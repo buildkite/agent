@@ -209,7 +209,7 @@ var (
 	CheckoutOverrideModeFlag = cli.StringFlag{
 		Name:   "checkout-override-mode",
 		Value:  "from-job",
-		Usage:  fmt.Sprintf("Controls which sources may override the agent's checkout settings; one of %v. ′strict′ makes the agent authoritative against pipeline/step env, secrets, hooks, plugins, and the Job API. ′from-job′ (default) blocks pipeline/step env and secrets but lets hooks, plugins, and the Job API set checkout vars. ′none′ lets any source override. Disabling command-eval floors this at ′from-job′.", checkoutOverrideModes),
+		Usage:  fmt.Sprintf("Controls which sources may override the agent's checkout settings; one of %v. ′strict′ makes the agent authoritative against pipeline/step env, secrets, hooks, plugins, and the Job API. ′from-job′ (default) lets pipeline/step env, hooks, plugins, and the Job API set checkout vars but blocks secrets. ′none′ lets any source, including secrets, override. Disabling command-eval floors this at ′strict′.", checkoutOverrideModes),
 		EnvVar: "BUILDKITE_CHECKOUT_OVERRIDE_MODE",
 	}
 
@@ -342,10 +342,10 @@ type APIConfig struct {
 }
 
 // resolveCheckoutOverrideMode parses a checkout-override mode value and floors it
-// at from-job when command-eval is disabled, so a job can't use backend env or
-// secret git flags to bypass no-command-eval. AgentStartConfig and BootstrapConfig
-// store the command-eval flag with opposite polarity, so each passes the resolved
-// boolean here.
+// at strict when command-eval is disabled, so a job can't use pipeline/step env
+// or secret git flags to bypass no-command-eval. AgentStartConfig and
+// BootstrapConfig store the command-eval flag with opposite polarity, so each
+// passes the resolved boolean here.
 func resolveCheckoutOverrideMode(raw string, commandEvalEnabled bool) (env.CheckoutOverrideMode, error) {
 	mode, err := env.ParseCheckoutOverrideMode(raw)
 	if err != nil {

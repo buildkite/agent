@@ -252,10 +252,9 @@ func (c *ExecutorConfig) ReadFromEnvironment(environ *env.Environment) map[strin
 		// Find struct fields with env tag
 		if tag := f.Tag.Get("env"); tag != "" && environ.Exists(tag) {
 			// ReadFromEnvironment runs after applyEnvironmentChanges, so the
-			// checkout vars here come from within the job (hooks/plugins). Use the
-			// within-job predicate: from-job lets them reconfigure checkout, strict
-			// does not.
-			if env.IsCheckoutLockedFromWithinJob(tag, c.CheckoutOverrideMode) {
+			// checkout vars here come from within the job (hooks/plugins). from-job
+			// and none let them reconfigure checkout; only strict locks them.
+			if env.IsCheckoutLocked(tag, c.CheckoutOverrideMode) {
 				continue
 			}
 

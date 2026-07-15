@@ -269,9 +269,9 @@ func TestCheckoutScopedJobEnvOverrideHonorsCheckoutOverrideMode(t *testing.T) {
 		},
 		{
 			// The zero value (unset CheckoutOverrideMode) is the default, from-job.
-			// Pin that the default blocks backend job env, so a future default flip
-			// or predicate change can't silently weaken it (regression for agent-7bu).
-			name:    "default_locks_clone_flags_to_agent_config",
+			// Pin that the default lets pipeline/step env override agent checkout
+			// config, so a future predicate change can't silently lock it back down.
+			name:    "default_allows_job_env_to_override_clone_flags",
 			varName: "BUILDKITE_GIT_CLONE_FLAGS",
 			jobEnv: map[string]string{
 				"BUILDKITE_GIT_CLONE_FLAGS": "--no-tags",
@@ -279,8 +279,72 @@ func TestCheckoutScopedJobEnvOverrideHonorsCheckoutOverrideMode(t *testing.T) {
 			agentCfg: agent.AgentConfiguration{
 				GitCloneFlags: "--mirror",
 			},
-			wantEnvValue:       "--mirror",
-			wantIgnoredEnvVars: []string{"BUILDKITE_GIT_CLONE_FLAGS"},
+			wantEnvValue: "--no-tags",
+		},
+		{
+			// Same as above but with the mode named explicitly, pinning that from-job
+			// (not just the zero value) allows the pipeline/step env override.
+			name:    "from_job_allows_job_env_to_override_clone_flags",
+			varName: "BUILDKITE_GIT_CLONE_FLAGS",
+			jobEnv: map[string]string{
+				"BUILDKITE_GIT_CLONE_FLAGS": "--no-tags",
+			},
+			agentCfg: agent.AgentConfiguration{
+				GitCloneFlags:        "--mirror",
+				CheckoutOverrideMode: env.CheckoutOverrideFromJob,
+			},
+			wantEnvValue: "--no-tags",
+		},
+		// The four vars below use the conditional-emit branch in createEnvironment
+		// (a separate code path from setCheckoutEnv). Pin that from-job takes the
+		// deferring branch for them, so job env wins, matching none.
+		{
+			name:    "from_job_allows_job_env_to_enable_submodules",
+			varName: "BUILDKITE_GIT_SUBMODULES",
+			jobEnv: map[string]string{
+				"BUILDKITE_GIT_SUBMODULES": "true",
+			},
+			agentCfg: agent.AgentConfiguration{
+				GitSubmodules:        false,
+				CheckoutOverrideMode: env.CheckoutOverrideFromJob,
+			},
+			wantEnvValue: "true",
+		},
+		{
+			name:    "from_job_allows_job_env_to_override_skip_checkout",
+			varName: "BUILDKITE_SKIP_CHECKOUT",
+			jobEnv: map[string]string{
+				"BUILDKITE_SKIP_CHECKOUT": "false",
+			},
+			agentCfg: agent.AgentConfiguration{
+				SkipCheckout:         true,
+				CheckoutOverrideMode: env.CheckoutOverrideFromJob,
+			},
+			wantEnvValue: "false",
+		},
+		{
+			name:    "from_job_allows_job_env_to_override_skip_fetch_existing_commits",
+			varName: "BUILDKITE_GIT_SKIP_FETCH_EXISTING_COMMITS",
+			jobEnv: map[string]string{
+				"BUILDKITE_GIT_SKIP_FETCH_EXISTING_COMMITS": "false",
+			},
+			agentCfg: agent.AgentConfiguration{
+				GitSkipFetchExistingCommits: true,
+				CheckoutOverrideMode:        env.CheckoutOverrideFromJob,
+			},
+			wantEnvValue: "false",
+		},
+		{
+			name:    "from_job_allows_job_env_to_override_checkout_timeout",
+			varName: "BUILDKITE_GIT_CHECKOUT_TIMEOUT",
+			jobEnv: map[string]string{
+				"BUILDKITE_GIT_CHECKOUT_TIMEOUT": "99",
+			},
+			agentCfg: agent.AgentConfiguration{
+				GitCheckoutTimeout:   60,
+				CheckoutOverrideMode: env.CheckoutOverrideFromJob,
+			},
+			wantEnvValue: "99",
 		},
 		{
 			name:    "none_allows_job_env_to_enable_submodules",

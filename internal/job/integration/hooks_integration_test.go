@@ -260,14 +260,13 @@ func TestEnvironmentHookCannotRelaxCheckoutOverrideMode(t *testing.T) {
 	}
 }
 
-func TestNoCommandEvalFloorsCheckoutOverrideModeToFromJob(t *testing.T) {
+func TestNoCommandEvalFloorsCheckoutOverrideModeToStrict(t *testing.T) {
 	t.Parallel()
 
-	// Disabling command-eval floors the mode up to from-job (none -> from-job;
-	// from-job and strict are unchanged). from-job only locks outside-job
-	// sources (backend job env, secrets), so a trusted agent hook can still set
-	// checkout vars even with command-eval off and mode=none. The floor's
-	// effect on outside-job sources is covered by the secrets integration test.
+	// Disabling command-eval floors the mode to strict regardless of the
+	// configured mode, so no source can inject git flags to bypass
+	// no-command-eval. Even a within-job hook (which from-job would allow) is
+	// blocked from setting checkout vars once command-eval is off.
 	tester, err := NewExecutorTester(mainCtx)
 	if err != nil {
 		t.Fatalf("NewExecutorTester() error = %v", err)
@@ -292,8 +291,8 @@ func TestNoCommandEvalFloorsCheckoutOverrideModeToFromJob(t *testing.T) {
 	}
 
 	tester.ExpectGlobalHook("command").Once().AndExitWith(0).AndCallFunc(func(c *bintest.Call) {
-		if got := c.GetEnv("BUILDKITE_SKIP_CHECKOUT"); got != "true" {
-			_, _ = fmt.Fprintf(c.Stderr, "BUILDKITE_SKIP_CHECKOUT=%q, want the hook's value to survive under from-job\n", got)
+		if got := c.GetEnv("BUILDKITE_SKIP_CHECKOUT"); got == "true" {
+			_, _ = fmt.Fprintf(c.Stderr, "BUILDKITE_SKIP_CHECKOUT=%q, want the command-eval floor to strict to block it\n", got)
 			c.Exit(1)
 			return
 		}
@@ -302,8 +301,8 @@ func TestNoCommandEvalFloorsCheckoutOverrideModeToFromJob(t *testing.T) {
 
 	tester.RunAndCheck(t, "BUILDKITE_COMMAND_EVAL=false", "BUILDKITE_CHECKOUT_OVERRIDE_MODE=none")
 
-	if strings.Contains(tester.Output, "env vars were blocked") && strings.Contains(tester.Output, "BUILDKITE_SKIP_CHECKOUT") {
-		t.Fatalf("BUILDKITE_SKIP_CHECKOUT should not be blocked under from-job\noutput: %s", tester.Output)
+	if !strings.Contains(tester.Output, "env vars were blocked") || !strings.Contains(tester.Output, "BUILDKITE_SKIP_CHECKOUT") {
+		t.Fatalf("BUILDKITE_SKIP_CHECKOUT should be blocked once command-eval floors the mode to strict\noutput: %s", tester.Output)
 	}
 }
 

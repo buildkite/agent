@@ -175,26 +175,25 @@ func TestCheckoutLockPredicates(t *testing.T) {
 		unscoped  = "MY_CUSTOM_VAR"             // in neither map
 	)
 
-	// The matrix from the design: strict locks every source; from-job locks the
-	// outside-job sources (backend env, secrets) but leaves within-job sources
-	// (hooks, plugins, Job API) open, matching the agent's historical behaviour;
-	// none locks nothing.
+	// The matrix from the design: strict locks every source; from-job lets the
+	// job's own sources (backend env, hooks, plugins, Job API) set checkout vars
+	// but still blocks secrets; none locks nothing, including secrets.
 	cases := []struct {
-		mode           CheckoutOverrideMode
-		wantFromJobEnv bool
-		wantWithinJob  bool
+		mode        CheckoutOverrideMode
+		wantJob     bool
+		wantSecrets bool
 	}{
 		{CheckoutOverrideStrict, true, true},
-		{CheckoutOverrideFromJob, true, false},
+		{CheckoutOverrideFromJob, false, true},
 		{CheckoutOverrideNone, false, false},
 	}
 
 	for _, tc := range cases {
-		if got := IsCheckoutLocked(scoped, tc.mode); got != tc.wantFromJobEnv {
-			t.Errorf("IsCheckoutLocked(%q, %v) = %t, want %t", scoped, tc.mode, got, tc.wantFromJobEnv)
+		if got := IsCheckoutLocked(scoped, tc.mode); got != tc.wantJob {
+			t.Errorf("IsCheckoutLocked(%q, %v) = %t, want %t", scoped, tc.mode, got, tc.wantJob)
 		}
-		if got := IsCheckoutLockedFromWithinJob(scoped, tc.mode); got != tc.wantWithinJob {
-			t.Errorf("IsCheckoutLockedFromWithinJob(%q, %v) = %t, want %t", scoped, tc.mode, got, tc.wantWithinJob)
+		if got := IsCheckoutLockedForSecrets(scoped, tc.mode); got != tc.wantSecrets {
+			t.Errorf("IsCheckoutLockedForSecrets(%q, %v) = %t, want %t", scoped, tc.mode, got, tc.wantSecrets)
 		}
 
 		// Non-checkout-scoped vars are never governed by the checkout predicates,
@@ -203,9 +202,34 @@ func TestCheckoutLockPredicates(t *testing.T) {
 			if IsCheckoutLocked(name, tc.mode) {
 				t.Errorf("IsCheckoutLocked(%q, %v) = true, want false", name, tc.mode)
 			}
-			if IsCheckoutLockedFromWithinJob(name, tc.mode) {
-				t.Errorf("IsCheckoutLockedFromWithinJob(%q, %v) = true, want false", name, tc.mode)
+			if IsCheckoutLockedForSecrets(name, tc.mode) {
+				t.Errorf("IsCheckoutLockedForSecrets(%q, %v) = true, want false", name, tc.mode)
 			}
+		}
+	}
+}
+
+func TestFlooredForCommandEval(t *testing.T) {
+	t.Parallel()
+
+	// With command-eval enabled the mode is unchanged; disabling it raises every
+	// mode to strict so no source can inject git flags to bypass no-command-eval.
+	cases := []struct {
+		mode              CheckoutOverrideMode
+		commandEvalOn     CheckoutOverrideMode
+		commandEvalOffMax CheckoutOverrideMode
+	}{
+		{CheckoutOverrideStrict, CheckoutOverrideStrict, CheckoutOverrideStrict},
+		{CheckoutOverrideFromJob, CheckoutOverrideFromJob, CheckoutOverrideStrict},
+		{CheckoutOverrideNone, CheckoutOverrideNone, CheckoutOverrideStrict},
+	}
+
+	for _, tc := range cases {
+		if got := tc.mode.FlooredForCommandEval(true); got != tc.commandEvalOn {
+			t.Errorf("%v.FlooredForCommandEval(true) = %v, want %v", tc.mode, got, tc.commandEvalOn)
+		}
+		if got := tc.mode.FlooredForCommandEval(false); got != tc.commandEvalOffMax {
+			t.Errorf("%v.FlooredForCommandEval(false) = %v, want %v", tc.mode, got, tc.commandEvalOffMax)
 		}
 	}
 }

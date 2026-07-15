@@ -381,7 +381,7 @@ func TestAgentStartCheckoutOverrideMode(t *testing.T) {
 	t.Parallel()
 
 	// AgentStartConfig uses NoCommandEval, so the zero value leaves command-eval
-	// enabled; none is only floored to from-job when command-eval is disabled.
+	// enabled; disabling command-eval floors every mode to strict.
 	tests := []struct {
 		name string
 		cfg  AgentStartConfig
@@ -390,7 +390,8 @@ func TestAgentStartCheckoutOverrideMode(t *testing.T) {
 		{name: "default_from_job", cfg: AgentStartConfig{}, want: env.CheckoutOverrideFromJob},
 		{name: "explicit_strict", cfg: AgentStartConfig{CheckoutOverrideMode: "strict"}, want: env.CheckoutOverrideStrict},
 		{name: "explicit_none", cfg: AgentStartConfig{CheckoutOverrideMode: "none"}, want: env.CheckoutOverrideNone},
-		{name: "no_command_eval_floors_none_to_from_job", cfg: AgentStartConfig{CheckoutOverrideMode: "none", NoCommandEval: true}, want: env.CheckoutOverrideFromJob},
+		{name: "no_command_eval_floors_none_to_strict", cfg: AgentStartConfig{CheckoutOverrideMode: "none", NoCommandEval: true}, want: env.CheckoutOverrideStrict},
+		{name: "no_command_eval_floors_from_job_to_strict", cfg: AgentStartConfig{CheckoutOverrideMode: "from-job", NoCommandEval: true}, want: env.CheckoutOverrideStrict},
 		{name: "no_command_eval_leaves_strict", cfg: AgentStartConfig{CheckoutOverrideMode: "strict", NoCommandEval: true}, want: env.CheckoutOverrideStrict},
 	}
 
@@ -420,7 +421,8 @@ func TestBootstrapCheckoutOverrideMode(t *testing.T) {
 	t.Parallel()
 
 	// BootstrapConfig uses CommandEval; the zero value disables command-eval and
-	// floors none to from-job, so cases that keep none must set CommandEval.
+	// floors the mode to strict, so cases that keep a laxer mode must set
+	// CommandEval.
 	tests := []struct {
 		name string
 		cfg  BootstrapConfig
@@ -429,7 +431,8 @@ func TestBootstrapCheckoutOverrideMode(t *testing.T) {
 		{name: "default_from_job", cfg: BootstrapConfig{CommandEval: true}, want: env.CheckoutOverrideFromJob},
 		{name: "explicit_strict", cfg: BootstrapConfig{CheckoutOverrideMode: "strict", CommandEval: true}, want: env.CheckoutOverrideStrict},
 		{name: "explicit_none", cfg: BootstrapConfig{CheckoutOverrideMode: "none", CommandEval: true}, want: env.CheckoutOverrideNone},
-		{name: "command_eval_disabled_floors_none_to_from_job", cfg: BootstrapConfig{CheckoutOverrideMode: "none", CommandEval: false}, want: env.CheckoutOverrideFromJob},
+		{name: "command_eval_disabled_floors_none_to_strict", cfg: BootstrapConfig{CheckoutOverrideMode: "none", CommandEval: false}, want: env.CheckoutOverrideStrict},
+		{name: "command_eval_disabled_floors_from_job_to_strict", cfg: BootstrapConfig{CheckoutOverrideMode: "from-job", CommandEval: false}, want: env.CheckoutOverrideStrict},
 	}
 
 	for _, tc := range tests {

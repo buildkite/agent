@@ -144,7 +144,7 @@ func (s *Server) checkProtected(candidates []string) []string {
 		// The Job API is only accessible from within the job, so allow writes
 		// to vars that allow write from within job.
 		if env.IsProtectedFromWithinJob(c) ||
-			env.IsCheckoutLockedFromWithinJob(c, s.checkoutOverrideMode) {
+			env.IsCheckoutLocked(c, s.checkoutOverrideMode) {
 			protected = append(protected, c)
 		}
 	}
@@ -157,7 +157,7 @@ func (s *Server) checkProtected(candidates []string) []string {
 func (s *Server) protectedEnvMessage(protected []string) string {
 	msg := fmt.Sprintf("the following environment variables are protected, and cannot be modified: % v", protected)
 	for _, p := range protected {
-		if env.IsCheckoutLockedFromWithinJob(p, s.checkoutOverrideMode) {
+		if env.IsCheckoutLocked(p, s.checkoutOverrideMode) {
 			msg += fmt.Sprintf(". Checkout-related variables are locked because BUILDKITE_CHECKOUT_OVERRIDE_MODE=%s", s.checkoutOverrideMode)
 			break
 		}

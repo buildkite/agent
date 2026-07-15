@@ -585,9 +585,9 @@ func TestSecretsIntegration_CheckoutOverrideMode(t *testing.T) {
 		{name: "strict_rejects_sparse_checkout_paths_secret", envVar: "BUILDKITE_GIT_SPARSE_CHECKOUT_PATHS", secretValue: "a/b", mode: "strict", wantErr: true},
 		// The lock must not over-block: a non-checkout secret is still allowed.
 		{name: "strict_allows_unscoped_secret", envVar: "MY_CUSTOM_VAR", secretValue: "hello", mode: "strict"},
-		// Disabling command-eval floors none up to from-job, so an outside-job
-		// secret that none would allow is now rejected.
-		{name: "none_floored_to_from_job_rejects_secret_when_command_eval_disabled", envVar: "BUILDKITE_GIT_CLONE_FLAGS", secretValue: "--mirror", mode: "none", commandEvalDisabled: true, wantErr: true},
+		// Disabling command-eval floors the mode to strict, so a secret that none
+		// would otherwise allow is now rejected.
+		{name: "none_floored_to_strict_rejects_secret_when_command_eval_disabled", envVar: "BUILDKITE_GIT_CLONE_FLAGS", secretValue: "--mirror", mode: "none", commandEvalDisabled: true, wantErr: true},
 	}
 
 	for _, tc := range tests {

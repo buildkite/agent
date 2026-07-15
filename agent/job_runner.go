@@ -405,10 +405,10 @@ func (r *JobRunner) normalizeVerificationBehavior(behavior string) (string, erro
 
 // Creates the environment variables that will be used in the process and writes a flat environment file
 func (r *JobRunner) createEnvironment(ctx context.Context) ([]string, error) {
-	// Checkout-scoped vars are locked against backend job env under strict and
-	// from-job (i.e. every mode except none).
+	// Checkout-scoped vars are locked against backend job env only under strict.
+	// from-job (the default) and none let pipeline/step env override agent config.
 	checkoutMode := r.conf.AgentConfiguration.CheckoutOverrideMode
-	checkoutLockedFromJobEnv := checkoutMode != envutil.CheckoutOverrideNone
+	checkoutLockedFromJobEnv := checkoutMode == envutil.CheckoutOverrideStrict
 
 	// Create a clone of our jobs environment. We'll then set the
 	// environment variables provided by the agent, which will override any
