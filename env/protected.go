@@ -153,8 +153,13 @@ type CheckoutOverrideMode int
 const (
 	// CheckoutOverrideFromJob is the default and matches the agent's historical
 	// behaviour: the job may configure its own checkout from within-job sources
-	// (hooks, plugins, and the Job API), overriding agent config, but the backend
-	// job env (pipeline/step env) and secrets may not set checkout-scoped vars.
+	// (hooks, plugins, and the Job API), overriding agent config. The backend job
+	// env (pipeline/step env) and secrets may not override the checkout flags,
+	// which the agent always emits. The submodules/skip-checkout/skip-fetch/timeout
+	// toggles are emitted by the agent only on their non-default side, so backend
+	// job env can still set those when the agent leaves them at their default, as
+	// on main (secrets are blocked from all of them; see IsCheckoutLockedForSecrets).
+	// strict closes that toggle gap.
 	CheckoutOverrideFromJob CheckoutOverrideMode = iota
 
 	// CheckoutOverrideStrict locks the checkoutOverrideScope vars against every
@@ -239,8 +244,11 @@ func IsCheckoutLocked(name string, mode CheckoutOverrideMode) bool {
 // IsCheckoutLockedForSecrets reports whether a checkout-scoped var is locked
 // against secret-to-env mappings under the given mode. Secrets are an external
 // source, so both strict and from-job block them; only none lets a secret set
-// checkout config. The backend job env follows the same rule, enforced in
-// createEnvironment (agent/job_runner.go). Vars that aren't checkout-scoped are
+// checkout config. The backend job env is mostly the same (enforced in
+// createEnvironment, agent/job_runner.go), except that under from-job it still
+// lets pipeline/step env set the submodules/skip-checkout/skip-fetch/timeout
+// toggles on their default side to match historical behaviour; secrets have no
+// such history, so they stay blocked. Vars that aren't checkout-scoped are
 // governed by IsProtected instead.
 func IsCheckoutLockedForSecrets(name string, mode CheckoutOverrideMode) bool {
 	if !IsCheckoutOverrideScoped(name) {

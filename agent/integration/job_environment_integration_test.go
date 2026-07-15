@@ -298,10 +298,12 @@ func TestCheckoutScopedJobEnvOverrideHonorsCheckoutOverrideMode(t *testing.T) {
 			wantEnvValue:       "--mirror",
 			wantIgnoredEnvVars: []string{"BUILDKITE_GIT_CLONE_FLAGS"},
 		},
-		// The four vars below use the conditional-emit branch in createEnvironment
-		// (a separate code path from setCheckoutEnv). Pin that from-job takes the
-		// locking branch for them, so agent config wins over backend job env,
-		// matching strict.
+		// The four vars below are emitted by the agent only on the non-default side
+		// of each (submodules off, skip-checkout on, skip-fetch on, timeout > 0). On
+		// that emitted side, from-job keeps agent config authoritative over backend
+		// job env (via setCheckoutEnv). The silent-side counterparts, where the agent
+		// stays at its default and a job value survives under from-job (matching main;
+		// only strict force-emits there), are covered further below.
 		{
 			name:    "from_job_locks_submodules_to_agent_config",
 			varName: "BUILDKITE_GIT_SUBMODULES",
@@ -353,6 +355,57 @@ func TestCheckoutScopedJobEnvOverrideHonorsCheckoutOverrideMode(t *testing.T) {
 			},
 			wantEnvValue:       "60",
 			wantIgnoredEnvVars: []string{"BUILDKITE_GIT_CHECKOUT_TIMEOUT"},
+		},
+		// Silent side under from-job: the agent leaves each var at its default and
+		// stays quiet, so a backend job env value survives, matching historical
+		// behaviour. Only strict force-emits the default here (see the strict_*_off
+		// cases below); from-job must not, hence no ignored vars.
+		{
+			name:    "from_job_allows_job_env_checkout_timeout_when_agent_unset",
+			varName: "BUILDKITE_GIT_CHECKOUT_TIMEOUT",
+			jobEnv: map[string]string{
+				"BUILDKITE_GIT_CHECKOUT_TIMEOUT": "99",
+			},
+			agentCfg: agent.AgentConfiguration{
+				CheckoutOverrideMode: env.CheckoutOverrideFromJob,
+			},
+			wantEnvValue: "99",
+		},
+		{
+			name:    "from_job_allows_job_env_submodules_when_agent_default_on",
+			varName: "BUILDKITE_GIT_SUBMODULES",
+			jobEnv: map[string]string{
+				"BUILDKITE_GIT_SUBMODULES": "false",
+			},
+			agentCfg: agent.AgentConfiguration{
+				GitSubmodules:        true,
+				CheckoutOverrideMode: env.CheckoutOverrideFromJob,
+			},
+			wantEnvValue: "false",
+		},
+		{
+			name:    "from_job_allows_job_env_skip_checkout_when_agent_default_off",
+			varName: "BUILDKITE_SKIP_CHECKOUT",
+			jobEnv: map[string]string{
+				"BUILDKITE_SKIP_CHECKOUT": "true",
+			},
+			agentCfg: agent.AgentConfiguration{
+				SkipCheckout:         false,
+				CheckoutOverrideMode: env.CheckoutOverrideFromJob,
+			},
+			wantEnvValue: "true",
+		},
+		{
+			name:    "from_job_allows_job_env_skip_fetch_existing_commits_when_agent_default_off",
+			varName: "BUILDKITE_GIT_SKIP_FETCH_EXISTING_COMMITS",
+			jobEnv: map[string]string{
+				"BUILDKITE_GIT_SKIP_FETCH_EXISTING_COMMITS": "true",
+			},
+			agentCfg: agent.AgentConfiguration{
+				GitSkipFetchExistingCommits: false,
+				CheckoutOverrideMode:        env.CheckoutOverrideFromJob,
+			},
+			wantEnvValue: "true",
 		},
 		{
 			name:    "none_allows_job_env_to_enable_submodules",
