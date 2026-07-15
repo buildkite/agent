@@ -178,8 +178,11 @@ func TestCheckoutLockPredicates(t *testing.T) {
 	)
 
 	// The matrix from the design: strict locks every source; from-job lets the
-	// job's own sources (backend env, hooks, plugins, Job API) set checkout vars
-	// but still blocks secrets; none locks nothing, including secrets.
+	// job's within-job sources (hooks, plugins, Job API) set checkout vars but
+	// blocks the backend job env and secrets; none locks nothing, including the
+	// backend job env and secrets. IsCheckoutLocked covers only the within-job
+	// sources; the backend job env shares the secrets rule (IsCheckoutLockedForSecrets
+	// and createEnvironment).
 	cases := []struct {
 		mode        CheckoutOverrideMode
 		wantJob     bool

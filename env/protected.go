@@ -87,9 +87,10 @@ var protectedEnv = map[string]protection{
 
 // checkoutOverrideScope contains checkout-related vars whose write-protection
 // depends on the checkout-override mode (see CheckoutOverrideMode). Under the
-// default (from-job) the job may set them from pipeline/step env, hooks, plugins,
-// and the Job API, overriding agent config, but secrets may not; strict locks
-// them against every source; none leaves them fully open, including secrets.
+// default (from-job) the job may set them from within-job sources (hooks, plugins,
+// and the Job API), overriding agent config, but the backend job env (pipeline/
+// step env) and secrets may not; strict locks them against every source; none
+// leaves them fully open, including the backend job env and secrets.
 // Locking matters because git is riddled with shell injections, so letting a job
 // set git flags would otherwise be a way to bypass protections like
 // no-command-eval (which is why disabling command-eval forces the mode to
@@ -150,11 +151,10 @@ func IsCheckoutOverrideScoped(name string) bool {
 type CheckoutOverrideMode int
 
 const (
-	// CheckoutOverrideFromJob is the default: the job may configure its own
-	// checkout from pipeline/step env, hooks, plugins, and the Job API,
-	// overriding agent config, but secrets may not set checkout-scoped vars. This
-	// is deliberately more permissive than the agent's historical behaviour,
-	// which locked checkout-scoped vars against backend job env.
+	// CheckoutOverrideFromJob is the default and matches the agent's historical
+	// behaviour: the job may configure its own checkout from within-job sources
+	// (hooks, plugins, and the Job API), overriding agent config, but the backend
+	// job env (pipeline/step env) and secrets may not set checkout-scoped vars.
 	CheckoutOverrideFromJob CheckoutOverrideMode = iota
 
 	// CheckoutOverrideStrict locks the checkoutOverrideScope vars against every
@@ -223,11 +223,12 @@ func (m CheckoutOverrideMode) RestrictedForCommandEval(commandEvalEnabled bool) 
 }
 
 // IsCheckoutLocked reports whether a checkout-scoped var is locked against the
-// job's own configuration sources (backend job env, hooks, plugins, and the Job
-// API) under the given mode. Only strict locks these; from-job and none let the
-// job configure its own checkout. Secrets are governed separately by
-// IsCheckoutLockedForSecrets, and vars that aren't checkout-scoped by IsProtected
-// / IsProtectedFromWithinJob.
+// job's within-job configuration sources (hooks, plugins, and the Job API) under
+// the given mode. Only strict locks these; from-job and none let the job
+// configure its own checkout. The backend job env (pipeline/step env) and secrets
+// are external sources locked in every mode except none, governed separately (see
+// IsCheckoutLockedForSecrets and createEnvironment in agent/job_runner.go); vars
+// that aren't checkout-scoped are governed by IsProtected / IsProtectedFromWithinJob.
 func IsCheckoutLocked(name string, mode CheckoutOverrideMode) bool {
 	if !IsCheckoutOverrideScoped(name) {
 		return false
@@ -238,8 +239,9 @@ func IsCheckoutLocked(name string, mode CheckoutOverrideMode) bool {
 // IsCheckoutLockedForSecrets reports whether a checkout-scoped var is locked
 // against secret-to-env mappings under the given mode. Secrets are an external
 // source, so both strict and from-job block them; only none lets a secret set
-// checkout config. Vars that aren't checkout-scoped are governed by IsProtected
-// instead.
+// checkout config. The backend job env follows the same rule, enforced in
+// createEnvironment (agent/job_runner.go). Vars that aren't checkout-scoped are
+// governed by IsProtected instead.
 func IsCheckoutLockedForSecrets(name string, mode CheckoutOverrideMode) bool {
 	if !IsCheckoutOverrideScoped(name) {
 		return false

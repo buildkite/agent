@@ -269,9 +269,10 @@ func TestCheckoutScopedJobEnvOverrideHonorsCheckoutOverrideMode(t *testing.T) {
 		},
 		{
 			// The zero value (unset CheckoutOverrideMode) is the default, from-job.
-			// Pin that the default lets pipeline/step env override agent checkout
-			// config, so a future predicate change can't silently lock it back down.
-			name:    "default_allows_job_env_to_override_clone_flags",
+			// Pin that the default locks the backend job env out of checkout config
+			// (matching the agent's historical behaviour), so a future predicate
+			// change can't silently reopen it.
+			name:    "default_locks_clone_flags_to_agent_config",
 			varName: "BUILDKITE_GIT_CLONE_FLAGS",
 			jobEnv: map[string]string{
 				"BUILDKITE_GIT_CLONE_FLAGS": "--no-tags",
@@ -279,12 +280,13 @@ func TestCheckoutScopedJobEnvOverrideHonorsCheckoutOverrideMode(t *testing.T) {
 			agentCfg: agent.AgentConfiguration{
 				GitCloneFlags: "--mirror",
 			},
-			wantEnvValue: "--no-tags",
+			wantEnvValue:       "--mirror",
+			wantIgnoredEnvVars: []string{"BUILDKITE_GIT_CLONE_FLAGS"},
 		},
 		{
 			// Same as above but with the mode named explicitly, pinning that from-job
-			// (not just the zero value) allows the pipeline/step env override.
-			name:    "from_job_allows_job_env_to_override_clone_flags",
+			// (not just the zero value) locks the backend job env, matching strict.
+			name:    "from_job_locks_clone_flags_to_agent_config",
 			varName: "BUILDKITE_GIT_CLONE_FLAGS",
 			jobEnv: map[string]string{
 				"BUILDKITE_GIT_CLONE_FLAGS": "--no-tags",
@@ -293,13 +295,15 @@ func TestCheckoutScopedJobEnvOverrideHonorsCheckoutOverrideMode(t *testing.T) {
 				GitCloneFlags:        "--mirror",
 				CheckoutOverrideMode: env.CheckoutOverrideFromJob,
 			},
-			wantEnvValue: "--no-tags",
+			wantEnvValue:       "--mirror",
+			wantIgnoredEnvVars: []string{"BUILDKITE_GIT_CLONE_FLAGS"},
 		},
 		// The four vars below use the conditional-emit branch in createEnvironment
 		// (a separate code path from setCheckoutEnv). Pin that from-job takes the
-		// deferring branch for them, so job env wins, matching none.
+		// locking branch for them, so agent config wins over backend job env,
+		// matching strict.
 		{
-			name:    "from_job_allows_job_env_to_enable_submodules",
+			name:    "from_job_locks_submodules_to_agent_config",
 			varName: "BUILDKITE_GIT_SUBMODULES",
 			jobEnv: map[string]string{
 				"BUILDKITE_GIT_SUBMODULES": "true",
@@ -308,10 +312,11 @@ func TestCheckoutScopedJobEnvOverrideHonorsCheckoutOverrideMode(t *testing.T) {
 				GitSubmodules:        false,
 				CheckoutOverrideMode: env.CheckoutOverrideFromJob,
 			},
-			wantEnvValue: "true",
+			wantEnvValue:       "false",
+			wantIgnoredEnvVars: []string{"BUILDKITE_GIT_SUBMODULES"},
 		},
 		{
-			name:    "from_job_allows_job_env_to_override_skip_checkout",
+			name:    "from_job_locks_skip_checkout_to_agent_config",
 			varName: "BUILDKITE_SKIP_CHECKOUT",
 			jobEnv: map[string]string{
 				"BUILDKITE_SKIP_CHECKOUT": "false",
@@ -320,10 +325,11 @@ func TestCheckoutScopedJobEnvOverrideHonorsCheckoutOverrideMode(t *testing.T) {
 				SkipCheckout:         true,
 				CheckoutOverrideMode: env.CheckoutOverrideFromJob,
 			},
-			wantEnvValue: "false",
+			wantEnvValue:       "true",
+			wantIgnoredEnvVars: []string{"BUILDKITE_SKIP_CHECKOUT"},
 		},
 		{
-			name:    "from_job_allows_job_env_to_override_skip_fetch_existing_commits",
+			name:    "from_job_locks_skip_fetch_existing_commits_to_agent_config",
 			varName: "BUILDKITE_GIT_SKIP_FETCH_EXISTING_COMMITS",
 			jobEnv: map[string]string{
 				"BUILDKITE_GIT_SKIP_FETCH_EXISTING_COMMITS": "false",
@@ -332,10 +338,11 @@ func TestCheckoutScopedJobEnvOverrideHonorsCheckoutOverrideMode(t *testing.T) {
 				GitSkipFetchExistingCommits: true,
 				CheckoutOverrideMode:        env.CheckoutOverrideFromJob,
 			},
-			wantEnvValue: "false",
+			wantEnvValue:       "true",
+			wantIgnoredEnvVars: []string{"BUILDKITE_GIT_SKIP_FETCH_EXISTING_COMMITS"},
 		},
 		{
-			name:    "from_job_allows_job_env_to_override_checkout_timeout",
+			name:    "from_job_locks_checkout_timeout_to_agent_config",
 			varName: "BUILDKITE_GIT_CHECKOUT_TIMEOUT",
 			jobEnv: map[string]string{
 				"BUILDKITE_GIT_CHECKOUT_TIMEOUT": "99",
@@ -344,7 +351,8 @@ func TestCheckoutScopedJobEnvOverrideHonorsCheckoutOverrideMode(t *testing.T) {
 				GitCheckoutTimeout:   60,
 				CheckoutOverrideMode: env.CheckoutOverrideFromJob,
 			},
-			wantEnvValue: "99",
+			wantEnvValue:       "60",
+			wantIgnoredEnvVars: []string{"BUILDKITE_GIT_CHECKOUT_TIMEOUT"},
 		},
 		{
 			name:    "none_allows_job_env_to_enable_submodules",
