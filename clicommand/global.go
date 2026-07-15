@@ -209,7 +209,7 @@ var (
 	CheckoutOverrideModeFlag = cli.StringFlag{
 		Name:   "checkout-override-mode",
 		Value:  "from-job",
-		Usage:  fmt.Sprintf("Controls which sources may override the agent's checkout settings; one of %v. ′strict′ makes the agent authoritative against pipeline/step env, secrets, hooks, plugins, and the Job API. ′from-job′ (default) lets pipeline/step env, hooks, plugins, and the Job API set checkout vars but blocks secrets. ′none′ lets any source, including secrets, override. Disabling command-eval floors this at ′strict′.", checkoutOverrideModes),
+		Usage:  fmt.Sprintf("Controls which sources may override the agent's checkout settings; one of %v. ′strict′ makes the agent authoritative against pipeline/step env, secrets, hooks, plugins, and the Job API. ′from-job′ (default) lets pipeline/step env, hooks, plugins, and the Job API set checkout vars but blocks secrets. ′none′ additionally lets secrets set them. Mirror configuration (path, lock timeout, checkout mode) and submodule clone config stay agent-authoritative in every mode. Disabling command-eval floors this at ′strict′.", checkoutOverrideModes),
 		EnvVar: "BUILDKITE_CHECKOUT_OVERRIDE_MODE",
 	}
 

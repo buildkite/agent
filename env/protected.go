@@ -144,8 +144,10 @@ const (
 	// every source: pipeline/step env, secrets, hooks, plugins, and the Job API.
 	CheckoutOverrideStrict
 
-	// CheckoutOverrideNone lets any source, including secrets, override agent
-	// checkout config.
+	// CheckoutOverrideNone lets any source, including secrets, override the
+	// checkout-override-scoped vars. Vars that are always agent-authoritative
+	// (the mirror-infra vars and SUBMODULE_CLONE_CONFIG in protectedEnv) are
+	// unaffected by the mode, so they stay locked even under none.
 	CheckoutOverrideNone
 )
 
