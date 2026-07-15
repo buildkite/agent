@@ -199,6 +199,9 @@ func (c *client) Save(ctx context.Context, cacheID string) (SaveResult, error) {
 		span.SetStatus(codes.Error, "failed to build archive")
 		return result, fmt.Errorf("failed to build archive: %w", err)
 	}
+	defer func() {
+		_ = os.Remove(archiveInfo.ArchivePath)
+	}()
 
 	// Populate archive metrics
 	result.Archive = ArchiveMetrics{
