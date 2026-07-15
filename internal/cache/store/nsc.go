@@ -202,8 +202,11 @@ func (n *NscStore) Download(ctx context.Context, key, filePath string) (*Transfe
 	}
 
 	if result.ExitCode != 0 {
-		// Distinguish a missing artifact from other download failures.
-		if strings.Contains(result.Stderr, "not found") {
+		// Map a missing or expired artifact to ErrBlobNotFound so the restore
+		// treats it as a cache miss (invalidating the stale entry and continuing)
+		// rather than failing the build.
+		if strings.Contains(result.Stderr, "not found") ||
+			strings.Contains(result.Stderr, "has expired") {
 			return nil, fmt.Errorf("%w: nsc key %s: %s", ErrBlobNotFound, key, strings.TrimSpace(result.Stderr))
 		}
 		return nil, fmt.Errorf("nsc download failed with exit code %d: %s", result.ExitCode, result.Stderr)

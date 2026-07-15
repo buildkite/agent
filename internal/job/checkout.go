@@ -762,7 +762,10 @@ func (e *Executor) getOrUpdateMirrorDir(ctx context.Context, repository string) 
 
 // fetchSource fetches the git source for the job. If GitSkipFetchExistingCommits is
 // enabled and the commit already exists locally, the fetch is skipped entirely.
-func (e *Executor) fetchSource(ctx context.Context) error {
+// When addBloblessFilter is true, --filter=blob:none is prepended to the fetch
+// flags — the caller decides based on sparse-checkout state and user-supplied
+// filters.
+func (e *Executor) fetchSource(ctx context.Context, addBloblessFilter bool) error {
 	// If configured, skip the fetch when the commit already exists locally.
 	// This is useful when a pre-populated git mirror is used with --reference,
 	// as the commit objects are already reachable and fetching is redundant.
@@ -773,6 +776,9 @@ func (e *Executor) fetchSource(ctx context.Context) error {
 	}
 
 	gitFetchFlags := e.GitFetchFlags
+	if addBloblessFilter {
+		gitFetchFlags = "--filter=blob:none " + gitFetchFlags
+	}
 
 	switch {
 	case e.RefSpec != "":
@@ -908,6 +914,21 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) (retErr error) {
 		return fmt.Errorf("creating checkout dir: %w", err)
 	}
 
+	// Resolve the cone paths to check out (nil means a full checkout).
+	sparsePaths := e.resolveSparseCheckout(ctx)
+
+	// Split the git clone flags into an array of strings, so we can append
+	// additional flags if needed (e.g., --reference, --dissociate, --sparse, --filter=blob:none).
+	gitCloneFlags, err := shellwords.Split(e.GitCloneFlags)
+	if err != nil {
+		return fmt.Errorf("splitting --git-clone-flags %q: %w", e.GitCloneFlags, err)
+	}
+
+	// Snapshot whether the user supplied their own --filter before we
+	// potentially append one — the fetch-side decision depends on the
+	// original user-supplied state, not on flags we auto-add here.
+	userSuppliedCloneFilter := hasPartialFilterFlags(gitCloneFlags)
+
 	// On mirrors and dissociation:
 	//
 	// --reference makes the clone reuse objects from the mirror, using the
@@ -953,14 +974,28 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) (retErr error) {
 
 		// Compute the clone flags. For mirrors we need --reference, and usually
 		// --dissociate.
-		gitCloneFlags, err := shellwords.Split(e.GitCloneFlags)
-		if err != nil {
-			return fmt.Errorf("splitting --git-clone-flags %q: %w", e.GitCloneFlags, err)
-		}
 		if mirrorDir != "" {
 			gitCloneFlags = append(gitCloneFlags, "--reference", mirrorDir)
 			if e.GitMirrorCheckoutMode == "dissociate" {
 				gitCloneFlags = append(gitCloneFlags, "--dissociate")
+			}
+		}
+
+		// When sparse checkout applies, add two clone flags:
+		//   --sparse             clone in sparse mode
+		//   --filter=blob:none   make it a partial clone, so blobs outside the
+		//                        sparse set aren't downloaded up front
+		// Each flag is added only if the user hasn't already supplied their own.
+		if len(sparsePaths) > 0 {
+			if slices.Contains(gitCloneFlags, "--sparse") {
+				e.shell.Commentf("Sparse checkout is configured and BUILDKITE_GIT_CLONE_FLAGS already contains a --sparse flag (preserving user-supplied sparse checkout).")
+			} else {
+				gitCloneFlags = append(gitCloneFlags, "--sparse")
+			}
+			if userSuppliedCloneFilter {
+				e.shell.Commentf("Sparse checkout is configured and BUILDKITE_GIT_CLONE_FLAGS already contains a --filter (preserving user-supplied filter).")
+			} else {
+				gitCloneFlags = append(gitCloneFlags, "--filter=blob:none")
 			}
 		}
 
@@ -991,7 +1026,16 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) (retErr error) {
 		}
 	}
 
-	if err := e.fetchSource(ctx); err != nil {
+	// Parse the fetch flags into tokens so we can check for a user-supplied --filter flag.
+	gitFetchFlags, err := shellwords.Split(e.GitFetchFlags)
+	if err != nil {
+		return fmt.Errorf("splitting --git-fetch-flags %q: %w", e.GitFetchFlags, err)
+	}
+
+	addBloblessFilter := len(sparsePaths) > 0 &&
+		!userSuppliedCloneFilter &&
+		!hasPartialFilterFlags(gitFetchFlags)
+	if err := e.fetchSource(ctx, addBloblessFilter); err != nil {
 		return err
 	}
 
@@ -999,7 +1043,7 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) (retErr error) {
 		return err
 	}
 
-	sparseCheckoutActive, err := e.setupSparseCheckout(ctx)
+	sparseCheckoutActive, err := e.setupSparseCheckout(ctx, sparsePaths)
 	if err != nil {
 		return err
 	}
@@ -1110,7 +1154,7 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) (retErr error) {
 
 	// When sparse-checkout is active, scope LFS to the same paths so we don't
 	// pull objects outside the sparse set (SUP-6529). If sparse fell back to a
-	// full checkout (e.g. git < 2.26), fetch unscoped so files outside the
+	// full checkout (e.g. git < 2.27), fetch unscoped so files outside the
 	// requested paths still get their LFS content.
 	if e.GitLFSEnabled {
 		lfsArgs := gitLFSFetchCheckoutArgs{
