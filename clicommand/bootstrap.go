@@ -123,7 +123,7 @@ type BootstrapConfig struct {
 	CheckoutAttempts             int      `cli:"checkout-attempts"`
 }
 
-// checkoutOverrideMode resolves the configured mode, flooring it for command-eval.
+// checkoutOverrideMode resolves the configured mode, forcing strict when command-eval is off.
 // BootstrapConfig stores CommandEval (the AgentStartConfig sibling stores NoCommandEval).
 func (cfg *BootstrapConfig) checkoutOverrideMode() (env.CheckoutOverrideMode, error) {
 	return resolveCheckoutOverrideMode(cfg.CheckoutOverrideMode, cfg.CommandEval)

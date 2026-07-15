@@ -209,7 +209,7 @@ var (
 	CheckoutOverrideModeFlag = cli.StringFlag{
 		Name:   "checkout-override-mode",
 		Value:  "from-job",
-		Usage:  fmt.Sprintf("Controls which sources may override the agent's checkout settings; one of %v. ′strict′ makes the agent authoritative against pipeline/step env, secrets, hooks, plugins, and the Job API. ′from-job′ (default) lets pipeline/step env, hooks, plugins, and the Job API set checkout vars but blocks secrets. ′none′ additionally lets secrets set them. Mirror configuration (path, lock timeout, checkout mode) and submodule clone config stay agent-authoritative in every mode. Disabling command-eval floors this at ′strict′.", checkoutOverrideModes),
+		Usage:  fmt.Sprintf("Controls which sources may override the agent's checkout settings; one of %v. ′strict′ makes the agent authoritative against pipeline/step env, secrets, hooks, plugins, and the Job API. ′from-job′ (default) lets pipeline/step env, hooks, plugins, and the Job API set checkout vars but blocks secrets. ′none′ additionally lets secrets set them. Mirror configuration (path, lock timeout, checkout mode) and submodule clone config stay agent-authoritative in every mode. Disabling command-eval forces this to ′strict′.", checkoutOverrideModes),
 		EnvVar: "BUILDKITE_CHECKOUT_OVERRIDE_MODE",
 	}
 
@@ -341,8 +341,8 @@ type APIConfig struct {
 	NoHTTP2          bool   `cli:"no-http2"`
 }
 
-// resolveCheckoutOverrideMode parses a checkout-override mode value and floors it
-// at strict when command-eval is disabled, so a job can't use pipeline/step env
+// resolveCheckoutOverrideMode parses a checkout-override mode value and forces it
+// to strict when command-eval is disabled, so a job can't use pipeline/step env
 // or secret git flags to bypass no-command-eval. AgentStartConfig and
 // BootstrapConfig store the command-eval flag with opposite polarity, so each
 // passes the resolved boolean here.
@@ -351,7 +351,7 @@ func resolveCheckoutOverrideMode(raw string, commandEvalEnabled bool) (env.Check
 	if err != nil {
 		return mode, err
 	}
-	return mode.FlooredForCommandEval(commandEvalEnabled), nil
+	return mode.RestrictedForCommandEval(commandEvalEnabled), nil
 }
 
 func globalFlags() []cli.Flag {

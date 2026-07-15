@@ -83,7 +83,7 @@ var protectedEnv = map[string]protection{
 // them against every source; none leaves them fully open, including secrets.
 // Locking matters because git is riddled with shell injections, so letting a job
 // set git flags would otherwise be a way to bypass protections like
-// no-command-eval (which is why disabling command-eval floors the mode at
+// no-command-eval (which is why disabling command-eval forces the mode to
 // strict). Vars here must not also appear in protectedEnv; the two maps are
 // disjoint.
 var checkoutOverrideScope = map[string]struct{}{
@@ -191,11 +191,12 @@ func ParseCheckoutOverrideMode(s string) (CheckoutOverrideMode, error) {
 	}
 }
 
-// FlooredForCommandEval restricts the mode so command-eval can't be bypassed:
-// when command-eval is disabled, the mode is raised to CheckoutOverrideStrict so
-// no source (pipeline/step env, secrets, hooks, plugins, or the Job API) can
-// inject git flags that would otherwise circumvent no-command-eval.
-func (m CheckoutOverrideMode) FlooredForCommandEval(commandEvalEnabled bool) CheckoutOverrideMode {
+// RestrictedForCommandEval tightens the mode so command-eval can't be bypassed:
+// when command-eval is disabled, it returns CheckoutOverrideStrict so no source
+// (pipeline/step env, secrets, hooks, plugins, or the Job API) can inject git
+// flags that would otherwise circumvent no-command-eval. Otherwise it returns the
+// mode unchanged.
+func (m CheckoutOverrideMode) RestrictedForCommandEval(commandEvalEnabled bool) CheckoutOverrideMode {
 	if !commandEvalEnabled {
 		return CheckoutOverrideStrict
 	}

@@ -209,10 +209,10 @@ func TestCheckoutLockPredicates(t *testing.T) {
 	}
 }
 
-func TestFlooredForCommandEval(t *testing.T) {
+func TestRestrictedForCommandEval(t *testing.T) {
 	t.Parallel()
 
-	// With command-eval enabled the mode is unchanged; disabling it raises every
+	// With command-eval enabled the mode is unchanged; disabling it forces every
 	// mode to strict so no source can inject git flags to bypass no-command-eval.
 	cases := []struct {
 		mode              CheckoutOverrideMode
@@ -225,11 +225,11 @@ func TestFlooredForCommandEval(t *testing.T) {
 	}
 
 	for _, tc := range cases {
-		if got := tc.mode.FlooredForCommandEval(true); got != tc.commandEvalOn {
-			t.Errorf("%v.FlooredForCommandEval(true) = %v, want %v", tc.mode, got, tc.commandEvalOn)
+		if got := tc.mode.RestrictedForCommandEval(true); got != tc.commandEvalOn {
+			t.Errorf("%v.RestrictedForCommandEval(true) = %v, want %v", tc.mode, got, tc.commandEvalOn)
 		}
-		if got := tc.mode.FlooredForCommandEval(false); got != tc.commandEvalOffMax {
-			t.Errorf("%v.FlooredForCommandEval(false) = %v, want %v", tc.mode, got, tc.commandEvalOffMax)
+		if got := tc.mode.RestrictedForCommandEval(false); got != tc.commandEvalOffMax {
+			t.Errorf("%v.RestrictedForCommandEval(false) = %v, want %v", tc.mode, got, tc.commandEvalOffMax)
 		}
 	}
 }

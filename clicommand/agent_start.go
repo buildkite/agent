@@ -234,7 +234,7 @@ type AgentStartConfig struct {
 	DisconnectAfterJobTimeout          int           `cli:"disconnect-after-job-timeout" deprecated:"Use disconnect-after-idle-timeout instead"`
 }
 
-// checkoutOverrideMode resolves the configured mode, flooring it for command-eval.
+// checkoutOverrideMode resolves the configured mode, forcing strict when command-eval is off.
 // AgentStartConfig stores NoCommandEval (the BootstrapConfig sibling stores CommandEval).
 func (cfg *AgentStartConfig) checkoutOverrideMode() (env.CheckoutOverrideMode, error) {
 	return resolveCheckoutOverrideMode(cfg.CheckoutOverrideMode, !cfg.NoCommandEval)
