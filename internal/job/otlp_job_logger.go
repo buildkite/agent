@@ -149,12 +149,7 @@ func (l *otlpJobLogger) Close() error {
 	if l.control != nil {
 		l.control.flush()
 	}
-	l.streamsMu.Lock()
-	streams := append([]*otlpJobLogStream(nil), l.streams...)
-	l.streamsMu.Unlock()
-	for _, stream := range streams {
-		stream.flush()
-	}
+	l.FlushRedactors()
 	if l.provider == nil {
 		return nil
 	}
@@ -167,6 +162,19 @@ func (l *otlpJobLogger) Close() error {
 		return flushErr
 	}
 	return shutdownErr
+}
+
+// FlushRedactors ends the current shared OTLP redaction streams. The executor
+// calls this at the same explicit hook/default-command boundaries where it
+// flushes the customer-facing redactors. Individual subprocesses within one of
+// those phases deliberately do not flush this state.
+func (l *otlpJobLogger) FlushRedactors() {
+	l.streamsMu.Lock()
+	streams := append([]*otlpJobLogStream(nil), l.streams...)
+	l.streamsMu.Unlock()
+	for _, stream := range streams {
+		stream.flush()
+	}
 }
 
 // otlpJobLogWriter tees process output to the normal (already redacting) job-log

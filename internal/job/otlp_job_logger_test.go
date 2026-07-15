@@ -238,6 +238,50 @@ func TestOTLPJobLoggerRedactsSecretsSplitAcrossCommands(t *testing.T) {
 	}
 }
 
+// TestOTLPJobLoggerFlushRedactorsMatchesExecutorBoundary ensures an explicit
+// executor redactor flush ends a partial match and emits it using the phase
+// that produced it, while ordinary per-command flushes do not.
+func TestOTLPJobLoggerFlushRedactorsMatchesExecutorBoundary(t *testing.T) {
+	t.Parallel()
+
+	const secret = "supersekret-value"
+	cap := &captureLogger{}
+	l := newTestOTLPJobLogger(cap, secret)
+	var downstream bytes.Buffer
+
+	first := l.Wrap(t.Context(), &downstream, map[string]string{"buildkite.phase": "hook"})
+	if _, err := first.Write([]byte("start super")); err != nil {
+		t.Fatalf("first Write() error = %v", err)
+	}
+	if f, ok := first.(interface{ Flush() }); ok {
+		f.Flush()
+	}
+	l.FlushRedactors()
+
+	second := l.Wrap(t.Context(), &downstream, map[string]string{"buildkite.phase": "command"})
+	if _, err := second.Write([]byte("sekret-value end\n")); err != nil {
+		t.Fatalf("second Write() error = %v", err)
+	}
+	if f, ok := second.(interface{ Flush() }); ok {
+		f.Flush()
+	}
+
+	cap.mu.Lock()
+	defer cap.mu.Unlock()
+	// The first command flush has already emitted the safe prefix. The
+	// executor boundary then releases the withheld partial match before the
+	// next phase starts.
+	want := []string{"start ", "super", "sekret-value end"}
+	if len(cap.bodies) != len(want) {
+		t.Fatalf("emitted records = %q, want %q", cap.bodies, want)
+	}
+	for i := range want {
+		if cap.bodies[i] != want[i] {
+			t.Errorf("record[%d] = %q, want %q", i, cap.bodies[i], want[i])
+		}
+	}
+}
+
 func TestOTLPJobLoggerChunksUnterminatedOutput(t *testing.T) {
 	t.Parallel()
 

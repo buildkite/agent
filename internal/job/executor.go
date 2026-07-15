@@ -74,6 +74,11 @@ type Executor struct {
 	// In order for the latter to happen, a reference is passed into the the Job API server as well
 	redactors *replacer.Mux
 
+	// otlpJobLogger retains the OTLP redaction streams while job log export is
+	// enabled. Executor redactor flush boundaries must flush these streams too
+	// so OTLP and the customer-facing job log have identical stream semantics.
+	otlpJobLogger *otlpJobLogger
+
 	// jobAPI is the Job API server for this job. It's retained so the executor
 	// can consume out-of-band requests made by hooks, such as a working
 	// directory set by an unwrapped hook via the /workdir endpoint.
@@ -205,6 +210,7 @@ func (e *Executor) Run(ctx context.Context) (exitCode int) {
 		if err != nil {
 			e.shell.Warningf("Failed to initialize OTLP job log exporter: %v", err)
 		} else {
+			e.otlpJobLogger = jobLogger
 			e.shell.SetOutputInterceptor(jobLogger.Wrap)
 			// Mirror the redacted shell logger control output (section headers,
 			// prompts, comments, warnings) into OTLP so the exported records
@@ -219,6 +225,7 @@ func (e *Executor) Run(ctx context.Context) (exitCode int) {
 				if err := jobLogger.Close(); err != nil {
 					e.shell.Warningf("Failed to close OTLP job log exporter: %v", err)
 				}
+				e.otlpJobLogger = nil
 			}()
 		}
 	}
@@ -616,7 +623,7 @@ func logMissingHookInfo(l shell.Logger, hookName, wrapperPath string) {
 
 func (e *Executor) runWrappedShellScriptHook(ctx context.Context, hookName string, hookCfg HookConfig) error {
 	defer func() {
-		if err := e.redactors.Flush(); err != nil {
+		if err := e.flushOutputRedactors(); err != nil {
 			e.shell.Errorf("Error flushing redactors: %v", err)
 		}
 	}()
@@ -807,6 +814,14 @@ func (e *Executor) addOutputRedactors() {
 	for _, pair := range toRedact {
 		e.redactors.Add(pair.Value, redact.GoEscaped(pair.Value))
 	}
+}
+
+func (e *Executor) flushOutputRedactors() error {
+	err := e.redactors.Flush()
+	if e.otlpJobLogger != nil {
+		e.otlpJobLogger.FlushRedactors()
+	}
+	return err
 }
 
 func (e *Executor) hasGlobalHook(name string) bool {
@@ -1246,7 +1261,7 @@ func (e *Executor) CommandPhase(ctx context.Context) (hookErr, commandErr error)
 // defaultCommandPhase is executed if there is no global or plugin command hook
 func (e *Executor) defaultCommandPhase(ctx context.Context) (retErr error) {
 	defer func() {
-		if err := e.redactors.Flush(); err != nil {
+		if err := e.flushOutputRedactors(); err != nil {
 			e.shell.Errorf("Error flushing redactors: %v", err)
 		}
 	}()
