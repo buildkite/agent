@@ -81,7 +81,8 @@ var MetaDataSetBatchCommand = cli.Command{
 			}
 		}
 
-		return setMetaDataBatch(ctx, cfg, l, items)
+		client := api.NewClient(l, loadAPIClientConfig(cfg, "AgentAccessToken"))
+		return setMetaDataBatch(ctx, client, cfg.Job, l, items)
 	},
 }
 
@@ -121,16 +122,14 @@ func parseMetaDataBatchArgs(args []string) ([]api.MetaData, error) {
 	return items, nil
 }
 
-func setMetaDataBatch(ctx context.Context, cfg MetaDataSetBatchConfig, l logger.Logger, items []api.MetaData) error {
-	client := api.NewClient(l, loadAPIClientConfig(cfg, "AgentAccessToken"))
-
+func setMetaDataBatch(ctx context.Context, client *api.Client, jobID string, l logger.Logger, items []api.MetaData) error {
 	batch := &api.MetaDataBatch{Items: items}
 
 	if err := roko.NewRetrier(
 		roko.WithMaxAttempts(10),
 		roko.WithStrategy(roko.ExponentialSubsecond(2*time.Second)),
 	).DoWithContext(ctx, func(r *roko.Retrier) error {
-		resp, err := client.SetMetaDataBatch(ctx, cfg.Job, batch)
+		resp, err := client.SetMetaDataBatch(ctx, jobID, batch)
 		if resp != nil && (resp.StatusCode == 401 || resp.StatusCode == 404) {
 			r.Break()
 		}

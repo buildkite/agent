@@ -4,8 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
-	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -90,14 +90,38 @@ func TestParseMetaDataBatchArgs(t *testing.T) {
 	}
 }
 
+type roundTripperFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripperFunc) RoundTrip(req *http.Request) (*http.Response, error) { return f(req) }
+
+func stubAPIClient(l logger.Logger, rt roundTripperFunc) *api.Client {
+	return api.NewClient(l, api.Config{
+		Endpoint:   "http://api.stub",
+		Token:      "agentaccesstoken",
+		HTTPClient: &http.Client{Transport: rt},
+	})
+}
+
+func stubResponse(req *http.Request, status int) *http.Response {
+	return &http.Response{
+		StatusCode: status,
+		Status:     http.StatusText(status),
+		Body:       io.NopCloser(strings.NewReader("")),
+		Header:     make(http.Header),
+		Request:    req,
+	}
+}
+
 func TestSetMetaDataBatch(t *testing.T) {
 	t.Parallel()
 
 	t.Run("success", func(t *testing.T) {
 		t.Parallel()
 
+		l := logger.NewBuffer()
+
 		var receivedBatch api.MetaDataBatch
-		server := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
+		client := stubAPIClient(l, func(req *http.Request) (*http.Response, error) {
 			if req.Method != "POST" {
 				t.Errorf("req.Method = %q, want %q", req.Method, "POST")
 			}
@@ -107,25 +131,15 @@ func TestSetMetaDataBatch(t *testing.T) {
 			if err := json.NewDecoder(req.Body).Decode(&receivedBatch); err != nil {
 				t.Errorf("decoding request body: %v", err)
 			}
-			rw.WriteHeader(http.StatusNoContent)
-		}))
-		defer server.Close()
-
-		cfg := MetaDataSetBatchConfig{
-			Job: "jobid",
-			APIConfig: APIConfig{
-				AgentAccessToken: "agentaccesstoken",
-				Endpoint:         server.URL,
-			},
-		}
+			return stubResponse(req, http.StatusNoContent), nil
+		})
 
 		items := []api.MetaData{
 			{Key: "foo", Value: "bar"},
 			{Key: "baz", Value: "qux"},
 		}
 
-		l := logger.NewBuffer()
-		if err := setMetaDataBatch(t.Context(), cfg, l, items); err != nil {
+		if err := setMetaDataBatch(t.Context(), client, "jobid", l, items); err != nil {
 			t.Fatalf("setMetaDataBatch error = %v, want nil", err)
 		}
 		if diff := cmp.Diff(receivedBatch.Items, items); diff != "" {
@@ -136,26 +150,17 @@ func TestSetMetaDataBatch(t *testing.T) {
 	t.Run("server error gives up when context is cancelled", func(t *testing.T) {
 		t.Parallel()
 
-		server := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
-			rw.WriteHeader(http.StatusInternalServerError)
-		}))
-		defer server.Close()
-
-		cfg := MetaDataSetBatchConfig{
-			Job: "jobid",
-			APIConfig: APIConfig{
-				AgentAccessToken: "agentaccesstoken",
-				Endpoint:         server.URL,
-			},
-		}
+		l := logger.NewBuffer()
+		client := stubAPIClient(l, func(req *http.Request) (*http.Response, error) {
+			return stubResponse(req, http.StatusInternalServerError), nil
+		})
 
 		items := []api.MetaData{{Key: "a", Value: "1"}}
 
 		ctx, cancel := context.WithTimeout(t.Context(), 100*time.Millisecond)
 		defer cancel()
 
-		l := logger.NewBuffer()
-		err := setMetaDataBatch(ctx, cfg, l, items)
+		err := setMetaDataBatch(ctx, client, "jobid", l, items)
 		if err == nil {
 			t.Fatal("setMetaDataBatch error = nil, want error")
 		}
@@ -167,25 +172,16 @@ func TestSetMetaDataBatch(t *testing.T) {
 	t.Run("401 does not retry", func(t *testing.T) {
 		t.Parallel()
 
+		l := logger.NewBuffer()
 		callCount := 0
-		server := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
+		client := stubAPIClient(l, func(req *http.Request) (*http.Response, error) {
 			callCount++
-			rw.WriteHeader(http.StatusUnauthorized)
-		}))
-		defer server.Close()
-
-		cfg := MetaDataSetBatchConfig{
-			Job: "jobid",
-			APIConfig: APIConfig{
-				AgentAccessToken: "agentaccesstoken",
-				Endpoint:         server.URL,
-			},
-		}
+			return stubResponse(req, http.StatusUnauthorized), nil
+		})
 
 		items := []api.MetaData{{Key: "a", Value: "1"}}
 
-		l := logger.NewBuffer()
-		if err := setMetaDataBatch(t.Context(), cfg, l, items); err == nil {
+		if err := setMetaDataBatch(t.Context(), client, "jobid", l, items); err == nil {
 			t.Fatal("setMetaDataBatch error = nil, want error")
 		}
 		if callCount != 1 {
@@ -196,25 +192,16 @@ func TestSetMetaDataBatch(t *testing.T) {
 	t.Run("404 does not retry", func(t *testing.T) {
 		t.Parallel()
 
+		l := logger.NewBuffer()
 		callCount := 0
-		server := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
+		client := stubAPIClient(l, func(req *http.Request) (*http.Response, error) {
 			callCount++
-			rw.WriteHeader(http.StatusNotFound)
-		}))
-		defer server.Close()
-
-		cfg := MetaDataSetBatchConfig{
-			Job: "jobid",
-			APIConfig: APIConfig{
-				AgentAccessToken: "agentaccesstoken",
-				Endpoint:         server.URL,
-			},
-		}
+			return stubResponse(req, http.StatusNotFound), nil
+		})
 
 		items := []api.MetaData{{Key: "a", Value: "1"}}
 
-		l := logger.NewBuffer()
-		if err := setMetaDataBatch(t.Context(), cfg, l, items); err == nil {
+		if err := setMetaDataBatch(t.Context(), client, "jobid", l, items); err == nil {
 			t.Fatal("setMetaDataBatch error = nil, want error")
 		}
 		if callCount != 1 {
