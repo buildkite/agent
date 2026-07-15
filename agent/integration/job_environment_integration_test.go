@@ -594,56 +594,6 @@ func TestCheckoutScopedJobEnvOverrideHonorsCheckoutOverrideMode(t *testing.T) {
 			wantIgnoredEnvVars: []string{"BUILDKITE_GIT_CLEAN_FLAGS"},
 		},
 		{
-			name:    "none_allows_job_env_to_override_clone_mirror_flags",
-			varName: "BUILDKITE_GIT_CLONE_MIRROR_FLAGS",
-			jobEnv: map[string]string{
-				"BUILDKITE_GIT_CLONE_MIRROR_FLAGS": "--mirror",
-			},
-			agentCfg: agent.AgentConfiguration{
-				GitCloneMirrorFlags:  "--bare",
-				CheckoutOverrideMode: env.CheckoutOverrideNone,
-			},
-			wantEnvValue: "--mirror",
-		},
-		{
-			name:    "strict_locks_clone_mirror_flags_to_agent_config",
-			varName: "BUILDKITE_GIT_CLONE_MIRROR_FLAGS",
-			jobEnv: map[string]string{
-				"BUILDKITE_GIT_CLONE_MIRROR_FLAGS": "--mirror",
-			},
-			agentCfg: agent.AgentConfiguration{
-				GitCloneMirrorFlags:  "--bare",
-				CheckoutOverrideMode: env.CheckoutOverrideStrict,
-			},
-			wantEnvValue:       "--bare",
-			wantIgnoredEnvVars: []string{"BUILDKITE_GIT_CLONE_MIRROR_FLAGS"},
-		},
-		{
-			name:    "none_allows_job_env_to_override_mirrors_skip_update",
-			varName: "BUILDKITE_GIT_MIRRORS_SKIP_UPDATE",
-			jobEnv: map[string]string{
-				"BUILDKITE_GIT_MIRRORS_SKIP_UPDATE": "true",
-			},
-			agentCfg: agent.AgentConfiguration{
-				GitMirrorsSkipUpdate: false,
-				CheckoutOverrideMode: env.CheckoutOverrideNone,
-			},
-			wantEnvValue: "true",
-		},
-		{
-			name:    "strict_locks_mirrors_skip_update_to_agent_config",
-			varName: "BUILDKITE_GIT_MIRRORS_SKIP_UPDATE",
-			jobEnv: map[string]string{
-				"BUILDKITE_GIT_MIRRORS_SKIP_UPDATE": "true",
-			},
-			agentCfg: agent.AgentConfiguration{
-				GitMirrorsSkipUpdate: false,
-				CheckoutOverrideMode: env.CheckoutOverrideStrict,
-			},
-			wantEnvValue:       "false",
-			wantIgnoredEnvVars: []string{"BUILDKITE_GIT_MIRRORS_SKIP_UPDATE"},
-		},
-		{
 			name:    "none_allows_job_env_to_override_checkout_timeout",
 			varName: "BUILDKITE_GIT_CHECKOUT_TIMEOUT",
 			jobEnv: map[string]string{
@@ -749,9 +699,10 @@ func TestCheckoutScopedJobEnvOverrideHonorsCheckoutOverrideMode(t *testing.T) {
 func TestCheckoutInfraVarsAreAgentAuthoritative(t *testing.T) {
 	t.Parallel()
 
-	// SSH_KEYSCAN, GIT_MIRRORS_PATH, GIT_MIRRORS_LOCK_TIMEOUT and
-	// GIT_MIRROR_CHECKOUT_MODE are agent-only: job env cannot override them even
-	// under the most permissive checkout-override mode (none).
+	// SSH_KEYSCAN, GIT_MIRRORS_PATH, GIT_MIRRORS_LOCK_TIMEOUT,
+	// GIT_MIRROR_CHECKOUT_MODE, GIT_CLONE_MIRROR_FLAGS and GIT_MIRRORS_SKIP_UPDATE
+	// are agent-only: job env cannot override them even under the most permissive
+	// checkout-override mode (none).
 	tests := []struct {
 		name         string
 		varName      string
@@ -786,6 +737,20 @@ func TestCheckoutInfraVarsAreAgentAuthoritative(t *testing.T) {
 			jobEnvValue:  "id",
 			agentCfg:     agent.AgentConfiguration{GitMirrorCheckoutMode: "raw", CheckoutOverrideMode: env.CheckoutOverrideNone},
 			wantEnvValue: "raw",
+		},
+		{
+			name:         "git_clone_mirror_flags",
+			varName:      "BUILDKITE_GIT_CLONE_MIRROR_FLAGS",
+			jobEnvValue:  "--mirror",
+			agentCfg:     agent.AgentConfiguration{GitCloneMirrorFlags: "--bare", CheckoutOverrideMode: env.CheckoutOverrideNone},
+			wantEnvValue: "--bare",
+		},
+		{
+			name:         "git_mirrors_skip_update",
+			varName:      "BUILDKITE_GIT_MIRRORS_SKIP_UPDATE",
+			jobEnvValue:  "true",
+			agentCfg:     agent.AgentConfiguration{GitMirrorsSkipUpdate: false, CheckoutOverrideMode: env.CheckoutOverrideNone},
+			wantEnvValue: "false",
 		},
 	}
 
