@@ -78,8 +78,6 @@ var (
 
 	mirrorCheckoutModes = []string{"dissociate", "reference"}
 
-	checkoutOverrideModes = env.CheckoutOverrideModeNames
-
 	buildkiteSetEnvironmentVariables = []*regexp.Regexp{
 		regexp.MustCompile("^BUILDKITE$"),
 		regexp.MustCompile("^BUILDKITE_.*$"),
