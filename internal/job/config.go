@@ -271,7 +271,9 @@ func (c *ExecutorConfig) ReadFromEnvironment(environ *env.Environment) map[strin
 			case reflect.Bool:
 				newBool, err := strconv.ParseBool(newStr)
 				if err != nil {
-					log.Printf("warning: cannot parse %s=%q as bool, ignoring", tag, newStr)
+					// Don't log the value: this env may hold secret-backed values
+					// (see setUp in executor.go) and this logger bypasses redaction.
+					log.Printf("warning: cannot parse %s as bool, ignoring", tag)
 					break
 				}
 				if newBool == v.Bool() {
@@ -283,7 +285,7 @@ func (c *ExecutorConfig) ReadFromEnvironment(environ *env.Environment) map[strin
 			case reflect.Int:
 				newInt, err := strconv.Atoi(newStr)
 				if err != nil {
-					log.Printf("warning: cannot parse %s=%q as int, ignoring", tag, newStr)
+					log.Printf("warning: cannot parse %s as int, ignoring", tag)
 					break
 				}
 				if int64(newInt) == v.Int() {
@@ -294,7 +296,7 @@ func (c *ExecutorConfig) ReadFromEnvironment(environ *env.Environment) map[strin
 
 			case reflect.Slice:
 				if v.Type().Elem() != reflect.TypeFor[string]() {
-					log.Printf("warning: cannot parse %s=%q as %v, ignoring", tag, newStr, v.Type())
+					log.Printf("warning: cannot parse %s as %v, ignoring", tag, v.Type())
 					break
 				}
 				var newSlice []string

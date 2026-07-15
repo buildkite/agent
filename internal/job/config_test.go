@@ -1,6 +1,9 @@
 package job
 
 import (
+	"bytes"
+	"log"
+	"os"
 	"slices"
 	"strings"
 	"testing"
@@ -109,6 +112,34 @@ func TestReadFromEnvironmentIgnoresMalformedBooleans(t *testing.T) {
 	}
 	if got, want := config.GitSubmodules, true; got != want {
 		t.Errorf("config.GitSubmodules = %t, want %t", got, want)
+	}
+}
+
+// ReadFromEnvironment runs over the full shell env, which can include
+// secret-backed values (setUp refreshes config right after fetching secrets).
+// Malformed bool/int values must not be echoed to the standard logger, which
+// writes outside the shell's redactors. Not parallel: it swaps the global log
+// output.
+func TestReadFromEnvironmentDoesNotLogMalformedValues(t *testing.T) {
+	const secret = "s3cret-not-a-number"
+
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
+	t.Cleanup(func() { log.SetOutput(os.Stderr) })
+
+	config := &ExecutorConfig{}
+	environ := env.FromSlice([]string{
+		"BUILDKITE_GIT_CHECKOUT_TIMEOUT=" + secret, // int field
+		"BUILDKITE_GIT_LFS_ENABLED=" + secret,      // bool field
+	})
+	config.ReadFromEnvironment(environ)
+
+	if strings.Contains(buf.String(), secret) {
+		t.Errorf("log leaked a secret-backed value: %q", buf.String())
+	}
+	// The var name should still be logged so the warning stays actionable.
+	if !strings.Contains(buf.String(), "BUILDKITE_GIT_CHECKOUT_TIMEOUT") {
+		t.Errorf("expected warning to name the offending var, got %q", buf.String())
 	}
 }
 
