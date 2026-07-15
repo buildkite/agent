@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"reflect"
 	"sync"
 	"time"
 
@@ -30,6 +31,8 @@ type otlpJobLogger struct {
 	provider  *sdklog.LoggerProvider
 	attrs     []otellog.KeyValue
 	redactors *replacer.Mux
+	streamsMu sync.Mutex
+	streams   []*otlpJobLogStream
 
 	// control mirrors bootstrap-generated control output (section headers,
 	// prompts, comments, warnings) into OTLP so the exported records match the
@@ -94,17 +97,33 @@ func (l *otlpJobLogger) Wrap(ctx context.Context, out io.Writer, attrs map[strin
 		log:   l.log,
 		attrs: appendLogAttrs(l.attrs, attrs),
 	}
-	// Redact OTLP output using the same secret needles as the job-log
-	// redactor, so secrets never reach the OTLP backend. A fresh per-command
-	// Replacer feeds the line emitter; it is seeded with the needles known at
-	// the time the command starts and kept in sync on every write with the
-	// live redactor Mux (see otlpJobLogWriter.Write), so secrets added mid
-	// command (e.g. via the Job API) are also redacted here.
+
+	// Keep one redaction stream for each shared downstream job-log writer. The
+	// visible job-log redactor also persists across command boundaries, so OTLP
+	// must retain partial matches across Wrap calls to avoid leaking fragments
+	// of a secret split between two commands.
+	l.streamsMu.Lock()
+	var stream *otlpJobLogStream
+	for _, candidate := range l.streams {
+		if sameOTLPWriter(candidate.out, out) {
+			stream = candidate
+			break
+		}
+	}
+	if stream == nil {
+		stream = &otlpJobLogStream{out: out, live: l.redactors}
+		stream.redactor = replacer.New(
+			otlpRedactedWriter{stream: stream},
+			l.redactors.Needles(),
+			redact.Redacted,
+		)
+		l.streams = append(l.streams, stream)
+	}
+	l.streamsMu.Unlock()
+
 	return &otlpJobLogWriter{
-		out:      out,
-		live:     l.redactors,
-		redactor: replacer.New(emitter, l.redactors.Needles(), redact.Redacted),
-		emitter:  emitter,
+		stream:  stream,
+		emitter: emitter,
 	}
 }
 
@@ -130,6 +149,12 @@ func (l *otlpJobLogger) Close() error {
 	if l.control != nil {
 		l.control.flush()
 	}
+	l.streamsMu.Lock()
+	streams := append([]*otlpJobLogStream(nil), l.streams...)
+	l.streamsMu.Unlock()
+	for _, stream := range streams {
+		stream.flush()
+	}
 	if l.provider == nil {
 		return nil
 	}
@@ -148,6 +173,42 @@ func (l *otlpJobLogger) Close() error {
 // writer and to a redacting OTLP line emitter, so OTLP records carry the same
 // redacted content as the customer-facing job log.
 type otlpJobLogWriter struct {
+	stream  *otlpJobLogStream
+	emitter *otlpLineEmitter
+}
+
+func (w *otlpJobLogWriter) Write(data []byte) (int, error) {
+	w.stream.mu.Lock()
+	defer w.stream.mu.Unlock()
+
+	n, err := w.stream.out.Write(data)
+	// Keep the OTLP redactor's needles in sync with the live job redactor
+	// before redacting, so secrets added mid-command (e.g. via the Job API)
+	// are redacted in OTLP output too. Replacer.Add deduplicates, so re-adding
+	// the full needle set each write is safe.
+	if w.stream.live != nil {
+		w.stream.redactor.Add(w.stream.live.Needles()...)
+	}
+	// Feed the OTLP copy through the redactor, which streams redacted bytes to
+	// this command's line emitter. Errors here must not affect the primary job
+	// log. The stream retains partial redaction matches for the next command.
+	w.stream.emitter = w.emitter
+	_, _ = w.stream.redactor.Write(data)
+	return n, err
+}
+
+func (w *otlpJobLogWriter) Flush() {
+	w.stream.mu.Lock()
+	defer w.stream.mu.Unlock()
+	// Flush this command's complete line data, but deliberately do not flush
+	// the shared redactor: it may be withholding the prefix of a secret that
+	// continues in the next command.
+	w.emitter.flush()
+}
+
+// otlpJobLogStream owns redaction state shared by command writers that feed the
+// same downstream job-log stream.
+type otlpJobLogStream struct {
 	mu       sync.Mutex
 	out      io.Writer
 	live     *replacer.Mux
@@ -155,29 +216,35 @@ type otlpJobLogWriter struct {
 	emitter  *otlpLineEmitter
 }
 
-func (w *otlpJobLogWriter) Write(data []byte) (int, error) {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-
-	n, err := w.out.Write(data)
-	// Keep the OTLP redactor's needles in sync with the live job redactor
-	// before redacting, so secrets added mid-command (e.g. via the Job API)
-	// are redacted in OTLP output too. Replacer.Add deduplicates, so re-adding
-	// the full needle set each write is safe.
-	if w.live != nil {
-		w.redactor.Add(w.live.Needles()...)
+func (s *otlpJobLogStream) flush() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	_ = s.redactor.Flush()
+	if s.emitter != nil {
+		s.emitter.flush()
 	}
-	// Feed the OTLP copy through the redactor, which streams redacted bytes to
-	// the line emitter. Errors here must not affect the primary job log.
-	_, _ = w.redactor.Write(data)
-	return n, err
 }
 
-func (w *otlpJobLogWriter) Flush() {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-	_ = w.redactor.Flush()
-	w.emitter.flush()
+// otlpRedactedWriter routes bytes released by the persistent redactor to the
+// emitter for the command whose write released them. Its stream mutex is held
+// by all callers.
+type otlpRedactedWriter struct {
+	stream *otlpJobLogStream
+}
+
+func (w otlpRedactedWriter) Write(data []byte) (int, error) {
+	if w.stream.emitter == nil {
+		return len(data), nil
+	}
+	return w.stream.emitter.Write(data)
+}
+
+func sameOTLPWriter(a, b io.Writer) bool {
+	if a == nil || b == nil {
+		return a == nil && b == nil
+	}
+	av, bv := reflect.ValueOf(a), reflect.ValueOf(b)
+	return av.Type() == bv.Type() && av.Comparable() && av.Interface() == bv.Interface()
 }
 
 // otlpLineEmitter line-buffers (already redacted) output and emits each line as

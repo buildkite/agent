@@ -194,6 +194,50 @@ func TestOTLPJobLoggerRedactsSecretsSplitAcrossWrites(t *testing.T) {
 	}
 }
 
+// TestOTLPJobLoggerRedactsSecretsSplitAcrossCommands ensures the OTLP redactor
+// retains partial matches across wrappers for sequential commands that share
+// the same downstream job-log stream.
+func TestOTLPJobLoggerRedactsSecretsSplitAcrossCommands(t *testing.T) {
+	t.Parallel()
+
+	const secret = "supersekret-value"
+	cap := &captureLogger{}
+	l := newTestOTLPJobLogger(cap, secret)
+	var downstream bytes.Buffer
+
+	first := l.Wrap(t.Context(), &downstream, map[string]string{"buildkite.phase": "checkout"})
+	if _, err := first.Write([]byte("start super")); err != nil {
+		t.Fatalf("first Write() error = %v", err)
+	}
+	if f, ok := first.(interface{ Flush() }); ok {
+		f.Flush()
+	}
+
+	second := l.Wrap(t.Context(), &downstream, map[string]string{"buildkite.phase": "command"})
+	if _, err := second.Write([]byte("sekret-value end\n")); err != nil {
+		t.Fatalf("second Write() error = %v", err)
+	}
+	if f, ok := second.(interface{ Flush() }); ok {
+		f.Flush()
+	}
+	if err := l.Close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+
+	cap.mu.Lock()
+	defer cap.mu.Unlock()
+	body := strings.Join(cap.bodies, "")
+	if strings.Contains(body, secret) || strings.Contains(body, "super") || strings.Contains(body, "sekret-value") {
+		t.Errorf("OTLP records leaked secret fragments across commands: %q", cap.bodies)
+	}
+	if !strings.Contains(body, "[REDACTED]") {
+		t.Errorf("OTLP records = %q, want them to contain [REDACTED]", cap.bodies)
+	}
+	if got := downstream.String(); got != "start "+secret+" end\n" {
+		t.Errorf("downstream = %q, want unmodified command output", got)
+	}
+}
+
 func TestOTLPJobLoggerChunksUnterminatedOutput(t *testing.T) {
 	t.Parallel()
 
