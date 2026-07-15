@@ -209,6 +209,66 @@ func TestEnvironmentHookCheckoutOverrideMode(t *testing.T) {
 	}
 }
 
+func TestEnvironmentHookCannotSetCheckoutInfraVars(t *testing.T) {
+	t.Parallel()
+
+	// SUBMODULE_CLONE_CONFIG and MIRROR_CHECKOUT_MODE are always agent-
+	// authoritative. Unlike the checkout-override-scoped vars, they're blocked
+	// from within-job sources regardless of the mode, so run under none (the most
+	// permissive mode) to prove the mode can't relax them.
+	infraVars := []struct {
+		envVar   string
+		envValue string
+	}{
+		{"BUILDKITE_GIT_SUBMODULE_CLONE_CONFIG", "protocol.file.allow=always"},
+		{"BUILDKITE_GIT_MIRROR_CHECKOUT_MODE", "dissociate"},
+	}
+
+	for _, tc := range infraVars {
+		t.Run(tc.envVar, func(t *testing.T) {
+			t.Parallel()
+
+			tester, err := NewExecutorTester(mainCtx)
+			if err != nil {
+				t.Fatalf("NewExecutorTester() error = %v", err)
+			}
+			defer tester.Close()
+
+			filename := "environment"
+			script := []string{
+				"#!/usr/bin/env bash",
+				fmt.Sprintf("export %s=%s", tc.envVar, tc.envValue),
+			}
+			if runtime.GOOS == "windows" {
+				filename = "environment.bat"
+				script = []string{
+					"@echo off",
+					fmt.Sprintf("set %s=%s", tc.envVar, tc.envValue),
+				}
+			}
+
+			if err := os.WriteFile(filepath.Join(tester.HooksDir, filename), []byte(strings.Join(script, "\n")), 0o700); err != nil {
+				t.Fatalf("os.WriteFile(%q, script, 0o700) = %v", filename, err)
+			}
+
+			tester.ExpectGlobalHook("command").Once().AndExitWith(0).AndCallFunc(func(c *bintest.Call) {
+				if got := c.GetEnv(tc.envVar); got == tc.envValue {
+					_, _ = fmt.Fprintf(c.Stderr, "%s=%q, want the within-job block to strip the hook's value\n", tc.envVar, got)
+					c.Exit(1)
+					return
+				}
+				c.Exit(0)
+			})
+
+			tester.RunAndCheck(t, "BUILDKITE_CHECKOUT_OVERRIDE_MODE=none")
+
+			if !strings.Contains(tester.Output, "env vars were blocked") || !strings.Contains(tester.Output, tc.envVar) {
+				t.Fatalf("output did not report %q as blocked\noutput: %s", tc.envVar, tester.Output)
+			}
+		})
+	}
+}
+
 func TestEnvironmentHookCannotRelaxCheckoutOverrideMode(t *testing.T) {
 	t.Parallel()
 
