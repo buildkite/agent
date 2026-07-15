@@ -552,6 +552,19 @@ func TestNscStore_DownloadNotFound(t *testing.T) {
 		}
 	})
 
+	t.Run("stderr expired maps to ErrBlobNotFound", func(t *testing.T) {
+		store := &NscStore{namespace: "ns", run: func(context.Context, string, ...string) (*CommandResult, error) {
+			return &CommandResult{
+				ExitCode: 1,
+				Stderr:   "Failed: the artifact has expired at 2026-07-14T02:06:24Z (request id: cbdorlqepas5e10ldvfvdpog40).",
+			}, nil
+		}}
+		_, err := store.Download(ctx, "valid-key", dest)
+		if !errors.Is(err, ErrBlobNotFound) {
+			t.Fatalf("Download err = %v, want ErrBlobNotFound", err)
+		}
+	})
+
 	t.Run("other failures are not ErrBlobNotFound", func(t *testing.T) {
 		store := &NscStore{namespace: "ns", run: func(context.Context, string, ...string) (*CommandResult, error) {
 			return &CommandResult{ExitCode: 1, Stderr: "connection refused"}, nil
