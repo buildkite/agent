@@ -564,6 +564,54 @@ func TestSecretsIntegration_ProtectedEnvironmentVariableRejection(t *testing.T) 
 	}
 }
 
+func TestSecretsIntegration_ProtectedCheckoutInfraRejection(t *testing.T) {
+	t.Parallel()
+
+	// These checkout-infra vars are always agent-authoritative (protectedEnv, not
+	// checkoutOverrideScope), so a secret can never set them, even under the most
+	// permissive checkout-override mode (none). Each is the sole secret so the
+	// rejection is unambiguously about it (fetchAndSetSecrets stops at the first
+	// offender). Pins against tier drift: moving either into checkoutOverrideScope
+	// would let a secret set it under none.
+	for _, envVar := range []string{
+		"BUILDKITE_GIT_MIRROR_CHECKOUT_MODE",
+		"BUILDKITE_GIT_SUBMODULE_CLONE_CONFIG",
+	} {
+		t.Run(envVar, func(t *testing.T) {
+			t.Parallel()
+
+			tester, err := NewExecutorTester(mainCtx)
+			if err != nil {
+				t.Fatalf("setting up executor tester: %v", err)
+			}
+			defer tester.Close()
+
+			apiServer := setupSecretsAPIServer(t, map[string]string{"INFRA_SECRET": "infra-secret-value"})
+			defer apiServer.Close()
+
+			secretsJSON, err := json.Marshal([]pipeline.Secret{{
+				Key:                 "INFRA_SECRET",
+				EnvironmentVariable: envVar,
+			}})
+			if err != nil {
+				t.Fatalf("marshaling secrets: %v", err)
+			}
+
+			err = tester.Run(t,
+				fmt.Sprintf("BUILDKITE_SECRETS_CONFIG=%s", string(secretsJSON)),
+				fmt.Sprintf("BUILDKITE_AGENT_ENDPOINT=%s", apiServer.URL),
+				"BUILDKITE_CHECKOUT_OVERRIDE_MODE=none",
+			)
+			if err == nil {
+				t.Fatalf("expected job to fail due to protected env var rejection, but it succeeded. Full output: %s", tester.Output)
+			}
+			if !strings.Contains(tester.Output, "cannot set protected environment variable") || !strings.Contains(tester.Output, envVar) {
+				t.Fatalf("expected output to mention protected env rejection of %s, got: %s", envVar, tester.Output)
+			}
+		})
+	}
+}
+
 func TestSecretsIntegration_CheckoutOverrideMode(t *testing.T) {
 	t.Parallel()
 
