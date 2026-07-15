@@ -12,6 +12,31 @@ import (
 	"github.com/buildkite/agent/v3/internal/shell"
 )
 
+// resolveSparseCheckout returns the cone paths to check out for this build, or
+// nil to check out the full tree — either because no paths were requested or
+// because git is too old (< 2.27).
+func (e *Executor) resolveSparseCheckout(ctx context.Context) []string {
+	paths := cleanGitSparseCheckoutPaths(e.GitSparseCheckoutPaths)
+	if len(paths) == 0 {
+		return nil
+	}
+
+	// We require git >= 2.27 because setupSparseCheckout runs
+	// `git sparse-checkout set --cone <paths>`, which was promoted
+	// from experimental to stable in git 2.27. On older git versions,
+	// fall back to a full checkout by returning nil.
+	ok, got, err := gitVersionAtLeast(ctx, e.shell, 2, 27)
+	if err != nil {
+		e.shell.Warningf("Sparse checkout requires git >= 2.27; falling back to full checkout (%v)", err)
+		return nil
+	}
+	if !ok {
+		e.shell.Warningf("Sparse checkout requires git >= 2.27, got %s; falling back to full checkout", got)
+		return nil
+	}
+	return paths
+}
+
 func cleanGitSparseCheckoutPaths(paths []string) []string {
 	cleaned := make([]string, 0, len(paths))
 	for _, path := range paths {
@@ -30,21 +55,27 @@ func parseGitVersion(output string) (major, minor int, ok bool) {
 	return major, minor, true
 }
 
-func gitVersionAtLeast(ctx context.Context, sh *shell.Shell, major, minor int) (bool, error) {
+// gitVersionAtLeast reports whether the local git binary is at least
+// major.minor. It also returns the parsed "M.m" version string so callers can
+// include it in log output. The err return is reserved for actual failures
+// (git command failure, unparseable version output) — a git that is simply
+// too old returns (false, "M.m", nil), not an error.
+func gitVersionAtLeast(ctx context.Context, sh *shell.Shell, major, minor int) (ok bool, got string, err error) {
 	output, err := sh.Command("git", "--version").RunAndCaptureStdout(ctx)
 	if err != nil {
-		return false, err
+		return false, "", err
 	}
 
-	gitMajor, gitMinor, ok := parseGitVersion(strings.TrimSpace(output))
-	if !ok {
-		return false, fmt.Errorf("parsing git version from %q", strings.TrimSpace(output))
+	gitMajor, gitMinor, parseOK := parseGitVersion(strings.TrimSpace(output))
+	if !parseOK {
+		return false, "", fmt.Errorf("parsing git version from %q", strings.TrimSpace(output))
 	}
 
+	got = fmt.Sprintf("%d.%d", gitMajor, gitMinor)
 	if gitMajor != major {
-		return gitMajor > major, nil
+		return gitMajor > major, got, nil
 	}
-	return gitMinor >= minor, nil
+	return gitMinor >= minor, got, nil
 }
 
 // sparseCheckoutMayBeConfigured does a cheap filesystem check for marker files
@@ -91,31 +122,19 @@ func (e *Executor) disableSparseCheckoutIfConfigured(ctx context.Context) {
 	}
 }
 
-// setupSparseCheckout configures (or disables) git sparse checkout for the
-// current working tree. It returns true if sparse checkout was successfully
-// applied for this build, so callers can adjust later behaviour (e.g. skip
-// submodule init, which requires the full tree).
-func (e *Executor) setupSparseCheckout(ctx context.Context) (bool, error) {
-	paths := cleanGitSparseCheckoutPaths(e.GitSparseCheckoutPaths)
-	if len(paths) == 0 {
+// setupSparseCheckout configures git sparse checkout for the given cone paths.
+// When sparsePaths is empty it does a full checkout instead, disabling any
+// prior sparse checkout configuration. It returns true when sparse checkout is
+// applied, so callers can skip steps that need the full tree (e.g. submodule
+// init).
+func (e *Executor) setupSparseCheckout(ctx context.Context, sparsePaths []string) (bool, error) {
+	if len(sparsePaths) == 0 {
 		e.disableSparseCheckoutIfConfigured(ctx)
 		return false, nil
 	}
 
-	ok, err := gitVersionAtLeast(ctx, e.shell, 2, 26)
-	if err != nil {
-		e.shell.Warningf("Sparse checkout requires git >= 2.26; falling back to full checkout (%v)", err)
-		e.disableSparseCheckoutIfConfigured(ctx)
-		return false, nil
-	}
-	if !ok {
-		e.shell.Warningf("Sparse checkout requires git >= 2.26; falling back to full checkout")
-		e.disableSparseCheckoutIfConfigured(ctx)
-		return false, nil
-	}
-
-	e.shell.Commentf("Setting up sparse checkout for paths: %s", strings.Join(paths, ","))
-	args := append([]string{"sparse-checkout", "set", "--cone"}, paths...)
+	e.shell.Commentf("Setting up sparse checkout for paths: %s", strings.Join(sparsePaths, ","))
+	args := append([]string{"sparse-checkout", "set", "--cone"}, sparsePaths...)
 	if err := e.shell.Command("git", args...).Run(ctx); err != nil {
 		return false, fmt.Errorf("setting sparse checkout paths: %w", err)
 	}
