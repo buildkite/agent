@@ -679,7 +679,7 @@ func (e *Executor) applyEnvironmentChanges(changes hook.EnvChanges) {
 	for k, v := range changes.Diff.Added {
 		if _, ok := executorConfigEnvChanges[k]; ok {
 			executorConfigEnvChangesLogged[k] = true
-			e.shell.Commentf("%s is now %q", k, v)
+			e.shell.Commentf("%s is now %s", k, e.redactedValue(v))
 		} else {
 			e.shell.Commentf("%s added", k)
 		}
@@ -687,7 +687,7 @@ func (e *Executor) applyEnvironmentChanges(changes hook.EnvChanges) {
 	for k, v := range changes.Diff.Changed {
 		if _, ok := executorConfigEnvChanges[k]; ok {
 			executorConfigEnvChangesLogged[k] = true
-			e.shell.Commentf("%s was %q and is now %q", k, v.Old, v.New)
+			e.shell.Commentf("%s was %s and is now %s", k, e.redactedValue(v.Old), e.redactedValue(v.New))
 		} else {
 			e.shell.Commentf("%s changed", k)
 		}
@@ -705,9 +705,16 @@ func (e *Executor) applyEnvironmentChanges(changes hook.EnvChanges) {
 	// it might not appear in the script "changes".
 	for k, v := range executorConfigEnvChanges {
 		if !executorConfigEnvChangesLogged[k] {
-			e.shell.Commentf("%s is now %q", k, v)
+			e.shell.Commentf("%s is now %s", k, e.redactedValue(v))
 		}
 	}
+}
+
+// redactedValue strips known secrets from a value before %q formatting.
+// %q escapes newlines, so the output redactor can't match a multiline secret
+// like an SSH key once it's formatted.
+func (e *Executor) redactedValue(value string) string {
+	return fmt.Sprintf("%q", redact.String(value, e.redactors.Needles()))
 }
 
 // Should be called whenever we updated our e.shell.Env.
