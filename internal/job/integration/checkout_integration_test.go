@@ -275,10 +275,10 @@ func TestCheckingOutLocalGitProjectWithSparseCheckoutAutoAddsBlobNoneFilter(t *t
 		PassthroughToLocalCommand()
 
 	git.ExpectAll([][]any{
+		{"--version"},
 		{"clone", "-v", "--sparse", "--filter=blob:none", "--", tester.Repo.Path, "."},
 		{"clean", "-fdq"},
 		{"fetch", "--filter=blob:none", "-v", "--", "origin", "main"},
-		{"--version"},
 		{"sparse-checkout", "set", "--cone", ".buildkite/", "src/"},
 		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
 		{"clean", "-fdq"},
