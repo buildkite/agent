@@ -928,6 +928,13 @@ func (e *Executor) setUp(ctx context.Context) (retErr error) {
 		if err := e.fetchAndSetSecrets(ctx); err != nil {
 			return fmt.Errorf("failed to fetch secrets for job: %w", err)
 		}
+		// fetchAndSetSecrets only writes to e.shell.Env. Refresh the executor
+		// config so a checkout-scoped var a secret is allowed to set (none mode)
+		// reaches the checkout phase, which reads struct fields like e.GitCloneFlags
+		// rather than the env. With no environment/plugin hook nothing else triggers
+		// a refresh before checkout. We don't route through applyEnvironmentChanges
+		// because its change logging would print the secret value.
+		e.ReadFromEnvironment(e.shell.Env)
 	}
 
 	// It's important to do this before checking out plugins, in case you want

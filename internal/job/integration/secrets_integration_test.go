@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/buildkite/agent/v3/internal/job"
 	"github.com/buildkite/agent/v3/jobapi"
 	"github.com/buildkite/bintest/v3"
 	"github.com/buildkite/go-pipeline"
@@ -626,7 +627,10 @@ func TestSecretsIntegration_CheckoutOverrideMode(t *testing.T) {
 		commandEvalDisabled bool
 		wantErr             bool
 	}{
-		{name: "none_allows_checkout_scoped_secret", envVar: "BUILDKITE_GIT_CLONE_FLAGS", secretValue: "--mirror", mode: "none"},
+		// This case runs a real checkout, and under none the secret now actually
+		// reaches git clone (see TestSecretsIntegration_CheckoutScopedSecretReachesCheckout),
+		// so the value must be a checkout-safe clone flag rather than --mirror.
+		{name: "none_allows_checkout_scoped_secret", envVar: "BUILDKITE_GIT_CLONE_FLAGS", secretValue: "--verbose", mode: "none"},
 		{name: "default_rejects_checkout_scoped_secret", envVar: "BUILDKITE_GIT_CLONE_FLAGS", secretValue: "--mirror", wantErr: true},
 		{name: "from_job_rejects_checkout_scoped_secret", envVar: "BUILDKITE_GIT_CLONE_FLAGS", secretValue: "--mirror", mode: "from-job", wantErr: true},
 		{name: "strict_rejects_checkout_locked_secret", envVar: "BUILDKITE_GIT_CLONE_FLAGS", secretValue: "--mirror", mode: "strict", wantErr: true},
@@ -698,4 +702,63 @@ func TestSecretsIntegration_CheckoutOverrideMode(t *testing.T) {
 			tester.CheckMocks(t)
 		})
 	}
+}
+
+// TestSecretsIntegration_CheckoutScopedSecretReachesCheckout verifies that a
+// checkout-scoped var set by an allowed secret (none mode) actually reaches the
+// checkout phase, not just e.shell.Env. Secrets are applied in setUp before any
+// hook runs, and checkout reads struct fields like e.GitCloneFlags that are only
+// refreshed from env when a hook triggers applyEnvironmentChanges. With no
+// environment/plugin hook, a secret-supplied BUILDKITE_GIT_CLONE_FLAGS would
+// otherwise be silently ignored by git clone. No hooks are registered here so the
+// clone flag having any effect depends on the config refresh after fetchAndSetSecrets.
+func TestSecretsIntegration_CheckoutScopedSecretReachesCheckout(t *testing.T) {
+	t.Parallel()
+
+	tester, err := NewExecutorTester(mainCtx)
+	if err != nil {
+		t.Fatalf("setting up executor tester: %v", err)
+	}
+	defer tester.Close()
+
+	// --verbose is functionally identical to the default -v clone flag but a
+	// distinct string, so the assertion distinguishes the secret value reaching
+	// checkout from the stale default.
+	apiServer := setupSecretsAPIServer(t, map[string]string{"CLONE_FLAGS_SECRET": "--verbose"})
+	defer apiServer.Close()
+
+	secretsJSON, err := json.Marshal([]pipeline.Secret{{
+		Key:                 "CLONE_FLAGS_SECRET",
+		EnvironmentVariable: "BUILDKITE_GIT_CLONE_FLAGS",
+	}})
+	if err != nil {
+		t.Fatalf("marshaling secrets: %v", err)
+	}
+
+	git := tester.
+		MustMock(t, "git").
+		PassthroughToLocalCommand()
+
+	// clone must use --verbose from the secret; the rest of the sequence uses the
+	// clean/fetch flags set below.
+	git.ExpectAll([][]any{
+		{"clone", "--verbose", "--", tester.Repo.Path, "."},
+		{"clean", "-fdq"},
+		{"fetch", "-v", "--", "origin", "main"},
+		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
+		{"clean", "-fdq"},
+		{"--no-pager", "log", "-1", "HEAD", "-s", "--no-color", gitShowFormatArg},
+	})
+
+	agent := tester.MockAgent(t)
+	agent.Expect("meta-data", "exists", job.CommitMetadataKey).AndExitWith(1)
+	agent.Expect("meta-data", "set", job.CommitMetadataKey).WithStdin(commitPattern)
+
+	tester.RunAndCheck(t,
+		fmt.Sprintf("BUILDKITE_SECRETS_CONFIG=%s", string(secretsJSON)),
+		fmt.Sprintf("BUILDKITE_AGENT_ENDPOINT=%s", apiServer.URL),
+		"BUILDKITE_CHECKOUT_OVERRIDE_MODE=none",
+		"BUILDKITE_GIT_CLEAN_FLAGS=-fdq",
+		"BUILDKITE_GIT_FETCH_FLAGS=-v",
+	)
 }
