@@ -45,6 +45,7 @@ type AgentConfiguration struct {
 	RunInPty                        bool
 	KubernetesExec                  bool
 	KubernetesContainerStartTimeout time.Duration
+	JobContextDir                   string
 
 	SigningJWKSFile  string // Where to find the key to sign pipeline uploads with (passed through to jobs, they might be uploading pipelines)
 	SigningJWKSKeyID string // The key ID to sign pipeline uploads with

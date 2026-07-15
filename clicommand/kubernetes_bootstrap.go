@@ -29,6 +29,7 @@ intended to be used directly.`
 type KubernetesBootstrapConfig struct {
 	KubernetesContainerID                int           `cli:"kubernetes-container-id"`
 	KubernetesBootstrapConnectionTimeout time.Duration `cli:"kubernetes-bootstrap-connection-timeout"`
+	JobContextDir                        string        `cli:"job-context-dir" normalize:"filepath"`
 
 	// Global flags for debugging, etc
 	LogLevel    string   `cli:"log-level"`
@@ -44,6 +45,7 @@ var KubernetesBootstrapCommand = cli.Command{
 	Description: kubernetesBootstrapHelpDescription,
 	Flags: []cli.Flag{
 		KubernetesContainerIDFlag,
+		JobContextDirFlag,
 		cli.DurationFlag{
 			Name: "kubernetes-bootstrap-connection-timeout",
 			Usage: "This is intended to be used only by the Buildkite k8s stack " +
@@ -70,7 +72,10 @@ var KubernetesBootstrapCommand = cli.Command{
 		defer cancel()
 
 		// Connect the socket.
-		socket := &kubernetes.Client{ID: cfg.KubernetesContainerID}
+		socket := &kubernetes.Client{
+			ID:         cfg.KubernetesContainerID,
+			SocketPath: kubernetes.SocketPath(cfg.JobContextDir),
+		}
 
 		// Registration passes down the env vars the agent normally sets on the
 		// subprocess, but in this case the bootstrap is in a separate
@@ -293,6 +298,11 @@ var existingEnvPriority = map[string]struct{}{
 	"BUILDKITE_COMMAND": {},
 	// BUILDKITE_CONTAINER_ID is preserved in case of Hyrum's Law.
 	"BUILDKITE_CONTAINER_ID": {},
+	// BUILDKITE_JOB_CONTEXT_DIR is set by the k8s stack on each container.
+	// The shared volume holding the socket and job context files may be
+	// mounted at a different path in each container, so the local value must
+	// win over the agent container's value.
+	"BUILDKITE_JOB_CONTEXT_DIR": {},
 	// BUILDKITE_SOCKETS_PATH is set by agent-stack-k8s and varies by container
 	// name.
 	"BUILDKITE_SOCKETS_PATH": {},

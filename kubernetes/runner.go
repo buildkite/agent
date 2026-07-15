@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/rpc"
 	"os"
+	"path/filepath"
 	"sync"
 	"syscall"
 	"time"
@@ -23,7 +24,25 @@ func init() {
 	gob.Register(new(syscall.WaitStatus))
 }
 
-const defaultSocketPath = "/workspace/buildkite.sock"
+const (
+	// socketName is the name of the coordination socket file within the job
+	// context directory.
+	socketName = "buildkite.sock"
+
+	// DefaultContextDir is the job context directory used when no other
+	// directory is configured. It must be on a volume shared by all
+	// containers in the pod.
+	DefaultContextDir = "/workspace"
+)
+
+// SocketPath returns the path of the coordination socket within the given job
+// context directory. An empty dir means DefaultContextDir.
+func SocketPath(dir string) string {
+	if dir == "" {
+		dir = DefaultContextDir
+	}
+	return filepath.Join(dir, socketName)
+}
 
 type RunnerConfig struct {
 	SocketPath         string
@@ -37,7 +56,7 @@ type RunnerConfig struct {
 // NewRunner returns a runner, implementing the agent's jobRunner interface.
 func NewRunner(l logger.Logger, c RunnerConfig) *Runner {
 	if c.SocketPath == "" {
-		c.SocketPath = defaultSocketPath
+		c.SocketPath = SocketPath("")
 	}
 	clients := make([]*clientResult, c.ClientCount)
 	for i := range c.ClientCount {

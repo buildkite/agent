@@ -206,6 +206,7 @@ type AgentStartConfig struct {
 	StrictSingleHooks               bool          `cli:"strict-single-hooks"`
 	KubernetesExec                  bool          `cli:"kubernetes-exec"`
 	KubernetesContainerStartTimeout time.Duration `cli:"kubernetes-container-start-timeout"`
+	JobContextDir                   string        `cli:"job-context-dir" normalize:"filepath"`
 	TraceContextEncoding            string        `cli:"trace-context-encoding"`
 	NoMultipartArtifactUpload       bool          `cli:"no-multipart-artifact-upload"`
 	ArtifactUploadConcurrency       int           `cli:"artifact-upload-concurrency"`
@@ -778,6 +779,7 @@ var AgentStartCommand = cli.Command{
 			EnvVar: "BUILDKITE_KUBERNETES_CONTAINER_START_TIMEOUT",
 			Value:  5 * time.Minute,
 		},
+		JobContextDirFlag,
 
 		// Other shared flags
 		RedactedVars,
@@ -1141,6 +1143,7 @@ var AgentStartCommand = cli.Command{
 			ArtifactUploadConcurrency:       cfg.ArtifactUploadConcurrency,
 			KubernetesExec:                  cfg.KubernetesExec,
 			KubernetesContainerStartTimeout: cfg.KubernetesContainerStartTimeout,
+			JobContextDir:                   cfg.JobContextDir,
 			PingMode:                        cfg.PingMode,
 
 			SigningJWKSFile:  cfg.SigningJWKSFile,

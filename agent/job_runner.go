@@ -90,6 +90,14 @@ type JobRunnerConfig struct {
 	// It's useful to be configured in situations like huge container image cold download.
 	KubernetesContainerStartTimeout time.Duration
 
+	// JobContextDir is the directory for files the agent uses to coordinate
+	// with the processes running the job: the job env files, the job timeout
+	// marker file, and, in Kubernetes mode, the coordination socket. If
+	// empty, it defaults to kubernetes.DefaultContextDir in Kubernetes mode,
+	// or the system temporary directory otherwise. In Kubernetes mode it must
+	// be on a volume shared by all containers in the pod.
+	JobContextDir string
+
 	// Stdout of the parent agent process. Used for job log stdout writing arg, for simpler containerized log collection.
 	AgentStdout io.Writer
 }
@@ -212,7 +220,9 @@ func NewJobRunner(ctx context.Context, l logger.Logger, apiClient *api.Client, c
 		},
 	)
 
-	r.envShellFile, r.envJSONFile, err = createJobEnvFiles(r.agentLogger, r.conf.Job.ID, conf.KubernetesExec)
+	contextDir := jobContextDir(conf)
+
+	r.envShellFile, r.envJSONFile, err = createJobEnvFiles(r.agentLogger, r.conf.Job.ID, contextDir)
 	if err != nil {
 		return nil, err
 	}
@@ -221,7 +231,7 @@ func NewJobRunner(ctx context.Context, l logger.Logger, apiClient *api.Client, c
 	// disk if the job is cancelled because of a Buildkite job-level timeout
 	// (see Cancel). The bootstrap subprocess reads this path from the
 	// BUILDKITE_AGENT_JOB_TIMEOUT_FILE env var.
-	r.jobTimeoutFilePath = jobTimeoutFilePath(r.conf.Job.ID, conf.KubernetesExec)
+	r.jobTimeoutFilePath = jobTimeoutFilePath(r.conf.Job.ID, contextDir)
 
 	env, err := r.createEnvironment(ctx)
 	if err != nil {
@@ -338,6 +348,7 @@ func NewJobRunner(ctx context.Context, l logger.Logger, apiClient *api.Client, c
 			return nil, fmt.Errorf("failed to parse BUILDKITE_CONTAINER_COUNT: %w", err)
 		}
 		r.process = kubernetes.NewRunner(r.agentLogger, kubernetes.RunnerConfig{
+			SocketPath:         kubernetes.SocketPath(jobContextDir(conf)),
 			Stdout:             r.jobLogs,
 			Stderr:             r.jobLogs,
 			ClientCount:        containerCount,
@@ -934,13 +945,22 @@ func (r *JobRunner) onUploadHeaderTime(ctx context.Context, cursor, total int, t
 	}
 }
 
-func createJobEnvFiles(l logger.Logger, jobID string, kubernetesExec bool) (shellFile, jsonFile *os.File, err error) {
-	// Use /workspace in Kubernetes mode for shared volume access between containers
-	tempDir := os.TempDir()
-	if kubernetesExec {
-		tempDir = "/workspace"
+// jobContextDir returns the directory for files the agent creates to
+// coordinate with the processes running the job (the env files, the job
+// timeout marker file, and, in Kubernetes mode, the coordination socket). In
+// Kubernetes mode these files are read by other containers in the pod, so the
+// directory must be on a volume shared by all containers in the pod.
+func jobContextDir(conf JobRunnerConfig) string {
+	if conf.JobContextDir != "" {
+		return conf.JobContextDir
 	}
+	if conf.KubernetesExec {
+		return kubernetes.DefaultContextDir
+	}
+	return os.TempDir()
+}
 
+func createJobEnvFiles(l logger.Logger, jobID, tempDir string) (shellFile, jsonFile *os.File, err error) {
 	// tempDir is not guaranteed to exist
 	if _, err := os.Stat(tempDir); os.IsNotExist(err) {
 		// Actual file permissions will be reduced by umask, and won't be 0o777 unless the user has manually changed the umask to 000
@@ -971,10 +991,6 @@ func createJobEnvFiles(l logger.Logger, jobID string, kubernetesExec bool) (shel
 // because of a Buildkite job-level timeout. The file is not created until
 // the timeout actually fires; the bootstrap detects the timeout by checking
 // whether the file exists.
-func jobTimeoutFilePath(jobID string, kubernetesExec bool) string {
-	tempDir := os.TempDir()
-	if kubernetesExec {
-		tempDir = "/workspace"
-	}
+func jobTimeoutFilePath(jobID, tempDir string) string {
 	return filepath.Join(tempDir, fmt.Sprintf("job-timeout-%s", jobID))
 }
