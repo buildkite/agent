@@ -32,6 +32,22 @@ func (m *Mux) Add(needles ...string) {
 	}
 }
 
+// Needles returns the deduplicated set of needles across all replacers.
+func (m *Mux) Needles() []string {
+	seen := make(map[string]struct{})
+	needles := make([]string, 0)
+	for _, r := range m.underlying {
+		for _, n := range r.Needles() {
+			if _, ok := seen[n]; ok {
+				continue
+			}
+			seen[n] = struct{}{}
+			needles = append(needles, n)
+		}
+	}
+	return needles
+}
+
 // Append adds a replacer to the Mux.
 func (m *Mux) Append(r *Replacer) {
 	m.underlying = append(m.underlying, r)
