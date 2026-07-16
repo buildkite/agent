@@ -303,6 +303,9 @@ var PipelineUploadCommand = cli.Command{
 			case "json":
 				enc := json.NewEncoder(c.App.Writer)
 				enc.SetIndent("", "  ")
+				// HTML escapes make dry-run output harder to read, and we don't
+				// expect the output to appear in a JS context within HTML.
+				enc.SetEscapeHTML(false)
 				dryRunEnc = enc.Encode
 
 			case "yaml":
@@ -563,6 +566,14 @@ func searchForSecrets(
 		shortValues[name] = struct{}{}
 	}
 
+	// Add GoEscaped versions (where different).
+	for _, pair := range matched {
+		escVal := redact.GoEscaped(pair.Value)
+		if pair.Value != escVal {
+			matched = append(matched, env.Pair{Name: pair.Name, Value: escVal})
+		}
+	}
+
 	// Create a slice of values to search the pipeline for.
 	needles := make([]string, 0, len(matched))
 	for _, pair := range matched {
@@ -583,7 +594,11 @@ func searchForSecrets(
 	})
 
 	// Encode the pipeline as JSON into the searcher.
-	if err := json.NewEncoder(searcher).Encode(pp); err != nil {
+	// Disable HTML escapes, because these replacements might hinder the search,
+	// and we ultimately discard the output.
+	enc := json.NewEncoder(searcher)
+	enc.SetEscapeHTML(false)
+	if err := enc.Encode(pp); err != nil {
 		return fmt.Errorf("couldn’t scan the %q pipeline for redacted variables. This parsed pipeline could not be serialized, ensure the pipeline YAML is valid, or ignore interpolated secrets for this upload by passing --redacted-vars=''. (%w)", src, err)
 	}
 

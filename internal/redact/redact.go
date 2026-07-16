@@ -8,6 +8,7 @@ import (
 	"os"
 	"path"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/buildkite/agent/v3/env"
@@ -61,7 +62,24 @@ func NeedlesFromEnv(patterns []string) (values, short []string, err error) {
 
 // New returns a replacer configured to write to dst, and redact all needles.
 func New(dst io.Writer, needles []string) *replacer.Replacer {
-	return replacer.New(dst, needles, Redacted)
+	return replacer.New(dst, AppendGoEscaped(needles), Redacted)
+}
+
+// GoEscaped is like [strconv.Quote], but without the surrounding double quotes.
+func GoEscaped(s string) string {
+	q := strconv.Quote(s)
+	return q[1 : len(q)-1]
+}
+
+// AppendGoEscaped appends the [GoEscaped] versions of needles, as needed, to
+// catch values printed via %q.
+func AppendGoEscaped(needles []string) []string {
+	for _, n := range needles {
+		if n2 := GoEscaped(n); n != n2 {
+			needles = append(needles, n2)
+		}
+	}
+	return needles
 }
 
 // MatchAny reports if the name matches any of the patterns.
