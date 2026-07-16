@@ -26,47 +26,62 @@ var ErrCommitVerificationUnavailable = errors.New("commit verification unavailab
 func (e *Executor) checkCommitOnBranch(ctx context.Context) error {
 	e.shell.Commentf("Verifying commit %q is on branch %q", e.Commit, e.Branch)
 
+	// The build's branch usually isn't a local ref at this point: the checkout
+	// fetches the commit directly (detached HEAD) and only the repository's
+	// default branch gets a local ref from the clone. Fetch the branch tip so
+	// there's a resolvable ref to check the commit's ancestry against, and pin it
+	// to a SHA (the deepening fetches below overwrite FETCH_HEAD). Without this,
+	// merge-base against the bare branch name fails to resolve for any non-default
+	// branch and the check silently degrades to "unavailable".
+	if fetchErr := e.shell.Command("git", "fetch", "origin", e.Branch).Run(ctx); fetchErr != nil {
+		return fmt.Errorf("%w: unable to fetch branch %q: %w", ErrCommitVerificationUnavailable, e.Branch, fetchErr)
+	}
+	branchTip, err := e.shell.Command("git", "rev-parse", "FETCH_HEAD").RunAndCaptureStdout(ctx)
+	if err != nil {
+		return fmt.Errorf("%w: unable to resolve branch %q: %w", ErrCommitVerificationUnavailable, e.Branch, err)
+	}
+	branchTip = strings.TrimSpace(branchTip)
+
+	// merge-base --is-ancestor walks back from the branch tip: exit 0 means the
+	// commit is reachable from it (definitive, even on a shallow clone), exit 1
+	// means it is not. On a shallow clone a "not an ancestor" result can be a
+	// false negative when the connecting history lies beyond the shallow boundary,
+	// so a negative (or otherwise inconclusive) result is only trusted once the
+	// repository is no longer shallow; until then we deepen the branch and re-check.
 	for _, fetchFlag := range []string{"", "--deepen=50", "--unshallow"} {
 		if fetchFlag != "" {
-			// After the first iteration, try to unshallow the repo (a bit or a lot)
 			e.shell.Commentf("Deepening checkout to verify commit (%s)...", fetchFlag)
-			fetchErr := e.shell.Command("git", "fetch", fetchFlag).Run(ctx)
-			if fetchErr != nil {
+			if fetchErr := e.shell.Command("git", "fetch", fetchFlag, "origin", e.Branch).Run(ctx); fetchErr != nil {
 				return fmt.Errorf("%w: unable to verify commit %q on branch %q: %w", ErrCommitVerificationUnavailable, e.Commit, e.Branch, fetchErr)
 			}
 		}
 
-		// Try the ancestry check
-		err := e.shell.Command("git", "merge-base", "--is-ancestor", e.Commit, e.Branch).Run(ctx)
-
-		switch shell.ExitCode(err) {
-		case 0:
-			return nil // verified!
-		case 1:
-			return fmt.Errorf("%w: commit %q is not on branch %q", ErrCommitVerificationFailed, e.Commit, e.Branch)
-		case 128:
-			// unclear — continue below
-		default:
-			return fmt.Errorf("%w: unable to verify commit %q on branch %q: %w", ErrCommitVerificationUnavailable, e.Commit, e.Branch, err)
+		mergeBaseErr := e.shell.Command("git", "merge-base", "--is-ancestor", e.Commit, branchTip).Run(ctx)
+		if mergeBaseErr == nil {
+			return nil // commit is reachable from the branch tip: verified
 		}
-
-		// On the first iteration, check if the checkout is shallow. If it is
-		// not, the 128 exit code reflects some other error.
-		if fetchFlag != "" {
-			continue
+		// A non-exit error (e.g. git failed to spawn) tells us nothing about
+		// ancestry, so treat it as unavailable rather than a definitive failure.
+		if !shell.IsExitError(mergeBaseErr) {
+			return fmt.Errorf("%w: unable to verify commit %q on branch %q: %w", ErrCommitVerificationUnavailable, e.Commit, e.Branch, mergeBaseErr)
 		}
-		output, shallowErr := e.shell.Command("git", "rev-parse", "--is-shallow-repository").RunAndCaptureStdout(ctx)
+		exitCode := shell.ExitCode(mergeBaseErr)
+
+		shallow, shallowErr := e.shell.Command("git", "rev-parse", "--is-shallow-repository").RunAndCaptureStdout(ctx)
 		if shallowErr != nil {
 			return fmt.Errorf("%w: unable to verify commit %q on branch %q: %w", ErrCommitVerificationUnavailable, e.Commit, e.Branch, shallowErr)
 		}
-
-		if strings.TrimSpace(output) != "true" {
-			// Not shallow — this is a genuine error
-			return fmt.Errorf("%w: unable to verify commit %q on branch %q: %w", ErrCommitVerificationUnavailable, e.Commit, e.Branch, err)
+		if strings.TrimSpace(shallow) != "true" {
+			// Full history, so the result is now definitive.
+			if exitCode == 1 {
+				return fmt.Errorf("%w: commit %q is not on branch %q", ErrCommitVerificationFailed, e.Commit, e.Branch)
+			}
+			return fmt.Errorf("%w: unable to verify commit %q on branch %q", ErrCommitVerificationUnavailable, e.Commit, e.Branch)
 		}
+		// Still shallow, so deepen on the next iteration and re-check.
 	}
 
-	// All attempts exhausted — verification is unavailable
+	// All attempts exhausted, so verification is unavailable.
 	return fmt.Errorf("%w: unable to verify commit %q on branch %q after exhausting fetch strategies", ErrCommitVerificationUnavailable, e.Commit, e.Branch)
 }
 
