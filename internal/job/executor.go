@@ -934,8 +934,10 @@ func (e *Executor) setUp(ctx context.Context) (retErr error) {
 		// config so a checkout-scoped var a secret is allowed to set (none mode)
 		// reaches the checkout phase, which reads struct fields like e.GitCloneFlags
 		// rather than the env. With no environment/plugin hook nothing else triggers
-		// a refresh before checkout. We don't route through applyEnvironmentChanges
-		// because its change logging would print the secret value.
+		// a refresh before checkout. Discard the returned changes: fetchAndSetSecrets
+		// already announces each secret by name, and we must not echo secret-backed
+		// values into the log even redacted (that would rely on the redactor never
+		// missing an escaping, the exact failure mode being hardened against).
 		e.ReadFromEnvironment(e.shell.Env)
 	}
 

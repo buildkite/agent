@@ -368,8 +368,10 @@ func TestSecretsIntegration_MultilineSecretRedaction(t *testing.T) {
 }
 
 // A secret mapped onto a config var like BUILDKITE_GIT_SSH_KEY used to be
-// printed by the env change log after a hook ran. %q escaped its newlines so
-// the output redactor missed it.
+// printed by the env change log after a hook ran; %q escaped its newlines so the
+// output redactor missed it. The agent now applies secret-backed config vars
+// silently (announcing them by name only) and never echoes the value back, so the
+// value can't leak here regardless of whether the redactor catches every escaping.
 func TestSecretsIntegration_ConfigVarSecretNotLoggedByEnvChange(t *testing.T) {
 	t.Parallel()
 
@@ -419,9 +421,16 @@ func TestSecretsIntegration_ConfigVarSecretNotLoggedByEnvChange(t *testing.T) {
 		t.Fatalf("SSH key leaked into job log in cleartext. Full output:\n%s", tester.Output)
 	}
 
-	// Prove the log line actually fired, so the test can't pass silently.
-	if !strings.Contains(tester.Output, `BUILDKITE_GIT_SSH_KEY is now "[REDACTED]"`) {
-		t.Fatalf("expected redacted env-change log for BUILDKITE_GIT_SSH_KEY. Full output:\n%s", tester.Output)
+	// The secret must be applied (announced by name) so the test can't pass by
+	// simply never handling it.
+	if !strings.Contains(tester.Output, "Secret REPO_DEPLOY_KEY added as environment variable BUILDKITE_GIT_SSH_KEY") {
+		t.Fatalf("expected the secret to be applied to BUILDKITE_GIT_SSH_KEY. Full output:\n%s", tester.Output)
+	}
+
+	// The value must never be echoed back by the env-change log, redacted or not:
+	// not printing it at all is stronger than trusting the redactor to scrub it.
+	if strings.Contains(tester.Output, "BUILDKITE_GIT_SSH_KEY is now") {
+		t.Fatalf("secret-backed config var was echoed by the env-change log. Full output:\n%s", tester.Output)
 	}
 }
 
