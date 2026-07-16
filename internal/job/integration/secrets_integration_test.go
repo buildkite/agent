@@ -367,6 +367,64 @@ func TestSecretsIntegration_MultilineSecretRedaction(t *testing.T) {
 	}
 }
 
+// A secret mapped onto a config var like BUILDKITE_GIT_SSH_KEY used to be
+// printed by the env change log after a hook ran. %q escaped its newlines so
+// the output redactor missed it.
+func TestSecretsIntegration_ConfigVarSecretNotLoggedByEnvChange(t *testing.T) {
+	t.Parallel()
+
+	tester, err := NewExecutorTester(mainCtx)
+	if err != nil {
+		t.Fatalf("setting up executor tester: %v", err)
+	}
+	defer tester.Close()
+
+	// The token makes any leaked rendering of the key easy to spot, raw or
+	// %q escaped.
+	const keyToken = "SYNTHETICKEYDONOTUSEFAKEFAKEFAKE"
+	multilineKey := "-----BEGIN OPENSSH PRIVATE KEY-----\n" +
+		"b3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAAAMwAAAAtz\n" +
+		"c2gtZWQyNTUxOQAAACD" + keyToken + "0123456789abcdefghij\n" +
+		"-----END OPENSSH PRIVATE KEY-----"
+
+	secretsMap := map[string]string{"REPO_DEPLOY_KEY": multilineKey}
+	apiServer := setupSecretsAPIServer(t, secretsMap)
+	defer apiServer.Close()
+
+	secrets := []pipeline.Secret{
+		{
+			Key:                 "REPO_DEPLOY_KEY",
+			EnvironmentVariable: "BUILDKITE_GIT_SSH_KEY",
+		},
+	}
+	secretsJSON, err := json.Marshal(secrets)
+	if err != nil {
+		t.Fatalf("marshaling secrets: %v", err)
+	}
+
+	// Running any hook is what triggers the env change log for the key.
+	tester.ExpectGlobalHook("environment").AndCallFunc(func(c *bintest.Call) {
+		c.Exit(0)
+	})
+	tester.ExpectGlobalHook("command").AndCallFunc(func(c *bintest.Call) {
+		c.Exit(0)
+	})
+
+	err = tester.Run(t, fmt.Sprintf("BUILDKITE_SECRETS_CONFIG=%s", string(secretsJSON)), fmt.Sprintf("BUILDKITE_AGENT_ENDPOINT=%s", apiServer.URL))
+	if err != nil {
+		t.Fatalf("running executor tester: %v", err)
+	}
+
+	if strings.Contains(tester.Output, keyToken) {
+		t.Fatalf("SSH key leaked into job log in cleartext. Full output:\n%s", tester.Output)
+	}
+
+	// Prove the log line actually fired, so the test can't pass silently.
+	if !strings.Contains(tester.Output, `BUILDKITE_GIT_SSH_KEY is now "[REDACTED]"`) {
+		t.Fatalf("expected redacted env-change log for BUILDKITE_GIT_SSH_KEY. Full output:\n%s", tester.Output)
+	}
+}
+
 func TestSecretsIntegration_LocalHookAccess(t *testing.T) {
 	t.Parallel()
 

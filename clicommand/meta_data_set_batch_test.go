@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -94,8 +95,6 @@ func TestSetMetaDataBatch(t *testing.T) {
 	t.Parallel()
 
 	t.Run("success", func(t *testing.T) {
-		t.Parallel()
-
 		var receivedBatch api.MetaDataBatch
 		server := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
 			if req.Method != "POST" {
@@ -134,8 +133,6 @@ func TestSetMetaDataBatch(t *testing.T) {
 	})
 
 	t.Run("server error gives up when context is cancelled", func(t *testing.T) {
-		t.Parallel()
-
 		server := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
 			rw.WriteHeader(http.StatusInternalServerError)
 		}))
@@ -165,11 +162,9 @@ func TestSetMetaDataBatch(t *testing.T) {
 	})
 
 	t.Run("401 does not retry", func(t *testing.T) {
-		t.Parallel()
-
-		callCount := 0
+		var callCount atomic.Int32
 		server := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
-			callCount++
+			callCount.Add(1)
 			rw.WriteHeader(http.StatusUnauthorized)
 		}))
 		defer server.Close()
@@ -188,17 +183,15 @@ func TestSetMetaDataBatch(t *testing.T) {
 		if err := setMetaDataBatch(t.Context(), cfg, l, items); err == nil {
 			t.Fatal("setMetaDataBatch error = nil, want error")
 		}
-		if callCount != 1 {
-			t.Errorf("callCount = %d, want 1", callCount)
+		if callCount.Load() != 1 {
+			t.Errorf("callCount.Load() = %d, want 1", callCount.Load())
 		}
 	})
 
 	t.Run("404 does not retry", func(t *testing.T) {
-		t.Parallel()
-
-		callCount := 0
+		var callCount atomic.Int32
 		server := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
-			callCount++
+			callCount.Add(1)
 			rw.WriteHeader(http.StatusNotFound)
 		}))
 		defer server.Close()
@@ -217,8 +210,8 @@ func TestSetMetaDataBatch(t *testing.T) {
 		if err := setMetaDataBatch(t.Context(), cfg, l, items); err == nil {
 			t.Fatal("setMetaDataBatch error = nil, want error")
 		}
-		if callCount != 1 {
-			t.Errorf("callCount = %d, want 1", callCount)
+		if callCount.Load() != 1 {
+			t.Errorf("callCount.Load() = %d, want 1", callCount.Load())
 		}
 	})
 }

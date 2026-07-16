@@ -93,6 +93,7 @@ func workdirSetAction(c *cli.Context) error {
 
 	case "json":
 		enc := json.NewEncoder(c.App.Writer)
+		enc.SetEscapeHTML(false) // HTML escapes may interfere with secret redaction
 		if err := enc.Encode(jobapi.WorkdirSetResponse{Workdir: workdir}); err != nil {
 			return fmt.Errorf("error marshalling JSON: %w", err)
 		}

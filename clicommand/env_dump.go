@@ -56,6 +56,7 @@ var EnvDumpCommand = cli.Command{
 		}
 
 		enc := json.NewEncoder(c.App.Writer)
+		enc.SetEscapeHTML(false) // HTML escapes may interfere with secret redaction
 		if cfg.Format == "json-pretty" {
 			enc.SetIndent("", "  ")
 		}

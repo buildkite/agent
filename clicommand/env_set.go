@@ -155,6 +155,7 @@ func envSetAction(c *cli.Context) error {
 
 	case "json", "json-pretty":
 		enc := json.NewEncoder(c.App.Writer)
+		enc.SetEscapeHTML(false) // HTML escapes may interfere with secret redaction
 		if c.String("output-format") == "json-pretty" {
 			enc.SetIndent("", "  ")
 		}
