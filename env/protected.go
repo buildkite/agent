@@ -66,7 +66,6 @@ var protectedEnv = map[string]protection{
 	"BUILDKITE_CONFIG_PATH":                 {},
 	"BUILDKITE_CONTAINER_COUNT":             {},
 	"BUILDKITE_GIT_CLONE_MIRROR_FLAGS":      {},
-	"BUILDKITE_GIT_COMMIT_VERIFICATION":     {},
 	"BUILDKITE_GIT_MIRRORS_LOCK_TIMEOUT":    {},
 	"BUILDKITE_GIT_MIRRORS_PATH":            {},
 	"BUILDKITE_GIT_MIRRORS_SKIP_UPDATE":     {},
@@ -94,13 +93,18 @@ var protectedEnv = map[string]protection{
 // Locking matters because git is riddled with shell injections, so letting a job
 // set git flags would otherwise be a way to bypass protections like
 // no-command-eval (which is why disabling command-eval forces the mode to
-// strict). Vars here must not also appear in protectedEnv; the two maps are
-// disjoint.
+// strict). BUILDKITE_GIT_COMMIT_VERIFICATION is an enum ("", "warn", "strict"),
+// not an injection vector, but the backend exposes it under `checkout:` alongside
+// the flag vars, so it's governed by the mode too: only none lets a job's own
+// checkout config (pipeline/step env, secrets) turn verification on, matching the
+// other checkout settings. Vars here must not also appear in protectedEnv; the
+// two maps are disjoint.
 var checkoutOverrideScope = map[string]struct{}{
 	"BUILDKITE_GIT_CHECKOUT_FLAGS":              {},
 	"BUILDKITE_GIT_CHECKOUT_TIMEOUT":            {},
 	"BUILDKITE_GIT_CLEAN_FLAGS":                 {},
 	"BUILDKITE_GIT_CLONE_FLAGS":                 {},
+	"BUILDKITE_GIT_COMMIT_VERIFICATION":         {},
 	"BUILDKITE_GIT_FETCH_FLAGS":                 {},
 	"BUILDKITE_GIT_SKIP_FETCH_EXISTING_COMMITS": {},
 	"BUILDKITE_GIT_SPARSE_CHECKOUT_PATHS":       {},

@@ -693,6 +693,61 @@ func TestCheckoutScopedJobEnvOverrideHonorsCheckoutOverrideMode(t *testing.T) {
 			wantEnvValue:       "0",
 			wantIgnoredEnvVars: []string{"BUILDKITE_GIT_CHECKOUT_TIMEOUT"},
 		},
+		// Commit verification is an enum (not a flag) but is checkout-override
+		// scoped, so it follows the same mode rules. The first case is the reported
+		// scenario: agent leaves it unset, the pipeline requests strict, and none
+		// lets the job env win so verification actually runs.
+		{
+			name:    "none_allows_job_env_to_enable_commit_verification_when_agent_unset",
+			varName: "BUILDKITE_GIT_COMMIT_VERIFICATION",
+			jobEnv: map[string]string{
+				"BUILDKITE_GIT_COMMIT_VERIFICATION": "strict",
+			},
+			agentCfg: agent.AgentConfiguration{
+				CheckoutOverrideMode: env.CheckoutOverrideNone,
+			},
+			wantEnvValue: "strict",
+		},
+		{
+			name:    "none_allows_job_env_to_override_commit_verification",
+			varName: "BUILDKITE_GIT_COMMIT_VERIFICATION",
+			jobEnv: map[string]string{
+				"BUILDKITE_GIT_COMMIT_VERIFICATION": "strict",
+			},
+			agentCfg: agent.AgentConfiguration{
+				GitCommitVerification: "warn",
+				CheckoutOverrideMode:  env.CheckoutOverrideNone,
+			},
+			wantEnvValue: "strict",
+		},
+		{
+			name:    "strict_locks_commit_verification_to_agent_config",
+			varName: "BUILDKITE_GIT_COMMIT_VERIFICATION",
+			jobEnv: map[string]string{
+				"BUILDKITE_GIT_COMMIT_VERIFICATION": "strict",
+			},
+			agentCfg: agent.AgentConfiguration{
+				GitCommitVerification: "warn",
+				CheckoutOverrideMode:  env.CheckoutOverrideStrict,
+			},
+			wantEnvValue:       "warn",
+			wantIgnoredEnvVars: []string{"BUILDKITE_GIT_COMMIT_VERIFICATION"},
+		},
+		{
+			// from-job (the default) keeps the agent authoritative over the backend
+			// job env, matching the other checkout vars: only none opens it up.
+			name:    "from_job_locks_commit_verification_to_agent_config",
+			varName: "BUILDKITE_GIT_COMMIT_VERIFICATION",
+			jobEnv: map[string]string{
+				"BUILDKITE_GIT_COMMIT_VERIFICATION": "strict",
+			},
+			agentCfg: agent.AgentConfiguration{
+				GitCommitVerification: "warn",
+				CheckoutOverrideMode:  env.CheckoutOverrideFromJob,
+			},
+			wantEnvValue:       "warn",
+			wantIgnoredEnvVars: []string{"BUILDKITE_GIT_COMMIT_VERIFICATION"},
+		},
 	}
 
 	for _, tc := range tests {
