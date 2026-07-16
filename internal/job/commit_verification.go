@@ -111,8 +111,9 @@ func (e *Executor) verifyCommit(ctx context.Context) error {
 		return nil
 	}
 
-	// Skip if this is a PR build — the commit may be on a merge ref, not the target branch
-	if e.PullRequest != "" {
+	// Skip if this is a PR build: the commit may be on a merge ref, not the target
+	// branch. BUILDKITE_PULL_REQUEST is the string "false" (not empty) on non-PR builds.
+	if e.PullRequest != "" && e.PullRequest != "false" {
 		e.shell.Commentf("Skipping commit verification: pull request build (#%s)", e.PullRequest)
 		return nil
 	}

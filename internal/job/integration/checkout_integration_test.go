@@ -1817,6 +1817,10 @@ func TestCommitVerificationFailsWithInvalidCommit(t *testing.T) {
 		"BUILDKITE_GIT_CLEAN_FLAGS=-fdq",
 		"BUILDKITE_GIT_FETCH_FLAGS=-v",
 		"BUILDKITE_GIT_COMMIT_VERIFICATION=strict",
+		// The non-PR sentinel. The agent sets this on every ordinary build, so
+		// verification must still run (a naive PullRequest != "" skip would disable
+		// it for almost every build).
+		"BUILDKITE_PULL_REQUEST=false",
 		fmt.Sprintf("BUILDKITE_COMMIT=%s", commitHash),
 	}
 
