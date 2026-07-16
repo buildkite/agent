@@ -138,13 +138,15 @@ func (e *Executor) verifyCommit(ctx context.Context) error {
 		if e.GitCommitVerification == "strict" {
 			return err
 		}
-		e.shell.Warningf("Commit verification failed: %v", err)
+		// err already begins with "commit verification failed", so log it as-is.
+		e.shell.Warningf("%s", err)
 		return nil
 	}
 
 	// Verification unavailable — infrastructure issue, not a security concern.
 	// We always warn but never block, even in strict mode, to avoid users
 	// disabling verification entirely due to infrastructure false positives.
-	e.shell.Warningf("Commit verification unavailable: %v", err)
+	// err already begins with "commit verification unavailable", so log it as-is.
+	e.shell.Warningf("%s", err)
 	return nil
 }
