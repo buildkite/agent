@@ -1771,14 +1771,19 @@ func TestCommitVerificationWithValidCommit(t *testing.T) {
 		MustMock(t, "git").
 		PassthroughToLocalCommand()
 
-	// Expect the normal checkout flow with merge-base --is-ancestor inserted
-	// between fetch and checkout. Since this is a full clone (not shallow),
-	// merge-base succeeds immediately — no rev-parse --is-shallow-repository needed.
+	// Expect the normal checkout flow with commit verification inserted between
+	// fetch and checkout: fetch the branch tip, pin it via FETCH_HEAD, then
+	// merge-base --is-ancestor against that SHA. Here the branch (main) tip is the
+	// build commit itself, so both merge-base args are commitHash. Since this is a
+	// full clone (not shallow) and the commit verifies, merge-base succeeds
+	// immediately, so no rev-parse --is-shallow-repository is needed.
 	git.ExpectAll([][]any{
 		{"clone", "-v", "--", tester.Repo.Path, "."},
 		{"clean", "-fdq"},
 		{"fetch", "-v", "--", "origin", commitHash},
-		{"merge-base", "--is-ancestor", commitHash, "main"},
+		{"fetch", "origin", "main"},
+		{"rev-parse", "FETCH_HEAD"},
+		{"merge-base", "--is-ancestor", commitHash, commitHash},
 		{"-c", "advice.detachedHead=false", "checkout", "-f", commitHash},
 		{"clean", "-fdq"},
 		{"--no-pager", "log", "-1", commitHash, "-s", "--no-color", gitShowFormatArg},
@@ -1815,26 +1820,84 @@ func TestCommitVerificationFailsWithInvalidCommit(t *testing.T) {
 		fmt.Sprintf("BUILDKITE_COMMIT=%s", commitHash),
 	}
 
-	git := tester.
-		MustMock(t, "git").
-		PassthroughToLocalCommand()
-
-	// Expect fetch, then merge-base which should return exit 1 (not ancestor).
-	// No checkout should happen after verification fails.
-	git.ExpectAll([][]any{
-		{"clone", "-v", "--", tester.Repo.Path, "."},
-		{"clean", "-fdq"},
-		{"fetch", "-v", "--", "origin", commitHash},
-		{"merge-base", "--is-ancestor", commitHash, "main"},
-	})
-
+	// Use real git (no mock) and assert on the outcome rather than the exact
+	// command sequence: the build must fail because the commit is not on the branch.
 	agent := tester.MockAgent(t)
-	agent.Expect("meta-data", "exists", job.CommitMetadataKey).AndExitWith(1)
+	agent.Expect("meta-data", "exists", job.CommitMetadataKey).Min(0).Max(bintest.InfiniteTimes).AndExitWith(1)
+	agent.IgnoreUnexpectedInvocations()
 
-	// This should fail — the commit is not on main
+	// This should fail: the commit is not on main.
 	err = tester.Run(t, env...)
 	if err == nil {
 		t.Fatalf("expected build to fail with commit verification error, but it passed")
+	}
+	if !strings.Contains(tester.Output, "is not on branch") {
+		t.Errorf("expected a commit-verification failure in the output, got:\n%s", tester.Output)
+	}
+	// The retry loop fast-breaks on a provably-off-branch commit, so verification
+	// runs once rather than re-cloning through the full backoff (default 6
+	// attempts). checkCommitOnBranch logs "Verifying commit" once per attempt.
+	if got := strings.Count(tester.Output, "Verifying commit"); got != 1 {
+		t.Errorf("commit verification ran %d times, want 1 (fast-break should prevent retries)", got)
+	}
+}
+
+// TestCommitVerificationFailsForCommitNotOnNonDefaultBranch is the regression
+// test for the case the old bare-branch-name check missed: a build on a branch
+// other than the repository default. The clone only materialises the default
+// branch as a local ref, so checking a commit against the bare build-branch name
+// used to resolve to nothing and silently degrade to "unavailable" (warn, never
+// block), even for a commit that is genuinely not on that branch.
+func TestCommitVerificationFailsForCommitNotOnNonDefaultBranch(t *testing.T) {
+	t.Parallel()
+
+	tester, err := NewExecutorTester(mainCtx)
+	if err != nil {
+		t.Fatalf("NewExecutorTester() error = %v", err)
+	}
+	defer tester.Close()
+
+	// Add a commit on main (the default branch) that diverges from update-test-txt,
+	// so it is genuinely not reachable from that non-default branch.
+	if err := tester.Repo.CheckoutBranch("main"); err != nil {
+		t.Fatalf("CheckoutBranch(main) error = %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(tester.Repo.Path, "main-only.txt"), []byte("main only"), 0o600); err != nil {
+		t.Fatalf("WriteFile error = %v", err)
+	}
+	if err := tester.Repo.Add("main-only.txt"); err != nil {
+		t.Fatalf("Add error = %v", err)
+	}
+	if err := tester.Repo.Commit("Commit only on main"); err != nil {
+		t.Fatalf("Commit error = %v", err)
+	}
+	offBranchCommit, err := tester.Repo.RevParse("main")
+	if err != nil {
+		t.Fatalf("RevParse(main) error = %v", err)
+	}
+	offBranchCommit = strings.TrimSpace(offBranchCommit)
+
+	env := []string{
+		"BUILDKITE_GIT_CLONE_FLAGS=-v",
+		"BUILDKITE_GIT_CLEAN_FLAGS=-fdq",
+		"BUILDKITE_GIT_FETCH_FLAGS=-v",
+		"BUILDKITE_GIT_COMMIT_VERIFICATION=strict",
+		"BUILDKITE_BRANCH=update-test-txt",
+		fmt.Sprintf("BUILDKITE_COMMIT=%s", offBranchCommit),
+	}
+
+	// Use real git (no mock) and assert on the outcome rather than the exact
+	// command sequence: the build must fail because the commit is not on the branch.
+	agent := tester.MockAgent(t)
+	agent.Expect("meta-data", "exists", job.CommitMetadataKey).Min(0).Max(bintest.InfiniteTimes).AndExitWith(1)
+	agent.IgnoreUnexpectedInvocations()
+
+	err = tester.Run(t, env...)
+	if err == nil {
+		t.Fatalf("expected build to fail: commit %s is not on branch update-test-txt, but it passed. Output:\n%s", offBranchCommit, tester.Output)
+	}
+	if !strings.Contains(tester.Output, "is not on branch") {
+		t.Errorf("expected a commit-verification failure in the output, got:\n%s", tester.Output)
 	}
 }
 
