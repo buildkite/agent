@@ -726,7 +726,7 @@ func (e *Executor) addOutputRedactors() {
 	// But does a particular string stop being a secret if we learn new secret strings?
 	// For produence, we use Add.
 	for _, pair := range toRedact {
-		e.redactors.Add(pair.Value)
+		e.redactors.Add(pair.Value, redact.GoEscaped(pair.Value))
 	}
 }
 
@@ -985,7 +985,7 @@ func (e *Executor) fetchAndSetSecrets(ctx context.Context) error {
 	for _, pipelineSecret := range pipelineSecrets {
 		if secretValue, exists := secretValuesByKey[pipelineSecret.Key]; exists {
 			// Always register the secret value for redaction regardless of env var setting
-			e.redactors.Add(secretValue)
+			e.redactors.Add(secretValue, redact.GoEscaped(secretValue))
 
 			// Set the environment variable only if environment_variable is specified and non-nil
 			if pipelineSecret.EnvironmentVariable != "" {
@@ -1395,6 +1395,7 @@ func (e *Executor) setupRedactors(log shell.Logger, environ *env.Environment, st
 	for _, pair := range varsToRedact {
 		needles = append(needles, pair.Value)
 	}
+	needles = redact.AppendGoEscaped(needles)
 
 	stdoutRedactor := replacer.New(stdout, needles, redact.Redacted)
 	e.redactors.Append(stdoutRedactor)

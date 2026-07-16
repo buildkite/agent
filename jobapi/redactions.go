@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/buildkite/agent/v3/internal/redact"
 	"github.com/buildkite/agent/v3/internal/socket"
 )
 
@@ -18,7 +19,7 @@ func (s *Server) createRedaction(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.mtx.Lock()
-	s.redactors.Add(payload.Redact)
+	s.redactors.Add(payload.Redact, redact.GoEscaped(payload.Redact))
 	s.mtx.Unlock()
 
 	respBody := &RedactionCreateResponse{Redacted: payload.Redact}

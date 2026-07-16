@@ -98,6 +98,12 @@ func TestRedactString(t *testing.T) {
 			input:   "secret 1 secret 2 secret 3 s",
 			want:    "[REDACTED] [REDACTED] [REDACTED] s",
 		},
+		{
+			name:    "needle with newline in two forms",
+			needles: []string{"secret\n1"},
+			input:   "secret\n1 secret\\n1 s",
+			want:    "[REDACTED] [REDACTED] s",
+		},
 	}
 
 	for _, test := range tests {

@@ -147,7 +147,11 @@ func secretGet(ctx context.Context, cfg SecretGetConfig, w io.Writer, l logger.L
 		return nil
 
 	case cfg.Format == "json" || (cfg.Format == "default" && len(cfg.Keys) > 1):
-		if err := json.NewEncoder(w).Encode(secretsMap); err != nil {
+		// Disable escapes for HTML here, since we don't expect w to be fed to
+		// a browser, and it potentially interferes with secret redaction.
+		enc := json.NewEncoder(w)
+		enc.SetEscapeHTML(false)
+		if err := enc.Encode(secretsMap); err != nil {
 			return fmt.Errorf("failed to write JSON response: %w", err)
 		}
 
