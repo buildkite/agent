@@ -119,7 +119,7 @@ type ExecutorConfig struct {
 	GitSSHKey string `env:"BUILDKITE_GIT_SSH_KEY"`
 
 	// Enable git commit verification
-	GitCommitVerification string
+	GitCommitVerification string `env:"BUILDKITE_GIT_COMMIT_VERIFICATION"`
 
 	// Config key=value pairs to pass to "git" when submodule init commands are invoked
 	GitSubmoduleCloneConfig []string `env:"BUILDKITE_GIT_SUBMODULE_CLONE_CONFIG"`

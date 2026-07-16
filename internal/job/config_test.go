@@ -203,6 +203,47 @@ func TestReadFromEnvironmentRefreshesCheckoutScopedVarsUnderFromJob(t *testing.T
 	}
 }
 
+func TestReadFromEnvironmentRefreshesCommitVerification(t *testing.T) {
+	t.Parallel()
+
+	// Commit verification is checkout-scoped, so an allowed within-job source
+	// (from-job or none) must refresh the executor field: verifyCommit reads
+	// GitCommitVerification, not the env, so a stale field would silently skip the
+	// requested verification. strict must keep the agent-config value.
+	t.Run("from-job refreshes the field", func(t *testing.T) {
+		t.Parallel()
+
+		config := &ExecutorConfig{CheckoutOverrideMode: env.CheckoutOverrideFromJob}
+		environ := env.FromSlice([]string{"BUILDKITE_GIT_COMMIT_VERIFICATION=strict"})
+
+		changes := config.ReadFromEnvironment(environ)
+		if got, want := config.GitCommitVerification, "strict"; got != want {
+			t.Errorf("config.GitCommitVerification = %q, want %q", got, want)
+		}
+		if _, ok := changes["BUILDKITE_GIT_COMMIT_VERIFICATION"]; !ok {
+			t.Errorf("changes = %v, want it to contain BUILDKITE_GIT_COMMIT_VERIFICATION", changes)
+		}
+	})
+
+	t.Run("strict locks the field to agent config", func(t *testing.T) {
+		t.Parallel()
+
+		config := &ExecutorConfig{
+			CheckoutOverrideMode:  env.CheckoutOverrideStrict,
+			GitCommitVerification: "warn",
+		}
+		environ := env.FromSlice([]string{"BUILDKITE_GIT_COMMIT_VERIFICATION=strict"})
+
+		changes := config.ReadFromEnvironment(environ)
+		if len(changes) != 0 {
+			t.Errorf("changes = %v, want none", changes)
+		}
+		if got, want := config.GitCommitVerification, "warn"; got != want {
+			t.Errorf("config.GitCommitVerification = %q, want %q", got, want)
+		}
+	})
+}
+
 func TestGitSubmodulesBidirectionalControl(t *testing.T) {
 	t.Parallel()
 
