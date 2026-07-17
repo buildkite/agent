@@ -1208,7 +1208,16 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) (retErr error) {
 // Only the default checkout phase invokes this; custom checkout hooks must
 // arrange their own credentials.
 func (e *Executor) prepareGitSSHKey() (sshKeyPath string, cleanup func() error, retErr error) {
-	if e.GitSSHKey == "" {
+	// Prefer the current value in the shell environment so that secrets
+	// materialised at runtime by fetchAndSetSecrets are honoured, even when
+	// no environment/pre-checkout hook has run to refresh e.GitSSHKey via
+	// applyEnvironmentChanges. Fall back to the config field for callers
+	// that populate it directly without touching shell.Env (chiefly tests).
+	gitSSHKey, ok := e.shell.Env.Get("BUILDKITE_GIT_SSH_KEY")
+	if !ok {
+		gitSSHKey = e.GitSSHKey
+	}
+	if gitSSHKey == "" {
 		return "", nil, nil
 	}
 
@@ -1242,7 +1251,7 @@ func (e *Executor) prepareGitSSHKey() (sshKeyPath string, cleanup func() error, 
 	sshKeyPath = filepath.Join(sshKeyDir, "id")
 	// Most SSH key parsers require a trailing newline; tolerate either form
 	// of input and always write a single one.
-	keyBytes := []byte(strings.TrimRight(e.GitSSHKey, "\n") + "\n")
+	keyBytes := []byte(strings.TrimRight(gitSSHKey, "\n") + "\n")
 	if err := os.WriteFile(sshKeyPath, keyBytes, 0o600); err != nil {
 		return "", nil, fmt.Errorf("writing ssh key file: %w", err)
 	}

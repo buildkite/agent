@@ -246,6 +246,67 @@ func TestPrepareGitSSHKey(t *testing.T) {
 		}
 	})
 
+	t.Run("uses shell env value when config field is empty", func(t *testing.T) {
+		checkoutParent := t.TempDir()
+		checkoutPath := filepath.Join(checkoutParent, "checkout")
+		sh.Env.Set("BUILDKITE_BUILD_CHECKOUT_PATH", checkoutPath)
+		sh.Env.Set("BUILDKITE_GIT_SSH_KEY", "runtime-injected-key")
+		sh.Env.Remove("GIT_SSH_COMMAND")
+		t.Cleanup(func() { sh.Env.Remove("BUILDKITE_GIT_SSH_KEY") })
+
+		// e.GitSSHKey is deliberately empty — this mirrors the real case where
+		// a cluster secret writes BUILDKITE_GIT_SSH_KEY to the shell env after
+		// bootstrap has already parsed its config.
+		executor := &Executor{shell: sh}
+
+		sshKeyPath, cleanup, err := executor.prepareGitSSHKey()
+		if err != nil {
+			t.Fatalf("executor.prepareGitSSHKey() error = %v, want nil", err)
+		}
+		if cleanup == nil {
+			t.Fatal("executor.prepareGitSSHKey() cleanup = nil, want non-nil")
+		}
+		t.Cleanup(func() { _ = cleanup() })
+
+		contents, err := os.ReadFile(sshKeyPath)
+		if err != nil {
+			t.Fatalf("os.ReadFile(%q) error = %v, want nil", sshKeyPath, err)
+		}
+		if got, want := string(contents), "runtime-injected-key\n"; got != want {
+			t.Fatalf("ssh key contents = %q, want %q", got, want)
+		}
+	})
+
+	t.Run("shell env value takes precedence over config field", func(t *testing.T) {
+		checkoutParent := t.TempDir()
+		checkoutPath := filepath.Join(checkoutParent, "checkout")
+		sh.Env.Set("BUILDKITE_BUILD_CHECKOUT_PATH", checkoutPath)
+		sh.Env.Set("BUILDKITE_GIT_SSH_KEY", "shell-env-key")
+		sh.Env.Remove("GIT_SSH_COMMAND")
+		t.Cleanup(func() { sh.Env.Remove("BUILDKITE_GIT_SSH_KEY") })
+
+		executor := &Executor{
+			shell: sh,
+			ExecutorConfig: ExecutorConfig{
+				GitSSHKey: "stale-config-key",
+			},
+		}
+
+		sshKeyPath, cleanup, err := executor.prepareGitSSHKey()
+		if err != nil {
+			t.Fatalf("executor.prepareGitSSHKey() error = %v, want nil", err)
+		}
+		t.Cleanup(func() { _ = cleanup() })
+
+		contents, err := os.ReadFile(sshKeyPath)
+		if err != nil {
+			t.Fatalf("os.ReadFile(%q) error = %v, want nil", sshKeyPath, err)
+		}
+		if got, want := string(contents), "shell-env-key\n"; got != want {
+			t.Fatalf("ssh key contents = %q, want %q", got, want)
+		}
+	})
+
 	t.Run("creates key file with default ssh command when none exists", func(t *testing.T) {
 		checkoutParent := t.TempDir()
 		checkoutPath := filepath.Join(checkoutParent, "checkout")
