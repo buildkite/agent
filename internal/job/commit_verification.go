@@ -33,7 +33,17 @@ func (e *Executor) checkCommitOnBranch(ctx context.Context) error {
 	// to a SHA (the deepening fetches below overwrite FETCH_HEAD). Without this,
 	// merge-base against the bare branch name fails to resolve for any non-default
 	// branch and the check silently degrades to "unavailable".
-	if fetchErr := e.shell.Command("git", "fetch", "origin", e.Branch).Run(ctx); fetchErr != nil {
+	//
+	// Qualify the ref as refs/heads/<branch>: git resolves a bare name against
+	// refs/tags/ before refs/heads/, so a tag sharing the branch's name would pin
+	// FETCH_HEAD to the tag tip and verify the commit against the tag instead of
+	// the branch, letting a commit reachable only from the tag pass.
+	branchRef := "refs/heads/" + e.Branch
+	if fetchErr := gitFetch(ctx, gitFetchArgs{
+		Shell:      e.shell,
+		Repository: "origin",
+		RefSpecs:   []string{branchRef},
+	}); fetchErr != nil {
 		return fmt.Errorf("%w: unable to fetch branch %q: %w", ErrCommitVerificationUnavailable, e.Branch, fetchErr)
 	}
 	branchTip, err := e.shell.Command("git", "rev-parse", "FETCH_HEAD").RunAndCaptureStdout(ctx)
@@ -51,7 +61,12 @@ func (e *Executor) checkCommitOnBranch(ctx context.Context) error {
 	for _, fetchFlag := range []string{"", "--deepen=50", "--unshallow"} {
 		if fetchFlag != "" {
 			e.shell.Commentf("Deepening checkout to verify commit (%s)...", fetchFlag)
-			if fetchErr := e.shell.Command("git", "fetch", fetchFlag, "origin", e.Branch).Run(ctx); fetchErr != nil {
+			if fetchErr := gitFetch(ctx, gitFetchArgs{
+				Shell:         e.shell,
+				GitFetchFlags: fetchFlag,
+				Repository:    "origin",
+				RefSpecs:      []string{branchRef},
+			}); fetchErr != nil {
 				return fmt.Errorf("%w: unable to verify commit %q on branch %q: %w", ErrCommitVerificationUnavailable, e.Commit, e.Branch, fetchErr)
 			}
 		}

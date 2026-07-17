@@ -1772,16 +1772,17 @@ func TestCommitVerificationWithValidCommit(t *testing.T) {
 		PassthroughToLocalCommand()
 
 	// Expect the normal checkout flow with commit verification inserted between
-	// fetch and checkout: fetch the branch tip, pin it via FETCH_HEAD, then
-	// merge-base --is-ancestor against that SHA. Here the branch (main) tip is the
-	// build commit itself, so both merge-base args are commitHash. Since this is a
-	// full clone (not shallow) and the commit verifies, merge-base succeeds
-	// immediately, so no rev-parse --is-shallow-repository is needed.
+	// fetch and checkout: fetch the branch tip (as refs/heads/main, so a same-named
+	// tag can't win the ref lookup), pin it via FETCH_HEAD, then merge-base
+	// --is-ancestor against that SHA. Here the branch (main) tip is the build commit
+	// itself, so both merge-base args are commitHash. Since this is a full clone
+	// (not shallow) and the commit verifies, merge-base succeeds immediately, so no
+	// rev-parse --is-shallow-repository is needed.
 	git.ExpectAll([][]any{
 		{"clone", "-v", "--", tester.Repo.Path, "."},
 		{"clean", "-fdq"},
 		{"fetch", "-v", "--", "origin", commitHash},
-		{"fetch", "origin", "main"},
+		{"fetch", "--", "origin", "refs/heads/main"},
 		{"rev-parse", "FETCH_HEAD"},
 		{"merge-base", "--is-ancestor", commitHash, commitHash},
 		{"-c", "advice.detachedHead=false", "checkout", "-f", commitHash},

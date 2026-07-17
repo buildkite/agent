@@ -93,6 +93,88 @@ func setupFileBackedRepo(t *testing.T, ctx context.Context) (repoURL, deepAncest
 	return repoURL, deepAncestor, offBranchCommit
 }
 
+// setupTagBranchCollisionRepo creates a bare repo served over file:// where a
+// branch and a tag share the name "release". The branch is a <- b; the tag points
+// at a divergent commit t (a <- t) that is not reachable from the branch. It
+// returns the file:// URL and the off-branch commit the tag points at. This is
+// the ambiguous case: git resolves a bare name against refs/tags/ before
+// refs/heads/, so an unqualified fetch of "release" pins FETCH_HEAD to the tag.
+func setupTagBranchCollisionRepo(t *testing.T, ctx context.Context) (repoURL, offBranchTagCommit string) {
+	t.Helper()
+	t.Setenv("GIT_AUTHOR_NAME", "Buildkite Agent")
+	t.Setenv("GIT_AUTHOR_EMAIL", "agent@example.com")
+	t.Setenv("GIT_COMMITTER_NAME", "Buildkite Agent")
+	t.Setenv("GIT_COMMITTER_EMAIL", "agent@example.com")
+
+	bareDir, err := os.MkdirTemp("", "verify-collision-bare-")
+	if err != nil {
+		t.Fatalf("MkdirTemp error = %v", err)
+	}
+	t.Cleanup(func() { os.RemoveAll(bareDir) }) //nolint:errcheck // Best-effort cleanup.
+
+	sh, err := shell.New()
+	if err != nil {
+		t.Fatalf("shell.New() error = %v", err)
+	}
+	if err := sh.Command("git", "init", "--bare", bareDir).Run(ctx); err != nil {
+		t.Fatalf("git init --bare error = %v", err)
+	}
+	repoURL = "file://" + bareDir
+
+	workDir, err := os.MkdirTemp("", "verify-collision-work-")
+	if err != nil {
+		t.Fatalf("MkdirTemp error = %v", err)
+	}
+	t.Cleanup(func() { os.RemoveAll(workDir) }) //nolint:errcheck // Best-effort cleanup.
+	if err := sh.Command("git", "clone", repoURL, workDir).Run(ctx); err != nil {
+		t.Fatalf("git clone error = %v", err)
+	}
+	if err := sh.Chdir(workDir); err != nil {
+		t.Fatalf("Chdir error = %v", err)
+	}
+
+	commit := func(name string) string {
+		if err := os.WriteFile(filepath.Join(workDir, name), []byte(name), 0o600); err != nil {
+			t.Fatalf("WriteFile error = %v", err)
+		}
+		if err := sh.Command("git", "add", name).Run(ctx); err != nil {
+			t.Fatalf("git add error = %v", err)
+		}
+		if err := sh.Command("git", "commit", "-m", "commit "+name).Run(ctx); err != nil {
+			t.Fatalf("git commit error = %v", err)
+		}
+		sha, err := sh.Command("git", "rev-parse", "HEAD").RunAndCaptureStdout(ctx)
+		if err != nil {
+			t.Fatalf("rev-parse HEAD error = %v", err)
+		}
+		return strings.TrimSpace(sha)
+	}
+
+	// release branch: a <- b.
+	base := commit("a.txt")
+	commit("b.txt")
+	if err := sh.Command("git", "branch", "-m", "release").Run(ctx); err != nil {
+		t.Fatalf("git branch -m release error = %v", err)
+	}
+	if err := sh.Command("git", "push", "origin", "release").Run(ctx); err != nil {
+		t.Fatalf("git push release error = %v", err)
+	}
+
+	// tag "release" on a divergent commit t (a <- t), not reachable from the branch.
+	if err := sh.Command("git", "checkout", "-b", "tagline", base).Run(ctx); err != nil {
+		t.Fatalf("git checkout -b tagline error = %v", err)
+	}
+	offBranchTagCommit = commit("t.txt")
+	if err := sh.Command("git", "tag", "release").Run(ctx); err != nil {
+		t.Fatalf("git tag release error = %v", err)
+	}
+	if err := sh.Command("git", "push", "origin", "refs/tags/release").Run(ctx); err != nil {
+		t.Fatalf("git push tag release error = %v", err)
+	}
+
+	return repoURL, offBranchTagCommit
+}
+
 func TestVerifyCommit(t *testing.T) {
 	// Table-driven tests for the skip conditions — these don't need a real git repo
 	skipTests := []struct {
@@ -517,6 +599,46 @@ func TestVerifyCommit(t *testing.T) {
 
 		// A shallow clone must not let a genuinely off-branch commit slip through:
 		// deepen/unshallow, then report a definitive failure, not "unavailable".
+		if err := e.checkCommitOnBranch(ctx); !errors.Is(err, ErrCommitVerificationFailed) {
+			t.Errorf("checkCommitOnBranch() error = %v, want ErrCommitVerificationFailed", err)
+		}
+	})
+
+	t.Run("fails when a same-named tag carries an off-branch commit", func(t *testing.T) {
+		ctx := t.Context()
+		repoURL, offBranchTagCommit := setupTagBranchCollisionRepo(t, ctx)
+
+		cloneDir, err := os.MkdirTemp("", "verify-commit-test-")
+		if err != nil {
+			t.Fatalf("MkdirTemp error = %v", err)
+		}
+		t.Cleanup(func() { os.RemoveAll(cloneDir) }) //nolint:errcheck // Best-effort cleanup.
+		sh, err := shell.New()
+		if err != nil {
+			t.Fatalf("shell.New() error = %v", err)
+		}
+
+		// A full clone brings refs/heads/release plus the refs/tags/release object,
+		// so the off-branch commit exists locally going into the check.
+		if err := sh.Command("git", "clone", "--branch", "release", repoURL, cloneDir).Run(ctx); err != nil {
+			t.Fatalf("git clone error = %v", err)
+		}
+		if err := sh.Chdir(cloneDir); err != nil {
+			t.Fatalf("Chdir error = %v", err)
+		}
+
+		e := &Executor{
+			shell: sh,
+			ExecutorConfig: ExecutorConfig{
+				GitCommitVerification: "strict",
+				Commit:                offBranchTagCommit,
+				Branch:                "release",
+			},
+		}
+
+		// The fetch must resolve refs/heads/release, not the same-named tag. If it
+		// pinned FETCH_HEAD to the tag tip, this commit (the tag itself) would pass;
+		// qualifying the ref makes it a definitive failure.
 		if err := e.checkCommitOnBranch(ctx); !errors.Is(err, ErrCommitVerificationFailed) {
 			t.Errorf("checkCommitOnBranch() error = %v, want ErrCommitVerificationFailed", err)
 		}
