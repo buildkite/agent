@@ -1,7 +1,7 @@
-# cache key fallbackLimit behavior. Two caches share a BUILD_ID-anchored key
-# but differ in an optional CACHE_VARIANT part: one declares fallbackLimit on
+# cache key fallback_limit behavior. Two caches share a BUILD_ID-anchored key
+# but differ in an optional CACHE_VARIANT part: one declares fallback_limit on
 # BUILD_ID (variant optional), the other does not (variant mandatory). The
-# variant changes between save and restore, so only the fallbackLimit cache
+# variant changes between save and restore, so only the fallback_limit cache
 # falls back to the BUILD_ID match; the other is a hard miss.
 env:
   BUILDKITE_AGENT_CACHE_STORE_URL: s3://buildkite-agent-e2e-tests-shared/cache-e2e-test?region=us-west-2
@@ -42,9 +42,9 @@ steps:
       - {{ .buildkite_agent_binary }} cache restore --cache-config-file cache.yml
       - |
         set -euo pipefail
-        # fallbackLimit makes CACHE_VARIANT optional, so the v1/v2 mismatch
+        # fallback_limit makes CACHE_VARIANT optional, so the v1/v2 mismatch
         # falls back to the BUILD_ID match and restores the saved content.
         [[ "$(cat fallback-src/file.txt)" == "fallback payload" ]]
-        # Without fallbackLimit every part is mandatory, so the variant
+        # Without fallback_limit every part is mandatory, so the variant
         # mismatch is a hard miss and nothing is restored.
         [[ ! -e nofallback-src ]]

@@ -50,11 +50,11 @@ func TestCacheFilesystemIntegrity(t *testing.T) {
 	}
 }
 
-// Test that a cache_key's fallbackLimit makes trailing parts optional on
+// Test that a cache_key's fallback_limit makes trailing parts optional on
 // restore. Two caches share a BUILD_ID-anchored key but differ in a trailing
 // CACHE_VARIANT part that changes between save and restore: the cache that
-// declares fallbackLimit on BUILD_ID falls back to the BUILD_ID match and
-// restores, while the cache without fallbackLimit treats the variant mismatch
+// declares fallback_limit on BUILD_ID falls back to the BUILD_ID match and
+// restores, while the cache without fallback_limit treats the variant mismatch
 // as a hard miss.
 func TestCacheKeyFallback(t *testing.T) {
 	ctx := t.Context()

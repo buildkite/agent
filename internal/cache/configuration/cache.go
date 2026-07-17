@@ -31,7 +31,7 @@ func (c Cache) Validate() error {
 		errors = append(errors, "cache_key cannot be empty")
 	}
 
-	// At most one cache_key part may declare fallbackLimit.
+	// At most one cache_key part may declare fallback_limit.
 	fallbackLimits := 0
 	for _, part := range c.CacheKey {
 		if part.FallbackLimit {
@@ -39,7 +39,7 @@ func (c Cache) Validate() error {
 		}
 	}
 	if fallbackLimits > 1 {
-		errors = append(errors, "cache_key: fallbackLimit may be set on at most one part")
+		errors = append(errors, "cache_key: fallback_limit may be set on at most one part")
 	}
 
 	// TargetPaths validation: non-empty set of valid, unique paths

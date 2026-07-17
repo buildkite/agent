@@ -59,26 +59,26 @@ func (k *KeyPart) unmarshalMapping(node *yaml.Node) error {
 		return fmt.Errorf("cache_key: invalid entry: %w", err)
 	}
 
-	// fallbackLimit is an optional modifier alongside the single source.
+	// fallback_limit is an optional modifier alongside the single source.
 	hasFallbackLimit := false
-	if raw, ok := fields["fallbackLimit"]; ok {
+	if raw, ok := fields["fallback_limit"]; ok {
 		if err := raw.Decode(&k.FallbackLimit); err != nil {
-			return fmt.Errorf("cache_key: fallbackLimit must be a boolean")
+			return fmt.Errorf("cache_key: fallback_limit must be a boolean")
 		}
 		hasFallbackLimit = true
 	}
 
-	// Exactly one source key; fallbackLimit is a modifier, not a source.
+	// Exactly one source key; fallback_limit is a modifier, not a source.
 	sourceCount := len(fields)
 	if hasFallbackLimit {
 		sourceCount--
 	}
 	if sourceCount != 1 {
-		return fmt.Errorf("cache_key: entry must name exactly one source (plus optional fallbackLimit)")
+		return fmt.Errorf("cache_key: entry must name exactly one source (plus optional fallback_limit)")
 	}
 
 	for src, val := range fields {
-		if src == "fallbackLimit" {
+		if src == "fallback_limit" {
 			continue
 		}
 		switch Source(src) {
@@ -115,8 +115,8 @@ func (k *KeyPart) unmarshalMapping(node *yaml.Node) error {
 
 // ResolveCacheKey resolves each KeyPart to its concrete value and returns the
 // flat wire shape the backend expects. A part is mandatory iff it is at or
-// before the part declaring fallbackLimit; parts after it are optional. When no
-// part declares fallbackLimit, every part is mandatory. At most one part may
+// before the part declaring fallback_limit; parts after it are optional. When no
+// part declares fallback_limit, every part is mandatory. At most one part may
 // declare it (enforced by Validate).
 func ResolveCacheKey(keyParts []KeyPart, env map[string]string) ([]api.CacheKeyPart, error) {
 	if len(keyParts) == 0 {
