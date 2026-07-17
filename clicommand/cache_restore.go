@@ -24,7 +24,7 @@ defined in your cache config file (defaults to .buildkite/cache.yml or
 The cache configuration file defines which files or directories should be restored
 and their associated cache key. An entry is restored when its target_paths
 (an order-insensitive set) and the mandatory parts of its cache_key match. By
-default every key part is mandatory; mark a part with fallbackLimit: true to make
+default every key part is mandatory; mark a part with fallback_limit: true to make
 every part after it optional.
 
 Note: This feature is currently in development and subject to change. It is not
@@ -49,7 +49,7 @@ Configuration File Format:
 The cache configuration file should be in YAML format. cache_key is an ordered
 list of parts; each part is a literal string or one of { agent: os },
 { agent: arch }, { checksum: <file> }, or { env: <VAR> }. Any one part may also
-set fallbackLimit: true to make every part after it optional for fallback
+set fallback_limit: true to make every part after it optional for fallback
 matching (the marked part itself stays mandatory). In the example below an exact
 match is preferred, but if the lockfile changed, an entry matching node + os + arch
 is still restored, as the fallback is specified on arch, making node + os + arch mandatory, 
@@ -60,7 +60,7 @@ but making checksum optional:
         cache_key:
           - node
           - { agent: os }
-          - { agent: arch, fallbackLimit: true }
+          - { agent: arch, fallback_limit: true }
           - { checksum: package-lock.json }
         target_paths:
           - node_modules

@@ -565,7 +565,7 @@ func TestCacheIntegration_RestoreMissingBlobInvalidates(t *testing.T) {
 }
 
 // TODO: restore fallback-matching coverage (was TestCacheIntegration_RestoreWithFallback,
-// removed in the v2 migration) once agent-side fallbackLimit parsing lands and the agent
+// removed in the v2 migration) once agent-side fallback_limit parsing lands and the agent
 // sends mandatory:false parts. Until then the agent only addresses exact matches.
 
 func TestCacheIntegration_LargeFileChecksum(t *testing.T) {
