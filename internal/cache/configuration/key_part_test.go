@@ -32,9 +32,9 @@ func TestKeyPartUnmarshal(t *testing.T) {
 		{name: "agent pipeline", yaml: `{ agent: pipeline }`, want: KeyPart{Source: SourceAgent, Arg: "pipeline"}},
 		{name: "checksum", yaml: `{ checksum: go.mod }`, want: KeyPart{Source: SourceChecksum, Arg: "go.mod"}},
 		{name: "env", yaml: `{ env: GO_VERSION }`, want: KeyPart{Source: SourceEnv, Arg: "GO_VERSION"}},
-		{name: "fallbackLimit on agent", yaml: `{ agent: arch, fallbackLimit: true }`, want: KeyPart{Source: SourceAgent, Arg: "arch", FallbackLimit: true}},
-		{name: "fallbackLimit on checksum", yaml: `{ checksum: go.mod, fallbackLimit: true }`, want: KeyPart{Source: SourceChecksum, Arg: "go.mod", FallbackLimit: true}},
-		{name: "fallbackLimit false is a no-op", yaml: `{ agent: arch, fallbackLimit: false }`, want: KeyPart{Source: SourceAgent, Arg: "arch", FallbackLimit: false}},
+		{name: "fallback_limit on agent", yaml: `{ agent: arch, fallback_limit: true }`, want: KeyPart{Source: SourceAgent, Arg: "arch", FallbackLimit: true}},
+		{name: "fallback_limit on checksum", yaml: `{ checksum: go.mod, fallback_limit: true }`, want: KeyPart{Source: SourceChecksum, Arg: "go.mod", FallbackLimit: true}},
+		{name: "fallback_limit false is a no-op", yaml: `{ agent: arch, fallback_limit: false }`, want: KeyPart{Source: SourceAgent, Arg: "arch", FallbackLimit: false}},
 
 		// Out of M1 scope -> parse errors.
 		{name: "empty literal", yaml: `""`, wantErr: "literal entry cannot be empty"},
@@ -42,8 +42,8 @@ func TestKeyPartUnmarshal(t *testing.T) {
 		{name: "checksum array deferred", yaml: `{ checksum: [go.mod, go.sum] }`, wantErr: "single file path"},
 		{name: "cmd deferred", yaml: `{ cmd: ["go", "version"] }`, wantErr: "unknown source"},
 		{name: "unknown source", yaml: `{ bogus: x }`, wantErr: "unknown source"},
-		{name: "fallbackLimit non-bool", yaml: `{ agent: arch, fallbackLimit: 7 }`, wantErr: "fallbackLimit must be a boolean"},
-		{name: "fallbackLimit without source", yaml: `{ fallbackLimit: true }`, wantErr: "exactly one source"},
+		{name: "fallback_limit non-bool", yaml: `{ agent: arch, fallback_limit: 7 }`, wantErr: "fallback_limit must be a boolean"},
+		{name: "fallback_limit without source", yaml: `{ fallback_limit: true }`, wantErr: "exactly one source"},
 		{name: "empty map", yaml: `{}`, wantErr: "exactly one source"},
 		{name: "sequence", yaml: `[a, b]`, wantErr: "must be a string or a { source: arg } map"},
 	}
@@ -199,7 +199,7 @@ func TestResolveCacheKey(t *testing.T) {
 		}
 	})
 
-	t.Run("fallbackLimit splits mandatory from optional", func(t *testing.T) {
+	t.Run("fallback_limit splits mandatory from optional", func(t *testing.T) {
 		t.Parallel()
 		parts := []KeyPart{
 			{Source: SourceLiteral, Arg: "node"},
@@ -211,7 +211,7 @@ func TestResolveCacheKey(t *testing.T) {
 			t.Fatalf("ResolveCacheKey() unexpected error = %v", err)
 		}
 
-		// The part declaring fallbackLimit (os) is itself mandatory;
+		// The part declaring fallback_limit (os) is itself mandatory;
 		// only parts after it are optional.
 		want := []api.CacheKeyPart{
 			{Value: "node", Mandatory: true},
@@ -225,7 +225,7 @@ func TestResolveCacheKey(t *testing.T) {
 		}
 	})
 
-	t.Run("fallbackLimit on first part makes only later parts optional", func(t *testing.T) {
+	t.Run("fallback_limit on first part makes only later parts optional", func(t *testing.T) {
 		t.Parallel()
 		parts := []KeyPart{
 			{Source: SourceLiteral, Arg: "node", FallbackLimit: true},
