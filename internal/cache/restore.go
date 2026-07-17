@@ -4,11 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io/fs"
 	"log/slog"
 	"os"
 	"path/filepath"
-	"runtime"
 	"time"
 
 	"github.com/buildkite/agent/v3/api"
@@ -100,6 +98,16 @@ func (c *client) Restore(ctx context.Context, cacheID string) (RestoreResult, er
 	)
 
 	c.callProgress(cacheID, "validating", "Validating cache configuration", 0, 0)
+
+	// Validate every target path before doing any work: unsupported paths
+	// (e.g. absolute paths outside the home directory on Windows) and paths
+	// that the destructive clean step would refuse must fail up front, so no
+	// path is removed when a later one is invalid.
+	if err := validateTargetPaths(cacheConfig.TargetPaths); err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "invalid target paths")
+		return result, fmt.Errorf("invalid target paths: %w", err)
+	}
 
 	c.callProgress(cacheID, "checking_exists", "Checking if cache exists", 0, 0)
 
@@ -403,91 +411,4 @@ func (c *client) extractCache(ctx context.Context, archiveFile string, archiveSi
 	span.SetStatus(codes.Ok, "extraction completed")
 
 	return archiveInfo, nil
-}
-
-// cleanPath removes a directory tree for a configured cache path.
-// It handles Go module cache directories that have 0555 permissions by
-// making them writable before removal.
-func cleanPath(ctx context.Context, dir string) error {
-	if dir == "" {
-		return fmt.Errorf("cleanPath: empty directory path")
-	}
-
-	clean := filepath.Clean(dir)
-
-	// Refuse to delete root or current directory
-	if clean == "." || clean == string(os.PathSeparator) {
-		return fmt.Errorf("cleanPath: refusing to remove %q", clean)
-	}
-
-	// On Windows, also check for drive roots like "C:\"
-	if runtime.GOOS == "windows" && len(clean) == 3 && clean[1] == ':' && clean[2] == '\\' {
-		return fmt.Errorf("cleanPath: refusing to remove drive root %q", clean)
-	}
-
-	// Refuse to delete home directory
-	if home, err := os.UserHomeDir(); err == nil {
-		if clean == filepath.Clean(home) {
-			return fmt.Errorf("cleanPath: refusing to remove home directory %q", clean)
-		}
-	}
-
-	// Module cache has 0555 directories; make them writable in order to remove content.
-	if err := makeTreeWritable(ctx, clean); err != nil {
-		return err
-	}
-
-	// Check context again before potentially long RemoveAll
-	if ctx.Err() != nil {
-		return ctx.Err()
-	}
-
-	if err := os.RemoveAll(clean); err != nil {
-		return fmt.Errorf("cleanPath: failed to remove %q: %w", clean, err)
-	}
-
-	return nil
-}
-
-// makeTreeWritable walks `clean` and chmods every directory to 0755 so that
-// the subsequent os.RemoveAll can delete read-only entries (e.g. Go module
-// cache). The os.Root handle is closed before returning so that the caller
-// can remove `clean` on platforms (Windows) that disallow removing a
-// directory with an open handle.
-func makeTreeWritable(ctx context.Context, clean string) error {
-	root, err := os.OpenRoot(clean)
-	if err != nil {
-		if errors.Is(err, fs.ErrNotExist) {
-			return nil
-		}
-		return fmt.Errorf("cleanPath: open root %q: %w", clean, err)
-	}
-	defer func() { _ = root.Close() }()
-
-	err = fs.WalkDir(root.FS(), ".", func(relPath string, info fs.DirEntry, walkErr error) error {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		default:
-		}
-
-		if walkErr != nil {
-			slog.Debug("cleanPath: error walking path", "path", relPath, "err", walkErr)
-			return nil
-		}
-
-		if info.IsDir() {
-			if chmodErr := root.Chmod(relPath, 0o755); chmodErr != nil {
-				return fmt.Errorf("chmod %q: %w", relPath, chmodErr)
-			}
-		}
-		return nil
-	})
-	if err != nil {
-		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
-			return err
-		}
-		return fmt.Errorf("cleanPath: error preparing %q for removal: %w", clean, err)
-	}
-	return nil
 }
