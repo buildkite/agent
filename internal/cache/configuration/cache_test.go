@@ -73,7 +73,7 @@ func TestCacheValidate(t *testing.T) {
 			errMsg:  "name cannot be empty",
 		},
 		{
-			name: "single fallbackLimit is valid",
+			name: "single fallback_limit is valid",
 			cache: Cache{
 				Name: "node_modules",
 				CacheKey: []KeyPart{
@@ -85,7 +85,7 @@ func TestCacheValidate(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "multiple fallbackLimit is invalid",
+			name: "multiple fallback_limit is invalid",
 			cache: Cache{
 				Name: "node_modules",
 				CacheKey: []KeyPart{
@@ -95,7 +95,7 @@ func TestCacheValidate(t *testing.T) {
 				TargetPaths: []string{"node_modules"},
 			},
 			wantErr: true,
-			errMsg:  "fallbackLimit may be set on at most one part",
+			errMsg:  "fallback_limit may be set on at most one part",
 		},
 		{
 			name: "empty cache_key",

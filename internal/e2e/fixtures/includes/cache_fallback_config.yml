@@ -2,7 +2,7 @@ caches:
   - name: with_fallback
     cache_key:
       - cache-e2e-fallback
-      - { env: BUILDKITE_BUILD_ID, fallbackLimit: true }
+      - { env: BUILDKITE_BUILD_ID, fallback_limit: true }
       - { env: CACHE_VARIANT }
     target_paths:
       - fallback-src
