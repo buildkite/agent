@@ -215,6 +215,52 @@ func TestCheckoutLockPredicates(t *testing.T) {
 	}
 }
 
+func TestIsCheckoutLockedForJobEnv(t *testing.T) {
+	t.Parallel()
+
+	const (
+		flagVar   = "BUILDKITE_GIT_CLONE_FLAGS"           // injection vector: none floor
+		sparseVar = "BUILDKITE_GIT_SPARSE_CHECKOUT_PATHS" // structured argv: from-job floor
+		protected = "BUILDKITE_COMMAND_EVAL"              // protected, not scoped
+		unscoped  = "MY_CUSTOM_VAR"                       // in neither map
+	)
+
+	// The flag vars share the secrets rule (locked unless none), but sparse-checkout
+	// paths have a lower floor: the backend job env may set them under from-job, and
+	// only strict locks them. That floor must not leak into the secrets rule.
+	cases := []struct {
+		mode       CheckoutOverrideMode
+		wantFlag   bool
+		wantSparse bool
+	}{
+		{CheckoutOverrideStrict, true, true},
+		{CheckoutOverrideFromJob, true, false},
+		{CheckoutOverrideNone, false, false},
+	}
+
+	for _, tc := range cases {
+		if got := IsCheckoutLockedForJobEnv(flagVar, tc.mode); got != tc.wantFlag {
+			t.Errorf("IsCheckoutLockedForJobEnv(%q, %v) = %t, want %t", flagVar, tc.mode, got, tc.wantFlag)
+		}
+		if got := IsCheckoutLockedForJobEnv(sparseVar, tc.mode); got != tc.wantSparse {
+			t.Errorf("IsCheckoutLockedForJobEnv(%q, %v) = %t, want %t", sparseVar, tc.mode, got, tc.wantSparse)
+		}
+
+		// Secrets stay locked unless none even for sparse: the from-job floor is
+		// scoped to the backend job env, not secret-to-env mappings.
+		if wantSecrets := tc.mode != CheckoutOverrideNone; IsCheckoutLockedForSecrets(sparseVar, tc.mode) != wantSecrets {
+			t.Errorf("IsCheckoutLockedForSecrets(%q, %v) = %t, want %t", sparseVar, tc.mode, !wantSecrets, wantSecrets)
+		}
+
+		// Vars outside the checkout scope are never governed by this predicate.
+		for _, name := range []string{protected, unscoped} {
+			if IsCheckoutLockedForJobEnv(name, tc.mode) {
+				t.Errorf("IsCheckoutLockedForJobEnv(%q, %v) = true, want false", name, tc.mode)
+			}
+		}
+	}
+}
+
 // TestCheckoutOverrideModeExclusions pins the checkout-related vars that the mode
 // deliberately does not govern, so a future change that scopes or protects them
 // has to update these expectations on purpose.

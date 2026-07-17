@@ -112,6 +112,18 @@ var checkoutOverrideScope = map[string]struct{}{
 	"BUILDKITE_SKIP_CHECKOUT":                   {},
 }
 
+// checkoutJobEnvFromJobFloor lists the checkout-scoped vars whose backend job env
+// (pipeline/step checkout config) floor is from-job rather than none: the backend
+// may set them under the default mode, and only strict locks them. Sparse-checkout
+// paths qualify because they are handed to `git sparse-checkout set --cone` as argv,
+// not word-split into a git command line, so a step's checkout.sparse config can't
+// bypass no-command-eval or otherwise escalate the way the flag vars can. The flag
+// vars and commit_verification stay at the none floor (see IsCheckoutLockedForJobEnv).
+// Entries must also appear in checkoutOverrideScope.
+var checkoutJobEnvFromJobFloor = map[string]struct{}{
+	"BUILDKITE_GIT_SPARSE_CHECKOUT_PATHS": {},
+}
+
 // Some checkout-related vars are intentionally governed by neither the mode nor
 // checkoutOverrideScope. BUILDKITE_GIT_SSH_KEY and BUILDKITE_GIT_LFS_ENABLED are
 // in no map at all, so any source may set them in every mode: a job supplying its
@@ -251,12 +263,29 @@ func IsCheckoutLocked(name string, mode CheckoutOverrideMode) bool {
 // checkout config. The backend job env is mostly the same (enforced in
 // createEnvironment, agent/job_runner.go), except that under from-job it still
 // lets pipeline/step env set the submodules/skip-checkout/skip-fetch/timeout
-// toggles on their default side to match historical behaviour; secrets have no
-// such history, so they stay blocked. Vars that aren't checkout-scoped are
-// governed by IsProtected instead.
+// toggles on their default side to match historical behaviour, and set sparse-
+// checkout paths outright (see IsCheckoutLockedForJobEnv); secrets have no such
+// history, so they stay blocked. Vars that aren't checkout-scoped are governed by
+// IsProtected instead.
 func IsCheckoutLockedForSecrets(name string, mode CheckoutOverrideMode) bool {
 	if !IsCheckoutOverrideScoped(name) {
 		return false
+	}
+	return mode != CheckoutOverrideNone
+}
+
+// IsCheckoutLockedForJobEnv reports whether a checkout-scoped var is locked against
+// the backend job env (pipeline/step env) under the given mode. Most scoped vars
+// follow the secrets rule (locked unless none; see IsCheckoutLockedForSecrets), but
+// the vars in checkoutJobEnvFromJobFloor have a from-job floor: the backend job env
+// may set them under from-job too, and only strict locks them. Vars that aren't
+// checkout-scoped are governed by IsProtected instead.
+func IsCheckoutLockedForJobEnv(name string, mode CheckoutOverrideMode) bool {
+	if !IsCheckoutOverrideScoped(name) {
+		return false
+	}
+	if _, ok := checkoutJobEnvFromJobFloor[normalizeKeyName(name)]; ok {
+		return mode == CheckoutOverrideStrict
 	}
 	return mode != CheckoutOverrideNone
 }

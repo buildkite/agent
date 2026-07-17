@@ -405,14 +405,14 @@ func (r *JobRunner) normalizeVerificationBehavior(behavior string) (string, erro
 
 // Creates the environment variables that will be used in the process and writes a flat environment file
 func (r *JobRunner) createEnvironment(ctx context.Context) ([]string, error) {
-	// Checkout-scoped vars are locked against the backend job env in every mode
-	// except none; only none lets pipeline/step env override agent config. strict
-	// and from-job (the default) keep the agent authoritative here, matching the
-	// agent's historical behaviour. This is the same rule secrets follow (see
-	// IsCheckoutLockedForSecrets); within-job sources (hooks, plugins, the Job API)
-	// are governed separately and only strict locks them.
+	// Most checkout-scoped vars are locked against the backend job env in every
+	// mode except none; only none lets pipeline/step env override agent config,
+	// matching the rule secrets follow (see IsCheckoutLockedForSecrets). The
+	// exception is sparse-checkout paths, which have a from-job floor: a step's
+	// checkout.sparse config is honored under the default mode too, and only strict
+	// locks it (see IsCheckoutLockedForJobEnv). Within-job sources (hooks, plugins,
+	// the Job API) are governed separately and only strict locks them.
 	checkoutMode := r.conf.AgentConfiguration.CheckoutOverrideMode
-	checkoutLockedFromJobEnv := checkoutMode != envutil.CheckoutOverrideNone
 
 	// Create a clone of our jobs environment. We'll then set the
 	// environment variables provided by the agent, which will override any
@@ -454,7 +454,7 @@ func (r *JobRunner) createEnvironment(ctx context.Context) ([]string, error) {
 	// higher precedence than the agent configuration, unless the checkout-override
 	// mode locks them. Only checkout-scoped vars are passed here.
 	setCheckoutEnv := func(name, value string) {
-		if !checkoutLockedFromJobEnv {
+		if !envutil.IsCheckoutLockedForJobEnv(name, checkoutMode) {
 			if _, exists := env[name]; exists {
 				return
 			}
