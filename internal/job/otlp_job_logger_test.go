@@ -131,7 +131,7 @@ func TestOTLPJobLoggerControlWriter(t *testing.T) {
 	if _, err := w.Write([]byte("# trailing comment")); err != nil {
 		t.Fatalf("Write() error = %v", err)
 	}
-	if err := l.Close(); err != nil {
+	if err := l.Close(t.Context()); err != nil {
 		t.Fatalf("Close() error = %v", err)
 	}
 
@@ -220,7 +220,7 @@ func TestOTLPJobLoggerRedactsSecretsSplitAcrossCommands(t *testing.T) {
 	if f, ok := second.(interface{ Flush() }); ok {
 		f.Flush()
 	}
-	if err := l.Close(); err != nil {
+	if err := l.Close(t.Context()); err != nil {
 		t.Fatalf("Close() error = %v", err)
 	}
 

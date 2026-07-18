@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"reflect"
 	"sync"
 	"time"
 
@@ -32,7 +31,7 @@ type otlpJobLogger struct {
 	attrs     []otellog.KeyValue
 	redactors *replacer.Mux
 	streamsMu sync.Mutex
-	streams   []*otlpJobLogStream
+	streams   map[io.Writer]*otlpJobLogStream
 
 	// control mirrors bootstrap-generated control output (section headers,
 	// prompts, comments, warnings) into OTLP so the exported records match the
@@ -101,15 +100,13 @@ func (l *otlpJobLogger) Wrap(ctx context.Context, out io.Writer, attrs map[strin
 	// Keep one redaction stream for each shared downstream job-log writer. The
 	// visible job-log redactor also persists across command boundaries, so OTLP
 	// must retain partial matches across Wrap calls to avoid leaking fragments
-	// of a secret split between two commands.
+	// of a secret split between two commands. Executor output passes pointer-
+	// based writers, so the io.Writer interface values are valid map keys.
 	l.streamsMu.Lock()
-	var stream *otlpJobLogStream
-	for _, candidate := range l.streams {
-		if sameOTLPWriter(candidate.out, out) {
-			stream = candidate
-			break
-		}
+	if l.streams == nil {
+		l.streams = make(map[io.Writer]*otlpJobLogStream)
 	}
+	stream := l.streams[out]
 	if stream == nil {
 		stream = &otlpJobLogStream{out: out, live: l.redactors}
 		stream.redactor = replacer.New(
@@ -117,7 +114,7 @@ func (l *otlpJobLogger) Wrap(ctx context.Context, out io.Writer, attrs map[strin
 			l.redactors.Needles(),
 			redact.Redacted,
 		)
-		l.streams = append(l.streams, stream)
+		l.streams[out] = stream
 	}
 	l.streamsMu.Unlock()
 
@@ -145,7 +142,7 @@ func (l *otlpJobLogger) controlWriter() io.Writer {
 	return l.control
 }
 
-func (l *otlpJobLogger) Close() error {
+func (l *otlpJobLogger) Close(ctx context.Context) error {
 	if l.control != nil {
 		l.control.flush()
 	}
@@ -154,7 +151,7 @@ func (l *otlpJobLogger) Close() error {
 		return nil
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 	defer cancel()
 	flushErr := l.provider.ForceFlush(ctx)
 	shutdownErr := l.provider.Shutdown(ctx)
@@ -170,7 +167,10 @@ func (l *otlpJobLogger) Close() error {
 // those phases deliberately do not flush this state.
 func (l *otlpJobLogger) FlushRedactors() {
 	l.streamsMu.Lock()
-	streams := append([]*otlpJobLogStream(nil), l.streams...)
+	streams := make([]*otlpJobLogStream, 0, len(l.streams))
+	for _, stream := range l.streams {
+		streams = append(streams, stream)
+	}
 	l.streamsMu.Unlock()
 	for _, stream := range streams {
 		stream.flush()
@@ -247,19 +247,16 @@ func (w otlpRedactedWriter) Write(data []byte) (int, error) {
 	return w.stream.emitter.Write(data)
 }
 
-func sameOTLPWriter(a, b io.Writer) bool {
-	if a == nil || b == nil {
-		return a == nil && b == nil
-	}
-	av, bv := reflect.ValueOf(a), reflect.ValueOf(b)
-	return av.Type() == bv.Type() && av.Comparable() && av.Interface() == bv.Interface()
-}
-
 // otlpLineEmitter line-buffers (already redacted) output and emits each line as
 // an OpenTelemetry log record with a native timestamp. Write and flush are
 // guarded by mu because control output may be written from multiple goroutines
 // (e.g. the cancellation handler emitting a comment).
 type otlpLineEmitter struct {
+	// An io.Writer does not carry a context, and line/redaction buffering can
+	// emit after the call that supplied these bytes. Retain the detached context
+	// selected by Wrap so delayed records keep command trace correlation after
+	// cancellation. A future record-aware buffer could retain a context with
+	// each buffered chunk instead.
 	ctx   context.Context
 	log   otellog.Logger
 	attrs []otellog.KeyValue

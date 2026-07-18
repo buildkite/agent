@@ -1,6 +1,8 @@
 package job
 
 import (
+	"bytes"
+	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -49,6 +51,33 @@ func TestDirForRepository(t *testing.T) {
 		if got, want := dirForRepository(test.repositoryName), test.expected; got != want {
 			t.Errorf("dirForRepository(test.repositoryName) = %q, want %q", got, want)
 		}
+	}
+}
+
+type errorWriter struct{ err error }
+
+func (w errorWriter) Write([]byte) (int, error) { return 0, w.err }
+
+func TestTeeWriterReturnsSecondaryWriteError(t *testing.T) {
+	t.Parallel()
+
+	wantErr := errors.New("secondary write failed")
+	var primary bytes.Buffer
+	w := &teeWriter{
+		primary:   &primary,
+		secondary: errorWriter{err: wantErr},
+	}
+	data := []byte("control output")
+
+	n, err := w.Write(data)
+	if !errors.Is(err, wantErr) {
+		t.Errorf("w.Write() error = %v, want %v", err, wantErr)
+	}
+	if n != len(data) {
+		t.Errorf("w.Write() wrote %d bytes to the primary, want %d", n, len(data))
+	}
+	if got, want := primary.String(), string(data); got != want {
+		t.Errorf("primary output = %q, want %q", got, want)
 	}
 }
 

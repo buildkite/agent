@@ -110,10 +110,12 @@ func (w *teeWriter) Write(p []byte) (int, error) {
 	defer w.mu.Unlock()
 
 	n, err := w.primary.Write(p)
-	if w.secondary != nil {
-		// The secondary sink is best-effort: failures must not affect the
-		// primary (customer-facing) job log output.
-		_, _ = w.secondary.Write(p)
+	if err != nil || w.secondary == nil {
+		return n, err
+	}
+	secondaryN, err := w.secondary.Write(p)
+	if err == nil && secondaryN != len(p) {
+		err = io.ErrShortWrite
 	}
 	return n, err
 }
@@ -122,6 +124,34 @@ func (w *teeWriter) setSecondary(secondary io.Writer) {
 	w.mu.Lock()
 	w.secondary = secondary
 	w.mu.Unlock()
+}
+
+func (e *Executor) setupOTLPJobLogger(ctx context.Context) func() {
+	jobLogger, err := newOTLPJobLogger(ctx, e)
+	if err != nil {
+		e.shell.Warningf("Failed to initialize OTLP job log exporter: %v", err)
+		return func() {}
+	}
+
+	e.otlpJobLogger = jobLogger
+	e.shell.SetOutputInterceptor(jobLogger.Wrap)
+	// Mirror the redacted shell logger control output (section headers,
+	// prompts, comments, warnings) into OTLP so the exported records match the
+	// downloadable Buildkite job log and the UI stream.
+	if e.loggerTee != nil {
+		e.loggerTee.setSecondary(jobLogger.controlWriter())
+	}
+
+	return func() {
+		e.shell.SetOutputInterceptor(nil)
+		if e.loggerTee != nil {
+			e.loggerTee.setSecondary(nil)
+		}
+		if err := jobLogger.Close(ctx); err != nil {
+			e.shell.Warningf("Failed to close OTLP job log exporter: %v", err)
+		}
+		e.otlpJobLogger = nil
+	}
 }
 
 // New returns a new executor instance
@@ -206,28 +236,8 @@ func (e *Executor) Run(ctx context.Context) (exitCode int) {
 	// records are trace-correlated. With tracing disabled, records are still
 	// emitted but remain uncorrelated.
 	if e.JobLogsOTLP {
-		jobLogger, err := newOTLPJobLogger(ctx, e)
-		if err != nil {
-			e.shell.Warningf("Failed to initialize OTLP job log exporter: %v", err)
-		} else {
-			e.otlpJobLogger = jobLogger
-			e.shell.SetOutputInterceptor(jobLogger.Wrap)
-			// Mirror the redacted shell logger control output (section headers,
-			// prompts, comments, warnings) into OTLP so the exported records
-			// match the downloadable Buildkite job log and the UI stream.
-			if e.loggerTee != nil {
-				e.loggerTee.setSecondary(jobLogger.controlWriter())
-			}
-			defer func() {
-				if e.loggerTee != nil {
-					e.loggerTee.setSecondary(nil)
-				}
-				if err := jobLogger.Close(); err != nil {
-					e.shell.Warningf("Failed to close OTLP job log exporter: %v", err)
-				}
-				e.otlpJobLogger = nil
-			}()
-		}
+		cleanup := e.setupOTLPJobLogger(ctx)
+		defer cleanup()
 	}
 
 	// Initialize the job API, iff the experiment is enabled. Noop otherwise
