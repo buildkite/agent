@@ -27,7 +27,12 @@ func (p *Process) setupProcessGroup() {
 }
 
 func (p *Process) postStart() error {
-	// a no-op on non-windows
+	if p.conf.Nice != 0 {
+		p.logger.Debugf("[Process] Setting nice value %d on PID %d", p.conf.Nice, p.pid())
+		if err := syscall.Setpriority(syscall.PRIO_PROCESS, p.pid(), p.conf.Nice); err != nil {
+			p.logger.Warnf("[Process] Failed to set nice value %d on PID %d: %v", p.conf.Nice, p.pid(), err)
+		}
+	}
 	return nil
 }
 

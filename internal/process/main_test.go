@@ -76,6 +76,14 @@ func TestMain(m *testing.M) {
 		fmt.Printf("SIG %v", <-signals)
 		os.Exit(0)
 
+	case "tester-nice":
+		prio, err := syscall.Getpriority(syscall.PRIO_PROCESS, 0)
+		if err != nil {
+			log.Fatalf("Getpriority: %v", err)
+		}
+		fmt.Printf("nice=%d", prio)
+		os.Exit(0)
+
 	case "tester-pgid":
 		pid := syscall.Getpid()
 		pgid, err := process.GetPgid(pid)
