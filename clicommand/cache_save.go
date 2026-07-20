@@ -45,7 +45,9 @@ Configuration File Format:
 
 The cache configuration file should be in YAML format. cache_key is an ordered
 list of parts; each part is a literal string or one of { agent: os },
-{ agent: arch }, { checksum: <file> }, or { env: <VAR> }:
+{ agent: arch }, { checksum: <file> }, or { env: <VAR> }. A checksum part also
+accepts an array of file paths and glob patterns (*, **, ?), expanded relative
+to the working directory and hashed together into one digest:
 
     caches:
       - name: node
@@ -53,7 +55,7 @@ list of parts; each part is a literal string or one of { agent: os },
           - node
           - { agent: os }
           - { agent: arch }
-          - { checksum: package-lock.json }
+          - { checksum: [package-lock.json, "patches/*.patch"] }
         target_paths:
           - node_modules`
 

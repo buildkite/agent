@@ -6,15 +6,23 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"runtime"
+	"sort"
+	"strings"
 
+	"github.com/bmatcuk/doublestar/v4"
 	"github.com/buildkite/agent/v3/api"
 	"gopkg.in/yaml.v3"
 )
 
 type KeyPart struct {
-	Arg    string
-	Source Source
+	// Arg is the single argument for the literal, agent and env sources.
+	Arg string
+	// Patterns holds the file paths / glob patterns for the checksum source.
+	// The scalar form yields one entry; the array form yields one or more.
+	Patterns []string
+	Source   Source
 	// FallbackLimit marks the fallback boundary: this part and every part before
 	// it are mandatory; parts after it are optional. At most one part may set it.
 	FallbackLimit bool
@@ -91,13 +99,11 @@ func (k *KeyPart) unmarshalMapping(node *yaml.Node) error {
 			}
 			k.Source, k.Arg = SourceAgent, val.Value
 		case SourceChecksum:
-			if val.Kind != yaml.ScalarNode {
-				return fmt.Errorf("cache_key: checksum takes a single file path (no arrays)")
+			patterns, err := decodeChecksumPatterns(&val)
+			if err != nil {
+				return err
 			}
-			if val.Value == "" {
-				return fmt.Errorf("cache_key: checksum entry cannot be empty")
-			}
-			k.Source, k.Arg = SourceChecksum, val.Value
+			k.Source, k.Patterns = SourceChecksum, patterns
 		case SourceEnv:
 			if val.Kind != yaml.ScalarNode {
 				return fmt.Errorf("cache_key: env source must be a string")
@@ -111,6 +117,37 @@ func (k *KeyPart) unmarshalMapping(node *yaml.Node) error {
 		}
 	}
 	return nil
+}
+
+// decodeChecksumPatterns accepts the checksum argument as either a single file
+// path (scalar) or an array of file paths / glob patterns (sequence), and
+// returns the normalised, non-empty list of patterns.
+func decodeChecksumPatterns(val *yaml.Node) ([]string, error) {
+	switch val.Kind {
+	case yaml.ScalarNode:
+		if val.Value == "" {
+			return nil, fmt.Errorf("cache_key: checksum entry cannot be empty")
+		}
+		return []string{val.Value}, nil
+
+	case yaml.SequenceNode:
+		var patterns []string
+		if err := val.Decode(&patterns); err != nil {
+			return nil, fmt.Errorf("cache_key: checksum array must be a list of strings: %w", err)
+		}
+		if len(patterns) == 0 {
+			return nil, fmt.Errorf("cache_key: checksum array cannot be empty")
+		}
+		for _, p := range patterns {
+			if p == "" {
+				return nil, fmt.Errorf("cache_key: checksum array entries cannot be empty")
+			}
+		}
+		return patterns, nil
+
+	default:
+		return nil, fmt.Errorf("cache_key: checksum must be a file path or an array of file paths")
+	}
 }
 
 // ResolveCacheKey resolves each KeyPart to its concrete value and returns the
@@ -170,10 +207,7 @@ func (k KeyPart) Resolve(env map[string]string) (string, error) {
 	case SourceEnv:
 		v = lookupEnv(env, k.Arg)
 	case SourceChecksum:
-		// For now, support is for single regular file only. Multi-file checksums, globs, and
-		// directories are not supported. We have NOT yet considered symlinks, special files, or very large
-		// files — k.Arg is treated as one path.
-		v, err = sha256File(k.Arg)
+		v, err = checksumDigest(k.Patterns)
 	default:
 		return "", fmt.Errorf("cache_key: unknown source %q", k.Source)
 	}
@@ -192,7 +226,79 @@ func lookupEnv(env map[string]string, name string) string {
 	return os.Getenv(name)
 }
 
-// sha256File returns the hex-encoded SHA-256 of the file's contents
+// checksumDigest folds every file matched by patterns into a single
+// deterministic SHA-256 digest.
+// A literal entry (no glob chars) is an assertion that a specific file
+// exists. A glob entry may match nothing without error,
+// but it is an error when the whole pattern set matches no files.
+//
+// A single plain path takes a fast path that hashes the file's raw contents,
+// identical to the original single-file checksum, so pre-existing cache keys
+// are preserved.
+func checksumDigest(patterns []string) (string, error) {
+	if len(patterns) == 0 {
+		return "", fmt.Errorf("cache_key: checksum has no patterns")
+	}
+	if len(patterns) == 1 && !hasGlobMeta(patterns[0]) {
+		return sha256File(patterns[0])
+	}
+
+	seen := make(map[string]struct{})
+	for _, pattern := range patterns {
+		if !hasGlobMeta(pattern) {
+			// Literal path: must exist (matching the scalar form), and must be a
+			// regular file since a directory has no hashable contents.
+			info, err := os.Stat(pattern)
+			if err != nil {
+				return "", fmt.Errorf("cache_key: checksum %q: %w", pattern, err)
+			}
+			if info.IsDir() {
+				return "", fmt.Errorf("cache_key: checksum %q is a directory", pattern)
+			}
+			// Clean before use as a dedup key so aliases like "go.mod" and
+			// "./go.mod" collapse to one entry, matching the already-cleaned paths
+			// that FilepathGlob returns for glob entries.
+			seen[filepath.ToSlash(filepath.Clean(pattern))] = struct{}{}
+			continue
+		}
+
+		matches, err := doublestar.FilepathGlob(pattern, doublestar.WithFilesOnly(), doublestar.WithFailOnIOErrors())
+		if err != nil {
+			return "", fmt.Errorf("cache_key: checksum pattern %q: %w", pattern, err)
+		}
+		for _, m := range matches {
+			seen[filepath.ToSlash(m)] = struct{}{}
+		}
+	}
+	if len(seen) == 0 {
+		return "", fmt.Errorf("cache_key: checksum patterns %v matched no files", patterns)
+	}
+
+	paths := make([]string, 0, len(seen))
+	for p := range seen {
+		paths = append(paths, p)
+	}
+	sort.Strings(paths)
+
+	h := sha256.New()
+	for _, p := range paths {
+		sum, err := sha256File(filepath.FromSlash(p))
+		if err != nil {
+			return "", err
+		}
+		// path\0contents-hash\n.
+		_, _ = fmt.Fprintf(h, "%s\x00%s\n", p, sum)
+	}
+	return hex.EncodeToString(h.Sum(nil)), nil
+}
+
+// hasGlobMeta reports whether p contains any glob metacharacter. A path with
+// none is a plain file path treated as a literal.
+func hasGlobMeta(p string) bool {
+	return strings.ContainsAny(p, "*?[{")
+}
+
+// sha256File returns the hex-encoded SHA-256 of the file's contents.
 func sha256File(path string) (string, error) {
 	f, err := os.Open(path)
 	if err != nil {

@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"os"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"strings"
 	"testing"
@@ -30,16 +31,21 @@ func TestKeyPartUnmarshal(t *testing.T) {
 		{name: "agent branch", yaml: `{ agent: branch }`, want: KeyPart{Source: SourceAgent, Arg: "branch"}},
 		{name: "agent step", yaml: `{ agent: step }`, want: KeyPart{Source: SourceAgent, Arg: "step"}},
 		{name: "agent pipeline", yaml: `{ agent: pipeline }`, want: KeyPart{Source: SourceAgent, Arg: "pipeline"}},
-		{name: "checksum", yaml: `{ checksum: go.mod }`, want: KeyPart{Source: SourceChecksum, Arg: "go.mod"}},
+		{name: "checksum", yaml: `{ checksum: go.mod }`, want: KeyPart{Source: SourceChecksum, Patterns: []string{"go.mod"}}},
+		{name: "checksum array", yaml: `{ checksum: [go.mod, go.sum] }`, want: KeyPart{Source: SourceChecksum, Patterns: []string{"go.mod", "go.sum"}}},
+		{name: "checksum single-element array", yaml: `{ checksum: [go.mod] }`, want: KeyPart{Source: SourceChecksum, Patterns: []string{"go.mod"}}},
+		{name: "checksum glob array", yaml: `{ checksum: ["**/*.proto", "buf.gen.yaml"] }`, want: KeyPart{Source: SourceChecksum, Patterns: []string{"**/*.proto", "buf.gen.yaml"}}},
 		{name: "env", yaml: `{ env: GO_VERSION }`, want: KeyPart{Source: SourceEnv, Arg: "GO_VERSION"}},
 		{name: "fallback_limit on agent", yaml: `{ agent: arch, fallback_limit: true }`, want: KeyPart{Source: SourceAgent, Arg: "arch", FallbackLimit: true}},
-		{name: "fallback_limit on checksum", yaml: `{ checksum: go.mod, fallback_limit: true }`, want: KeyPart{Source: SourceChecksum, Arg: "go.mod", FallbackLimit: true}},
+		{name: "fallback_limit on checksum", yaml: `{ checksum: go.mod, fallback_limit: true }`, want: KeyPart{Source: SourceChecksum, Patterns: []string{"go.mod"}, FallbackLimit: true}},
+		{name: "fallback_limit on checksum array", yaml: `{ checksum: [go.mod, go.sum], fallback_limit: true }`, want: KeyPart{Source: SourceChecksum, Patterns: []string{"go.mod", "go.sum"}, FallbackLimit: true}},
 		{name: "fallback_limit false is a no-op", yaml: `{ agent: arch, fallback_limit: false }`, want: KeyPart{Source: SourceAgent, Arg: "arch", FallbackLimit: false}},
 
-		// Out of M1 scope -> parse errors.
+		// Out of scope -> parse errors.
 		{name: "empty literal", yaml: `""`, wantErr: "literal entry cannot be empty"},
 		{name: "agent os_version deferred", yaml: `{ agent: os_version }`, wantErr: "unsupported agent argument"},
-		{name: "checksum array deferred", yaml: `{ checksum: [go.mod, go.sum] }`, wantErr: "single file path"},
+		{name: "checksum empty array", yaml: `{ checksum: [] }`, wantErr: "checksum array cannot be empty"},
+		{name: "checksum array with empty entry", yaml: `{ checksum: [go.mod, ""] }`, wantErr: "checksum array entries cannot be empty"},
 		{name: "cmd deferred", yaml: `{ cmd: ["go", "version"] }`, wantErr: "unknown source"},
 		{name: "unknown source", yaml: `{ bogus: x }`, wantErr: "unknown source"},
 		{name: "fallback_limit non-bool", yaml: `{ agent: arch, fallback_limit: 7 }`, wantErr: "fallback_limit must be a boolean"},
@@ -68,7 +74,7 @@ func TestKeyPartUnmarshal(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Unmarshal(%q) unexpected error = %v", tt.yaml, err)
 			}
-			if got != tt.want {
+			if !reflect.DeepEqual(got, tt.want) {
 				t.Fatalf("Unmarshal(%q) = %+v, want %+v", tt.yaml, got, tt.want)
 			}
 		})
@@ -144,7 +150,7 @@ func TestKeyPartResolveChecksum(t *testing.T) {
 	sum := sha256.Sum256(contents)
 	want := hex.EncodeToString(sum[:])
 
-	got, err := KeyPart{Source: SourceChecksum, Arg: path}.Resolve(nil)
+	got, err := KeyPart{Source: SourceChecksum, Patterns: []string{path}}.Resolve(nil)
 	if err != nil {
 		t.Fatalf("Resolve() unexpected error = %v", err)
 	}
@@ -156,9 +162,167 @@ func TestKeyPartResolveChecksum(t *testing.T) {
 func TestKeyPartResolveChecksumMissingFile(t *testing.T) {
 	t.Parallel()
 
-	_, err := KeyPart{Source: SourceChecksum, Arg: filepath.Join(t.TempDir(), "does-not-exist")}.Resolve(nil)
+	_, err := KeyPart{Source: SourceChecksum, Patterns: []string{filepath.Join(t.TempDir(), "does-not-exist")}}.Resolve(nil)
 	if err == nil {
 		t.Fatal("Resolve() error = nil, want error for missing checksum file")
+	}
+}
+
+func writeFile(t *testing.T, path, contents string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	if err := os.WriteFile(path, []byte(contents), 0o600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+}
+
+func TestKeyPartResolveChecksumArrayAndGlob(t *testing.T) {
+	// Not parallel: relies on the process working directory via t.Chdir.
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "package-lock.json"), "lockfile\n")
+	writeFile(t, filepath.Join(dir, "patches", "a.patch"), "patch a\n")
+	writeFile(t, filepath.Join(dir, "patches", "b.patch"), "patch b\n")
+	writeFile(t, filepath.Join(dir, "patches", "notes.txt"), "ignore me\n")
+	t.Chdir(dir)
+
+	// A literal path plus a glob that matches two of three files.
+	part := KeyPart{Source: SourceChecksum, Patterns: []string{"package-lock.json", "patches/*.patch"}}
+	got, err := part.Resolve(nil)
+	if err != nil {
+		t.Fatalf("Resolve() unexpected error = %v", err)
+	}
+	if got == "" {
+		t.Fatal("Resolve() = empty digest")
+	}
+
+	// Reordering the patterns must not change the digest.
+	reordered := KeyPart{Source: SourceChecksum, Patterns: []string{"patches/*.patch", "package-lock.json"}}
+	got2, err := reordered.Resolve(nil)
+	if err != nil {
+		t.Fatalf("Resolve() unexpected error = %v", err)
+	}
+	if got != got2 {
+		t.Fatalf("digest depends on pattern order: %q != %q", got, got2)
+	}
+
+	// An overlapping pattern set (same files, deduplicated) yields the same digest.
+	overlap := KeyPart{Source: SourceChecksum, Patterns: []string{"package-lock.json", "patches/*.patch", "patches/a.patch"}}
+	got3, err := overlap.Resolve(nil)
+	if err != nil {
+		t.Fatalf("Resolve() unexpected error = %v", err)
+	}
+	if got != got3 {
+		t.Fatalf("dedup changed digest: %q != %q", got, got3)
+	}
+
+	// Uncleaned literal aliases ("./package-lock.json") must clean to the same
+	// dedup key, so the file is hashed once and the digest is unchanged.
+	aliased := KeyPart{Source: SourceChecksum, Patterns: []string{"package-lock.json", "./package-lock.json", "patches/*.patch"}}
+	gotAlias, err := aliased.Resolve(nil)
+	if err != nil {
+		t.Fatalf("Resolve() unexpected error = %v", err)
+	}
+	if got != gotAlias {
+		t.Fatalf("literal alias changed digest: %q != %q", got, gotAlias)
+	}
+
+	// Changing a matched file's contents changes the digest.
+	writeFile(t, filepath.Join(dir, "patches", "a.patch"), "patch a modified\n")
+	got4, err := part.Resolve(nil)
+	if err != nil {
+		t.Fatalf("Resolve() unexpected error = %v", err)
+	}
+	if got == got4 {
+		t.Fatal("digest unchanged after a matched file's contents changed")
+	}
+}
+
+func TestKeyPartResolveChecksumEmptyMatch(t *testing.T) {
+	// Not parallel: relies on the process working directory via t.Chdir.
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "go.mod"), "module x\n")
+	t.Chdir(dir)
+
+	// A non-matching glob alongside a matching one is fine (set is non-empty).
+	part := KeyPart{Source: SourceChecksum, Patterns: []string{"go.mod", "patches/*.patch"}}
+	if _, err := part.Resolve(nil); err != nil {
+		t.Fatalf("Resolve() unexpected error = %v", err)
+	}
+
+	// When the whole set matches nothing, it is an error.
+	empty := KeyPart{Source: SourceChecksum, Patterns: []string{"nope/*.patch", "missing/**/*.lock"}}
+	if _, err := empty.Resolve(nil); err == nil {
+		t.Fatal("Resolve() error = nil, want error when no pattern matched any file")
+	}
+}
+
+func TestChecksumDigestSingleGlobExcludesDirectories(t *testing.T) {
+	// Not parallel: relies on the process working directory via t.Chdir.
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "services", "a", "package-lock.json"), "a\n")
+	writeFile(t, filepath.Join(dir, "services", "b", "package-lock.json"), "b\n")
+	t.Chdir(dir)
+
+	part := KeyPart{Source: SourceChecksum, Patterns: []string{"services/*/package-lock.json"}}
+	if _, err := part.Resolve(nil); err != nil {
+		t.Fatalf("Resolve() unexpected error = %v", err)
+	}
+}
+
+func TestKeyPartResolveChecksumMissingLiteralInArray(t *testing.T) {
+	// Not parallel: relies on the process working directory via t.Chdir.
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "patches", "a.patch"), "patch a\n")
+	// Deliberately no package-lock.json.
+	t.Chdir(dir)
+
+	// A named literal that doesn't exist is an error even though the glob matches.
+	part := KeyPart{Source: SourceChecksum, Patterns: []string{"package-lock.json", "patches/*.patch"}}
+	if _, err := part.Resolve(nil); err == nil {
+		t.Fatal("Resolve() error = nil, want error for missing literal in array")
+	}
+
+	// Once the literal exists, it resolves.
+	writeFile(t, filepath.Join(dir, "package-lock.json"), "lock\n")
+	if _, err := part.Resolve(nil); err != nil {
+		t.Fatalf("Resolve() unexpected error = %v", err)
+	}
+
+	// A glob that matches nothing is fine as long as a literal exists.
+	globOnly := KeyPart{Source: SourceChecksum, Patterns: []string{"package-lock.json", "does-not-exist/*.patch"}}
+	if _, err := globOnly.Resolve(nil); err != nil {
+		t.Fatalf("Resolve() unexpected error = %v", err)
+	}
+
+	// Globs only, none matching, no literal to backstop them: the whole set is
+	// empty, which is an error.
+	noMatch := KeyPart{Source: SourceChecksum, Patterns: []string{"nope/*.patch", "missing/**/*.lock"}}
+	if _, err := noMatch.Resolve(nil); err == nil {
+		t.Fatal("Resolve() error = nil, want error when only globs are given and none match")
+	}
+
+	// Multiple globs, at least one matching, no literal: resolves over the union
+	// of matches.
+	writeFile(t, filepath.Join(dir, "protos", "svc.proto"), "syntax\n")
+	multiGlob := KeyPart{Source: SourceChecksum, Patterns: []string{"patches/*.patch", "protos/**/*.proto"}}
+	if _, err := multiGlob.Resolve(nil); err != nil {
+		t.Fatalf("Resolve() unexpected error = %v", err)
+	}
+}
+
+func TestKeyPartResolveChecksumLiteralDirectoryInArray(t *testing.T) {
+	// Not parallel: relies on the process working directory via t.Chdir.
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "node_modules", "x"), "x\n")
+	writeFile(t, filepath.Join(dir, "go.mod"), "module x\n")
+	t.Chdir(dir)
+
+	// A literal naming a directory has no hashable contents and is an error.
+	part := KeyPart{Source: SourceChecksum, Patterns: []string{"go.mod", "node_modules"}}
+	if _, err := part.Resolve(nil); err == nil {
+		t.Fatal("Resolve() error = nil, want error for literal directory")
 	}
 }
 
