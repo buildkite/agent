@@ -5,6 +5,7 @@ package process_test
 import (
 	"bytes"
 	"context"
+	"io"
 	"os"
 	"testing"
 	"time"
@@ -17,18 +18,39 @@ func TestProcessNiceValue(t *testing.T) {
 	t.Parallel()
 
 	stdout := &bytes.Buffer{}
+	stdinR, stdinW := io.Pipe()
+	started := make(chan struct{})
 
 	p := process.New(logger.Discard, process.Config{
-		Path:   os.Args[0],
-		Env:    []string{"TEST_MAIN=tester-nice"},
-		Stdout: stdout,
-		Nice:   5,
+		Path:    os.Args[0],
+		Env:     []string{"TEST_MAIN=tester-nice"},
+		Stdout:  stdout,
+		Stdin:   stdinR,
+		Nice:    5,
+		Started: started,
 	})
 
 	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	defer cancel()
 
-	if err := p.Run(ctx); err != nil {
+	// Run the process in the background.
+	errCh := make(chan error, 1)
+	go func() { errCh <- p.Run(ctx) }()
+
+	// Wait for the process to start (postStart has applied Setpriority).
+	select {
+	case <-started:
+	case <-ctx.Done():
+		t.Fatal("timed out waiting for process to start")
+	}
+
+	// Signal the child that it's safe to read its priority.
+	if _, err := stdinW.Write([]byte("g")); err != nil {
+		t.Fatalf("writing start signal: %v", err)
+	}
+	stdinW.Close()
+
+	if err := <-errCh; err != nil {
 		t.Fatalf("p.Run(ctx) = %v", err)
 	}
 

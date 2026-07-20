@@ -12,6 +12,14 @@ import (
 
 func init() {
 	extraTestMainCases["tester-nice"] = func() {
+		// Wait for a byte on stdin before reading priority.
+		// The parent writes this byte after postStart has applied Setpriority,
+		// avoiding a race where we read priority before it's been set.
+		buf := make([]byte, 1)
+		if _, err := os.Stdin.Read(buf); err != nil {
+			log.Fatalf("waiting for start signal: %v", err)
+		}
+
 		prio, err := syscall.Getpriority(syscall.PRIO_PROCESS, 0)
 		if err != nil {
 			log.Fatalf("Getpriority: %v", err)
