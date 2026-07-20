@@ -48,7 +48,9 @@ func TestProcessNiceValue(t *testing.T) {
 	if _, err := stdinW.Write([]byte("g")); err != nil {
 		t.Fatalf("writing start signal: %v", err)
 	}
-	stdinW.Close()
+	if err := stdinW.Close(); err != nil {
+		t.Fatalf("closing stdin pipe: %v", err)
+	}
 
 	if err := <-errCh; err != nil {
 		t.Fatalf("p.Run(ctx) = %v", err)
