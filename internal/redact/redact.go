@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"maps"
+	"net/url"
 	"os"
 	"path"
 	"slices"
@@ -24,6 +25,19 @@ const LengthMin = 6
 
 // Redacted ignores its input and returns "[REDACTED]".
 func Redacted([]byte) []byte { return []byte("[REDACTED]") }
+
+// URLCredentials returns rawURL with any embedded password masked. URLs
+// without one (including SCP-style SSH remotes) are returned unchanged.
+func URLCredentials(rawURL string) string {
+	u, err := url.Parse(rawURL)
+	if err != nil || u.User == nil {
+		return rawURL
+	}
+	if _, hasPassword := u.User.Password(); !hasPassword {
+		return rawURL
+	}
+	return u.Redacted()
+}
 
 // String is a convenience wrapper for redacting small strings.
 // This is fine to call repeatedly with many separate strings, but avoid using

@@ -116,3 +116,35 @@ func TestRedactString(t *testing.T) {
 		})
 	}
 }
+
+// TestURLCredentials asserts that an embedded password is masked while URLs
+// without a secret, ssh:// SSH remotes and relative submodule paths pass
+// through unchanged.
+func TestURLCredentials(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{name: "https with creds", in: "https://x-access-token:ghs_secret@github.com/org/repo.git", want: "https://x-access-token:xxxxx@github.com/org/repo.git"},
+		{name: "https with creds but no user", in: "https://:ghs_secret@github.com/org/repo.git", want: "https://:xxxxx@github.com/org/repo.git"},
+		{name: "https no creds", in: "https://github.com/org/repo.git", want: "https://github.com/org/repo.git"},
+		{name: "https user only", in: "https://user@github.com/org/repo.git", want: "https://user@github.com/org/repo.git"},
+		{name: "scp-style ssh", in: "git@github.com:org/repo.git", want: "git@github.com:org/repo.git"},
+		{name: "ssh scheme", in: "ssh://git@github.com/org/repo.git", want: "ssh://git@github.com/org/repo.git"},
+		{name: "relative submodule", in: "../relative/submodule", want: "../relative/submodule"},
+		{name: "empty", in: "", want: ""},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			if got := URLCredentials(test.in); got != test.want {
+				t.Errorf("URLCredentials(%q) = %q, want %q", test.in, got, test.want)
+			}
+		})
+	}
+}
