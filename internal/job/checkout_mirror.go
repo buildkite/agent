@@ -13,6 +13,28 @@ import (
 	"github.com/buildkite/shellwords"
 )
 
+func (e *Executor) getOrUpdateMirrorDir(ctx context.Context, repository string) (string, error) {
+	var mirrorDir string
+	// Skip updating the Git mirror before using it?
+	if e.GitMirrorsSkipUpdate {
+		mirrorDir = filepath.Join(e.GitMirrorsPath, dirForRepository(repository))
+		e.shell.Commentf("Skipping update and using existing mirror for repository %s at %s.", repository, mirrorDir)
+
+		// Check if specified mirrorDir exists, otherwise the clone will fail.
+		if !osutil.FileExists(mirrorDir) {
+			// Fall back to a clean clone, rather than failing the clone and therefore the build
+			e.shell.Commentf("No existing mirror found for repository %s at %s.", repository, mirrorDir)
+			mirrorDir = ""
+		}
+
+		// If git mirror updates are skipped, we assume there's no change
+		// to the mirror objects, so no need for snapshotting.
+		return mirrorDir, nil
+	}
+
+	return e.updateGitMirror(ctx, repository)
+}
+
 // updateGitMirror clones a new git mirror (git clone --mirror ...), or updates
 // an existing git mirror to ensure relevant refs are available. It returns a
 // directory path that a checkout can use for the --reference flag. If clean
@@ -266,17 +288,6 @@ func (e *Executor) snapshotMirror(ctx context.Context, repository, mirrorDir str
 	return snapshotDir, nil
 }
 
-type ErrTimedOutAcquiringLock struct {
-	Name string
-	Err  error
-}
-
-func (e ErrTimedOutAcquiringLock) Error() string {
-	return fmt.Sprintf("timed out acquiring %s lock: %v", e.Name, e.Err)
-}
-
-func (e ErrTimedOutAcquiringLock) Unwrap() error { return e.Err }
-
 // updateRemoteURL updates the URL for 'origin' and reports whether the
 // URL changed from something else. If gitDir == "", it assumes the
 // local repo is in the current directory, otherwise it includes --git-dir.
@@ -337,28 +348,6 @@ func (e *Executor) updateRemoteURL(ctx context.Context, gitDir, repository strin
 	return true, e.shell.Command("git", args...).Run(ctx)
 }
 
-func (e *Executor) getOrUpdateMirrorDir(ctx context.Context, repository string) (string, error) {
-	var mirrorDir string
-	// Skip updating the Git mirror before using it?
-	if e.GitMirrorsSkipUpdate {
-		mirrorDir = filepath.Join(e.GitMirrorsPath, dirForRepository(repository))
-		e.shell.Commentf("Skipping update and using existing mirror for repository %s at %s.", repository, mirrorDir)
-
-		// Check if specified mirrorDir exists, otherwise the clone will fail.
-		if !osutil.FileExists(mirrorDir) {
-			// Fall back to a clean clone, rather than failing the clone and therefore the build
-			e.shell.Commentf("No existing mirror found for repository %s at %s.", repository, mirrorDir)
-			mirrorDir = ""
-		}
-
-		// If git mirror updates are skipped, we assume there's no change
-		// to the mirror objects, so no need for snapshotting.
-		return mirrorDir, nil
-	}
-
-	return e.updateGitMirror(ctx, repository)
-}
-
 // This is the same thing that git does at the end of clone when it is
 // passed --dissociate:
 // https://github.com/git/git/blob/6e8d538aab8fe4dd07ba9fb87b5c7edcfa5706ad/builtin/clone.c#L843-L859
@@ -399,3 +388,14 @@ func (e *Executor) reassociateIfNeeded(ctx context.Context, gitDir, mirrorDir st
 	}
 	return nil
 }
+
+type ErrTimedOutAcquiringLock struct {
+	Name string
+	Err  error
+}
+
+func (e ErrTimedOutAcquiringLock) Error() string {
+	return fmt.Sprintf("timed out acquiring %s lock: %v", e.Name, e.Err)
+}
+
+func (e ErrTimedOutAcquiringLock) Unwrap() error { return e.Err }

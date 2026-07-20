@@ -18,83 +18,6 @@ import (
 	"github.com/buildkite/shellwords"
 )
 
-func (e *Executor) removeCheckoutDir() error {
-	checkoutPath, _ := e.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH")
-
-	if e.checkoutRoot != nil {
-		_ = e.checkoutRoot.Close()
-		e.checkoutRoot = nil
-	}
-
-	// on windows, sometimes removing large dirs can fail for various reasons
-	// for instance having files open
-	// see https://github.com/golang/go/issues/20841
-	for range 10 {
-		e.shell.Commentf("Removing %s", checkoutPath)
-		if err := os.RemoveAll(checkoutPath); err != nil {
-			e.shell.Errorf("Failed to remove \"%s\" (%s)", checkoutPath, err)
-		} else {
-			if _, err := os.Stat(checkoutPath); os.IsNotExist(err) {
-				return nil
-			} else {
-				e.shell.Errorf("Failed to remove %s", checkoutPath)
-			}
-		}
-		e.shell.Commentf("Waiting 10 seconds")
-		<-time.After(time.Second * 10)
-	}
-
-	return fmt.Errorf("failed to remove %s", checkoutPath)
-}
-
-// createCheckoutDir checks for the existence of a directory at
-// $BUILDKITE_BUILD_CHECKOUT_PATH, and creates it if it does not exist.
-// It opens the checkout directory as an [os.Root], saved to e.checkoutRoot.
-// It then changes e.shell's working directory to the checkout directory.
-func (e *Executor) createCheckoutDir() error {
-	checkoutPath, _ := e.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH")
-
-	if !osutil.FileExists(checkoutPath) {
-		e.shell.Commentf("Creating %q", checkoutPath)
-		// Actual file permissions will be reduced by umask, and won't be 0o777 unless the user has manually changed the umask to 000
-		if err := os.MkdirAll(checkoutPath, 0o777); err != nil {
-			return err
-		}
-	}
-
-	if err := e.refreshCheckoutRoot(); err != nil {
-		return err
-	}
-
-	if e.shell.Getwd() != checkoutPath {
-		if err := e.shell.Chdir(checkoutPath); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-// refreshCheckoutRoot refreshes e.checkoutRoot
-func (e *Executor) refreshCheckoutRoot() error {
-	checkoutPath, _ := e.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH")
-	if e.checkoutRoot != nil {
-		if err := e.checkoutRoot.Close(); err != nil {
-			// While it's unlikely, it's not a blocking error
-			e.shell.Warningf("unable to close existing checkoutRoot during refreshCheckoutRoot: %w", err)
-		}
-	}
-	root, err := os.OpenRoot(checkoutPath)
-	if err != nil {
-		return fmt.Errorf("opening checkout path as root: %w", err)
-	}
-	// This cleanup is largely ornamental, since the executor pointer only
-	// becomes unreachable when the bootstrap exits.
-	runtime.AddCleanup(e, func(r *os.Root) { _ = r.Close() }, root)
-	e.checkoutRoot = root
-	return nil
-}
-
 // CheckoutPhase creates the build directory and makes sure we're running the
 // build at the right commit.
 func (e *Executor) CheckoutPhase(ctx context.Context) (retErr error) {
@@ -177,32 +100,6 @@ func (e *Executor) CheckoutPhase(ctx context.Context) (retErr error) {
 	}
 
 	return nil
-}
-
-// errCheckoutAttemptTimedOut is a sentinel marker, joined into the error
-// returned by runDefaultCheckoutAttempt when the per-attempt timeout fires.
-// The retry loop matches it explicitly so a timeout-killed git process is
-// retried instead of being treated like a user signal.
-var errCheckoutAttemptTimedOut = errors.New("checkout attempt timed out")
-
-// runDefaultCheckoutAttempt runs defaultCheckoutPhase, applying a per-attempt
-// timeout if BUILDKITE_GIT_CHECKOUT_TIMEOUT is set. On timeout the returned
-// error is joined with errCheckoutAttemptTimedOut so the retry loop can
-// distinguish a timeout-kill from other signal-terminated processes.
-func (e *Executor) runDefaultCheckoutAttempt(ctx context.Context) error {
-	if e.GitCheckoutTimeout <= 0 {
-		return e.defaultCheckoutPhase(ctx)
-	}
-
-	timeout := time.Duration(e.GitCheckoutTimeout) * time.Second
-	attemptCtx, cancel := context.WithTimeout(ctx, timeout)
-	defer cancel()
-
-	err := e.defaultCheckoutPhase(attemptCtx)
-	if err != nil && attemptCtx.Err() == context.DeadlineExceeded && ctx.Err() == nil {
-		return fmt.Errorf("%w after %s: %w", errCheckoutAttemptTimedOut, timeout, err)
-	}
-	return err
 }
 
 // checkout runs checkout hook or default checkout logic
@@ -358,6 +255,32 @@ func (e *Executor) checkout(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+// errCheckoutAttemptTimedOut is a sentinel marker, joined into the error
+// returned by runDefaultCheckoutAttempt when the per-attempt timeout fires.
+// The retry loop matches it explicitly so a timeout-killed git process is
+// retried instead of being treated like a user signal.
+var errCheckoutAttemptTimedOut = errors.New("checkout attempt timed out")
+
+// runDefaultCheckoutAttempt runs defaultCheckoutPhase, applying a per-attempt
+// timeout if BUILDKITE_GIT_CHECKOUT_TIMEOUT is set. On timeout the returned
+// error is joined with errCheckoutAttemptTimedOut so the retry loop can
+// distinguish a timeout-kill from other signal-terminated processes.
+func (e *Executor) runDefaultCheckoutAttempt(ctx context.Context) error {
+	if e.GitCheckoutTimeout <= 0 {
+		return e.defaultCheckoutPhase(ctx)
+	}
+
+	timeout := time.Duration(e.GitCheckoutTimeout) * time.Second
+	attemptCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	err := e.defaultCheckoutPhase(attemptCtx)
+	if err != nil && attemptCtx.Err() == context.DeadlineExceeded && ctx.Err() == nil {
+		return fmt.Errorf("%w after %s: %w", errCheckoutAttemptTimedOut, timeout, err)
+	}
+	return err
 }
 
 // defaultCheckoutPhase is called by the CheckoutPhase if no global or plugin checkout
@@ -689,4 +612,81 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) (retErr error) {
 	}
 
 	return nil
+}
+
+// createCheckoutDir checks for the existence of a directory at
+// $BUILDKITE_BUILD_CHECKOUT_PATH, and creates it if it does not exist.
+// It opens the checkout directory as an [os.Root], saved to e.checkoutRoot.
+// It then changes e.shell's working directory to the checkout directory.
+func (e *Executor) createCheckoutDir() error {
+	checkoutPath, _ := e.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH")
+
+	if !osutil.FileExists(checkoutPath) {
+		e.shell.Commentf("Creating %q", checkoutPath)
+		// Actual file permissions will be reduced by umask, and won't be 0o777 unless the user has manually changed the umask to 000
+		if err := os.MkdirAll(checkoutPath, 0o777); err != nil {
+			return err
+		}
+	}
+
+	if err := e.refreshCheckoutRoot(); err != nil {
+		return err
+	}
+
+	if e.shell.Getwd() != checkoutPath {
+		if err := e.shell.Chdir(checkoutPath); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// refreshCheckoutRoot refreshes e.checkoutRoot
+func (e *Executor) refreshCheckoutRoot() error {
+	checkoutPath, _ := e.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH")
+	if e.checkoutRoot != nil {
+		if err := e.checkoutRoot.Close(); err != nil {
+			// While it's unlikely, it's not a blocking error
+			e.shell.Warningf("unable to close existing checkoutRoot during refreshCheckoutRoot: %w", err)
+		}
+	}
+	root, err := os.OpenRoot(checkoutPath)
+	if err != nil {
+		return fmt.Errorf("opening checkout path as root: %w", err)
+	}
+	// This cleanup is largely ornamental, since the executor pointer only
+	// becomes unreachable when the bootstrap exits.
+	runtime.AddCleanup(e, func(r *os.Root) { _ = r.Close() }, root)
+	e.checkoutRoot = root
+	return nil
+}
+
+func (e *Executor) removeCheckoutDir() error {
+	checkoutPath, _ := e.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH")
+
+	if e.checkoutRoot != nil {
+		_ = e.checkoutRoot.Close()
+		e.checkoutRoot = nil
+	}
+
+	// on windows, sometimes removing large dirs can fail for various reasons
+	// for instance having files open
+	// see https://github.com/golang/go/issues/20841
+	for range 10 {
+		e.shell.Commentf("Removing %s", checkoutPath)
+		if err := os.RemoveAll(checkoutPath); err != nil {
+			e.shell.Errorf("Failed to remove \"%s\" (%s)", checkoutPath, err)
+		} else {
+			if _, err := os.Stat(checkoutPath); os.IsNotExist(err) {
+				return nil
+			} else {
+				e.shell.Errorf("Failed to remove %s", checkoutPath)
+			}
+		}
+		e.shell.Commentf("Waiting 10 seconds")
+		<-time.After(time.Second * 10)
+	}
+
+	return fmt.Errorf("failed to remove %s", checkoutPath)
 }
