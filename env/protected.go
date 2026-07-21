@@ -1,6 +1,9 @@
 package env
 
-import "fmt"
+import (
+	"fmt"
+	"slices"
+)
 
 type protection struct {
 	// Some otherwise-protected env vars may be written from within the job
@@ -163,8 +166,8 @@ func IsCheckoutOverrideScoped(name string) bool {
 
 // CheckoutOverrideMode controls how much of the agent's checkout configuration a
 // job may override. It applies only to checkoutOverrideScope vars; protectedEnv
-// membership is independent of the mode.
-type CheckoutOverrideMode int
+// membership is independent of the mode. Its value is the flag/env string.
+type CheckoutOverrideMode string
 
 const (
 	// CheckoutOverrideFromJob is the default and matches the agent's historical
@@ -176,59 +179,42 @@ const (
 	// job env can still set those when the agent leaves them at their default, as
 	// on main (secrets are blocked from all of them; see IsCheckoutLockedForSecrets).
 	// strict closes that toggle gap.
-	CheckoutOverrideFromJob CheckoutOverrideMode = iota
+	CheckoutOverrideFromJob CheckoutOverrideMode = "from-job"
 
 	// CheckoutOverrideStrict locks the checkoutOverrideScope vars against every
 	// source: pipeline/step env, secrets, hooks, plugins, and the Job API. Vars
 	// outside that scope (see the exclusions note on checkoutOverrideScope) are
 	// unaffected by the mode.
-	CheckoutOverrideStrict
+	CheckoutOverrideStrict CheckoutOverrideMode = "strict"
 
 	// CheckoutOverrideNone lets any source, including secrets, override the
 	// checkout-override-scoped vars. Vars that are always agent-authoritative
 	// (the mirror-infra vars and SUBMODULE_CLONE_CONFIG in protectedEnv) are
 	// unaffected by the mode, so they stay locked even under none.
-	CheckoutOverrideNone
-)
-
-// Accepted flag/env values for the checkout-override modes.
-const (
-	checkoutOverrideFromJobName = "from-job"
-	checkoutOverrideStrictName  = "strict"
-	checkoutOverrideNoneName    = "none"
+	CheckoutOverrideNone CheckoutOverrideMode = "none"
 )
 
 // CheckoutOverrideModeNames lists the accepted flag/env values, strictest first.
 var CheckoutOverrideModeNames = []string{
-	checkoutOverrideStrictName,
-	checkoutOverrideFromJobName,
-	checkoutOverrideNoneName,
+	string(CheckoutOverrideStrict),
+	string(CheckoutOverrideFromJob),
+	string(CheckoutOverrideNone),
 }
 
 func (m CheckoutOverrideMode) String() string {
-	switch m {
-	case CheckoutOverrideStrict:
-		return checkoutOverrideStrictName
-	case CheckoutOverrideNone:
-		return checkoutOverrideNoneName
-	default:
-		return checkoutOverrideFromJobName
-	}
+	return string(m)
 }
 
 // ParseCheckoutOverrideMode maps a flag/env value to a mode. An empty string
 // selects the default (from-job).
 func ParseCheckoutOverrideMode(s string) (CheckoutOverrideMode, error) {
-	switch s {
-	case "", checkoutOverrideFromJobName:
+	if s == "" {
 		return CheckoutOverrideFromJob, nil
-	case checkoutOverrideStrictName:
-		return CheckoutOverrideStrict, nil
-	case checkoutOverrideNoneName:
-		return CheckoutOverrideNone, nil
-	default:
+	}
+	if !slices.Contains(CheckoutOverrideModeNames, s) {
 		return CheckoutOverrideFromJob, fmt.Errorf("invalid checkout-override mode %q, must be one of %v", s, CheckoutOverrideModeNames)
 	}
+	return CheckoutOverrideMode(s), nil
 }
 
 // RestrictedForCommandEval tightens the mode so command-eval can't be bypassed:
