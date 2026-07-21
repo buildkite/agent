@@ -38,12 +38,15 @@ func (e *Executor) checkCommitOnBranch(ctx context.Context) error {
 	// refs/tags/ before refs/heads/, so a tag sharing the branch's name would pin
 	// FETCH_HEAD to the tag tip and verify the commit against the tag instead of
 	// the branch, letting a commit reachable only from the tag pass.
+	//
+	// Fetch with a discrete argument vector rather than via gitFetch: gitFetch
+	// runs shellwords.Split on every refspec, which mangles a branch name
+	// containing shell metacharacters (quotes are legal in git refs). e.Branch is
+	// externally controlled, so a split ref could target the wrong branch or fail
+	// to parse, silently degrading verification to "unavailable" (warn, never
+	// blocking) and defeating the qualification above.
 	branchRef := "refs/heads/" + e.Branch
-	if fetchErr := gitFetch(ctx, gitFetchArgs{
-		Shell:      e.shell,
-		Repository: "origin",
-		RefSpecs:   []string{branchRef},
-	}); fetchErr != nil {
+	if fetchErr := e.shell.Command("git", "fetch", "--", "origin", branchRef).Run(ctx); fetchErr != nil {
 		return fmt.Errorf("%w: unable to fetch branch %q: %w", ErrCommitVerificationUnavailable, e.Branch, fetchErr)
 	}
 	branchTip, err := e.shell.Command("git", "rev-parse", "FETCH_HEAD").RunAndCaptureStdout(ctx)
@@ -61,12 +64,7 @@ func (e *Executor) checkCommitOnBranch(ctx context.Context) error {
 	for _, fetchFlag := range []string{"", "--deepen=50", "--unshallow"} {
 		if fetchFlag != "" {
 			e.shell.Commentf("Deepening checkout to verify commit (%s)...", fetchFlag)
-			if fetchErr := gitFetch(ctx, gitFetchArgs{
-				Shell:         e.shell,
-				GitFetchFlags: fetchFlag,
-				Repository:    "origin",
-				RefSpecs:      []string{branchRef},
-			}); fetchErr != nil {
+			if fetchErr := e.shell.Command("git", "fetch", fetchFlag, "--", "origin", branchRef).Run(ctx); fetchErr != nil {
 				return fmt.Errorf("%w: unable to verify commit %q on branch %q: %w", ErrCommitVerificationUnavailable, e.Commit, e.Branch, fetchErr)
 			}
 		}

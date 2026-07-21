@@ -13,13 +13,13 @@ import (
 )
 
 // setupFileBackedRepo creates a bare git repository served over file:// with a
-// "feature" branch (commits a <- b <- c) and a divergent "other" branch (a <- o).
-// It returns the file:// URL, a deep ancestor of feature (a, beyond a depth=1
-// clone's boundary), and an off-branch commit (o, present on the remote but not on
-// feature). A file:// remote is used rather than githttptest because shallow
-// deepening over the test server's stateless-rpc HTTP transport is not reliable
-// across git versions.
-func setupFileBackedRepo(t *testing.T, ctx context.Context) (repoURL, deepAncestor, offBranchCommit string) {
+// featureBranch (commits a <- b <- c) and a divergent "other" branch (a <- o).
+// It returns the file:// URL, a deep ancestor of featureBranch (a, beyond a
+// depth=1 clone's boundary), and an off-branch commit (o, present on the remote
+// but not on featureBranch). A file:// remote is used rather than githttptest
+// because shallow deepening over the test server's stateless-rpc HTTP transport
+// is not reliable across git versions.
+func setupFileBackedRepo(t *testing.T, ctx context.Context, featureBranch string) (repoURL, deepAncestor, offBranchCommit string) {
 	t.Helper()
 	t.Setenv("GIT_AUTHOR_NAME", "Buildkite Agent")
 	t.Setenv("GIT_AUTHOR_EMAIL", "agent@example.com")
@@ -70,18 +70,18 @@ func setupFileBackedRepo(t *testing.T, ctx context.Context) (repoURL, deepAncest
 		return strings.TrimSpace(sha)
 	}
 
-	// feature: a <- b <- c, where a is two commits below the tip.
+	// featureBranch: a <- b <- c, where a is two commits below the tip.
 	deepAncestor = commit("a.txt")
 	commit("b.txt")
 	commit("c.txt")
-	if err := sh.Command("git", "branch", "-m", "feature").Run(ctx); err != nil {
-		t.Fatalf("git branch -m feature error = %v", err)
+	if err := sh.Command("git", "branch", "-m", featureBranch).Run(ctx); err != nil {
+		t.Fatalf("git branch -m %q error = %v", featureBranch, err)
 	}
-	if err := sh.Command("git", "push", "origin", "feature").Run(ctx); err != nil {
-		t.Fatalf("git push feature error = %v", err)
+	if err := sh.Command("git", "push", "origin", featureBranch).Run(ctx); err != nil {
+		t.Fatalf("git push %q error = %v", featureBranch, err)
 	}
 
-	// other: a <- o, diverging from feature so o is not an ancestor of feature.
+	// other: a <- o, diverging from featureBranch so o is not an ancestor of it.
 	if err := sh.Command("git", "checkout", "-b", "other", deepAncestor).Run(ctx); err != nil {
 		t.Fatalf("git checkout -b other error = %v", err)
 	}
@@ -524,7 +524,7 @@ func TestVerifyCommit(t *testing.T) {
 
 	t.Run("passes after deepening a shallow clone", func(t *testing.T) {
 		ctx := t.Context()
-		repoURL, deepAncestor, _ := setupFileBackedRepo(t, ctx)
+		repoURL, deepAncestor, _ := setupFileBackedRepo(t, ctx, "feature")
 
 		cloneDir, err := os.MkdirTemp("", "verify-commit-test-")
 		if err != nil {
@@ -563,7 +563,7 @@ func TestVerifyCommit(t *testing.T) {
 
 	t.Run("fails on a shallow clone when commit is not an ancestor", func(t *testing.T) {
 		ctx := t.Context()
-		repoURL, _, offBranchCommit := setupFileBackedRepo(t, ctx)
+		repoURL, _, offBranchCommit := setupFileBackedRepo(t, ctx, "feature")
 
 		cloneDir, err := os.MkdirTemp("", "verify-commit-test-")
 		if err != nil {
@@ -599,6 +599,48 @@ func TestVerifyCommit(t *testing.T) {
 
 		// A shallow clone must not let a genuinely off-branch commit slip through:
 		// deepen/unshallow, then report a definitive failure, not "unavailable".
+		if err := e.checkCommitOnBranch(ctx); !errors.Is(err, ErrCommitVerificationFailed) {
+			t.Errorf("checkCommitOnBranch() error = %v, want ErrCommitVerificationFailed", err)
+		}
+	})
+
+	t.Run("verifies a branch whose name contains shell metacharacters", func(t *testing.T) {
+		ctx := t.Context()
+		// A single quote is a legal git ref character. The branch tip must be
+		// fetched with the ref intact: routing it through a shell-word splitter
+		// would corrupt it, and the check would silently degrade to "unavailable"
+		// (warn, never blocking) instead of catching an off-branch commit.
+		const branch = "quote'branch"
+		repoURL, _, offBranchCommit := setupFileBackedRepo(t, ctx, branch)
+
+		cloneDir, err := os.MkdirTemp("", "verify-commit-test-")
+		if err != nil {
+			t.Fatalf("MkdirTemp error = %v", err)
+		}
+		t.Cleanup(func() { os.RemoveAll(cloneDir) }) //nolint:errcheck // Best-effort cleanup.
+		sh, err := shell.New()
+		if err != nil {
+			t.Fatalf("shell.New() error = %v", err)
+		}
+
+		// A full clone brings the off-branch commit's object across, so it exists
+		// locally going into the check (as the real checkout fetches the commit).
+		if err := sh.Command("git", "clone", "--branch", branch, repoURL, cloneDir).Run(ctx); err != nil {
+			t.Fatalf("git clone error = %v", err)
+		}
+		if err := sh.Chdir(cloneDir); err != nil {
+			t.Fatalf("Chdir error = %v", err)
+		}
+
+		e := &Executor{
+			shell: sh,
+			ExecutorConfig: ExecutorConfig{
+				GitCommitVerification: "strict",
+				Commit:                offBranchCommit,
+				Branch:                branch,
+			},
+		}
+
 		if err := e.checkCommitOnBranch(ctx); !errors.Is(err, ErrCommitVerificationFailed) {
 			t.Errorf("checkCommitOnBranch() error = %v, want ErrCommitVerificationFailed", err)
 		}
