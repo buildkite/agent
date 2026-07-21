@@ -136,6 +136,8 @@ func TestURLCredentials(t *testing.T) {
 		{name: "ssh scheme", in: "ssh://git@github.com/org/repo.git", want: "ssh://git@github.com/org/repo.git"},
 		{name: "relative submodule", in: "../relative/submodule", want: "../relative/submodule"},
 		{name: "empty", in: "", want: ""},
+		{name: "unparsable scheme url with creds", in: "https://x-access-token:ghs_secret@github.com/org/repo.git\x7f", want: "(invalid URL)"},
+		{name: "unparsable schemeless ref", in: "git@github.com:org/repo.git\x7f", want: "git@github.com:org/repo.git\x7f"},
 	}
 
 	for _, test := range tests {
