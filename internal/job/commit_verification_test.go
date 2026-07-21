@@ -653,6 +653,98 @@ func TestVerifyCommit(t *testing.T) {
 		}
 	})
 
+	t.Run("verifies via --unshallow beyond the deepen boundary", func(t *testing.T) {
+		ctx := t.Context()
+		sh, repoURL, commit := newFileBackedRepo(t, ctx, "verify-unshallow")
+
+		// Put the target at the root, then pile more than (1 + --deepen=50) commits
+		// on top so neither the depth=1 clone nor the first --deepen=50 reaches it,
+		// forcing the check all the way to the --unshallow iteration.
+		deepTarget := commit("root.txt")
+		for range 60 {
+			if err := sh.Command("git", "commit", "--allow-empty", "-m", "filler").Run(ctx); err != nil {
+				t.Fatalf("git commit --allow-empty error = %v", err)
+			}
+		}
+		if err := sh.Command("git", "branch", "-m", "deep").Run(ctx); err != nil {
+			t.Fatalf("git branch -m deep error = %v", err)
+		}
+		if err := sh.Command("git", "push", "origin", "deep").Run(ctx); err != nil {
+			t.Fatalf("git push deep error = %v", err)
+		}
+
+		cloneDir, err := os.MkdirTemp("", "verify-commit-test-")
+		if err != nil {
+			t.Fatalf("MkdirTemp error = %v", err)
+		}
+		t.Cleanup(func() { os.RemoveAll(cloneDir) }) //nolint:errcheck // Best-effort cleanup.
+		clone, err := shell.New()
+		if err != nil {
+			t.Fatalf("shell.New() error = %v", err)
+		}
+		if err := clone.Command("git", "clone", "--depth=1", "--branch", "deep", repoURL, cloneDir).Run(ctx); err != nil {
+			t.Fatalf("git clone error = %v", err)
+		}
+		if err := clone.Chdir(cloneDir); err != nil {
+			t.Fatalf("Chdir error = %v", err)
+		}
+
+		e := &Executor{
+			shell: clone,
+			ExecutorConfig: ExecutorConfig{
+				GitCommitVerification: "strict",
+				Commit:                deepTarget,
+				Branch:                "deep",
+			},
+		}
+
+		// --deepen=50 can't reach a commit 60 back, so a nil result proves the
+		// --unshallow iteration is what verified it.
+		if err := e.checkCommitOnBranch(ctx); err != nil {
+			t.Errorf("checkCommitOnBranch() error = %v, want nil (verified via --unshallow)", err)
+		}
+	})
+
+	t.Run("does not skip a non-PR build", func(t *testing.T) {
+		ctx := t.Context()
+		// BUILDKITE_PULL_REQUEST is the string "false" (not empty) on ordinary
+		// builds; only a real PR number should skip verification. Point at an
+		// off-branch commit and prove the check still runs and fails rather than
+		// being skipped by the "false" sentinel.
+		repoURL, _, offBranchCommit := setupFileBackedRepo(t, ctx, "feature")
+
+		cloneDir, err := os.MkdirTemp("", "verify-commit-test-")
+		if err != nil {
+			t.Fatalf("MkdirTemp error = %v", err)
+		}
+		t.Cleanup(func() { os.RemoveAll(cloneDir) }) //nolint:errcheck // Best-effort cleanup.
+		sh, err := shell.New()
+		if err != nil {
+			t.Fatalf("shell.New() error = %v", err)
+		}
+		if err := sh.Command("git", "clone", "--branch", "feature", repoURL, cloneDir).Run(ctx); err != nil {
+			t.Fatalf("git clone error = %v", err)
+		}
+		if err := sh.Chdir(cloneDir); err != nil {
+			t.Fatalf("Chdir error = %v", err)
+		}
+
+		e := &Executor{
+			shell: sh,
+			ExecutorConfig: ExecutorConfig{
+				GitCommitVerification: "strict",
+				Commit:                offBranchCommit,
+				Branch:                "feature",
+				PullRequest:           "false",
+			},
+		}
+
+		// A skip would return nil; verifyCommit must surface the failure instead.
+		if err := e.verifyCommit(ctx); !errors.Is(err, ErrCommitVerificationFailed) {
+			t.Errorf("verifyCommit() error = %v, want ErrCommitVerificationFailed (a non-PR build must not be skipped)", err)
+		}
+	})
+
 	t.Run("unavailable check does not fail strict mode", func(t *testing.T) {
 		t.Setenv("GIT_AUTHOR_NAME", "Buildkite Agent")
 		t.Setenv("GIT_AUTHOR_EMAIL", "agent@example.com")
