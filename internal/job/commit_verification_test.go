@@ -12,21 +12,21 @@ import (
 	"github.com/buildkite/agent/v3/internal/shell"
 )
 
-// setupFileBackedRepo creates a bare git repository served over file:// with a
-// featureBranch (commits a <- b <- c) and a divergent "other" branch (a <- o).
-// It returns the file:// URL, a deep ancestor of featureBranch (a, beyond a
-// depth=1 clone's boundary), and an off-branch commit (o, present on the remote
-// but not on featureBranch). A file:// remote is used rather than githttptest
-// because shallow deepening over the test server's stateless-rpc HTTP transport
-// is not reliable across git versions.
-func setupFileBackedRepo(t *testing.T, ctx context.Context, featureBranch string) (repoURL, deepAncestor, offBranchCommit string) {
+// newFileBackedRepo creates an empty bare git repository served over file://
+// plus a working clone to build history in (the shell is left cd'd into the
+// clone). It returns the shell, the file:// URL, and a helper that commits a
+// one-line file and returns its SHA. A file:// remote is used rather than
+// githttptest because shallow deepening over the test server's stateless-rpc
+// HTTP transport is not reliable across git versions. prefix names the temp
+// directories so failures point at the right fixture.
+func newFileBackedRepo(t *testing.T, ctx context.Context, prefix string) (*shell.Shell, string, func(name string) string) {
 	t.Helper()
 	t.Setenv("GIT_AUTHOR_NAME", "Buildkite Agent")
 	t.Setenv("GIT_AUTHOR_EMAIL", "agent@example.com")
 	t.Setenv("GIT_COMMITTER_NAME", "Buildkite Agent")
 	t.Setenv("GIT_COMMITTER_EMAIL", "agent@example.com")
 
-	bareDir, err := os.MkdirTemp("", "verify-bare-")
+	bareDir, err := os.MkdirTemp("", prefix+"-bare-")
 	if err != nil {
 		t.Fatalf("MkdirTemp error = %v", err)
 	}
@@ -39,9 +39,9 @@ func setupFileBackedRepo(t *testing.T, ctx context.Context, featureBranch string
 	if err := sh.Command("git", "init", "--bare", bareDir).Run(ctx); err != nil {
 		t.Fatalf("git init --bare error = %v", err)
 	}
-	repoURL = "file://" + bareDir
+	repoURL := "file://" + bareDir
 
-	workDir, err := os.MkdirTemp("", "verify-work-")
+	workDir, err := os.MkdirTemp("", prefix+"-work-")
 	if err != nil {
 		t.Fatalf("MkdirTemp error = %v", err)
 	}
@@ -69,6 +69,20 @@ func setupFileBackedRepo(t *testing.T, ctx context.Context, featureBranch string
 		}
 		return strings.TrimSpace(sha)
 	}
+
+	return sh, repoURL, commit
+}
+
+// setupFileBackedRepo creates a bare git repository served over file:// with a
+// featureBranch (commits a <- b <- c) and a divergent "other" branch (a <- o).
+// It returns the file:// URL, a deep ancestor of featureBranch (a, beyond a
+// depth=1 clone's boundary), and an off-branch commit (o, present on the remote
+// but not on featureBranch). A file:// remote is used rather than githttptest
+// because shallow deepening over the test server's stateless-rpc HTTP transport
+// is not reliable across git versions.
+func setupFileBackedRepo(t *testing.T, ctx context.Context, featureBranch string) (repoURL, deepAncestor, offBranchCommit string) {
+	t.Helper()
+	sh, repoURL, commit := newFileBackedRepo(t, ctx, "verify")
 
 	// featureBranch: a <- b <- c, where a is two commits below the tip.
 	deepAncestor = commit("a.txt")
@@ -101,54 +115,7 @@ func setupFileBackedRepo(t *testing.T, ctx context.Context, featureBranch string
 // refs/heads/, so an unqualified fetch of "release" pins FETCH_HEAD to the tag.
 func setupTagBranchCollisionRepo(t *testing.T, ctx context.Context) (repoURL, offBranchTagCommit string) {
 	t.Helper()
-	t.Setenv("GIT_AUTHOR_NAME", "Buildkite Agent")
-	t.Setenv("GIT_AUTHOR_EMAIL", "agent@example.com")
-	t.Setenv("GIT_COMMITTER_NAME", "Buildkite Agent")
-	t.Setenv("GIT_COMMITTER_EMAIL", "agent@example.com")
-
-	bareDir, err := os.MkdirTemp("", "verify-collision-bare-")
-	if err != nil {
-		t.Fatalf("MkdirTemp error = %v", err)
-	}
-	t.Cleanup(func() { os.RemoveAll(bareDir) }) //nolint:errcheck // Best-effort cleanup.
-
-	sh, err := shell.New()
-	if err != nil {
-		t.Fatalf("shell.New() error = %v", err)
-	}
-	if err := sh.Command("git", "init", "--bare", bareDir).Run(ctx); err != nil {
-		t.Fatalf("git init --bare error = %v", err)
-	}
-	repoURL = "file://" + bareDir
-
-	workDir, err := os.MkdirTemp("", "verify-collision-work-")
-	if err != nil {
-		t.Fatalf("MkdirTemp error = %v", err)
-	}
-	t.Cleanup(func() { os.RemoveAll(workDir) }) //nolint:errcheck // Best-effort cleanup.
-	if err := sh.Command("git", "clone", repoURL, workDir).Run(ctx); err != nil {
-		t.Fatalf("git clone error = %v", err)
-	}
-	if err := sh.Chdir(workDir); err != nil {
-		t.Fatalf("Chdir error = %v", err)
-	}
-
-	commit := func(name string) string {
-		if err := os.WriteFile(filepath.Join(workDir, name), []byte(name), 0o600); err != nil {
-			t.Fatalf("WriteFile error = %v", err)
-		}
-		if err := sh.Command("git", "add", name).Run(ctx); err != nil {
-			t.Fatalf("git add error = %v", err)
-		}
-		if err := sh.Command("git", "commit", "-m", "commit "+name).Run(ctx); err != nil {
-			t.Fatalf("git commit error = %v", err)
-		}
-		sha, err := sh.Command("git", "rev-parse", "HEAD").RunAndCaptureStdout(ctx)
-		if err != nil {
-			t.Fatalf("rev-parse HEAD error = %v", err)
-		}
-		return strings.TrimSpace(sha)
-	}
+	sh, repoURL, commit := newFileBackedRepo(t, ctx, "verify-collision")
 
 	// release branch: a <- b.
 	base := commit("a.txt")
