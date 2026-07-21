@@ -648,8 +648,7 @@ func (e *Executor) applyEnvironmentChanges(changes hook.EnvChanges) {
 	// breaks the rest of the job.
 	var protected []string
 	for k := range changes.Diff.Keys {
-		if env.IsProtectedFromWithinJob(k) ||
-			env.IsCheckoutLocked(k, e.CheckoutOverrideMode) {
+		if env.IsProtectedFromWithinJob(k) || env.IsCheckoutLocked(k, e.CheckoutOverrideMode) {
 			protected = append(protected, k)
 			changes.Diff.Remove(k)
 		}

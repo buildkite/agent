@@ -6,6 +6,7 @@ import (
 	"maps"
 	"net/http"
 	"slices"
+	"strings"
 
 	"github.com/buildkite/agent/v3/env"
 	"github.com/buildkite/agent/v3/internal/socket"
@@ -143,8 +144,7 @@ func (s *Server) checkProtected(candidates []string) []string {
 	for _, c := range candidates {
 		// The Job API is only accessible from within the job, so allow writes
 		// to vars that allow write from within job.
-		if env.IsProtectedFromWithinJob(c) ||
-			env.IsCheckoutLocked(c, s.checkoutOverrideMode) {
+		if env.IsProtectedFromWithinJob(c) || env.IsCheckoutLocked(c, s.checkoutOverrideMode) {
 			protected = append(protected, c)
 		}
 	}
@@ -155,12 +155,13 @@ func (s *Server) checkProtected(candidates []string) []string {
 // noting when the rejection is due to the checkout-override lock rather than an
 // always-protected var.
 func (s *Server) protectedEnvMessage(protected []string) string {
-	msg := fmt.Sprintf("the following environment variables are protected, and cannot be modified: % v", protected)
+	var msg strings.Builder
+	fmt.Fprintf(&msg, "the following environment variables are protected, and cannot be modified: % v", protected)
 	for _, p := range protected {
 		if env.IsCheckoutLocked(p, s.checkoutOverrideMode) {
-			msg += fmt.Sprintf(". Checkout-related variables are locked because BUILDKITE_CHECKOUT_OVERRIDE_MODE=%s", s.checkoutOverrideMode)
+			fmt.Fprintf(&msg, ". Checkout-related variables are locked because BUILDKITE_CHECKOUT_OVERRIDE_MODE=%s", s.checkoutOverrideMode)
 			break
 		}
 	}
-	return msg
+	return msg.String()
 }
