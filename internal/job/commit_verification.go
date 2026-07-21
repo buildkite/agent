@@ -5,8 +5,10 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/buildkite/agent/v3/internal/shell"
+	"github.com/buildkite/roko"
 )
 
 // ErrCommitVerificationFailed indicates that git has definitively determined
@@ -46,7 +48,18 @@ func (e *Executor) checkCommitOnBranch(ctx context.Context) error {
 	// to parse, silently degrading verification to "unavailable" (warn, never
 	// blocking) and defeating the qualification above.
 	branchRef := "refs/heads/" + e.Branch
-	if fetchErr := e.shell.Command("git", "fetch", "--", "origin", branchRef).Run(ctx); fetchErr != nil {
+	// Retry the branch-tip fetch a few times: it is the one network dependency the
+	// check adds, and a transient failure would otherwise degrade the whole check
+	// to "unavailable" (warn, never blocking) with no second chance, since
+	// verifyCommit returns nil and the outer checkout retry loop won't re-run it.
+	fetchErr := roko.NewRetrier(
+		roko.WithMaxAttempts(3),
+		roko.WithStrategy(roko.ExponentialSubsecond(time.Second)),
+		roko.WithJitter(),
+	).DoWithContext(ctx, func(*roko.Retrier) error {
+		return e.shell.Command("git", "fetch", "--", "origin", branchRef).Run(ctx)
+	})
+	if fetchErr != nil {
 		return fmt.Errorf("%w: unable to fetch branch %q: %w", ErrCommitVerificationUnavailable, e.Branch, fetchErr)
 	}
 	branchTip, err := e.shell.Command("git", "rev-parse", "FETCH_HEAD").RunAndCaptureStdout(ctx)

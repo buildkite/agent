@@ -8,6 +8,7 @@ import (
 	"path"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -1795,6 +1796,63 @@ func TestCommitVerificationWithValidCommit(t *testing.T) {
 	agent.Expect("meta-data", "set", job.CommitMetadataKey).WithStdin(commitPattern)
 
 	tester.RunAndCheck(t, env...)
+}
+
+// TestCommitVerificationRetriesTransientBranchFetch proves the branch-tip fetch
+// survives a transient failure. Without a retry a single fetch blip degrades the
+// check to "unavailable" (warn, never blocking) with no second chance, since the
+// outer checkout retry loop does not re-run a verification that returned nil.
+func TestCommitVerificationRetriesTransientBranchFetch(t *testing.T) {
+	t.Parallel()
+
+	tester, err := NewExecutorTester(mainCtx)
+	if err != nil {
+		t.Fatalf("NewExecutorTester() error = %v", err)
+	}
+	defer tester.Close()
+
+	commitHash, err := tester.Repo.RevParse("main")
+	if err != nil {
+		t.Fatalf("RevParse(main) error = %v", err)
+	}
+	commitHash = strings.TrimSpace(commitHash)
+
+	env := []string{
+		"BUILDKITE_GIT_CLONE_FLAGS=-v",
+		"BUILDKITE_GIT_CLEAN_FLAGS=-fdq",
+		"BUILDKITE_GIT_FETCH_FLAGS=-v",
+		"BUILDKITE_GIT_COMMIT_VERIFICATION=strict",
+		fmt.Sprintf("BUILDKITE_COMMIT=%s", commitHash),
+	}
+
+	// Fail the first branch-tip fetch (of refs/heads/main) to simulate a transient
+	// blip, then let the retry pass through to real git. A Before error exits the
+	// mocked git non-zero, which is what the retrier sees.
+	var branchFetchAttempts atomic.Int32
+	git := tester.MustMock(t, "git").PassthroughToLocalCommand().Before(func(i bintest.Invocation) error {
+		if i.Args[0] == "fetch" && slices.Contains(i.Args, "refs/heads/main") {
+			if branchFetchAttempts.Add(1) == 1 {
+				return fmt.Errorf("simulated transient fetch failure")
+			}
+		}
+		return nil
+	})
+	git.Expect().AtLeastOnce().WithAnyArguments()
+
+	agent := tester.MockAgent(t)
+	agent.Expect("meta-data", "exists", job.CommitMetadataKey).AndExitWith(1)
+	agent.Expect("meta-data", "set", job.CommitMetadataKey).WithStdin(commitPattern)
+
+	if err := tester.Run(t, env...); err != nil {
+		t.Fatalf("tester.Run() error = %v, want nil (build should pass after the fetch retries). Output:\n%s", err, tester.Output)
+	}
+	if got := branchFetchAttempts.Load(); got < 2 {
+		t.Errorf("branch-tip fetch attempts = %d, want >= 2 (fetch should retry after a transient failure)", got)
+	}
+	// The retry must let verification actually run, not degrade to "unavailable".
+	if strings.Contains(tester.Output, "verification unavailable") {
+		t.Errorf("verification degraded to unavailable despite the retry; output:\n%s", tester.Output)
+	}
 }
 
 func TestCommitVerificationFailsWithInvalidCommit(t *testing.T) {
