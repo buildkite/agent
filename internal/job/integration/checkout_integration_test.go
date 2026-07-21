@@ -1964,6 +1964,56 @@ func TestCommitVerificationFailsForCommitNotOnNonDefaultBranch(t *testing.T) {
 	}
 }
 
+// TestCommitVerificationPassesForCommitOnNonDefaultBranch is the happy-path
+// companion to the failure regression above: a valid commit that IS on a
+// non-default branch must verify and let the build proceed. The clone only
+// materialises the default branch as a local ref, so this exercises the
+// branch-tip fetch end-to-end, proving non-default verification passes rather
+// than silently degrading to "unavailable".
+func TestCommitVerificationPassesForCommitOnNonDefaultBranch(t *testing.T) {
+	t.Parallel()
+
+	tester, err := NewExecutorTester(mainCtx)
+	if err != nil {
+		t.Fatalf("NewExecutorTester() error = %v", err)
+	}
+	defer tester.Close()
+
+	// The tip of update-test-txt is genuinely on that non-default branch.
+	onBranchCommit, err := tester.Repo.RevParse("update-test-txt")
+	if err != nil {
+		t.Fatalf("RevParse(update-test-txt) error = %v", err)
+	}
+	onBranchCommit = strings.TrimSpace(onBranchCommit)
+
+	env := []string{
+		"BUILDKITE_GIT_CLONE_FLAGS=-v",
+		"BUILDKITE_GIT_CLEAN_FLAGS=-fdq",
+		"BUILDKITE_GIT_FETCH_FLAGS=-v",
+		"BUILDKITE_GIT_COMMIT_VERIFICATION=strict",
+		"BUILDKITE_BRANCH=update-test-txt",
+		fmt.Sprintf("BUILDKITE_COMMIT=%s", onBranchCommit),
+	}
+
+	agent := tester.MockAgent(t)
+	agent.Expect("meta-data", "exists", job.CommitMetadataKey).AndExitWith(1)
+	agent.Expect("meta-data", "set", job.CommitMetadataKey).WithStdin(commitPattern)
+
+	if err := tester.Run(t, env...); err != nil {
+		t.Fatalf("tester.Run() error = %v, want nil (commit is on update-test-txt). Output:\n%s", err, tester.Output)
+	}
+	// Verification must actually run and pass, not skip or degrade.
+	if !strings.Contains(tester.Output, "Verifying commit") {
+		t.Errorf("expected verification to run (%q not in output):\n%s", "Verifying commit", tester.Output)
+	}
+	if strings.Contains(tester.Output, "is not on branch") {
+		t.Errorf("verification wrongly reported the commit off-branch; output:\n%s", tester.Output)
+	}
+	if strings.Contains(tester.Output, "verification unavailable") {
+		t.Errorf("verification degraded to unavailable; output:\n%s", tester.Output)
+	}
+}
+
 type subDirMatcher struct {
 	dir string
 }
