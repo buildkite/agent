@@ -39,11 +39,11 @@ func newFileBackedRepo(t *testing.T, ctx context.Context, prefix string) (*shell
 	if err := sh.Command("git", "init", "--bare", bareDir).Run(ctx); err != nil {
 		t.Fatalf("git init --bare error = %v", err)
 	}
-urlPath := filepath.ToSlash(bareDir)
-if !strings.HasPrefix(urlPath, "/") {
-	urlPath = "/" + urlPath
-}
-repoURL := "file://" + urlPath
+	urlPath := filepath.ToSlash(bareDir)
+	if !strings.HasPrefix(urlPath, "/") {
+		urlPath = "/" + urlPath
+	}
+	repoURL := "file://" + urlPath
 
 	workDir, err := os.MkdirTemp("", prefix+"-work-")
 	if err != nil {
