@@ -229,24 +229,11 @@ func (c *Client) FinishJob(ctx context.Context, job *api.Job, finishedAt time.Ti
 	).DoWithContext(ctx, func(retrier *roko.Retrier) error {
 		response, err := c.APIClient.FinishJob(ctx, job, ignoreAgentInDispatches)
 		if err != nil {
-			// If the API returns with a 422, that means that we successfully tried to
-			// finish the job, but Buildkite rejected the finish for some reason. This
-			// can sometimes mean that Buildkite has cancelled the job before we get a
-			// chance to send the final API call (maybe this agent took too long to kill
-			// the process).
-			// The API may also return a 401 when job tokens are enabled.
-			// In either case, we don't want to keep trying to finish the job forever so
-			// we'll just bail out and go find some more work to do.
-			//
-			// Unlike other API calls, we intentionally do not use
-			// api.BreakOnNonRetryable here: finish is critical, so unknown transport
-			// errors (e.g. "http2: client connection lost") must keep retrying.
-			if response != nil && (response.StatusCode == 422 || response.StatusCode == 401) {
-				c.Logger.Warnf("Buildkite rejected the call to finish the job (%s)", err)
-				retrier.Break()
-				return err
+			// Non-retryable responses (e.g. 422, or 401 when job tokens are being used) mean the job has been cancelled or
+			// otherwise already finished. We should stop trying and go find more work to do.
+			if !api.BreakOnNonRetryable(retrier, response, err) {
+				c.Logger.Warnf("%s (%s)", err, retrier)
 			}
-			c.Logger.Warnf("%s (%s)", err, retrier)
 		}
 
 		return err
