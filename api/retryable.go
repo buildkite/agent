@@ -20,6 +20,9 @@ var retriableErrorSuffixes = []string{
 	"remote error: handshake failure",
 	io.ErrUnexpectedEOF.Error(),
 	io.EOF.Error(),
+	// Transient HTTP/2 transport failure when a previously pooled connection
+	// has gone away (load balancer idle timeout, server GOAWAY, etc.).
+	"http2: client connection lost",
 }
 
 // IsRetryableStatus returns true if the response's StatusCode is one that we should retry.
