@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/buildkite/agent/v3/internal/osutil"
 	"github.com/buildkite/agent/v3/internal/shell"
 	"github.com/buildkite/roko"
 	"github.com/buildkite/shellwords"
@@ -57,6 +58,26 @@ type gitError struct {
 
 func (e *gitError) Unwrap() error {
 	return e.error
+}
+
+func hasGitSubmodules(sh *shell.Shell) bool {
+	return osutil.FileExists(filepath.Join(sh.Getwd(), ".gitmodules"))
+}
+
+func hasGitCommit(ctx context.Context, sh *shell.Shell, gitDir, commit string) bool {
+	// Resolve commit to an actual commit object
+	output, err := sh.Command("git", "--git-dir", gitDir, "rev-parse", commit+"^{commit}").RunAndCaptureStdout(ctx, shell.ShowStderr(false))
+	if err != nil {
+		return false
+	}
+
+	// Filter out commitish things like HEAD et al
+	if strings.TrimSpace(output) != commit {
+		return false
+	}
+
+	// Otherwise it's a commit in the repo
+	return true
 }
 
 func gitCheckout(ctx context.Context, sh *shell.Shell, gitCheckoutFlags, reference string) error {

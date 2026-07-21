@@ -48,13 +48,6 @@ func cleanGitSparseCheckoutPaths(paths []string) []string {
 	return cleaned
 }
 
-func parseGitVersion(output string) (major, minor int, ok bool) {
-	if _, err := fmt.Sscanf(output, "git version %d.%d", &major, &minor); err != nil {
-		return 0, 0, false
-	}
-	return major, minor, true
-}
-
 // gitVersionAtLeast reports whether the local git binary is at least
 // major.minor. It also returns the parsed "M.m" version string so callers can
 // include it in log output. The err return is reserved for actual failures
@@ -78,24 +71,31 @@ func gitVersionAtLeast(ctx context.Context, sh *shell.Shell, major, minor int) (
 	return gitMinor >= minor, got, nil
 }
 
-// sparseCheckoutMayBeConfigured does a cheap filesystem check for marker files
-// that indicate sparse checkout (or the worktree-config extension that
-// `sparse-checkout` enables) might already be in effect, so we can avoid
-// shelling out to `git config` on every checkout. It resolves the .git dir
-// directly to handle the worktree/submodule case where .git is a file
-// containing `gitdir: <path>`.
-func sparseCheckoutMayBeConfigured(sh *shell.Shell) bool {
-	gitDir := filepath.Join(sh.Getwd(), ".git")
-	if data, err := os.ReadFile(gitDir); err == nil && bytes.HasPrefix(data, []byte("gitdir:")) {
-		gitDirValue := strings.TrimSpace(string(bytes.TrimPrefix(data, []byte("gitdir:"))))
-		if !filepath.IsAbs(gitDirValue) {
-			gitDirValue = filepath.Join(sh.Getwd(), gitDirValue)
-		}
-		gitDir = gitDirValue
+func parseGitVersion(output string) (major, minor int, ok bool) {
+	if _, err := fmt.Sscanf(output, "git version %d.%d", &major, &minor); err != nil {
+		return 0, 0, false
+	}
+	return major, minor, true
+}
+
+// setupSparseCheckout configures git sparse checkout for the given cone paths.
+// When sparsePaths is empty it does a full checkout instead, disabling any
+// prior sparse checkout configuration. It returns true when sparse checkout is
+// applied, so callers can skip steps that need the full tree (e.g. submodule
+// init).
+func (e *Executor) setupSparseCheckout(ctx context.Context, sparsePaths []string) (bool, error) {
+	if len(sparsePaths) == 0 {
+		e.disableSparseCheckoutIfConfigured(ctx)
+		return false, nil
 	}
 
-	return osutil.FileExists(filepath.Join(gitDir, "info", "sparse-checkout")) ||
-		osutil.FileExists(filepath.Join(gitDir, "config.worktree"))
+	e.shell.Commentf("Setting up sparse checkout for paths: %s", strings.Join(sparsePaths, ","))
+	args := append([]string{"sparse-checkout", "set", "--cone"}, sparsePaths...)
+	if err := e.shell.Command("git", args...).Run(ctx); err != nil {
+		return false, fmt.Errorf("setting sparse checkout paths: %w", err)
+	}
+
+	return true, nil
 }
 
 func (e *Executor) disableSparseCheckoutIfConfigured(ctx context.Context) {
@@ -122,22 +122,22 @@ func (e *Executor) disableSparseCheckoutIfConfigured(ctx context.Context) {
 	}
 }
 
-// setupSparseCheckout configures git sparse checkout for the given cone paths.
-// When sparsePaths is empty it does a full checkout instead, disabling any
-// prior sparse checkout configuration. It returns true when sparse checkout is
-// applied, so callers can skip steps that need the full tree (e.g. submodule
-// init).
-func (e *Executor) setupSparseCheckout(ctx context.Context, sparsePaths []string) (bool, error) {
-	if len(sparsePaths) == 0 {
-		e.disableSparseCheckoutIfConfigured(ctx)
-		return false, nil
+// sparseCheckoutMayBeConfigured does a cheap filesystem check for marker files
+// that indicate sparse checkout (or the worktree-config extension that
+// `sparse-checkout` enables) might already be in effect, so we can avoid
+// shelling out to `git config` on every checkout. It resolves the .git dir
+// directly to handle the worktree/submodule case where .git is a file
+// containing `gitdir: <path>`.
+func sparseCheckoutMayBeConfigured(sh *shell.Shell) bool {
+	gitDir := filepath.Join(sh.Getwd(), ".git")
+	if data, err := os.ReadFile(gitDir); err == nil && bytes.HasPrefix(data, []byte("gitdir:")) {
+		gitDirValue := strings.TrimSpace(string(bytes.TrimPrefix(data, []byte("gitdir:"))))
+		if !filepath.IsAbs(gitDirValue) {
+			gitDirValue = filepath.Join(sh.Getwd(), gitDirValue)
+		}
+		gitDir = gitDirValue
 	}
 
-	e.shell.Commentf("Setting up sparse checkout for paths: %s", strings.Join(sparsePaths, ","))
-	args := append([]string{"sparse-checkout", "set", "--cone"}, sparsePaths...)
-	if err := e.shell.Command("git", args...).Run(ctx); err != nil {
-		return false, fmt.Errorf("setting sparse checkout paths: %w", err)
-	}
-
-	return true, nil
+	return osutil.FileExists(filepath.Join(gitDir, "info", "sparse-checkout")) ||
+		osutil.FileExists(filepath.Join(gitDir, "config.worktree"))
 }
