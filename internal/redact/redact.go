@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"io"
 	"maps"
+	"net/url"
 	"os"
 	"path"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -24,6 +26,31 @@ const LengthMin = 6
 
 // Redacted ignores its input and returns "[REDACTED]".
 func Redacted([]byte) []byte { return []byte("[REDACTED]") }
+
+// hasScheme matches URLs that begin with a "scheme://" prefix
+var hasScheme = regexp.MustCompile(`^[^:]+://`)
+
+// URLCredentials returns rawURL with any embedded password masked. URLs
+// without one are returned unchanged; an unparsable scheme-based URL returns a
+// placeholder to avoid leaking a credential it may contain.
+func URLCredentials(rawURL string) string {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		if hasScheme.MatchString(rawURL) {
+			// Avoid returning the unparsed as it may contain an embedded
+			// credential that we were unable to mask.
+			return "(invalid URL)"
+		}
+		return rawURL
+	}
+	if u.User == nil {
+		return rawURL
+	}
+	if _, hasPassword := u.User.Password(); !hasPassword {
+		return rawURL
+	}
+	return u.Redacted()
+}
 
 // String is a convenience wrapper for redacting small strings.
 // This is fine to call repeatedly with many separate strings, but avoid using
