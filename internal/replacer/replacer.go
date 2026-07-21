@@ -4,6 +4,7 @@ package replacer
 import (
 	"fmt"
 	"io"
+	"maps"
 	"slices"
 	"strings"
 	"sync"
@@ -25,6 +26,9 @@ type Replacer struct {
 	// Why first byte? Because looking up needles by the first byte is a lot
 	// faster than _filtering_ all the needles by first byte.
 	needlesByFirstByte [256][]string
+
+	// All strings to search for, for deduplication purposes
+	allNeedles map[string]struct{}
 
 	// For synchronising writes. Each write can touch everything below.
 	mu sync.Mutex
@@ -71,6 +75,7 @@ func New(dst io.Writer, needles []string, replacement func([]byte) []byte) *Repl
 		dst:         dst,
 
 		// Preallocate a few things.
+		allNeedles:       make(map[string]struct{}, len(needles)),
 		buf:              make([]byte, 0, 65536),
 		partialMatches:   make([]partialMatch, 0, len(needles)),
 		nextMatches:      make([]partialMatch, 0, len(needles)),
@@ -316,11 +321,7 @@ func (r *Replacer) flushUpTo(limit int) error {
 
 // Size returns the number of needles
 func (r *Replacer) Size() int {
-	sum := 0
-	for _, n := range r.needlesByFirstByte {
-		sum += len(n)
-	}
-	return sum
+	return len(r.allNeedles)
 }
 
 // Needle returns the current needles
@@ -328,11 +329,7 @@ func (r *Replacer) Needles() []string {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	needles := make([]string, 0, r.Size())
-	for _, m := range r.needlesByFirstByte {
-		needles = append(needles, m...)
-	}
-	return needles
+	return slices.Collect(maps.Keys(r.allNeedles))
 }
 
 // Reset removes all current needes and sets new set of needles. It is not
@@ -345,6 +342,7 @@ func (r *Replacer) Reset(needles []string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
+	clear(r.allNeedles)
 	for i := range r.needlesByFirstByte {
 		r.needlesByFirstByte[i] = nil
 	}
@@ -371,12 +369,11 @@ func (r *Replacer) unsafeAdd(needles []string) {
 		if len(s) == 0 {
 			continue
 		}
-		firstByte := s[0]
-		// Check for the needle in the slice first (deduplication).
-		// There aren't expected to be so many that this would be slow.
-		if slices.Contains(r.needlesByFirstByte[firstByte], s) {
+		if _, alreadyHas := r.allNeedles[s]; alreadyHas {
 			continue
 		}
+		r.allNeedles[s] = struct{}{}
+		firstByte := s[0]
 		r.needlesByFirstByte[firstByte] = append(r.needlesByFirstByte[firstByte], s)
 	}
 }
