@@ -3,6 +3,8 @@ package agent
 import (
 	"regexp"
 	"time"
+
+	"github.com/buildkite/agent/v3/env"
 )
 
 // AgentConfiguration is the run-time configuration for an agent that
@@ -31,6 +33,7 @@ type AgentConfiguration struct {
 	GitSubmoduleCloneConfig         []string
 	SkipCheckout                    bool
 	GitSkipFetchExistingCommits     bool
+	CheckoutOverrideMode            env.CheckoutOverrideMode
 	CheckoutAttempts                int
 	AllowedRepositories             []*regexp.Regexp
 	AllowedPlugins                  []*regexp.Regexp

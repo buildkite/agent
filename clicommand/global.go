@@ -11,6 +11,7 @@ import (
 
 	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/cliconfig"
+	"github.com/buildkite/agent/v3/env"
 	"github.com/buildkite/agent/v3/internal/experiments"
 	"github.com/buildkite/agent/v3/internal/job"
 	"github.com/buildkite/agent/v3/logger"
@@ -205,6 +206,13 @@ var (
 		EnvVar: "BUILDKITE_SKIP_CHECKOUT",
 	}
 
+	CheckoutOverrideModeFlag = cli.StringFlag{
+		Name:   "checkout-override-mode",
+		Value:  "from-job",
+		Usage:  fmt.Sprintf("Controls which sources may override the agent's checkout settings; one of %v. ′strict′ makes the agent authoritative against pipeline/step env, secrets, hooks, plugins, and the Job API. ′from-job′ (default) lets hooks, plugins, and the Job API set checkout vars, blocks secrets, and keeps the agent's checkout flags authoritative over pipeline/step env; pipeline/step env may still set the checkout timeout, submodules, skip-checkout, and skip-fetch-existing-commits toggles that the agent leaves unset, matching earlier agent behaviour, and may set the sparse-checkout paths outright. ′none′ additionally lets pipeline/step env and secrets set them. All mirror configuration and submodule clone config stay agent-authoritative in every mode. The checkout SSH key and Git LFS toggle are not governed by this flag and stay job-settable in every mode. Disabling command-eval forces this to ′strict′.", env.CheckoutOverrideModeNames),
+		EnvVar: "BUILDKITE_CHECKOUT_OVERRIDE_MODE",
+	}
+
 	GitCheckoutFlagsFlag = cli.StringFlag{
 		Name:   "git-checkout-flags",
 		Value:  "-f",
@@ -331,6 +339,19 @@ type APIConfig struct {
 	TraceHTTP        bool   `cli:"trace-http"`
 	Endpoint         string `cli:"endpoint" validate:"required"`
 	NoHTTP2          bool   `cli:"no-http2"`
+}
+
+// resolveCheckoutOverrideMode parses a checkout-override mode value and forces it
+// to strict when command-eval is disabled, so a job can't use pipeline/step env
+// or secret git flags to bypass no-command-eval. AgentStartConfig and
+// BootstrapConfig store the command-eval flag with opposite polarity, so each
+// passes the resolved boolean here.
+func resolveCheckoutOverrideMode(raw string, commandEvalEnabled bool) (env.CheckoutOverrideMode, error) {
+	mode, err := env.ParseCheckoutOverrideMode(raw)
+	if err != nil {
+		return mode, err
+	}
+	return mode.RestrictedForCommandEval(commandEvalEnabled), nil
 }
 
 func globalFlags() []cli.Flag {

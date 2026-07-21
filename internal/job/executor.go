@@ -648,7 +648,7 @@ func (e *Executor) applyEnvironmentChanges(changes hook.EnvChanges) {
 	// breaks the rest of the job.
 	var protected []string
 	for k := range changes.Diff.Keys {
-		if env.IsProtectedFromWithinJob(k) {
+		if env.IsProtectedFromWithinJob(k) || env.IsCheckoutLocked(k, e.CheckoutOverrideMode) {
 			protected = append(protected, k)
 			changes.Diff.Remove(k)
 		}
@@ -664,6 +664,14 @@ func (e *Executor) applyEnvironmentChanges(changes hook.EnvChanges) {
 	// to change the job configuration at run time.
 	// Note this func mutates/refreshes the ExecutorConfig too.
 	executorConfigEnvChanges := e.ReadFromEnvironment(e.shell.Env)
+
+	// If a hook, plugin, or the Job API just enabled LFS, ensure GIT_LFS_SKIP_SMUDGE
+	// is set before checkout so LFS objects go through the controlled fetch/checkout
+	// path rather than the automatic smudge filter. setUp handles the agent-config
+	// and secret paths; this covers within-job sources that flip it afterward.
+	if e.GitLFSEnabled {
+		e.shell.Env.Set("GIT_LFS_SKIP_SMUDGE", "1")
+	}
 
 	// Print out the env vars that changed. As we go through each
 	// one, we'll determine if it was a special environment variable
@@ -916,17 +924,28 @@ func (e *Executor) setUp(ctx context.Context) (retErr error) {
 	// Disable any interactive Git/SSH prompting
 	e.shell.Env.Set("GIT_TERMINAL_PROMPT", "0")
 
-	// Suppress automatic LFS smudge only when LFS is enabled, so the checkout
-	// phase can materialise objects explicitly; otherwise git's default applies.
-	if e.GitLFSEnabled {
-		e.shell.Env.Set("GIT_LFS_SKIP_SMUDGE", "1")
-	}
-
 	// Fetch and set secrets before environment hook execution
 	if e.Secrets != "" {
 		if err := e.fetchAndSetSecrets(ctx); err != nil {
 			return fmt.Errorf("failed to fetch secrets for job: %w", err)
 		}
+		// fetchAndSetSecrets only writes to e.shell.Env. Refresh the executor
+		// config so a checkout-scoped var a secret is allowed to set (none mode)
+		// reaches the checkout phase, which reads struct fields like e.GitCloneFlags
+		// rather than the env. With no environment/plugin hook nothing else triggers
+		// a refresh before checkout. Discard the returned changes: fetchAndSetSecrets
+		// already announces each secret by name, and we must not echo secret-backed
+		// values into the log even redacted (that would rely on the redactor never
+		// missing an escaping, the exact failure mode being hardened against).
+		e.ReadFromEnvironment(e.shell.Env)
+	}
+
+	// Suppress automatic LFS smudge only when LFS is enabled, so the checkout
+	// phase can materialise objects explicitly; otherwise git's default applies.
+	// After the secret refresh above so a secret that enables LFS is honoured here
+	// rather than leaving smudge on for the plain checkout.
+	if e.GitLFSEnabled {
+		e.shell.Env.Set("GIT_LFS_SKIP_SMUDGE", "1")
 	}
 
 	// It's important to do this before checking out plugins, in case you want
@@ -992,6 +1011,9 @@ func (e *Executor) fetchAndSetSecrets(ctx context.Context) error {
 				// Check if the environment variable is protected
 				if env.IsProtected(pipelineSecret.EnvironmentVariable) {
 					return fmt.Errorf("secret %q cannot set protected environment variable %q", pipelineSecret.Key, pipelineSecret.EnvironmentVariable)
+				}
+				if env.IsCheckoutLockedForSecrets(pipelineSecret.EnvironmentVariable, e.CheckoutOverrideMode) {
+					return fmt.Errorf("secret %q cannot set checkout-locked environment variable %q while BUILDKITE_CHECKOUT_OVERRIDE_MODE=%s", pipelineSecret.Key, pipelineSecret.EnvironmentVariable, e.CheckoutOverrideMode)
 				}
 
 				var alreadySet bool

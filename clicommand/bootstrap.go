@@ -11,6 +11,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/buildkite/agent/v3/env"
 	"github.com/buildkite/agent/v3/internal/job"
 	"github.com/buildkite/agent/v3/internal/process"
 	"github.com/buildkite/agent/v3/internal/self"
@@ -86,6 +87,7 @@ type BootstrapConfig struct {
 	GitMirrorsLockTimeout        int      `cli:"git-mirrors-lock-timeout"`
 	GitMirrorsSkipUpdate         bool     `cli:"git-mirrors-skip-update"`
 	GitSubmoduleCloneConfig      []string `cli:"git-submodule-clone-config" normalize:"list"`
+	CheckoutOverrideMode         string   `cli:"checkout-override-mode"`
 	BinPath                      string   `cli:"bin-path" normalize:"filepath"`
 	BuildPath                    string   `cli:"build-path" normalize:"filepath"`
 	HooksPath                    string   `cli:"hooks-path" normalize:"filepath"`
@@ -119,6 +121,12 @@ type BootstrapConfig struct {
 	NoJobAPI                     bool     `cli:"no-job-api"`
 	DisableWarningsFor           []string `cli:"disable-warnings-for" normalize:"list"`
 	CheckoutAttempts             int      `cli:"checkout-attempts"`
+}
+
+// checkoutOverrideMode resolves the configured mode, forcing strict when command-eval is off.
+// BootstrapConfig stores CommandEval (the AgentStartConfig sibling stores NoCommandEval).
+func (cfg *BootstrapConfig) checkoutOverrideMode() (env.CheckoutOverrideMode, error) {
+	return resolveCheckoutOverrideMode(cfg.CheckoutOverrideMode, cfg.CommandEval)
 }
 
 var BootstrapCommand = cli.Command{
@@ -242,6 +250,7 @@ var BootstrapCommand = cli.Command{
 
 		// Various git related flags shared with agent start
 		SkipCheckoutFlag,
+		CheckoutOverrideModeFlag,
 		GitCheckoutFlagsFlag,
 		GitCloneFlagsFlag,
 		GitCloneMirrorFlagsFlag,
@@ -442,6 +451,11 @@ var BootstrapCommand = cli.Command{
 			return fmt.Errorf("while parsing trace context encoding: %v", err)
 		}
 
+		checkoutMode, err := cfg.checkoutOverrideMode()
+		if err != nil {
+			return err
+		}
+
 		// Configure the bootstraper
 		bootstrap := job.New(job.ExecutorConfig{
 			AgentName:                    cfg.AgentName,
@@ -457,6 +471,7 @@ var BootstrapCommand = cli.Command{
 			SkipCheckout:                 cfg.SkipCheckout,
 			GitCheckoutTimeout:           cfg.GitCheckoutTimeout,
 			GitSkipFetchExistingCommits:  cfg.GitSkipFetchExistingCommits,
+			CheckoutOverrideMode:         checkoutMode,
 			Command:                      cfg.Command,
 			CommandEval:                  cfg.CommandEval,
 			Commit:                       cfg.Commit,

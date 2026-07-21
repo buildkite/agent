@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/buildkite/agent/v3/internal/job"
 	"github.com/buildkite/agent/v3/jobapi"
 	"github.com/buildkite/bintest/v3"
 	"github.com/buildkite/go-pipeline"
@@ -367,8 +368,10 @@ func TestSecretsIntegration_MultilineSecretRedaction(t *testing.T) {
 }
 
 // A secret mapped onto a config var like BUILDKITE_GIT_SSH_KEY used to be
-// printed by the env change log after a hook ran. %q escaped its newlines so
-// the output redactor missed it.
+// printed by the env change log after a hook ran; %q escaped its newlines so the
+// output redactor missed it. The agent now applies secret-backed config vars
+// silently (announcing them by name only) and never echoes the value back, so the
+// value can't leak here regardless of whether the redactor catches every escaping.
 func TestSecretsIntegration_ConfigVarSecretNotLoggedByEnvChange(t *testing.T) {
 	t.Parallel()
 
@@ -418,9 +421,16 @@ func TestSecretsIntegration_ConfigVarSecretNotLoggedByEnvChange(t *testing.T) {
 		t.Fatalf("SSH key leaked into job log in cleartext. Full output:\n%s", tester.Output)
 	}
 
-	// Prove the log line actually fired, so the test can't pass silently.
-	if !strings.Contains(tester.Output, `BUILDKITE_GIT_SSH_KEY is now "[REDACTED]"`) {
-		t.Fatalf("expected redacted env-change log for BUILDKITE_GIT_SSH_KEY. Full output:\n%s", tester.Output)
+	// The secret must be applied (announced by name) so the test can't pass by
+	// simply never handling it.
+	if !strings.Contains(tester.Output, "Secret REPO_DEPLOY_KEY added as environment variable BUILDKITE_GIT_SSH_KEY") {
+		t.Fatalf("expected the secret to be applied to BUILDKITE_GIT_SSH_KEY. Full output:\n%s", tester.Output)
+	}
+
+	// The value must never be echoed back by the env-change log, redacted or not:
+	// not printing it at all is stronger than trusting the redactor to scrub it.
+	if strings.Contains(tester.Output, "BUILDKITE_GIT_SSH_KEY is now") {
+		t.Fatalf("secret-backed config var was echoed by the env-change log. Full output:\n%s", tester.Output)
 	}
 }
 
@@ -619,5 +629,251 @@ func TestSecretsIntegration_ProtectedEnvironmentVariableRejection(t *testing.T) 
 		if !strings.Contains(tester.Output, expectedError) {
 			t.Fatalf("expected error output to contain %q, but it didn't. Full output: %s", expectedError, tester.Output)
 		}
+	}
+}
+
+func TestSecretsIntegration_ProtectedCheckoutInfraRejection(t *testing.T) {
+	t.Parallel()
+
+	// These checkout-infra vars are always agent-authoritative (protectedEnv, not
+	// checkoutOverrideScope), so a secret can never set them, even under the most
+	// permissive checkout-override mode (none). Each is the sole secret so the
+	// rejection is unambiguously about it (fetchAndSetSecrets stops at the first
+	// offender). Pins against tier drift: moving either into checkoutOverrideScope
+	// would let a secret set it under none.
+	for _, envVar := range []string{
+		"BUILDKITE_GIT_MIRROR_CHECKOUT_MODE",
+		"BUILDKITE_GIT_SUBMODULE_CLONE_CONFIG",
+	} {
+		t.Run(envVar, func(t *testing.T) {
+			t.Parallel()
+
+			tester, err := NewExecutorTester(mainCtx)
+			if err != nil {
+				t.Fatalf("setting up executor tester: %v", err)
+			}
+			defer tester.Close()
+
+			apiServer := setupSecretsAPIServer(t, map[string]string{"INFRA_SECRET": "infra-secret-value"})
+			defer apiServer.Close()
+
+			secretsJSON, err := json.Marshal([]pipeline.Secret{{
+				Key:                 "INFRA_SECRET",
+				EnvironmentVariable: envVar,
+			}})
+			if err != nil {
+				t.Fatalf("marshaling secrets: %v", err)
+			}
+
+			err = tester.Run(t,
+				fmt.Sprintf("BUILDKITE_SECRETS_CONFIG=%s", string(secretsJSON)),
+				fmt.Sprintf("BUILDKITE_AGENT_ENDPOINT=%s", apiServer.URL),
+				"BUILDKITE_CHECKOUT_OVERRIDE_MODE=none",
+			)
+			if err == nil {
+				t.Fatalf("expected job to fail due to protected env var rejection, but it succeeded. Full output: %s", tester.Output)
+			}
+			if !strings.Contains(tester.Output, "cannot set protected environment variable") || !strings.Contains(tester.Output, envVar) {
+				t.Fatalf("expected output to mention protected env rejection of %s, got: %s", envVar, tester.Output)
+			}
+		})
+	}
+}
+
+func TestSecretsIntegration_CheckoutOverrideMode(t *testing.T) {
+	t.Parallel()
+
+	// Secrets are an outside-the-job source, so both from-job (the default) and
+	// strict block a secret from setting a checkout-scoped var; only none allows
+	// it.
+	tests := []struct {
+		name                string
+		envVar              string
+		secretValue         string
+		mode                string // BUILDKITE_CHECKOUT_OVERRIDE_MODE; "" leaves the default
+		commandEvalDisabled bool
+		wantErr             bool
+	}{
+		// This case runs a real checkout, and under none the secret now actually
+		// reaches git clone (see TestSecretsIntegration_CheckoutScopedSecretReachesCheckout),
+		// so the value must be a checkout-safe clone flag rather than --mirror.
+		{name: "none_allows_checkout_scoped_secret", envVar: "BUILDKITE_GIT_CLONE_FLAGS", secretValue: "--verbose", mode: "none"},
+		{name: "default_rejects_checkout_scoped_secret", envVar: "BUILDKITE_GIT_CLONE_FLAGS", secretValue: "--mirror", wantErr: true},
+		{name: "from_job_rejects_checkout_scoped_secret", envVar: "BUILDKITE_GIT_CLONE_FLAGS", secretValue: "--mirror", mode: "from-job", wantErr: true},
+		{name: "strict_rejects_checkout_locked_secret", envVar: "BUILDKITE_GIT_CLONE_FLAGS", secretValue: "--mirror", mode: "strict", wantErr: true},
+		{name: "strict_rejects_sparse_checkout_paths_secret", envVar: "BUILDKITE_GIT_SPARSE_CHECKOUT_PATHS", secretValue: "a/b", mode: "strict", wantErr: true},
+		// The lock must not over-block: a non-checkout secret is still allowed.
+		{name: "strict_allows_unscoped_secret", envVar: "MY_CUSTOM_VAR", secretValue: "hello", mode: "strict"},
+		// Disabling command-eval floors the mode to strict, so a secret that none
+		// would otherwise allow is now rejected.
+		{name: "none_floored_to_strict_rejects_secret_when_command_eval_disabled", envVar: "BUILDKITE_GIT_CLONE_FLAGS", secretValue: "--mirror", mode: "none", commandEvalDisabled: true, wantErr: true},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			tester, err := NewExecutorTester(mainCtx)
+			if err != nil {
+				t.Fatalf("setting up executor tester: %v", err)
+			}
+			defer tester.Close()
+
+			apiServer := setupSecretsAPIServer(t, map[string]string{"CHECKOUT_SECRET": tc.secretValue})
+			defer apiServer.Close()
+
+			secretsJSON, err := json.Marshal([]pipeline.Secret{{
+				Key:                 "CHECKOUT_SECRET",
+				EnvironmentVariable: tc.envVar,
+			}})
+			if err != nil {
+				t.Fatalf("marshaling secrets: %v", err)
+			}
+
+			if !tc.wantErr {
+				tester.ExpectGlobalHook("command").AndCallFunc(func(c *bintest.Call) {
+					if got, want := c.GetEnv(tc.envVar), tc.secretValue; got != want {
+						_, _ = fmt.Fprintf(c.Stderr, "Expected %s=%q, got %q\n", tc.envVar, want, got)
+						c.Exit(1)
+						return
+					}
+					c.Exit(0)
+				})
+			}
+
+			env := []string{
+				fmt.Sprintf("BUILDKITE_SECRETS_CONFIG=%s", string(secretsJSON)),
+				fmt.Sprintf("BUILDKITE_AGENT_ENDPOINT=%s", apiServer.URL),
+			}
+			if tc.mode != "" {
+				env = append(env, "BUILDKITE_CHECKOUT_OVERRIDE_MODE="+tc.mode)
+			}
+			if tc.commandEvalDisabled {
+				env = append(env, "BUILDKITE_COMMAND_EVAL=false")
+			}
+
+			err = tester.Run(t, env...)
+			if tc.wantErr {
+				if err == nil {
+					t.Fatalf("expected job to fail due to checkout-locked secret mapping, but it succeeded. Full output: %s", tester.Output)
+				}
+				if !strings.Contains(tester.Output, "checkout-locked environment variable") || !strings.Contains(tester.Output, tc.envVar) {
+					t.Fatalf("expected output to mention checkout-locked env rejection, got: %s", tester.Output)
+				}
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("running executor tester: %v", err)
+			}
+			tester.CheckMocks(t)
+		})
+	}
+}
+
+// TestSecretsIntegration_CheckoutScopedSecretReachesCheckout verifies that a
+// checkout-scoped var set by an allowed secret (none mode) actually reaches the
+// checkout phase, not just e.shell.Env. Secrets are applied in setUp before any
+// hook runs, and checkout reads struct fields like e.GitCloneFlags that are only
+// refreshed from env when a hook triggers applyEnvironmentChanges. With no
+// environment/plugin hook, a secret-supplied BUILDKITE_GIT_CLONE_FLAGS would
+// otherwise be silently ignored by git clone. No hooks are registered here so the
+// clone flag having any effect depends on the config refresh after fetchAndSetSecrets.
+func TestSecretsIntegration_CheckoutScopedSecretReachesCheckout(t *testing.T) {
+	t.Parallel()
+
+	tester, err := NewExecutorTester(mainCtx)
+	if err != nil {
+		t.Fatalf("setting up executor tester: %v", err)
+	}
+	defer tester.Close()
+
+	// --verbose is functionally identical to the default -v clone flag but a
+	// distinct string, so the assertion distinguishes the secret value reaching
+	// checkout from the stale default.
+	apiServer := setupSecretsAPIServer(t, map[string]string{"CLONE_FLAGS_SECRET": "--verbose"})
+	defer apiServer.Close()
+
+	secretsJSON, err := json.Marshal([]pipeline.Secret{{
+		Key:                 "CLONE_FLAGS_SECRET",
+		EnvironmentVariable: "BUILDKITE_GIT_CLONE_FLAGS",
+	}})
+	if err != nil {
+		t.Fatalf("marshaling secrets: %v", err)
+	}
+
+	git := tester.
+		MustMock(t, "git").
+		PassthroughToLocalCommand()
+
+	// clone must use --verbose from the secret; the rest of the sequence uses the
+	// clean/fetch flags set below.
+	git.ExpectAll([][]any{
+		{"clone", "--verbose", "--", tester.Repo.Path, "."},
+		{"clean", "-fdq"},
+		{"fetch", "-v", "--", "origin", "main"},
+		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
+		{"clean", "-fdq"},
+		{"--no-pager", "log", "-1", "HEAD", "-s", "--no-color", gitShowFormatArg},
+	})
+
+	agent := tester.MockAgent(t)
+	agent.Expect("meta-data", "exists", job.CommitMetadataKey).AndExitWith(1)
+	agent.Expect("meta-data", "set", job.CommitMetadataKey).WithStdin(commitPattern)
+
+	tester.RunAndCheck(t,
+		fmt.Sprintf("BUILDKITE_SECRETS_CONFIG=%s", string(secretsJSON)),
+		fmt.Sprintf("BUILDKITE_AGENT_ENDPOINT=%s", apiServer.URL),
+		"BUILDKITE_CHECKOUT_OVERRIDE_MODE=none",
+		"BUILDKITE_GIT_CLEAN_FLAGS=-fdq",
+		"BUILDKITE_GIT_FETCH_FLAGS=-v",
+	)
+}
+
+// BUILDKITE_GIT_LFS_ENABLED sits outside both protection maps, so a secret can
+// enable LFS in any mode. GIT_LFS_SKIP_SMUDGE must then be set before checkout so
+// LFS objects go through the controlled fetch/checkout path rather than the
+// automatic smudge filter. The skip-smudge decision runs after the secret refresh
+// in setUp, so it sees the secret-enabled LFS. The environment hook is the last
+// setUp step before checkout, so it observes the final env; it exits non-zero to
+// stop before the real LFS checkout flow (which needs git-lfs installed).
+func TestSecretsIntegration_SecretEnabledLFSSetsSkipSmudge(t *testing.T) {
+	t.Parallel()
+
+	tester, err := NewExecutorTester(mainCtx)
+	if err != nil {
+		t.Fatalf("setting up executor tester: %v", err)
+	}
+	defer tester.Close()
+
+	apiServer := setupSecretsAPIServer(t, map[string]string{"LFS_TOGGLE": "true"})
+	defer apiServer.Close()
+
+	secretsJSON, err := json.Marshal([]pipeline.Secret{{
+		Key:                 "LFS_TOGGLE",
+		EnvironmentVariable: "BUILDKITE_GIT_LFS_ENABLED",
+	}})
+	if err != nil {
+		t.Fatalf("marshaling secrets: %v", err)
+	}
+
+	tester.ExpectGlobalHook("environment").AndCallFunc(func(c *bintest.Call) {
+		// Report only the non-secret marker, not the secret-backed LFS value.
+		_, _ = fmt.Fprintf(c.Stderr, "SKIP_SMUDGE=%q\n", c.GetEnv("GIT_LFS_SKIP_SMUDGE"))
+		c.Exit(1)
+	})
+
+	// Agent LFS defaults off, so a skip-smudge of "1" can only come from the secret
+	// enabling LFS before the (post-refresh) skip-smudge block.
+	err = tester.Run(t,
+		fmt.Sprintf("BUILDKITE_SECRETS_CONFIG=%s", string(secretsJSON)),
+		fmt.Sprintf("BUILDKITE_AGENT_ENDPOINT=%s", apiServer.URL),
+	)
+	if err == nil {
+		t.Fatalf("expected job to stop at the environment hook, but it succeeded. Full output: %s", tester.Output)
+	}
+
+	if !strings.Contains(tester.Output, `SKIP_SMUDGE="1"`) {
+		t.Fatalf("expected GIT_LFS_SKIP_SMUDGE=1 before checkout after a secret enabled LFS, got: %s", tester.Output)
 	}
 }

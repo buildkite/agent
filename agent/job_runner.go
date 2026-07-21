@@ -405,10 +405,20 @@ func (r *JobRunner) normalizeVerificationBehavior(behavior string) (string, erro
 
 // Creates the environment variables that will be used in the process and writes a flat environment file
 func (r *JobRunner) createEnvironment(ctx context.Context) ([]string, error) {
+	// Most checkout-scoped vars are locked against the backend job env in every
+	// mode except none; only none lets pipeline/step env override agent config,
+	// matching the rule secrets follow (see IsCheckoutLockedForSecrets). The
+	// exception is sparse-checkout paths, which have a from-job floor: a step's
+	// checkout.sparse config is honored under the default mode too, and only strict
+	// locks it (see IsCheckoutLockedForJobEnv). Within-job sources (hooks, plugins,
+	// the Job API) are governed separately and only strict locks them.
+	checkoutMode := r.conf.AgentConfiguration.CheckoutOverrideMode
+
 	// Create a clone of our jobs environment. We'll then set the
 	// environment variables provided by the agent, which will override any
-	// sent by Buildkite. The variables below should always take
-	// precedence.
+	// sent by Buildkite. The variables below should always take precedence,
+	// except the checkout-scoped vars set via setCheckoutEnv, which defer to
+	// the Buildkite-sent value unless the checkout-override mode locks them.
 	env := make(map[string]string)
 	maps.Copy(env, r.conf.Job.Env)
 
@@ -440,6 +450,17 @@ func (r *JobRunner) createEnvironment(ctx context.Context) ([]string, error) {
 		}
 		env[name] = value
 	}
+	// For some checkout env vars, we allow the Job env (if present) to have
+	// higher precedence than the agent configuration, unless the checkout-override
+	// mode locks them. Only checkout-scoped vars are passed here.
+	setCheckoutEnv := func(name, value string) {
+		if !envutil.IsCheckoutLockedForJobEnv(name, checkoutMode) {
+			if _, exists := env[name]; exists {
+				return
+			}
+		}
+		setEnv(name, value)
+	}
 
 	// Write out the job environment to file:
 	// - envShellFile: in k="v" format, with newlines escaped. If the
@@ -467,6 +488,7 @@ BUILDKITE_GIT_MIRRORS_PATH
 BUILDKITE_GIT_MIRRORS_SKIP_UPDATE
 BUILDKITE_GIT_SUBMODULES
 BUILDKITE_GIT_SUBMODULE_CLONE_CONFIG
+BUILDKITE_CHECKOUT_OVERRIDE_MODE
 BUILDKITE_CANCEL_GRACE_PERIOD
 BUILDKITE_COMMAND_EVAL
 BUILDKITE_LOCAL_HOOKS_ENABLED
@@ -596,20 +618,43 @@ BUILDKITE_AGENT_JWKS_KEY_ID`
 	setEnv("BUILDKITE_ADDITIONAL_HOOKS_PATHS", strings.Join(r.conf.AgentConfiguration.AdditionalHooksPaths, ","))
 	setEnv("BUILDKITE_PLUGINS_PATH", r.conf.AgentConfiguration.PluginsPath)
 	setEnv("BUILDKITE_SSH_KEYSCAN", fmt.Sprint(r.conf.AgentConfiguration.SSHKeyscan))
-	// Disable cloning submodules if specified in Agent config as precedence
-	// else allow pipeline/step env to control it via BUILDKITE_GIT_SUBMODULES
-	if !r.conf.AgentConfiguration.GitSubmodules {
-		setEnv("BUILDKITE_GIT_SUBMODULES", "false")
+	// submodules/skip-checkout/skip-fetch/timeout are each emitted by the agent on
+	// only one side of their default (submodules off, skip-checkout on, skip-fetch
+	// on, timeout > 0); on the other, silent, side the agent stays quiet and
+	// historically let pipeline/step env decide. Only strict closes that silent
+	// side, emitting the agent value unconditionally so a job can't reintroduce a
+	// setting the agent left at its default. from-job and none keep the historical
+	// conditional emit; setCheckoutEnv then decides precedence against backend job
+	// env: from-job keeps agent config authoritative on the emitted side, none lets
+	// job env win. The checkout flags above are agent-authoritative in both from-job
+	// and strict (they were always emitted), so only these four differ by mode here.
+	if checkoutMode == envutil.CheckoutOverrideStrict {
+		setEnv("BUILDKITE_GIT_SUBMODULES", fmt.Sprint(r.conf.AgentConfiguration.GitSubmodules))
+		setEnv("BUILDKITE_SKIP_CHECKOUT", fmt.Sprint(r.conf.AgentConfiguration.SkipCheckout))
+		setEnv("BUILDKITE_GIT_SKIP_FETCH_EXISTING_COMMITS", fmt.Sprint(r.conf.AgentConfiguration.GitSkipFetchExistingCommits))
+		// A zero timeout means no checkout timeout; emit it anyway under strict so
+		// a job-supplied value can't reintroduce one past the agent config.
+		setEnv("BUILDKITE_GIT_CHECKOUT_TIMEOUT", strconv.Itoa(r.conf.AgentConfiguration.GitCheckoutTimeout))
+	} else {
+		// Default submodules off when disabled in agent config, but let pipeline/
+		// step env override via BUILDKITE_GIT_SUBMODULES (unless from-job locks it).
+		if !r.conf.AgentConfiguration.GitSubmodules {
+			setCheckoutEnv("BUILDKITE_GIT_SUBMODULES", "false")
+		}
+		// Allow BUILDKITE_SKIP_CHECKOUT to be enabled either by agent config
+		// or by pipeline/step env
+		// This is here now to make it ready for if/when we add skip_checkout to the core app
+		if r.conf.AgentConfiguration.SkipCheckout {
+			setCheckoutEnv("BUILDKITE_SKIP_CHECKOUT", "true")
+		}
+		if r.conf.AgentConfiguration.GitSkipFetchExistingCommits {
+			setCheckoutEnv("BUILDKITE_GIT_SKIP_FETCH_EXISTING_COMMITS", "true")
+		}
+		if r.conf.AgentConfiguration.GitCheckoutTimeout > 0 {
+			setCheckoutEnv("BUILDKITE_GIT_CHECKOUT_TIMEOUT", strconv.Itoa(r.conf.AgentConfiguration.GitCheckoutTimeout))
+		}
 	}
-	// Allow BUILDKITE_SKIP_CHECKOUT to be enabled either by agent config
-	// or by pipeline/step env
-	// This is here now to make it ready for if/when we add skip_checkout to the core app
-	if r.conf.AgentConfiguration.SkipCheckout {
-		setEnv("BUILDKITE_SKIP_CHECKOUT", "true")
-	}
-	if r.conf.AgentConfiguration.GitSkipFetchExistingCommits {
-		setEnv("BUILDKITE_GIT_SKIP_FETCH_EXISTING_COMMITS", "true")
-	}
+	setEnv("BUILDKITE_CHECKOUT_OVERRIDE_MODE", checkoutMode.String())
 	setEnv("BUILDKITE_CHECKOUT_ATTEMPTS", strconv.Itoa(r.conf.AgentConfiguration.CheckoutAttempts))
 	setEnv("BUILDKITE_COMMAND_EVAL", fmt.Sprint(r.conf.AgentConfiguration.CommandEval))
 	setEnv("BUILDKITE_PLUGINS_ENABLED", fmt.Sprint(r.conf.AgentConfiguration.PluginsEnabled))
@@ -620,22 +665,16 @@ BUILDKITE_AGENT_JWKS_KEY_ID`
 	}
 	setEnv("BUILDKITE_LOCAL_HOOKS_ENABLED", fmt.Sprint(r.conf.AgentConfiguration.LocalHooksEnabled))
 
-	setEnv("BUILDKITE_GIT_CHECKOUT_FLAGS", r.conf.AgentConfiguration.GitCheckoutFlags)
-	setEnv("BUILDKITE_GIT_CLONE_FLAGS", r.conf.AgentConfiguration.GitCloneFlags)
-	setEnv("BUILDKITE_GIT_FETCH_FLAGS", r.conf.AgentConfiguration.GitFetchFlags)
-
-	if len(r.conf.AgentConfiguration.GitSparseCheckoutPaths) > 0 {
-		setEnv("BUILDKITE_GIT_SPARSE_CHECKOUT_PATHS", strings.Join(r.conf.AgentConfiguration.GitSparseCheckoutPaths, ","))
-	}
+	setCheckoutEnv("BUILDKITE_GIT_CHECKOUT_FLAGS", r.conf.AgentConfiguration.GitCheckoutFlags)
+	setCheckoutEnv("BUILDKITE_GIT_CLONE_FLAGS", r.conf.AgentConfiguration.GitCloneFlags)
+	setCheckoutEnv("BUILDKITE_GIT_FETCH_FLAGS", r.conf.AgentConfiguration.GitFetchFlags)
+	setCheckoutEnv("BUILDKITE_GIT_SPARSE_CHECKOUT_PATHS", strings.Join(r.conf.AgentConfiguration.GitSparseCheckoutPaths, ","))
 	setEnv("BUILDKITE_GIT_CLONE_MIRROR_FLAGS", r.conf.AgentConfiguration.GitCloneMirrorFlags)
 	setEnv("BUILDKITE_GIT_MIRROR_CHECKOUT_MODE", r.conf.AgentConfiguration.GitMirrorCheckoutMode)
-	setEnv("BUILDKITE_GIT_CLEAN_FLAGS", r.conf.AgentConfiguration.GitCleanFlags)
+	setCheckoutEnv("BUILDKITE_GIT_CLEAN_FLAGS", r.conf.AgentConfiguration.GitCleanFlags)
 	setEnv("BUILDKITE_GIT_MIRRORS_LOCK_TIMEOUT", strconv.Itoa(r.conf.AgentConfiguration.GitMirrorsLockTimeout))
-	if r.conf.AgentConfiguration.GitCheckoutTimeout > 0 {
-		setEnv("BUILDKITE_GIT_CHECKOUT_TIMEOUT", strconv.Itoa(r.conf.AgentConfiguration.GitCheckoutTimeout))
-	}
 	setEnv("BUILDKITE_GIT_SUBMODULE_CLONE_CONFIG", strings.Join(r.conf.AgentConfiguration.GitSubmoduleCloneConfig, ","))
-	setEnv("BUILDKITE_GIT_COMMIT_VERIFICATION", r.conf.AgentConfiguration.GitCommitVerification)
+	setCheckoutEnv("BUILDKITE_GIT_COMMIT_VERIFICATION", r.conf.AgentConfiguration.GitCommitVerification)
 
 	setEnv("BUILDKITE_SHELL", r.conf.AgentConfiguration.Shell)
 	setEnv("BUILDKITE_HOOKS_SHELL", r.conf.AgentConfiguration.HooksShell)
