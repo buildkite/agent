@@ -15,36 +15,6 @@ import (
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 )
 
-// TestRedactURLCredentials asserts that an embedded password is masked while
-// URLs without a secret — plain HTTPS, SCP-style and ssh:// SSH remotes, and
-// relative submodule paths — pass through unchanged (never re-encoded).
-func TestRedactURLCredentials(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name string
-		in   string
-		want string
-	}{
-		{name: "https with token", in: "https://x-access-token:ghs_secret@github.com/org/repo.git", want: "https://x-access-token:xxxxx@github.com/org/repo.git"},
-		{name: "https no creds", in: "https://github.com/org/repo.git", want: "https://github.com/org/repo.git"},
-		{name: "https user only", in: "https://user@github.com/org/repo.git", want: "https://user@github.com/org/repo.git"},
-		{name: "scp-style ssh", in: "git@github.com:org/repo.git", want: "git@github.com:org/repo.git"},
-		{name: "ssh scheme", in: "ssh://git@github.com/org/repo.git", want: "ssh://git@github.com/org/repo.git"},
-		{name: "relative submodule", in: "../relative/submodule", want: "../relative/submodule"},
-		{name: "empty", in: "", want: ""},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			if got := redactURLCredentials(tt.in); got != tt.want {
-				t.Errorf("redactURLCredentials(%q) = %q, want %q", tt.in, got, tt.want)
-			}
-		})
-	}
-}
-
 // --- Layer 2: pure-logic tests (noop backend) ---
 
 // TestTraceGitOp_PropagatesError asserts that traceGitOp returns fn's error
@@ -227,8 +197,8 @@ func runTracedCheckout(t *testing.T, traceGitCheckout bool) []sdktrace.ReadOnlyS
 		_ = provider.Shutdown(context.Background()) //nolint:usetesting // t.Context() is cancelled before Cleanup funcs.
 	})
 
-	if err := executor.defaultCheckoutPhase(ctx, 1); err != nil {
-		t.Fatalf("executor.defaultCheckoutPhase(ctx, 1) error = %v, want nil", err)
+	if err := executor.defaultCheckoutPhase(ctx, 0); err != nil {
+		t.Fatalf("executor.defaultCheckoutPhase(ctx, 0) error = %v, want nil", err)
 	}
 
 	return recorder.Ended()

@@ -72,12 +72,14 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string) (dir 
 	// Lock the mirror dir to prevent concurrent clones
 	cloneCtx, canc := context.WithTimeout(ctx, lockTimeout)
 	defer canc()
-	// git.mirror.lock_wait.clone wraps only the lock acquisition, isolating
-	// contention wait from the useful work done while holding the lock.
+
 	cloneLockSpan, _ := e.traceGitOpSpan(ctx, "git.mirror.lock_wait.clone")
+
 	mirrorCloneLock, err := e.shell.LockFile(cloneCtx, mirrorDir+".clonelock")
+
 	cloneLockSpan.AddAttributes(map[string]string{"git.timed_out": strconv.FormatBool(errors.Is(err, context.DeadlineExceeded))})
 	cloneLockSpan.FinishWithError(err)
+
 	if err != nil {
 		if errors.Is(err, context.DeadlineExceeded) {
 			return "", ErrTimedOutAcquiringLock{Name: "clone", Err: err}
@@ -121,11 +123,14 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string) (dir 
 	// Lock the mirror dir to prevent concurrent updates
 	updateCtx, canc := context.WithTimeout(ctx, lockTimeout)
 	defer canc()
-	// git.mirror.lock_wait.update wraps only the lock acquisition.
+
 	updateLockSpan, _ := e.traceGitOpSpan(ctx, "git.mirror.lock_wait.update")
+
 	mirrorUpdateLock, err := e.shell.LockFile(updateCtx, mirrorDir+".updatelock")
+
 	updateLockSpan.AddAttributes(map[string]string{"git.timed_out": strconv.FormatBool(errors.Is(err, context.DeadlineExceeded))})
 	updateLockSpan.FinishWithError(err)
+
 	if err != nil {
 		if errors.Is(err, context.DeadlineExceeded) {
 			return "", ErrTimedOutAcquiringLock{Name: "update", Err: err}
@@ -137,6 +142,7 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string) (dir 
 			finalErr = errors.Join(finalErr, fmt.Errorf("unable to release update lock: %w", err))
 		}
 	}()
+
 	if isMainRepository {
 		// Check again after we get a lock, in case the other process has already updated
 		if hasGitCommit(ctx, e.shell, mirrorDir, e.Commit) {

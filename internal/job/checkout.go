@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net/url"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -156,9 +155,7 @@ func (e *Executor) checkout(ctx context.Context) error {
 			roko.WithStrategy(roko.Exponential(2*time.Second, 0)),
 			roko.WithJitter(),
 		).DoWithContext(ctx, func(r *roko.Retrier) error {
-			// roko's AttemptCount is 0-based inside the callback (MarkAttempt runs
-			// after the callback, and only on error), so add 1 for a 1-based index.
-			err := e.runDefaultCheckoutAttempt(ctx, r.AttemptCount()+1)
+			err := e.runDefaultCheckoutAttempt(ctx, r.AttemptCount())
 			if err == nil {
 				return nil
 			}
@@ -272,79 +269,36 @@ var errCheckoutAttemptTimedOut = errors.New("checkout attempt timed out")
 // timeout if BUILDKITE_GIT_CHECKOUT_TIMEOUT is set. On timeout the returned
 // error is joined with errCheckoutAttemptTimedOut so the retry loop can
 // distinguish a timeout-kill from other signal-terminated processes.
-func (e *Executor) runDefaultCheckoutAttempt(ctx context.Context, attempt int) error {
+func (e *Executor) runDefaultCheckoutAttempt(ctx context.Context, previousAttempts int) error {
 	if e.GitCheckoutTimeout <= 0 {
-		return e.defaultCheckoutPhase(ctx, attempt)
+		return e.defaultCheckoutPhase(ctx, previousAttempts)
 	}
 
 	timeout := time.Duration(e.GitCheckoutTimeout) * time.Second
 	attemptCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
-	err := e.defaultCheckoutPhase(attemptCtx, attempt)
+	err := e.defaultCheckoutPhase(attemptCtx, previousAttempts)
 	if err != nil && attemptCtx.Err() == context.DeadlineExceeded && ctx.Err() == nil {
 		return fmt.Errorf("%w after %s: %w", errCheckoutAttemptTimedOut, timeout, err)
 	}
 	return err
 }
 
-// redactURLCredentials returns rawURL with any embedded password masked, for
-// safe inclusion in span attributes (which are shipped to the tracing backend).
-// URLs without an embedded password — including SCP-style SSH remotes like
-// "git@host:path" and relative submodule paths, none of which carry a secret —
-// are returned unchanged, so the common case is never re-encoded.
-func redactURLCredentials(rawURL string) string {
-	u, err := url.Parse(rawURL)
-	if err != nil || u.User == nil {
-		return rawURL
-	}
-	if _, hasPassword := u.User.Password(); !hasPassword {
-		return rawURL
-	}
-	return u.Redacted()
-}
-
-// traceGitOp wraps fn in a child span named `name`, finishing it with fn's error so a
-// slow-and-failing operation is both timed and marked errored. When the --trace-git-checkout
-// flag is off, no span is created and fn runs with the unmodified ctx.
-func (e *Executor) traceGitOp(ctx context.Context, name string, fn func(context.Context) error) (err error) {
-	if !e.TraceGitCheckout {
-		return fn(ctx)
-	}
-	span, ctx := tracetools.StartSpanFromContext(ctx, name, e.TracingBackend)
-	defer func() { span.FinishWithError(err) }()
-	return fn(ctx)
-}
-
-// traceGitOpSpan is the same as traceGitOp but exposes the span so the caller can set
-// attributes. The caller is responsible for calling span.FinishWithError. When the
-// --trace-git-checkout flag is off it returns a NoopSpan and the unmodified ctx, so callers
-// can unconditionally call AddAttributes / FinishWithError with no effect.
-func (e *Executor) traceGitOpSpan(ctx context.Context, name string) (tracetools.Span, context.Context) {
-	if !e.TraceGitCheckout {
-		return &tracetools.NoopSpan{}, ctx
-	}
-	return tracetools.StartSpanFromContext(ctx, name, e.TracingBackend)
-}
-
 // defaultCheckoutPhase is called by the CheckoutPhase if no global or plugin checkout
 // hook exists. It performs the default checkout on the Repository provided in the config.
-// attempt is the 1-based index of the current checkout attempt, recorded on the
-// repo-checkout span so retries stay visible in aggregate form.
-func (e *Executor) defaultCheckoutPhase(ctx context.Context, attempt int) (retErr error) {
+// previousAttempts is the count of prior checkout attempts.
+func (e *Executor) defaultCheckoutPhase(ctx context.Context, previousAttempts int) (retErr error) {
 	span, spanCtx := tracetools.StartSpanFromContext(ctx, "repo-checkout", e.TracingBackend)
 	span.AddAttributes(map[string]string{
 		"checkout.repo_name": redact.URLCredentials(e.Repository),
 		"checkout.refspec":   e.RefSpec,
 		"checkout.commit":    e.Commit,
-		"checkout.attempt":   strconv.Itoa(attempt),
+		"checkout.attempt":   strconv.Itoa(previousAttempts + 1),
 	})
 	defer func() { span.FinishWithError(retErr) }()
 
-	// Only adopt the repo-checkout child ctx when the flag is on, so flag-off
-	// behaviour (including the trace context propagated into git subprocess env)
-	// is byte-identical to today. When the flag is off, downstream git ops keep
-	// receiving the exact same ctx they get today.
+	// Adopt the repo-checkout child ctx when TraceGitCheckout is enabled
 	if e.TraceGitCheckout {
 		ctx = spanCtx
 	}
@@ -371,17 +325,19 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context, attempt int) (retEr
 	// If we can, get a mirror of the git repository to use for reference later
 	if e.GitMirrorsPath != "" && e.Repository != "" {
 		span.AddAttributes(map[string]string{"checkout.is_using_git_mirrors": "true"})
+
 		var err error
-		// git.mirror.update wraps getOrUpdateMirrorDir; its own git.mirror.* children
-		// (clone/fetch/lock_wait/snapshot) nest under it via the threaded child ctx.
+
 		mirrorSpan, mirrorCtx := e.traceGitOpSpan(ctx, "git.mirror.update")
-		mirrorSpan.AddAttributes(map[string]string{"git.repo": redactURLCredentials(e.Repository)})
+		mirrorSpan.AddAttributes(map[string]string{"git.repo": redact.URLCredentials(e.Repository)})
+
 		mirrorDir, err = e.getOrUpdateMirrorDir(mirrorCtx, e.Repository)
+
 		mirrorSpan.FinishWithError(err)
+
 		if err != nil {
 			return fmt.Errorf("getting/updating git mirror: %w", err)
 		}
-
 		e.shell.Env.Set("BUILDKITE_REPO_MIRROR", mirrorDir)
 	}
 
@@ -425,10 +381,7 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context, attempt int) (retEr
 	if osutil.FileExists(existingGitDir) {
 		// Ensure the origin matches the configured repo, so we can
 		// gracefully handle repository renames.
-		if err := e.traceGitOp(ctx, "git.remote_url", func(ctx context.Context) error {
-			_, err := e.updateRemoteURL(ctx, "", e.Repository)
-			return err
-		}); err != nil {
+		if _, err := e.updateRemoteURL(ctx, "", e.Repository); err != nil {
 			return fmt.Errorf("setting origin: %w", err)
 		}
 
@@ -445,9 +398,7 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context, attempt int) (retEr
 			case "reference":
 				// If the existing repo does not have a reference to the mirror,
 				// create one. Existing objects don't need cleaning up.
-				if err := e.traceGitOp(ctx, "git.reassociate", func(ctx context.Context) error {
-					return e.reassociateIfNeeded(ctx, existingGitDir, mirrorDir)
-				}); err != nil {
+				if err := e.reassociateIfNeeded(ctx, existingGitDir, mirrorDir); err != nil {
 					return fmt.Errorf("reassociating existing clone: %w", err)
 				}
 			}
@@ -493,8 +444,11 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context, attempt int) (retEr
 			"git.sparse":          strconv.FormatBool(len(sparsePaths) > 0),
 			"git.blobless_filter": strconv.FormatBool(hasPartialFilterFlags(gitCloneFlags)),
 		})
+
 		cloneErr := gitClone(cloneCtx, e.shell, gitCloneFlags, e.Repository, ".")
+
 		cloneSpan.FinishWithError(cloneErr)
+
 		if cloneErr != nil {
 			return fmt.Errorf("cloning git repository: %w", cloneErr)
 		}
@@ -537,9 +491,6 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context, attempt int) (retEr
 	addBloblessFilter := len(sparsePaths) > 0 &&
 		!userSuppliedCloneFilter &&
 		!hasPartialFilterFlags(gitFetchFlags)
-	// Unlike the git ops above, fetch is not wrapped in traceGitOp here:
-	// fetchSource emits its own git.fetch span internally because it owns the
-	// skip-fetch decision (git.skipped) and the refspec classification.
 	if err := e.fetchSource(ctx, addBloblessFilter); err != nil {
 		return err
 	}
@@ -552,8 +503,11 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context, attempt int) (retEr
 
 	sparseSpan, sparseCtx := e.traceGitOpSpan(ctx, "git.sparse_checkout")
 	sparseSpan.AddAttributes(map[string]string{"git.path_count": strconv.Itoa(len(sparsePaths))})
+
 	sparseCheckoutActive, err := e.setupSparseCheckout(sparseCtx, sparsePaths)
+
 	sparseSpan.FinishWithError(err)
+
 	if err != nil {
 		return err
 	}
@@ -652,9 +606,6 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context, attempt int) (retEr
 // updated with a reference to its mirror; otherwise submodules are updated
 // with a plain clean update.
 func (e *Executor) updateGitSubmodules(ctx context.Context) (retErr error) {
-	// git.submodules wraps sync + per-submodule work + foreach reset. Its child
-	// ctx is threaded through the rest of this method so the per-submodule
-	// git.mirror.update and git.submodule.update spans nest under it.
 	submodulesSpan, ctx := e.traceGitOpSpan(ctx, "git.submodules")
 	submodulesSpan.AddAttributes(map[string]string{"git.mirrored": strconv.FormatBool(e.GitMirrorsPath != "")})
 	defer func() { submodulesSpan.FinishWithError(retErr) }()
@@ -688,6 +639,7 @@ func (e *Executor) updateGitSubmodules(ctx context.Context) (retErr error) {
 	}
 
 	submodulesSpan.AddAttributes(map[string]string{"git.count": strconv.Itoa(len(submoduleRepos))})
+
 	mirrorSubmodules := e.GitMirrorsPath != ""
 	for _, repository := range submoduleRepos {
 		// submodules might need their fingerprints verified too
@@ -700,12 +652,16 @@ func (e *Executor) updateGitSubmodules(ctx context.Context) (retErr error) {
 		}
 		// It's all mirrored submodules for the rest of the loop.
 
-		// Per-submodule git.mirror.update gets the same full sub-tree as the
-		// main repo via the threaded child ctx, distinguished by git.repo.
+		// getOrUpdateMirrorDir is shared with the main repo's mirror update, so
+		// this produces the same sub-tree of spans; git.repo distinguishes
+		// submodules since the span names repeat.
 		subMirrorSpan, subMirrorCtx := e.traceGitOpSpan(ctx, "git.mirror.update")
-		subMirrorSpan.AddAttributes(map[string]string{"git.repo": redactURLCredentials(repository)})
+		subMirrorSpan.AddAttributes(map[string]string{"git.repo": redact.URLCredentials(repository)})
+
 		mirrorDir, err := e.getOrUpdateMirrorDir(subMirrorCtx, repository)
+
 		subMirrorSpan.FinishWithError(err)
+
 		if err != nil {
 			return fmt.Errorf("getting/updating mirror dir for submodules: %w", err)
 		}
