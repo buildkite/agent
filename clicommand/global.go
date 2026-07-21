@@ -106,6 +106,17 @@ var (
 		EnvVar: "BUILDKITE_CONTAINER_ID",
 	}
 
+	JobContextDirFlag = cli.StringFlag{
+		Name: "job-context-dir",
+		Usage: "The directory for files the agent uses to coordinate with the " +
+			"processes running the job: the job env files, the job timeout marker " +
+			"file, and, in Kubernetes mode, the coordination socket " +
+			"(buildkite.sock). In Kubernetes mode this defaults to /workspace and " +
+			"must be on a volume mounted by all containers in the pod; otherwise " +
+			"it defaults to the system temporary directory",
+		EnvVar: "BUILDKITE_JOB_CONTEXT_DIR",
+	}
+
 	KubernetesLogCollectionGracePeriodFlag = cli.DurationFlag{
 		Name:   "kubernetes-log-collection-grace-period",
 		Usage:  "Deprecated, do not use",

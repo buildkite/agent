@@ -29,7 +29,7 @@ var errNotConnected = errors.New("client not connected")
 // Callers should use context.WithTimeout to control the connection timeout.
 func (c *Client) Connect(ctx context.Context) (*RegisterResponse, error) {
 	if c.SocketPath == "" {
-		c.SocketPath = defaultSocketPath
+		c.SocketPath = SocketPath("")
 	}
 
 	// Retry until the context is cancelled. The high maxAttempts is a safety net
