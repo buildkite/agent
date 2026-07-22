@@ -225,6 +225,7 @@ var KubernetesBootstrapCommand = cli.Command{
 			Stderr:            io.MultiWriter(os.Stderr, socket),
 			Dir:               buildPath,
 			PTY:               runInPTY,
+			Nice:              5, // Lower priority for bootstrap subprocess so kubernetes-bootstrap's StatusLoop stays responsive
 			InterruptSignal:   cancelSignal,
 			SignalGracePeriod: signalGracePeriod,
 		})
