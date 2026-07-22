@@ -1773,19 +1773,22 @@ func TestCommitVerificationWithValidCommit(t *testing.T) {
 		PassthroughToLocalCommand()
 
 	// Expect the normal checkout flow with commit verification inserted between
-	// fetch and checkout: fetch the branch tip (as refs/heads/main, so a same-named
-	// tag can't win the ref lookup), pin it via FETCH_HEAD, then merge-base
-	// --is-ancestor against that SHA. Here the branch (main) tip is the build commit
-	// itself, so both merge-base args are commitHash. Since this is a full clone
-	// (not shallow) and the commit verifies, merge-base succeeds immediately, so no
-	// rev-parse --is-shallow-repository is needed.
+	// fetch and checkout: fetch the branch tip into a dedicated ref (source
+	// refs/heads/main, so a same-named tag can't win the ref lookup) rather than
+	// reading FETCH_HEAD, resolve that ref, then merge-base --is-ancestor against
+	// the SHA. Here the branch (main) tip is the build commit itself, so both
+	// merge-base args are commitHash. Since this is a full clone (not shallow) and
+	// the commit verifies, merge-base succeeds immediately, so no rev-parse
+	// --is-shallow-repository is needed. The dedicated ref is deleted on return.
+	const branchTipRef = "refs/buildkite-agent/commit-verification-branch-tip"
 	git.ExpectAll([][]any{
 		{"clone", "-v", "--", tester.Repo.Path, "."},
 		{"clean", "-fdq"},
 		{"fetch", "-v", "--", "origin", commitHash},
-		{"fetch", "-v", "--", "origin", "refs/heads/main"},
-		{"rev-parse", "FETCH_HEAD"},
+		{"fetch", "-v", "--", "origin", "+refs/heads/main:" + branchTipRef},
+		{"rev-parse", branchTipRef},
 		{"merge-base", "--is-ancestor", commitHash, commitHash},
+		{"update-ref", "-d", branchTipRef},
 		{"-c", "advice.detachedHead=false", "checkout", "-f", commitHash},
 		{"clean", "-fdq"},
 		{"--no-pager", "log", "-1", commitHash, "-s", "--no-color", gitShowFormatArg},
@@ -1825,12 +1828,15 @@ func TestCommitVerificationRetriesTransientBranchFetch(t *testing.T) {
 		fmt.Sprintf("BUILDKITE_COMMIT=%s", commitHash),
 	}
 
-	// Fail the first branch-tip fetch (of refs/heads/main) to simulate a transient
-	// blip, then let the retry pass through to real git. A Before error exits the
-	// mocked git non-zero, which is what the retrier sees.
+	// Fail the first branch-tip fetch (its refspec sources refs/heads/main) to
+	// simulate a transient blip, then let the retry pass through to real git. A
+	// Before error exits the mocked git non-zero, which is what the retrier sees.
 	var branchFetchAttempts atomic.Int32
 	git := tester.MustMock(t, "git").PassthroughToLocalCommand().Before(func(i bintest.Invocation) error {
-		if i.Args[0] == "fetch" && slices.Contains(i.Args, "refs/heads/main") {
+		isBranchTipFetch := i.Args[0] == "fetch" && slices.ContainsFunc(i.Args, func(a string) bool {
+			return strings.Contains(a, "refs/heads/main")
+		})
+		if isBranchTipFetch {
 			if branchFetchAttempts.Add(1) == 1 {
 				return fmt.Errorf("simulated transient fetch failure")
 			}

@@ -31,16 +31,25 @@ func (e *Executor) checkCommitOnBranch(ctx context.Context) error {
 
 	// The build's branch usually isn't a local ref at this point: the checkout
 	// fetches the commit directly (detached HEAD) and only the repository's
-	// default branch gets a local ref from the clone. Fetch the branch tip so
-	// there's a resolvable ref to check the commit's ancestry against, and pin it
-	// to a SHA (the deepening fetches below overwrite FETCH_HEAD). Without this,
-	// merge-base against the bare branch name fails to resolve for any non-default
-	// branch and the check silently degrades to "unavailable".
+	// default branch gets a local ref from the clone. Fetch the branch tip into a
+	// dedicated local ref so there's a resolvable ref to check the commit's
+	// ancestry against. Without this, merge-base against the bare branch name fails
+	// to resolve for any non-default branch and the check silently degrades to
+	// "unavailable".
 	//
-	// Qualify the ref as refs/heads/<branch>: git resolves a bare name against
+	// Resolve the tip through that dedicated ref rather than FETCH_HEAD: with the
+	// operator's fetch flags preserved (below), a configured --append,
+	// --no-write-fetch-head or --dry-run leaves FETCH_HEAD pointing at an earlier
+	// fetch — e.g. the build commit recorded by fetchSource — so rev-parse
+	// FETCH_HEAD could resolve to the build commit itself. merge-base
+	// <commit> <commit> then trivially succeeds and strict verification would
+	// accept an off-branch commit. A refspec with an explicit destination updates
+	// the ref regardless of those flags; the ref is deleted again on return.
+	//
+	// Qualify the source as refs/heads/<branch>: git resolves a bare name against
 	// refs/tags/ before refs/heads/, so a tag sharing the branch's name would pin
-	// FETCH_HEAD to the tag tip and verify the commit against the tag instead of
-	// the branch, letting a commit reachable only from the tag pass.
+	// the ref to the tag tip and verify the commit against the tag instead of the
+	// branch, letting a commit reachable only from the tag pass.
 	//
 	// Build the fetch argument vector directly rather than going through gitFetch:
 	// gitFetch runs shellwords.Split on every refspec, which mangles a branch name
@@ -54,7 +63,7 @@ func (e *Executor) checkCommitOnBranch(ctx context.Context) error {
 	// path), and the checkout's own clone and source fetch already honour them. A
 	// fetch here that dropped them could fail where those succeed, again degrading
 	// to "unavailable" and letting strict pass. Split the flags (they are meant to
-	// be word-split) but keep branchRef a single unsplit argument.
+	// be word-split) but keep the refspec a single unsplit argument.
 	//
 	// The deepening fetches below take a stripped copy: git rejects --depth (and
 	// --shallow-since/--shallow-exclude) combined with --deepen or --unshallow, so
@@ -62,7 +71,8 @@ func (e *Executor) checkCommitOnBranch(ctx context.Context) error {
 	// non-zero and degrades a genuinely off-branch commit on a shallow clone back
 	// to "unavailable" (warn, never blocking). Keep the transport flags there but
 	// drop the depth-limiting ones.
-	branchRef := "refs/heads/" + e.Branch
+	const branchTipRef = "refs/buildkite-agent/commit-verification-branch-tip"
+	branchRefspec := "+refs/heads/" + e.Branch + ":" + branchTipRef
 	fetchFlags, err := shellwords.Split(e.GitFetchFlags)
 	if err != nil {
 		return fmt.Errorf("%w: unable to parse git-fetch-flags %q: %w", ErrCommitVerificationUnavailable, e.GitFetchFlags, err)
@@ -71,9 +81,11 @@ func (e *Executor) checkCommitOnBranch(ctx context.Context) error {
 	fetchBranch := func(baseFlags []string, extraFlags ...string) error {
 		args := append([]string{"fetch"}, baseFlags...)
 		args = append(args, extraFlags...)
-		args = append(args, "--", "origin", branchRef)
+		args = append(args, "--", "origin", branchRefspec)
 		return e.shell.Command("git", args...).Run(ctx)
 	}
+	// The ref is internal to verification; don't leave it behind in the repo.
+	defer func() { _ = e.shell.Command("git", "update-ref", "-d", branchTipRef).Run(ctx) }()
 
 	// Retry the branch-tip fetch a few times: it is the one network dependency the
 	// check adds, and a transient failure would otherwise degrade the whole check
@@ -89,7 +101,7 @@ func (e *Executor) checkCommitOnBranch(ctx context.Context) error {
 	if fetchErr != nil {
 		return fmt.Errorf("%w: unable to fetch branch %q: %w", ErrCommitVerificationUnavailable, e.Branch, fetchErr)
 	}
-	branchTip, err := e.shell.Command("git", "rev-parse", "FETCH_HEAD").RunAndCaptureStdout(ctx)
+	branchTip, err := e.shell.Command("git", "rev-parse", branchTipRef).RunAndCaptureStdout(ctx)
 	if err != nil {
 		return fmt.Errorf("%w: unable to resolve branch %q: %w", ErrCommitVerificationUnavailable, e.Branch, err)
 	}
