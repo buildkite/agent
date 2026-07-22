@@ -5,13 +5,14 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"runtime"
 	"sort"
 	"strings"
 
-	"github.com/bmatcuk/doublestar/v4"
+	"drjosh.dev/zzglob"
 	"github.com/buildkite/agent/v3/api"
 	"gopkg.in/yaml.v3"
 )
@@ -257,17 +258,31 @@ func checksumDigest(patterns []string) (string, error) {
 			}
 			// Clean before use as a dedup key so aliases like "go.mod" and
 			// "./go.mod" collapse to one entry, matching the already-cleaned paths
-			// that FilepathGlob returns for glob entries.
+			// that the globber returns for glob entries.
 			seen[filepath.ToSlash(filepath.Clean(pattern))] = struct{}{}
 			continue
 		}
 
-		matches, err := doublestar.FilepathGlob(pattern, doublestar.WithFilesOnly(), doublestar.WithFailOnIOErrors())
+		parsed, err := zzglob.Parse(pattern)
 		if err != nil {
 			return "", fmt.Errorf("cache_key: checksum pattern %q: %w", pattern, err)
 		}
-		for _, m := range matches {
-			seen[filepath.ToSlash(m)] = struct{}{}
+		// zzglob walks the filesystem sequentially (fs.WalkDir), so recording
+		// matches into seen needs no synchronisation. A glob matching nothing
+		// simply never invokes the callback; a read error on a matched path is
+		// surfaced rather than silently dropped.
+		walk := func(match string, d fs.DirEntry, err error) error {
+			if err != nil {
+				return fmt.Errorf("cache_key: checksum pattern %q: %w", pattern, err)
+			}
+			if d == nil || d.IsDir() {
+				return nil // directories have no hashable contents
+			}
+			seen[filepath.ToSlash(match)] = struct{}{}
+			return nil
+		}
+		if err := parsed.Glob(walk); err != nil {
+			return "", err
 		}
 	}
 	if len(seen) == 0 {
