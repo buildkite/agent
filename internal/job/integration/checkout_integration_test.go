@@ -1783,7 +1783,7 @@ func TestCommitVerificationWithValidCommit(t *testing.T) {
 		{"clone", "-v", "--", tester.Repo.Path, "."},
 		{"clean", "-fdq"},
 		{"fetch", "-v", "--", "origin", commitHash},
-		{"fetch", "--", "origin", "refs/heads/main"},
+		{"fetch", "-v", "--", "origin", "refs/heads/main"},
 		{"rev-parse", "FETCH_HEAD"},
 		{"merge-base", "--is-ancestor", commitHash, commitHash},
 		{"-c", "advice.detachedHead=false", "checkout", "-f", commitHash},

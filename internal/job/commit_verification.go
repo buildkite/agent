@@ -55,13 +55,21 @@ func (e *Executor) checkCommitOnBranch(ctx context.Context) error {
 	// fetch here that dropped them could fail where those succeed, again degrading
 	// to "unavailable" and letting strict pass. Split the flags (they are meant to
 	// be word-split) but keep branchRef a single unsplit argument.
+	//
+	// The deepening fetches below take a stripped copy: git rejects --depth (and
+	// --shallow-since/--shallow-exclude) combined with --deepen or --unshallow, so
+	// carrying a configured --depth=1 into them makes the deepen fetch exit
+	// non-zero and degrades a genuinely off-branch commit on a shallow clone back
+	// to "unavailable" (warn, never blocking). Keep the transport flags there but
+	// drop the depth-limiting ones.
 	branchRef := "refs/heads/" + e.Branch
 	fetchFlags, err := shellwords.Split(e.GitFetchFlags)
 	if err != nil {
 		return fmt.Errorf("%w: unable to parse git-fetch-flags %q: %w", ErrCommitVerificationUnavailable, e.GitFetchFlags, err)
 	}
-	fetchBranch := func(extraFlags ...string) error {
-		args := append([]string{"fetch"}, fetchFlags...)
+	deepenFlags := stripShallowFetchFlags(fetchFlags)
+	fetchBranch := func(baseFlags []string, extraFlags ...string) error {
+		args := append([]string{"fetch"}, baseFlags...)
 		args = append(args, extraFlags...)
 		args = append(args, "--", "origin", branchRef)
 		return e.shell.Command("git", args...).Run(ctx)
@@ -76,7 +84,7 @@ func (e *Executor) checkCommitOnBranch(ctx context.Context) error {
 		roko.WithStrategy(roko.ExponentialSubsecond(time.Second)),
 		roko.WithJitter(),
 	).DoWithContext(ctx, func(*roko.Retrier) error {
-		return fetchBranch()
+		return fetchBranch(fetchFlags)
 	})
 	if fetchErr != nil {
 		return fmt.Errorf("%w: unable to fetch branch %q: %w", ErrCommitVerificationUnavailable, e.Branch, fetchErr)
@@ -96,7 +104,7 @@ func (e *Executor) checkCommitOnBranch(ctx context.Context) error {
 	for _, fetchFlag := range []string{"", "--deepen=50", "--unshallow"} {
 		if fetchFlag != "" {
 			e.shell.Commentf("Deepening checkout to verify commit (%s)...", fetchFlag)
-			if fetchErr := fetchBranch(fetchFlag); fetchErr != nil {
+			if fetchErr := fetchBranch(deepenFlags, fetchFlag); fetchErr != nil {
 				return fmt.Errorf("%w: unable to verify commit %q on branch %q: %w", ErrCommitVerificationUnavailable, e.Commit, e.Branch, fetchErr)
 			}
 		}
@@ -128,6 +136,37 @@ func (e *Executor) checkCommitOnBranch(ctx context.Context) error {
 
 	// All attempts exhausted, so verification is unavailable.
 	return fmt.Errorf("%w: unable to verify commit %q on branch %q after exhausting fetch strategies", ErrCommitVerificationUnavailable, e.Commit, e.Branch)
+}
+
+// stripShallowFetchFlags removes depth-limiting options from a git-fetch flag
+// list. git treats --depth, --deepen, --shallow-since and --shallow-exclude as
+// mutually exclusive with the --deepen/--unshallow fetches checkCommitOnBranch
+// issues, so those fetches must not inherit them from BUILDKITE_GIT_FETCH_FLAGS.
+// Both the "--flag=value" and "--flag value" spellings are handled; the latter
+// also drops the following value token. --unshallow is dropped too, since we add
+// it ourselves.
+func stripShallowFetchFlags(flags []string) []string {
+	valueFlags := map[string]bool{
+		"--depth":           true,
+		"--deepen":          true,
+		"--shallow-since":   true,
+		"--shallow-exclude": true,
+	}
+	out := make([]string, 0, len(flags))
+	for i := 0; i < len(flags); i++ {
+		name, _, hasValue := strings.Cut(flags[i], "=")
+		if name == "--unshallow" {
+			continue
+		}
+		if valueFlags[name] {
+			if !hasValue {
+				i++ // skip the separate value token in the "--flag value" form
+			}
+			continue
+		}
+		out = append(out, flags[i])
+	}
+	return out
 }
 
 // verifyCommit is called if the user has commit verification enabled. It ensures that the commit we are
