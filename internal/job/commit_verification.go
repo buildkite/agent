@@ -9,6 +9,7 @@ import (
 
 	"github.com/buildkite/agent/v3/internal/shell"
 	"github.com/buildkite/roko"
+	"github.com/buildkite/shellwords"
 )
 
 // ErrCommitVerificationFailed indicates that git has definitively determined
@@ -41,13 +42,31 @@ func (e *Executor) checkCommitOnBranch(ctx context.Context) error {
 	// FETCH_HEAD to the tag tip and verify the commit against the tag instead of
 	// the branch, letting a commit reachable only from the tag pass.
 	//
-	// Fetch with a discrete argument vector rather than via gitFetch: gitFetch
-	// runs shellwords.Split on every refspec, which mangles a branch name
+	// Build the fetch argument vector directly rather than going through gitFetch:
+	// gitFetch runs shellwords.Split on every refspec, which mangles a branch name
 	// containing shell metacharacters (quotes are legal in git refs). e.Branch is
 	// externally controlled, so a split ref could target the wrong branch or fail
 	// to parse, silently degrading verification to "unavailable" (warn, never
 	// blocking) and defeating the qualification above.
+	//
+	// Preserve the operator's configured git-fetch flags: they are the supported
+	// way to configure every fetch (e.g. --upload-pack for a server on a custom
+	// path), and the checkout's own clone and source fetch already honour them. A
+	// fetch here that dropped them could fail where those succeed, again degrading
+	// to "unavailable" and letting strict pass. Split the flags (they are meant to
+	// be word-split) but keep branchRef a single unsplit argument.
 	branchRef := "refs/heads/" + e.Branch
+	fetchFlags, err := shellwords.Split(e.GitFetchFlags)
+	if err != nil {
+		return fmt.Errorf("%w: unable to parse git-fetch-flags %q: %w", ErrCommitVerificationUnavailable, e.GitFetchFlags, err)
+	}
+	fetchBranch := func(extraFlags ...string) error {
+		args := append([]string{"fetch"}, fetchFlags...)
+		args = append(args, extraFlags...)
+		args = append(args, "--", "origin", branchRef)
+		return e.shell.Command("git", args...).Run(ctx)
+	}
+
 	// Retry the branch-tip fetch a few times: it is the one network dependency the
 	// check adds, and a transient failure would otherwise degrade the whole check
 	// to "unavailable" (warn, never blocking) with no second chance, since
@@ -57,7 +76,7 @@ func (e *Executor) checkCommitOnBranch(ctx context.Context) error {
 		roko.WithStrategy(roko.ExponentialSubsecond(time.Second)),
 		roko.WithJitter(),
 	).DoWithContext(ctx, func(*roko.Retrier) error {
-		return e.shell.Command("git", "fetch", "--", "origin", branchRef).Run(ctx)
+		return fetchBranch()
 	})
 	if fetchErr != nil {
 		return fmt.Errorf("%w: unable to fetch branch %q: %w", ErrCommitVerificationUnavailable, e.Branch, fetchErr)
@@ -77,7 +96,7 @@ func (e *Executor) checkCommitOnBranch(ctx context.Context) error {
 	for _, fetchFlag := range []string{"", "--deepen=50", "--unshallow"} {
 		if fetchFlag != "" {
 			e.shell.Commentf("Deepening checkout to verify commit (%s)...", fetchFlag)
-			if fetchErr := e.shell.Command("git", "fetch", fetchFlag, "--", "origin", branchRef).Run(ctx); fetchErr != nil {
+			if fetchErr := fetchBranch(fetchFlag); fetchErr != nil {
 				return fmt.Errorf("%w: unable to verify commit %q on branch %q: %w", ErrCommitVerificationUnavailable, e.Commit, e.Branch, fetchErr)
 			}
 		}

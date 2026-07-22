@@ -657,6 +657,47 @@ func TestVerifyCommit(t *testing.T) {
 		}
 	})
 
+	t.Run("preserves configured git-fetch flags", func(t *testing.T) {
+		ctx := t.Context()
+		repoURL, _, offBranchCommit := setupFileBackedRepo(t, ctx, "feature")
+
+		cloneDir, err := os.MkdirTemp("", "verify-commit-test-")
+		if err != nil {
+			t.Fatalf("MkdirTemp error = %v", err)
+		}
+		t.Cleanup(func() { os.RemoveAll(cloneDir) }) //nolint:errcheck // Best-effort cleanup.
+		sh, err := shell.New()
+		if err != nil {
+			t.Fatalf("shell.New() error = %v", err)
+		}
+		if err := sh.Command("git", "clone", "--branch", "feature", repoURL, cloneDir).Run(ctx); err != nil {
+			t.Fatalf("git clone error = %v", err)
+		}
+		if err := sh.Chdir(cloneDir); err != nil {
+			t.Fatalf("Chdir error = %v", err)
+		}
+
+		// A bogus --upload-pack makes the branch-tip fetch fail, but only if the
+		// configured git-fetch flags actually reach git fetch. If they were dropped,
+		// the fetch would succeed and this off-branch commit would produce a
+		// definitive ErrCommitVerificationFailed; honouring the flag makes the fetch
+		// fail and degrades the check to "unavailable" instead, which is what proves
+		// the flag was passed through.
+		e := &Executor{
+			shell: sh,
+			ExecutorConfig: ExecutorConfig{
+				GitCommitVerification: "strict",
+				Commit:                offBranchCommit,
+				Branch:                "feature",
+				GitFetchFlags:         "--upload-pack=/nonexistent/git-upload-pack",
+			},
+		}
+
+		if err := e.checkCommitOnBranch(ctx); !errors.Is(err, ErrCommitVerificationUnavailable) {
+			t.Errorf("checkCommitOnBranch() error = %v, want ErrCommitVerificationUnavailable", err)
+		}
+	})
+
 	t.Run("verifies via --unshallow beyond the deepen boundary", func(t *testing.T) {
 		ctx := t.Context()
 		sh, repoURL, commit := newFileBackedRepo(t, ctx, "verify-unshallow")
