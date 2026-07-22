@@ -37,6 +37,16 @@ func (m *Mux) Append(r *Replacer) {
 	m.underlying = append(m.underlying, r)
 }
 
+// Needles returns the current set of needles (secrets). All replacers in a Mux
+// are kept in sync by Add/Reset, so the needles of the first replacer are
+// representative of the whole Mux. Returns nil if the Mux is empty.
+func (m *Mux) Needles() []string {
+	if len(m.underlying) == 0 {
+		return nil
+	}
+	return m.underlying[0].Needles()
+}
+
 // Flush flushes all replacers.
 func (m *Mux) Flush() error {
 	errs := make([]error, 0, len(m.underlying))

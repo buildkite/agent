@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"syscall"
 	"testing"
 	"time"
@@ -21,6 +22,17 @@ import (
 	"github.com/buildkite/bintest/v3"
 	"github.com/google/go-cmp/cmp"
 )
+
+type synchronizedWriter struct {
+	mu  sync.Mutex
+	out io.Writer
+}
+
+func (w *synchronizedWriter) Write(p []byte) (int, error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.out.Write(p)
+}
 
 func TestRunAndCaptureWithTTY(t *testing.T) {
 	t.Parallel()
@@ -140,6 +152,76 @@ func TestRunWithStdin(t *testing.T) {
 	}
 	if got, want := out.String(), "Hello Stdin"; want != got {
 		t.Errorf(`sh.WithStdin("hello stdin").Run("tr", "hs", "HS") output = %q, want %q`, got, want)
+	}
+}
+
+func TestCloneWithStdinPreservesOutputInterceptor(t *testing.T) {
+	t.Parallel()
+
+	out := &bytes.Buffer{}
+	intercepted := &bytes.Buffer{}
+	sh := newShellForTest(t,
+		shell.WithStdout(out),
+		shell.WithPTY(false),
+		shell.WithOutputInterceptor(func(_ context.Context, downstream io.Writer, _ map[string]string) io.Writer {
+			return io.MultiWriter(downstream, intercepted)
+		}),
+	)
+
+	cmd := sh.CloneWithStdin(strings.NewReader("hello stdin")).Command("tr", "hs", "HS")
+	if err := cmd.Run(t.Context()); err != nil {
+		t.Fatalf(`sh.CloneWithStdin("hello stdin").Command("tr", "hs", "HS").Run(ctx) error = %v`, err)
+	}
+	if got, want := out.String(), "Hello Stdin"; got != want {
+		t.Errorf("stdout = %q, want %q", got, want)
+	}
+	if got, want := intercepted.String(), "Hello Stdin"; got != want {
+		t.Errorf("intercepted stdout = %q, want %q", got, want)
+	}
+}
+
+func TestRunSharesOutputInterceptorForCombinedStdoutAndStderr(t *testing.T) {
+	t.Parallel()
+
+	proxy, err := bintest.CompileProxy("combined-output")
+	if err != nil {
+		t.Fatalf("bintest.CompileProxy(combined-output) error = %v", err)
+	}
+	defer func() {
+		if err := proxy.Close(); err != nil {
+			t.Errorf("proxy.Close() error = %v", err)
+		}
+	}()
+
+	out := &bytes.Buffer{}
+	interceptorCalls := 0
+	smelled := map[string]bool{"stdout": false, "stderr": false}
+	sh := newShellForTest(t,
+		shell.WithStdout(out),
+		shell.WithPTY(false),
+		shell.WithOutputInterceptor(func(_ context.Context, downstream io.Writer, _ map[string]string) io.Writer {
+			interceptorCalls++
+			return &synchronizedWriter{out: downstream}
+		}),
+	)
+
+	go func() {
+		call := <-proxy.Ch
+		_, _ = io.WriteString(call.Stdout, "stdout")
+		_, _ = io.WriteString(call.Stderr, "stderr")
+		call.Exit(0)
+	}()
+
+	if err := sh.Command(proxy.Path).Run(t.Context(), shell.WithStringSearch(smelled)); err != nil {
+		t.Fatalf("Command.Run() error = %v", err)
+	}
+	if got, want := interceptorCalls, 1; got != want {
+		t.Errorf("output interceptor calls = %d, want %d for shared stdout/stderr with string search", got, want)
+	}
+	for output, found := range smelled {
+		if !found {
+			t.Errorf("WithStringSearch did not find %q", output)
+		}
 	}
 }
 

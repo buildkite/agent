@@ -1,6 +1,8 @@
 package job
 
 import (
+	"bytes"
+	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -11,6 +13,7 @@ import (
 	"github.com/buildkite/agent/v3/tracetools"
 	"github.com/google/go-cmp/cmp"
 	"github.com/opentracing/opentracing-go"
+	"go.opentelemetry.io/otel/trace"
 	"gopkg.in/DataDog/dd-trace-go.v1/ddtrace/opentracer"
 )
 
@@ -48,6 +51,33 @@ func TestDirForRepository(t *testing.T) {
 		if got, want := dirForRepository(test.repositoryName), test.expected; got != want {
 			t.Errorf("dirForRepository(test.repositoryName) = %q, want %q", got, want)
 		}
+	}
+}
+
+type errorWriter struct{ err error }
+
+func (w errorWriter) Write([]byte) (int, error) { return 0, w.err }
+
+func TestTeeWriterReturnsSecondaryWriteError(t *testing.T) {
+	t.Parallel()
+
+	wantErr := errors.New("secondary write failed")
+	var primary bytes.Buffer
+	w := &teeWriter{
+		primary:   &primary,
+		secondary: errorWriter{err: wantErr},
+	}
+	data := []byte("control output")
+
+	n, err := w.Write(data)
+	if !errors.Is(err, wantErr) {
+		t.Errorf("w.Write() error = %v, want %v", err, wantErr)
+	}
+	if n != len(data) {
+		t.Errorf("w.Write() wrote %d bytes to the primary, want %d", n, len(data))
+	}
+	if got, want := primary.String(), string(data); got != want {
+		t.Errorf("primary output = %q, want %q", got, want)
 	}
 }
 
@@ -105,6 +135,47 @@ func TestStartTracing_Datadog(t *testing.T) {
 		t.Errorf("opentracing.SpanFromContext(ctx) = %v, want %v", got, want)
 	}
 	stopper()
+}
+
+func TestContextWithTraceparentIfEnabledDoesNotAcceptServerTraceparentWithoutPropagation(t *testing.T) {
+	t.Parallel()
+
+	sh, err := shell.New(shell.WithLogger(shell.DiscardLogger))
+	if err != nil {
+		t.Fatalf("shell.New() error = %v", err)
+	}
+	e := New(ExecutorConfig{
+		TracingTraceParent: "00-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-bbbbbbbbbbbbbbbb-01",
+	})
+	e.shell = sh
+
+	ctx := e.contextWithTraceparentIfEnabled(t.Context())
+	if sc := trace.SpanContextFromContext(ctx); sc.IsValid() {
+		t.Fatalf("SpanContextFromContext(ctx).IsValid() = true, want false")
+	}
+}
+
+func TestContextWithTraceparentIfEnabledAcceptsServerTraceparentWithPropagation(t *testing.T) {
+	t.Parallel()
+
+	sh, err := shell.New(shell.WithLogger(shell.DiscardLogger))
+	if err != nil {
+		t.Fatalf("shell.New() error = %v", err)
+	}
+	e := New(ExecutorConfig{
+		TracingPropagateTraceparent: true,
+		TracingTraceParent:          "00-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-bbbbbbbbbbbbbbbb-01",
+	})
+	e.shell = sh
+
+	ctx := e.contextWithTraceparentIfEnabled(t.Context())
+	sc := trace.SpanContextFromContext(ctx)
+	if !sc.IsValid() {
+		t.Fatalf("SpanContextFromContext(ctx).IsValid() = false, want true")
+	}
+	if got, want := sc.TraceID().String(), "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"; got != want {
+		t.Fatalf("SpanContextFromContext(ctx).TraceID() = %q, want %q", got, want)
+	}
 }
 
 // newCancelTestExecutor returns an Executor whose shell.Env starts empty,
