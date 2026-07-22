@@ -38,13 +38,13 @@ func (e *Executor) checkCommitOnBranch(ctx context.Context) error {
 	// "unavailable".
 	//
 	// Resolve the tip through that dedicated ref rather than FETCH_HEAD: with the
-	// operator's fetch flags preserved (below), a configured --append,
-	// --no-write-fetch-head or --dry-run leaves FETCH_HEAD pointing at an earlier
-	// fetch — e.g. the build commit recorded by fetchSource — so rev-parse
-	// FETCH_HEAD could resolve to the build commit itself. merge-base
-	// <commit> <commit> then trivially succeeds and strict verification would
-	// accept an off-branch commit. A refspec with an explicit destination updates
-	// the ref regardless of those flags; the ref is deleted again on return.
+	// operator's fetch flags preserved (below), a configured --append or
+	// --no-write-fetch-head leaves FETCH_HEAD pointing at an earlier fetch (e.g.
+	// the build commit recorded by fetchSource), so rev-parse FETCH_HEAD could
+	// resolve to the build commit itself. merge-base <commit> <commit> then
+	// trivially succeeds and strict verification would accept an off-branch
+	// commit. A refspec with an explicit destination writes the ref regardless of
+	// those flags; the ref is deleted again on return.
 	//
 	// Qualify the source as refs/heads/<branch>: git resolves a bare name against
 	// refs/tags/ before refs/heads/, so a tag sharing the branch's name would pin
@@ -65,6 +65,12 @@ func (e *Executor) checkCommitOnBranch(ctx context.Context) error {
 	// to "unavailable" and letting strict pass. Split the flags (they are meant to
 	// be word-split) but keep the refspec a single unsplit argument.
 	//
+	// Strip the fetch modes that would leave that ref unwritten, though: --dry-run
+	// fetches nothing, --prefetch redirects refs under refs/prefetch/, and
+	// --negotiate-only fetches no packfile. Any of them would make rev-parse of the
+	// ref fail and degrade the check to "unavailable" (a pass under strict), so
+	// drop them from every verification fetch.
+	//
 	// The deepening fetches below take a stripped copy: git rejects --depth (and
 	// --shallow-since/--shallow-exclude) combined with --deepen or --unshallow, so
 	// carrying a configured --depth=1 into them makes the deepen fetch exit
@@ -77,6 +83,7 @@ func (e *Executor) checkCommitOnBranch(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("%w: unable to parse git-fetch-flags %q: %w", ErrCommitVerificationUnavailable, e.GitFetchFlags, err)
 	}
+	fetchFlags = stripRefSuppressingFetchFlags(fetchFlags)
 	deepenFlags := stripShallowFetchFlags(fetchFlags)
 	fetchBranch := func(baseFlags []string, extraFlags ...string) error {
 		args := append([]string{"fetch"}, baseFlags...)
@@ -177,6 +184,29 @@ func stripShallowFetchFlags(flags []string) []string {
 			continue
 		}
 		out = append(out, flags[i])
+	}
+	return out
+}
+
+// stripRefSuppressingFetchFlags removes git-fetch modes that make a fetch skip
+// or redirect the ref update checkCommitOnBranch relies on: --dry-run performs
+// no fetch and writes no ref, --prefetch rewrites the destination under
+// refs/prefetch/, and --negotiate-only fetches no packfile. Left in
+// BUILDKITE_GIT_FETCH_FLAGS, any of them would leave the branch-tip ref
+// unwritten, so rev-parse fails and the check degrades to "unavailable" (a pass
+// under strict). None of them belong in the verification probe.
+func stripRefSuppressingFetchFlags(flags []string) []string {
+	suppressing := map[string]bool{
+		"--dry-run":        true,
+		"--prefetch":       true,
+		"--negotiate-only": true,
+	}
+	out := make([]string, 0, len(flags))
+	for _, f := range flags {
+		if suppressing[f] {
+			continue
+		}
+		out = append(out, f)
 	}
 	return out
 }

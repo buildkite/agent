@@ -792,6 +792,54 @@ func TestVerifyCommit(t *testing.T) {
 		}
 	})
 
+	t.Run("fails when a configured fetch mode would suppress the ref update", func(t *testing.T) {
+		// --dry-run writes no ref and --prefetch redirects it under refs/prefetch/;
+		// either would leave the branch-tip ref unresolvable and degrade the check
+		// to "unavailable" (a pass under strict). They must be stripped so the tip
+		// is actually pinned and the off-branch commit is caught.
+		for _, flag := range []string{"--dry-run", "--prefetch"} {
+			t.Run(flag, func(t *testing.T) {
+				ctx := t.Context()
+				repoURL, _, offBranchCommit := setupFileBackedRepo(t, ctx, "feature")
+
+				cloneDir, err := os.MkdirTemp("", "verify-commit-test-")
+				if err != nil {
+					t.Fatalf("MkdirTemp error = %v", err)
+				}
+				t.Cleanup(func() { os.RemoveAll(cloneDir) }) //nolint:errcheck // Best-effort cleanup.
+				sh, err := shell.New()
+				if err != nil {
+					t.Fatalf("shell.New() error = %v", err)
+				}
+				if err := sh.Command("git", "clone", "--branch", "feature", repoURL, cloneDir).Run(ctx); err != nil {
+					t.Fatalf("git clone error = %v", err)
+				}
+				if err := sh.Chdir(cloneDir); err != nil {
+					t.Fatalf("Chdir error = %v", err)
+				}
+				// Bring the off-branch commit across so it exists locally, as the real
+				// checkout's fetchSource would.
+				if err := sh.Command("git", "fetch", "origin", "other").Run(ctx); err != nil {
+					t.Fatalf("git fetch (off-branch commit) error = %v", err)
+				}
+
+				e := &Executor{
+					shell: sh,
+					ExecutorConfig: ExecutorConfig{
+						GitCommitVerification: "strict",
+						Commit:                offBranchCommit,
+						Branch:                "feature",
+						GitFetchFlags:         flag,
+					},
+				}
+
+				if err := e.checkCommitOnBranch(ctx); !errors.Is(err, ErrCommitVerificationFailed) {
+					t.Errorf("checkCommitOnBranch() error = %v, want ErrCommitVerificationFailed", err)
+				}
+			})
+		}
+	})
+
 	t.Run("verifies via --unshallow beyond the deepen boundary", func(t *testing.T) {
 		ctx := t.Context()
 		sh, repoURL, commit := newFileBackedRepo(t, ctx, "verify-unshallow")
@@ -963,6 +1011,30 @@ func TestStripShallowFetchFlags(t *testing.T) {
 			got := stripShallowFetchFlags(tt.in)
 			if !slices.Equal(got, tt.want) {
 				t.Errorf("stripShallowFetchFlags(%q) = %q, want %q", tt.in, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestStripRefSuppressingFetchFlags(t *testing.T) {
+	tests := []struct {
+		name string
+		in   []string
+		want []string
+	}{
+		{"nil", nil, []string{}},
+		{"transport flags survive", []string{"-v", "--prune", "--upload-pack=/x"}, []string{"-v", "--prune", "--upload-pack=/x"}},
+		{"dry-run", []string{"--dry-run"}, []string{}},
+		{"prefetch", []string{"--prefetch"}, []string{}},
+		{"negotiate-only", []string{"--negotiate-only"}, []string{}},
+		{"-n is --no-tags, not dry-run, so it survives", []string{"-n"}, []string{"-n"}},
+		{"keeps surrounding flags", []string{"-v", "--dry-run", "--prune"}, []string{"-v", "--prune"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := stripRefSuppressingFetchFlags(tt.in)
+			if !slices.Equal(got, tt.want) {
+				t.Errorf("stripRefSuppressingFetchFlags(%q) = %q, want %q", tt.in, got, tt.want)
 			}
 		})
 	}
