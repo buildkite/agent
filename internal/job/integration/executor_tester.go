@@ -19,12 +19,11 @@ import (
 	"syscall"
 	"testing"
 
-	"github.com/buildkite/agent/v3/clicommand"
-	"github.com/buildkite/agent/v3/env"
-	"github.com/buildkite/agent/v3/internal/experiments"
-	"github.com/buildkite/agent/v3/internal/job"
-	"github.com/buildkite/agent/v3/internal/shell"
-
+	"github.com/buildkite/agent/v4/clicommand"
+	"github.com/buildkite/agent/v4/env"
+	"github.com/buildkite/agent/v4/internal/experiments"
+	"github.com/buildkite/agent/v4/internal/job"
+	"github.com/buildkite/agent/v4/internal/shell"
 	"github.com/buildkite/bintest/v3"
 )
 
@@ -112,7 +111,7 @@ func NewExecutorTester(ctx context.Context) (*ExecutorTester, error) {
 			"BUILDKITE_COMMAND=true",
 			"BUILDKITE_JOB_ID=1111-1111-1111-1111",
 			"BUILDKITE_AGENT_ACCESS_TOKEN=test-token-please-ignore",
-			fmt.Sprintf("BUILDKITE_REDACTED_VARS=%s", strings.Join(*clicommand.RedactedVars.Value, ",")),
+			fmt.Sprintf("BUILDKITE_REDACTED_VARS=%s", strings.Join(clicommand.RedactedVars.Value, ",")),
 			// Normally the executor will use the self-path to self-execute
 			// other subcommands such as 'artifact upload'.
 			// Because we've mocked buildkite-agent using bintest, we want it to

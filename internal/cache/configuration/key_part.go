@@ -8,7 +8,7 @@ import (
 	"os"
 	"runtime"
 
-	"github.com/buildkite/agent/v3/api"
+	"github.com/buildkite/agent/v4/api"
 	"gopkg.in/yaml.v3"
 )
 

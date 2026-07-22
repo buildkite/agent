@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/buildkite/agent/v3/internal/shell"
+	"github.com/buildkite/agent/v4/internal/shell"
 )
 
 // fetchSource fetches the git source for the job. If GitSkipFetchExistingCommits is

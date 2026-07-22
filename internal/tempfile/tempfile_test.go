@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/buildkite/agent/v3/internal/tempfile"
+	"github.com/buildkite/agent/v4/internal/tempfile"
 )
 
 func TestNew(t *testing.T) {

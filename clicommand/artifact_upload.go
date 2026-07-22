@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"slices"
 
-	"github.com/buildkite/agent/v3/api"
-	"github.com/buildkite/agent/v3/internal/artifact"
-	"github.com/urfave/cli"
+	"github.com/buildkite/agent/v4/api"
+	"github.com/buildkite/agent/v4/internal/artifact"
+	"github.com/urfave/cli/v3"
 	"go.opentelemetry.io/otel"
 )
 
@@ -91,64 +91,55 @@ type ArtifactUploadConfig struct {
 	UploadSkipSymlinks        bool   `cli:"upload-skip-symlinks"`
 	NoMultipartUpload         bool   `cli:"no-multipart-artifact-upload"`
 	UploadConcurrency         int    `cli:"concurrency"`
-
-	// deprecated
-	FollowSymlinks bool `cli:"follow-symlinks" deprecated-and-renamed-to:"GlobResolveFollowSymlinks"`
 }
 
-var ArtifactUploadCommand = cli.Command{
+var ArtifactUploadCommand = &cli.Command{
 	Name:        "upload",
 	Usage:       "Uploads files to a job as artifacts",
 	Description: uploadHelpDescription,
 	Flags: slices.Concat(globalFlags(), apiFlags(), []cli.Flag{
-		cli.StringFlag{
-			Name:   "job",
-			Value:  "",
-			Usage:  "Which job should the artifacts be uploaded to",
-			EnvVar: "BUILDKITE_JOB_ID",
+		&cli.StringFlag{
+			Name:    "job",
+			Value:   "",
+			Usage:   "Which job should the artifacts be uploaded to",
+			Sources: cli.EnvVars("BUILDKITE_JOB_ID"),
 		},
-		cli.StringFlag{
-			Name:   "content-type",
-			Value:  "",
-			Usage:  "A specific Content-Type to set for the artifacts (otherwise detected)",
-			EnvVar: "BUILDKITE_ARTIFACT_CONTENT_TYPE",
+		&cli.StringFlag{
+			Name:    "content-type",
+			Value:   "",
+			Usage:   "A specific Content-Type to set for the artifacts (otherwise detected)",
+			Sources: cli.EnvVars("BUILDKITE_ARTIFACT_CONTENT_TYPE"),
 		},
-		cli.BoolFlag{
-			Name:   "literal",
-			Usage:  "Disables parsing of the upload paths as glob patterns; each path will be treated as a single literal file path (default: false)",
-			EnvVar: "BUILDKITE_AGENT_ARTIFACT_LITERAL",
+		&cli.BoolFlag{
+			Name:    "literal",
+			Usage:   "Disables parsing of the upload paths as glob patterns; each path will be treated as a single literal file path (default: false)",
+			Sources: cli.EnvVars("BUILDKITE_AGENT_ARTIFACT_LITERAL"),
 		},
-		cli.StringFlag{
-			Name:   "delimiter",
-			Usage:  "Changes the delimiter used to split the upload paths into multiple paths; it can be more than 1 character. When set to the empty string, no splitting occurs",
-			EnvVar: "BUILDKITE_AGENT_ARTIFACT_DELIMITER",
-			Value:  ";",
+		&cli.StringFlag{
+			Name:    "delimiter",
+			Usage:   "Changes the delimiter used to split the upload paths into multiple paths; it can be more than 1 character. When set to the empty string, no splitting occurs",
+			Sources: cli.EnvVars("BUILDKITE_AGENT_ARTIFACT_DELIMITER"),
+			Value:   ";",
 		},
-		cli.BoolFlag{
-			Name:   "glob-resolve-follow-symlinks",
-			Usage:  "Follow symbolic links to directories while resolving globs. Note: this will not prevent symlinks to files from being uploaded. Use --upload-skip-symlinks to do that (default: false)",
-			EnvVar: "BUILDKITE_AGENT_ARTIFACT_GLOB_RESOLVE_FOLLOW_SYMLINKS",
+		&cli.BoolFlag{
+			Name:    "glob-resolve-follow-symlinks",
+			Usage:   "Follow symbolic links to directories while resolving globs. Note: this will not prevent symlinks to files from being uploaded. Use --upload-skip-symlinks to do that (default: false)",
+			Sources: cli.EnvVars("BUILDKITE_AGENT_ARTIFACT_GLOB_RESOLVE_FOLLOW_SYMLINKS"),
 		},
-		cli.BoolFlag{
-			Name:   "upload-skip-symlinks",
-			Usage:  "After the glob has been resolved to a list of files to upload, skip uploading those that are symlinks to files (default: false)",
-			EnvVar: "BUILDKITE_ARTIFACT_UPLOAD_SKIP_SYMLINKS",
+		&cli.BoolFlag{
+			Name:    "upload-skip-symlinks",
+			Usage:   "After the glob has been resolved to a list of files to upload, skip uploading those that are symlinks to files (default: false)",
+			Sources: cli.EnvVars("BUILDKITE_ARTIFACT_UPLOAD_SKIP_SYMLINKS"),
 		},
-		cli.BoolFlag{ // Deprecated
-			Name:   "follow-symlinks",
-			Usage:  "Follow symbolic links while resolving globs. Note this argument is deprecated. Use `--glob-resolve-follow-symlinks` instead (default: false)",
-			EnvVar: "BUILDKITE_AGENT_ARTIFACT_SYMLINKS",
-		},
-		cli.IntFlag{
-			Name:   "concurrency",
-			Value:  artifact.DefaultUploadConcurrency(),
-			Usage:  "Number of concurrent artifact upload operations",
-			EnvVar: ArtifactUploadConcurrencyEnvVar,
+		&cli.IntFlag{
+			Name:    "concurrency",
+			Value:   artifact.DefaultUploadConcurrency(),
+			Usage:   "Number of concurrent artifact upload operations",
+			Sources: cli.EnvVars(ArtifactUploadConcurrencyEnvVar),
 		},
 		NoMultipartArtifactUploadFlag,
 	}),
-	Action: func(c *cli.Context) error {
-		ctx := context.Background()
+	Action: func(ctx context.Context, c *cli.Command) error {
 		ctx, cfg, l, _, done := setupLoggerAndConfig[ArtifactUploadConfig](ctx, c)
 		defer done()
 
@@ -172,9 +163,7 @@ var ArtifactUploadCommand = cli.Command{
 			Delimiter:         cfg.Delimiter,
 			UploadConcurrency: cfg.UploadConcurrency,
 
-			// If the deprecated flag was set to true, pretend its replacement was set to true too
-			// this works as long as the user only sets one of the two flags
-			GlobResolveFollowSymlinks: (cfg.GlobResolveFollowSymlinks || cfg.FollowSymlinks),
+			GlobResolveFollowSymlinks: cfg.GlobResolveFollowSymlinks,
 			UploadSkipSymlinks:        cfg.UploadSkipSymlinks,
 		})
 

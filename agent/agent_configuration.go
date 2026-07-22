@@ -4,7 +4,7 @@ import (
 	"regexp"
 	"time"
 
-	"github.com/buildkite/agent/v3/env"
+	"github.com/buildkite/agent/v4/env"
 )
 
 // AgentConfiguration is the run-time configuration for an agent that
@@ -58,14 +58,12 @@ type AgentConfiguration struct {
 	VerificationJWKS             any    // The set of keys to verify jobs with
 	VerificationFailureBehaviour string // What to do if job verification fails (one of `block` or `warn`)
 
-	ANSITimestamps               bool
-	TimestampLines               bool
 	HealthCheckAddr              string
 	DisconnectAfterJob           bool
 	DisconnectAfterIdleTimeout   time.Duration
 	DisconnectAfterUptime        time.Duration
-	CancelGracePeriod            int
-	SignalGracePeriod            time.Duration
+	CancelSignalTimeout          time.Duration
+	CancelCleanupTimeout         time.Duration
 	EnableJobLogTmpfile          bool
 	JobLogPath                   string
 	WriteJobLogsToStdout         bool
@@ -75,10 +73,8 @@ type AgentConfiguration struct {
 	Profile                      string
 	RedactedVars                 []string
 	AcquireJob                   string
-	TracingBackend               string
-	TracingServiceName           string
-	TracingPropagateTraceparent  bool
-	TraceContextEncoding         string
+	OpenTelemetryTracing         bool
+	TelemetryServiceName         string
 	DisableWarningsFor           []string
 	AllowMultipartArtifactUpload bool
 	ArtifactUploadConcurrency    int

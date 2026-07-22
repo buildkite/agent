@@ -12,8 +12,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/buildkite/agent/v3/internal/job"
-	"github.com/buildkite/agent/v3/jobapi"
+	"github.com/buildkite/agent/v4/internal/job"
+	"github.com/buildkite/agent/v4/jobapi"
 	"github.com/buildkite/bintest/v3"
 	"github.com/buildkite/go-pipeline"
 )
@@ -814,6 +814,7 @@ func TestSecretsIntegration_CheckoutScopedSecretReachesCheckout(t *testing.T) {
 		{"fetch", "-v", "--", "origin", "main"},
 		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
 		{"clean", "-fdq"},
+		{"rev-parse", "HEAD"},
 		{"--no-pager", "log", "-1", "HEAD", "-s", "--no-color", gitShowFormatArg},
 	})
 

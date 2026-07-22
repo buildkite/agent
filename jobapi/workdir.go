@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"path/filepath"
 
-	"github.com/buildkite/agent/v3/internal/socket"
+	"github.com/buildkite/agent/v4/internal/socket"
 )
 
 // setWorkdir records a working directory requested by a hook. The directory is

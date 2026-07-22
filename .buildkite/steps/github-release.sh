@@ -69,7 +69,6 @@ release_args=(
   --repo buildkite/agent
   --target "$(git rev-parse HEAD)"
   --generate-notes
-  --fail-on-no-commits
 )
 
 if [[ "${IS_PRERELEASE}" == "1" ]]; then
@@ -90,6 +89,8 @@ else
   echo "--- 🚀 ${AGENT_VERSION}"
 
   buildkite-agent meta-data set github_release_type "stable"
+
+  release_args+=(--fail-on-no-commits)
 fi
 
 buildkite-agent meta-data set github_release_version "${AGENT_VERSION}"

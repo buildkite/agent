@@ -10,11 +10,11 @@ import (
 	"slices"
 	"time"
 
-	"github.com/buildkite/agent/v3/internal/experiments"
-	"github.com/buildkite/agent/v3/internal/osutil"
-	"github.com/buildkite/agent/v3/internal/redact"
-	"github.com/buildkite/agent/v3/internal/shell"
-	"github.com/buildkite/agent/v3/tracetools"
+	"github.com/buildkite/agent/v4/internal/experiments"
+	"github.com/buildkite/agent/v4/internal/osutil"
+	"github.com/buildkite/agent/v4/internal/redact"
+	"github.com/buildkite/agent/v4/internal/shell"
+	"github.com/buildkite/agent/v4/tracetools"
 	"github.com/buildkite/roko"
 	"github.com/buildkite/shellwords"
 )
@@ -23,7 +23,7 @@ import (
 // build at the right commit.
 func (e *Executor) CheckoutPhase(ctx context.Context) (retErr error) {
 	span, ctx := tracetools.StartSpanFromContext(ctx, "checkout", e.TracingBackend)
-	defer func() { span.FinishWithError(retErr) }()
+	defer func() { tracetools.FinishWithError(span, retErr) }()
 
 	if err := e.executeGlobalHook(ctx, "pre-checkout"); err != nil {
 		return err
@@ -76,16 +76,16 @@ func (e *Executor) CheckoutPhase(ctx context.Context) (retErr error) {
 	}
 
 	// Run post-checkout hooks
-	if err := e.executeGlobalHook(ctx, "post-checkout"); err != nil {
-		return err
-	}
-
-	if err := e.executeLocalHook(ctx, "post-checkout"); err != nil {
-		return err
-	}
-
-	if err := e.executePluginHook(ctx, "post-checkout", e.pluginCheckouts); err != nil {
-		return err
+	if experiments.IsEnabled(ctx, experiments.LegacyPostHookOrder) {
+		// Legacy order = same order as pre-checkout
+		if err := e.executeHooksForward(ctx, "post-checkout"); err != nil {
+			return err
+		}
+	} else {
+		// Modern order = reverse, to make composition easier
+		if err := e.executeHooksReverse(ctx, "post-checkout"); err != nil {
+			return err
+		}
 	}
 
 	// Capture the new checkout path so we can see if it's changed.
@@ -288,16 +288,12 @@ func (e *Executor) runDefaultCheckoutAttempt(ctx context.Context) error {
 // hook exists. It performs the default checkout on the Repository provided in the config
 func (e *Executor) defaultCheckoutPhase(ctx context.Context) (retErr error) {
 	span, _ := tracetools.StartSpanFromContext(ctx, "repo-checkout", e.TracingBackend)
-	span.AddAttributes(map[string]string{
+	tracetools.AddAttributes(span, map[string]string{
 		"checkout.repo_name": redact.URLCredentials(e.Repository),
 		"checkout.refspec":   e.RefSpec,
 		"checkout.commit":    e.Commit,
 	})
-	defer func() { span.FinishWithError(retErr) }()
-
-	if e.SSHKeyscan {
-		addRepositoryHostToSSHKnownHosts(ctx, e.shell, e.Repository)
-	}
+	defer func() { tracetools.FinishWithError(span, retErr) }()
 
 	sshKeyPath, cleanupSSHKey, err := e.prepareGitSSHKey()
 	if err != nil {
@@ -316,7 +312,7 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) (retErr error) {
 
 	// If we can, get a mirror of the git repository to use for reference later
 	if e.GitMirrorsPath != "" && e.Repository != "" {
-		span.AddAttributes(map[string]string{"checkout.is_using_git_mirrors": "true"})
+		tracetools.AddAttributes(span, map[string]string{"checkout.is_using_git_mirrors": "true"})
 		var err error
 		mirrorDir, err = e.getOrUpdateMirrorDir(ctx, e.Repository)
 		if err != nil {
@@ -519,11 +515,6 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) (retErr error) {
 		} else {
 			mirrorSubmodules := e.GitMirrorsPath != ""
 			for _, repository := range submoduleRepos {
-				// submodules might need their fingerprints verified too
-				if e.SSHKeyscan {
-					addRepositoryHostToSSHKnownHosts(ctx, e.shell, repository)
-				}
-
 				if !mirrorSubmodules {
 					continue
 				}
@@ -607,10 +598,7 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) (retErr error) {
 	}
 
 	// resolve BUILDKITE_COMMIT based on the local git repo
-	if experiments.IsEnabled(ctx, experiments.ResolveCommitAfterCheckout) {
-		e.shell.Commentf("Using resolve-commit-after-checkout experiment 🧪")
-		e.resolveCommit(ctx)
-	}
+	e.resolveCommit(ctx)
 
 	return nil
 }

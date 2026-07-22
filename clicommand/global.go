@@ -2,23 +2,22 @@ package clicommand
 
 import (
 	"context"
-	"errors"
 	"fmt"
+	"iter"
 	"os"
 	"reflect"
-	"strings"
+	"strconv"
 	"time"
 
-	"github.com/buildkite/agent/v3/api"
-	"github.com/buildkite/agent/v3/cliconfig"
-	"github.com/buildkite/agent/v3/env"
-	"github.com/buildkite/agent/v3/internal/experiments"
-	"github.com/buildkite/agent/v3/internal/job"
-	"github.com/buildkite/agent/v3/logger"
-	"github.com/buildkite/agent/v3/tracetools"
-	"github.com/buildkite/agent/v3/version"
+	"github.com/buildkite/agent/v4/api"
+	"github.com/buildkite/agent/v4/cliconfig"
+	"github.com/buildkite/agent/v4/env"
+	"github.com/buildkite/agent/v4/internal/experiments"
+	"github.com/buildkite/agent/v4/internal/job"
+	"github.com/buildkite/agent/v4/logger"
+	"github.com/buildkite/agent/v4/version"
 	"github.com/oleiade/reflections"
-	"github.com/urfave/cli"
+	"github.com/urfave/cli/v3"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/propagation"
 )
@@ -29,115 +28,108 @@ const (
 )
 
 var (
-	AgentAccessTokenFlag = cli.StringFlag{
-		Name:   "agent-access-token",
-		Value:  "",
-		Usage:  "The access token used to identify the agent",
-		EnvVar: "BUILDKITE_AGENT_ACCESS_TOKEN",
+	AgentAccessTokenFlag = &cli.StringFlag{
+		Name:    "agent-access-token",
+		Value:   "",
+		Usage:   "The access token used to identify the agent",
+		Sources: cli.EnvVars("BUILDKITE_AGENT_ACCESS_TOKEN"),
 	}
 
-	AgentRegisterTokenFlag = cli.StringFlag{
-		Name:   "token",
-		Value:  "",
-		Usage:  "Your cluster token or unclustered registration token. Prefix with file:// to read the token from a file, or fd:// to read it from an inherited file descriptor",
-		EnvVar: "BUILDKITE_AGENT_TOKEN",
+	AgentRegisterTokenFlag = &cli.StringFlag{
+		Name:    "token",
+		Value:   "",
+		Usage:   "Your cluster token or unclustered registration token. Prefix with file:// to read the token from a file, or fd:// to read it from an inherited file descriptor",
+		Sources: cli.EnvVars("BUILDKITE_AGENT_TOKEN"),
 	}
 
-	EndpointFlag = cli.StringFlag{
-		Name:   "endpoint",
-		Value:  DefaultEndpoint,
-		Usage:  "The Agent API endpoint",
-		EnvVar: "BUILDKITE_AGENT_ENDPOINT",
+	EndpointFlag = &cli.StringFlag{
+		Name:    "endpoint",
+		Value:   DefaultEndpoint,
+		Usage:   "The Agent API endpoint",
+		Sources: cli.EnvVars("BUILDKITE_AGENT_ENDPOINT"),
 	}
 
-	NoHTTP2Flag = cli.BoolFlag{
-		Name:   "no-http2",
-		Usage:  "Disable HTTP2 when communicating with the Agent API (default: false)",
-		EnvVar: "BUILDKITE_NO_HTTP2",
+	NoHTTP2Flag = &cli.BoolFlag{
+		Name:    "no-http2",
+		Usage:   "Disable HTTP2 when communicating with the Agent API (default: false)",
+		Sources: cli.EnvVars("BUILDKITE_NO_HTTP2"),
 	}
 
-	DebugFlag = cli.BoolFlag{
-		Name:   "debug",
-		Usage:  "Enable debug mode. Synonym for ′--log-level debug′. Takes precedence over ′--log-level′ (default: false)",
-		EnvVar: "BUILDKITE_AGENT_DEBUG",
+	DebugFlag = &cli.BoolFlag{
+		Name:    "debug",
+		Usage:   "Enable debug mode. Synonym for ′--log-level debug′. Takes precedence over ′--log-level′ (default: false)",
+		Sources: cli.EnvVars("BUILDKITE_AGENT_DEBUG"),
 	}
 
-	LogLevelFlag = cli.StringFlag{
-		Name:   "log-level",
-		Value:  "notice",
-		Usage:  "Set the log level for the agent, making logging more or less verbose. Defaults to notice. Allowed values are: debug, info, error, warn, fatal",
-		EnvVar: "BUILDKITE_AGENT_LOG_LEVEL",
+	LogLevelFlag = &cli.StringFlag{
+		Name:    "log-level",
+		Value:   "notice",
+		Usage:   "Set the log level for the agent, making logging more or less verbose. Defaults to notice. Allowed values are: debug, info, error, warn, fatal",
+		Sources: cli.EnvVars("BUILDKITE_AGENT_LOG_LEVEL"),
 	}
 
-	ProfileFlag = cli.StringFlag{
-		Name:   "profile",
-		Usage:  "Enable a profiling mode, either cpu, memory, mutex or block",
-		EnvVar: "BUILDKITE_AGENT_PROFILE",
+	ProfileFlag = &cli.StringFlag{
+		Name:    "profile",
+		Usage:   "Enable a profiling mode, either cpu, memory, mutex or block",
+		Sources: cli.EnvVars("BUILDKITE_AGENT_PROFILE"),
 	}
 
-	DebugHTTPFlag = cli.BoolFlag{
-		Name:   "debug-http",
-		Usage:  "Enable HTTP debug mode, which dumps all request and response bodies to the log (default: false)",
-		EnvVar: "BUILDKITE_AGENT_DEBUG_HTTP",
+	DebugHTTPFlag = &cli.BoolFlag{
+		Name:    "debug-http",
+		Usage:   "Enable HTTP debug mode, which dumps all request and response bodies to the log (default: false)",
+		Sources: cli.EnvVars("BUILDKITE_AGENT_DEBUG_HTTP"),
 	}
 
-	TraceHTTPFlag = cli.BoolFlag{
-		Name:   "trace-http",
-		Usage:  "Enable HTTP trace mode, which logs timings for each HTTP request. Timings are logged at the debug level unless a request fails at the network level in which case they are logged at the error level (default: false)",
-		EnvVar: "BUILDKITE_AGENT_TRACE_HTTP",
+	TraceHTTPFlag = &cli.BoolFlag{
+		Name:    "trace-http",
+		Usage:   "Enable HTTP trace mode, which logs timings for each HTTP request. Timings are logged at the debug level unless a request fails at the network level in which case they are logged at the error level (default: false)",
+		Sources: cli.EnvVars("BUILDKITE_AGENT_TRACE_HTTP"),
 	}
 
-	NoColorFlag = cli.BoolFlag{
-		Name:   "no-color",
-		Usage:  "Don't show colors in logging (default: false)",
-		EnvVar: "BUILDKITE_AGENT_NO_COLOR",
+	NoColorFlag = &cli.BoolFlag{
+		Name:    "no-color",
+		Usage:   "Don't show colors in logging (default: false)",
+		Sources: cli.EnvVars("BUILDKITE_AGENT_NO_COLOR"),
 	}
 
-	StrictSingleHooksFlag = cli.BoolFlag{
-		Name:   "strict-single-hooks",
-		Usage:  "Enforces that only one checkout hook, and only one command hook, can be run (default: false)",
-		EnvVar: "BUILDKITE_STRICT_SINGLE_HOOKS",
+	StrictSingleHooksFlag = &cli.BoolFlag{
+		Name:    "strict-single-hooks",
+		Usage:   "Enforces that only one checkout hook, and only one command hook, can be run (default: false)",
+		Sources: cli.EnvVars("BUILDKITE_STRICT_SINGLE_HOOKS"),
 	}
 
-	KubernetesContainerIDFlag = cli.IntFlag{
+	KubernetesContainerIDFlag = &cli.IntFlag{
 		Name: "kubernetes-container-id",
 		Usage: "This is intended to be used only by the Buildkite k8s stack " +
 			"(github.com/buildkite/agent-stack-k8s); it sets an ID number " +
 			"used to identify this container within the pod",
-		EnvVar: "BUILDKITE_CONTAINER_ID",
+		Sources: cli.EnvVars("BUILDKITE_CONTAINER_ID"),
 	}
 
-	KubernetesLogCollectionGracePeriodFlag = cli.DurationFlag{
-		Name:   "kubernetes-log-collection-grace-period",
-		Usage:  "Deprecated, do not use",
-		EnvVar: "BUILDKITE_KUBERNETES_LOG_COLLECTION_GRACE_PERIOD",
-		Value:  50 * time.Second,
+	NoMultipartArtifactUploadFlag = &cli.BoolFlag{
+		Name:    "no-multipart-artifact-upload",
+		Usage:   "For Buildkite-hosted artifacts, disables the use of multipart uploads. Has no effect on uploads to other destinations such as custom cloud buckets (default: false)",
+		Sources: cli.EnvVars("BUILDKITE_NO_MULTIPART_ARTIFACT_UPLOAD"),
 	}
 
-	NoMultipartArtifactUploadFlag = cli.BoolFlag{
-		Name:   "no-multipart-artifact-upload",
-		Usage:  "For Buildkite-hosted artifacts, disables the use of multipart uploads. Has no effect on uploads to other destinations such as custom cloud buckets (default: false)",
-		EnvVar: "BUILDKITE_NO_MULTIPART_ARTIFACT_UPLOAD",
+	AgentArtifactUploadConcurrencyFlag = &cli.IntFlag{
+		Name:    "artifact-upload-concurrency",
+		Usage:   "Maximum number of concurrent artifact upload operations used by jobs started by this agent. When unset, artifact uploads use their default",
+		Sources: cli.EnvVars(ArtifactUploadConcurrencyEnvVar),
 	}
 
-	AgentArtifactUploadConcurrencyFlag = cli.IntFlag{
-		Name:   "artifact-upload-concurrency",
-		Usage:  "Maximum number of concurrent artifact upload operations used by jobs started by this agent. When unset, artifact uploads use their default",
-		EnvVar: ArtifactUploadConcurrencyEnvVar,
+	ExperimentsFlag = &cli.StringSliceFlag{
+		Name:    "experiment",
+		Value:   nil,
+		Usage:   "Enable experimental features within the buildkite-agent",
+		Sources: cli.EnvVars("BUILDKITE_AGENT_EXPERIMENT"),
 	}
 
-	ExperimentsFlag = cli.StringSliceFlag{
-		Name:   "experiment",
-		Value:  &cli.StringSlice{},
-		Usage:  "Enable experimental features within the buildkite-agent",
-		EnvVar: "BUILDKITE_AGENT_EXPERIMENT",
-	}
-
-	RedactedVars = cli.StringSliceFlag{
-		Name:   "redacted-vars",
-		Usage:  "Pattern of environment variable names containing sensitive values",
-		EnvVar: "BUILDKITE_REDACTED_VARS",
-		Value: &cli.StringSlice{
+	RedactedVars = &cli.StringSliceFlag{
+		Name:    "redacted-vars",
+		Usage:   "Pattern of environment variable names containing sensitive values",
+		Sources: cli.EnvVars("BUILDKITE_REDACTED_VARS"),
+		Value: []string{
 			"*_PASSWORD",
 			"*_SECRET",
 			"*_TOKEN",
@@ -151,172 +143,165 @@ var (
 			"*_API_KEY",
 		},
 	}
-
-	TraceContextEncodingFlag = cli.StringFlag{
-		Name:   "trace-context-encoding",
-		Usage:  "Sets the inner encoding for BUILDKITE_TRACE_CONTEXT. Must be either json or gob",
-		Value:  "gob",
-		EnvVar: "BUILDKITE_TRACE_CONTEXT_ENCODING",
-	}
 )
 
 // File path flags shared between agent start and bootstrap
 var (
-	BuildPathFlag = cli.StringFlag{
-		Name:   "build-path",
-		Value:  "",
-		Usage:  "Path to where the builds will run from",
-		EnvVar: "BUILDKITE_BUILD_PATH",
+	BuildPathFlag = &cli.StringFlag{
+		Name:    "build-path",
+		Value:   "",
+		Usage:   "Path to where the builds will run from",
+		Sources: cli.EnvVars("BUILDKITE_BUILD_PATH"),
 	}
 
-	HooksPathFlag = cli.StringFlag{
-		Name:   "hooks-path",
-		Value:  "",
-		Usage:  "Directory where the hook scripts are found",
-		EnvVar: "BUILDKITE_HOOKS_PATH",
+	HooksPathFlag = &cli.StringFlag{
+		Name:    "hooks-path",
+		Value:   "",
+		Usage:   "Directory where the hook scripts are found",
+		Sources: cli.EnvVars("BUILDKITE_HOOKS_PATH"),
 	}
 
-	AdditionalHooksPathsFlag = cli.StringSliceFlag{
-		Name:   "additional-hooks-paths",
-		Value:  &cli.StringSlice{},
-		Usage:  "Additional directories to look for agent hooks",
-		EnvVar: "BUILDKITE_ADDITIONAL_HOOKS_PATHS",
+	AdditionalHooksPathsFlag = &cli.StringSliceFlag{
+		Name:    "additional-hooks-paths",
+		Value:   nil,
+		Usage:   "Additional directories to look for agent hooks",
+		Sources: cli.EnvVars("BUILDKITE_ADDITIONAL_HOOKS_PATHS"),
 	}
 
-	SocketsPathFlag = cli.StringFlag{
-		Name:   "sockets-path",
-		Value:  defaultSocketsPath(),
-		Usage:  "Directory where the agent will place sockets",
-		EnvVar: "BUILDKITE_SOCKETS_PATH",
+	SocketsPathFlag = &cli.StringFlag{
+		Name:    "sockets-path",
+		Value:   defaultSocketsPath(),
+		Usage:   "Directory where the agent will place sockets",
+		Sources: cli.EnvVars("BUILDKITE_SOCKETS_PATH"),
 	}
 
-	PluginsPathFlag = cli.StringFlag{
-		Name:   "plugins-path",
-		Value:  "",
-		Usage:  "Directory where the plugins are saved to",
-		EnvVar: "BUILDKITE_PLUGINS_PATH",
+	PluginsPathFlag = &cli.StringFlag{
+		Name:    "plugins-path",
+		Value:   "",
+		Usage:   "Directory where the plugins are saved to",
+		Sources: cli.EnvVars("BUILDKITE_PLUGINS_PATH"),
 	}
 )
 
 // Git related flags shared between agent start and bootstrap
 var (
-	SkipCheckoutFlag = cli.BoolFlag{
-		Name:   "skip-checkout",
-		Usage:  "Skip the git checkout phase entirely",
-		EnvVar: "BUILDKITE_SKIP_CHECKOUT",
+	SkipCheckoutFlag = &cli.BoolFlag{
+		Name:    "skip-checkout",
+		Usage:   "Skip the git checkout phase entirely",
+		Sources: cli.EnvVars("BUILDKITE_SKIP_CHECKOUT"),
 	}
 
-	CheckoutOverrideModeFlag = cli.StringFlag{
-		Name:   "checkout-override-mode",
-		Value:  "from-job",
-		Usage:  fmt.Sprintf("Controls which sources may override the agent's checkout settings; one of %v. ′strict′ makes the agent authoritative against pipeline/step env, secrets, hooks, plugins, and the Job API. ′from-job′ (default) lets hooks, plugins, and the Job API set checkout vars, blocks secrets, and keeps the agent's checkout flags authoritative over pipeline/step env; pipeline/step env may still set the checkout timeout, submodules, skip-checkout, and skip-fetch-existing-commits toggles that the agent leaves unset, matching earlier agent behaviour, and may set the sparse-checkout paths outright. ′none′ additionally lets pipeline/step env and secrets set them. All mirror configuration and submodule clone config stay agent-authoritative in every mode. The checkout SSH key and Git LFS toggle are not governed by this flag and stay job-settable in every mode. Disabling command-eval forces this to ′strict′.", env.CheckoutOverrideModeNames),
-		EnvVar: "BUILDKITE_CHECKOUT_OVERRIDE_MODE",
+	CheckoutOverrideModeFlag = &cli.StringFlag{
+		Name:    "checkout-override-mode",
+		Value:   "from-job",
+		Usage:   fmt.Sprintf("Controls which sources may override the agent's checkout settings; one of %v. ′strict′ makes the agent authoritative against pipeline/step env, secrets, hooks, plugins, and the Job API. ′from-job′ (default) lets hooks, plugins, and the Job API set checkout vars, blocks secrets, and keeps the agent's checkout flags authoritative over pipeline/step env; pipeline/step env may still set the checkout timeout, submodules, skip-checkout, and skip-fetch-existing-commits toggles that the agent leaves unset, matching earlier agent behaviour, and may set the sparse-checkout paths outright. ′none′ additionally lets pipeline/step env and secrets set them. All mirror configuration and submodule clone config stay agent-authoritative in every mode. The checkout SSH key and Git LFS toggle are not governed by this flag and stay job-settable in every mode. Disabling command-eval forces this to ′strict′.", env.CheckoutOverrideModeNames),
+		Sources: cli.EnvVars("BUILDKITE_CHECKOUT_OVERRIDE_MODE"),
 	}
 
-	GitCheckoutFlagsFlag = cli.StringFlag{
-		Name:   "git-checkout-flags",
-		Value:  "-f",
-		Usage:  "Flags to pass to \"git checkout\" command",
-		EnvVar: "BUILDKITE_GIT_CHECKOUT_FLAGS",
+	GitCheckoutFlagsFlag = &cli.StringFlag{
+		Name:    "git-checkout-flags",
+		Value:   "-f",
+		Usage:   "Flags to pass to \"git checkout\" command",
+		Sources: cli.EnvVars("BUILDKITE_GIT_CHECKOUT_FLAGS"),
 	}
 
-	GitCloneFlagsFlag = cli.StringFlag{
-		Name:   "git-clone-flags",
-		Value:  "-v",
-		Usage:  "Flags to pass to \"git clone\" command",
-		EnvVar: "BUILDKITE_GIT_CLONE_FLAGS",
+	GitCloneFlagsFlag = &cli.StringFlag{
+		Name:    "git-clone-flags",
+		Value:   "-v",
+		Usage:   "Flags to pass to \"git clone\" command",
+		Sources: cli.EnvVars("BUILDKITE_GIT_CLONE_FLAGS"),
 	}
 
-	GitCloneMirrorFlagsFlag = cli.StringFlag{
-		Name:   "git-clone-mirror-flags",
-		Value:  "-v",
-		Usage:  "Flags to pass to \"git clone\" command when mirroring",
-		EnvVar: "BUILDKITE_GIT_CLONE_MIRROR_FLAGS",
+	GitCloneMirrorFlagsFlag = &cli.StringFlag{
+		Name:    "git-clone-mirror-flags",
+		Value:   "-v",
+		Usage:   "Flags to pass to \"git clone\" command when mirroring",
+		Sources: cli.EnvVars("BUILDKITE_GIT_CLONE_MIRROR_FLAGS"),
 	}
 
-	GitCleanFlagsFlag = cli.StringFlag{
-		Name:   "git-clean-flags",
-		Value:  "-ffxdq",
-		Usage:  "Flags to pass to \"git clean\" command",
-		EnvVar: "BUILDKITE_GIT_CLEAN_FLAGS",
+	GitCleanFlagsFlag = &cli.StringFlag{
+		Name:    "git-clean-flags",
+		Value:   "-ffxdq",
+		Usage:   "Flags to pass to \"git clean\" command",
+		Sources: cli.EnvVars("BUILDKITE_GIT_CLEAN_FLAGS"),
 		// -ff: delete files and directories, including untracked nested git repositories
 		// -x: don't use .gitignore rules
 		// -d: recurse into untracked directories
 		// -q: quiet, only report errors
 	}
 
-	GitCommitVerificationFlag = cli.StringFlag{
-		Name:   "git-commit-verification",
-		Usage:  "Enable git commit verification",
-		EnvVar: "BUILDKITE_GIT_COMMIT_VERIFICATION",
+	GitCommitVerificationFlag = &cli.StringFlag{
+		Name:    "git-commit-verification",
+		Usage:   "Enable git commit verification",
+		Sources: cli.EnvVars("BUILDKITE_GIT_COMMIT_VERIFICATION"),
 	}
 
-	GitFetchFlagsFlag = cli.StringFlag{
-		Name:   "git-fetch-flags",
-		Value:  "-v --prune",
-		Usage:  "Flags to pass to \"git fetch\" command",
-		EnvVar: "BUILDKITE_GIT_FETCH_FLAGS",
+	GitFetchFlagsFlag = &cli.StringFlag{
+		Name:    "git-fetch-flags",
+		Value:   "-v --prune",
+		Usage:   "Flags to pass to \"git fetch\" command",
+		Sources: cli.EnvVars("BUILDKITE_GIT_FETCH_FLAGS"),
 	}
 
-	GitSparseCheckoutPathsFlag = cli.StringSliceFlag{
-		Name:   "git-sparse-checkout-paths",
-		Value:  &cli.StringSlice{},
-		Usage:  "Comma-separated list of paths for git sparse checkout (cone mode). When set, only the listed paths are materialized in the working tree.",
-		EnvVar: "BUILDKITE_GIT_SPARSE_CHECKOUT_PATHS",
+	GitSparseCheckoutPathsFlag = &cli.StringSliceFlag{
+		Name:    "git-sparse-checkout-paths",
+		Value:   nil,
+		Usage:   "Comma-separated list of paths for git sparse checkout (cone mode). When set, only the listed paths are materialized in the working tree.",
+		Sources: cli.EnvVars("BUILDKITE_GIT_SPARSE_CHECKOUT_PATHS"),
 	}
 
-	GitMirrorsPathFlag = cli.StringFlag{
-		Name:   "git-mirrors-path",
-		Value:  "",
-		Usage:  "Path to where mirrors of git repositories are stored",
-		EnvVar: "BUILDKITE_GIT_MIRRORS_PATH",
+	GitMirrorsPathFlag = &cli.StringFlag{
+		Name:    "git-mirrors-path",
+		Value:   "",
+		Usage:   "Path to where mirrors of git repositories are stored",
+		Sources: cli.EnvVars("BUILDKITE_GIT_MIRRORS_PATH"),
 	}
 
-	GitMirrorCheckoutModeFlag = cli.StringFlag{
-		Name:   "git-mirror-checkout-mode",
-		Value:  "reference",
-		Usage:  fmt.Sprintf("Changes how clones of a mirror are made; available modes are %v. In ′dissociate′ mode, clones from a mirror uses the git clone ′--dissociate′ flag, which copies underlying objects from the mirror, making the clone robust to changes in the mirror such as garbage collection, at the expense of additional disk usage and setup time. ′reference′ mode does not pass ′--dissociate′, which causes the clone to directly use objects from the mirror, which is more fragile and can cause the clone to break under entirely normal operation of the mirror, but is slightly faster to clone and uses less disk space.", mirrorCheckoutModes),
-		EnvVar: "BUILDKITE_GIT_MIRROR_CHECKOUT_MODE",
+	GitMirrorCheckoutModeFlag = &cli.StringFlag{
+		Name:    "git-mirror-checkout-mode",
+		Value:   "reference",
+		Usage:   fmt.Sprintf("Changes how clones of a mirror are made; available modes are %v. In ′dissociate′ mode, clones from a mirror uses the git clone ′--dissociate′ flag, which copies underlying objects from the mirror, making the clone robust to changes in the mirror such as garbage collection, at the expense of additional disk usage and setup time. ′reference′ mode does not pass ′--dissociate′, which causes the clone to directly use objects from the mirror, which is more fragile and can cause the clone to break under entirely normal operation of the mirror, but is slightly faster to clone and uses less disk space.", mirrorCheckoutModes),
+		Sources: cli.EnvVars("BUILDKITE_GIT_MIRROR_CHECKOUT_MODE"),
 	}
 
-	GitMirrorsLockTimeoutFlag = cli.IntFlag{
-		Name:   "git-mirrors-lock-timeout",
-		Value:  300,
-		Usage:  "Seconds to lock a git mirror during clone, should exceed your longest checkout",
-		EnvVar: "BUILDKITE_GIT_MIRRORS_LOCK_TIMEOUT",
+	GitMirrorsLockTimeoutFlag = &cli.IntFlag{
+		Name:    "git-mirrors-lock-timeout",
+		Value:   300,
+		Usage:   "Seconds to lock a git mirror during clone, should exceed your longest checkout",
+		Sources: cli.EnvVars("BUILDKITE_GIT_MIRRORS_LOCK_TIMEOUT"),
 	}
 
-	GitMirrorsSkipUpdateFlag = cli.BoolFlag{
-		Name:   "git-mirrors-skip-update",
-		Usage:  "Skip updating the Git mirror (default: false)",
-		EnvVar: "BUILDKITE_GIT_MIRRORS_SKIP_UPDATE",
+	GitMirrorsSkipUpdateFlag = &cli.BoolFlag{
+		Name:    "git-mirrors-skip-update",
+		Usage:   "Skip updating the Git mirror (default: false)",
+		Sources: cli.EnvVars("BUILDKITE_GIT_MIRRORS_SKIP_UPDATE"),
 	}
 
-	GitSubmoduleCloneConfigFlag = cli.StringSliceFlag{
-		Name:   "git-submodule-clone-config",
-		Value:  &cli.StringSlice{},
-		Usage:  "Comma separated key=value git config pairs applied before git submodule clone commands such as ′update --init′. If the config is needed to be applied to all git commands, supply it in a global git config file for the system that the agent runs in instead",
-		EnvVar: "BUILDKITE_GIT_SUBMODULE_CLONE_CONFIG",
+	GitSubmoduleCloneConfigFlag = &cli.StringSliceFlag{
+		Name:    "git-submodule-clone-config",
+		Value:   nil,
+		Usage:   "Comma separated key=value git config pairs applied before git submodule clone commands such as ′update --init′. If the config is needed to be applied to all git commands, supply it in a global git config file for the system that the agent runs in instead",
+		Sources: cli.EnvVars("BUILDKITE_GIT_SUBMODULE_CLONE_CONFIG"),
 	}
 
-	GitCheckoutTimeoutFlag = cli.IntFlag{
-		Name:   "git-checkout-timeout",
-		Value:  0,
-		Usage:  "Seconds to allow for each git checkout attempt before it is killed and retried (0 means no timeout)",
-		EnvVar: "BUILDKITE_GIT_CHECKOUT_TIMEOUT",
+	GitCheckoutTimeoutFlag = &cli.IntFlag{
+		Name:    "git-checkout-timeout",
+		Value:   0,
+		Usage:   "Seconds to allow for each git checkout attempt before it is killed and retried (0 means no timeout)",
+		Sources: cli.EnvVars("BUILDKITE_GIT_CHECKOUT_TIMEOUT"),
 	}
 
-	GitSkipFetchExistingCommitsFlag = cli.BoolFlag{
-		Name:   "git-skip-fetch-existing-commits",
-		Usage:  "Skip git fetch if the commit already exists in the local git directory (default: false)",
-		EnvVar: "BUILDKITE_GIT_SKIP_FETCH_EXISTING_COMMITS",
+	GitSkipFetchExistingCommitsFlag = &cli.BoolFlag{
+		Name:    "git-skip-fetch-existing-commits",
+		Usage:   "Skip git fetch if the commit already exists in the local git directory (default: false)",
+		Sources: cli.EnvVars("BUILDKITE_GIT_SKIP_FETCH_EXISTING_COMMITS"),
 	}
 
-	CheckoutAttemptsFlag = cli.IntFlag{
-		Name:   "checkout-attempts",
-		Value:  6,
-		Usage:  "Number of checkout attempts (including the initial attempt). Failed attempts are retried with exponential backoff (factor of 2, starting at 1s: 1s, 2s, 4s, ...)",
-		EnvVar: "BUILDKITE_CHECKOUT_ATTEMPTS",
+	CheckoutAttemptsFlag = &cli.IntFlag{
+		Name:    "checkout-attempts",
+		Value:   6,
+		Usage:   "Number of checkout attempts (including the initial attempt). Failed attempts are retried with exponential backoff (factor of 2, starting at 1s: 1s, 2s, 4s, ...)",
+		Sources: cli.EnvVars("BUILDKITE_CHECKOUT_ATTEMPTS"),
 	}
 )
 
@@ -485,21 +470,40 @@ func handleLogLevelFlag(l logger.Logger, cfg any) error {
 	return nil
 }
 
-func UnsetConfigFromEnvironment(c *cli.Context) error {
-	flags := append(c.App.Flags, c.Command.Flags...)
-	for _, fl := range flags {
-		// use golang reflection to find EnvVar values on flags
-		r := reflect.ValueOf(fl)
-		f := reflect.Indirect(r).FieldByName("EnvVar")
-		if !f.IsValid() {
-			return errors.New("EnvVar field not found on flag")
-		}
-		// split comma delimited env
-		if envVars := f.String(); envVars != "" {
-			for env := range strings.SplitSeq(envVars, ",") {
-				_ = os.Unsetenv(env)
+func allFlagEnvs(c *cli.Command) iter.Seq[string] {
+	return func(yield func(string) bool) {
+		for _, c := range c.Lineage() {
+			for _, fl := range c.Flags {
+				// use golang reflection to find Sources values on flags
+				// because it's not a method of cli.Flag, and the concrete flag
+				// types are generic, so we'd have a huge type switch...
+				r := reflect.ValueOf(fl)
+				sv := reflect.Indirect(r).FieldByName("Sources")
+				if !sv.IsValid() {
+					continue
+				}
+				srcs, is := sv.Interface().(cli.ValueSourceChain)
+				if !is {
+					continue
+				}
+				for _, s := range srcs.Chain {
+					evs, is := s.(cli.EnvValueSource)
+					if !is {
+						// bit weird, since we're not using anything else, but OK
+						continue
+					}
+					if !yield(evs.Key()) {
+						return
+					}
+				}
 			}
 		}
+	}
+}
+
+func UnsetConfigFromEnvironment(c *cli.Command) error {
+	for key := range allFlagEnvs(c) {
+		_ = os.Unsetenv(key)
 	}
 	return nil
 }
@@ -556,7 +560,7 @@ func withConfigFilePaths(paths []string) func(*cliconfig.Loader) {
 // future to clean up other resources. Importantly, the calling code does not
 // need to know or care about what the returned function does, only that it
 // must defer it.
-func setupLoggerAndConfig[T any](ctx context.Context, c *cli.Context, opts ...configOpts) (
+func setupLoggerAndConfig[T any](ctx context.Context, c *cli.Command, opts ...configOpts) (
 	newCtx context.Context,
 	cfg T,
 	l logger.Logger,
@@ -571,14 +575,14 @@ func setupLoggerAndConfig[T any](ctx context.Context, c *cli.Context, opts ...co
 
 	warnings, err := loader.Load()
 	if err != nil {
-		_, _ = fmt.Fprintf(c.App.ErrWriter, "%s\n", err)
+		_, _ = fmt.Fprintf(c.ErrWriter, "%s\n", err)
 		os.Exit(1)
 	}
 
 	l = CreateLogger(&cfg)
 
 	if debug, err := reflections.GetField(cfg, "Debug"); err == nil && debug.(bool) {
-		l = l.WithFields(logger.StringField("command", c.Command.FullName()))
+		l = l.WithFields(logger.StringField("command", c.FullName()))
 	}
 
 	l.Debugf("Loaded config")
@@ -593,16 +597,16 @@ func setupLoggerAndConfig[T any](ctx context.Context, c *cli.Context, opts ...co
 
 	// When OpenTelemetry tracing is enabled, always initialize a TracerProvider
 	// so that every command (bootstrap or standalone subcommand) can emit spans.
-	tracingBackend := os.Getenv("BUILDKITE_TRACING_BACKEND")
-	if tb, err := reflections.GetField(cfg, "TracingBackend"); err == nil {
-		if tbStr, ok := tb.(string); ok && tbStr != "" {
-			tracingBackend = tbStr
+	tracingEnabled, _ := strconv.ParseBool(os.Getenv("BUILDKITE_OPENTELEMETRY_TRACING"))
+	if tb, err := reflections.GetField(cfg, "OpenTelemetryTracing"); err == nil {
+		if te, ok := tb.(bool); ok {
+			tracingEnabled = te
 		}
 	}
 
-	if tracingBackend == tracetools.BackendOpenTelemetry {
-		serviceName := os.Getenv("BUILDKITE_TRACING_SERVICE_NAME")
-		if sn, err := reflections.GetField(cfg, "TracingServiceName"); err == nil {
+	if tracingEnabled {
+		serviceName := os.Getenv("BUILDKITE_TELEMETRY_SERVICE_NAME")
+		if sn, err := reflections.GetField(cfg, "TelemetryServiceName"); err == nil {
 			if snStr, ok := sn.(string); ok && snStr != "" {
 				serviceName = snStr
 			}

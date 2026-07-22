@@ -11,10 +11,10 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/buildkite/agent/v3/env"
-	"github.com/buildkite/agent/v3/internal/process"
-	"github.com/buildkite/agent/v3/kubernetes"
-	"github.com/urfave/cli"
+	"github.com/buildkite/agent/v4/env"
+	"github.com/buildkite/agent/v4/internal/process"
+	"github.com/buildkite/agent/v4/kubernetes"
+	"github.com/urfave/cli/v3"
 )
 
 const kubernetesBootstrapHelpDescription = `Usage:
@@ -37,19 +37,19 @@ type KubernetesBootstrapConfig struct {
 	Profile     string   `cli:"profile"`
 }
 
-var KubernetesBootstrapCommand = cli.Command{
+var KubernetesBootstrapCommand = &cli.Command{
 	Name:        "kubernetes-bootstrap",
 	Usage:       "Harness used internally by the agent to run jobs on Kubernetes",
 	Category:    categoryInternal,
 	Description: kubernetesBootstrapHelpDescription,
 	Flags: []cli.Flag{
 		KubernetesContainerIDFlag,
-		cli.DurationFlag{
+		&cli.DurationFlag{
 			Name: "kubernetes-bootstrap-connection-timeout",
 			Usage: "This is intended to be used only by the Buildkite k8s stack " +
 				"(github.com/buildkite/agent-stack-k8s); it set the max time a container will wait " +
 				"to connect Agent.",
-			EnvVar: "BUILDKITE_KUBERNETES_BOOTSTRAP_CONNECTION_TIMEOUT",
+			Sources: cli.EnvVars("BUILDKITE_KUBERNETES_BOOTSTRAP_CONNECTION_TIMEOUT"),
 		},
 
 		// Global flags for debugging, etc
@@ -58,11 +58,10 @@ var KubernetesBootstrapCommand = cli.Command{
 		ExperimentsFlag,
 		ProfileFlag,
 	},
-	Action: func(c *cli.Context) error {
+	Action: func(ctx context.Context, c *cli.Command) error {
 		// kubernetes-bootstrap first register with the agent server container (the container that runs `buildkite-agent start`)
 		// As part the process, it will gain a bunch of env vars.
 		// After registration, it will run `buildkite-agent bootstrap`
-		ctx := context.Background()
 		ctx, cfg, l, _, done := setupLoggerAndConfig[KubernetesBootstrapConfig](ctx, c)
 		defer done()
 
@@ -140,13 +139,23 @@ var KubernetesBootstrapCommand = cli.Command{
 			}
 			cancelSignal = cs
 		}
-		cancelGracePeriodSecs := environ.GetInt("BUILDKITE_CANCEL_GRACE_PERIOD", defaultCancelGracePeriodSecs)
-		cancelGracePeriod := time.Duration(cancelGracePeriodSecs) * time.Second
-		signalGracePeriodSecs := environ.GetInt("BUILDKITE_SIGNAL_GRACE_PERIOD_SECONDS", defaultSignalGracePeriodSecs)
-		signalGracePeriod, err := signalGracePeriod(cancelGracePeriodSecs, signalGracePeriodSecs)
-		if err != nil {
-			return err
+		cancelSignalTimeout := defaultCancelSignalTimeout
+		if s, has := environ.Get("BUILDKITE_CANCEL_SIGNAL_TIMEOUT"); has {
+			d, err := time.ParseDuration(s)
+			if err != nil {
+				return fmt.Errorf("failed to parse BUILDKITE_CANCEL_SIGNAL_TIMEOUT: %w", err)
+			}
+			cancelSignalTimeout = d
 		}
+		cancelCleanupTimeout := defaultCancelCleanupTimeout
+		if s, has := environ.Get("BUILDKITE_CANCEL_CLEANUP_TIMEOUT"); has {
+			d, err := time.ParseDuration(s)
+			if err != nil {
+				return fmt.Errorf("failed to parse BUILDKITE_CANCEL_CLEANUP_TIMEOUT: %w", err)
+			}
+			cancelCleanupTimeout = d
+		}
+		cancelGracePeriod := cancelSignalTimeout + cancelCleanupTimeout
 
 		// BUILDKITE_KUBERNETES_EXEC is a legacy environment variable. It was used to activate the socket
 		// on the bootstrap command, and to activate the socket server on `buildkite-agent start`.
@@ -227,7 +236,7 @@ var KubernetesBootstrapCommand = cli.Command{
 			PTY:               runInPTY,
 			Nice:              5, // Lower priority for bootstrap subprocess so kubernetes-bootstrap's StatusLoop stays responsive
 			InterruptSignal:   cancelSignal,
-			SignalGracePeriod: signalGracePeriod,
+			SignalGracePeriod: cancelSignalTimeout,
 		})
 
 		// We aren't expecting the user to Ctrl-C the process (we're in k8s),

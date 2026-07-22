@@ -20,7 +20,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/buildkite/agent/v3/version"
+	"github.com/buildkite/agent/v4/version"
 )
 
 const errorTmplSrc = `<div class="error">❌ {{.Operation}}: <code>{{.Error}}</code><br>
