@@ -627,6 +627,54 @@ func TestVerifyCommit(t *testing.T) {
 		}
 	})
 
+	t.Run("fails when a configured --unshallow reaches a completed repo", func(t *testing.T) {
+		// --unshallow (and its abbreviations) must not reach the verification
+		// fetches: once fetchSource has completed the clone, git fetch --unshallow
+		// exits 128 ("--unshallow on a complete repository does not make sense"),
+		// which would degrade a genuinely off-branch commit to "unavailable" (a pass
+		// under strict). A full clone is already complete, so it reproduces that state.
+		for _, flag := range []string{"--unshallow", "--unsh"} {
+			t.Run(flag, func(t *testing.T) {
+				ctx := t.Context()
+				repoURL, _, offBranchCommit := setupFileBackedRepo(t, ctx, "feature")
+
+				cloneDir, err := os.MkdirTemp("", "verify-commit-test-")
+				if err != nil {
+					t.Fatalf("MkdirTemp error = %v", err)
+				}
+				t.Cleanup(func() { os.RemoveAll(cloneDir) }) //nolint:errcheck // Best-effort cleanup.
+				sh, err := shell.New()
+				if err != nil {
+					t.Fatalf("shell.New() error = %v", err)
+				}
+				if err := sh.Command("git", "clone", "--branch", "feature", repoURL, cloneDir).Run(ctx); err != nil {
+					t.Fatalf("git clone error = %v", err)
+				}
+				if err := sh.Chdir(cloneDir); err != nil {
+					t.Fatalf("Chdir error = %v", err)
+				}
+				// Bring the off-branch commit across so it exists locally, as fetchSource would.
+				if err := sh.Command("git", "fetch", "origin", "other").Run(ctx); err != nil {
+					t.Fatalf("git fetch (off-branch commit) error = %v", err)
+				}
+
+				e := &Executor{
+					shell: sh,
+					ExecutorConfig: ExecutorConfig{
+						GitCommitVerification: "strict",
+						Commit:                offBranchCommit,
+						Branch:                "feature",
+						GitFetchFlags:         flag,
+					},
+				}
+
+				if err := e.checkCommitOnBranch(ctx); !errors.Is(err, ErrCommitVerificationFailed) {
+					t.Errorf("checkCommitOnBranch() error = %v, want ErrCommitVerificationFailed", err)
+				}
+			})
+		}
+	})
+
 	t.Run("verifies a branch whose name contains shell metacharacters", func(t *testing.T) {
 		ctx := t.Context()
 		// A single quote is a legal git ref character. The branch tip must be

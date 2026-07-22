@@ -71,22 +71,23 @@ func (e *Executor) checkCommitOnBranch(ctx context.Context) error {
 	// ref fail and degrade the check to "unavailable" (a pass under strict), so
 	// drop them from every verification fetch.
 	//
-	// The deepening fetches below take a stripped copy: git rejects --depth (and
-	// --shallow-since/--shallow-exclude) combined with --deepen or --unshallow, so
-	// carrying a configured --depth=1 into them makes the deepen fetch exit
-	// non-zero and degrades a genuinely off-branch commit on a shallow clone back
-	// to "unavailable" (warn, never blocking). Keep the transport flags there but
-	// drop the depth-limiting ones.
+	// Drop the depth-limiting flags from every verification fetch too, not just
+	// the deepening ones: git rejects --depth (and --shallow-since/--shallow-exclude)
+	// alongside the --deepen and --unshallow the loop below adds, and a configured
+	// --unshallow errors on a clone fetchSource has already completed ("--unshallow
+	// on a complete repository does not make sense"). Either way the fetch exits
+	// non-zero and a genuinely off-branch commit degrades to "unavailable" (a pass
+	// under strict). Reshaping history is the deepening loop's job, so keep the
+	// transport flags but strip the depth-limiting ones everywhere.
 	const branchTipRef = "refs/buildkite-agent/commit-verification-branch-tip"
 	branchRefspec := "+refs/heads/" + e.Branch + ":" + branchTipRef
 	fetchFlags, err := shellwords.Split(e.GitFetchFlags)
 	if err != nil {
 		return fmt.Errorf("%w: unable to parse git-fetch-flags %q: %w", ErrCommitVerificationUnavailable, e.GitFetchFlags, err)
 	}
-	fetchFlags = stripRefSuppressingFetchFlags(fetchFlags)
-	deepenFlags := stripShallowFetchFlags(fetchFlags)
-	fetchBranch := func(baseFlags []string, extraFlags ...string) error {
-		args := append([]string{"fetch"}, baseFlags...)
+	fetchFlags = stripShallowFetchFlags(stripRefSuppressingFetchFlags(fetchFlags))
+	fetchBranch := func(extraFlags ...string) error {
+		args := append([]string{"fetch"}, fetchFlags...)
 		args = append(args, extraFlags...)
 		args = append(args, "--", "origin", branchRefspec)
 		return e.shell.Command("git", args...).Run(ctx)
@@ -103,7 +104,7 @@ func (e *Executor) checkCommitOnBranch(ctx context.Context) error {
 		roko.WithStrategy(roko.ExponentialSubsecond(time.Second)),
 		roko.WithJitter(),
 	).DoWithContext(ctx, func(*roko.Retrier) error {
-		return fetchBranch(fetchFlags)
+		return fetchBranch()
 	})
 	if fetchErr != nil {
 		return fmt.Errorf("%w: unable to fetch branch %q: %w", ErrCommitVerificationUnavailable, e.Branch, fetchErr)
@@ -123,7 +124,7 @@ func (e *Executor) checkCommitOnBranch(ctx context.Context) error {
 	for _, fetchFlag := range []string{"", "--deepen=50", "--unshallow"} {
 		if fetchFlag != "" {
 			e.shell.Commentf("Deepening checkout to verify commit (%s)...", fetchFlag)
-			if fetchErr := fetchBranch(deepenFlags, fetchFlag); fetchErr != nil {
+			if fetchErr := fetchBranch(fetchFlag); fetchErr != nil {
 				return fmt.Errorf("%w: unable to verify commit %q on branch %q: %w", ErrCommitVerificationUnavailable, e.Commit, e.Branch, fetchErr)
 			}
 		}
