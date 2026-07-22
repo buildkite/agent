@@ -16,15 +16,14 @@ func TestProtectedEnv(t *testing.T) {
 		"BUILDKITE_BUILD_PATH",
 		"BUILDKITE_COMMAND_EVAL",
 		"BUILDKITE_CONFIG_PATH",
+		"BUILDKITE_CHECKOUT_OVERRIDE_MODE",
 		"BUILDKITE_CONTAINER_COUNT",
-		"BUILDKITE_GIT_CLEAN_FLAGS",
-		"BUILDKITE_GIT_CLONE_FLAGS",
 		"BUILDKITE_GIT_CLONE_MIRROR_FLAGS",
-		"BUILDKITE_GIT_FETCH_FLAGS",
 		"BUILDKITE_GIT_MIRRORS_LOCK_TIMEOUT",
 		"BUILDKITE_GIT_MIRRORS_PATH",
 		"BUILDKITE_GIT_MIRRORS_SKIP_UPDATE",
-		"BUILDKITE_GIT_SUBMODULES",
+		"BUILDKITE_GIT_MIRROR_CHECKOUT_MODE",
+		"BUILDKITE_GIT_SUBMODULE_CLONE_CONFIG",
 		"BUILDKITE_HOOKS_PATH",
 		"BUILDKITE_KUBERNETES_EXEC",
 		"BUILDKITE_LOCAL_HOOKS_ENABLED",
@@ -48,6 +47,9 @@ func TestProtectedEnv(t *testing.T) {
 		"SECRET_KEY",
 		"DATABASE_URL",
 		"API_TOKEN",
+		"BUILDKITE_GIT_CLONE_FLAGS",
+		"BUILDKITE_GIT_SUBMODULES",
+		"BUILDKITE_SKIP_CHECKOUT",
 		"BUILDKITE_BRANCH",  // This is a standard build env var, not protected
 		"BUILDKITE_COMMIT",  // This is a standard build env var, not protected
 		"BUILDKITE_MESSAGE", // This is a standard build env var, not protected
@@ -67,5 +69,274 @@ func TestIsProtected_Normalised(t *testing.T) {
 
 	if got != want {
 		t.Errorf("IsProtected(%q) = %t, want %t", name, got, want)
+	}
+}
+
+func TestCheckoutOverrideScope(t *testing.T) {
+	t.Parallel()
+
+	scoped := []string{
+		"BUILDKITE_GIT_CHECKOUT_FLAGS",
+		"BUILDKITE_GIT_CHECKOUT_TIMEOUT",
+		"BUILDKITE_GIT_CLONE_FLAGS",
+		"BUILDKITE_GIT_CLEAN_FLAGS",
+		"BUILDKITE_GIT_COMMIT_VERIFICATION",
+		"BUILDKITE_GIT_FETCH_FLAGS",
+		"BUILDKITE_GIT_SUBMODULES",
+		"BUILDKITE_GIT_SKIP_FETCH_EXISTING_COMMITS",
+		"BUILDKITE_GIT_SPARSE_CHECKOUT_PATHS",
+		"BUILDKITE_SKIP_CHECKOUT",
+	}
+
+	// These vars are conditionally locked: scoped, write-protected depending on
+	// the checkout override mode. (Disjointness from protectedEnv is covered by
+	// TestProtectedAndCheckoutScopeDisjoint.)
+	for _, envVar := range scoped {
+		if got := IsCheckoutOverrideScoped(envVar); !got {
+			t.Errorf("IsCheckoutOverrideScoped(%q) = false, want true", envVar)
+		}
+	}
+
+	// Mirror infra is agent-only: always protected and never in the override
+	// scope, so a job can't relocate the mirror, stretch its lock timeout, or
+	// change the mirror checkout mode. Submodule clone config is likewise
+	// always protected (a `git -c` injection vector with no backend knob).
+	for _, envVar := range []string{
+		"BUILDKITE_GIT_MIRRORS_PATH",
+		"BUILDKITE_GIT_MIRRORS_LOCK_TIMEOUT",
+		"BUILDKITE_GIT_MIRRORS_SKIP_UPDATE",
+		"BUILDKITE_GIT_MIRROR_CHECKOUT_MODE",
+		"BUILDKITE_GIT_CLONE_MIRROR_FLAGS",
+		"BUILDKITE_GIT_SUBMODULE_CLONE_CONFIG",
+		"BUILDKITE_SSH_KEYSCAN",
+		"BUILDKITE_COMMAND_EVAL",
+	} {
+		if got := IsProtected(envVar); !got {
+			t.Errorf("IsProtected(%q) = false, want true", envVar)
+		}
+		if got := IsCheckoutOverrideScoped(envVar); got {
+			t.Errorf("IsCheckoutOverrideScoped(%q) = true, want false", envVar)
+		}
+	}
+
+	// An unrecognised var is neither protected nor checkout-scoped.
+	if IsProtected("MY_CUSTOM_VAR") {
+		t.Errorf("IsProtected(MY_CUSTOM_VAR) = true, want false")
+	}
+	if IsCheckoutOverrideScoped("MY_CUSTOM_VAR") {
+		t.Errorf("IsCheckoutOverrideScoped(MY_CUSTOM_VAR) = true, want false")
+	}
+}
+
+func TestParseCheckoutOverrideMode(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		in      string
+		want    CheckoutOverrideMode
+		wantErr bool
+	}{
+		{"", CheckoutOverrideFromJob, false}, // empty selects the default
+		{"from-job", CheckoutOverrideFromJob, false},
+		{"strict", CheckoutOverrideStrict, false},
+		{"none", CheckoutOverrideNone, false},
+		{"STRICT", CheckoutOverrideFromJob, true}, // case-sensitive
+		{"lockdown", CheckoutOverrideFromJob, true},
+	}
+
+	for _, tc := range cases {
+		got, err := ParseCheckoutOverrideMode(tc.in)
+		if (err != nil) != tc.wantErr {
+			t.Errorf("ParseCheckoutOverrideMode(%q) err = %v, wantErr %t", tc.in, err, tc.wantErr)
+		}
+		if got != tc.want {
+			t.Errorf("ParseCheckoutOverrideMode(%q) = %v, want %v", tc.in, got, tc.want)
+		}
+	}
+}
+
+func TestCheckoutOverrideModeStringRoundTrip(t *testing.T) {
+	t.Parallel()
+
+	for _, m := range []CheckoutOverrideMode{CheckoutOverrideFromJob, CheckoutOverrideStrict, CheckoutOverrideNone} {
+		got, err := ParseCheckoutOverrideMode(m.String())
+		if err != nil {
+			t.Errorf("ParseCheckoutOverrideMode(%q): unexpected err %v", m.String(), err)
+		}
+		if got != m {
+			t.Errorf("round trip via %q = %v, want %v", m.String(), got, m)
+		}
+	}
+}
+
+func TestCheckoutLockPredicates(t *testing.T) {
+	t.Parallel()
+
+	const (
+		scoped    = "BUILDKITE_GIT_CLONE_FLAGS" // in checkoutOverrideScope
+		protected = "BUILDKITE_COMMAND_EVAL"    // in protectedEnv, not scoped
+		unscoped  = "MY_CUSTOM_VAR"             // in neither map
+	)
+
+	// The matrix from the design: strict locks every source; from-job lets the
+	// job's within-job sources (hooks, plugins, Job API) set checkout vars but
+	// blocks the backend job env and secrets; none locks nothing, including the
+	// backend job env and secrets. IsCheckoutLocked covers only the within-job
+	// sources; the backend job env shares the secrets rule (IsCheckoutLockedForSecrets
+	// and createEnvironment).
+	cases := []struct {
+		mode        CheckoutOverrideMode
+		wantJob     bool
+		wantSecrets bool
+	}{
+		{CheckoutOverrideStrict, true, true},
+		{CheckoutOverrideFromJob, false, true},
+		{CheckoutOverrideNone, false, false},
+	}
+
+	for _, tc := range cases {
+		if got := IsCheckoutLocked(scoped, tc.mode); got != tc.wantJob {
+			t.Errorf("IsCheckoutLocked(%q, %v) = %t, want %t", scoped, tc.mode, got, tc.wantJob)
+		}
+		if got := IsCheckoutLockedForSecrets(scoped, tc.mode); got != tc.wantSecrets {
+			t.Errorf("IsCheckoutLockedForSecrets(%q, %v) = %t, want %t", scoped, tc.mode, got, tc.wantSecrets)
+		}
+
+		// Non-checkout-scoped vars are never governed by the checkout predicates,
+		// regardless of mode; protectedEnv handles them via IsProtected*.
+		for _, name := range []string{protected, unscoped} {
+			if IsCheckoutLocked(name, tc.mode) {
+				t.Errorf("IsCheckoutLocked(%q, %v) = true, want false", name, tc.mode)
+			}
+			if IsCheckoutLockedForSecrets(name, tc.mode) {
+				t.Errorf("IsCheckoutLockedForSecrets(%q, %v) = true, want false", name, tc.mode)
+			}
+		}
+	}
+}
+
+func TestIsCheckoutLockedForJobEnv(t *testing.T) {
+	t.Parallel()
+
+	const (
+		flagVar   = "BUILDKITE_GIT_CLONE_FLAGS"           // injection vector: none floor
+		sparseVar = "BUILDKITE_GIT_SPARSE_CHECKOUT_PATHS" // structured argv: from-job floor
+		protected = "BUILDKITE_COMMAND_EVAL"              // protected, not scoped
+		unscoped  = "MY_CUSTOM_VAR"                       // in neither map
+	)
+
+	// The flag vars share the secrets rule (locked unless none), but sparse-checkout
+	// paths have a lower floor: the backend job env may set them under from-job, and
+	// only strict locks them. That floor must not leak into the secrets rule.
+	cases := []struct {
+		mode       CheckoutOverrideMode
+		wantFlag   bool
+		wantSparse bool
+	}{
+		{CheckoutOverrideStrict, true, true},
+		{CheckoutOverrideFromJob, true, false},
+		{CheckoutOverrideNone, false, false},
+	}
+
+	for _, tc := range cases {
+		if got := IsCheckoutLockedForJobEnv(flagVar, tc.mode); got != tc.wantFlag {
+			t.Errorf("IsCheckoutLockedForJobEnv(%q, %v) = %t, want %t", flagVar, tc.mode, got, tc.wantFlag)
+		}
+		if got := IsCheckoutLockedForJobEnv(sparseVar, tc.mode); got != tc.wantSparse {
+			t.Errorf("IsCheckoutLockedForJobEnv(%q, %v) = %t, want %t", sparseVar, tc.mode, got, tc.wantSparse)
+		}
+
+		// Secrets stay locked unless none even for sparse: the from-job floor is
+		// scoped to the backend job env, not secret-to-env mappings.
+		if wantSecrets := tc.mode != CheckoutOverrideNone; IsCheckoutLockedForSecrets(sparseVar, tc.mode) != wantSecrets {
+			t.Errorf("IsCheckoutLockedForSecrets(%q, %v) = %t, want %t", sparseVar, tc.mode, !wantSecrets, wantSecrets)
+		}
+
+		// Vars outside the checkout scope are never governed by this predicate.
+		for _, name := range []string{protected, unscoped} {
+			if IsCheckoutLockedForJobEnv(name, tc.mode) {
+				t.Errorf("IsCheckoutLockedForJobEnv(%q, %v) = true, want false", name, tc.mode)
+			}
+		}
+	}
+}
+
+// TestCheckoutOverrideModeExclusions pins the checkout-related vars that the mode
+// deliberately does not govern, so a future change that scopes or protects them
+// has to update these expectations on purpose.
+func TestCheckoutOverrideModeExclusions(t *testing.T) {
+	t.Parallel()
+
+	// GIT_SSH_KEY and GIT_LFS_ENABLED are in neither map, so any source can set
+	// them in every mode, including strict.
+	for _, name := range []string{"BUILDKITE_GIT_SSH_KEY", "BUILDKITE_GIT_LFS_ENABLED"} {
+		if IsProtected(name) {
+			t.Errorf("IsProtected(%q) = true, want false", name)
+		}
+		if IsCheckoutOverrideScoped(name) {
+			t.Errorf("IsCheckoutOverrideScoped(%q) = true, want false", name)
+		}
+		if IsCheckoutLocked(name, CheckoutOverrideStrict) {
+			t.Errorf("IsCheckoutLocked(%q, strict) = true, want false", name)
+		}
+		if IsCheckoutLockedForSecrets(name, CheckoutOverrideStrict) {
+			t.Errorf("IsCheckoutLockedForSecrets(%q, strict) = true, want false", name)
+		}
+	}
+
+	// REPO and REFSPEC are not checkout-override-scoped, so the mode never locks
+	// them; they stay mutableFromWithinJob in protectedEnv (hooks and plugins may
+	// set them even under strict, while backend job env and secrets are blocked).
+	for _, name := range []string{"BUILDKITE_REPO", "BUILDKITE_REFSPEC"} {
+		if IsCheckoutOverrideScoped(name) {
+			t.Errorf("IsCheckoutOverrideScoped(%q) = true, want false", name)
+		}
+		if IsCheckoutLocked(name, CheckoutOverrideStrict) {
+			t.Errorf("IsCheckoutLocked(%q, strict) = true, want false", name)
+		}
+		if !IsProtected(name) {
+			t.Errorf("IsProtected(%q) = false, want true", name)
+		}
+		if IsProtectedFromWithinJob(name) {
+			t.Errorf("IsProtectedFromWithinJob(%q) = true, want false", name)
+		}
+	}
+}
+
+func TestRestrictedForCommandEval(t *testing.T) {
+	t.Parallel()
+
+	// With command-eval enabled the mode is unchanged; disabling it forces every
+	// mode to strict so no source can inject git flags to bypass no-command-eval.
+	cases := []struct {
+		mode              CheckoutOverrideMode
+		commandEvalOn     CheckoutOverrideMode
+		commandEvalOffMax CheckoutOverrideMode
+	}{
+		{CheckoutOverrideStrict, CheckoutOverrideStrict, CheckoutOverrideStrict},
+		{CheckoutOverrideFromJob, CheckoutOverrideFromJob, CheckoutOverrideStrict},
+		{CheckoutOverrideNone, CheckoutOverrideNone, CheckoutOverrideStrict},
+	}
+
+	for _, tc := range cases {
+		if got := tc.mode.RestrictedForCommandEval(true); got != tc.commandEvalOn {
+			t.Errorf("%v.RestrictedForCommandEval(true) = %v, want %v", tc.mode, got, tc.commandEvalOn)
+		}
+		if got := tc.mode.RestrictedForCommandEval(false); got != tc.commandEvalOffMax {
+			t.Errorf("%v.RestrictedForCommandEval(false) = %v, want %v", tc.mode, got, tc.commandEvalOffMax)
+		}
+	}
+}
+
+func TestProtectedAndCheckoutScopeDisjoint(t *testing.T) {
+	t.Parallel()
+
+	// A var must sit in exactly one tier. The enforcement sites read the two
+	// maps through different predicates, so a var in both would be locked
+	// inconsistently across hooks, secrets, the Job API, and config refresh.
+	for name := range checkoutOverrideScope {
+		if _, ok := protectedEnv[name]; ok {
+			t.Errorf("%q is in both protectedEnv and checkoutOverrideScope; it must sit in exactly one tier", name)
+		}
 	}
 }

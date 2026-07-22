@@ -1,6 +1,9 @@
 package job
 
 import (
+	"bytes"
+	"log"
+	"os"
 	"slices"
 	"strings"
 	"testing"
@@ -110,6 +113,135 @@ func TestReadFromEnvironmentIgnoresMalformedBooleans(t *testing.T) {
 	if got, want := config.GitSubmodules, true; got != want {
 		t.Errorf("config.GitSubmodules = %t, want %t", got, want)
 	}
+}
+
+// ReadFromEnvironment runs over the full shell env, which can include
+// secret-backed values (setUp refreshes config right after fetching secrets).
+// Malformed bool/int values must not be echoed to the standard logger, which
+// writes outside the shell's redactors. Not parallel: it swaps the global log
+// output.
+func TestReadFromEnvironmentDoesNotLogMalformedValues(t *testing.T) {
+	const secret = "s3cret-not-a-number"
+
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
+	t.Cleanup(func() { log.SetOutput(os.Stderr) })
+
+	config := &ExecutorConfig{}
+	environ := env.FromSlice([]string{
+		"BUILDKITE_GIT_CHECKOUT_TIMEOUT=" + secret, // int field
+		"BUILDKITE_GIT_LFS_ENABLED=" + secret,      // bool field
+	})
+	config.ReadFromEnvironment(environ)
+
+	if strings.Contains(buf.String(), secret) {
+		t.Errorf("log leaked a secret-backed value: %q", buf.String())
+	}
+	// The var name should still be logged so the warning stays actionable.
+	if !strings.Contains(buf.String(), "BUILDKITE_GIT_CHECKOUT_TIMEOUT") {
+		t.Errorf("expected warning to name the offending var, got %q", buf.String())
+	}
+}
+
+func TestReadFromEnvironmentDoesNotRefreshCheckoutOverrideMode(t *testing.T) {
+	t.Parallel()
+
+	config := &ExecutorConfig{CheckoutOverrideMode: env.CheckoutOverrideStrict}
+	environ := env.FromSlice([]string{"BUILDKITE_CHECKOUT_OVERRIDE_MODE=none"})
+
+	changes := config.ReadFromEnvironment(environ)
+	if len(changes) != 0 {
+		t.Errorf("changes = %v, want none", changes)
+	}
+	if got, want := config.CheckoutOverrideMode, env.CheckoutOverrideStrict; got != want {
+		t.Errorf("config.CheckoutOverrideMode = %v, want %v", got, want)
+	}
+}
+
+func TestReadFromEnvironmentSkipsCheckoutScopedVarsWhenCheckoutLocked(t *testing.T) {
+	t.Parallel()
+
+	config := &ExecutorConfig{
+		CheckoutOverrideMode: env.CheckoutOverrideStrict,
+		SkipCheckout:         false,
+		GitCloneFlags:        "-v",
+	}
+	environ := env.FromSlice([]string{
+		"BUILDKITE_SKIP_CHECKOUT=true",
+		"BUILDKITE_GIT_CLONE_FLAGS=--mirror",
+	})
+
+	changes := config.ReadFromEnvironment(environ)
+	if len(changes) != 0 {
+		t.Errorf("changes = %v, want none", changes)
+	}
+	if got, want := config.SkipCheckout, false; got != want {
+		t.Errorf("config.SkipCheckout = %t, want %t", got, want)
+	}
+	if got, want := config.GitCloneFlags, "-v"; got != want {
+		t.Errorf("config.GitCloneFlags = %q, want %q", got, want)
+	}
+}
+
+func TestReadFromEnvironmentRefreshesCheckoutScopedVarsUnderFromJob(t *testing.T) {
+	t.Parallel()
+
+	// from-job lets hooks/plugins reconfigure checkout, so ReadFromEnvironment
+	// must apply their checkout-scoped changes rather than skip them.
+	config := &ExecutorConfig{
+		CheckoutOverrideMode: env.CheckoutOverrideFromJob,
+		GitCloneFlags:        "-v",
+	}
+	environ := env.FromSlice([]string{"BUILDKITE_GIT_CLONE_FLAGS=--mirror"})
+
+	changes := config.ReadFromEnvironment(environ)
+	if got, want := config.GitCloneFlags, "--mirror"; got != want {
+		t.Errorf("config.GitCloneFlags = %q, want %q", got, want)
+	}
+	if _, ok := changes["BUILDKITE_GIT_CLONE_FLAGS"]; !ok {
+		t.Errorf("changes = %v, want it to contain BUILDKITE_GIT_CLONE_FLAGS", changes)
+	}
+}
+
+func TestReadFromEnvironmentRefreshesCommitVerification(t *testing.T) {
+	t.Parallel()
+
+	// Commit verification is checkout-scoped, so an allowed within-job source
+	// (from-job or none) must refresh the executor field: verifyCommit reads
+	// GitCommitVerification, not the env, so a stale field would silently skip the
+	// requested verification. strict must keep the agent-config value.
+	t.Run("from-job refreshes the field", func(t *testing.T) {
+		t.Parallel()
+
+		config := &ExecutorConfig{CheckoutOverrideMode: env.CheckoutOverrideFromJob}
+		environ := env.FromSlice([]string{"BUILDKITE_GIT_COMMIT_VERIFICATION=strict"})
+
+		changes := config.ReadFromEnvironment(environ)
+		if got, want := config.GitCommitVerification, "strict"; got != want {
+			t.Errorf("config.GitCommitVerification = %q, want %q", got, want)
+		}
+		if _, ok := changes["BUILDKITE_GIT_COMMIT_VERIFICATION"]; !ok {
+			t.Errorf("changes = %v, want it to contain BUILDKITE_GIT_COMMIT_VERIFICATION", changes)
+		}
+	})
+
+	t.Run("strict locks the field to agent config", func(t *testing.T) {
+		t.Parallel()
+
+		config := &ExecutorConfig{
+			CheckoutOverrideMode:  env.CheckoutOverrideStrict,
+			GitCommitVerification: "warn",
+		}
+		environ := env.FromSlice([]string{"BUILDKITE_GIT_COMMIT_VERIFICATION=strict"})
+
+		changes := config.ReadFromEnvironment(environ)
+		if len(changes) != 0 {
+			t.Errorf("changes = %v, want none", changes)
+		}
+		if got, want := config.GitCommitVerification, "warn"; got != want {
+			t.Errorf("config.GitCommitVerification = %q, want %q", got, want)
+		}
+	})
 }
 
 func TestGitSubmodulesBidirectionalControl(t *testing.T) {

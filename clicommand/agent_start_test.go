@@ -10,6 +10,7 @@ import (
 	"github.com/buildkite/agent/v3/agent"
 	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/core"
+	"github.com/buildkite/agent/v3/env"
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/google/go-cmp/cmp"
 	"github.com/urfave/cli"
@@ -373,5 +374,77 @@ func TestAgentStartJobAcquisitionRejected_ExitCode27(t *testing.T) {
 	}
 	if got, want := exitErr.ExitCode(), 27; got != want {
 		t.Errorf("Expected exit code 27 for job acquisition rejected, got: %d", exitErr.ExitCode())
+	}
+}
+
+func TestAgentStartCheckoutOverrideMode(t *testing.T) {
+	t.Parallel()
+
+	// AgentStartConfig uses NoCommandEval, so the zero value leaves command-eval
+	// enabled; disabling command-eval floors every mode to strict.
+	tests := []struct {
+		name string
+		cfg  AgentStartConfig
+		want env.CheckoutOverrideMode
+	}{
+		{name: "default_from_job", cfg: AgentStartConfig{}, want: env.CheckoutOverrideFromJob},
+		{name: "explicit_strict", cfg: AgentStartConfig{CheckoutOverrideMode: "strict"}, want: env.CheckoutOverrideStrict},
+		{name: "explicit_none", cfg: AgentStartConfig{CheckoutOverrideMode: "none"}, want: env.CheckoutOverrideNone},
+		{name: "no_command_eval_floors_none_to_strict", cfg: AgentStartConfig{CheckoutOverrideMode: "none", NoCommandEval: true}, want: env.CheckoutOverrideStrict},
+		{name: "no_command_eval_floors_from_job_to_strict", cfg: AgentStartConfig{CheckoutOverrideMode: "from-job", NoCommandEval: true}, want: env.CheckoutOverrideStrict},
+		{name: "no_command_eval_leaves_strict", cfg: AgentStartConfig{CheckoutOverrideMode: "strict", NoCommandEval: true}, want: env.CheckoutOverrideStrict},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got, err := tc.cfg.checkoutOverrideMode()
+			if err != nil {
+				t.Fatalf("checkoutOverrideMode() error = %v", err)
+			}
+			if got != tc.want {
+				t.Errorf("checkoutOverrideMode() = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestAgentStartCheckoutOverrideModeInvalid(t *testing.T) {
+	t.Parallel()
+	cfg := AgentStartConfig{CheckoutOverrideMode: "bogus"}
+	if _, err := cfg.checkoutOverrideMode(); err == nil {
+		t.Error("checkoutOverrideMode() with invalid mode: want error, got nil")
+	}
+}
+
+func TestBootstrapCheckoutOverrideMode(t *testing.T) {
+	t.Parallel()
+
+	// BootstrapConfig uses CommandEval; the zero value disables command-eval and
+	// floors the mode to strict, so cases that keep a laxer mode must set
+	// CommandEval.
+	tests := []struct {
+		name string
+		cfg  BootstrapConfig
+		want env.CheckoutOverrideMode
+	}{
+		{name: "default_from_job", cfg: BootstrapConfig{CommandEval: true}, want: env.CheckoutOverrideFromJob},
+		{name: "explicit_strict", cfg: BootstrapConfig{CheckoutOverrideMode: "strict", CommandEval: true}, want: env.CheckoutOverrideStrict},
+		{name: "explicit_none", cfg: BootstrapConfig{CheckoutOverrideMode: "none", CommandEval: true}, want: env.CheckoutOverrideNone},
+		{name: "command_eval_disabled_floors_none_to_strict", cfg: BootstrapConfig{CheckoutOverrideMode: "none", CommandEval: false}, want: env.CheckoutOverrideStrict},
+		{name: "command_eval_disabled_floors_from_job_to_strict", cfg: BootstrapConfig{CheckoutOverrideMode: "from-job", CommandEval: false}, want: env.CheckoutOverrideStrict},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got, err := tc.cfg.checkoutOverrideMode()
+			if err != nil {
+				t.Fatalf("checkoutOverrideMode() error = %v", err)
+			}
+			if got != tc.want {
+				t.Errorf("checkoutOverrideMode() = %v, want %v", got, tc.want)
+			}
+		})
 	}
 }

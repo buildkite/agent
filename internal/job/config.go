@@ -21,7 +21,7 @@ import (
 // To add a new config option that is mapped from an environment variable, add a
 // struct tag, then don't forget to add a corresponding CLI flag over in the
 // clicommand/bootstrap.go(BootstrapConfig) struct, otherwise it won't work.
-// Also check the protectedEnv map in env/protected.go.
+// Also check protectedEnv and checkoutOverrideScope in env/protected.go.
 
 type ExecutorConfig struct {
 	// The command to run
@@ -90,6 +90,10 @@ type ExecutorConfig struct {
 	// Skip git fetch if the commit already exists locally
 	GitSkipFetchExistingCommits bool `env:"BUILDKITE_GIT_SKIP_FETCH_EXISTING_COMMITS"`
 
+	// Controls which sources may override the agent's checkout settings.
+	// Intentionally has no env tag so hooks cannot relax it at runtime.
+	CheckoutOverrideMode env.CheckoutOverrideMode
+
 	// Timeout in seconds for the git checkout phase (0 means no timeout)
 	GitCheckoutTimeout int `env:"BUILDKITE_GIT_CHECKOUT_TIMEOUT"`
 
@@ -115,7 +119,7 @@ type ExecutorConfig struct {
 	GitSSHKey string `env:"BUILDKITE_GIT_SSH_KEY"`
 
 	// Enable git commit verification
-	GitCommitVerification string
+	GitCommitVerification string `env:"BUILDKITE_GIT_COMMIT_VERIFICATION"`
 
 	// Config key=value pairs to pass to "git" when submodule init commands are invoked
 	GitSubmoduleCloneConfig []string `env:"BUILDKITE_GIT_SUBMODULE_CLONE_CONFIG"`
@@ -247,6 +251,13 @@ func (c *ExecutorConfig) ReadFromEnvironment(environ *env.Environment) map[strin
 
 		// Find struct fields with env tag
 		if tag := f.Tag.Get("env"); tag != "" && environ.Exists(tag) {
+			// ReadFromEnvironment runs after applyEnvironmentChanges, so the
+			// checkout vars here come from within the job (hooks/plugins). from-job
+			// and none let them reconfigure checkout; only strict locks them.
+			if env.IsCheckoutLocked(tag, c.CheckoutOverrideMode) {
+				continue
+			}
+
 			newStr, _ := environ.Get(tag)
 
 			switch v.Kind() {
@@ -260,7 +271,9 @@ func (c *ExecutorConfig) ReadFromEnvironment(environ *env.Environment) map[strin
 			case reflect.Bool:
 				newBool, err := strconv.ParseBool(newStr)
 				if err != nil {
-					log.Printf("warning: cannot parse %s=%q as bool, ignoring", tag, newStr)
+					// Don't log the value: this env may hold secret-backed values
+					// (see setUp in executor.go) and this logger bypasses redaction.
+					log.Printf("warning: cannot parse %s as bool, ignoring", tag)
 					break
 				}
 				if newBool == v.Bool() {
@@ -272,7 +285,7 @@ func (c *ExecutorConfig) ReadFromEnvironment(environ *env.Environment) map[strin
 			case reflect.Int:
 				newInt, err := strconv.Atoi(newStr)
 				if err != nil {
-					log.Printf("warning: cannot parse %s=%q as int, ignoring", tag, newStr)
+					log.Printf("warning: cannot parse %s as int, ignoring", tag)
 					break
 				}
 				if int64(newInt) == v.Int() {
@@ -283,7 +296,7 @@ func (c *ExecutorConfig) ReadFromEnvironment(environ *env.Environment) map[strin
 
 			case reflect.Slice:
 				if v.Type().Elem() != reflect.TypeFor[string]() {
-					log.Printf("warning: cannot parse %s=%q as %v, ignoring", tag, newStr, v.Type())
+					log.Printf("warning: cannot parse %s as %v, ignoring", tag, v.Type())
 					break
 				}
 				var newSlice []string

@@ -78,6 +78,89 @@ func TestRunningPlugins(t *testing.T) {
 	tester.RunAndCheck(t, env...)
 }
 
+func TestPluginEnvironmentHookCheckoutOverrideMode(t *testing.T) {
+	t.Parallel()
+
+	// A plugin's environment hook (e.g. git-clean) is a within-job source: the
+	// default (from-job) lets it set checkout flags; only strict blocks it.
+	tests := []struct {
+		name        string
+		envVar      string
+		envValue    string
+		mode        string // BUILDKITE_CHECKOUT_OVERRIDE_MODE; "" exercises the default
+		wantBlocked bool
+	}{
+		{name: "default_allows_plugin_to_override_skip_checkout", envVar: "BUILDKITE_SKIP_CHECKOUT", envValue: "true"},
+		{name: "strict_blocks_plugin_skip_checkout_override", envVar: "BUILDKITE_SKIP_CHECKOUT", envValue: "true", mode: "strict", wantBlocked: true},
+		{name: "strict_blocks_plugin_sparse_checkout_paths_override", envVar: "BUILDKITE_GIT_SPARSE_CHECKOUT_PATHS", envValue: "a/b", mode: "strict", wantBlocked: true},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			tester, err := NewExecutorTester(mainCtx)
+			if err != nil {
+				t.Fatalf("NewExecutorTester() error = %v", err)
+			}
+			defer tester.Close()
+
+			// These scoped vars keep the checkout safe: SKIP_CHECKOUT just skips
+			// cloning, and sparse paths is only exercised in the blocked direction
+			// where the lock strips it before checkout. Setting a real clone flag
+			// in the allowed direction would break the checkout.
+			hooks := map[string][]string{
+				"environment": {
+					"#!/usr/bin/env bash",
+					fmt.Sprintf("export %s=%s", tc.envVar, tc.envValue),
+				},
+			}
+			if runtime.GOOS == "windows" {
+				hooks = map[string][]string{
+					"environment.bat": {
+						"@echo off",
+						fmt.Sprintf("set %s=%s", tc.envVar, tc.envValue),
+					},
+				}
+			}
+
+			p := createTestPlugin(t, hooks)
+			pluginJSON, err := p.ToJSON()
+			if err != nil {
+				t.Fatalf("testPlugin.ToJSON() error = %v", err)
+			}
+
+			tester.ExpectGlobalHook("command").Once().AndExitWith(0).AndCallFunc(func(c *bintest.Call) {
+				got := c.GetEnv(tc.envVar)
+				if tc.wantBlocked && got == tc.envValue {
+					_, _ = fmt.Fprintf(c.Stderr, "%s=%q, want the plugin override to be blocked\n", tc.envVar, got)
+					c.Exit(1)
+					return
+				}
+				if !tc.wantBlocked && got != tc.envValue {
+					_, _ = fmt.Fprintf(c.Stderr, "%s=%q, want %q\n", tc.envVar, got, tc.envValue)
+					c.Exit(1)
+					return
+				}
+				c.Exit(0)
+			})
+
+			env := []string{"BUILDKITE_PLUGINS=" + pluginJSON}
+			if tc.mode != "" {
+				env = append(env, "BUILDKITE_CHECKOUT_OVERRIDE_MODE="+tc.mode)
+			}
+
+			tester.RunAndCheck(t, env...)
+
+			containsWarning := strings.Contains(tester.Output, "env vars were blocked") &&
+				strings.Contains(tester.Output, tc.envVar)
+			if containsWarning != tc.wantBlocked {
+				t.Fatalf("blocked warning presence = %t, want %t\noutput: %s", containsWarning, tc.wantBlocked, tester.Output)
+			}
+		})
+	}
+}
+
 func TestExitCodesPropagateOutFromPlugins(t *testing.T) {
 	t.Parallel()
 
