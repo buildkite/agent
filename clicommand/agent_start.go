@@ -175,6 +175,7 @@ type AgentStartConfig struct {
 	GitSubmoduleCloneConfig     []string `cli:"git-submodule-clone-config"`
 	SkipCheckout                bool     `cli:"skip-checkout"`
 	GitSkipFetchExistingCommits bool     `cli:"git-skip-fetch-existing-commits"`
+	CheckoutOverrideMode        string   `cli:"checkout-override-mode"`
 	CheckoutAttempts            int      `cli:"checkout-attempts"`
 
 	NoSSHKeyscan            bool     `cli:"no-ssh-keyscan"`
@@ -229,6 +230,12 @@ type AgentStartConfig struct {
 	TagsFromEC2                        bool          `cli:"tags-from-ec2" deprecated-and-renamed-to:"TagsFromEC2MetaData"`
 	TagsFromGCP                        bool          `cli:"tags-from-gcp" deprecated-and-renamed-to:"TagsFromGCPMetaData"`
 	DisconnectAfterJobTimeout          int           `cli:"disconnect-after-job-timeout" deprecated:"Use disconnect-after-idle-timeout instead"`
+}
+
+// checkoutOverrideMode resolves the configured mode, forcing strict when command-eval is off.
+// AgentStartConfig stores NoCommandEval (the BootstrapConfig sibling stores CommandEval).
+func (cfg *AgentStartConfig) checkoutOverrideMode() (env.CheckoutOverrideMode, error) {
+	return resolveCheckoutOverrideMode(cfg.CheckoutOverrideMode, !cfg.NoCommandEval)
 }
 
 func (asc AgentStartConfig) Features(ctx context.Context) []string {
@@ -536,6 +543,7 @@ var AgentStartCommand = cli.Command{
 
 		// Various git related flags shared with bootstrap
 		SkipCheckoutFlag,
+		CheckoutOverrideModeFlag,
 		GitCheckoutFlagsFlag,
 		GitCloneFlagsFlag,
 		GitCleanFlagsFlag,
@@ -593,7 +601,7 @@ var AgentStartCommand = cli.Command{
 		},
 		cli.BoolFlag{
 			Name:   "no-command-eval",
-			Usage:  "Don't allow this agent to run arbitrary console commands, including plugins (default: false)",
+			Usage:  "Don't allow this agent to run arbitrary console commands, including plugins; also forces checkout-override-mode to 'strict' (default: false)",
 			EnvVar: "BUILDKITE_NO_COMMAND_EVAL",
 		},
 		cli.BoolFlag{
@@ -936,6 +944,11 @@ var AgentStartCommand = cli.Command{
 			cfg.NoPlugins = true
 		}
 
+		checkoutMode, err := cfg.checkoutOverrideMode()
+		if err != nil {
+			return err
+		}
+
 		// Guess the shell if none is provided
 		if cfg.Shell == "" {
 			cfg.Shell = DefaultShell()
@@ -1108,6 +1121,7 @@ var AgentStartCommand = cli.Command{
 			GitSubmoduleCloneConfig:         cfg.GitSubmoduleCloneConfig,
 			SkipCheckout:                    cfg.SkipCheckout,
 			GitSkipFetchExistingCommits:     cfg.GitSkipFetchExistingCommits,
+			CheckoutOverrideMode:            checkoutMode,
 			CheckoutAttempts:                cfg.CheckoutAttempts,
 			SSHKeyscan:                      !cfg.NoSSHKeyscan,
 			CommandEval:                     !cfg.NoCommandEval,

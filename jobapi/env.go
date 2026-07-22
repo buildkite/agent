@@ -6,6 +6,7 @@ import (
 	"maps"
 	"net/http"
 	"slices"
+	"strings"
 
 	"github.com/buildkite/agent/v3/env"
 	"github.com/buildkite/agent/v3/internal/socket"
@@ -36,12 +37,12 @@ func (s *Server) patchEnv(w http.ResponseWriter, r *http.Request) {
 
 	added := make([]string, 0, len(req.Env))
 	updated := make([]string, 0, len(req.Env))
-	protected := checkProtected(slices.Collect(maps.Keys(req.Env)))
+	protected := s.checkProtected(slices.Collect(maps.Keys(req.Env)))
 
 	if len(protected) > 0 {
 		err := socket.WriteError(
 			w,
-			fmt.Sprintf("the following environment variables are protected, and cannot be modified: % v", protected),
+			s.protectedEnvMessage(protected),
 			http.StatusUnprocessableEntity,
 		)
 		if err != nil {
@@ -106,11 +107,11 @@ func (s *Server) deleteEnv(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	protected := checkProtected(req.Keys)
+	protected := s.checkProtected(req.Keys)
 	if len(protected) > 0 {
 		err := socket.WriteError(
 			w,
-			fmt.Sprintf("the following environment variables are protected, and cannot be modified: % v", protected),
+			s.protectedEnvMessage(protected),
 			http.StatusUnprocessableEntity,
 		)
 		if err != nil {
@@ -138,14 +139,29 @@ func (s *Server) deleteEnv(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func checkProtected(candidates []string) []string {
+func (s *Server) checkProtected(candidates []string) []string {
 	protected := make([]string, 0, len(candidates))
 	for _, c := range candidates {
 		// The Job API is only accessible from within the job, so allow writes
 		// to vars that allow write from within job.
-		if env.IsProtectedFromWithinJob(c) {
+		if env.IsProtectedFromWithinJob(c) || env.IsCheckoutLocked(c, s.checkoutOverrideMode) {
 			protected = append(protected, c)
 		}
 	}
 	return protected
+}
+
+// protectedEnvMessage builds the rejection message for protected candidates,
+// noting when the rejection is due to the checkout-override lock rather than an
+// always-protected var.
+func (s *Server) protectedEnvMessage(protected []string) string {
+	var msg strings.Builder
+	fmt.Fprintf(&msg, "the following environment variables are protected, and cannot be modified: % v", protected)
+	for _, p := range protected {
+		if env.IsCheckoutLocked(p, s.checkoutOverrideMode) {
+			fmt.Fprintf(&msg, ". Checkout-related variables are locked because BUILDKITE_CHECKOUT_OVERRIDE_MODE=%s", s.checkoutOverrideMode)
+			break
+		}
+	}
+	return msg.String()
 }
