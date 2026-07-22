@@ -161,23 +161,33 @@ func (e *Executor) checkCommitOnBranch(ctx context.Context) error {
 // list. git treats --depth, --deepen, --shallow-since and --shallow-exclude as
 // mutually exclusive with the --deepen/--unshallow fetches checkCommitOnBranch
 // issues, so those fetches must not inherit them from BUILDKITE_GIT_FETCH_FLAGS.
-// Both the "--flag=value" and "--flag value" spellings are handled; the latter
-// also drops the following value token. --unshallow is dropped too, since we add
-// it ourselves.
+//
+// Both the "--flag=value" and "--flag value" spellings are handled (the latter
+// also drops the following value token), as are the unambiguous abbreviations
+// git accepts (--dept for --depth, --deep for --deepen, --unsh for --unshallow):
+// a token is dropped when one of the mode names begins with it. The exact-name
+// check this replaced let --dept=1 slip through and re-break the deepen fetch.
 func stripShallowFetchFlags(flags []string) []string {
-	valueFlags := map[string]bool{
-		"--depth":           true,
-		"--deepen":          true,
-		"--shallow-since":   true,
-		"--shallow-exclude": true,
-	}
+	valueModes := []string{"depth", "deepen", "shallow-since", "shallow-exclude"}
 	out := make([]string, 0, len(flags))
 	for i := 0; i < len(flags); i++ {
-		name, _, hasValue := strings.Cut(flags[i], "=")
-		if name == "--unshallow" {
+		name, isLong := strings.CutPrefix(flags[i], "--")
+		name, _, hasValue := strings.Cut(name, "=")
+		if !isLong || name == "" {
+			out = append(out, flags[i])
 			continue
 		}
-		if valueFlags[name] {
+		if strings.HasPrefix("unshallow", name) {
+			continue // boolean, no value token to drop
+		}
+		isValueMode := false
+		for _, m := range valueModes {
+			if strings.HasPrefix(m, name) {
+				isValueMode = true
+				break
+			}
+		}
+		if isValueMode {
 			if !hasValue {
 				i++ // skip the separate value token in the "--flag value" form
 			}

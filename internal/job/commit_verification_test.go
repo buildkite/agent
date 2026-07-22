@@ -577,48 +577,53 @@ func TestVerifyCommit(t *testing.T) {
 	})
 
 	t.Run("fails on a shallow clone with a configured --depth fetch flag", func(t *testing.T) {
-		ctx := t.Context()
-		repoURL, _, offBranchCommit := setupFileBackedRepo(t, ctx, "feature")
-
-		cloneDir, err := os.MkdirTemp("", "verify-commit-test-")
-		if err != nil {
-			t.Fatalf("MkdirTemp error = %v", err)
-		}
-		t.Cleanup(func() { os.RemoveAll(cloneDir) }) //nolint:errcheck // Best-effort cleanup.
-		sh, err := shell.New()
-		if err != nil {
-			t.Fatalf("shell.New() error = %v", err)
-		}
-
-		// Same shallow off-branch setup as above: clone feature at depth=1, then
-		// fetch the off-branch commit so it exists locally while the repo stays shallow.
-		if err := sh.Command("git", "clone", "--depth=1", "--branch", "feature", repoURL, cloneDir).Run(ctx); err != nil {
-			t.Fatalf("git clone error = %v", err)
-		}
-		if err := sh.Chdir(cloneDir); err != nil {
-			t.Fatalf("Chdir error = %v", err)
-		}
-		if err := sh.Command("git", "fetch", "--depth=1", "origin", "other").Run(ctx); err != nil {
-			t.Fatalf("git fetch (off-branch commit) error = %v", err)
-		}
-
 		// --depth=1 in the configured fetch flags must not reach the deepening
 		// fetches: git rejects --depth alongside --deepen/--unshallow, so an
 		// un-stripped flag would make the deepen fetch exit non-zero and degrade a
 		// genuinely off-branch commit on a shallow clone to "unavailable" (warn,
-		// never blocking under strict) instead of a definitive failure.
-		e := &Executor{
-			shell: sh,
-			ExecutorConfig: ExecutorConfig{
-				GitCommitVerification: "strict",
-				Commit:                offBranchCommit,
-				Branch:                "feature",
-				GitFetchFlags:         "--depth=1",
-			},
-		}
+		// never blocking under strict) instead of a definitive failure. The
+		// abbreviated spelling git also accepts (--dept) must be stripped too.
+		for _, flag := range []string{"--depth=1", "--dept=1"} {
+			t.Run(flag, func(t *testing.T) {
+				ctx := t.Context()
+				repoURL, _, offBranchCommit := setupFileBackedRepo(t, ctx, "feature")
 
-		if err := e.checkCommitOnBranch(ctx); !errors.Is(err, ErrCommitVerificationFailed) {
-			t.Errorf("checkCommitOnBranch() error = %v, want ErrCommitVerificationFailed", err)
+				cloneDir, err := os.MkdirTemp("", "verify-commit-test-")
+				if err != nil {
+					t.Fatalf("MkdirTemp error = %v", err)
+				}
+				t.Cleanup(func() { os.RemoveAll(cloneDir) }) //nolint:errcheck // Best-effort cleanup.
+				sh, err := shell.New()
+				if err != nil {
+					t.Fatalf("shell.New() error = %v", err)
+				}
+
+				// Clone feature at depth=1, then fetch the off-branch commit so it
+				// exists locally while the repo stays shallow.
+				if err := sh.Command("git", "clone", "--depth=1", "--branch", "feature", repoURL, cloneDir).Run(ctx); err != nil {
+					t.Fatalf("git clone error = %v", err)
+				}
+				if err := sh.Chdir(cloneDir); err != nil {
+					t.Fatalf("Chdir error = %v", err)
+				}
+				if err := sh.Command("git", "fetch", "--depth=1", "origin", "other").Run(ctx); err != nil {
+					t.Fatalf("git fetch (off-branch commit) error = %v", err)
+				}
+
+				e := &Executor{
+					shell: sh,
+					ExecutorConfig: ExecutorConfig{
+						GitCommitVerification: "strict",
+						Commit:                offBranchCommit,
+						Branch:                "feature",
+						GitFetchFlags:         flag,
+					},
+				}
+
+				if err := e.checkCommitOnBranch(ctx); !errors.Is(err, ErrCommitVerificationFailed) {
+					t.Errorf("checkCommitOnBranch() error = %v, want ErrCommitVerificationFailed", err)
+				}
+			})
 		}
 	})
 
@@ -1005,6 +1010,11 @@ func TestStripShallowFetchFlags(t *testing.T) {
 		{"depth space form drops the value token", []string{"--depth", "1"}, []string{}},
 		{"deepen and unshallow", []string{"--deepen=50", "--unshallow"}, []string{}},
 		{"shallow-since and shallow-exclude", []string{"--shallow-since=2020-01-01", "--shallow-exclude", "v1.0"}, []string{}},
+		{"depth abbreviation", []string{"--dept=1"}, []string{}},
+		{"depth abbreviation space form", []string{"--dept", "1"}, []string{}},
+		{"deepen abbreviation", []string{"--deep=50"}, []string{}},
+		{"unshallow abbreviation", []string{"--unsh"}, []string{}},
+		{"--filter survives", []string{"--filter=blob:none"}, []string{"--filter=blob:none"}},
 		{"keeps surrounding flags", []string{"-v", "--depth=1", "--prune"}, []string{"-v", "--prune"}},
 	}
 	for _, tt := range tests {
