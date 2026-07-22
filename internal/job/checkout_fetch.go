@@ -4,12 +4,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/buildkite/agent/v3/internal/shell"
 )
 
-// refspecKind is the category of git refspec a fetch targets.
+// refspecKind is the category of git refspec a fetch targets. It is classified
+// once in fetchSource and then drives both the git.refspec_kind span attribute
+// and the fetch dispatch, so the label and the fetch behaviour cannot drift apart.
 type refspecKind string
 
 const (
@@ -34,22 +37,22 @@ const (
 // When addBloblessFilter is true, --filter=blob:none is prepended to the fetch
 // flags — the caller decides based on sparse-checkout state and user-supplied
 // filters.
-func (e *Executor) fetchSource(ctx context.Context, addBloblessFilter bool) error {
-	// If configured, skip the fetch when the commit already exists locally.
-	// This is useful when a pre-populated git mirror is used with --reference,
-	// as the commit objects are already reachable and fetching is redundant.
-	if e.GitSkipFetchExistingCommits && e.Commit != "HEAD" &&
-		hasGitCommit(ctx, e.shell, ".git", e.Commit) {
-		e.shell.Commentf("Commit %q already exists locally, skipping fetch", e.Commit)
-		return nil
-	}
+func (e *Executor) fetchSource(ctx context.Context, addBloblessFilter bool) (retErr error) {
+	// The git.fetch span is started here (inside the function that owns the
+	// operation) so its attributes — decided below — are set directly on the
+	// in-scope span, avoiding any signature change to fetchSource.
+	//
+	// Note: this span covers the whole fetch, including the retry loops inside
+	// gitFetch / gitFetchWithFallback (up to 10 attempts, ~2m). A long span may
+	// therefore be several retried fetches rather than one slow fetch; it does
+	// not break down per attempt.
+	span, ctx := e.traceGitOpSpan(ctx, "git.fetch")
+	defer func() { span.FinishWithError(retErr) }()
 
-	gitFetchFlags := e.GitFetchFlags
-	if addBloblessFilter {
-		gitFetchFlags = "--filter=blob:none " + gitFetchFlags
-	}
-
-	// Classify the refspec kind once and dispatch on it in the switch below.
+	// Classify the refspec kind once, up front. The work switch below dispatches
+	// on this same value rather than re-evaluating the conditions, so the label
+	// and the fetch behaviour stay in lockstep. Done before the skip-fetch
+	// short-circuit so a skipped fetch is still labelled accurately.
 	kind := refspecCommit
 	switch {
 	case e.RefSpec != "":
@@ -62,6 +65,26 @@ func (e *Executor) fetchSource(ctx context.Context, addBloblessFilter bool) erro
 		}
 	case e.Commit == "HEAD":
 		kind = refspecBranch
+	}
+	span.AddAttributes(map[string]string{
+		"git.pull_request": strconv.FormatBool(e.PullRequest != "false"),
+		"git.refspec_kind": string(kind),
+	})
+
+	// If configured, skip the fetch when the commit already exists locally.
+	// This is useful when a pre-populated git mirror is used with --reference,
+	// as the commit objects are already reachable and fetching is redundant.
+	skipFetch := e.GitSkipFetchExistingCommits && e.Commit != "HEAD" &&
+		hasGitCommit(ctx, e.shell, ".git", e.Commit)
+	span.AddAttributes(map[string]string{"git.skipped": strconv.FormatBool(skipFetch)})
+	if skipFetch {
+		e.shell.Commentf("Commit %q already exists locally, skipping fetch", e.Commit)
+		return nil
+	}
+
+	gitFetchFlags := e.GitFetchFlags
+	if addBloblessFilter {
+		gitFetchFlags = "--filter=blob:none " + gitFetchFlags
 	}
 
 	switch kind {

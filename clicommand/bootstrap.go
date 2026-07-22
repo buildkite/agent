@@ -74,6 +74,7 @@ type BootstrapConfig struct {
 	SkipCheckout                 bool     `cli:"skip-checkout"`
 	GitCheckoutTimeout           int      `cli:"git-checkout-timeout"`
 	GitSkipFetchExistingCommits  bool     `cli:"git-skip-fetch-existing-commits"`
+	TraceGitCheckout             bool     `cli:"trace-git-checkout"`
 	GitCheckoutFlags             string   `cli:"git-checkout-flags"`
 	GitCloneFlags                string   `cli:"git-clone-flags"`
 	GitFetchFlags                string   `cli:"git-fetch-flags"`
@@ -270,6 +271,7 @@ var BootstrapCommand = cli.Command{
 		GitSubmoduleCloneConfigFlag,
 		GitCheckoutTimeoutFlag,
 		GitSkipFetchExistingCommitsFlag,
+		TraceGitCheckoutFlag,
 		CheckoutAttemptsFlag,
 
 		cli.StringFlag{
@@ -472,6 +474,7 @@ var BootstrapCommand = cli.Command{
 			GitCheckoutTimeout:           cfg.GitCheckoutTimeout,
 			GitSkipFetchExistingCommits:  cfg.GitSkipFetchExistingCommits,
 			CheckoutOverrideMode:         checkoutMode,
+			TraceGitCheckout:             cfg.TraceGitCheckout,
 			Command:                      cfg.Command,
 			CommandEval:                  cfg.CommandEval,
 			Commit:                       cfg.Commit,

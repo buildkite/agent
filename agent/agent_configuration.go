@@ -34,6 +34,7 @@ type AgentConfiguration struct {
 	SkipCheckout                    bool
 	GitSkipFetchExistingCommits     bool
 	CheckoutOverrideMode            env.CheckoutOverrideMode
+	TraceGitCheckout                bool
 	CheckoutAttempts                int
 	AllowedRepositories             []*regexp.Regexp
 	AllowedPlugins                  []*regexp.Regexp
