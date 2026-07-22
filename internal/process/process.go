@@ -88,6 +88,7 @@ type Config struct {
 	Stdout            io.Writer
 	Stderr            io.Writer
 	Dir               string
+	Nice              int // Unix nice value for the child process (0 = default)
 	InterruptSignal   Signal
 	SignalGracePeriod time.Duration
 	Started           chan struct{}

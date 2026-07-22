@@ -13,8 +13,15 @@ import (
 	"github.com/buildkite/agent/v3/internal/process"
 )
 
+var extraTestMainCases = map[string]func(){}
+
 // Invoked by `go test`, switch between helper and running tests based on env
 func TestMain(m *testing.M) {
+	if fn, ok := extraTestMainCases[os.Getenv("TEST_MAIN")]; ok {
+		fn()
+		return // fn is expected to call os.Exit
+	}
+
 	switch os.Getenv("TEST_MAIN") {
 	case "tester":
 		for line := range strings.SplitSeq(strings.TrimSuffix(longTestOutput, "\n"), "\n") {

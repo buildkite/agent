@@ -12,6 +12,7 @@ import (
 
 	"github.com/buildkite/agent/v3/internal/experiments"
 	"github.com/buildkite/agent/v3/internal/osutil"
+	"github.com/buildkite/agent/v3/internal/redact"
 	"github.com/buildkite/agent/v3/internal/shell"
 	"github.com/buildkite/agent/v3/tracetools"
 	"github.com/buildkite/roko"
@@ -288,7 +289,7 @@ func (e *Executor) runDefaultCheckoutAttempt(ctx context.Context) error {
 func (e *Executor) defaultCheckoutPhase(ctx context.Context) (retErr error) {
 	span, _ := tracetools.StartSpanFromContext(ctx, "repo-checkout", e.TracingBackend)
 	span.AddAttributes(map[string]string{
-		"checkout.repo_name": e.Repository,
+		"checkout.repo_name": redact.URLCredentials(e.Repository),
 		"checkout.refspec":   e.RefSpec,
 		"checkout.commit":    e.Commit,
 	})

@@ -120,6 +120,298 @@ func TestHooksCanUnsetEnvironmentVariables(t *testing.T) {
 	tester.RunAndCheck(t, "MY_CUSTOM_ENV=1")
 }
 
+func TestEnvironmentHookCheckoutOverrideMode(t *testing.T) {
+	t.Parallel()
+
+	// An environment hook is a within-job source: the default (from-job) lets it
+	// set checkout vars; only strict blocks it.
+	tests := []struct {
+		name               string
+		envVar             string
+		envValue           string
+		mode               string // BUILDKITE_CHECKOUT_OVERRIDE_MODE; "" exercises the default
+		wantEnv            string
+		wantBlockedWarning bool
+	}{
+		{
+			name:     "default_allows_skip_checkout",
+			envVar:   "BUILDKITE_SKIP_CHECKOUT",
+			envValue: "true",
+			wantEnv:  "true",
+		},
+		{
+			name:               "strict_blocks_skip_checkout",
+			envVar:             "BUILDKITE_SKIP_CHECKOUT",
+			envValue:           "true",
+			mode:               "strict",
+			wantBlockedWarning: true,
+		},
+		{
+			// Sparse paths is only exercised in the blocked direction: the lock
+			// strips it before checkout, so the real checkout is unaffected.
+			name:               "strict_blocks_sparse_checkout_paths",
+			envVar:             "BUILDKITE_GIT_SPARSE_CHECKOUT_PATHS",
+			envValue:           "a/b",
+			mode:               "strict",
+			wantBlockedWarning: true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			tester, err := NewExecutorTester(mainCtx)
+			if err != nil {
+				t.Fatalf("NewExecutorTester() error = %v", err)
+			}
+			defer tester.Close()
+
+			filename := "environment"
+			script := []string{
+				"#!/usr/bin/env bash",
+				fmt.Sprintf("export %s=%s", tc.envVar, tc.envValue),
+			}
+			if runtime.GOOS == "windows" {
+				filename = "environment.bat"
+				script = []string{
+					"@echo off",
+					fmt.Sprintf("set %s=%s", tc.envVar, tc.envValue),
+				}
+			}
+
+			if err := os.WriteFile(filepath.Join(tester.HooksDir, filename), []byte(strings.Join(script, "\n")), 0o700); err != nil {
+				t.Fatalf("os.WriteFile(%q, script, 0o700) = %v", filename, err)
+			}
+
+			tester.ExpectGlobalHook("command").Once().AndExitWith(0).AndCallFunc(func(c *bintest.Call) {
+				if got, want := c.GetEnv(tc.envVar), tc.wantEnv; got != want {
+					_, _ = fmt.Fprintf(c.Stderr, "Expected %s=%q, got %q\n", tc.envVar, want, got)
+					c.Exit(1)
+					return
+				}
+				c.Exit(0)
+			})
+
+			env := []string{}
+			if tc.mode != "" {
+				env = append(env, "BUILDKITE_CHECKOUT_OVERRIDE_MODE="+tc.mode)
+			}
+
+			tester.RunAndCheck(t, env...)
+
+			containsWarning := strings.Contains(tester.Output, "env vars were blocked") &&
+				strings.Contains(tester.Output, tc.envVar)
+			if containsWarning != tc.wantBlockedWarning {
+				t.Fatalf("blocked warning presence = %t, want %t\noutput: %s", containsWarning, tc.wantBlockedWarning, tester.Output)
+			}
+		})
+	}
+}
+
+func TestEnvironmentHookCannotSetCheckoutInfraVars(t *testing.T) {
+	t.Parallel()
+
+	// SUBMODULE_CLONE_CONFIG and MIRROR_CHECKOUT_MODE are always agent-
+	// authoritative. Unlike the checkout-override-scoped vars, they're blocked
+	// from within-job sources regardless of the mode, so run under none (the most
+	// permissive mode) to prove the mode can't relax them.
+	infraVars := []struct {
+		envVar   string
+		envValue string
+	}{
+		{"BUILDKITE_GIT_SUBMODULE_CLONE_CONFIG", "protocol.file.allow=always"},
+		{"BUILDKITE_GIT_MIRROR_CHECKOUT_MODE", "dissociate"},
+	}
+
+	for _, tc := range infraVars {
+		t.Run(tc.envVar, func(t *testing.T) {
+			t.Parallel()
+
+			tester, err := NewExecutorTester(mainCtx)
+			if err != nil {
+				t.Fatalf("NewExecutorTester() error = %v", err)
+			}
+			defer tester.Close()
+
+			filename := "environment"
+			script := []string{
+				"#!/usr/bin/env bash",
+				fmt.Sprintf("export %s=%s", tc.envVar, tc.envValue),
+			}
+			if runtime.GOOS == "windows" {
+				filename = "environment.bat"
+				script = []string{
+					"@echo off",
+					fmt.Sprintf("set %s=%s", tc.envVar, tc.envValue),
+				}
+			}
+
+			if err := os.WriteFile(filepath.Join(tester.HooksDir, filename), []byte(strings.Join(script, "\n")), 0o700); err != nil {
+				t.Fatalf("os.WriteFile(%q, script, 0o700) = %v", filename, err)
+			}
+
+			tester.ExpectGlobalHook("command").Once().AndExitWith(0).AndCallFunc(func(c *bintest.Call) {
+				if got := c.GetEnv(tc.envVar); got == tc.envValue {
+					_, _ = fmt.Fprintf(c.Stderr, "%s=%q, want the within-job block to strip the hook's value\n", tc.envVar, got)
+					c.Exit(1)
+					return
+				}
+				c.Exit(0)
+			})
+
+			tester.RunAndCheck(t, "BUILDKITE_CHECKOUT_OVERRIDE_MODE=none")
+
+			if !strings.Contains(tester.Output, "env vars were blocked") || !strings.Contains(tester.Output, tc.envVar) {
+				t.Fatalf("output did not report %q as blocked\noutput: %s", tc.envVar, tester.Output)
+			}
+		})
+	}
+}
+
+func TestEnvironmentHookCannotRelaxCheckoutOverrideMode(t *testing.T) {
+	t.Parallel()
+
+	// A hook must not be able to relax the mode mid-job: exporting
+	// BUILDKITE_CHECKOUT_OVERRIDE_MODE=none should be ignored while the agent
+	// runs with strict, so a checkout-scoped var the same hook tries to set
+	// stays blocked.
+	tester, err := NewExecutorTester(mainCtx)
+	if err != nil {
+		t.Fatalf("NewExecutorTester() error = %v", err)
+	}
+	defer tester.Close()
+
+	filename := "environment"
+	script := []string{
+		"#!/usr/bin/env bash",
+		"export BUILDKITE_CHECKOUT_OVERRIDE_MODE=none",
+		"export BUILDKITE_SKIP_CHECKOUT=true",
+	}
+	if runtime.GOOS == "windows" {
+		filename = "environment.bat"
+		script = []string{
+			"@echo off",
+			"set BUILDKITE_CHECKOUT_OVERRIDE_MODE=none",
+			"set BUILDKITE_SKIP_CHECKOUT=true",
+		}
+	}
+
+	if err := os.WriteFile(filepath.Join(tester.HooksDir, filename), []byte(strings.Join(script, "\n")), 0o700); err != nil {
+		t.Fatalf("os.WriteFile(%q, script, 0o700) = %v", filename, err)
+	}
+
+	tester.ExpectGlobalHook("command").Once().AndExitWith(0).AndCallFunc(func(c *bintest.Call) {
+		if got := c.GetEnv("BUILDKITE_SKIP_CHECKOUT"); got == "true" {
+			_, _ = fmt.Fprintf(c.Stderr, "BUILDKITE_SKIP_CHECKOUT=%q, want strict to stay on and block it\n", got)
+			c.Exit(1)
+			return
+		}
+		c.Exit(0)
+	})
+
+	tester.RunAndCheck(t, "BUILDKITE_CHECKOUT_OVERRIDE_MODE=strict")
+
+	// Both the mode var itself and the scoped var should be reported as blocked.
+	for _, want := range []string{"BUILDKITE_CHECKOUT_OVERRIDE_MODE", "BUILDKITE_SKIP_CHECKOUT"} {
+		if !strings.Contains(tester.Output, "env vars were blocked") || !strings.Contains(tester.Output, want) {
+			t.Fatalf("output did not report %q as blocked\noutput: %s", want, tester.Output)
+		}
+	}
+}
+
+func TestEnvironmentHookEnablingLFSSetsSkipSmudge(t *testing.T) {
+	t.Parallel()
+
+	// A hook that enables LFS after setUp's skip-smudge decision must still get
+	// GIT_LFS_SKIP_SMUDGE set before checkout, so LFS objects go through the
+	// controlled fetch/checkout path rather than the automatic smudge filter. The
+	// hook also skips checkout so the command hook can assert without git-lfs
+	// installed (from-job lets a hook set both vars).
+	tester, err := NewExecutorTester(mainCtx)
+	if err != nil {
+		t.Fatalf("NewExecutorTester() error = %v", err)
+	}
+	defer tester.Close()
+
+	filename := "environment"
+	script := []string{
+		"#!/usr/bin/env bash",
+		"export BUILDKITE_GIT_LFS_ENABLED=true",
+		"export BUILDKITE_SKIP_CHECKOUT=true",
+	}
+	if runtime.GOOS == "windows" {
+		filename = "environment.bat"
+		script = []string{
+			"@echo off",
+			"set BUILDKITE_GIT_LFS_ENABLED=true",
+			"set BUILDKITE_SKIP_CHECKOUT=true",
+		}
+	}
+
+	if err := os.WriteFile(filepath.Join(tester.HooksDir, filename), []byte(strings.Join(script, "\n")), 0o700); err != nil {
+		t.Fatalf("os.WriteFile(%q, script, 0o700) = %v", filename, err)
+	}
+
+	tester.ExpectGlobalHook("command").Once().AndExitWith(0).AndCallFunc(func(c *bintest.Call) {
+		if got := c.GetEnv("GIT_LFS_SKIP_SMUDGE"); got != "1" {
+			_, _ = fmt.Fprintf(c.Stderr, "GIT_LFS_SKIP_SMUDGE=%q, want \"1\" after a hook enabled LFS\n", got)
+			c.Exit(1)
+			return
+		}
+		c.Exit(0)
+	})
+
+	// Agent LFS defaults off; the hook is the only thing enabling it.
+	tester.RunAndCheck(t)
+}
+
+func TestNoCommandEvalFloorsCheckoutOverrideModeToStrict(t *testing.T) {
+	t.Parallel()
+
+	// Disabling command-eval floors the mode to strict regardless of the
+	// configured mode, so no source can inject git flags to bypass
+	// no-command-eval. Even a within-job hook (which from-job would allow) is
+	// blocked from setting checkout vars once command-eval is off.
+	tester, err := NewExecutorTester(mainCtx)
+	if err != nil {
+		t.Fatalf("NewExecutorTester() error = %v", err)
+	}
+	defer tester.Close()
+
+	filename := "environment"
+	script := []string{
+		"#!/usr/bin/env bash",
+		"export BUILDKITE_SKIP_CHECKOUT=true",
+	}
+	if runtime.GOOS == "windows" {
+		filename = "environment.bat"
+		script = []string{
+			"@echo off",
+			"set BUILDKITE_SKIP_CHECKOUT=true",
+		}
+	}
+
+	if err := os.WriteFile(filepath.Join(tester.HooksDir, filename), []byte(strings.Join(script, "\n")), 0o700); err != nil {
+		t.Fatalf("os.WriteFile(%q, script, 0o700) = %v", filename, err)
+	}
+
+	tester.ExpectGlobalHook("command").Once().AndExitWith(0).AndCallFunc(func(c *bintest.Call) {
+		if got := c.GetEnv("BUILDKITE_SKIP_CHECKOUT"); got == "true" {
+			_, _ = fmt.Fprintf(c.Stderr, "BUILDKITE_SKIP_CHECKOUT=%q, want the command-eval floor to strict to block it\n", got)
+			c.Exit(1)
+			return
+		}
+		c.Exit(0)
+	})
+
+	tester.RunAndCheck(t, "BUILDKITE_COMMAND_EVAL=false", "BUILDKITE_CHECKOUT_OVERRIDE_MODE=none")
+
+	if !strings.Contains(tester.Output, "env vars were blocked") || !strings.Contains(tester.Output, "BUILDKITE_SKIP_CHECKOUT") {
+		t.Fatalf("BUILDKITE_SKIP_CHECKOUT should be blocked once command-eval floors the mode to strict\noutput: %s", tester.Output)
+	}
+}
+
 func TestDirectoryPassesBetweenHooks(t *testing.T) {
 	t.Parallel()
 
