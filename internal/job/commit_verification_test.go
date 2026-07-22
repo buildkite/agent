@@ -796,8 +796,9 @@ func TestVerifyCommit(t *testing.T) {
 		// --dry-run writes no ref and --prefetch redirects it under refs/prefetch/;
 		// either would leave the branch-tip ref unresolvable and degrade the check
 		// to "unavailable" (a pass under strict). They must be stripped so the tip
-		// is actually pinned and the off-branch commit is caught.
-		for _, flag := range []string{"--dry-run", "--prefetch"} {
+		// is actually pinned and the off-branch commit is caught. The abbreviated
+		// spellings git also accepts (--dry, --prefe) must be caught as well.
+		for _, flag := range []string{"--dry-run", "--dry", "--prefetch", "--prefe"} {
 			t.Run(flag, func(t *testing.T) {
 				ctx := t.Context()
 				repoURL, _, offBranchCommit := setupFileBackedRepo(t, ctx, "feature")
@@ -1027,7 +1028,13 @@ func TestStripRefSuppressingFetchFlags(t *testing.T) {
 		{"dry-run", []string{"--dry-run"}, []string{}},
 		{"prefetch", []string{"--prefetch"}, []string{}},
 		{"negotiate-only", []string{"--negotiate-only"}, []string{}},
+		{"dry-run abbreviation", []string{"--dry"}, []string{}},
+		{"prefetch abbreviation", []string{"--prefe"}, []string{}},
+		{"negotiate-only abbreviation", []string{"--negotiate"}, []string{}},
 		{"-n is --no-tags, not dry-run, so it survives", []string{"-n"}, []string{"-n"}},
+		{"--prune is not a prefix of these modes", []string{"--prune"}, []string{"--prune"}},
+		{"--negotiation-tip survives", []string{"--negotiation-tip=abc"}, []string{"--negotiation-tip=abc"}},
+		{"--no-* negations survive", []string{"--no-dry-run", "--no-prefetch"}, []string{"--no-dry-run", "--no-prefetch"}},
 		{"keeps surrounding flags", []string{"-v", "--dry-run", "--prune"}, []string{"-v", "--prune"}},
 	}
 	for _, tt := range tests {

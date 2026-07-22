@@ -195,15 +195,30 @@ func stripShallowFetchFlags(flags []string) []string {
 // BUILDKITE_GIT_FETCH_FLAGS, any of them would leave the branch-tip ref
 // unwritten, so rev-parse fails and the check degrades to "unavailable" (a pass
 // under strict). None of them belong in the verification probe.
+//
+// Unambiguous prefixes are matched too: git accepts --dry for --dry-run and
+// --prefe for --prefetch, so a token is dropped when one of the mode names
+// begins with it. Stripping tokens keeps this version-safe, unlike appending the
+// --no-* forms: --prefetch (git 2.29) and --negotiate-only (2.32) postdate the
+// oldest git the agent runs on, so --no-prefetch/--no-negotiate-only would break
+// fetches there. Legitimate flags like --prune and --negotiation-tip are not
+// prefixes of these names, so they survive.
 func stripRefSuppressingFetchFlags(flags []string) []string {
-	suppressing := map[string]bool{
-		"--dry-run":        true,
-		"--prefetch":       true,
-		"--negotiate-only": true,
-	}
+	modes := []string{"dry-run", "prefetch", "negotiate-only"}
 	out := make([]string, 0, len(flags))
 	for _, f := range flags {
-		if suppressing[f] {
+		name, isLong := strings.CutPrefix(f, "--")
+		name, _, _ = strings.Cut(name, "=")
+		suppressing := false
+		if isLong && name != "" {
+			for _, m := range modes {
+				if strings.HasPrefix(m, name) {
+					suppressing = true
+					break
+				}
+			}
+		}
+		if suppressing {
 			continue
 		}
 		out = append(out, f)
