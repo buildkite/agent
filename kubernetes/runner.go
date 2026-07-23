@@ -23,7 +23,10 @@ func init() {
 	gob.Register(new(syscall.WaitStatus))
 }
 
-const defaultSocketPath = "/workspace/buildkite.sock"
+const (
+	defaultSocketPath          = "/workspace/buildkite.sock"
+	unknownContainerExitStatus = 137
+)
 
 type RunnerConfig struct {
 	SocketPath         string
@@ -227,16 +230,22 @@ func (r *Runner) WaitStatus() process.WaitStatus {
 		exitStatus, state := client.ExitStatus, client.State
 		client.mu.Unlock()
 
-		if exitStatus != 0 {
-			return waitStatus{Code: exitStatus}
-		}
-
-		// use an unusual status code to distinguish unusual states
 		switch state {
+		case StateExited:
+			if exitStatus != 0 {
+				return waitStatus{Code: exitStatus}
+			}
 		case StateLost:
 			return waitStatus{Code: -7}
 		case StateNotYetConnected:
 			return waitStatus{Code: -10}
+		default:
+			// During agent shutdown, a long-running post-command hook can outlast
+			// the signal grace period. The runner then stops before the connected
+			// client reports its terminal status. Match Kubernetes' synthetic exit
+			// status rather than treating the zero-value exit status as success.
+			// Any future client state is also unknown by default.
+			return waitStatus{Code: unknownContainerExitStatus}
 		}
 	}
 	return waitStatus{}

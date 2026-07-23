@@ -52,6 +52,10 @@ func TestOrderedClients(t *testing.T) {
 	default:
 		t.Fatalf("runner should be done when all clients have exited")
 	}
+
+	if got, want := runner.WaitStatus().ExitStatus(), 0; got != want {
+		t.Errorf("runner.WaitStatus().ExitStatus() = %d, want %d", got, want)
+	}
 }
 
 func TestLivenessCheck(t *testing.T) {
@@ -160,6 +164,42 @@ func TestWaitStatusNonZero(t *testing.T) {
 	}
 }
 
+func TestWaitStatusUnknown(t *testing.T) {
+	runner := newRunner(t, 2)
+
+	client0 := &Client{ID: 0, SocketPath: runner.conf.SocketPath}
+	client1 := &Client{ID: 1, SocketPath: runner.conf.SocketPath}
+
+	ctx, cancel := context.WithCancel(t.Context())
+	t.Cleanup(cancel)
+
+	for _, client := range []*Client{client0, client1} {
+		if err := connect(ctx, client); err != nil {
+			t.Errorf("connect(ctx, client) error = %v", err)
+		}
+		t.Cleanup(client.Close)
+	}
+
+	if err := client0.Exit(0); err != nil {
+		t.Errorf("client0.Exit(0) error = %v", err)
+	}
+	if err := runner.Terminate(); err != nil {
+		t.Errorf("runner.Terminate() error = %v", err)
+	}
+
+	if got, want := runner.WaitStatus().ExitStatus(), unknownContainerExitStatus; got != want {
+		t.Errorf("runner.WaitStatus().ExitStatus() = %d, want %d", got, want)
+	}
+}
+
+func TestWaitStatusUnknownState(t *testing.T) {
+	runner := &Runner{clients: []*clientResult{{State: ClientState(99)}}}
+
+	if got, want := runner.WaitStatus().ExitStatus(), unknownContainerExitStatus; got != want {
+		t.Errorf("runner.WaitStatus().ExitStatus() = %d, want %d", got, want)
+	}
+}
+
 func TestInterruptBeforeStart(t *testing.T) {
 	runner := newRunner(t, 2)
 	ctx, cancel := context.WithCancel(t.Context())
@@ -236,7 +276,7 @@ func TestInterruptAfterStart(t *testing.T) {
 }
 
 func TestTerminateAfterStart(t *testing.T) {
-	runner := newRunner(t, 2)
+	runner := newRunner(t, 1)
 	ctx, cancel := context.WithCancel(t.Context())
 	t.Cleanup(cancel)
 	client0 := &Client{ID: 0, SocketPath: runner.conf.SocketPath}
@@ -265,6 +305,10 @@ func TestTerminateAfterStart(t *testing.T) {
 	}
 
 	<-terminated
+
+	if got, want := runner.WaitStatus().ExitStatus(), unknownContainerExitStatus; got != want {
+		t.Errorf("runner.WaitStatus().ExitStatus() = %d, want %d", got, want)
+	}
 }
 
 func newRunner(t *testing.T, clientCount int) *Runner {
