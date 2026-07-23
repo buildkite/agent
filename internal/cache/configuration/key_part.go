@@ -3,6 +3,7 @@ package configuration
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -18,14 +19,9 @@ import (
 )
 
 type KeyPart struct {
-	// Arg is the single argument for the literal, agent and env sources.
-	Arg string
-	// Patterns holds the file paths / glob patterns for the checksum source.
-	// The scalar form yields one entry; the array form yields one or more.
-	Patterns []string
-	Source   Source
-	// FallbackLimit marks the fallback boundary: this part and every part before
-	// it are mandatory; parts after it are optional. At most one part may set it.
+	Arg           string
+	Patterns      []string
+	Source        Source
 	FallbackLimit bool
 }
 type Source string
@@ -229,13 +225,6 @@ func lookupEnv(env map[string]string, name string) string {
 
 // checksumDigest folds every file matched by patterns into a single
 // deterministic SHA-256 digest.
-// A literal entry (no glob chars) is an assertion that a specific file
-// exists. A glob entry may match nothing without error,
-// but it is an error when the whole pattern set matches no files.
-//
-// A single plain path takes a fast path that hashes the file's raw contents,
-// identical to the original single-file checksum, so pre-existing cache keys
-// are preserved.
 func checksumDigest(patterns []string) (string, error) {
 	if len(patterns) == 0 {
 		return "", fmt.Errorf("cache_key: checksum has no patterns")
@@ -247,8 +236,7 @@ func checksumDigest(patterns []string) (string, error) {
 	seen := make(map[string]struct{})
 	for _, pattern := range patterns {
 		if !hasGlobMeta(pattern) {
-			// Literal path: must exist (matching the scalar form), and must be a
-			// regular file since a directory has no hashable contents.
+			// Literal path: must exist and must be a regular file since a directory has no hashable contents.
 			info, err := os.Stat(pattern)
 			if err != nil {
 				return "", fmt.Errorf("cache_key: checksum %q: %w", pattern, err)
@@ -256,9 +244,7 @@ func checksumDigest(patterns []string) (string, error) {
 			if info.IsDir() {
 				return "", fmt.Errorf("cache_key: checksum %q is a directory", pattern)
 			}
-			// Clean before use as a dedup key so aliases like "go.mod" and
-			// "./go.mod" collapse to one entry, matching the already-cleaned paths
-			// that the globber returns for glob entries.
+			// Clean before use as a dedup key so aliases like "go.mod" and "./go.mod" collapse to one entry.
 			seen[filepath.ToSlash(filepath.Clean(pattern))] = struct{}{}
 			continue
 		}
@@ -273,15 +259,33 @@ func checksumDigest(patterns []string) (string, error) {
 		// surfaced rather than silently dropped.
 		walk := func(match string, d fs.DirEntry, err error) error {
 			if err != nil {
+				// A non-existent path (e.g. the glob's base directory is absent)
+				// just means the glob matched nothing here — legitimate and not an
+				// error.
+				if errors.Is(err, fs.ErrNotExist) {
+					return nil
+				}
 				return fmt.Errorf("cache_key: checksum pattern %q: %w", pattern, err)
 			}
-			if d == nil || d.IsDir() {
-				return nil // directories have no hashable contents
+			if d == nil {
+				return nil
+			}
+			// d.IsDir() reports false for a symlink to a directory (it reflects
+			// the link, not its target), so stat the resolved path to exclude
+			// directories reached via a symlink too.
+			info, err := os.Stat(match)
+			if err != nil {
+				return fmt.Errorf("cache_key: checksum pattern %q: %w", pattern, err)
+			}
+			if info.IsDir() {
+				return nil // directory (or symlink to one) has no hashable contents
 			}
 			seen[filepath.ToSlash(match)] = struct{}{}
 			return nil
 		}
-		if err := parsed.Glob(walk); err != nil {
+		// WalkIntermediateDirs makes zzglob invoke the callback for the pattern's
+		// fixed walk root.
+		if err := parsed.Glob(walk, zzglob.WalkIntermediateDirs(true)); err != nil {
 			return "", err
 		}
 	}

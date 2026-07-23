@@ -271,6 +271,54 @@ func TestChecksumDigestSingleGlobExcludesDirectories(t *testing.T) {
 	}
 }
 
+func TestChecksumDigestGlobUnreadableRoot(t *testing.T) {
+	if os.Getuid() == 0 {
+		t.Skip("running as root bypasses directory permissions")
+	}
+	// Not parallel: relies on the process working directory via t.Chdir.
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "go.mod"), "module x\n")
+
+	// A directory that the glob's fixed root walks into, made unreadable.
+	secret := filepath.Join(dir, "secret")
+	if err := os.MkdirAll(secret, 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	writeFile(t, filepath.Join(secret, "a.lock"), "locked\n")
+	if err := os.Chmod(secret, 0o000); err != nil {
+		t.Fatalf("Chmod: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(secret, 0o755) }) // so t.TempDir cleanup can remove it
+	t.Chdir(dir)
+
+	// The unreadable root must surface as an error, not be silently dropped,
+	part := KeyPart{Source: SourceChecksum, Patterns: []string{"go.mod", "secret/**/*.lock"}}
+	if _, err := part.Resolve(nil); err == nil {
+		t.Fatal("Resolve() error = nil, want error when a glob's root is unreadable")
+	}
+}
+
+func TestChecksumDigestGlobExcludesSymlinkedDirectory(t *testing.T) {
+	// Not parallel: relies on the process working directory via t.Chdir.
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "real.lock"), "locked\n")
+	if err := os.MkdirAll(filepath.Join(dir, "adir"), 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	// A symlink to a directory: fs.DirEntry.IsDir() reports false for it, so it
+	// must be excluded by stat'ing the resolved target rather than hashed.
+	if err := os.Symlink(filepath.Join(dir, "adir"), filepath.Join(dir, "linkdir")); err != nil {
+		t.Skipf("symlinks unsupported: %v", err)
+	}
+	t.Chdir(dir)
+
+	// "*" matches real.lock, adir, and linkdir; only real.lock is hashable.
+	part := KeyPart{Source: SourceChecksum, Patterns: []string{"*"}}
+	if _, err := part.Resolve(nil); err != nil {
+		t.Fatalf("Resolve() unexpected error = %v (symlink-to-dir should be excluded, not hashed)", err)
+	}
+}
+
 func TestKeyPartResolveChecksumMissingLiteralInArray(t *testing.T) {
 	// Not parallel: relies on the process working directory via t.Chdir.
 	dir := t.TempDir()
