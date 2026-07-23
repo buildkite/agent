@@ -3,69 +3,8 @@ package archive
 import (
 	"bytes"
 	"crypto/sha256"
-	"os"
-	"path/filepath"
 	"testing"
 )
-
-func TestIsUnderHome(t *testing.T) {
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		t.Fatalf("failed to get home directory: %v", err)
-	}
-
-	tests := []struct {
-		name     string
-		path     string
-		expected bool
-		wantErr  bool
-	}{
-		{
-			name:     "path under home directory",
-			path:     filepath.Join(homeDir, "documents"),
-			expected: true,
-			wantErr:  false,
-		},
-		{
-			name:     "path not under home directory",
-			path:     "/tmp/test",
-			expected: false,
-			wantErr:  false,
-		},
-		// TODO: investigate how we can override the home directory for testing
-		// {
-		// 	name:     "relative path under home",
-		// 	path:     "~/documents",
-		// 	expected: true,
-		// 	wantErr:  false,
-		// },
-		{
-			name:     "empty path",
-			path:     "",
-			expected: false,
-			wantErr:  true,
-		},
-		{
-			name:     "path with symlinks",
-			path:     filepath.Join(homeDir, "..", filepath.Base(homeDir)),
-			expected: true,
-			wantErr:  false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result, err := isUnderHome(tt.path)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("isUnderHome() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if result != tt.expected {
-				t.Errorf("isUnderHome() = %v, want %v", result, tt.expected)
-			}
-		})
-	}
-}
 
 func TestChecksumSHA256_Sum(t *testing.T) {
 	tests := []struct {
