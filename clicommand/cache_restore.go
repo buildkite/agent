@@ -48,8 +48,10 @@ Configuration File Format:
 
 The cache configuration file should be in YAML format. cache_key is an ordered
 list of parts; each part is a literal string or one of { agent: os },
-{ agent: arch }, { checksum: <file> }, or { env: <VAR> }. Any one part may also
-set fallback_limit: true to make every part after it optional for fallback
+{ agent: arch }, { checksum: <file> }, or { env: <VAR> }. A checksum part also
+accepts an array of file paths and glob patterns (*, **, ?), expanded relative
+to the working directory and hashed together into one digest. Any one part may
+also set fallback_limit: true to make every part after it optional for fallback
 matching (the marked part itself stays mandatory). In the example below an exact
 match is preferred, but if the lockfile changed, an entry matching node + os + arch
 is still restored, as the fallback is specified on arch, making node + os + arch mandatory, 
