@@ -44,7 +44,7 @@ import (
 	"github.com/buildkite/agent/v3/tracetools"
 	"github.com/buildkite/agent/v3/version"
 	"github.com/buildkite/shellwords"
-	"github.com/lestrrat-go/jwx/v2/jwk"
+	"github.com/lestrrat-go/jwx/v3/jwk"
 	"github.com/urfave/cli"
 )
 
@@ -1482,7 +1482,7 @@ var AgentStartCommand = cli.Command{
 	},
 }
 
-func parseAndValidateJWKS(ctx context.Context, keysetType, path string) (jwk.Set, error) {
+func parseAndValidateJWKS(_ context.Context, keysetType, path string) (jwk.Set, error) {
 	jwksBytes, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read job %s keyset: %w", keysetType, err)
@@ -1497,16 +1497,10 @@ func parseAndValidateJWKS(ctx context.Context, keysetType, path string) (jwk.Set
 		return nil, fmt.Errorf("job %s keyset is empty", keysetType)
 	}
 
-	iter := jwks.Keys(ctx)
-	for iter.Next(ctx) {
-		keyI := iter.Pair().Value
-		key, ok := keyI.(jwk.Key)
-		if !ok {
-			return nil, fmt.Errorf("job %s keyset contains a non-key at index %d", keysetType, iter.Pair().Index)
-		}
-
-		if _, ok = key.Get(jwk.AlgorithmKey); !ok {
-			return nil, fmt.Errorf("job %s keyset contains a key without an algorithm at index %d. all keys used for signing and verification in the agent must have their `alg` key set", keysetType, iter.Pair().Index)
+	for i := range jwks.Len() {
+		key, _ := jwks.Key(i)
+		if _, ok := key.Algorithm(); !ok {
+			return nil, fmt.Errorf("job %s keyset contains a key without an algorithm at index %d. all keys used for signing and verification in the agent must have their `alg` key set", keysetType, i)
 		}
 	}
 

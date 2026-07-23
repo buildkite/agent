@@ -10,7 +10,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/kms"
 	"github.com/aws/aws-sdk-go-v2/service/kms/types"
-	"github.com/lestrrat-go/jwx/v2/jwa"
+	"github.com/lestrrat-go/jwx/v3/jwa"
 )
 
 var (
@@ -66,7 +66,7 @@ func NewKMS(client *kms.Client, kmsKeyID string) (*KMS, error) {
 		return &KMS{
 			client: client,
 			kid:    kmsKeyID,
-			jwaAlg: jwa.ES256,
+			jwaAlg: jwa.ES256(),
 			alg:    types.SigningAlgorithmSpecEcdsaSha256,
 		}, nil
 	default:
@@ -137,6 +137,6 @@ func (sv *KMS) GetPublicKey() (crypto.PublicKey, error) {
 }
 
 // Algorithm returns the equivalent of the KMS key's signing algorithm as a JWA key algorithm.
-func (sv *KMS) Algorithm() jwa.KeyAlgorithm {
-	return sv.jwaAlg
+func (sv *KMS) Algorithm() (jwa.KeyAlgorithm, bool) {
+	return sv.jwaAlg, true
 }
