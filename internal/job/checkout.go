@@ -163,6 +163,12 @@ func (e *Executor) checkout(ctx context.Context) error {
 			var errGit *gitError
 
 			switch {
+			case errors.Is(err, ErrCommitVerificationFailed):
+				// A commit that is provably not on its branch won't become valid by
+				// retrying, so fail fast instead of re-cloning through the whole backoff.
+				e.shell.Warningf("Checkout failed! %s", err)
+				r.Break()
+
 			case errors.Is(err, errCheckoutAttemptTimedOut):
 				// The per-attempt timeout fired and git was signal-killed.
 				// Treat this like a generic transient failure: warn, clean

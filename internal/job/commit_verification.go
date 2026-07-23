@@ -5,8 +5,11 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/buildkite/agent/v3/internal/shell"
+	"github.com/buildkite/roko"
+	"github.com/buildkite/shellwords"
 )
 
 // ErrCommitVerificationFailed indicates that git has definitively determined
@@ -26,48 +29,212 @@ var ErrCommitVerificationUnavailable = errors.New("commit verification unavailab
 func (e *Executor) checkCommitOnBranch(ctx context.Context) error {
 	e.shell.Commentf("Verifying commit %q is on branch %q", e.Commit, e.Branch)
 
+	// The build's branch usually isn't a local ref at this point: the checkout
+	// fetches the commit directly (detached HEAD) and only the repository's
+	// default branch gets a local ref from the clone. Fetch the branch tip into a
+	// dedicated local ref so there's a resolvable ref to check the commit's
+	// ancestry against. Without this, merge-base against the bare branch name fails
+	// to resolve for any non-default branch and the check silently degrades to
+	// "unavailable".
+	//
+	// Resolve the tip through that dedicated ref rather than FETCH_HEAD: with the
+	// operator's fetch flags preserved (below), a configured --append or
+	// --no-write-fetch-head leaves FETCH_HEAD pointing at an earlier fetch (e.g.
+	// the build commit recorded by fetchSource), so rev-parse FETCH_HEAD could
+	// resolve to the build commit itself. merge-base <commit> <commit> then
+	// trivially succeeds and strict verification would accept an off-branch
+	// commit. A refspec with an explicit destination writes the ref regardless of
+	// those flags; the ref is deleted again on return.
+	//
+	// Qualify the source as refs/heads/<branch>: git resolves a bare name against
+	// refs/tags/ before refs/heads/, so a tag sharing the branch's name would pin
+	// the ref to the tag tip and verify the commit against the tag instead of the
+	// branch, letting a commit reachable only from the tag pass.
+	//
+	// Build the fetch argument vector directly rather than going through gitFetch:
+	// gitFetch runs shellwords.Split on every refspec, which mangles a branch name
+	// containing shell metacharacters (quotes are legal in git refs). e.Branch is
+	// externally controlled, so a split ref could target the wrong branch or fail
+	// to parse, silently degrading verification to "unavailable" (warn, never
+	// blocking) and defeating the qualification above.
+	//
+	// Preserve the operator's configured git-fetch flags: they are the supported
+	// way to configure every fetch (e.g. --upload-pack for a server on a custom
+	// path), and the checkout's own clone and source fetch already honour them. A
+	// fetch here that dropped them could fail where those succeed, again degrading
+	// to "unavailable" and letting strict pass. Split the flags (they are meant to
+	// be word-split) but keep the refspec a single unsplit argument.
+	//
+	// Strip the fetch modes that would leave that ref unwritten, though: --dry-run
+	// fetches nothing, --prefetch redirects refs under refs/prefetch/, and
+	// --negotiate-only fetches no packfile. Any of them would make rev-parse of the
+	// ref fail and degrade the check to "unavailable" (a pass under strict), so
+	// drop them from every verification fetch.
+	//
+	// Drop the depth-limiting flags from every verification fetch too, not just
+	// the deepening ones: git rejects --depth (and --shallow-since/--shallow-exclude)
+	// alongside the --deepen and --unshallow the loop below adds, and a configured
+	// --unshallow errors on a clone fetchSource has already completed ("--unshallow
+	// on a complete repository does not make sense"). Either way the fetch exits
+	// non-zero and a genuinely off-branch commit degrades to "unavailable" (a pass
+	// under strict). Reshaping history is the deepening loop's job, so keep the
+	// transport flags but strip the depth-limiting ones everywhere.
+	const branchTipRef = "refs/buildkite-agent/commit-verification-branch-tip"
+	branchRefspec := "+refs/heads/" + e.Branch + ":" + branchTipRef
+	fetchFlags, err := shellwords.Split(e.GitFetchFlags)
+	if err != nil {
+		return fmt.Errorf("%w: unable to parse git-fetch-flags %q: %w", ErrCommitVerificationUnavailable, e.GitFetchFlags, err)
+	}
+	fetchFlags = stripShallowFetchFlags(stripRefSuppressingFetchFlags(fetchFlags))
+	fetchBranch := func(extraFlags ...string) error {
+		args := append([]string{"fetch"}, fetchFlags...)
+		args = append(args, extraFlags...)
+		args = append(args, "--", "origin", branchRefspec)
+		return e.shell.Command("git", args...).Run(ctx)
+	}
+	// The ref is internal to verification; don't leave it behind in the repo.
+	defer func() { _ = e.shell.Command("git", "update-ref", "-d", branchTipRef).Run(ctx) }()
+
+	// Retry the branch-tip fetch a few times: it is the one network dependency the
+	// check adds, and a transient failure would otherwise degrade the whole check
+	// to "unavailable" (warn, never blocking) with no second chance, since
+	// verifyCommit returns nil and the outer checkout retry loop won't re-run it.
+	fetchErr := roko.NewRetrier(
+		roko.WithMaxAttempts(3),
+		roko.WithStrategy(roko.ExponentialSubsecond(time.Second)),
+		roko.WithJitter(),
+	).DoWithContext(ctx, func(*roko.Retrier) error {
+		return fetchBranch()
+	})
+	if fetchErr != nil {
+		return fmt.Errorf("%w: unable to fetch branch %q: %w", ErrCommitVerificationUnavailable, e.Branch, fetchErr)
+	}
+	branchTip, err := e.shell.Command("git", "rev-parse", branchTipRef).RunAndCaptureStdout(ctx)
+	if err != nil {
+		return fmt.Errorf("%w: unable to resolve branch %q: %w", ErrCommitVerificationUnavailable, e.Branch, err)
+	}
+	branchTip = strings.TrimSpace(branchTip)
+
+	// merge-base --is-ancestor walks back from the branch tip: exit 0 means the
+	// commit is reachable from it (definitive, even on a shallow clone), exit 1
+	// means it is not. On a shallow clone a "not an ancestor" result can be a
+	// false negative when the connecting history lies beyond the shallow boundary,
+	// so a negative (or otherwise inconclusive) result is only trusted once the
+	// repository is no longer shallow; until then we deepen the branch and re-check.
 	for _, fetchFlag := range []string{"", "--deepen=50", "--unshallow"} {
 		if fetchFlag != "" {
-			// After the first iteration, try to unshallow the repo (a bit or a lot)
 			e.shell.Commentf("Deepening checkout to verify commit (%s)...", fetchFlag)
-			fetchErr := e.shell.Command("git", "fetch", fetchFlag).Run(ctx)
-			if fetchErr != nil {
+			if fetchErr := fetchBranch(fetchFlag); fetchErr != nil {
 				return fmt.Errorf("%w: unable to verify commit %q on branch %q: %w", ErrCommitVerificationUnavailable, e.Commit, e.Branch, fetchErr)
 			}
 		}
 
-		// Try the ancestry check
-		err := e.shell.Command("git", "merge-base", "--is-ancestor", e.Commit, e.Branch).Run(ctx)
-
-		switch shell.ExitCode(err) {
-		case 0:
-			return nil // verified!
-		case 1:
-			return fmt.Errorf("%w: commit %q is not on branch %q", ErrCommitVerificationFailed, e.Commit, e.Branch)
-		case 128:
-			// unclear — continue below
-		default:
-			return fmt.Errorf("%w: unable to verify commit %q on branch %q: %w", ErrCommitVerificationUnavailable, e.Commit, e.Branch, err)
+		mergeBaseErr := e.shell.Command("git", "merge-base", "--is-ancestor", e.Commit, branchTip).Run(ctx)
+		if mergeBaseErr == nil {
+			return nil // commit is reachable from the branch tip: verified
 		}
-
-		// On the first iteration, check if the checkout is shallow. If it is
-		// not, the 128 exit code reflects some other error.
-		if fetchFlag != "" {
-			continue
+		// A non-exit error (e.g. git failed to spawn) tells us nothing about
+		// ancestry, so treat it as unavailable rather than a definitive failure.
+		if !shell.IsExitError(mergeBaseErr) {
+			return fmt.Errorf("%w: unable to verify commit %q on branch %q: %w", ErrCommitVerificationUnavailable, e.Commit, e.Branch, mergeBaseErr)
 		}
-		output, shallowErr := e.shell.Command("git", "rev-parse", "--is-shallow-repository").RunAndCaptureStdout(ctx)
+		exitCode := shell.ExitCode(mergeBaseErr)
+
+		shallow, shallowErr := e.shell.Command("git", "rev-parse", "--is-shallow-repository").RunAndCaptureStdout(ctx)
 		if shallowErr != nil {
 			return fmt.Errorf("%w: unable to verify commit %q on branch %q: %w", ErrCommitVerificationUnavailable, e.Commit, e.Branch, shallowErr)
 		}
-
-		if strings.TrimSpace(output) != "true" {
-			// Not shallow — this is a genuine error
-			return fmt.Errorf("%w: unable to verify commit %q on branch %q: %w", ErrCommitVerificationUnavailable, e.Commit, e.Branch, err)
+		if strings.TrimSpace(shallow) != "true" {
+			// Full history, so the result is now definitive.
+			if exitCode == 1 {
+				return fmt.Errorf("%w: commit %q is not on branch %q", ErrCommitVerificationFailed, e.Commit, e.Branch)
+			}
+			return fmt.Errorf("%w: unable to verify commit %q on branch %q", ErrCommitVerificationUnavailable, e.Commit, e.Branch)
 		}
+		// Still shallow, so deepen on the next iteration and re-check.
 	}
 
-	// All attempts exhausted — verification is unavailable
+	// All attempts exhausted, so verification is unavailable.
 	return fmt.Errorf("%w: unable to verify commit %q on branch %q after exhausting fetch strategies", ErrCommitVerificationUnavailable, e.Commit, e.Branch)
+}
+
+// stripShallowFetchFlags removes depth-limiting options from a git-fetch flag
+// list. git treats --depth, --deepen, --shallow-since and --shallow-exclude as
+// mutually exclusive with the --deepen/--unshallow fetches checkCommitOnBranch
+// issues, so those fetches must not inherit them from BUILDKITE_GIT_FETCH_FLAGS.
+//
+// Both the "--flag=value" and "--flag value" spellings are handled (the latter
+// also drops the following value token), as are the unambiguous abbreviations
+// git accepts (--dept for --depth, --deep for --deepen, --unsh for --unshallow):
+// a token is dropped when one of the mode names begins with it. The exact-name
+// check this replaced let --dept=1 slip through and re-break the deepen fetch.
+func stripShallowFetchFlags(flags []string) []string {
+	valueModes := []string{"depth", "deepen", "shallow-since", "shallow-exclude"}
+	out := make([]string, 0, len(flags))
+	for i := 0; i < len(flags); i++ {
+		name, isLong := strings.CutPrefix(flags[i], "--")
+		name, _, hasValue := strings.Cut(name, "=")
+		if !isLong || name == "" {
+			out = append(out, flags[i])
+			continue
+		}
+		if strings.HasPrefix("unshallow", name) {
+			continue // boolean, no value token to drop
+		}
+		isValueMode := false
+		for _, m := range valueModes {
+			if strings.HasPrefix(m, name) {
+				isValueMode = true
+				break
+			}
+		}
+		if isValueMode {
+			if !hasValue {
+				i++ // skip the separate value token in the "--flag value" form
+			}
+			continue
+		}
+		out = append(out, flags[i])
+	}
+	return out
+}
+
+// stripRefSuppressingFetchFlags removes git-fetch modes that make a fetch skip
+// or redirect the ref update checkCommitOnBranch relies on: --dry-run performs
+// no fetch and writes no ref, --prefetch rewrites the destination under
+// refs/prefetch/, and --negotiate-only fetches no packfile. Left in
+// BUILDKITE_GIT_FETCH_FLAGS, any of them would leave the branch-tip ref
+// unwritten, so rev-parse fails and the check degrades to "unavailable" (a pass
+// under strict). None of them belong in the verification probe.
+//
+// Unambiguous prefixes are matched too: git accepts --dry for --dry-run and
+// --prefe for --prefetch, so a token is dropped when one of the mode names
+// begins with it. Stripping tokens keeps this version-safe, unlike appending the
+// --no-* forms: --prefetch (git 2.29) and --negotiate-only (2.32) postdate the
+// oldest git the agent runs on, so --no-prefetch/--no-negotiate-only would break
+// fetches there. Legitimate flags like --prune and --negotiation-tip are not
+// prefixes of these names, so they survive.
+func stripRefSuppressingFetchFlags(flags []string) []string {
+	modes := []string{"dry-run", "prefetch", "negotiate-only"}
+	out := make([]string, 0, len(flags))
+	for _, f := range flags {
+		name, isLong := strings.CutPrefix(f, "--")
+		name, _, _ = strings.Cut(name, "=")
+		suppressing := false
+		if isLong && name != "" {
+			for _, m := range modes {
+				if strings.HasPrefix(m, name) {
+					suppressing = true
+					break
+				}
+			}
+		}
+		if suppressing {
+			continue
+		}
+		out = append(out, f)
+	}
+	return out
 }
 
 // verifyCommit is called if the user has commit verification enabled. It ensures that the commit we are
@@ -96,8 +263,9 @@ func (e *Executor) verifyCommit(ctx context.Context) error {
 		return nil
 	}
 
-	// Skip if this is a PR build — the commit may be on a merge ref, not the target branch
-	if e.PullRequest != "" {
+	// Skip if this is a PR build: the commit may be on a merge ref, not the target
+	// branch. BUILDKITE_PULL_REQUEST is the string "false" (not empty) on non-PR builds.
+	if e.PullRequest != "" && e.PullRequest != "false" {
 		e.shell.Commentf("Skipping commit verification: pull request build (#%s)", e.PullRequest)
 		return nil
 	}
@@ -122,13 +290,15 @@ func (e *Executor) verifyCommit(ctx context.Context) error {
 		if e.GitCommitVerification == "strict" {
 			return err
 		}
-		e.shell.Warningf("Commit verification failed: %v", err)
+		// err already begins with "commit verification failed", so log it as-is.
+		e.shell.Warningf("%s", err)
 		return nil
 	}
 
 	// Verification unavailable — infrastructure issue, not a security concern.
 	// We always warn but never block, even in strict mode, to avoid users
 	// disabling verification entirely due to infrastructure false positives.
-	e.shell.Warningf("Commit verification unavailable: %v", err)
+	// err already begins with "commit verification unavailable", so log it as-is.
+	e.shell.Warningf("%s", err)
 	return nil
 }
