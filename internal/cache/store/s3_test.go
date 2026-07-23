@@ -412,14 +412,54 @@ func TestNewS3Blob(t *testing.T) {
 	if blob.prefix != "cache/prefix" {
 		t.Errorf("prefix = %q, want %q", blob.prefix, "cache/prefix")
 	}
-	if blob.uploadConcurrency != 8 {
-		t.Errorf("uploadConcurrency = %d, want 8", blob.uploadConcurrency)
+	// The URL's concurrency/part_size_mb tune downloads only; uploads stay on
+	// the fixed defaults regardless of what the URL asks for.
+	if blob.uploadConcurrency != defaultUploadConcurrency {
+		t.Errorf("uploadConcurrency = %d, want %d (URL knobs must not affect uploads)", blob.uploadConcurrency, defaultUploadConcurrency)
 	}
 	if blob.downloadConcurrency != 8 {
 		t.Errorf("downloadConcurrency = %d, want 8", blob.downloadConcurrency)
 	}
 	if want := int64(16 * 1024 * 1024); blob.downloadPartSize != want {
 		t.Errorf("downloadPartSize = %d, want %d", blob.downloadPartSize, want)
+	}
+}
+
+func TestUploadConcurrencyForSize(t *testing.T) {
+	const (
+		mib = int64(1024 * 1024)
+		gib = 1024 * mib
+		tib = 1024 * gib
+	)
+
+	tests := []struct {
+		name string
+		size int64
+		want int
+	}{
+		{name: "small file keeps full concurrency", size: 10 * mib, want: defaultUploadConcurrency},
+		{name: "hundreds of GiB still full", size: 300 * gib, want: defaultUploadConcurrency},
+		{name: "large object throttles to stay under budget", size: 800 * gib, want: 2},
+		{name: "multi-TiB bottoms out at 1", size: 2 * tib, want: 1},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := uploadConcurrencyForSize(tt.size, defaultUploadConcurrency)
+			if got != tt.want {
+				t.Errorf("uploadConcurrencyForSize(%d) = %d, want %d", tt.size, got, tt.want)
+			}
+			// The resulting pool must never exceed the budget unless we're already
+			// at the concurrency-1 floor (unavoidable for very large objects).
+			partSize := int64(defaultUploadPartSizeBytes)
+			if forced := tt.size/uploadMaxParts + 1; forced > partSize {
+				partSize = forced
+			}
+			pool := int64(got+1) * partSize
+			if pool > uploadMemoryBudget && got != 1 {
+				t.Errorf("pool %d exceeds budget %d at concurrency %d", pool, int64(uploadMemoryBudget), got)
+			}
+		})
 	}
 }
 
@@ -443,10 +483,10 @@ func TestResolveTransferSettings(t *testing.T) {
 			},
 		},
 		{
-			name: "concurrency override applies to both",
+			name: "concurrency override applies to download only",
 			opts: &Options{Concurrency: 50},
 			want: transferSettings{
-				uploadConcurrency:   50,
+				uploadConcurrency:   defaultUploadConcurrency,
 				uploadPartSize:      int64(defaultUploadPartSizeBytes),
 				downloadConcurrency: 50,
 				downloadPartSize:    int64(defaultDownloadPartSizeMB) * mb,
@@ -454,22 +494,22 @@ func TestResolveTransferSettings(t *testing.T) {
 			},
 		},
 		{
-			name: "part size override applies to both",
+			name: "part size override applies to download only",
 			opts: &Options{PartSizeMB: 64},
 			want: transferSettings{
 				uploadConcurrency:   defaultUploadConcurrency,
-				uploadPartSize:      64 * mb,
+				uploadPartSize:      int64(defaultUploadPartSizeBytes),
 				downloadConcurrency: defaultDownloadConcurrency,
 				downloadPartSize:    64 * mb,
 				maxIdleConnsPerHost: defaultDownloadConcurrency,
 			},
 		},
 		{
-			name: "both overrides applied",
+			name: "overrides never affect upload settings",
 			opts: &Options{Concurrency: 8, PartSizeMB: 16},
 			want: transferSettings{
-				uploadConcurrency:   8,
-				uploadPartSize:      16 * mb,
+				uploadConcurrency:   defaultUploadConcurrency,
+				uploadPartSize:      int64(defaultUploadPartSizeBytes),
 				downloadConcurrency: 8,
 				downloadPartSize:    16 * mb,
 				maxIdleConnsPerHost: 8,
