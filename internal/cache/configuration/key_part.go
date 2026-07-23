@@ -128,17 +128,19 @@ func decodeChecksumPatterns(val *yaml.Node) ([]string, error) {
 		return []string{val.Value}, nil
 
 	case yaml.SequenceNode:
-		var patterns []string
-		if err := val.Decode(&patterns); err != nil {
-			return nil, fmt.Errorf("cache_key: checksum array must be a list of strings: %w", err)
-		}
-		if len(patterns) == 0 {
+		if len(val.Content) == 0 {
 			return nil, fmt.Errorf("cache_key: checksum array cannot be empty")
 		}
-		for _, p := range patterns {
-			if p == "" {
+		// Validate each element node directly rather than Decode-ing into []string
+		patterns := make([]string, 0, len(val.Content))
+		for _, item := range val.Content {
+			if item.Kind != yaml.ScalarNode || item.Tag == "!!null" {
+				return nil, fmt.Errorf("cache_key: checksum array entries must be strings")
+			}
+			if item.Value == "" {
 				return nil, fmt.Errorf("cache_key: checksum array entries cannot be empty")
 			}
+			patterns = append(patterns, item.Value)
 		}
 		return patterns, nil
 
@@ -236,20 +238,24 @@ func checksumDigest(patterns []string) (string, error) {
 	seen := make(map[string]struct{})
 	for _, pattern := range patterns {
 		if !hasGlobMeta(pattern) {
-			// Literal path: must exist and must be a regular file since a directory has no hashable contents.
+			// Literal path: must exist and be a regular file. A directory, FIFO,
+			// socket or device has no hashable contents.
 			info, err := os.Stat(pattern)
 			if err != nil {
 				return "", fmt.Errorf("cache_key: checksum %q: %w", pattern, err)
 			}
-			if info.IsDir() {
-				return "", fmt.Errorf("cache_key: checksum %q is a directory", pattern)
+			if !info.Mode().IsRegular() {
+				return "", fmt.Errorf("cache_key: checksum %q is not a regular file", pattern)
 			}
 			// Clean before use as a dedup key so aliases like "go.mod" and "./go.mod" collapse to one entry.
 			seen[filepath.ToSlash(filepath.Clean(pattern))] = struct{}{}
 			continue
 		}
 
-		parsed, err := zzglob.Parse(pattern)
+		// ExpandTilde(false) keeps "~" a literal path segment: patterns resolve
+		// relative to the job working directory, rather than
+		// "~/..." expanding to the agent user's home directory.
+		parsed, err := zzglob.Parse(pattern, zzglob.ExpandTilde(false))
 		if err != nil {
 			return "", fmt.Errorf("cache_key: checksum pattern %q: %w", pattern, err)
 		}
@@ -277,15 +283,17 @@ func checksumDigest(patterns []string) (string, error) {
 			if err != nil {
 				return fmt.Errorf("cache_key: checksum pattern %q: %w", pattern, err)
 			}
-			if info.IsDir() {
-				return nil // directory (or symlink to one) has no hashable contents
+			if !info.Mode().IsRegular() {
+				return nil
 			}
 			seen[filepath.ToSlash(match)] = struct{}{}
 			return nil
 		}
 		// WalkIntermediateDirs makes zzglob invoke the callback for the pattern's
-		// fixed walk root.
-		if err := parsed.Glob(walk, zzglob.WalkIntermediateDirs(true)); err != nil {
+		// fixed walk root (so an unreadable root surfaces rather than being
+		// swallowed). TraverseSymlinks(false) keeps expansion within the real
+		// directory tree - since a symlinked directory is neither hashed nor descended into.
+		if err := parsed.Glob(walk, zzglob.WalkIntermediateDirs(true), zzglob.TraverseSymlinks(false)); err != nil {
 			return "", err
 		}
 	}
@@ -319,6 +327,15 @@ func hasGlobMeta(p string) bool {
 
 // sha256File returns the hex-encoded SHA-256 of the file's contents.
 func sha256File(path string) (string, error) {
+	// Stat before opening: a non-regular file has no meaningful contents to hash.
+	info, err := os.Stat(path)
+	if err != nil {
+		return "", fmt.Errorf("cache_key: checksum %q: %w", path, err)
+	}
+	if !info.Mode().IsRegular() {
+		return "", fmt.Errorf("cache_key: checksum %q is not a regular file", path)
+	}
+
 	f, err := os.Open(path)
 	if err != nil {
 		return "", fmt.Errorf("cache_key: checksum %q: %w", path, err)

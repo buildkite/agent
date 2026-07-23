@@ -46,6 +46,9 @@ func TestKeyPartUnmarshal(t *testing.T) {
 		{name: "agent os_version deferred", yaml: `{ agent: os_version }`, wantErr: "unsupported agent argument"},
 		{name: "checksum empty array", yaml: `{ checksum: [] }`, wantErr: "checksum array cannot be empty"},
 		{name: "checksum array with empty entry", yaml: `{ checksum: [go.mod, ""] }`, wantErr: "checksum array entries cannot be empty"},
+		{name: "checksum array with null entry", yaml: `{ checksum: [go.mod, null] }`, wantErr: "checksum array entries must be strings"},
+		{name: "checksum array with tilde-null entry", yaml: `{ checksum: [go.mod, ~] }`, wantErr: "checksum array entries must be strings"},
+		{name: "checksum array with nested sequence", yaml: `{ checksum: [go.mod, [go.sum]] }`, wantErr: "checksum array entries must be strings"},
 		{name: "cmd deferred", yaml: `{ cmd: ["go", "version"] }`, wantErr: "unknown source"},
 		{name: "unknown source", yaml: `{ bogus: x }`, wantErr: "unknown source"},
 		{name: "fallback_limit non-bool", yaml: `{ agent: arch, fallback_limit: 7 }`, wantErr: "fallback_limit must be a boolean"},
@@ -272,9 +275,6 @@ func TestChecksumDigestSingleGlobExcludesDirectories(t *testing.T) {
 }
 
 func TestChecksumDigestGlobUnreadableRoot(t *testing.T) {
-	if os.Getuid() == 0 {
-		t.Skip("running as root bypasses directory permissions")
-	}
 	// Not parallel: relies on the process working directory via t.Chdir.
 	dir := t.TempDir()
 	writeFile(t, filepath.Join(dir, "go.mod"), "module x\n")
@@ -289,9 +289,19 @@ func TestChecksumDigestGlobUnreadableRoot(t *testing.T) {
 		t.Fatalf("Chmod: %v", err)
 	}
 	t.Cleanup(func() { _ = os.Chmod(secret, 0o755) }) // so t.TempDir cleanup can remove it
+
+	// Skip when the environment doesn't actually enforce the permission — e.g.
+	// running as root, or a filesystem that ignores chmod (common in CI
+	// containers). Without a real read failure there is nothing for this test to
+	// observe.
+	if _, err := os.ReadDir(secret); err == nil {
+		t.Skip("filesystem does not enforce directory read permissions; cannot exercise an unreadable root")
+	}
 	t.Chdir(dir)
 
 	// The unreadable root must surface as an error, not be silently dropped,
+	// even though the other pattern (go.mod) matches. Otherwise the digest would
+	// be computed from fewer inputs than declared.
 	part := KeyPart{Source: SourceChecksum, Patterns: []string{"go.mod", "secret/**/*.lock"}}
 	if _, err := part.Resolve(nil); err == nil {
 		t.Fatal("Resolve() error = nil, want error when a glob's root is unreadable")
@@ -316,6 +326,57 @@ func TestChecksumDigestGlobExcludesSymlinkedDirectory(t *testing.T) {
 	part := KeyPart{Source: SourceChecksum, Patterns: []string{"*"}}
 	if _, err := part.Resolve(nil); err != nil {
 		t.Fatalf("Resolve() unexpected error = %v (symlink-to-dir should be excluded, not hashed)", err)
+	}
+}
+
+func TestChecksumDigestGlobDoesNotTraverseSymlinkedDirs(t *testing.T) {
+	// Not parallel: relies on the process working directory via t.Chdir.
+	dir := t.TempDir()
+	// A file reachable only by descending through a symlinked directory.
+	writeFile(t, filepath.Join(dir, "outside", "x.lock"), "outside\n")
+	writeFile(t, filepath.Join(dir, "inside", "y.lock"), "inside\n")
+	if err := os.Symlink(filepath.Join(dir, "outside"), filepath.Join(dir, "inside", "link")); err != nil {
+		t.Skipf("symlinks unsupported: %v", err)
+	}
+	t.Chdir(dir)
+
+	// "inside/**/*.lock" must hash inside/y.lock but NOT descend through the
+	// symlink inside/link into outside/, so outside/x.lock is excluded and the
+	// digest stays within the real tree.
+	got, err := KeyPart{Source: SourceChecksum, Patterns: []string{"inside/**/*.lock"}}.Resolve(nil)
+	if err != nil {
+		t.Fatalf("Resolve() unexpected error = %v", err)
+	}
+
+	// Removing the out-of-tree file must not change the digest — proof it was
+	// never followed.
+	if err := os.Remove(filepath.Join(dir, "outside", "x.lock")); err != nil {
+		t.Fatalf("Remove: %v", err)
+	}
+	got2, err := KeyPart{Source: SourceChecksum, Patterns: []string{"inside/**/*.lock"}}.Resolve(nil)
+	if err != nil {
+		t.Fatalf("Resolve() unexpected error = %v", err)
+	}
+	if got != got2 {
+		t.Fatalf("digest changed after removing a file reached only via a symlink: %q != %q", got, got2)
+	}
+}
+
+func TestChecksumDigestGlobDoesNotExpandTilde(t *testing.T) {
+	// Not parallel: relies on the process working directory and $HOME.
+	home := t.TempDir() // an empty home: if "~" were expanded, nothing matches
+	t.Setenv("HOME", home)
+
+	dir := t.TempDir()
+	// A directory literally named "~" under the working directory.
+	writeFile(t, filepath.Join(dir, "~", "a.lock"), "locked\n")
+	t.Chdir(dir)
+
+	// "~/*.lock" must resolve relative to the working directory (matching the
+	// literal "~" dir), not expand to $HOME (which is empty and would make the
+	// whole set match nothing → error).
+	if _, err := (KeyPart{Source: SourceChecksum, Patterns: []string{"~/*.lock"}}).Resolve(nil); err != nil {
+		t.Fatalf("Resolve() unexpected error = %v (\"~\" should be literal, not expanded to $HOME)", err)
 	}
 }
 
