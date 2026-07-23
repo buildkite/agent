@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -12,9 +11,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
 	awshttp "github.com/aws/aws-sdk-go-v2/aws/transport/http"
-	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
-	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/aws-sdk-go-v2/feature/s3/transfermanager"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	smithy "github.com/aws/smithy-go"
 	smithyhttp "github.com/aws/smithy-go/transport/http"
@@ -386,6 +385,44 @@ func TestGetFullKey(t *testing.T) {
 	}
 }
 
+// TestNewS3Blob exercises construction against a custom endpoint with
+// path-style access and explicit transfer tuning — the URL options that
+// self-hosted / S3-compatible backends rely on. Construction makes no network
+// calls, so this verifies the transfermanager clients and settings are wired
+// through from the URL without needing a live S3.
+func TestNewS3Blob(t *testing.T) {
+	blob, err := NewS3Blob(t.Context(),
+		"s3://my-bucket/cache/prefix?region=us-west-2&endpoint=http://localhost:9000&use_path_style=true&concurrency=8&part_size_mb=16")
+	if err != nil {
+		t.Fatalf("NewS3Blob: %v", err)
+	}
+
+	if blob.client == nil {
+		t.Error("client is nil")
+	}
+	if blob.uploader == nil {
+		t.Error("uploader is nil")
+	}
+	if blob.downloader == nil {
+		t.Error("downloader is nil")
+	}
+	if blob.bucketName != "my-bucket" {
+		t.Errorf("bucketName = %q, want %q", blob.bucketName, "my-bucket")
+	}
+	if blob.prefix != "cache/prefix" {
+		t.Errorf("prefix = %q, want %q", blob.prefix, "cache/prefix")
+	}
+	if blob.uploadConcurrency != 8 {
+		t.Errorf("uploadConcurrency = %d, want 8", blob.uploadConcurrency)
+	}
+	if blob.downloadConcurrency != 8 {
+		t.Errorf("downloadConcurrency = %d, want 8", blob.downloadConcurrency)
+	}
+	if want := int64(16 * 1024 * 1024); blob.downloadPartSize != want {
+		t.Errorf("downloadPartSize = %d, want %d", blob.downloadPartSize, want)
+	}
+}
+
 func TestResolveTransferSettings(t *testing.T) {
 	const mb = int64(1024 * 1024)
 
@@ -398,8 +435,8 @@ func TestResolveTransferSettings(t *testing.T) {
 			name: "defaults differ between upload and download",
 			opts: &Options{},
 			want: transferSettings{
-				uploadConcurrency:   manager.DefaultUploadConcurrency,
-				uploadPartSize:      manager.DefaultUploadPartSize,
+				uploadConcurrency:   defaultUploadConcurrency,
+				uploadPartSize:      int64(defaultUploadPartSizeBytes),
 				downloadConcurrency: defaultDownloadConcurrency,
 				downloadPartSize:    int64(defaultDownloadPartSizeMB) * mb,
 				maxIdleConnsPerHost: defaultDownloadConcurrency,
@@ -410,7 +447,7 @@ func TestResolveTransferSettings(t *testing.T) {
 			opts: &Options{Concurrency: 50},
 			want: transferSettings{
 				uploadConcurrency:   50,
-				uploadPartSize:      manager.DefaultUploadPartSize,
+				uploadPartSize:      int64(defaultUploadPartSizeBytes),
 				downloadConcurrency: 50,
 				downloadPartSize:    int64(defaultDownloadPartSizeMB) * mb,
 				maxIdleConnsPerHost: 50,
@@ -420,7 +457,7 @@ func TestResolveTransferSettings(t *testing.T) {
 			name: "part size override applies to both",
 			opts: &Options{PartSizeMB: 64},
 			want: transferSettings{
-				uploadConcurrency:   manager.DefaultUploadConcurrency,
+				uploadConcurrency:   defaultUploadConcurrency,
 				uploadPartSize:      64 * mb,
 				downloadConcurrency: defaultDownloadConcurrency,
 				downloadPartSize:    64 * mb,
@@ -474,14 +511,17 @@ type fakeDownloadResult struct {
 	payload []byte
 }
 
-func (f *fakeDownloader) Download(_ context.Context, w io.WriterAt, _ *s3.GetObjectInput, _ ...func(*manager.Downloader)) (int64, error) { //nolint:staticcheck // SA1019: pending migration to transfermanager
+func (f *fakeDownloader) DownloadObject(_ context.Context, in *transfermanager.DownloadObjectInput, _ ...func(*transfermanager.Options)) (*transfermanager.DownloadObjectOutput, error) {
 	res := f.results[min(f.calls, len(f.results)-1)]
 	f.calls++
 	if res.err != nil {
-		return 0, res.err
+		return nil, res.err
 	}
-	n, err := w.WriteAt(res.payload, 0)
-	return int64(n), err
+	n, err := in.WriterAt.WriteAt(res.payload, 0)
+	if err != nil {
+		return nil, err
+	}
+	return &transfermanager.DownloadObjectOutput{ContentLength: aws.Int64(int64(n))}, nil
 }
 
 // testRetrier builds a retrier that runs instantly (no real sleeps) so the
@@ -504,7 +544,7 @@ func TestDownloadWithRetry(t *testing.T) {
 			{payload: payload},
 		}}
 
-		n, err := downloadWithRetry(t.Context(), testRetrier(), fake, destPath, &s3.GetObjectInput{})
+		n, err := downloadWithRetry(t.Context(), testRetrier(), fake, destPath, &transfermanager.DownloadObjectInput{})
 		if err != nil {
 			t.Fatalf("downloadWithRetry: unexpected error: %v", err)
 		}
@@ -529,7 +569,7 @@ func TestDownloadWithRetry(t *testing.T) {
 			{err: responseErrorWithStatus(http.StatusPreconditionFailed)},
 		}}
 
-		_, err := downloadWithRetry(t.Context(), testRetrier(), fake, destPath, &s3.GetObjectInput{})
+		_, err := downloadWithRetry(t.Context(), testRetrier(), fake, destPath, &transfermanager.DownloadObjectInput{})
 		if err == nil {
 			t.Fatal("downloadWithRetry: expected error, got nil")
 		}
@@ -547,7 +587,7 @@ func TestDownloadWithRetry(t *testing.T) {
 			{err: responseErrorWithStatus(http.StatusInternalServerError)},
 		}}
 
-		_, err := downloadWithRetry(t.Context(), testRetrier(), fake, destPath, &s3.GetObjectInput{})
+		_, err := downloadWithRetry(t.Context(), testRetrier(), fake, destPath, &transfermanager.DownloadObjectInput{})
 		if err == nil {
 			t.Fatal("downloadWithRetry: expected error, got nil")
 		}
