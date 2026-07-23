@@ -491,81 +491,8 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) (retErr error) {
 	}
 
 	if gitSubmodules {
-		// `submodule sync` will ensure the .git/config
-		// matches the .gitmodules file.  The command
-		// is only available in git version 1.8.1, so
-		// if the call fails, continue the job
-		// script, and show an informative error.
-		if err := e.shell.Command("git", "submodule", "sync", "--recursive").Run(ctx); err != nil {
-			gitVersionOutput, _ := e.shell.Command("git", "--version").RunAndCaptureStdout(ctx)
-			e.shell.Warningf("Failed to recursively sync git submodules. This is most likely because you have an older version of git installed (" + gitVersionOutput + ") and you need version 1.8.1 and above. If you're using submodules, it's highly recommended you upgrade if you can.")
-		}
-
-		args := []string{}
-		for _, config := range e.GitSubmoduleCloneConfig {
-			// -c foo=bar is valid, -c foo= is valid, -c foo is valid, but...
-			// -c (nothing) is invalid.
-			// This could happen because the env var was set to an empty value.
-			if config == "" {
-				continue
-			}
-			args = append(args, "-c", config)
-		}
-
-		// Checking for submodule repositories
-		submoduleRepos, err := gitEnumerateSubmoduleURLs(ctx, e.shell)
-		if err != nil {
-			e.shell.Warningf("Failed to enumerate git submodules: %v", err)
-		} else {
-			mirrorSubmodules := e.GitMirrorsPath != ""
-			for _, repository := range submoduleRepos {
-				// submodules might need their fingerprints verified too
-				if e.SSHKeyscan {
-					addRepositoryHostToSSHKnownHosts(ctx, e.shell, repository)
-				}
-
-				if !mirrorSubmodules {
-					continue
-				}
-				// It's all mirrored submodules for the rest of the loop.
-
-				mirrorDir, err := e.getOrUpdateMirrorDir(ctx, repository)
-				if err != nil {
-					return fmt.Errorf("getting/updating mirror dir for submodules: %w", err)
-				}
-
-				// Switch back to the checkout dir, doing other operations from GitMirrorsPath will fail.
-				if err := e.createCheckoutDir(); err != nil {
-					return fmt.Errorf("creating checkout dir: %w", err)
-				}
-
-				submoduleArgs := slices.Clone(args)
-				if mirrorDir != "" {
-					submoduleArgs = append(submoduleArgs, "submodule", "update", "--init", "--recursive", "--force", "--reference", mirrorDir)
-					if e.GitMirrorCheckoutMode == "dissociate" {
-						submoduleArgs = append(submoduleArgs, "--dissociate")
-					}
-				} else {
-					// Fall back to a clean update, rather than failing the checkout and therefore the build
-					submoduleArgs = append(submoduleArgs, "submodule", "update", "--init", "--recursive", "--force")
-				}
-
-				if err := e.shell.Command("git", submoduleArgs...).Run(ctx); err != nil {
-					return fmt.Errorf("updating submodules: %w", err)
-				}
-			}
-
-			if !mirrorSubmodules {
-				args = append(args, "submodule", "update", "--init", "--recursive", "--force")
-				if err := e.shell.Command("git", args...).Run(ctx); err != nil {
-					return fmt.Errorf("updating submodules: %w", err)
-				}
-			}
-
-			cmd := e.shell.Command("git", "submodule", "foreach", "--recursive", "git reset --hard")
-			if err := cmd.Run(ctx); err != nil {
-				return fmt.Errorf("resetting submodules: %w", err)
-			}
+		if err := e.updateGitSubmodules(ctx); err != nil {
+			return err
 		}
 	}
 
@@ -610,6 +537,92 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) (retErr error) {
 	if experiments.IsEnabled(ctx, experiments.ResolveCommitAfterCheckout) {
 		e.shell.Commentf("Using resolve-commit-after-checkout experiment 🧪")
 		e.resolveCommit(ctx)
+	}
+
+	return nil
+}
+
+// updateGitSubmodules syncs, updates, and resets the repository's git
+// submodules. When git mirrors are configured, each submodule is mirrored and
+// updated with a reference to its mirror; otherwise submodules are updated
+// with a plain clean update.
+func (e *Executor) updateGitSubmodules(ctx context.Context) error {
+	// `submodule sync` will ensure the .git/config
+	// matches the .gitmodules file.  The command
+	// is only available in git version 1.8.1, so
+	// if the call fails, continue the job
+	// script, and show an informative error.
+	if err := e.shell.Command("git", "submodule", "sync", "--recursive").Run(ctx); err != nil {
+		gitVersionOutput, _ := e.shell.Command("git", "--version").RunAndCaptureStdout(ctx)
+		e.shell.Warningf("Failed to recursively sync git submodules. This is most likely because you have an older version of git installed (" + gitVersionOutput + ") and you need version 1.8.1 and above. If you're using submodules, it's highly recommended you upgrade if you can.")
+	}
+
+	args := []string{}
+	for _, config := range e.GitSubmoduleCloneConfig {
+		// -c foo=bar is valid, -c foo= is valid, -c foo is valid, but...
+		// -c (nothing) is invalid.
+		// This could happen because the env var was set to an empty value.
+		if config == "" {
+			continue
+		}
+		args = append(args, "-c", config)
+	}
+
+	// Checking for submodule repositories
+	submoduleRepos, err := gitEnumerateSubmoduleURLs(ctx, e.shell)
+	if err != nil {
+		e.shell.Warningf("Failed to enumerate git submodules: %v", err)
+		return nil
+	}
+
+	mirrorSubmodules := e.GitMirrorsPath != ""
+	for _, repository := range submoduleRepos {
+		// submodules might need their fingerprints verified too
+		if e.SSHKeyscan {
+			addRepositoryHostToSSHKnownHosts(ctx, e.shell, repository)
+		}
+
+		if !mirrorSubmodules {
+			continue
+		}
+		// It's all mirrored submodules for the rest of the loop.
+
+		mirrorDir, err := e.getOrUpdateMirrorDir(ctx, repository)
+		if err != nil {
+			return fmt.Errorf("getting/updating mirror dir for submodules: %w", err)
+		}
+
+		// Switch back to the checkout dir, doing other operations from GitMirrorsPath will fail.
+		if err := e.createCheckoutDir(); err != nil {
+			return fmt.Errorf("creating checkout dir: %w", err)
+		}
+
+		submoduleArgs := slices.Clone(args)
+		if mirrorDir != "" {
+			submoduleArgs = append(submoduleArgs, "submodule", "update", "--init", "--recursive", "--force", "--reference", mirrorDir)
+			if e.GitMirrorCheckoutMode == "dissociate" {
+				submoduleArgs = append(submoduleArgs, "--dissociate")
+			}
+		} else {
+			// Fall back to a clean update, rather than failing the checkout and therefore the build
+			submoduleArgs = append(submoduleArgs, "submodule", "update", "--init", "--recursive", "--force")
+		}
+
+		if err := e.shell.Command("git", submoduleArgs...).Run(ctx); err != nil {
+			return fmt.Errorf("updating submodules: %w", err)
+		}
+	}
+
+	if !mirrorSubmodules {
+		args = append(args, "submodule", "update", "--init", "--recursive", "--force")
+		if err := e.shell.Command("git", args...).Run(ctx); err != nil {
+			return fmt.Errorf("updating submodules: %w", err)
+		}
+	}
+
+	cmd := e.shell.Command("git", "submodule", "foreach", "--recursive", "git reset --hard")
+	if err := cmd.Run(ctx); err != nil {
+		return fmt.Errorf("resetting submodules: %w", err)
 	}
 
 	return nil
