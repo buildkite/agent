@@ -15,6 +15,64 @@ import (
 	"github.com/buildkite/agent/v3/internal/shell"
 )
 
+// setupCheckoutTestRepo prepares a githttptest server hosting a freshly
+// initialised repository named projectName with a pushed "feature-branch". It
+// configures a git identity (so no global git config is needed or created),
+// allocates build and checkout directories, and points the executor at them via
+// BuildPath, Repository and the BUILDKITE_BUILD_CHECKOUT_PATH env var. Cleanup
+// is registered on t. It returns the server and the commit hash at the tip of
+// feature-branch.
+func setupCheckoutTestRepo(t *testing.T, e *Executor, projectName string) (*githttptest.Server, string) {
+	t.Helper()
+
+	// Configure a git identity so commits don't rely on (or create) a global
+	// git config in the home directory.
+	t.Setenv("GIT_AUTHOR_NAME", "Buildkite Agent")
+	t.Setenv("GIT_AUTHOR_EMAIL", "agent@example.com")
+	t.Setenv("GIT_COMMITTER_NAME", "Buildkite Agent")
+	t.Setenv("GIT_COMMITTER_EMAIL", "agent@example.com")
+
+	s := githttptest.NewServer()
+	t.Cleanup(s.Close)
+
+	if err := s.CreateRepository(projectName); err != nil {
+		t.Fatalf("s.CreateRepository(%q) error = %v, want nil", projectName, err)
+	}
+	if out, err := s.InitRepository(projectName); err != nil {
+		t.Fatalf("s.InitRepository(%q) error = %v, output: %s", projectName, err, string(out))
+	}
+
+	commit, out, err := s.PushBranch(projectName, "feature-branch")
+	if err != nil {
+		t.Fatalf("s.PushBranch(%q, feature-branch) error = %v, output: %s", projectName, err, string(out))
+	}
+
+	// os.MkdirTemp (with best-effort cleanup) rather than t.TempDir(): on
+	// Windows, git child processes can hold handles past their exit, and
+	// t.TempDir()'s strict cleanup would fail the test.
+	buildDir, err := os.MkdirTemp("", "build-path-")
+	if err != nil {
+		t.Fatalf("os.MkdirTemp(build-path-) error = %v, want nil", err)
+	}
+	t.Cleanup(func() {
+		os.RemoveAll(buildDir) //nolint:errcheck // Best-effort cleanup.
+	})
+
+	checkoutDir, err := os.MkdirTemp("", "checkout-path-")
+	if err != nil {
+		t.Fatalf("os.MkdirTemp(checkout-path-) error = %v, want nil", err)
+	}
+	t.Cleanup(func() {
+		os.RemoveAll(checkoutDir) //nolint:errcheck // Best-effort cleanup.
+	})
+
+	e.BuildPath = buildDir
+	e.Repository = s.RepoURL(projectName)
+	e.shell.Env.Set("BUILDKITE_BUILD_CHECKOUT_PATH", checkoutDir)
+
+	return s, commit
+}
+
 func TestDefaultCheckoutPhase(t *testing.T) {
 	ctx := t.Context()
 
@@ -29,6 +87,10 @@ func TestDefaultCheckoutPhase(t *testing.T) {
 		projectName string
 		checkoutDir string
 		refSpec     string
+		// When resolveCommit is true, the executor's Commit is set to the actual
+		// commit hash pushed to the test repo (instead of "HEAD") to exercise
+		// the "known commit" fetch code paths.
+		resolveCommit bool
 	}{
 		{
 			name: "Default checkout phase with HEAD commit",
@@ -42,6 +104,21 @@ func TestDefaultCheckoutPhase(t *testing.T) {
 				},
 			},
 			projectName: "project-name-head",
+		},
+		{
+			name: "Default checkout phase with specific commit",
+			executor: &Executor{
+				shell: shell,
+				ExecutorConfig: ExecutorConfig{
+					// Commit is intentionally unset here; resolveCommit sets it
+					// to the real pushed hash at runtime.
+					Branch:        "feature-branch",
+					CleanCheckout: false,
+					GitCleanFlags: "-f -d -x",
+				},
+			},
+			projectName:   "project-name-specific-commit",
+			resolveCommit: true,
 		},
 		{
 			name: "Default checkout phase with custom refspec",
@@ -91,66 +168,56 @@ func TestDefaultCheckoutPhase(t *testing.T) {
 			projectName: "project-name-pull-request",
 			refSpec:     "refs/pull/124/merge",
 		},
+		{
+			name: "Default checkout phase with pull request and known commit (typical case)",
+			executor: &Executor{
+				shell: shell,
+				ExecutorConfig: ExecutorConfig{
+					PullRequest:      "124",
+					Branch:           "feature-branch",
+					CleanCheckout:    false,
+					GitCleanFlags:    "-f -d -x",
+					PipelineProvider: "github",
+				},
+			},
+			projectName:   "project-name-pull-request-known-commit",
+			refSpec:       "refs/pull/124/head",
+			resolveCommit: true,
+		},
+		{
+			name: "Default checkout phase with pull request using merge refspec and known commit",
+			executor: &Executor{
+				shell: shell,
+				ExecutorConfig: ExecutorConfig{
+					PullRequest:                  "124",
+					Branch:                       "feature-branch",
+					CleanCheckout:                false,
+					GitCleanFlags:                "-f -d -x",
+					PipelineProvider:             "github",
+					PullRequestUsingMergeRefspec: true,
+				},
+			},
+			projectName:   "project-name-pull-request-merge-known-commit",
+			refSpec:       "refs/pull/124/merge",
+			resolveCommit: true,
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// configure a global user name and email
-			// this is to avoid the git config file being created in the home directory
-			// which is not needed for the test
-			t.Setenv("GIT_AUTHOR_NAME", "Buildkite Agent")
-			t.Setenv("GIT_AUTHOR_EMAIL", "agent@example.com")
-			t.Setenv("GIT_COMMITTER_NAME", "Buildkite Agent")
-			t.Setenv("GIT_COMMITTER_EMAIL", "agent@example.com")
-
-			s := githttptest.NewServer()
-			defer s.Close()
-
-			err = s.CreateRepository(tt.projectName)
-			if err != nil {
-				t.Fatalf("s.CreateRepository(%q) error = %v, want nil", tt.projectName, err)
-			}
-
-			out, err := s.InitRepository(tt.projectName)
-			if err != nil {
-				t.Fatalf("failed to init repository: %v output: %s", err, string(out))
-			}
-
-			commit, out, err := s.PushBranch(tt.projectName, "feature-branch")
-			if err != nil {
-				t.Fatalf("failed to init repository: %v output: %s", err, string(out))
-			}
+			s, commit := setupCheckoutTestRepo(t, tt.executor, tt.projectName)
 
 			if tt.refSpec != "" {
-				out, err = s.CreateRef(tt.projectName, tt.refSpec, commit)
-				if err != nil {
-					t.Fatalf("failed to create ref: %v output: %s", err, string(out))
+				if out, err := s.CreateRef(tt.projectName, tt.refSpec, commit); err != nil {
+					t.Fatalf("s.CreateRef(%q, %q) error = %v, output: %s", tt.projectName, tt.refSpec, err, string(out))
 				}
 			}
 
-			buildDir, err := os.MkdirTemp("", "build-path-")
-			if err != nil {
-				t.Fatalf("os.MkdirTemp(%q, %q) error = %v, want nil", "", "build-path-", err)
+			if tt.resolveCommit {
+				tt.executor.Commit = commit
 			}
-			t.Cleanup(func() {
-				os.RemoveAll(buildDir) //nolint:errcheck // Best-effort cleanup.
-			})
 
-			tt.executor.BuildPath = buildDir
-			tt.executor.Repository = s.RepoURL(tt.projectName)
-
-			checkoutDir, err := os.MkdirTemp("", "checkout-path-")
-			if err != nil {
-				t.Fatalf("os.MkdirTemp(%q, %q) error = %v, want nil", "", "checkout-path-", err)
-			}
-			t.Cleanup(func() {
-				os.RemoveAll(checkoutDir) //nolint:errcheck // Best-effort cleanup.
-			})
-
-			shell.Env.Set("BUILDKITE_BUILD_CHECKOUT_PATH", checkoutDir)
-
-			err = tt.executor.defaultCheckoutPhase(ctx)
-			if err != nil {
+			if err := tt.executor.defaultCheckoutPhase(ctx); err != nil {
 				t.Fatalf("tt.executor.defaultCheckoutPhase(ctx) error = %v, want nil", err)
 			}
 		})
@@ -322,6 +389,51 @@ func TestDefaultCheckoutPhase_CleansUpGitSSHKeyOnError(t *testing.T) {
 	}
 }
 
+// TestDefaultCheckoutPhase_MergeRefspecFailsFast checks that a missing PR
+// merge ref fails immediately instead of being retried (~2min). The retried
+// pr-head case is covered by TestDefaultCheckoutPhase_DelayedRefCreation.
+func TestDefaultCheckoutPhase_MergeRefspecFailsFast(t *testing.T) {
+	ctx := t.Context()
+
+	shell, err := shell.New()
+	if err != nil {
+		t.Fatalf("shell.New() error = %v, want nil", err)
+	}
+
+	executor := &Executor{
+		shell: shell,
+		ExecutorConfig: ExecutorConfig{
+			// The merge ref refs/pull/999/merge is never created, so the fetch
+			// must fail. With Commit == "HEAD" this takes the gitFetch path
+			// where retry is false for a merge refspec, so it fails fast.
+			PullRequest:                  "999",
+			Commit:                       "HEAD",
+			Branch:                       "main",
+			CleanCheckout:                false,
+			GitCleanFlags:                "-f -d -x",
+			PipelineProvider:             "github",
+			PullRequestUsingMergeRefspec: true,
+		},
+	}
+
+	setupCheckoutTestRepo(t, executor, "project-name-merge-fail-fast")
+
+	// A single failed fetch takes milliseconds; the retry path (pr-head) would
+	// take ~2m17s. A generous threshold cleanly distinguishes "did not retry"
+	// from "retried" without being flaky.
+	const maxDuration = 60 * time.Second
+	start := time.Now()
+	err = executor.defaultCheckoutPhase(ctx)
+	elapsed := time.Since(start)
+
+	if err == nil {
+		t.Fatal("executor.defaultCheckoutPhase(ctx) error = nil, want non-nil (missing merge ref)")
+	}
+	if elapsed >= maxDuration {
+		t.Fatalf("executor.defaultCheckoutPhase(ctx) took %s, want < %s — merge refspec should not be retried", elapsed, maxDuration)
+	}
+}
+
 func TestSkipCheckout(t *testing.T) {
 	t.Parallel()
 
@@ -379,50 +491,7 @@ func TestDefaultCheckoutPhase_DelayedRefCreation(t *testing.T) {
 		refSpec:     "refs/pull/124/head",
 	}
 
-	// configure a global user name and email
-	// this is to avoid the git config file being created in the home directory
-	// which is not needed for the test
-	t.Setenv("GIT_AUTHOR_NAME", "Buildkite Agent")
-	t.Setenv("GIT_AUTHOR_EMAIL", "agent@example.com")
-	t.Setenv("GIT_COMMITTER_NAME", "Buildkite Agent")
-	t.Setenv("GIT_COMMITTER_EMAIL", "agent@example.com")
-
-	s := githttptest.NewServer()
-	defer s.Close()
-
-	err = s.CreateRepository(tt.projectName)
-	if err != nil {
-		t.Fatalf("s.CreateRepository(%q) error = %v, want nil", tt.projectName, err)
-	}
-
-	out, err := s.InitRepository(tt.projectName)
-	if err != nil {
-		t.Fatalf("failed to init repository: %v output: %s", err, string(out))
-	}
-
-	commit, out, err := s.PushBranch(tt.projectName, "feature-branch")
-	if err != nil {
-		t.Fatalf("failed to init repository: %v output: %s", err, string(out))
-	}
-
-	buildDir, err := os.MkdirTemp("", "build-path-")
-	if err != nil {
-		t.Fatalf("os.MkdirTemp(%q, %q) error = %v, want nil", "", "build-path-", err)
-	}
-	t.Cleanup(func() {
-		os.RemoveAll(buildDir) //nolint:errcheck // Best-effort cleanup.
-	})
-
-	tt.executor.BuildPath = buildDir
-	tt.executor.Repository = s.RepoURL(tt.projectName)
-
-	checkoutDir, err := os.MkdirTemp("", "checkout-path-")
-	if err != nil {
-		t.Fatalf("os.MkdirTemp(%q, %q) error = %v, want nil", "", "checkout-path-", err)
-	}
-	t.Cleanup(func() {
-		os.RemoveAll(checkoutDir) //nolint:errcheck // Best-effort cleanup.
-	})
+	s, commit := setupCheckoutTestRepo(t, tt.executor, tt.projectName)
 
 	// Concurrently sleep for 5 seconds to delay ref being created
 	go func() {
@@ -432,16 +501,12 @@ func TestDefaultCheckoutPhase_DelayedRefCreation(t *testing.T) {
 		case <-time.After(5 * time.Second):
 			// continue below
 		}
-		out, err = s.CreateRef(tt.projectName, tt.refSpec, commit)
-		if err != nil {
-			t.Errorf("failed to create ref: %v output: %s", err, string(out))
+		if out, err := s.CreateRef(tt.projectName, tt.refSpec, commit); err != nil {
+			t.Errorf("s.CreateRef(%q, %q) error = %v, output: %s", tt.projectName, tt.refSpec, err, string(out))
 		}
 	}()
 
-	shell.Env.Set("BUILDKITE_BUILD_CHECKOUT_PATH", checkoutDir)
-
-	err = tt.executor.defaultCheckoutPhase(ctx)
-	if err != nil {
+	if err := tt.executor.defaultCheckoutPhase(ctx); err != nil {
 		t.Fatalf("tt.executor.defaultCheckoutPhase(ctx) error = %v, want nil", err)
 	}
 }
