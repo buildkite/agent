@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"log/slog"
 	"net/http"
 	"net/url"
@@ -12,17 +11,16 @@ import (
 	"path"
 	"strconv"
 	"strings"
-	"sync/atomic"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awshttp "github.com/aws/aws-sdk-go-v2/aws/transport/http"
 	"github.com/aws/aws-sdk-go-v2/config"
-	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
+	"github.com/aws/aws-sdk-go-v2/feature/s3/transfermanager"
+	tmtypes "github.com/aws/aws-sdk-go-v2/feature/s3/transfermanager/types"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	smithy "github.com/aws/smithy-go"
-	smithymiddleware "github.com/aws/smithy-go/middleware"
 	"github.com/buildkite/agent/v3/internal/cache/internal/trace"
 	"github.com/buildkite/roko"
 	"go.opentelemetry.io/otel/attribute"
@@ -35,6 +33,24 @@ import (
 const (
 	defaultDownloadConcurrency = 32
 	defaultDownloadPartSizeMB  = 32
+	// Upload defaults are fixed, never URL-tunable. defaultUploadConcurrency is
+	// the maximum parallelism; uploadConcurrencyForSize lowers it for large
+	// objects so the pool UploadObject eagerly allocates — (concurrency+1) ×
+	// partSize — stays within uploadMemoryBudget.
+	defaultUploadConcurrency   = 5
+	defaultUploadPartSizeBytes = 5 * 1024 * 1024
+	// defaultUploadMultipartThreshold is pinned rather than inherited from the
+	// SDK so upload behaviour is explicit and stable across SDK versions.
+	defaultUploadMultipartThreshold = 16 * 1024 * 1024
+	// uploadMemoryBudget is the target ceiling for a single upload's part-buffer
+	// pool. It holds for all normal object sizes; multi-TiB objects bottom out at
+	// concurrency 1, where one part buffer (size/uploadMaxParts) is unavoidable
+	// and may exceed this.
+	uploadMemoryBudget = 256 * 1024 * 1024
+	// uploadMaxParts mirrors S3's hard limit on parts per multipart upload. It is
+	// pinned on the client so uploadConcurrencyForSize predicts the SDK's part
+	// sizing exactly.
+	uploadMaxParts = 10000
 )
 
 // Options holds configuration for S3Blob and can be constructed from an S3 URL in a similar way to gocloud.dev
@@ -106,10 +122,9 @@ func OptionsFromURL(s3url string) (*Options, error) {
 	return opts, nil
 }
 
-// objectDownloader is the subset of manager.Downloader used by downloadWithRetry,
-// declared so the retry loop can be tested with a fake.
+// objectDownloader is the subset of *transfermanager.Client used by downloadWithRetry
 type objectDownloader interface {
-	Download(ctx context.Context, w io.WriterAt, input *s3.GetObjectInput, options ...func(*manager.Downloader)) (int64, error) //nolint:staticcheck // SA1019: pending migration to transfermanager
+	DownloadObject(ctx context.Context, input *transfermanager.DownloadObjectInput, opts ...func(*transfermanager.Options)) (*transfermanager.DownloadObjectOutput, error)
 }
 
 // isPreconditionFailed returns true when an error is an S3 412 PreconditionFailed.
@@ -143,7 +158,7 @@ func isNotFound(err error) bool {
 // downloadWithRetry runs the multipart download, retrying on S3 412
 // PreconditionFailed (a concurrent restore's TTL-refresh CopyObject changed the
 // object's ETag and invalidated the SDK's If-Match guard). Returns bytes written.
-func downloadWithRetry(ctx context.Context, r *roko.Retrier, d objectDownloader, destPath string, in *s3.GetObjectInput, opts ...func(*manager.Downloader)) (int64, error) { //nolint:staticcheck // SA1019: pending migration to transfermanager
+func downloadWithRetry(ctx context.Context, r *roko.Retrier, d objectDownloader, destPath string, in *transfermanager.DownloadObjectInput) (int64, error) {
 	var bytesWritten int64
 	err := r.DoWithContext(ctx, func(r *roko.Retrier) error {
 		destFile, err := os.Create(destPath)
@@ -153,7 +168,11 @@ func downloadWithRetry(ctx context.Context, r *roko.Retrier, d objectDownloader,
 		}
 		defer func() { _ = destFile.Close() }()
 
-		n, err := d.Download(ctx, destFile, in, opts...)
+		// Parts arrive out of order via io.WriterAt, so point the transfer at a
+		// freshly-truncated file on each attempt.
+		in.WriterAt = destFile
+
+		out, err := d.DownloadObject(ctx, in)
 		if err != nil {
 			if isPreconditionFailed(err) {
 				slog.Warn("cache download hit 412 (concurrent ETag change), retrying",
@@ -164,7 +183,7 @@ func downloadWithRetry(ctx context.Context, r *roko.Retrier, d objectDownloader,
 			return err
 		}
 
-		bytesWritten = n
+		bytesWritten = aws.ToInt64(out.ContentLength)
 		return nil
 	})
 	return bytesWritten, err
@@ -173,12 +192,13 @@ func downloadWithRetry(ctx context.Context, r *roko.Retrier, d objectDownloader,
 // S3Blob implements the Blob interface using AWS S3
 type S3Blob struct {
 	client              *s3.Client
-	uploader            *manager.Uploader   //nolint:staticcheck // SA1019: pending migration to transfermanager
-	downloader          *manager.Downloader //nolint:staticcheck // SA1019: pending migration to transfermanager
+	uploader            *transfermanager.Client
+	downloader          *transfermanager.Client
 	bucketName          string
 	prefix              string
 	uploadConcurrency   int
 	downloadConcurrency int
+	downloadPartSize    int64
 }
 
 // NewS3Blob creates a new S3Blob instance using an S3 URL and prefix
@@ -227,14 +247,26 @@ func NewS3Blob(ctx context.Context, s3url string) (*S3Blob, error) {
 			}
 		})
 
-	// Create the uploader and downloader with their resolved settings
-	uploader := manager.NewUploader(client, func(u *manager.Uploader) { //nolint:staticcheck // SA1019: pending migration to transfermanager
-		u.Concurrency = settings.uploadConcurrency
-		u.PartSize = settings.uploadPartSize
+	// Create the transfer-manager clients with their resolved settings. Uploads
+	// and downloads are tuned differently, so each gets its own client.
+	uploader := transfermanager.New(client, func(o *transfermanager.Options) {
+		// Concurrency is the per-upload maximum; Upload lowers it per object via
+		// uploadConcurrencyForSize to keep the buffer pool bounded.
+		o.Concurrency = settings.uploadConcurrency
+		o.PartSizeBytes = settings.uploadPartSize
+		o.MaxUploadParts = uploadMaxParts
+		// Pin the multipart threshold instead of inheriting the SDK default so
+		// upload behaviour is explicit and stable across SDK versions.
+		o.MultipartUploadThreshold = defaultUploadMultipartThreshold
 	})
-	downloader := manager.NewDownloader(client, func(d *manager.Downloader) { //nolint:staticcheck // SA1019: pending migration to transfermanager
-		d.Concurrency = settings.downloadConcurrency
-		d.PartSize = settings.downloadPartSize
+	downloader := transfermanager.New(client, func(o *transfermanager.Options) {
+		o.Concurrency = settings.downloadConcurrency
+		o.PartSizeBytes = settings.downloadPartSize
+		// Use Range-based fan-out rather than partNumber-based. The SDK default
+		// (PART) only fans out for objects uploaded as multipart; Ranges work on any object
+		// regardless of how it was uploaded, so restore parallelism
+		// is determined by our config (Concurrency × PartSizeBytes), not by upload history
+		o.GetObjectType = tmtypes.GetObjectRanges
 	})
 
 	slog.Debug("configured S3 transfer manager",
@@ -253,6 +285,7 @@ func NewS3Blob(ctx context.Context, s3url string) (*S3Blob, error) {
 		prefix:              opts.Prefix,
 		uploadConcurrency:   settings.uploadConcurrency,
 		downloadConcurrency: settings.downloadConcurrency,
+		downloadPartSize:    settings.downloadPartSize,
 	}, nil
 }
 
@@ -267,21 +300,18 @@ type transferSettings struct {
 }
 
 // resolveTransferSettings turns parsed Options into concrete transfer settings.
-// An explicit concurrency or part_size_mb override applies to both uploads and
-// downloads; otherwise uploads use the SDK's upload defaults and downloads use
-// the download-tuned defaults.
+// The concurrency and part_size_mb URL overrides restore
+// path only; save always uses the fixed upload defaults.
 func resolveTransferSettings(opts *Options) transferSettings {
-	uploadConcurrency := manager.DefaultUploadConcurrency
+	// Upload settings are fixed and intentionally not derived from the URL
+	uploadConcurrency := defaultUploadConcurrency
+	uploadPartSize := int64(defaultUploadPartSizeBytes)
 	downloadConcurrency := defaultDownloadConcurrency
+	downloadPartSize := int64(defaultDownloadPartSizeMB) * 1024 * 1024
 	if opts.Concurrency > 0 {
-		uploadConcurrency = opts.Concurrency
 		downloadConcurrency = opts.Concurrency
 	}
-
-	uploadPartSize := manager.DefaultUploadPartSize
-	downloadPartSize := int64(defaultDownloadPartSizeMB) * 1024 * 1024
 	if opts.PartSizeMB > 0 {
-		uploadPartSize = int64(opts.PartSizeMB) * 1024 * 1024
 		downloadPartSize = int64(opts.PartSizeMB) * 1024 * 1024
 	}
 
@@ -292,6 +322,31 @@ func resolveTransferSettings(opts *Options) transferSettings {
 		downloadPartSize:    downloadPartSize,
 		maxIdleConnsPerHost: max(uploadConcurrency, downloadConcurrency),
 	}
+}
+
+// uploadConcurrencyForSize picks how many part buffers UploadObject may hold in
+// parallel for an object of the given size, so the pool it eagerly allocates —
+// (concurrency+1) × partSize — stays within uploadMemoryBudget.
+//
+// transfermanager raises the part size to size/uploadMaxParts once an object
+// would exceed S3's 10,000-part limit, so for large objects the part buffers
+// grow with the object and we trade away concurrency to compensate. Multi-TiB
+// objects bottom out at concurrency 1: one part buffer is unavoidable, so the
+// budget is a ceiling for normal sizes, not a hard cap at every size.
+func uploadConcurrencyForSize(size int64, maxConcurrency int) int {
+	partSize := int64(defaultUploadPartSizeBytes)
+	if forced := size/uploadMaxParts + 1; forced > partSize {
+		partSize = forced
+	}
+
+	concurrency := int(uploadMemoryBudget/partSize) - 1
+	if concurrency > maxConcurrency {
+		concurrency = maxConcurrency
+	}
+	if concurrency < 1 {
+		concurrency = 1
+	}
+	return concurrency
 }
 
 // Upload uploads a file to S3 using multipart upload for parallel transfers
@@ -321,17 +376,23 @@ func (b *S3Blob) Upload(ctx context.Context, filePath, key string) (*TransferInf
 
 	bytesWritten := fileInfo.Size()
 
+	// Choose upload concurrency from the object size so the part-buffer pool
+	// stays within uploadMemoryBudget (see uploadConcurrencyForSize).
+	uploadConcurrency := uploadConcurrencyForSize(bytesWritten, b.uploadConcurrency)
+
 	slog.Debug("starting S3 upload",
 		"key", fullKey,
 		"file_size", bytesWritten,
-		"concurrency", b.uploadConcurrency,
+		"concurrency", uploadConcurrency,
 	)
 
-	// Upload the file to S3 using the multipart uploader
-	result, err := b.uploader.Upload(ctx, &s3.PutObjectInput{ //nolint:staticcheck // SA1019: pending migration to transfermanager
+	// Upload the file to S3 using the multipart transfer manager
+	result, err := b.uploader.UploadObject(ctx, &transfermanager.UploadObjectInput{
 		Bucket: aws.String(b.bucketName),
 		Key:    aws.String(fullKey),
 		Body:   file,
+	}, func(o *transfermanager.Options) {
+		o.Concurrency = uploadConcurrency
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to upload file to S3: %w", err)
@@ -345,7 +406,7 @@ func (b *S3Blob) Upload(ctx context.Context, filePath, key string) (*TransferInf
 	}
 
 	// Extract request ID from the upload result (only set for multipart uploads)
-	requestID := result.UploadID
+	requestID := aws.ToString(result.UploadID)
 
 	duration := time.Since(start)
 	averageSpeed := calculateTransferSpeedMBps(bytesWritten, duration)
@@ -354,7 +415,7 @@ func (b *S3Blob) Upload(ctx context.Context, filePath, key string) (*TransferInf
 		"key", fullKey,
 		"bytes_transferred", bytesWritten,
 		"parts_uploaded", partCount,
-		"concurrency", b.uploadConcurrency,
+		"concurrency", uploadConcurrency,
 		"duration", duration,
 		"transfer_speed_mbps", fmt.Sprintf("%.2f", averageSpeed),
 	)
@@ -364,7 +425,7 @@ func (b *S3Blob) Upload(ctx context.Context, filePath, key string) (*TransferInf
 		attribute.String("transfer_speed", fmt.Sprintf("%.2fMB/s", averageSpeed)),
 		attribute.String("request_id", requestID),
 		attribute.Int("part_count", partCount),
-		attribute.Int("concurrency", b.uploadConcurrency),
+		attribute.Int("concurrency", uploadConcurrency),
 	)
 
 	return &TransferInfo{
@@ -373,7 +434,7 @@ func (b *S3Blob) Upload(ctx context.Context, filePath, key string) (*TransferInf
 		RequestID:        requestID,
 		Duration:         duration,
 		PartCount:        partCount,
-		Concurrency:      b.uploadConcurrency,
+		Concurrency:      uploadConcurrency,
 	}, nil
 }
 
@@ -401,8 +462,6 @@ func (b *S3Blob) Download(ctx context.Context, key, destPath string) (*TransferI
 		"concurrency", b.downloadConcurrency,
 	)
 
-	var partCount atomic.Int32
-
 	// Download the file from S3 using parallel range requests, retrying on a
 	// 412 PreconditionFailed caused by a concurrent restore's ETag change.
 	retrier := roko.NewRetrier(
@@ -410,21 +469,9 @@ func (b *S3Blob) Download(ctx context.Context, key, destPath string) (*TransferI
 		roko.WithStrategy(roko.ExponentialSubsecond(200*time.Millisecond)),
 		roko.WithJitterRange(0, 250*time.Millisecond),
 	)
-	bytesWritten, err := downloadWithRetry(ctx, retrier, b.downloader, destPath, &s3.GetObjectInput{
+	bytesWritten, err := downloadWithRetry(ctx, retrier, b.downloader, destPath, &transfermanager.DownloadObjectInput{
 		Bucket: aws.String(b.bucketName),
 		Key:    aws.String(fullKey),
-	}, func(d *manager.Downloader) { //nolint:staticcheck // SA1019: pending migration to transfermanager
-		d.ClientOptions = append(d.ClientOptions, func(o *s3.Options) {
-			o.APIOptions = append(o.APIOptions, func(stack *smithymiddleware.Stack) error {
-				return stack.Initialize.Add(smithymiddleware.InitializeMiddlewareFunc(
-					"PartCounter",
-					func(ctx context.Context, in smithymiddleware.InitializeInput, next smithymiddleware.InitializeHandler) (smithymiddleware.InitializeOutput, smithymiddleware.Metadata, error) {
-						partCount.Add(1)
-						return next.HandleInitialize(ctx, in)
-					},
-				), smithymiddleware.Before)
-			})
-		})
 	})
 	if err != nil {
 		if isNotFound(err) {
@@ -433,10 +480,12 @@ func (b *S3Blob) Download(ctx context.Context, key, destPath string) (*TransferI
 		return nil, fmt.Errorf("failed to download file from S3: %w", err)
 	}
 
-	// Get actual part count from interceptor
-	actualPartCount := int(partCount.Load())
-	if actualPartCount == 0 {
-		actualPartCount = 1
+	// transfermanager doesn't report how many ranges it fetched, and an object's
+	// PartsCount reflects its original multipart upload, not the restore fan-out.
+	// For range-based downloads the range count is ceil(bytes / partSize).
+	actualPartCount := 1
+	if b.downloadPartSize > 0 && bytesWritten > 0 {
+		actualPartCount = int((bytesWritten + b.downloadPartSize - 1) / b.downloadPartSize)
 	}
 
 	duration := time.Since(start)
