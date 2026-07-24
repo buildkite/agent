@@ -3,20 +3,25 @@ package configuration
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
+	"path/filepath"
 	"runtime"
+	"sort"
+	"strings"
 
+	"drjosh.dev/zzglob"
 	"github.com/buildkite/agent/v3/api"
 	"gopkg.in/yaml.v3"
 )
 
 type KeyPart struct {
-	Arg    string
-	Source Source
-	// FallbackLimit marks the fallback boundary: this part and every part before
-	// it are mandatory; parts after it are optional. At most one part may set it.
+	Arg           string
+	Patterns      []string
+	Source        Source
 	FallbackLimit bool
 }
 type Source string
@@ -91,13 +96,11 @@ func (k *KeyPart) unmarshalMapping(node *yaml.Node) error {
 			}
 			k.Source, k.Arg = SourceAgent, val.Value
 		case SourceChecksum:
-			if val.Kind != yaml.ScalarNode {
-				return fmt.Errorf("cache_key: checksum takes a single file path (no arrays)")
+			patterns, err := decodeChecksumPatterns(&val)
+			if err != nil {
+				return err
 			}
-			if val.Value == "" {
-				return fmt.Errorf("cache_key: checksum entry cannot be empty")
-			}
-			k.Source, k.Arg = SourceChecksum, val.Value
+			k.Source, k.Patterns = SourceChecksum, patterns
 		case SourceEnv:
 			if val.Kind != yaml.ScalarNode {
 				return fmt.Errorf("cache_key: env source must be a string")
@@ -111,6 +114,39 @@ func (k *KeyPart) unmarshalMapping(node *yaml.Node) error {
 		}
 	}
 	return nil
+}
+
+// decodeChecksumPatterns accepts the checksum argument as either a single file
+// path (scalar) or an array of file paths / glob patterns (sequence), and
+// returns the normalised, non-empty list of patterns.
+func decodeChecksumPatterns(val *yaml.Node) ([]string, error) {
+	switch val.Kind {
+	case yaml.ScalarNode:
+		if val.Value == "" {
+			return nil, fmt.Errorf("cache_key: checksum entry cannot be empty")
+		}
+		return []string{val.Value}, nil
+
+	case yaml.SequenceNode:
+		if len(val.Content) == 0 {
+			return nil, fmt.Errorf("cache_key: checksum array cannot be empty")
+		}
+		// Validate each element node directly rather than Decode-ing into []string
+		patterns := make([]string, 0, len(val.Content))
+		for _, item := range val.Content {
+			if item.Kind != yaml.ScalarNode || item.Tag == "!!null" {
+				return nil, fmt.Errorf("cache_key: checksum array entries must be strings")
+			}
+			if item.Value == "" {
+				return nil, fmt.Errorf("cache_key: checksum array entries cannot be empty")
+			}
+			patterns = append(patterns, item.Value)
+		}
+		return patterns, nil
+
+	default:
+		return nil, fmt.Errorf("cache_key: checksum must be a file path or an array of file paths")
+	}
 }
 
 // ResolveCacheKey resolves each KeyPart to its concrete value and returns the
@@ -170,10 +206,7 @@ func (k KeyPart) Resolve(env map[string]string) (string, error) {
 	case SourceEnv:
 		v = lookupEnv(env, k.Arg)
 	case SourceChecksum:
-		// For now, support is for single regular file only. Multi-file checksums, globs, and
-		// directories are not supported. We have NOT yet considered symlinks, special files, or very large
-		// files — k.Arg is treated as one path.
-		v, err = sha256File(k.Arg)
+		v, err = checksumDigest(k.Patterns)
 	default:
 		return "", fmt.Errorf("cache_key: unknown source %q", k.Source)
 	}
@@ -192,8 +225,117 @@ func lookupEnv(env map[string]string, name string) string {
 	return os.Getenv(name)
 }
 
-// sha256File returns the hex-encoded SHA-256 of the file's contents
+// checksumDigest folds every file matched by patterns into a single
+// deterministic SHA-256 digest.
+func checksumDigest(patterns []string) (string, error) {
+	if len(patterns) == 0 {
+		return "", fmt.Errorf("cache_key: checksum has no patterns")
+	}
+	if len(patterns) == 1 && !hasGlobMeta(patterns[0]) {
+		return sha256File(patterns[0])
+	}
+
+	seen := make(map[string]struct{})
+	for _, pattern := range patterns {
+		if !hasGlobMeta(pattern) {
+			// Literal path: must exist and be a regular file. A directory, FIFO,
+			// socket or device has no hashable contents.
+			info, err := os.Stat(pattern)
+			if err != nil {
+				return "", fmt.Errorf("cache_key: checksum %q: %w", pattern, err)
+			}
+			if !info.Mode().IsRegular() {
+				return "", fmt.Errorf("cache_key: checksum %q is not a regular file", pattern)
+			}
+			// Clean before use as a dedup key so aliases like "go.mod" and "./go.mod" collapse to one entry.
+			seen[filepath.ToSlash(filepath.Clean(pattern))] = struct{}{}
+			continue
+		}
+
+		// ExpandTilde(false) keeps "~" a literal path segment: patterns resolve
+		// relative to the job working directory, rather than
+		// "~/..." expanding to the agent user's home directory.
+		parsed, err := zzglob.Parse(pattern, zzglob.ExpandTilde(false))
+		if err != nil {
+			return "", fmt.Errorf("cache_key: checksum pattern %q: %w", pattern, err)
+		}
+		// zzglob walks the filesystem sequentially (fs.WalkDir), so recording
+		// matches into seen needs no synchronisation. A glob matching nothing
+		// simply never invokes the callback; a read error on a matched path is
+		// surfaced rather than silently dropped.
+		walk := func(match string, d fs.DirEntry, err error) error {
+			if err != nil {
+				// A non-existent path (e.g. the glob's base directory is absent)
+				// just means the glob matched nothing here — legitimate and not an
+				// error.
+				if errors.Is(err, fs.ErrNotExist) {
+					return nil
+				}
+				return fmt.Errorf("cache_key: checksum pattern %q: %w", pattern, err)
+			}
+			if d == nil {
+				return nil
+			}
+			// d.IsDir() reports false for a symlink to a directory (it reflects
+			// the link, not its target), so stat the resolved path to exclude
+			// directories reached via a symlink too.
+			info, err := os.Stat(match)
+			if err != nil {
+				return fmt.Errorf("cache_key: checksum pattern %q: %w", pattern, err)
+			}
+			if !info.Mode().IsRegular() {
+				return nil
+			}
+			seen[filepath.ToSlash(match)] = struct{}{}
+			return nil
+		}
+		// WalkIntermediateDirs makes zzglob invoke the callback for the pattern's
+		// fixed walk root (so an unreadable root surfaces rather than being
+		// swallowed). TraverseSymlinks(false) keeps expansion within the real
+		// directory tree - since a symlinked directory is neither hashed nor descended into.
+		if err := parsed.Glob(walk, zzglob.WalkIntermediateDirs(true), zzglob.TraverseSymlinks(false)); err != nil {
+			return "", err
+		}
+	}
+	if len(seen) == 0 {
+		return "", fmt.Errorf("cache_key: checksum patterns %v matched no files", patterns)
+	}
+
+	paths := make([]string, 0, len(seen))
+	for p := range seen {
+		paths = append(paths, p)
+	}
+	sort.Strings(paths)
+
+	h := sha256.New()
+	for _, p := range paths {
+		sum, err := sha256File(filepath.FromSlash(p))
+		if err != nil {
+			return "", err
+		}
+		// path\0contents-hash\n.
+		_, _ = fmt.Fprintf(h, "%s\x00%s\n", p, sum)
+	}
+	return hex.EncodeToString(h.Sum(nil)), nil
+}
+
+// hasGlobMeta reports whether p contains any glob metacharacter. A path with
+// none is a plain file path treated as a literal.
+func hasGlobMeta(p string) bool {
+	return strings.ContainsAny(p, "*?[{")
+}
+
+// sha256File returns the hex-encoded SHA-256 of the file's contents.
 func sha256File(path string) (string, error) {
+	// Stat before opening: a non-regular file has no meaningful contents to hash.
+	info, err := os.Stat(path)
+	if err != nil {
+		return "", fmt.Errorf("cache_key: checksum %q: %w", path, err)
+	}
+	if !info.Mode().IsRegular() {
+		return "", fmt.Errorf("cache_key: checksum %q is not a regular file", path)
+	}
+
 	f, err := os.Open(path)
 	if err != nil {
 		return "", fmt.Errorf("cache_key: checksum %q: %w", path, err)
