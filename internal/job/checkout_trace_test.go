@@ -15,12 +15,8 @@ import (
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 )
 
-// --- Layer 2: pure-logic tests (noop backend) ---
-
 // TestTraceGitOp_PropagatesError asserts that traceGitOp returns fn's error
-// unchanged, both when the --trace-git-checkout flag is on and off. This is the
-// property the retry loop and error wrapping depend on. The noop backend is
-// sufficient here because we are asserting the return value, not span state.
+// unchanged, regardless of --trace-git-checkout.
 func TestTraceGitOp_PropagatesError(t *testing.T) {
 	t.Parallel()
 
@@ -42,7 +38,7 @@ func TestTraceGitOp_PropagatesError(t *testing.T) {
 			t.Parallel()
 
 			e := &Executor{ExecutorConfig: ExecutorConfig{
-				// BackendNone means even with the flag on, tracetools noops.
+				// BackendNone means even with --trace-git-checkout on, tracetools noops.
 				TracingBackend:   tracetools.BackendNone,
 				TraceGitCheckout: tt.traceGitCheckout,
 			}}
@@ -63,9 +59,8 @@ func TestTraceGitOp_PropagatesError(t *testing.T) {
 	}
 }
 
-// TestTraceGitOpSpan_FlagOffReturnsNoop asserts that when the flag is off,
-// traceGitOpSpan returns a NoopSpan and the unmodified ctx, so callers can
-// unconditionally call AddAttributes / FinishWithError with no effect.
+// TestTraceGitOpSpan_FlagOffReturnsNoop asserts that with --trace-git-checkout
+// off, traceGitOpSpan returns a NoopSpan and the unmodified ctx.
 func TestTraceGitOpSpan_FlagOffReturnsNoop(t *testing.T) {
 	t.Parallel()
 
@@ -84,17 +79,15 @@ func TestTraceGitOpSpan_FlagOffReturnsNoop(t *testing.T) {
 		t.Fatal("traceGitOpSpan returned a different ctx when flag is off, want unmodified ctx")
 	}
 
-	// These must not panic.
+	// Must not panic.
 	span.AddAttributes(map[string]string{"git.repo": "x"})
 	span.FinishWithError(errors.New("x"))
 }
 
-// --- Layer 3: structural span-emission tests (OTel in-memory SpanRecorder) ---
-//
-// tracetools uses the global OTel tracer, so these tests register the recorder
-// as the global provider and therefore cannot use t.Parallel().
+// tracetools uses the global OTel tracer, so these register the recorder as
+// the global provider and can't use t.Parallel().
 
-// gitSpanNames returns the names of ended spans that use the git.* prefix.
+// gitSpanNames returns the names of ended spans with the git.* prefix.
 func gitSpanNames(spans []sdktrace.ReadOnlySpan) []string {
 	var names []string
 	for _, s := range spans {
@@ -115,8 +108,8 @@ func findSpan(spans []sdktrace.ReadOnlySpan, name string) sdktrace.ReadOnlySpan 
 	return nil
 }
 
-// spanAttr returns the string value of the named attribute on a span, and
-// whether it was present.
+// spanAttr returns the string value of the named attribute, and whether it
+// was present.
 func spanAttr(s sdktrace.ReadOnlySpan, key string) (string, bool) {
 	for _, kv := range s.Attributes() {
 		if string(kv.Key) == key {
@@ -126,9 +119,9 @@ func spanAttr(s sdktrace.ReadOnlySpan, key string) (string, bool) {
 	return "", false
 }
 
-// runTracedCheckout runs a full default checkout against a throwaway git-over-http
-// repository, with the OpenTelemetry backend and the given --trace-git-checkout
-// setting, and returns the ended spans recorded during the checkout.
+// runTracedCheckout runs a default checkout against a throwaway git-over-http
+// repo with the OpenTelemetry backend and the given --trace-git-checkout
+// setting, and returns the ended spans.
 func runTracedCheckout(t *testing.T, traceGitCheckout bool) []sdktrace.ReadOnlySpan {
 	t.Helper()
 
@@ -186,8 +179,8 @@ func runTracedCheckout(t *testing.T, traceGitCheckout bool) []sdktrace.ReadOnlyS
 		},
 	}
 
-	// Register an in-memory recorder as the global provider for the duration of
-	// this test, since tracetools uses otel.Tracer("buildkite-agent").
+	// tracetools uses otel.Tracer("buildkite-agent"), so register an
+	// in-memory recorder as the global provider for this test.
 	recorder := tracetest.NewSpanRecorder()
 	provider := sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(recorder))
 	prev := otel.GetTracerProvider()
@@ -204,9 +197,9 @@ func runTracedCheckout(t *testing.T, traceGitCheckout bool) []sdktrace.ReadOnlyS
 	return recorder.Ended()
 }
 
-// TestTraceGitCheckout_FlagOn asserts that with the flag on, the new git.* spans
-// are emitted and nest under the repo-checkout span, and that repo-checkout
-// carries the checkout.attempt attribute.
+// TestTraceGitCheckout_FlagOn asserts that with --trace-git-checkout on,
+// git.* spans are emitted, nest under repo-checkout, and repo-checkout has
+// checkout.attempt.
 func TestTraceGitCheckout_FlagOn(t *testing.T) {
 	spans := runTracedCheckout(t, true)
 
@@ -218,7 +211,7 @@ func TestTraceGitCheckout_FlagOn(t *testing.T) {
 		t.Fatalf("repo-checkout checkout.attempt = %q (present=%t), want %q", got, ok, "1")
 	}
 
-	// A fresh clone against an empty checkout dir should exercise these spans.
+	// A fresh clone into an empty checkout dir exercises these spans.
 	wantSpans := []string{
 		"git.clone",
 		"git.clean.pre",
@@ -242,9 +235,8 @@ func TestTraceGitCheckout_FlagOn(t *testing.T) {
 	}
 }
 
-// TestTraceGitCheckout_FlagOff asserts that with the flag off, no git.* spans are
-// emitted, while the unconditional repo-checkout span (with checkout.attempt) is
-// still present.
+// TestTraceGitCheckout_FlagOff asserts that with --trace-git-checkout off, no
+// git.* spans are emitted, but repo-checkout (with checkout.attempt) still is.
 func TestTraceGitCheckout_FlagOff(t *testing.T) {
 	spans := runTracedCheckout(t, false)
 
