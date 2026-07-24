@@ -341,6 +341,19 @@ func toOpenTelemetryAttributes(extras map[string]any) ([]attribute.KeyValue, map
 	return attrs, unknownAttrTypes
 }
 
+// traceOpSpan starts a child span named `name` and returns it alongside the
+// derived context. The caller is responsible for calling FinishWithError.
+func (e *Executor) traceOpSpan(ctx context.Context, name string) (tracetools.Span, context.Context) {
+	return tracetools.StartSpanFromContext(ctx, name, e.TracingBackend)
+}
+
+// traceOp runs fn in a child span named `name`, finishing it with fn's error.
+func (e *Executor) traceOp(ctx context.Context, name string, fn func(context.Context) error) (err error) {
+	span, ctx := tracetools.StartSpanFromContext(ctx, name, e.TracingBackend)
+	defer func() { span.FinishWithError(err) }()
+	return fn(ctx)
+}
+
 func (e *Executor) implementationSpecificSpanName(otelName, ddName string) string {
 	switch e.TracingBackend {
 	case tracetools.BackendDatadog:

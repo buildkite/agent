@@ -217,8 +217,8 @@ func TestDefaultCheckoutPhase(t *testing.T) {
 				tt.executor.Commit = commit
 			}
 
-			if err := tt.executor.defaultCheckoutPhase(ctx); err != nil {
-				t.Fatalf("tt.executor.defaultCheckoutPhase(ctx) error = %v, want nil", err)
+			if err := tt.executor.defaultCheckoutPhase(ctx, 1); err != nil {
+				t.Fatalf("tt.executor.defaultCheckoutPhase(ctx, 1) error = %v, want nil", err)
 			}
 		})
 	}
@@ -376,8 +376,8 @@ func TestDefaultCheckoutPhase_CleansUpGitSSHKeyOnError(t *testing.T) {
 		}
 	})
 
-	if err := executor.defaultCheckoutPhase(t.Context()); err == nil {
-		t.Fatal("executor.defaultCheckoutPhase(t.Context()) error = nil, want non-nil")
+	if err := executor.defaultCheckoutPhase(t.Context(), 1); err == nil {
+		t.Fatal("executor.defaultCheckoutPhase(t.Context(), 1) error = nil, want non-nil")
 	}
 
 	matches, err := filepath.Glob(filepath.Join(checkoutParent, ".buildkite-ssh-key-*"))
@@ -423,14 +423,14 @@ func TestDefaultCheckoutPhase_MergeRefspecFailsFast(t *testing.T) {
 	// from "retried" without being flaky.
 	const maxDuration = 60 * time.Second
 	start := time.Now()
-	err = executor.defaultCheckoutPhase(ctx)
+	err = executor.defaultCheckoutPhase(ctx, 1)
 	elapsed := time.Since(start)
 
 	if err == nil {
-		t.Fatal("executor.defaultCheckoutPhase(ctx) error = nil, want non-nil (missing merge ref)")
+		t.Fatal("executor.defaultCheckoutPhase(ctx, 1) error = nil, want non-nil (missing merge ref)")
 	}
 	if elapsed >= maxDuration {
-		t.Fatalf("executor.defaultCheckoutPhase(ctx) took %s, want < %s — merge refspec should not be retried", elapsed, maxDuration)
+		t.Fatalf("executor.defaultCheckoutPhase(ctx, 1) took %s, want < %s — merge refspec should not be retried", elapsed, maxDuration)
 	}
 }
 
@@ -506,8 +506,8 @@ func TestDefaultCheckoutPhase_DelayedRefCreation(t *testing.T) {
 		}
 	}()
 
-	if err := tt.executor.defaultCheckoutPhase(ctx); err != nil {
-		t.Fatalf("tt.executor.defaultCheckoutPhase(ctx) error = %v, want nil", err)
+	if err := tt.executor.defaultCheckoutPhase(ctx, 1); err != nil {
+		t.Fatalf("tt.executor.defaultCheckoutPhase(ctx, 1) error = %v, want nil", err)
 	}
 }
 
@@ -719,7 +719,7 @@ func TestDefaultCheckoutPhase_GitLFS(t *testing.T) {
 				},
 			}
 
-			err = executor.defaultCheckoutPhase(ctx)
+			err = executor.defaultCheckoutPhase(ctx, 1)
 			if tt.wantErr == "" {
 				if err != nil {
 					t.Errorf("defaultCheckoutPhase() error = %v, want nil", err)

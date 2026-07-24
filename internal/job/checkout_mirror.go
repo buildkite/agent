@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -71,7 +72,14 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string) (dir 
 	// Lock the mirror dir to prevent concurrent clones
 	cloneCtx, canc := context.WithTimeout(ctx, lockTimeout)
 	defer canc()
+
+	cloneLockSpan, _ := e.traceOpSpan(ctx, "git.mirror.lock_wait.clone")
+
 	mirrorCloneLock, err := e.shell.LockFile(cloneCtx, mirrorDir+".clonelock")
+
+	cloneLockSpan.AddAttributes(map[string]string{"git.timed_out": strconv.FormatBool(errors.Is(err, context.DeadlineExceeded))})
+	cloneLockSpan.FinishWithError(err)
+
 	if err != nil {
 		if errors.Is(err, context.DeadlineExceeded) {
 			return "", ErrTimedOutAcquiringLock{Name: "clone", Err: err}
@@ -90,7 +98,9 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string) (dir 
 			return "", err
 		}
 		flags = append(flags, mirrorFlags...)
-		if err := gitClone(ctx, e.shell, flags, repository, mirrorDir); err != nil {
+		if err := e.traceOp(ctx, "git.mirror.clone", func(ctx context.Context) error {
+			return gitClone(ctx, e.shell, flags, repository, mirrorDir)
+		}); err != nil {
 			e.shell.Commentf("Removing mirror dir %q due to failed clone", mirrorDir)
 			if err := os.RemoveAll(mirrorDir); err != nil {
 				e.shell.Errorf("Failed to remove %q (%s)", mirrorDir, err)
@@ -113,7 +123,14 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string) (dir 
 	// Lock the mirror dir to prevent concurrent updates
 	updateCtx, canc := context.WithTimeout(ctx, lockTimeout)
 	defer canc()
+
+	updateLockSpan, _ := e.traceOpSpan(ctx, "git.mirror.lock_wait.update")
+
 	mirrorUpdateLock, err := e.shell.LockFile(updateCtx, mirrorDir+".updatelock")
+
+	updateLockSpan.AddAttributes(map[string]string{"git.timed_out": strconv.FormatBool(errors.Is(err, context.DeadlineExceeded))})
+	updateLockSpan.FinishWithError(err)
+
 	if err != nil {
 		if errors.Is(err, context.DeadlineExceeded) {
 			return "", ErrTimedOutAcquiringLock{Name: "update", Err: err}
@@ -125,6 +142,7 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string) (dir 
 			finalErr = errors.Join(finalErr, fmt.Errorf("unable to release update lock: %w", err))
 		}
 	}()
+
 	if isMainRepository {
 		// Check again after we get a lock, in case the other process has already updated
 		if hasGitCommit(ctx, e.shell, mirrorDir, e.Commit) {
@@ -167,12 +185,14 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string) (dir 
 		}
 
 		// Fetch the refspecs from the upstream repository into the mirror.
-		if err := gitFetch(ctx, gitFetchArgs{
-			Shell:      e.shell,
-			GitFlags:   fmt.Sprintf("--git-dir=%s", mirrorDir),
-			Repository: "origin",
-			RefSpecs:   refspecs,
-			Retry:      retry,
+		if err := e.traceOp(ctx, "git.mirror.fetch", func(ctx context.Context) error {
+			return gitFetch(ctx, gitFetchArgs{
+				Shell:      e.shell,
+				GitFlags:   fmt.Sprintf("--git-dir=%s", mirrorDir),
+				Repository: "origin",
+				RefSpecs:   refspecs,
+				Retry:      retry,
+			})
 		}); err != nil {
 			return "", err
 		}
@@ -186,7 +206,9 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string) (dir 
 		// TODO: Investigate getting the ref from the main repo and passing
 		// that in here.
 		cmd := e.shell.Command("git", "--git-dir", mirrorDir, "fetch", "origin")
-		if err := cmd.Run(ctx); err != nil {
+		if err := e.traceOp(ctx, "git.mirror.fetch", func(ctx context.Context) error {
+			return cmd.Run(ctx)
+		}); err != nil {
 			return "", err
 		}
 	}
@@ -281,7 +303,9 @@ func (e *Executor) snapshotMirror(ctx context.Context, repository, mirrorDir str
 
 	// Finally, clone the snapshot. Yes, it's a --mirror of a --mirror.
 	e.shell.Commentf("Creating mirror snapshot in %q", snapshotDir)
-	if err := gitClone(ctx, e.shell, []string{"--mirror"}, mirrorDir, snapshotDir); err != nil {
+	if err := e.traceOp(ctx, "git.mirror.snapshot", func(ctx context.Context) error {
+		return gitClone(ctx, e.shell, []string{"--mirror"}, mirrorDir, snapshotDir)
+	}); err != nil {
 		return "", err
 	}
 

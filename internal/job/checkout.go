@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"slices"
+	"strconv"
 	"time"
 
 	"github.com/buildkite/agent/v3/internal/experiments"
@@ -154,7 +155,7 @@ func (e *Executor) checkout(ctx context.Context) error {
 			roko.WithStrategy(roko.Exponential(2*time.Second, 0)),
 			roko.WithJitter(),
 		).DoWithContext(ctx, func(r *roko.Retrier) error {
-			err := e.runDefaultCheckoutAttempt(ctx)
+			err := e.runDefaultCheckoutAttempt(ctx, r.AttemptCount())
 			if err == nil {
 				return nil
 			}
@@ -268,16 +269,16 @@ var errCheckoutAttemptTimedOut = errors.New("checkout attempt timed out")
 // timeout if BUILDKITE_GIT_CHECKOUT_TIMEOUT is set. On timeout the returned
 // error is joined with errCheckoutAttemptTimedOut so the retry loop can
 // distinguish a timeout-kill from other signal-terminated processes.
-func (e *Executor) runDefaultCheckoutAttempt(ctx context.Context) error {
+func (e *Executor) runDefaultCheckoutAttempt(ctx context.Context, previousAttempts int) error {
 	if e.GitCheckoutTimeout <= 0 {
-		return e.defaultCheckoutPhase(ctx)
+		return e.defaultCheckoutPhase(ctx, previousAttempts)
 	}
 
 	timeout := time.Duration(e.GitCheckoutTimeout) * time.Second
 	attemptCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
-	err := e.defaultCheckoutPhase(attemptCtx)
+	err := e.defaultCheckoutPhase(attemptCtx, previousAttempts)
 	if err != nil && attemptCtx.Err() == context.DeadlineExceeded && ctx.Err() == nil {
 		return fmt.Errorf("%w after %s: %w", errCheckoutAttemptTimedOut, timeout, err)
 	}
@@ -285,15 +286,20 @@ func (e *Executor) runDefaultCheckoutAttempt(ctx context.Context) error {
 }
 
 // defaultCheckoutPhase is called by the CheckoutPhase if no global or plugin checkout
-// hook exists. It performs the default checkout on the Repository provided in the config
-func (e *Executor) defaultCheckoutPhase(ctx context.Context) (retErr error) {
-	span, _ := tracetools.StartSpanFromContext(ctx, "repo-checkout", e.TracingBackend)
+// hook exists. It performs the default checkout on the Repository provided in the config.
+// previousAttempts is the count of prior checkout attempts.
+func (e *Executor) defaultCheckoutPhase(ctx context.Context, previousAttempts int) (retErr error) {
+	span, spanCtx := tracetools.StartSpanFromContext(ctx, "repo-checkout", e.TracingBackend)
 	span.AddAttributes(map[string]string{
 		"checkout.repo_name": redact.URLCredentials(e.Repository),
 		"checkout.refspec":   e.RefSpec,
 		"checkout.commit":    e.Commit,
+		"checkout.attempt":   strconv.Itoa(previousAttempts + 1),
 	})
 	defer func() { span.FinishWithError(retErr) }()
+
+	// Adopt the repo-checkout child ctx so git.* spans nest under it.
+	ctx = spanCtx
 
 	if e.SSHKeyscan {
 		addRepositoryHostToSSHKnownHosts(ctx, e.shell, e.Repository)
@@ -317,12 +323,19 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) (retErr error) {
 	// If we can, get a mirror of the git repository to use for reference later
 	if e.GitMirrorsPath != "" && e.Repository != "" {
 		span.AddAttributes(map[string]string{"checkout.is_using_git_mirrors": "true"})
+
 		var err error
-		mirrorDir, err = e.getOrUpdateMirrorDir(ctx, e.Repository)
+
+		mirrorSpan, mirrorCtx := e.traceOpSpan(ctx, "git.mirror.update")
+		mirrorSpan.AddAttributes(map[string]string{"git.repo": redact.URLCredentials(e.Repository)})
+
+		mirrorDir, err = e.getOrUpdateMirrorDir(mirrorCtx, e.Repository)
+
+		mirrorSpan.FinishWithError(err)
+
 		if err != nil {
 			return fmt.Errorf("getting/updating git mirror: %w", err)
 		}
-
 		e.shell.Env.Set("BUILDKITE_REPO_MIRROR", mirrorDir)
 	}
 
@@ -375,7 +388,9 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) (retErr error) {
 			case "dissociate":
 				// If the existing repo is still relying on the reference, then
 				// "dissociate" it (git repack, and delete the alternates file).
-				if err := e.dissociateIfNeeded(ctx, existingGitDir); err != nil {
+				if err := e.traceOp(ctx, "git.dissociate", func(ctx context.Context) error {
+					return e.dissociateIfNeeded(ctx, existingGitDir)
+				}); err != nil {
 					return fmt.Errorf("dissociating existing reference clone: %w", err)
 				}
 			case "reference":
@@ -417,28 +432,50 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) (retErr error) {
 		}
 
 		// Do the clone.
-		if err := gitClone(ctx, e.shell, gitCloneFlags, e.Repository, "."); err != nil {
-			return fmt.Errorf("cloning git repository: %w", err)
+		cloneSpan, cloneCtx := e.traceOpSpan(ctx, "git.clone")
+		mirrorMode := "none"
+		if mirrorDir != "" {
+			mirrorMode = e.GitMirrorCheckoutMode
+		}
+		cloneSpan.AddAttributes(map[string]string{
+			"git.mirror_mode":     mirrorMode,
+			"git.sparse":          strconv.FormatBool(len(sparsePaths) > 0),
+			"git.blobless_filter": strconv.FormatBool(hasPartialFilterFlags(gitCloneFlags)),
+		})
+
+		cloneErr := gitClone(cloneCtx, e.shell, gitCloneFlags, e.Repository, ".")
+
+		cloneSpan.FinishWithError(cloneErr)
+
+		if cloneErr != nil {
+			return fmt.Errorf("cloning git repository: %w", cloneErr)
 		}
 	}
 
 	// Git clean prior to checkout, we do this even if submodules have been
 	// disabled to ensure previous submodules are cleaned up
-	if hasGitSubmodules(e.shell) {
-		if err := gitCleanSubmodules(ctx, e.shell, e.GitCleanFlags); err != nil {
-			return fmt.Errorf("cleaning git submodules: %w", err)
+	if err := e.traceOp(ctx, "git.clean.pre", func(ctx context.Context) error {
+		if hasGitSubmodules(e.shell) {
+			if err := gitCleanSubmodules(ctx, e.shell, e.GitCleanFlags); err != nil {
+				return fmt.Errorf("cleaning git submodules: %w", err)
+			}
 		}
-	}
 
-	if err := gitClean(ctx, e.shell, e.GitCleanFlags); err != nil {
-		return fmt.Errorf("cleaning git repository: %w", err)
+		if err := gitClean(ctx, e.shell, e.GitCleanFlags); err != nil {
+			return fmt.Errorf("cleaning git repository: %w", err)
+		}
+		return nil
+	}); err != nil {
+		return err
 	}
 
 	// Install LFS filter before fetch so the filter is registered before any
 	// network operation, following the conventional git-lfs setup order.
 	if e.GitLFSEnabled {
 		e.shell.Commentf("Installing Git LFS filter")
-		if err := e.shell.Command("git", "lfs", "install", "--local").Run(ctx); err != nil {
+		if err := e.traceOp(ctx, "git.lfs.install", func(ctx context.Context) error {
+			return e.shell.Command("git", "lfs", "install", "--local").Run(ctx)
+		}); err != nil {
 			return fmt.Errorf("installing git lfs filter: %w", err)
 		}
 	}
@@ -456,25 +493,38 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) (retErr error) {
 		return err
 	}
 
-	if err := e.verifyCommit(ctx); err != nil {
+	if err := e.traceOp(ctx, "git.verify_commit", func(ctx context.Context) error {
+		return e.verifyCommit(ctx)
+	}); err != nil {
 		return err
 	}
 
-	sparseCheckoutActive, err := e.setupSparseCheckout(ctx, sparsePaths)
+	sparseSpan, sparseCtx := e.traceOpSpan(ctx, "git.sparse_checkout")
+	sparseSpan.AddAttributes(map[string]string{"git.path_count": strconv.Itoa(len(sparsePaths))})
+
+	sparseCheckoutActive, err := e.setupSparseCheckout(sparseCtx, sparsePaths)
+
+	sparseSpan.FinishWithError(err)
+
 	if err != nil {
 		return err
 	}
 
 	gitCheckoutFlags := e.GitCheckoutFlags
 
-	if e.Commit == "HEAD" {
-		if err := gitCheckout(ctx, e.shell, gitCheckoutFlags, "FETCH_HEAD"); err != nil {
-			return fmt.Errorf("checking out FETCH_HEAD: %w", err)
+	if err := e.traceOp(ctx, "git.checkout", func(ctx context.Context) error {
+		if e.Commit == "HEAD" {
+			if err := gitCheckout(ctx, e.shell, gitCheckoutFlags, "FETCH_HEAD"); err != nil {
+				return fmt.Errorf("checking out FETCH_HEAD: %w", err)
+			}
+		} else {
+			if err := gitCheckout(ctx, e.shell, gitCheckoutFlags, e.Commit); err != nil {
+				return fmt.Errorf("checking out commit %q: %w", e.Commit, err)
+			}
 		}
-	} else {
-		if err := gitCheckout(ctx, e.shell, gitCheckoutFlags, e.Commit); err != nil {
-			return fmt.Errorf("checking out commit %q: %w", e.Commit, err)
-		}
+		return nil
+	}); err != nil {
+		return err
 	}
 
 	gitSubmodules := false
@@ -508,7 +558,9 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) (retErr error) {
 		if sparseCheckoutActive {
 			lfsArgs.Include = cleanGitSparseCheckoutPaths(e.GitSparseCheckoutPaths)
 		}
-		if err := gitLFSFetchCheckout(ctx, lfsArgs); err != nil {
+		if err := e.traceOp(ctx, "git.lfs.fetch", func(ctx context.Context) error {
+			return gitLFSFetchCheckout(ctx, lfsArgs)
+		}); err != nil {
 			return err
 		}
 	}
@@ -518,14 +570,19 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) (retErr error) {
 	// good solution to this problem that we've found
 	e.shell.Commentf("Cleaning again to catch any post-checkout changes")
 
-	if err := gitClean(ctx, e.shell, e.GitCleanFlags); err != nil {
-		return fmt.Errorf("cleaning repository post-checkout: %w", err)
-	}
-
-	if gitSubmodules {
-		if err := gitCleanSubmodules(ctx, e.shell, e.GitCleanFlags); err != nil {
-			return fmt.Errorf("cleaning submodules post-checkout: %w", err)
+	if err := e.traceOp(ctx, "git.clean.post", func(ctx context.Context) error {
+		if err := gitClean(ctx, e.shell, e.GitCleanFlags); err != nil {
+			return fmt.Errorf("cleaning repository post-checkout: %w", err)
 		}
+
+		if gitSubmodules {
+			if err := gitCleanSubmodules(ctx, e.shell, e.GitCleanFlags); err != nil {
+				return fmt.Errorf("cleaning submodules post-checkout: %w", err)
+			}
+		}
+		return nil
+	}); err != nil {
+		return err
 	}
 
 	if _, hasToken := e.shell.Env.Get("BUILDKITE_AGENT_ACCESS_TOKEN"); !hasToken {
@@ -546,7 +603,11 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context) (retErr error) {
 // submodules. When git mirrors are configured, each submodule is mirrored and
 // updated with a reference to its mirror; otherwise submodules are updated
 // with a plain clean update.
-func (e *Executor) updateGitSubmodules(ctx context.Context) error {
+func (e *Executor) updateGitSubmodules(ctx context.Context) (retErr error) {
+	submodulesSpan, ctx := e.traceOpSpan(ctx, "git.submodules")
+	submodulesSpan.AddAttributes(map[string]string{"git.mirrored": strconv.FormatBool(e.GitMirrorsPath != "")})
+	defer func() { submodulesSpan.FinishWithError(retErr) }()
+
 	// `submodule sync` will ensure the .git/config
 	// matches the .gitmodules file.  The command
 	// is only available in git version 1.8.1, so
@@ -575,6 +636,8 @@ func (e *Executor) updateGitSubmodules(ctx context.Context) error {
 		return nil
 	}
 
+	submodulesSpan.AddAttributes(map[string]string{"git.count": strconv.Itoa(len(submoduleRepos))})
+
 	mirrorSubmodules := e.GitMirrorsPath != ""
 	for _, repository := range submoduleRepos {
 		// submodules might need their fingerprints verified too
@@ -587,7 +650,16 @@ func (e *Executor) updateGitSubmodules(ctx context.Context) error {
 		}
 		// It's all mirrored submodules for the rest of the loop.
 
-		mirrorDir, err := e.getOrUpdateMirrorDir(ctx, repository)
+		// getOrUpdateMirrorDir is shared with the main repo's mirror update, so
+		// this produces the same sub-tree of spans; git.repo distinguishes
+		// submodules since the span names repeat.
+		subMirrorSpan, subMirrorCtx := e.traceOpSpan(ctx, "git.mirror.update")
+		subMirrorSpan.AddAttributes(map[string]string{"git.repo": redact.URLCredentials(repository)})
+
+		mirrorDir, err := e.getOrUpdateMirrorDir(subMirrorCtx, repository)
+
+		subMirrorSpan.FinishWithError(err)
+
 		if err != nil {
 			return fmt.Errorf("getting/updating mirror dir for submodules: %w", err)
 		}
@@ -608,14 +680,18 @@ func (e *Executor) updateGitSubmodules(ctx context.Context) error {
 			submoduleArgs = append(submoduleArgs, "submodule", "update", "--init", "--recursive", "--force")
 		}
 
-		if err := e.shell.Command("git", submoduleArgs...).Run(ctx); err != nil {
+		if err := e.traceOp(ctx, "git.submodule.update", func(ctx context.Context) error {
+			return e.shell.Command("git", submoduleArgs...).Run(ctx)
+		}); err != nil {
 			return fmt.Errorf("updating submodules: %w", err)
 		}
 	}
 
 	if !mirrorSubmodules {
 		args = append(args, "submodule", "update", "--init", "--recursive", "--force")
-		if err := e.shell.Command("git", args...).Run(ctx); err != nil {
+		if err := e.traceOp(ctx, "git.submodule.update", func(ctx context.Context) error {
+			return e.shell.Command("git", args...).Run(ctx)
+		}); err != nil {
 			return fmt.Errorf("updating submodules: %w", err)
 		}
 	}
