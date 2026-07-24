@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"os"
+	"os/exec"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -84,28 +86,274 @@ func TestTraceGitOpSpan_FlagOffReturnsNoop(t *testing.T) {
 	span.FinishWithError(errors.New("x"))
 }
 
-// tracetools uses the global OTel tracer, so these register the recorder as
-// the global provider and can't use t.Parallel().
+// TestTraceGitCheckout_FlagOn asserts that with --trace-git-checkout on,
+// git.* spans are emitted, nest under repo-checkout, and repo-checkout has
+// checkout.attempt.
+func TestTraceGitCheckout_FlagOn(t *testing.T) {
+	spans := runTracedCheckout(t, true)
 
-// gitSpanNames returns the names of ended spans with the git.* prefix.
-func gitSpanNames(spans []sdktrace.ReadOnlySpan) []string {
-	var names []string
-	for _, s := range spans {
-		if strings.HasPrefix(s.Name(), "git.") {
-			names = append(names, s.Name())
-		}
+	repoCheckout := findOnlySpan(t, spans, "repo-checkout")
+	assertSpanAttr(t, repoCheckout, "checkout.attempt", "1")
+
+	// A fresh clone into an empty checkout dir exercises these spans, all
+	// nested directly under repo-checkout.
+	wantSpans := []string{
+		"git.clone",
+		"git.clean.pre",
+		"git.fetch",
+		"git.verify_commit",
+		"git.sparse_checkout",
+		"git.checkout",
+		"git.clean.post",
 	}
-	return names
+	for _, name := range wantSpans {
+		assertSpanChildOf(t, spans, name, "repo-checkout")
+	}
 }
 
-// findSpan returns the first ended span with the given name, or nil.
-func findSpan(spans []sdktrace.ReadOnlySpan, name string) sdktrace.ReadOnlySpan {
-	for _, s := range spans {
-		if s.Name() == name {
-			return s
+// TestTraceGitCheckout_FlagOff asserts that with --trace-git-checkout off, no
+// git.* spans are emitted, but repo-checkout (with checkout.attempt) still is.
+func TestTraceGitCheckout_FlagOff(t *testing.T) {
+	spans := runTracedCheckout(t, false)
+
+	if names := gitSpanNames(spans); len(names) != 0 {
+		t.Fatalf("git.* spans emitted with flag off: %v, want none", names)
+	}
+
+	repoCheckout := findOnlySpan(t, spans, "repo-checkout")
+	assertSpanAttr(t, repoCheckout, "checkout.attempt", "1")
+}
+
+// TestTraceGitCheckout_Mirrors asserts the git.mirror.* and git.dissociate
+// spans are emitted. Two runs share a mirror path and checkout dir: run 1
+// clones a fresh mirror, run 2 updates it and dissociates the existing clone.
+func TestTraceGitCheckout_Mirrors(t *testing.T) {
+	e, _ := newTracedExecutor(t, "trace-mirrors")
+
+	e.GitMirrorsPath = tracingTempDir(t, "git-mirrors-")
+	e.GitMirrorsLockTimeout = 30 // seconds; ample for a local, uncontended mirror.
+	e.GitMirrorCheckoutMode = "dissociate"
+	e.CleanCheckout = true // For git.mirror.snapshot.
+
+	recorder := installGlobalSpanRecorder(t)
+
+	// Run 1: fresh mirror -> clone and snapshot.
+	if err := e.defaultCheckoutPhase(t.Context(), 0); err != nil {
+		t.Fatalf("first defaultCheckoutPhase error = %v, want nil", err)
+	}
+	// Run 2: mirror and .git exist; Commit=HEAD forces a fetch and dissociate.
+	if err := e.defaultCheckoutPhase(t.Context(), 1); err != nil {
+		t.Fatalf("second defaultCheckoutPhase error = %v, want nil", err)
+	}
+
+	spans := recorder.Ended()
+
+	// Mirror sub-operations nest under git.mirror.update, itself under repo-checkout.
+	assertSpanChildOf(t, spans, "git.mirror.update", "repo-checkout")
+	for _, name := range []string{
+		"git.mirror.lock_wait.clone",
+		"git.mirror.clone",
+		"git.mirror.lock_wait.update",
+		"git.mirror.fetch",
+		"git.mirror.snapshot",
+	} {
+		assertSpanChildOf(t, spans, name, "git.mirror.update")
+	}
+
+	// Dissociation happens directly under repo-checkout.
+	assertSpanChildOf(t, spans, "git.dissociate", "repo-checkout")
+}
+
+// TestTraceGitCheckout_Submodules asserts the git.submodules and
+// git.submodule.update spans are emitted for a repo with a submodule.
+func TestTraceGitCheckout_Submodules(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("local submodule wiring is finicky on Windows temp dirs")
+	}
+
+	e, s := newTracedExecutor(t, "trace-submodules-main")
+	addTestSubmodule(t, s, "trace-submodules-main", "trace-submodules-sub")
+	e.GitSubmodules = true
+
+	recorder := installGlobalSpanRecorder(t)
+
+	if err := e.defaultCheckoutPhase(t.Context(), 0); err != nil {
+		t.Fatalf("defaultCheckoutPhase error = %v, want nil", err)
+	}
+
+	spans := recorder.Ended()
+
+	assertSpanChildOf(t, spans, "git.submodules", "repo-checkout")
+	assertSpanChildOf(t, spans, "git.submodule.update", "git.submodules")
+}
+
+// TestTraceGitCheckout_GitLFS asserts the git.lfs.install and git.lfs.fetch
+// spans are emitted when Git LFS is enabled. Skipped if git-lfs is absent.
+func TestTraceGitCheckout_GitLFS(t *testing.T) {
+	if _, err := exec.LookPath("git-lfs"); err != nil {
+		t.Skip("git-lfs not installed")
+	}
+
+	e, _ := newTracedExecutor(t, "trace-lfs")
+	e.GitLFSEnabled = true
+
+	recorder := installGlobalSpanRecorder(t)
+
+	if err := e.defaultCheckoutPhase(t.Context(), 0); err != nil {
+		t.Fatalf("defaultCheckoutPhase error = %v, want nil", err)
+	}
+
+	spans := recorder.Ended()
+
+	assertSpanChildOf(t, spans, "git.lfs.install", "repo-checkout")
+	assertSpanChildOf(t, spans, "git.lfs.fetch", "repo-checkout")
+}
+
+// runTracedCheckout runs a default checkout against a throwaway git-over-http
+// repo with the given --trace-git-checkout setting, and returns the ended spans.
+func runTracedCheckout(t *testing.T, traceGitCheckout bool) []sdktrace.ReadOnlySpan {
+	t.Helper()
+
+	e, _ := newTracedExecutor(t, "trace-checkout")
+	e.TraceGitCheckout = traceGitCheckout
+
+	recorder := installGlobalSpanRecorder(t)
+
+	if err := e.defaultCheckoutPhase(t.Context(), 0); err != nil {
+		t.Fatalf("executor.defaultCheckoutPhase(ctx, 0) error = %v, want nil", err)
+	}
+
+	return recorder.Ended()
+}
+
+// newTracedExecutor builds an Executor wired to a throwaway git-over-http repo,
+// with the OpenTelemetry backend and git-checkout tracing enabled.
+func newTracedExecutor(t *testing.T, projectName string) (*Executor, *githttptest.Server) {
+	t.Helper()
+
+	sh, err := shell.New()
+	if err != nil {
+		t.Fatalf("shell.New() error = %v, want nil", err)
+	}
+
+	e := &Executor{
+		shell: sh,
+		ExecutorConfig: ExecutorConfig{
+			// Commit "HEAD" (rather than the pushed hash returned by
+			// setupCheckoutTestRepo) intentionally exercises the fresh-clone
+			// path, which is why that hash is discarded below.
+			Commit:           "HEAD",
+			Branch:           "main",
+			GitCleanFlags:    "-f -d -x",
+			TracingBackend:   tracetools.BackendOpenTelemetry,
+			TraceGitCheckout: true,
+		},
+	}
+
+	s, _ := setupCheckoutTestRepo(t, e, projectName)
+	return e, s
+}
+
+// addTestSubmodule creates subRepo on s and adds it as a submodule on mainRepo's
+// main branch, so a checkout of main HEAD has a submodule to initialise. Relies
+// on the git identity env set by setupCheckoutTestRepo.
+func addTestSubmodule(t *testing.T, s *githttptest.Server, mainRepo, subRepo string) {
+	t.Helper()
+
+	if err := s.CreateRepository(subRepo); err != nil {
+		t.Fatalf("s.CreateRepository(%q) error = %v, want nil", subRepo, err)
+	}
+	if out, err := s.InitRepository(subRepo); err != nil {
+		t.Fatalf("s.InitRepository(%q) error = %v, output: %s", subRepo, err, string(out))
+	}
+
+	work := tracingTempDir(t, "submodule-add-")
+	git := func(dir string, args ...string) {
+		t.Helper()
+		cmd := exec.Command("git", args...)
+		cmd.Dir = dir
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %s error = %v, output: %s", strings.Join(args, " "), err, string(out))
 		}
 	}
-	return nil
+
+	// -b main: don't rely on remote HEAD, which may point at master, not main.
+	git("", "clone", "-b", "main", s.RepoURL(mainRepo), work)
+	git(work, "submodule", "add", "-b", "main", s.RepoURL(subRepo), "sub")
+	git(work, "commit", "-m", "Add submodule")
+	git(work, "push", "origin", "main")
+}
+
+// installGlobalSpanRecorder swaps in an in-memory recorder as the *global* OTel
+// provider (tracetools uses the global tracer), restoring it on cleanup. Callers
+// mutate global state, so can't t.Parallel().
+func installGlobalSpanRecorder(t *testing.T) *tracetest.SpanRecorder {
+	t.Helper()
+	recorder := tracetest.NewSpanRecorder()
+	provider := sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(recorder))
+	prev := otel.GetTracerProvider()
+	otel.SetTracerProvider(provider)
+	t.Cleanup(func() {
+		otel.SetTracerProvider(prev)
+		_ = provider.Shutdown(context.Background()) //nolint:usetesting // t.Context() is cancelled before Cleanup funcs.
+	})
+	return recorder
+}
+
+// tracingTempDir makes a temp dir with best-effort cleanup. Not t.TempDir():
+// on Windows git child processes can hold handles past exit, which
+// t.TempDir()'s strict cleanup would fail on.
+func tracingTempDir(t *testing.T, prefix string) string {
+	t.Helper()
+	dir, err := os.MkdirTemp("", prefix)
+	if err != nil {
+		t.Fatalf("os.MkdirTemp(%q) error = %v, want nil", prefix, err)
+	}
+	t.Cleanup(func() { os.RemoveAll(dir) }) //nolint:errcheck // Best-effort cleanup.
+	return dir
+}
+
+// assertSpanChildOf asserts some span named childName has a parent named
+// parentName. Tolerates repeated names (e.g. mirror spans, once per run).
+func assertSpanChildOf(t *testing.T, spans []sdktrace.ReadOnlySpan, childName, parentName string) {
+	t.Helper()
+	for _, child := range spans {
+		if child.Name() != childName {
+			continue
+		}
+		parentID := child.Parent().SpanID()
+		for _, p := range spans {
+			if p.SpanContext().SpanID() == parentID && p.Name() == parentName {
+				return
+			}
+		}
+	}
+	t.Errorf("no %q span with parent %q; git.* spans present: %v", childName, parentName, gitSpanNames(spans))
+}
+
+// findOnlySpan asserts exactly one ended span has the given name and returns
+// it, so attribute assertions can't silently target one of several.
+func findOnlySpan(t *testing.T, spans []sdktrace.ReadOnlySpan, name string) sdktrace.ReadOnlySpan {
+	t.Helper()
+	var matches []sdktrace.ReadOnlySpan
+	for _, s := range spans {
+		if s.Name() == name {
+			matches = append(matches, s)
+		}
+	}
+	if len(matches) != 1 {
+		t.Fatalf("found %d %q spans, want exactly 1", len(matches), name)
+	}
+	return matches[0]
+}
+
+// assertSpanAttr asserts the named span attribute is present and equals want.
+func assertSpanAttr(t *testing.T, s sdktrace.ReadOnlySpan, key, want string) {
+	t.Helper()
+	got, ok := spanAttr(s, key)
+	if !ok || got != want {
+		t.Fatalf("span %q attribute %q = %q (present=%t), want %q", s.Name(), key, got, ok, want)
+	}
 }
 
 // spanAttr returns the string value of the named attribute, and whether it
@@ -119,136 +367,13 @@ func spanAttr(s sdktrace.ReadOnlySpan, key string) (string, bool) {
 	return "", false
 }
 
-// runTracedCheckout runs a default checkout against a throwaway git-over-http
-// repo with the OpenTelemetry backend and the given --trace-git-checkout
-// setting, and returns the ended spans.
-func runTracedCheckout(t *testing.T, traceGitCheckout bool) []sdktrace.ReadOnlySpan {
-	t.Helper()
-
-	ctx := t.Context()
-
-	sh, err := shell.New()
-	if err != nil {
-		t.Fatalf("shell.New() error = %v, want nil", err)
-	}
-
-	// Keep git config out of the home directory.
-	t.Setenv("GIT_AUTHOR_NAME", "Buildkite Agent")
-	t.Setenv("GIT_AUTHOR_EMAIL", "agent@example.com")
-	t.Setenv("GIT_COMMITTER_NAME", "Buildkite Agent")
-	t.Setenv("GIT_COMMITTER_EMAIL", "agent@example.com")
-
-	const projectName = "trace-checkout"
-
-	s := githttptest.NewServer()
-	defer s.Close()
-
-	if err := s.CreateRepository(projectName); err != nil {
-		t.Fatalf("s.CreateRepository(%q) error = %v, want nil", projectName, err)
-	}
-	if out, err := s.InitRepository(projectName); err != nil {
-		t.Fatalf("failed to init repository: %v output: %s", err, string(out))
-	}
-	if _, out, err := s.PushBranch(projectName, "feature-branch"); err != nil {
-		t.Fatalf("failed to push branch: %v output: %s", err, string(out))
-	}
-
-	buildDir, err := os.MkdirTemp("", "build-path-")
-	if err != nil {
-		t.Fatalf("os.MkdirTemp error = %v, want nil", err)
-	}
-	t.Cleanup(func() { os.RemoveAll(buildDir) }) //nolint:errcheck // Best-effort cleanup.
-
-	checkoutDir, err := os.MkdirTemp("", "checkout-path-")
-	if err != nil {
-		t.Fatalf("os.MkdirTemp error = %v, want nil", err)
-	}
-	t.Cleanup(func() { os.RemoveAll(checkoutDir) }) //nolint:errcheck // Best-effort cleanup.
-	sh.Env.Set("BUILDKITE_BUILD_CHECKOUT_PATH", checkoutDir)
-
-	executor := &Executor{
-		shell: sh,
-		ExecutorConfig: ExecutorConfig{
-			Commit:           "HEAD",
-			Branch:           "main",
-			GitCleanFlags:    "-f -d -x",
-			BuildPath:        buildDir,
-			Repository:       s.RepoURL(projectName),
-			TracingBackend:   tracetools.BackendOpenTelemetry,
-			TraceGitCheckout: traceGitCheckout,
-		},
-	}
-
-	// tracetools uses otel.Tracer("buildkite-agent"), so register an
-	// in-memory recorder as the global provider for this test.
-	recorder := tracetest.NewSpanRecorder()
-	provider := sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(recorder))
-	prev := otel.GetTracerProvider()
-	otel.SetTracerProvider(provider)
-	t.Cleanup(func() {
-		otel.SetTracerProvider(prev)
-		_ = provider.Shutdown(context.Background()) //nolint:usetesting // t.Context() is cancelled before Cleanup funcs.
-	})
-
-	if err := executor.defaultCheckoutPhase(ctx, 0); err != nil {
-		t.Fatalf("executor.defaultCheckoutPhase(ctx, 0) error = %v, want nil", err)
-	}
-
-	return recorder.Ended()
-}
-
-// TestTraceGitCheckout_FlagOn asserts that with --trace-git-checkout on,
-// git.* spans are emitted, nest under repo-checkout, and repo-checkout has
-// checkout.attempt.
-func TestTraceGitCheckout_FlagOn(t *testing.T) {
-	spans := runTracedCheckout(t, true)
-
-	repoCheckout := findSpan(spans, "repo-checkout")
-	if repoCheckout == nil {
-		t.Fatal("repo-checkout span not found")
-	}
-	if got, ok := spanAttr(repoCheckout, "checkout.attempt"); !ok || got != "1" {
-		t.Fatalf("repo-checkout checkout.attempt = %q (present=%t), want %q", got, ok, "1")
-	}
-
-	// A fresh clone into an empty checkout dir exercises these spans.
-	wantSpans := []string{
-		"git.clone",
-		"git.clean.pre",
-		"git.fetch",
-		"git.verify_commit",
-		"git.sparse_checkout",
-		"git.checkout",
-		"git.clean.post",
-	}
-
-	repoSpanID := repoCheckout.SpanContext().SpanID()
-	for _, name := range wantSpans {
-		s := findSpan(spans, name)
-		if s == nil {
-			t.Errorf("expected span %q not found; got git.* spans: %v", name, gitSpanNames(spans))
-			continue
-		}
-		if parent := s.Parent().SpanID(); parent != repoSpanID {
-			t.Errorf("span %q parent = %s, want repo-checkout %s", name, parent, repoSpanID)
+// gitSpanNames returns the names of ended spans with the git.* prefix.
+func gitSpanNames(spans []sdktrace.ReadOnlySpan) []string {
+	var names []string
+	for _, s := range spans {
+		if strings.HasPrefix(s.Name(), "git.") {
+			names = append(names, s.Name())
 		}
 	}
-}
-
-// TestTraceGitCheckout_FlagOff asserts that with --trace-git-checkout off, no
-// git.* spans are emitted, but repo-checkout (with checkout.attempt) still is.
-func TestTraceGitCheckout_FlagOff(t *testing.T) {
-	spans := runTracedCheckout(t, false)
-
-	if names := gitSpanNames(spans); len(names) != 0 {
-		t.Fatalf("git.* spans emitted with flag off: %v, want none", names)
-	}
-
-	repoCheckout := findSpan(spans, "repo-checkout")
-	if repoCheckout == nil {
-		t.Fatal("repo-checkout span not found")
-	}
-	if got, ok := spanAttr(repoCheckout, "checkout.attempt"); !ok || got != "1" {
-		t.Fatalf("repo-checkout checkout.attempt = %q (present=%t), want %q", got, ok, "1")
-	}
+	return names
 }
