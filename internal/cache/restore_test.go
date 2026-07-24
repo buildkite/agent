@@ -97,6 +97,22 @@ func TestCleanPath(t *testing.T) {
 		}
 	})
 
+	t.Run("rejects resolved current directory", func(t *testing.T) {
+		// target_paths: ["."] resolves to the absolute cwd before cleanup; the
+		// guard must catch that too, not just the literal ".".
+		cwd, err := os.Getwd()
+		if err != nil {
+			t.Fatalf("os.Getwd: %v", err)
+		}
+		err = cleanPath(t.Context(), cwd)
+		if err == nil {
+			t.Fatal("expected error, got nil")
+		}
+		if !strings.Contains(err.Error(), "refusing to remove") {
+			t.Errorf("error %q should contain %q", err.Error(), "refusing to remove")
+		}
+	})
+
 	t.Run("rejects home directory", func(t *testing.T) {
 		home, err := os.UserHomeDir()
 		if err != nil {
@@ -107,8 +123,46 @@ func TestCleanPath(t *testing.T) {
 		if err == nil {
 			t.Fatal("expected error, got nil")
 		}
-		if !strings.Contains(err.Error(), "refusing to remove home directory") {
-			t.Errorf("error %q should contain %q", err.Error(), "refusing to remove home directory")
+		if !strings.Contains(err.Error(), "refusing to remove") {
+			t.Errorf("error %q should contain %q", err.Error(), "refusing to remove")
+		}
+	})
+
+	t.Run("removes a regular file", func(t *testing.T) {
+		// A file target must be removable; makeTreeWritable's os.OpenRoot only
+		// works on directories, so cleanPath must skip it for files.
+		file := filepath.Join(t.TempDir(), "cache-file")
+		if err := os.WriteFile(file, []byte("x"), 0o600); err != nil {
+			t.Fatalf("WriteFile: %v", err)
+		}
+		if err := cleanPath(t.Context(), file); err != nil {
+			t.Fatalf("cleanPath: %v", err)
+		}
+		if _, err := os.Stat(file); !os.IsNotExist(err) {
+			t.Errorf("file should be removed, stat err = %v", err)
+		}
+	})
+
+	t.Run("rejects path resolving to cwd through a symlink", func(t *testing.T) {
+		if runtime.GOOS == "windows" {
+			t.Skip("symlink creation needs privileges on Windows")
+		}
+		// A lexically-different spelling that resolves to the cwd (here via a
+		// symlink) must still be refused — the guard compares file identity.
+		cwd, err := os.Getwd()
+		if err != nil {
+			t.Fatalf("os.Getwd: %v", err)
+		}
+		link := filepath.Join(t.TempDir(), "alias")
+		if err := os.Symlink(cwd, link); err != nil {
+			t.Fatalf("Symlink: %v", err)
+		}
+		err = cleanPath(t.Context(), link)
+		if err == nil {
+			t.Fatal("expected error, got nil")
+		}
+		if !strings.Contains(err.Error(), "refusing to remove") {
+			t.Errorf("error %q should contain %q", err.Error(), "refusing to remove")
 		}
 	})
 

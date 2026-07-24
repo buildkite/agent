@@ -213,14 +213,47 @@ func (c *client) Restore(ctx context.Context, cacheID string) (RestoreResult, er
 		Concurrency:      transferInfo.Concurrency,
 	}
 
+	// Detect the archive format before touching the filesystem. An
+	// unrecognized archive soft-fails as a cache miss so the job is
+	// not blocked and the existing target paths are left untouched.
+	if err := detectArchiveFormat(archiveFile, transferInfo.BytesTransferred); err != nil {
+		if errors.Is(err, archive.ErrUnrecognizedFormat) {
+			slog.Warn("unrecognized cache archive format, treating as miss and invalidating entry",
+				"cache_id", cacheID, "err", err)
+			// Invalidate the entry so it stops pointing at an archive this agent
+			// can't read. Otherwise the next Save sees the entry via
+			// CacheEntryPeekExists and returns early, leaving stable keys stuck
+			// on the unreadable archive until it expires. Mirrors the
+			// missing-blob path above.
+			invalidated := c.invalidateStaleEntry(ctx, retrieveResp)
+			result.CacheHit = false
+			result.FallbackUsed = false
+			result.CacheRestored = false
+			result.TotalDuration = time.Since(startTime)
+			span.SetAttributes(
+				attribute.Bool("cache.hit", false),
+				attribute.Bool("cache.restored", false),
+				attribute.Bool("cache.unrecognized_format", true),
+				attribute.Bool("cache.invalidated", invalidated),
+			)
+			span.SetStatus(codes.Ok, "cache miss (unrecognized format)")
+			c.callProgress(cacheID, "complete", "Cache miss (unrecognized archive format, invalidated stale entry)", 0, 0)
+			return result, nil
+		}
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "failed to detect archive format")
+		return result, fmt.Errorf("failed to detect archive format: %w", err)
+	}
+
 	c.callProgress(cacheID, "cleaning", "Cleaning paths", 0, 0)
 
 	for _, path := range cacheConfig.TargetPaths {
-		extractedPath, err := archive.ResolveHomeDir(path)
+		// Resolve exactly as save/restore matching does.
+		extractedPath, err := archive.ResolveConfigPath(path)
 		if err != nil {
 			span.RecordError(err)
-			span.SetStatus(codes.Error, "failed to resolve home dir")
-			return result, fmt.Errorf("failed to resolve home dir for %q: %w", path, err)
+			span.SetStatus(codes.Error, "failed to resolve target path")
+			return result, fmt.Errorf("failed to resolve target path %q: %w", path, err)
 		}
 
 		slog.Debug("cleaning path", "path", path, "extractedPath", extractedPath)
@@ -367,6 +400,18 @@ func (c *client) downloadCache(ctx context.Context, retrieveResp api.CacheEntryR
 	return tmpDir, archiveFile, transferInfo, nil
 }
 
+// detectArchiveFormat opens a downloaded archive and reports whether it is a
+// readable archive, returning archive.ErrUnrecognizedFormat otherwise.
+func detectArchiveFormat(archiveFile string, archiveSize int64) error {
+	f, err := os.Open(archiveFile)
+	if err != nil {
+		return fmt.Errorf("failed to open archive file: %w", err)
+	}
+	defer func() { _ = f.Close() }()
+
+	return archive.DetectFormat(f, archiveSize)
+}
+
 // extractCache extracts files from a cache archive
 func (c *client) extractCache(ctx context.Context, archiveFile string, archiveSize int64, paths []string) (*archive.ArchiveInfo, error) {
 	tracer := otel.Tracer("github.com/buildkite/agent/v3/internal/cache")
@@ -415,26 +460,32 @@ func cleanPath(ctx context.Context, dir string) error {
 
 	clean := filepath.Clean(dir)
 
-	// Refuse to delete root or current directory
+	// Cheap lexical guards for degenerate spellings.
 	if clean == "." || clean == string(os.PathSeparator) {
 		return fmt.Errorf("cleanPath: refusing to remove %q", clean)
 	}
-
-	// On Windows, also check for drive roots like "C:\"
 	if runtime.GOOS == "windows" && len(clean) == 3 && clean[1] == ':' && clean[2] == '\\' {
 		return fmt.Errorf("cleanPath: refusing to remove drive root %q", clean)
 	}
 
-	// Refuse to delete home directory
-	if home, err := os.UserHomeDir(); err == nil {
-		if clean == filepath.Clean(home) {
-			return fmt.Errorf("cleanPath: refusing to remove home directory %q", clean)
+	// Identity guards: refuse if the target resolves — through symlinked parents
+	// or case-insensitive spellings — to a protected directory (working dir,
+	// home, or filesystem root), even when the lexical spelling differs.
+	info, statErr := os.Stat(clean)
+	if statErr == nil {
+		for _, p := range protectedDirs() {
+			if pinfo, err := os.Stat(p); err == nil && os.SameFile(info, pinfo) {
+				return fmt.Errorf("cleanPath: refusing to remove %q (resolves to protected directory %q)", clean, p)
+			}
 		}
 	}
 
-	// Module cache has 0555 directories; make them writable in order to remove content.
-	if err := makeTreeWritable(ctx, clean); err != nil {
-		return err
+	// Module cache has 0555 directories; make them writable before removal.
+	// Only meaningful for a directory.
+	if statErr == nil && info.IsDir() {
+		if err := makeTreeWritable(ctx, clean); err != nil {
+			return err
+		}
 	}
 
 	// Check context again before potentially long RemoveAll
@@ -447,6 +498,19 @@ func cleanPath(ctx context.Context, dir string) error {
 	}
 
 	return nil
+}
+
+// protectedDirs returns directories cleanPath must never remove: the filesystem
+// root, the working directory, and the user's home directory.
+func protectedDirs() []string {
+	dirs := []string{string(os.PathSeparator)}
+	if cwd, err := os.Getwd(); err == nil {
+		dirs = append(dirs, cwd)
+	}
+	if home, err := os.UserHomeDir(); err == nil {
+		dirs = append(dirs, home)
+	}
+	return dirs
 }
 
 // makeTreeWritable walks `clean` and chmods every directory to 0755 so that

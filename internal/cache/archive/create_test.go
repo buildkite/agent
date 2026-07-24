@@ -11,6 +11,41 @@ import (
 	"github.com/buildkite/agent/v3/internal/cache/internal/trace"
 )
 
+func TestSaveLayoutRootAnchor(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("root anchor is POSIX-only")
+	}
+
+	// The filesystem root itself is rejected...
+	if _, _, err := saveLayout(Mapping{Namespace: "_0", Anchor: AnchorRoot, ResolvedPath: "/"}, "/home/x", "/wd"); err == nil {
+		t.Error("expected error archiving the filesystem root")
+	}
+
+	// ...but a child of "/" is representable (this is the case v1 could not do).
+	tests := []struct {
+		resolved   string
+		wantChroot string
+		wantPrefix string
+		namespace  string
+	}{
+		{"/cache-file", "/cache-file", "_0/cache-file/", "_0"},
+		{"/opt/cache", "/opt/cache", "_1/opt/cache/", "_1"},
+	}
+	for _, tt := range tests {
+		chroot, prefix, err := saveLayout(Mapping{Namespace: tt.namespace, Anchor: AnchorRoot, ResolvedPath: tt.resolved}, "/home/x", "/wd")
+		if err != nil {
+			t.Errorf("saveLayout(%q): unexpected error %v", tt.resolved, err)
+			continue
+		}
+		if chroot != tt.wantChroot {
+			t.Errorf("saveLayout(%q) chroot = %q, want %q", tt.resolved, chroot, tt.wantChroot)
+		}
+		if prefix != tt.wantPrefix {
+			t.Errorf("saveLayout(%q) prefix = %q, want %q", tt.resolved, prefix, tt.wantPrefix)
+		}
+	}
+}
+
 func TestBuildArchive(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		// The expected sha256/size encode unix file modes and LF line
@@ -34,11 +69,49 @@ func TestBuildArchive(t *testing.T) {
 	if err != nil {
 		t.Fatalf("BuildArchive: %v", err)
 	}
-	if got, want := archiveInfo.Sha256sum, "3f194172652432099ffc528f81ea6ce1687780287cba1d1a9587f5c26c72aeac"; got != want {
-		t.Errorf("Sha256sum = %v, want %v", got, want)
+	if archiveInfo.Size <= 0 {
+		t.Errorf("Size = %v, want > 0", archiveInfo.Size)
 	}
-	if got, want := archiveInfo.Size, int64(1228); got != want {
-		t.Errorf("Size = %v, want %v", got, want)
+	if archiveInfo.Sha256sum == "" {
+		t.Error("Sha256sum should not be empty")
+	}
+	defer func() { _ = os.Remove(archiveInfo.ArchivePath) }()
+
+	// Content-addressing relies on the archive being byte-for-byte
+	// deterministic for the same inputs.
+	second, err := BuildArchive(t.Context(), []string{"testdata"}, "test")
+	if err != nil {
+		t.Fatalf("BuildArchive (second): %v", err)
+	}
+	defer func() { _ = os.Remove(second.ArchivePath) }()
+	if archiveInfo.Sha256sum != second.Sha256sum {
+		t.Errorf("archive is not deterministic: %v != %v", archiveInfo.Sha256sum, second.Sha256sum)
+	}
+
+	zipFile, err := os.Open(archiveInfo.ArchivePath)
+	if err != nil {
+		t.Fatalf("os.Open: %v", err)
+	}
+	defer func() { _ = zipFile.Close() }()
+
+	entries, err := ListArchive(t.Context(), zipFile, archiveInfo.Size)
+	if err != nil {
+		t.Fatalf("ListArchive: %v", err)
+	}
+	if !slices.Contains(entries, ManifestPath) {
+		t.Errorf("entries does not contain manifest %q: %v", ManifestPath, entries)
+	}
+	// "testdata" is a relative path, so it is namespaced under _0 with the "."
+	// anchor.
+	foundNamespaced := false
+	for _, e := range entries {
+		if strings.HasPrefix(e, "_0/testdata/") {
+			foundNamespaced = true
+			break
+		}
+	}
+	if !foundNamespaced {
+		t.Errorf("entries does not contain any _0/testdata/ entry: %v", entries)
 	}
 
 	homeDir, err := os.UserHomeDir()
@@ -130,11 +203,11 @@ func TestBuildAndExtractArchive_MultipleHomeDirPaths(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListArchive: %v", err)
 	}
-	if !slices.Contains(entries, ".go-build/cache.txt") {
-		t.Errorf("entries does not contain %q: %v", ".go-build/cache.txt", entries)
+	if !slices.Contains(entries, "_0/.go-build/cache.txt") {
+		t.Errorf("entries does not contain %q: %v", "_0/.go-build/cache.txt", entries)
 	}
-	if !slices.Contains(entries, "go/pkg/mod/module.txt") {
-		t.Errorf("entries does not contain %q: %v", "go/pkg/mod/module.txt", entries)
+	if !slices.Contains(entries, "_1/go/pkg/mod/module.txt") {
+		t.Errorf("entries does not contain %q: %v", "_1/go/pkg/mod/module.txt", entries)
 	}
 
 	_, err = zipFile.Seek(0, 0)
@@ -208,8 +281,8 @@ func TestBuildArchive_MissingPathOnFilesystem(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListArchive: %v", err)
 	}
-	if !slices.Contains(entries, ".go-build/cache.txt") {
-		t.Errorf("entries does not contain %q: %v", ".go-build/cache.txt", entries)
+	if !slices.Contains(entries, "_0/.go-build/cache.txt") {
+		t.Errorf("entries does not contain %q: %v", "_0/.go-build/cache.txt", entries)
 	}
 
 	for _, entry := range entries {
@@ -260,11 +333,11 @@ func TestExtractArchive_MissingPathInArchive(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListArchive: %v", err)
 	}
-	if !slices.Contains(entries, ".go-build/cache.txt") {
-		t.Errorf("entries does not contain %q: %v", ".go-build/cache.txt", entries)
+	if !slices.Contains(entries, "_0/.go-build/cache.txt") {
+		t.Errorf("entries does not contain %q: %v", "_0/.go-build/cache.txt", entries)
 	}
-	if slices.Contains(entries, "go/pkg/mod/") {
-		t.Errorf("entries should not contain %q: %v", "go/pkg/mod/", entries)
+	if slices.Contains(entries, "_0/go/pkg/mod/") {
+		t.Errorf("entries should not contain %q: %v", "_0/go/pkg/mod/", entries)
 	}
 
 	_, err = zipFile.Seek(0, 0)

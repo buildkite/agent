@@ -1,6 +1,7 @@
 package cache
 
 import (
+	"archive/zip"
 	"context"
 	"crypto/rand"
 	"fmt"
@@ -561,6 +562,116 @@ func TestCacheIntegration_RestoreMissingBlobInvalidates(t *testing.T) {
 	}
 	if !resaveResult.CacheEntryCreated {
 		t.Error("expected re-save to re-create the invalidated entry")
+	}
+}
+
+// TestCacheIntegration_SaveAndRestoreRegularFile exercises the full client path
+// for a target that is a single regular file (not a directory).
+func TestCacheIntegration_SaveAndRestoreRegularFile(t *testing.T) {
+	ctx := t.Context()
+
+	cacheClient, cacheDir, _ := setupTestCache(t, "local_file")
+
+	// Reconfigure the cache to target a single regular file. cacheDir is a
+	// relative path, so the file is cwd-anchored and this runs cross-platform.
+	file := filepath.Join(cacheDir, "single.txt")
+	if err := os.WriteFile(file, []byte("file-cache-data"), 0o600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	cacheClient.caches[0].TargetPaths = []string{file}
+
+	if _, err := cacheClient.Save(ctx, "test-cache"); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+
+	// Corrupt the file so a successful restore must clean + replace it.
+	if err := os.WriteFile(file, []byte("stale"), 0o600); err != nil {
+		t.Fatalf("WriteFile (stale): %v", err)
+	}
+
+	result, err := cacheClient.Restore(ctx, "test-cache")
+	if err != nil {
+		t.Fatalf("Restore: %v", err)
+	}
+	if !result.CacheRestored {
+		t.Fatal("expected the regular-file cache to be restored")
+	}
+
+	got, err := os.ReadFile(file)
+	if err != nil {
+		t.Fatalf("ReadFile: %v", err)
+	}
+	if string(got) != "file-cache-data" {
+		t.Errorf("restored content = %q, want %q", string(got), "file-cache-data")
+	}
+}
+
+// TestCacheIntegration_RestoreUnrecognizedFormatInvalidates covers the clean-break migration path:
+// the entry still exists but points at an archive this agent can't read.
+// Restore must degrade to a cache miss AND invalidate the stale entry,
+// so a subsequent save can re-upload a v2 archive instead of being blocked by CacheEntryPeekExists.
+func TestCacheIntegration_RestoreUnrecognizedFormatInvalidates(t *testing.T) {
+	ctx := t.Context()
+
+	cacheClient, _, storageDir := setupTestCache(t, "local_file")
+	mockClient := cacheClient.api.(*mockAPIClient)
+
+	// Save so the entry is committed and a blob exists.
+	saveResult, err := cacheClient.Save(ctx, "test-cache")
+	if err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+
+	// Overwrite the stored blob (named by its digest; a .attrs.json sidecar sits
+	// alongside it) with a v1-style archive that has no manifest.
+	writeManifestlessArchive(t, filepath.Join(storageDir, saveResult.Archive.Sha256Sum))
+
+	// Restore must not error, must report a miss, and must invalidate the entry.
+	restoreResult, err := cacheClient.Restore(ctx, "test-cache")
+	if err != nil {
+		t.Fatalf("Restore with unrecognized format should not error, got: %v", err)
+	}
+	if restoreResult.CacheRestored {
+		t.Error("unrecognized format should degrade to CacheRestored=false")
+	}
+	if restoreResult.CacheHit {
+		t.Error("unrecognized format should not be a cache hit")
+	}
+	if len(mockClient.expireCalls) != 1 {
+		t.Fatalf("expire calls = %d, want 1", len(mockClient.expireCalls))
+	}
+
+	// A subsequent save must re-upload, proving the entry was invalidated.
+	resaveResult, err := cacheClient.Save(ctx, "test-cache")
+	if err != nil {
+		t.Fatalf("re-Save: %v", err)
+	}
+	if !resaveResult.CacheEntryCreated {
+		t.Error("expected re-save to re-create the invalidated entry")
+	}
+}
+
+// writeManifestlessArchive overwrites path with a plain zip that has no v2
+// manifest entry, simulating a v1/foreign archive.
+func writeManifestlessArchive(t *testing.T, path string) {
+	t.Helper()
+
+	f, err := os.Create(path)
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	defer func() { _ = f.Close() }()
+
+	zw := zip.NewWriter(f)
+	w, err := zw.Create("cache/file.txt")
+	if err != nil {
+		t.Fatalf("zip Create: %v", err)
+	}
+	if _, err := w.Write([]byte("legacy")); err != nil {
+		t.Fatalf("Write: %v", err)
+	}
+	if err := zw.Close(); err != nil {
+		t.Fatalf("zip Close: %v", err)
 	}
 }
 

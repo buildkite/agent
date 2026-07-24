@@ -3,111 +3,99 @@ package archive
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
-func TestPathsToMappings_AbsolutePathUnderHome(t *testing.T) {
+func TestPathsToMappings(t *testing.T) {
 	home := t.TempDir()
 	setHomeDir(t, home)
 
+	cwd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("os.Getwd: %v", err)
+	}
+
+	// "/opt/cache" is only absolute on POSIX; on Windows an absolute path needs
+	// a volume, so build one from the temp dir's volume.
+	absPath := "/opt/cache"
+	if runtime.GOOS == "windows" {
+		absPath = filepath.VolumeName(home) + `\opt\cache`
+	}
+
 	paths := []string{
+		"~/.npm",
+		absPath,
+		"node_modules",
 		filepath.Join(home, ".go-build"),
-		filepath.Join(home, "go", "pkg", "mod"),
 	}
 
 	mappings, err := PathsToMappings(paths)
 	if err != nil {
 		t.Fatalf("PathsToMappings: %v", err)
 	}
-	if len(mappings) != 2 {
-		t.Fatalf("len(mappings) = %d, want 2", len(mappings))
+	if len(mappings) != 4 {
+		t.Fatalf("len(mappings) = %d, want 4", len(mappings))
 	}
 
-	if got, want := mappings[0].RelativePath, ".go-build"; got != want {
-		t.Errorf("mappings[0].RelativePath = %v, want %v", got, want)
-	}
-	if got, want := mappings[0].ResolvedPath, filepath.Join(home, ".go-build"); got != want {
-		t.Errorf("mappings[0].ResolvedPath = %v, want %v", got, want)
-	}
-	if mappings[0].Relative {
-		t.Errorf("mappings[0].Relative = true, want false")
+	tests := []struct {
+		namespace    string
+		anchor       string
+		resolvedPath string
+	}{
+		{"_0", AnchorHome, filepath.Join(home, ".npm")},
+		{"_1", volumeRoot(filepath.Clean(absPath)), filepath.Clean(absPath)},
+		{"_2", AnchorCWD, filepath.Join(cwd, "node_modules")},
+		// An absolute path under $HOME is pinned (root-anchored), not portable:
+		// only a leading "~" is portable per A-1584.
+		{"_3", volumeRoot(filepath.Join(home, ".go-build")), filepath.Join(home, ".go-build")},
 	}
 
-	if got, want := mappings[1].RelativePath, filepath.Join("go", "pkg", "mod"); got != want {
-		t.Errorf("mappings[1].RelativePath = %v, want %v", got, want)
-	}
-	if got, want := mappings[1].ResolvedPath, filepath.Join(home, "go", "pkg", "mod"); got != want {
-		t.Errorf("mappings[1].ResolvedPath = %v, want %v", got, want)
-	}
-	if mappings[1].Relative {
-		t.Errorf("mappings[1].Relative = true, want false")
+	for i, want := range tests {
+		got := mappings[i]
+		if got.Namespace != want.namespace {
+			t.Errorf("mappings[%d].Namespace = %q, want %q", i, got.Namespace, want.namespace)
+		}
+		if got.Anchor != want.anchor {
+			t.Errorf("mappings[%d].Anchor = %q, want %q", i, got.Anchor, want.anchor)
+		}
+		if got.ResolvedPath != want.resolvedPath {
+			t.Errorf("mappings[%d].ResolvedPath = %q, want %q", i, got.ResolvedPath, want.resolvedPath)
+		}
 	}
 }
 
-func TestResolveHomeDir(t *testing.T) {
-	homeDir, err := os.UserHomeDir()
+// TestResolveConfigPath pins the resolver used by both restore matching and
+// cleanup. The bare-"~" case: it must resolve to $HOME
+// (consistent with how save classifies it), not stay a literal "~".
+func TestResolveConfigPath(t *testing.T) {
+	home := t.TempDir()
+	setHomeDir(t, home)
+
+	cwd, err := os.Getwd()
 	if err != nil {
-		t.Fatalf("os.UserHomeDir: %v", err)
+		t.Fatalf("os.Getwd: %v", err)
 	}
 
 	tests := []struct {
 		name     string
 		path     string
 		expected string
-		wantErr  bool
 	}{
-		{
-			name:     "path with tilde prefix",
-			path:     "~/documents/test.txt",
-			expected: filepath.Join(homeDir, "documents/test.txt"),
-			wantErr:  false,
-		},
-		{
-			name:     "path without tilde",
-			path:     "/absolute/path/test.txt",
-			expected: "/absolute/path/test.txt",
-			wantErr:  false,
-		},
-		{
-			name:     "empty path",
-			path:     "",
-			expected: "",
-			wantErr:  false,
-		},
-		{
-			name:     "tilde only",
-			path:     "~",
-			expected: "~",
-			wantErr:  false,
-		},
-		{
-			name:     "relative path",
-			path:     "./test.txt",
-			expected: "./test.txt",
-			wantErr:  false,
-		},
-		{
-			name:     "path with multiple tildes",
-			path:     "~/path/~/test.txt",
-			expected: filepath.Join(homeDir, "path/~/test.txt"),
-			wantErr:  false,
-		},
+		{"bare tilde resolves to home", "~", home},
+		{"tilde prefix", "~/documents/test.txt", filepath.Join(home, "documents/test.txt")},
+		{"absolute path", filepath.Join(home, "x"), filepath.Join(home, "x")},
+		{"relative path", filepath.Join("sub", "test.txt"), filepath.Join(cwd, "sub", "test.txt")},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := ResolveHomeDir(tt.path)
-			if tt.wantErr {
-				if err == nil {
-					t.Fatal("expected error, got nil")
-				}
-				return
-			}
+			result, err := ResolveConfigPath(tt.path)
 			if err != nil {
-				t.Fatalf("ResolveHomeDir: %v", err)
+				t.Fatalf("ResolveConfigPath: %v", err)
 			}
 			if result != tt.expected {
-				t.Errorf("ResolveHomeDir() = %v, want %v", result, tt.expected)
+				t.Errorf("ResolveConfigPath(%q) = %v, want %v", tt.path, result, tt.expected)
 			}
 		})
 	}

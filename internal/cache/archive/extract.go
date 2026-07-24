@@ -2,6 +2,8 @@ package archive
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"log/slog"
 	"os"
@@ -36,37 +38,102 @@ func ListArchive(ctx context.Context, zipFile *os.File, zipFileLen int64) ([]str
 	return entries, nil
 }
 
+// ExtractFiles extracts a cache archive to the given target paths.
 func ExtractFiles(ctx context.Context, zipFile *os.File, zipFileLen int64, paths []string) (*ArchiveInfo, error) {
 	_, span := trace.Start(ctx, "ExtractFiles")
 	defer span.End()
 
 	start := time.Now()
 
+	reader, err := zip.NewReader(zipFile, zipFileLen)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open zip reader: %w", err)
+	}
+
+	manifest, err := readManifest(reader)
+	if err != nil {
+		return nil, err
+	}
+
+	// Normalise the configured target paths so archive destinations can be
+	// matched against them regardless of spelling ("~/cache" vs "$HOME/cache").
+	configPaths := make([]string, len(paths))
+	for i, p := range paths {
+		resolved, err := ResolveConfigPath(p)
+		if err != nil {
+			return nil, fmt.Errorf("failed to resolve config path %q: %w", p, err)
+		}
+		configPaths[i] = resolved
+	}
+
+	// Entries that are not restored (the manifest, and namespaces absent from
+	// local config) are routed to a throwaway directory that is removed when we
+	// return, since quickzip's path mapper cannot skip an entry outright.
+	discardDir, err := os.MkdirTemp("", "cache-extract-discard-*")
+	if err != nil {
+		return nil, fmt.Errorf("failed to create discard directory: %w", err)
+	}
+	defer func() { _ = os.RemoveAll(discardDir) }()
+
+	discard := func(name string) string {
+		return discardName(discardDir, name)
+	}
+
 	extract, err := quickzip.NewExtractorFromReader(zipFile, zipFileLen)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create extractor: %w", err)
 	}
 
-	mappings, err := PathsToMappings(paths)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create mappings: %w", err)
-	}
-
 	foundPaths := make(map[string]bool)
 
 	err = extract.ExtractWithPathMapper(ctx, func(file *zip.File) (string, error) {
-		// Zip entry names always use forward slashes (per the zip spec),
-		// but mapping.RelativePath comes from filepath.Rel and may use the
-		// OS native separator (backslash on Windows). Normalise the mapping
-		// to forward slashes for the comparison.
-		for _, mapping := range mappings {
-			if strings.HasPrefix(file.Name, filepath.ToSlash(mapping.RelativePath)) {
-				foundPaths[mapping.Path] = true
-				return filepath.Join(mapping.Chroot, file.Name), nil
-			}
+		if file.Name == ManifestPath {
+			return discard(file.Name), nil
 		}
 
-		return "", fmt.Errorf("failed to find path mapping for: %s", file.Name)
+		namespace, rest, ok := splitNamespace(file.Name)
+		if !ok {
+			slog.Warn("archive entry has no namespace, skipping", "entry", file.Name)
+			return discard(file.Name), nil
+		}
+
+		anchor, ok := manifest.Mappings[namespace]
+		if !ok {
+			slog.Warn("archive entry namespace not in manifest, skipping", "entry", file.Name)
+			return discard(file.Name), nil
+		}
+
+		base, err := resolveAnchor(anchor)
+		if err != nil {
+			return "", err
+		}
+
+		dest := filepath.Clean(filepath.Join(base, filepath.FromSlash(rest)))
+
+		// Containment: an entry must stay within its own anchor. This rejects
+		// zip-slip payloads (e.g. "_0/../../etc/passwd") before they escape.
+		if !isUnder(dest, base) {
+			return "", fmt.Errorf("entry %q escapes its anchor %q", file.Name, base)
+		}
+
+		// Only restore entries that belong to a locally configured path. When
+		// configured paths overlap (e.g. "~/.cache" and "~/.cache/sub"), credit
+		// the most specific (longest) match.
+		best := -1
+		for i, cfg := range configPaths {
+			if !isUnder(dest, cfg) {
+				continue
+			}
+			if best == -1 || len(cfg) > len(configPaths[best]) {
+				best = i
+			}
+		}
+		if best == -1 {
+			return discard(file.Name), nil
+		}
+		foundPaths[paths[best]] = true
+
+		return dest, nil
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to extract zip file: %w", err)
@@ -93,4 +160,40 @@ func ExtractFiles(ctx context.Context, zipFile *os.File, zipFileLen int64, paths
 		WrittenEntries: countExtracted,
 		Duration:       time.Since(start),
 	}, nil
+}
+
+// discardName maps an archive entry that won't be restored (the manifest, or a
+// namespace absent from local config) to an opaque, separator-free path under
+// discardDir. Hashing the entry name guarantees the result stays inside
+// discardDir regardless of "/", "\", or ".." segments in the name — a crafted
+// archive must not escape the throwaway directory on any OS (on Windows,
+// filepath.Join would otherwise resolve a backslash-laden name like
+// `..\..\victim` outside discardDir).
+func discardName(discardDir, name string) string {
+	sum := sha256.Sum256([]byte(name))
+	return filepath.Join(discardDir, hex.EncodeToString(sum[:]))
+}
+
+// splitNamespace splits an entry name into its leading namespace ("_0") and
+// the anchor-relative remainder. Zip entry names always use forward slashes.
+func splitNamespace(name string) (namespace, rest string, ok bool) {
+	i := strings.IndexByte(name, '/')
+	if i <= 0 || i == len(name)-1 {
+		return "", "", false
+	}
+	return name[:i], name[i+1:], true
+}
+
+// isUnder reports whether p is root itself or a path beneath it.
+func isUnder(p, root string) bool {
+	if p == root {
+		return true
+	}
+	// A root that already ends in a separator — the POSIX root "/" or a Windows
+	// volume root like "C:\" — needs no extra separator. Otherwise require one
+	// so "/home/user2" isn't treated as under "/home/user".
+	if strings.HasSuffix(root, string(filepath.Separator)) {
+		return strings.HasPrefix(p, root)
+	}
+	return strings.HasPrefix(p, root+string(filepath.Separator))
 }
