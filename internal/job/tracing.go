@@ -341,24 +341,17 @@ func toOpenTelemetryAttributes(extras map[string]any) ([]attribute.KeyValue, map
 	return attrs, unknownAttrTypes
 }
 
-// traceGitOp runs fn in a child span named `name`, finishing it with fn's error.
-// No-op if --trace-git-checkout is off.
-func (e *Executor) traceGitOp(ctx context.Context, name string, fn func(context.Context) error) (err error) {
-	if !e.TraceGitCheckout {
-		return fn(ctx)
-	}
+// traceOpSpan starts a child span named `name` and returns it alongside the
+// derived context. The caller is responsible for calling FinishWithError.
+func (e *Executor) traceOpSpan(ctx context.Context, name string) (tracetools.Span, context.Context) {
+	return tracetools.StartSpanFromContext(ctx, name, e.TracingBackend)
+}
+
+// traceOp runs fn in a child span named `name`, finishing it with fn's error.
+func (e *Executor) traceOp(ctx context.Context, name string, fn func(context.Context) error) (err error) {
 	span, ctx := tracetools.StartSpanFromContext(ctx, name, e.TracingBackend)
 	defer func() { span.FinishWithError(err) }()
 	return fn(ctx)
-}
-
-// traceGitOpSpan is like traceGitOp but returns the span so the caller can set
-// attributes and must call FinishWithError. Returns a NoopSpan when tracing is off.
-func (e *Executor) traceGitOpSpan(ctx context.Context, name string) (tracetools.Span, context.Context) {
-	if !e.TraceGitCheckout {
-		return &tracetools.NoopSpan{}, ctx
-	}
-	return tracetools.StartSpanFromContext(ctx, name, e.TracingBackend)
 }
 
 func (e *Executor) implementationSpecificSpanName(otelName, ddName string) string {

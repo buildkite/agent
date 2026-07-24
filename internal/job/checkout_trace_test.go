@@ -2,7 +2,6 @@ package job
 
 import (
 	"context"
-	"errors"
 	"os"
 	"os/exec"
 	"runtime"
@@ -17,80 +16,10 @@ import (
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 )
 
-// TestTraceGitOp_PropagatesError asserts that traceGitOp returns fn's error
-// unchanged, regardless of --trace-git-checkout.
-func TestTraceGitOp_PropagatesError(t *testing.T) {
-	t.Parallel()
-
-	sentinel := errors.New("boom")
-
-	tests := []struct {
-		name             string
-		traceGitCheckout bool
-		fnErr            error
-	}{
-		{name: "flag off, error", traceGitCheckout: false, fnErr: sentinel},
-		{name: "flag off, nil", traceGitCheckout: false, fnErr: nil},
-		{name: "flag on, error", traceGitCheckout: true, fnErr: sentinel},
-		{name: "flag on, nil", traceGitCheckout: true, fnErr: nil},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			e := &Executor{ExecutorConfig: ExecutorConfig{
-				// BackendNone means even with --trace-git-checkout on, tracetools noops.
-				TracingBackend:   tracetools.BackendNone,
-				TraceGitCheckout: tt.traceGitCheckout,
-			}}
-
-			called := false
-			got := e.traceGitOp(t.Context(), "git.test", func(ctx context.Context) error {
-				called = true
-				return tt.fnErr
-			})
-
-			if !called {
-				t.Fatal("traceGitOp did not call fn")
-			}
-			if !errors.Is(got, tt.fnErr) {
-				t.Fatalf("traceGitOp error = %v, want %v", got, tt.fnErr)
-			}
-		})
-	}
-}
-
-// TestTraceGitOpSpan_FlagOffReturnsNoop asserts that with --trace-git-checkout
-// off, traceGitOpSpan returns a NoopSpan and the unmodified ctx.
-func TestTraceGitOpSpan_FlagOffReturnsNoop(t *testing.T) {
-	t.Parallel()
-
-	e := &Executor{ExecutorConfig: ExecutorConfig{
-		TracingBackend:   tracetools.BackendOpenTelemetry,
-		TraceGitCheckout: false,
-	}}
-
-	ctx := t.Context()
-	span, gotCtx := e.traceGitOpSpan(ctx, "git.test")
-
-	if _, ok := span.(*tracetools.NoopSpan); !ok {
-		t.Fatalf("traceGitOpSpan span type = %T, want *tracetools.NoopSpan", span)
-	}
-	if gotCtx != ctx {
-		t.Fatal("traceGitOpSpan returned a different ctx when flag is off, want unmodified ctx")
-	}
-
-	// Must not panic.
-	span.AddAttributes(map[string]string{"git.repo": "x"})
-	span.FinishWithError(errors.New("x"))
-}
-
-// TestTraceGitCheckout_FlagOn asserts that with --trace-git-checkout on,
-// git.* spans are emitted, nest under repo-checkout, and repo-checkout has
-// checkout.attempt.
-func TestTraceGitCheckout_FlagOn(t *testing.T) {
-	spans := runTracedCheckout(t, true)
+// TestTraceGitCheckout_EmitsSpans asserts that git.* spans are emitted, nest
+// under repo-checkout, and repo-checkout has checkout.attempt.
+func TestTraceGitCheckout_EmitsSpans(t *testing.T) {
+	spans := runTracedCheckout(t)
 
 	repoCheckout := findOnlySpan(t, spans, "repo-checkout")
 	assertSpanAttr(t, repoCheckout, "checkout.attempt", "1")
@@ -109,19 +38,6 @@ func TestTraceGitCheckout_FlagOn(t *testing.T) {
 	for _, name := range wantSpans {
 		assertSpanChildOf(t, spans, name, "repo-checkout")
 	}
-}
-
-// TestTraceGitCheckout_FlagOff asserts that with --trace-git-checkout off, no
-// git.* spans are emitted, but repo-checkout (with checkout.attempt) still is.
-func TestTraceGitCheckout_FlagOff(t *testing.T) {
-	spans := runTracedCheckout(t, false)
-
-	if names := gitSpanNames(spans); len(names) != 0 {
-		t.Fatalf("git.* spans emitted with flag off: %v, want none", names)
-	}
-
-	repoCheckout := findOnlySpan(t, spans, "repo-checkout")
-	assertSpanAttr(t, repoCheckout, "checkout.attempt", "1")
 }
 
 // TestTraceGitCheckout_Mirrors asserts the git.mirror.* and git.dissociate
@@ -210,12 +126,11 @@ func TestTraceGitCheckout_GitLFS(t *testing.T) {
 }
 
 // runTracedCheckout runs a default checkout against a throwaway git-over-http
-// repo with the given --trace-git-checkout setting, and returns the ended spans.
-func runTracedCheckout(t *testing.T, traceGitCheckout bool) []sdktrace.ReadOnlySpan {
+// repo and returns the ended spans.
+func runTracedCheckout(t *testing.T) []sdktrace.ReadOnlySpan {
 	t.Helper()
 
 	e, _ := newTracedExecutor(t, "trace-checkout")
-	e.TraceGitCheckout = traceGitCheckout
 
 	recorder := installGlobalSpanRecorder(t)
 
@@ -227,7 +142,7 @@ func runTracedCheckout(t *testing.T, traceGitCheckout bool) []sdktrace.ReadOnlyS
 }
 
 // newTracedExecutor builds an Executor wired to a throwaway git-over-http repo,
-// with the OpenTelemetry backend and git-checkout tracing enabled.
+// with the OpenTelemetry backend enabled.
 func newTracedExecutor(t *testing.T, projectName string) (*Executor, *githttptest.Server) {
 	t.Helper()
 
@@ -242,11 +157,10 @@ func newTracedExecutor(t *testing.T, projectName string) (*Executor, *githttptes
 			// Commit "HEAD" (rather than the pushed hash returned by
 			// setupCheckoutTestRepo) intentionally exercises the fresh-clone
 			// path, which is why that hash is discarded below.
-			Commit:           "HEAD",
-			Branch:           "main",
-			GitCleanFlags:    "-f -d -x",
-			TracingBackend:   tracetools.BackendOpenTelemetry,
-			TraceGitCheckout: true,
+			Commit:         "HEAD",
+			Branch:         "main",
+			GitCleanFlags:  "-f -d -x",
+			TracingBackend: tracetools.BackendOpenTelemetry,
 		},
 	}
 

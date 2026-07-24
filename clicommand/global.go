@@ -312,12 +312,6 @@ var (
 		EnvVar: "BUILDKITE_GIT_SKIP_FETCH_EXISTING_COMMITS",
 	}
 
-	TraceGitCheckoutFlag = cli.BoolFlag{
-		Name:   "trace-git-checkout",
-		Usage:  "Emit per-operation git.* child spans inside the checkout phase so a trace shows a waterfall of the individual git operations. Only takes effect when tracing is enabled (default: false)",
-		EnvVar: "BUILDKITE_TRACE_GIT_CHECKOUT",
-	}
-
 	CheckoutAttemptsFlag = cli.IntFlag{
 		Name:   "checkout-attempts",
 		Value:  6,

@@ -655,9 +655,6 @@ BUILDKITE_AGENT_JWKS_KEY_ID`
 		}
 	}
 	setEnv("BUILDKITE_CHECKOUT_OVERRIDE_MODE", checkoutMode.String())
-	if r.conf.AgentConfiguration.TraceGitCheckout {
-		setEnv("BUILDKITE_TRACE_GIT_CHECKOUT", "true")
-	}
 	setEnv("BUILDKITE_CHECKOUT_ATTEMPTS", strconv.Itoa(r.conf.AgentConfiguration.CheckoutAttempts))
 	setEnv("BUILDKITE_COMMAND_EVAL", fmt.Sprint(r.conf.AgentConfiguration.CommandEval))
 	setEnv("BUILDKITE_PLUGINS_ENABLED", fmt.Sprint(r.conf.AgentConfiguration.PluginsEnabled))

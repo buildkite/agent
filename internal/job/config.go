@@ -94,9 +94,6 @@ type ExecutorConfig struct {
 	// Intentionally has no env tag so hooks cannot relax it at runtime.
 	CheckoutOverrideMode env.CheckoutOverrideMode
 
-	// Emit per-operation git.* child spans inside the default checkout phase
-	TraceGitCheckout bool `env:"BUILDKITE_TRACE_GIT_CHECKOUT"`
-
 	// Timeout in seconds for the git checkout phase (0 means no timeout)
 	GitCheckoutTimeout int `env:"BUILDKITE_GIT_CHECKOUT_TIMEOUT"`
 

@@ -38,7 +38,7 @@ const (
 func (e *Executor) fetchSource(ctx context.Context, addBloblessFilter bool) (retErr error) {
 	// Start span here so attributes can be set on the in-scope span; covers the
 	// whole fetch including retries (up to 10 attempts, ~2m), not per-attempt.
-	span, ctx := e.traceGitOpSpan(ctx, "git.fetch")
+	span, ctx := e.traceOpSpan(ctx, "git.fetch")
 	defer func() { span.FinishWithError(retErr) }()
 
 	// Classify the refspec kind once and dispatch on it in the switch below.
