@@ -47,7 +47,7 @@ func TestPathsToMappings(t *testing.T) {
 		{"_1", volumeRoot(filepath.Clean(absPath)), filepath.Clean(absPath)},
 		{"_2", AnchorCWD, filepath.Join(cwd, "node_modules")},
 		// An absolute path under $HOME is pinned (root-anchored), not portable:
-		// only a leading "~" is portable per A-1584.
+		// only a leading "~" is portable.
 		{"_3", volumeRoot(filepath.Join(home, ".go-build")), filepath.Join(home, ".go-build")},
 	}
 

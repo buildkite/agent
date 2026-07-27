@@ -84,6 +84,28 @@ func BuildArchive(ctx context.Context, paths []string, key string) (*ArchiveInfo
 		manifest.Mappings[mapping.Namespace] = mapping.Anchor
 	}
 
+	// Reject overlapping targets: nested/equal paths archive shared files twice
+	// and collide on the same restore destination (a race, or a symlink-vs-dir
+	// conflict). Check lexical and canonical paths — lexical catches nesting at
+	// the restore destination ("/cache" + "/cache/link/sub"), canonical catches
+	// symlink aliases and Windows case variants. EvalSymlinks falls back to
+	// lexical on error (plans only hold existing paths).
+	canonical := make([]string, len(plans))
+	caseInsensitive := make([]bool, len(plans))
+	for i, p := range plans {
+		canonical[i] = canonicalizeForOverlap(p.mapping.ResolvedPath)
+		caseInsensitive[i] = pathCaseInsensitive(p.mapping.ResolvedPath)
+	}
+	for i := 0; i < len(plans); i++ {
+		for j := i + 1; j < len(plans); j++ {
+			insensitive := caseInsensitive[i] || caseInsensitive[j]
+			if pathsOverlap(plans[i].mapping.ResolvedPath, plans[j].mapping.ResolvedPath, insensitive) ||
+				pathsOverlap(canonical[i], canonical[j], insensitive) {
+				return nil, fmt.Errorf("cache target_paths overlap: %q and %q resolve to nested or aliased locations; remove the redundant one", plans[i].mapping.Path, plans[j].mapping.Path)
+			}
+		}
+	}
+
 	if err := writeManifest(zw, manifest); err != nil {
 		return nil, err
 	}
@@ -120,6 +142,52 @@ func BuildArchive(ctx context.Context, paths []string, key string) (*ArchiveInfo
 		WrittenEntries: writtenEntries,
 		Duration:       time.Since(start),
 	}, nil
+}
+
+// pathsOverlap reports whether two paths are nested or equal, folding case when
+// the filesystem is case-insensitive. (Only the overlap check needs this;
+// isUnder stays case-sensitive for its other callers.)
+func pathsOverlap(a, b string, caseInsensitive bool) bool {
+	if caseInsensitive {
+		a, b = strings.ToLower(a), strings.ToLower(b)
+	}
+	return isUnder(a, b) || isUnder(b, a)
+}
+
+// pathCaseInsensitive reports whether the filesystem holding p is
+// case-insensitive, by probing at runtime: it stats p under a
+// different-case spelling of its final component and checks
+// whether that names the same file. p is expected to exist; assumed
+// case-sensitive if the probe can't confirm.
+func pathCaseInsensitive(p string) bool {
+	dir, base := filepath.Split(p)
+
+	other := strings.ToUpper(base)
+	if other == base {
+		other = strings.ToLower(base)
+	}
+	if other == base {
+		return false // no letters to re-case — nothing to probe
+	}
+
+	orig, err1 := os.Stat(p)
+	alt, err2 := os.Stat(filepath.Join(dir, other))
+	return err1 == nil && err2 == nil && os.SameFile(orig, alt)
+}
+
+// canonicalizeForOverlap resolves symlinks in a path's *parent* but preserves
+// the final component. This matches how filepath.Walk archives a target: a
+// symlinked parent means two targets touch the same physical files (they must
+// overlap-check as equal), but a target that is *itself* a symlink is archived
+// as the symlink — not its referent — so it doesn't overlap with writes into
+// the referent. Falls back to the lexical path if the parent can't be resolved.
+func canonicalizeForOverlap(p string) string {
+	dir, base := filepath.Split(p)
+	realDir, err := filepath.EvalSymlinks(filepath.Clean(dir))
+	if err != nil {
+		return p
+	}
+	return filepath.Join(realDir, base)
 }
 
 // saveLayout computes the quickzip chroot and the archive entry prefix for a

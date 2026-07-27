@@ -2,8 +2,11 @@ package cache
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"log/slog"
 	"os"
@@ -213,36 +216,38 @@ func (c *client) Restore(ctx context.Context, cacheID string) (RestoreResult, er
 		Concurrency:      transferInfo.Concurrency,
 	}
 
-	// Detect the archive format before touching the filesystem. An
-	// unrecognized archive soft-fails as a cache miss so the job is
-	// not blocked and the existing target paths are left untouched.
-	if err := detectArchiveFormat(archiveFile, transferInfo.BytesTransferred); err != nil {
-		if errors.Is(err, archive.ErrUnrecognizedFormat) {
-			slog.Warn("unrecognized cache archive format, treating as miss and invalidating entry",
-				"cache_id", cacheID, "err", err)
-			// Invalidate the entry so it stops pointing at an archive this agent
-			// can't read. Otherwise the next Save sees the entry via
-			// CacheEntryPeekExists and returns early, leaving stable keys stuck
-			// on the unreadable archive until it expires. Mirrors the
-			// missing-blob path above.
-			invalidated := c.invalidateStaleEntry(ctx, retrieveResp)
-			result.CacheHit = false
-			result.FallbackUsed = false
-			result.CacheRestored = false
-			result.TotalDuration = time.Since(startTime)
-			span.SetAttributes(
-				attribute.Bool("cache.hit", false),
-				attribute.Bool("cache.restored", false),
-				attribute.Bool("cache.unrecognized_format", true),
-				attribute.Bool("cache.invalidated", invalidated),
-			)
-			span.SetStatus(codes.Ok, "cache miss (unrecognized format)")
-			c.callProgress(cacheID, "complete", "Cache miss (unrecognized archive format, invalidated stale entry)", 0, 0)
-			return result, nil
-		}
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "failed to detect archive format")
-		return result, fmt.Errorf("failed to detect archive format: %w", err)
+	// Verify the downloaded blob before touching the filesystem. Its digest must
+	// match the content-addressed name — this catches corruption anywhere in the
+	// archive, including a payload member the format check never reads.
+	var expectedDigest string
+	if len(retrieveResp.Blobs) > 0 && retrieveResp.Blobs[0].Digest.Algorithm == "sha256" {
+		expectedDigest = retrieveResp.Blobs[0].Digest.Value
+	}
+	if err := verifyDownloadedArchive(archiveFile, transferInfo.BytesTransferred, expectedDigest); err != nil {
+		// Any failure to make sense of the downloaded blob — an unrecognized
+		// format, or an unreadable/corrupt archive — degrades to a
+		// cache miss rather than failing the job; a bad cache must never block a
+		// build. Invalidate the entry so a later save re-uploads, and leave the
+		// target paths untouched (detection runs before cleaning). The
+		// unrecognized_format attribute distinguishes the expected clean-break
+		// case from actual corruption.
+		unrecognized := errors.Is(err, archive.ErrUnrecognizedFormat)
+		slog.Warn("cache archive unreadable, treating as miss and invalidating entry",
+			"cache_id", cacheID, "unrecognized_format", unrecognized, "err", err)
+		invalidated := c.invalidateStaleEntry(ctx, retrieveResp)
+		result.CacheHit = false
+		result.FallbackUsed = false
+		result.CacheRestored = false
+		result.TotalDuration = time.Since(startTime)
+		span.SetAttributes(
+			attribute.Bool("cache.hit", false),
+			attribute.Bool("cache.restored", false),
+			attribute.Bool("cache.unrecognized_format", unrecognized),
+			attribute.Bool("cache.invalidated", invalidated),
+		)
+		span.SetStatus(codes.Ok, "cache miss (unreadable archive)")
+		c.callProgress(cacheID, "complete", "Cache miss (unreadable archive, invalidated stale entry)", 0, 0)
+		return result, nil
 	}
 
 	c.callProgress(cacheID, "cleaning", "Cleaning paths", 0, 0)
@@ -400,6 +405,41 @@ func (c *client) downloadCache(ctx context.Context, retrieveResp api.CacheEntryR
 	return tmpDir, archiveFile, transferInfo, nil
 }
 
+// verifyDownloadedArchive checks a downloaded blob is safe to extract: its bytes
+// must hash to the expected content-addressed digest (integrity — catches
+// corruption anywhere, including payload members), and it must be a readable
+// archive (format). Both run before the target paths are cleaned. A blank
+// expectedDigest skips the integrity check (e.g. an unknown digest algorithm).
+func verifyDownloadedArchive(archiveFile string, archiveSize int64, expectedDigest string) error {
+	if expectedDigest != "" {
+		if err := verifyArchiveDigest(archiveFile, expectedDigest); err != nil {
+			return err
+		}
+	}
+	return detectArchiveFormat(archiveFile, archiveSize)
+}
+
+// verifyArchiveDigest re-hashes a downloaded blob and compares it to the digest
+// its object name promised. Download doesn't verify this, so without it a blob
+// corrupted in storage would only surface as a CRC error mid-extraction, after
+// the target paths were already cleaned.
+func verifyArchiveDigest(archiveFile, expected string) error {
+	f, err := os.Open(archiveFile)
+	if err != nil {
+		return fmt.Errorf("failed to open archive file: %w", err)
+	}
+	defer func() { _ = f.Close() }()
+
+	h := sha256.New()
+	if _, err := io.Copy(h, f); err != nil {
+		return fmt.Errorf("failed to hash archive file: %w", err)
+	}
+	if got := hex.EncodeToString(h.Sum(nil)); got != expected {
+		return fmt.Errorf("archive digest mismatch: got %s, want %s", got, expected)
+	}
+	return nil
+}
+
 // detectArchiveFormat opens a downloaded archive and reports whether it is a
 // readable archive, returning archive.ErrUnrecognizedFormat otherwise.
 func detectArchiveFormat(archiveFile string, archiveSize int64) error {
@@ -467,24 +507,25 @@ func cleanPath(ctx context.Context, dir string) error {
 	if runtime.GOOS == "windows" && len(clean) == 3 && clean[1] == ':' && clean[2] == '\\' {
 		return fmt.Errorf("cleanPath: refusing to remove drive root %q", clean)
 	}
-
-	// Identity guards: refuse if the target resolves — through symlinked parents
-	// or case-insensitive spellings — to a protected directory (working dir,
-	// home, or filesystem root), even when the lexical spelling differs.
-	info, statErr := os.Stat(clean)
-	if statErr == nil {
+	// os.Lstat leaves a final symlink undereferenced, so the guards below run only for a real
+	// (non-symlink) target; a symlink falls straight through to RemoveAll.
+	if lstat, err := os.Lstat(clean); err == nil && lstat.Mode()&os.ModeSymlink == 0 {
+		// Refuse if the target is, or is an ancestor of, a protected directory
+		// (working dir, home, or filesystem root) — removing it would delete
+		// that directory too. Comparison is by file identity (walking each
+		// protected dir up to the root), so symlinked parents and
+		// case-insensitive spellings are handled, not just an exact match.
 		for _, p := range protectedDirs() {
-			if pinfo, err := os.Stat(p); err == nil && os.SameFile(info, pinfo) {
-				return fmt.Errorf("cleanPath: refusing to remove %q (resolves to protected directory %q)", clean, p)
+			if pathContains(lstat, p) {
+				return fmt.Errorf("cleanPath: refusing to remove %q (it is or contains protected directory %q)", clean, p)
 			}
 		}
-	}
 
-	// Module cache has 0555 directories; make them writable before removal.
-	// Only meaningful for a directory.
-	if statErr == nil && info.IsDir() {
-		if err := makeTreeWritable(ctx, clean); err != nil {
-			return err
+		// Module cache has 0555 directories; make them writable before removal.
+		if lstat.IsDir() {
+			if err := makeTreeWritable(ctx, clean); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -511,6 +552,21 @@ func protectedDirs() []string {
 		dirs = append(dirs, home)
 	}
 	return dirs
+}
+
+// pathContains reports whether the file described by info is dir itself or an
+// ancestor of it.
+func pathContains(info os.FileInfo, dir string) bool {
+	for cur := filepath.Clean(dir); ; {
+		if ci, err := os.Stat(cur); err == nil && os.SameFile(info, ci) {
+			return true
+		}
+		parent := filepath.Dir(cur)
+		if parent == cur { // reached the root
+			return false
+		}
+		cur = parent
+	}
 }
 
 // makeTreeWritable walks `clean` and chmods every directory to 0755 so that

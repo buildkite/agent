@@ -93,10 +93,10 @@ func classifyPath(path, home, cwd string) (anchor, resolved string) {
 
 	case filepath.IsAbs(path):
 		resolved := filepath.Clean(path)
-		// Absolute paths are pinned (A-1584): they restore to their exact
+		// Absolute paths are pinned - they restore to their exact
 		// location and never follow $HOME — even when they happen to sit under
 		// it. The anchor is the path's volume root, so a Windows drive is
-		// retained ("C:\") rather than lost; on POSIX it is always "/".
+		// retained ("C:\"); on POSIX it is always "/".
 		return volumeRoot(resolved), resolved
 
 	default:

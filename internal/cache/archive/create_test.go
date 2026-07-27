@@ -13,7 +13,7 @@ import (
 
 func TestSaveLayoutRootAnchor(t *testing.T) {
 	if runtime.GOOS == "windows" {
-		t.Skip("root anchor is POSIX-only")
+		t.Skip("uses POSIX \"/\" path literals; Windows root anchors are drive roots")
 	}
 
 	// The filesystem root itself is rejected...

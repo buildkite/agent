@@ -143,12 +143,13 @@ func TestCleanPath(t *testing.T) {
 		}
 	})
 
-	t.Run("rejects path resolving to cwd through a symlink", func(t *testing.T) {
+	t.Run("removes a final symlink without following it to a protected dir", func(t *testing.T) {
 		if runtime.GOOS == "windows" {
 			t.Skip("symlink creation needs privileges on Windows")
 		}
-		// A lexically-different spelling that resolves to the cwd (here via a
-		// symlink) must still be refused — the guard compares file identity.
+		// A final symlink is only unlinked by RemoveAll, so removing it is safe
+		// even when it points at the cwd — the referent must be left intact and
+		// removal must not be refused (nor the referent's tree chmod-ed).
 		cwd, err := os.Getwd()
 		if err != nil {
 			t.Fatalf("os.Getwd: %v", err)
@@ -157,7 +158,28 @@ func TestCleanPath(t *testing.T) {
 		if err := os.Symlink(cwd, link); err != nil {
 			t.Fatalf("Symlink: %v", err)
 		}
-		err = cleanPath(t.Context(), link)
+		if err := cleanPath(t.Context(), link); err != nil {
+			t.Fatalf("removing a symlink to cwd should be safe, got: %v", err)
+		}
+		if _, err := os.Lstat(link); !os.IsNotExist(err) {
+			t.Errorf("symlink should be removed, got err=%v", err)
+		}
+		if _, err := os.Stat(cwd); err != nil {
+			t.Errorf("cwd (the referent) must be left intact: %v", err)
+		}
+	})
+
+	t.Run("rejects an ancestor of the working directory", func(t *testing.T) {
+		// A target that contains the cwd (e.g. "/work" while cwd is "/work/job")
+		// must be refused — RemoveAll would recursively delete the cwd too.
+		base := t.TempDir()
+		job := filepath.Join(base, "job")
+		if err := os.MkdirAll(job, 0o755); err != nil {
+			t.Fatalf("MkdirAll: %v", err)
+		}
+		t.Chdir(job) // cwd is now base/job; restored automatically after the test
+
+		err := cleanPath(t.Context(), base)
 		if err == nil {
 			t.Fatal("expected error, got nil")
 		}
@@ -184,6 +206,42 @@ func TestCleanPath(t *testing.T) {
 			t.Errorf("expected context.Canceled, got %v", err)
 		}
 	})
+}
+
+// TestPathContains covers the ancestor/equality logic behind cleanPath's
+// protected-directory guard.
+func TestPathContains(t *testing.T) {
+	base := t.TempDir()
+	parent := filepath.Join(base, "work")
+	child := filepath.Join(parent, "job")
+	sibling := filepath.Join(base, "other")
+	for _, d := range []string{child, sibling} {
+		if err := os.MkdirAll(d, 0o755); err != nil {
+			t.Fatalf("MkdirAll: %v", err)
+		}
+	}
+
+	parentInfo, err := os.Stat(parent)
+	if err != nil {
+		t.Fatalf("Stat: %v", err)
+	}
+	childInfo, err := os.Stat(child)
+	if err != nil {
+		t.Fatalf("Stat: %v", err)
+	}
+
+	if !pathContains(parentInfo, parent) {
+		t.Error("a directory should contain itself")
+	}
+	if !pathContains(parentInfo, child) {
+		t.Error("parent should contain its descendant")
+	}
+	if pathContains(parentInfo, sibling) {
+		t.Error("parent should not contain a sibling")
+	}
+	if pathContains(childInfo, parent) {
+		t.Error("child should not contain its parent")
+	}
 }
 
 func TestCleanPathWindowsDriveRoot(t *testing.T) {

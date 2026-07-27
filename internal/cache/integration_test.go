@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 	"testing"
@@ -606,6 +607,85 @@ func TestCacheIntegration_SaveAndRestoreRegularFile(t *testing.T) {
 	}
 }
 
+// TestCacheIntegration_SaveAndRestoreSymlinkTarget drives a symlink cache
+// target through the full client path. Restore's cleanup must unlink the
+// symlink (not follow it): it must not recurse into or chmod the referent, and
+// must recreate the symlink. Covers the client cleanup path the archive-only
+// symlink test bypasses.
+func TestCacheIntegration_SaveAndRestoreSymlinkTarget(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("creating a symlink needs privileges on Windows")
+	}
+	ctx := t.Context()
+
+	cacheClient, _, _ := setupTestCache(t, "local_file")
+
+	base := t.TempDir()
+	realDir := filepath.Join(base, "real")
+	if err := os.MkdirAll(realDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(realDir, "keep.txt"), []byte("referent"), 0o600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	link := filepath.Join(base, "link")
+	if err := os.Symlink(realDir, link); err != nil {
+		t.Fatalf("Symlink: %v", err)
+	}
+	cacheClient.caches[0].TargetPaths = []string{link}
+
+	if _, err := cacheClient.Save(ctx, "test-cache"); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+
+	// Repoint the symlink at a different, mode-0700 directory before restore. A
+	// correct restore unlinks the stale symlink and recreates it → realDir,
+	// without recursing into or chmod-ing the stale referent.
+	otherDir := filepath.Join(base, "other")
+	if err := os.MkdirAll(otherDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(otherDir, "untouched.txt"), []byte("stay"), 0o600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	if err := os.Chmod(otherDir, 0o700); err != nil {
+		t.Fatalf("Chmod: %v", err)
+	}
+	if err := os.Remove(link); err != nil {
+		t.Fatalf("Remove: %v", err)
+	}
+	if err := os.Symlink(otherDir, link); err != nil {
+		t.Fatalf("Symlink: %v", err)
+	}
+
+	result, err := cacheClient.Restore(ctx, "test-cache")
+	if err != nil {
+		t.Fatalf("Restore: %v", err)
+	}
+	if !result.CacheRestored {
+		t.Fatal("expected the symlink cache to be restored")
+	}
+
+	// The symlink is recreated pointing at the original referent.
+	if got, err := os.Readlink(link); err != nil {
+		t.Fatalf("symlink should be restored: %v", err)
+	} else if got != realDir {
+		t.Errorf("symlink target = %q, want %q", got, realDir)
+	}
+
+	// The stale referent is untouched — cleanup unlinked the symlink and neither
+	// recursed into it (content intact) nor chmod-ed it (mode still 0700).
+	if content, err := os.ReadFile(filepath.Join(otherDir, "untouched.txt")); err != nil || string(content) != "stay" {
+		t.Errorf("stale referent content = %q (err %v), want %q", content, err, "stay")
+	}
+	if fi, err := os.Stat(otherDir); err != nil {
+		t.Fatalf("Stat otherDir: %v", err)
+	} else if fi.Mode().Perm() != 0o700 {
+		t.Errorf("stale referent mode = %v, want 0700 (cleanup must not chmod a symlink's referent)", fi.Mode().Perm())
+	}
+}
+
 // TestCacheIntegration_RestoreUnrecognizedFormatInvalidates covers the clean-break migration path:
 // the entry still exists but points at an archive this agent can't read.
 // Restore must degrade to a cache miss AND invalidate the stale entry,
@@ -648,6 +728,100 @@ func TestCacheIntegration_RestoreUnrecognizedFormatInvalidates(t *testing.T) {
 	}
 	if !resaveResult.CacheEntryCreated {
 		t.Error("expected re-save to re-create the invalidated entry")
+	}
+}
+
+// TestCacheIntegration_RestoreCorruptArchiveInvalidates covers a blob that is
+// not a valid archive at all (corrupted/truncated in storage). Like the
+// unrecognized-format case, restore must degrade to a miss and invalidate the
+// entry rather than failing the job.
+func TestCacheIntegration_RestoreCorruptArchiveInvalidates(t *testing.T) {
+	ctx := t.Context()
+
+	cacheClient, _, storageDir := setupTestCache(t, "local_file")
+	mockClient := cacheClient.api.(*mockAPIClient)
+
+	saveResult, err := cacheClient.Save(ctx, "test-cache")
+	if err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+
+	// Corrupt the stored blob so it is no longer a valid zip.
+	if err := os.WriteFile(filepath.Join(storageDir, saveResult.Archive.Sha256Sum), []byte("not a zip file"), 0o600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	restoreResult, err := cacheClient.Restore(ctx, "test-cache")
+	if err != nil {
+		t.Fatalf("Restore with corrupt archive should not error, got: %v", err)
+	}
+	if restoreResult.CacheRestored {
+		t.Error("corrupt archive should degrade to CacheRestored=false")
+	}
+	if restoreResult.CacheHit {
+		t.Error("corrupt archive should not be a cache hit")
+	}
+	if len(mockClient.expireCalls) != 1 {
+		t.Fatalf("expire calls = %d, want 1", len(mockClient.expireCalls))
+	}
+
+	// A subsequent save must re-upload, proving the entry was invalidated.
+	resaveResult, err := cacheClient.Save(ctx, "test-cache")
+	if err != nil {
+		t.Fatalf("re-Save: %v", err)
+	}
+	if !resaveResult.CacheEntryCreated {
+		t.Error("expected re-save to re-create the invalidated entry")
+	}
+}
+
+// TestCacheIntegration_RestoreCorruptPayloadInvalidates covers the subtle case
+// the format gate can't catch: a valid zip with a valid manifest but a corrupt
+// payload member. Digest verification must reject it *before* cleanup, so the
+// target dir is not deleted and extraction never runs on bad data.
+func TestCacheIntegration_RestoreCorruptPayloadInvalidates(t *testing.T) {
+	ctx := t.Context()
+
+	cacheClient, cacheDir, storageDir := setupTestCache(t, "local_file")
+	mockClient := cacheClient.api.(*mockAPIClient)
+
+	saveResult, err := cacheClient.Save(ctx, "test-cache")
+	if err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+
+	// Flip a byte in the middle of the blob — deep in a payload member's
+	// compressed data, so the zip structure and manifest still parse but the
+	// content no longer matches the digest (and would fail extraction's CRC).
+	blobPath := filepath.Join(storageDir, saveResult.Archive.Sha256Sum)
+	data, err := os.ReadFile(blobPath)
+	if err != nil {
+		t.Fatalf("ReadFile: %v", err)
+	}
+	data[len(data)/2] ^= 0xFF
+	if err := os.WriteFile(blobPath, data, 0o600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	restoreResult, err := cacheClient.Restore(ctx, "test-cache")
+	if err != nil {
+		t.Fatalf("Restore with corrupt payload should not error, got: %v", err)
+	}
+	if restoreResult.CacheRestored {
+		t.Error("corrupt payload should degrade to CacheRestored=false")
+	}
+	if len(mockClient.expireCalls) != 1 {
+		t.Fatalf("expire calls = %d, want 1", len(mockClient.expireCalls))
+	}
+
+	// The target dir must NOT have been cleaned — corruption is caught before
+	// cleanup, so the original cache contents survive.
+	entries, err := os.ReadDir(cacheDir)
+	if err != nil {
+		t.Fatalf("ReadDir: %v", err)
+	}
+	if len(entries) == 0 {
+		t.Error("target dir should not be cleaned when the archive is rejected before extraction")
 	}
 }
 

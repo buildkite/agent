@@ -19,7 +19,7 @@ const (
 	bufferSize    = 1024 * 1024 * 20
 	skipOwnership = true
 
-	// ManifestPath is the reserved archive entry that records the v2 layout.
+	// ManifestPath is the reserved archive entry.
 	// Extraction reads it but never writes it to disk.
 	ManifestPath = ".buildkite/cache-manifest.json"
 	// ManifestVersion is the archive format version this agent reads and writes.
@@ -46,8 +46,8 @@ type ArchiveInfo struct {
 	Duration       time.Duration
 }
 
-// writeManifest serialises the manifest into the reserved manifest entry of the
-// archive being written.
+// writeManifest converts manifest into json, creates a
+// new zip/archive file and writes the manifest to that file.
 func writeManifest(zw *zip.Writer, manifest Manifest) error {
 	data, err := json.Marshal(manifest)
 	if err != nil {
@@ -67,8 +67,7 @@ func writeManifest(zw *zip.Writer, manifest Manifest) error {
 }
 
 // readManifest extracts and validates the manifest from an archive. It
-// returns ErrUnrecognizedFormat when the manifest is absent or its version is
-// not understood.
+// returns ErrUnrecognizedFormat when the manifest is absent or invalid.
 func readManifest(reader *zip.Reader) (Manifest, error) {
 	for _, f := range reader.File {
 		if f.Name != ManifestPath {
@@ -97,16 +96,14 @@ func readManifest(reader *zip.Reader) (Manifest, error) {
 
 		for namespace, anchor := range manifest.Mappings {
 			// A pinned-absolute anchor is a volume/filesystem root, which is "/"
-			// on POSIX but a drive root (e.g. "C:\") on Windows, so accept any
+			// on POSIX but a drive root on Windows, so accept any
 			// root rather than only the AnchorRoot constant.
 			if anchor != AnchorHome && anchor != AnchorCWD && !isRootAnchor(anchor) {
 				return Manifest{}, fmt.Errorf("%w: unrecognized anchor %q for namespace %q", ErrUnrecognizedFormat, anchor, namespace)
 			}
 		}
-
 		return manifest, nil
 	}
-
 	return Manifest{}, fmt.Errorf("%w: no manifest entry", ErrUnrecognizedFormat)
 }
 
