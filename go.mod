@@ -7,7 +7,7 @@ toolchain go1.25.9
 require (
 	buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go v1.36.11-20260709200747-435963d16310.1
 	cloud.google.com/go/compute/metadata v0.9.0
-	cloud.google.com/go/kms v1.32.0
+	cloud.google.com/go/kms v1.33.0
 	connectrpc.com/connect v1.20.0
 	drjosh.dev/zzglob v0.4.3
 	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.14.0
