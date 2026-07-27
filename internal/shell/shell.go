@@ -13,6 +13,7 @@ import (
 	"os/exec"
 	"path"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"strings"
 	"sync/atomic"
@@ -81,6 +82,8 @@ type Shell struct {
 	// Defaults to [os.Stdout].
 	stdout io.Writer
 
+	outputInterceptor OutputInterceptor
+
 	// How to encode trace contexts.
 	traceContextCodec tracetools.Codec
 
@@ -90,14 +93,23 @@ type Shell struct {
 
 type NewShellOpt = func(*Shell)
 
+type OutputInterceptor func(context.Context, io.Writer, map[string]string) io.Writer
+
 func WithCommandLog(log *[][]string) NewShellOpt { return func(s *Shell) { s.commandLog = log } }
 func WithDebug(d bool) NewShellOpt               { return func(s *Shell) { s.debug = d } }
 func WithDryRun(d bool) NewShellOpt              { return func(s *Shell) { s.dryRun = d } }
 func WithEnv(e *env.Environment) NewShellOpt     { return func(s *Shell) { s.Env = e } }
 func WithLogger(l Logger) NewShellOpt            { return func(s *Shell) { s.Logger = l } }
-func WithPTY(pty bool) NewShellOpt               { return func(s *Shell) { s.pty = pty } }
-func WithStdout(w io.Writer) NewShellOpt         { return func(s *Shell) { s.stdout = w } }
-func WithWD(wd string) NewShellOpt               { return func(s *Shell) { s.wd = wd } }
+func WithOutputInterceptor(i OutputInterceptor) NewShellOpt {
+	return func(s *Shell) { s.outputInterceptor = i }
+}
+func WithPTY(pty bool) NewShellOpt       { return func(s *Shell) { s.pty = pty } }
+func WithStdout(w io.Writer) NewShellOpt { return func(s *Shell) { s.stdout = w } }
+func WithWD(wd string) NewShellOpt       { return func(s *Shell) { s.wd = wd } }
+
+func (s *Shell) SetOutputInterceptor(i OutputInterceptor) {
+	s.outputInterceptor = i
+}
 
 func WithInterruptSignal(sig process.Signal) NewShellOpt {
 	return func(s *Shell) { s.interruptSignal = sig }
@@ -161,6 +173,7 @@ func (s *Shell) CloneWithStdin(r io.Reader) *Shell {
 		Env:               s.Env,
 		stdin:             r, // our new stdin
 		stdout:            s.stdout,
+		outputInterceptor: s.outputInterceptor,
 		wd:                s.wd,
 		interruptSignal:   s.interruptSignal,
 		signalGracePeriod: s.signalGracePeriod,
@@ -461,8 +474,40 @@ func (c Command) Run(ctx context.Context, opts ...RunCommandOpt) error {
 		stderr = io.Discard
 	}
 
-	// If we're performing a string search, wrap the current stdout and stderr
-	// in olfactors, and report which ones were detected through the map.
+	var flushers []interface{ Flush() }
+	if c.shell.outputInterceptor != nil {
+		// stdout and stderr normally share the same downstream job-log writer.
+		// Preserve that shared stream through the interceptor as well so
+		// stateful processing such as redaction can match values split across
+		// writes to the two file descriptors.
+		if cfg.captureStdout == nil && sameWriter(stdout, stderr) && stdout != nil && stdout != io.Discard {
+			stdout = c.shell.outputInterceptor(ctx, stdout, cfg.outputAttrs)
+			stderr = stdout
+			if f, ok := stdout.(interface{ Flush() }); ok {
+				flushers = append(flushers, f)
+			}
+		} else {
+			if cfg.captureStdout == nil && stdout != nil && stdout != io.Discard {
+				stdout = c.shell.outputInterceptor(ctx, stdout, cfg.outputAttrs)
+				if f, ok := stdout.(interface{ Flush() }); ok {
+					flushers = append(flushers, f)
+				}
+			}
+			if stderr != nil && stderr != io.Discard {
+				stderr = c.shell.outputInterceptor(ctx, stderr, cfg.outputAttrs)
+				if f, ok := stderr.(interface{ Flush() }); ok {
+					flushers = append(flushers, f)
+				}
+			}
+		}
+	}
+
+	// If we're performing a string search, wrap the intercepted stdout and
+	// stderr in olfactors and report which ones were detected through the map.
+	// Interception must happen first: olfactor uses separate wrappers for each
+	// stream, which would otherwise hide that both ultimately share the same
+	// job-log writer and incorrectly split stateful processing such as OTLP
+	// redaction.
 	if cfg.smells != nil {
 		smells := make([]string, 0, len(cfg.smells))
 		for s := range cfg.smells {
@@ -481,11 +526,24 @@ func (c Command) Run(ctx context.Context, opts ...RunCommandOpt) error {
 			}
 		}()
 	}
+	defer func() {
+		for _, f := range flushers {
+			f.Flush()
+		}
+	}()
 
 	cmdCfg.Started = cfg.started
 	cmdCfg.Done = cfg.done
 
 	return c.shell.executeCommand(ctx, cmdCfg, stdout, stderr, pty)
+}
+
+func sameWriter(a, b io.Writer) bool {
+	if a == nil || b == nil {
+		return a == nil && b == nil
+	}
+	av, bv := reflect.ValueOf(a), reflect.ValueOf(b)
+	return av.Type() == bv.Type() && av.Comparable() && av.Interface() == bv.Interface()
 }
 
 // RunAndCaptureStdout is Run, but automatically sets options:
@@ -507,6 +565,7 @@ type runConfig struct {
 	started       chan struct{}
 	done          chan struct{}
 	extraEnv      *env.Environment
+	outputAttrs   map[string]string
 	smells        map[string]bool
 }
 
@@ -529,6 +588,10 @@ func ShowPrompt(show bool) RunCommandOpt { return func(c *runConfig) { c.showPro
 
 // WithExtraEnv can be used to set additional env vars for this run.
 func WithExtraEnv(e *env.Environment) RunCommandOpt { return func(c *runConfig) { c.extraEnv = e } }
+
+func WithOutputAttributes(attrs map[string]string) RunCommandOpt {
+	return func(c *runConfig) { c.outputAttrs = attrs }
+}
 
 // WithStarted provides a channel that is closed after the command has started.
 func WithStarted(started chan struct{}) RunCommandOpt {
