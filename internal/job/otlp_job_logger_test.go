@@ -6,25 +6,32 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
-	"github.com/buildkite/agent/v3/internal/redact"
-	"github.com/buildkite/agent/v3/internal/replacer"
+	"github.com/buildkite/agent/v3/env"
+	"github.com/buildkite/agent/v3/internal/shell"
 	otellog "go.opentelemetry.io/otel/log"
 	"go.opentelemetry.io/otel/log/embedded"
+	"go.opentelemetry.io/otel/trace"
 )
 
-// captureLogger is a minimal otellog.Logger that records emitted record bodies.
+// captureLogger is a minimal otellog.Logger that records emitted record
+// bodies, attributes and emit-context span IDs.
 type captureLogger struct {
 	embedded.Logger
-	mu      sync.Mutex
-	bodies  []string
-	lastKVs map[string]string
+	mu         sync.Mutex
+	bodies     []string
+	spanIDs    []trace.SpanID
+	timestamps []time.Time
+	lastKVs    map[string]string
 }
 
-func (c *captureLogger) Emit(_ context.Context, r otellog.Record) {
+func (c *captureLogger) Emit(ctx context.Context, r otellog.Record) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.bodies = append(c.bodies, r.Body().AsString())
+	c.spanIDs = append(c.spanIDs, trace.SpanContextFromContext(ctx).SpanID())
+	c.timestamps = append(c.timestamps, r.Timestamp())
 	c.lastKVs = map[string]string{}
 	r.WalkAttributes(func(kv otellog.KeyValue) bool {
 		c.lastKVs[string(kv.Key)] = kv.Value.AsString()
@@ -34,83 +41,163 @@ func (c *captureLogger) Emit(_ context.Context, r otellog.Record) {
 
 func (c *captureLogger) Enabled(context.Context, otellog.EnabledParameters) bool { return true }
 
-func newTestOTLPJobLogger(log otellog.Logger, needles ...string) *otlpJobLogger {
-	mux := replacer.NewMux(replacer.New(nil, needles, redact.Redacted))
-	return &otlpJobLogger{
-		log:       log,
-		attrs:     []otellog.KeyValue{otellog.String("source", "job")},
-		redactors: mux,
-	}
+func newTestOTLPJobLogger(log otellog.Logger) *otlpJobLogger {
+	return newOTLPJobLoggerWithLogger(context.Background(), log, nil, []otellog.KeyValue{otellog.String("source", "job")})
 }
 
-// TestOTLPJobLoggerRedactsSecrets ensures OTLP log records never carry secret
-// values, matching the redaction applied to the customer-facing job log.
-func TestOTLPJobLoggerRedactsSecrets(t *testing.T) {
+func spanContextWithID(t *testing.T, id string) context.Context {
+	t.Helper()
+	spanID, err := trace.SpanIDFromHex(id)
+	if err != nil {
+		t.Fatalf("trace.SpanIDFromHex(%q) error = %v", id, err)
+	}
+	traceID, err := trace.TraceIDFromHex("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+	if err != nil {
+		t.Fatalf("trace.TraceIDFromHex() error = %v", err)
+	}
+	return trace.ContextWithSpanContext(t.Context(), trace.NewSpanContext(trace.SpanContextConfig{
+		TraceID: traceID,
+		SpanID:  spanID,
+	}))
+}
+
+// TestOTLPJobLoggerEmitsRedactedOutput ensures OTLP log records mirror the
+// child-process output after the job log redactor, so records never carry
+// secret values, including secrets split across writes and secrets added
+// mid-job (e.g. via the Job API).
+func TestOTLPJobLoggerEmitsRedactedOutput(t *testing.T) {
 	t.Parallel()
 
 	const secret = "supersekret-value"
+	e := New(ExecutorConfig{RedactedVars: []string{"MY_SECRET"}})
+	environ := env.New()
+	environ.Set("MY_SECRET", secret)
+
+	var stdout, stderr bytes.Buffer
+	preRedactedStdout, _ := e.setupRedactors(shell.DiscardLogger, environ, &stdout, &stderr)
+
 	cap := &captureLogger{}
-	l := newTestOTLPJobLogger(cap, secret)
+	l := newTestOTLPJobLogger(cap)
+	e.otlpJobLogger = l
+	e.stdoutTee.setSecondary(l.outputWriter())
 
-	var downstream bytes.Buffer
-	w := l.Wrap(t.Context(), &downstream, map[string]string{"buildkite.phase": "command"})
-
-	if _, err := w.Write([]byte("before " + secret + " after\n")); err != nil {
+	if _, err := preRedactedStdout.Write([]byte("before " + secret + " after\n")); err != nil {
 		t.Fatalf("Write() error = %v", err)
 	}
-	if f, ok := w.(interface{ Flush() }); ok {
-		f.Flush()
+	// A secret split across writes must also be redacted.
+	if _, err := preRedactedStdout.Write([]byte("start super")); err != nil {
+		t.Fatalf("Write() error = %v", err)
+	}
+	if _, err := preRedactedStdout.Write([]byte("sekret-value end\n")); err != nil {
+		t.Fatalf("Write() error = %v", err)
+	}
+	// A secret added mid-job (e.g. via the Job API) must be redacted too.
+	const lateSecret = "late-bound-secret"
+	e.redactors.Add(lateSecret)
+	if _, err := preRedactedStdout.Write([]byte("value " + lateSecret + " end\n")); err != nil {
+		t.Fatalf("Write() error = %v", err)
 	}
 
 	cap.mu.Lock()
 	defer cap.mu.Unlock()
 
-	if len(cap.bodies) != 1 {
-		t.Fatalf("emitted %d records, want 1: %q", len(cap.bodies), cap.bodies)
+	want := []string{"before [REDACTED] after", "start [REDACTED] end", "value [REDACTED] end"}
+	if len(cap.bodies) != len(want) {
+		t.Fatalf("emitted %d records, want %d: %q", len(cap.bodies), len(want), cap.bodies)
 	}
-	body := cap.bodies[0]
-	if strings.Contains(body, secret) {
-		t.Errorf("OTLP record body leaked secret: %q", body)
+	for i, line := range want {
+		if cap.bodies[i] != line {
+			t.Errorf("record[%d] = %q, want %q", i, cap.bodies[i], line)
+		}
 	}
-	if !strings.Contains(body, "[REDACTED]") {
-		t.Errorf("OTLP record body = %q, want it to contain [REDACTED]", body)
-	}
-	if got := cap.lastKVs["buildkite.phase"]; got != "command" {
-		t.Errorf("buildkite.phase attribute = %q, want %q", got, "command")
+	if got := stdout.String(); strings.Contains(got, secret) || strings.Contains(got, lateSecret) {
+		t.Errorf("job log stdout leaked secret: %q", got)
 	}
 }
 
-// TestOTLPJobLoggerRedactsNeedlesAddedMidStream ensures a secret added to the
-// live redactor Mux after the command writer is created (e.g. via the Job API)
-// is still redacted in OTLP output, not just secrets known at writer creation.
-func TestOTLPJobLoggerRedactsNeedlesAddedMidStream(t *testing.T) {
+// TestOTLPJobLoggerSetSpanContext ensures records carry the current span
+// context, that a buffered partial line is attributed to the span that
+// produced it, and that the returned restore function unwinds nested spans.
+func TestOTLPJobLoggerSetSpanContext(t *testing.T) {
 	t.Parallel()
 
 	cap := &captureLogger{}
-	// Start with no needles, matching a command that adds a secret at runtime.
 	l := newTestOTLPJobLogger(cap)
+	w := l.outputWriter()
 
-	w := l.Wrap(t.Context(), &bytes.Buffer{}, nil)
+	checkoutCtx := spanContextWithID(t, "bbbbbbbbbbbbbbbb")
+	hookCtx := spanContextWithID(t, "cccccccccccccccc")
 
-	const secret = "late-bound-secret"
-	// Secret added to the live Mux after the writer was created.
-	l.redactors.Add(secret)
-
-	if _, err := w.Write([]byte("value " + secret + " end\n")); err != nil {
+	restoreCheckout := l.setSpanContext(checkoutCtx)
+	if _, err := w.Write([]byte("checkout line\npartial")); err != nil {
 		t.Fatalf("Write() error = %v", err)
 	}
-	if f, ok := w.(interface{ Flush() }); ok {
-		f.Flush()
+
+	// Switching spans flushes the buffered partial line with the old span.
+	restoreHook := l.setSpanContext(hookCtx)
+	if _, err := w.Write([]byte("hook line\n")); err != nil {
+		t.Fatalf("Write() error = %v", err)
+	}
+
+	// Restoring unwinds to the enclosing span.
+	restoreHook()
+	if _, err := w.Write([]byte("more checkout\n")); err != nil {
+		t.Fatalf("Write() error = %v", err)
+	}
+	restoreCheckout()
+
+	cap.mu.Lock()
+	defer cap.mu.Unlock()
+
+	wantBodies := []string{"checkout line", "partial", "hook line", "more checkout"}
+	if len(cap.bodies) != len(wantBodies) {
+		t.Fatalf("emitted records = %q, want %q", cap.bodies, wantBodies)
+	}
+	for i, body := range wantBodies {
+		if cap.bodies[i] != body {
+			t.Errorf("record[%d] = %q, want %q", i, cap.bodies[i], body)
+		}
+	}
+	checkoutSpanID := trace.SpanContextFromContext(checkoutCtx).SpanID()
+	hookSpanID := trace.SpanContextFromContext(hookCtx).SpanID()
+	wantSpanIDs := []trace.SpanID{checkoutSpanID, checkoutSpanID, hookSpanID, checkoutSpanID}
+	for i, want := range wantSpanIDs {
+		if cap.spanIDs[i] != want {
+			t.Errorf("record[%d] span ID = %s, want %s", i, cap.spanIDs[i], want)
+		}
+	}
+}
+
+// TestOTLPLineEmitterStartOfLineTimestamp ensures a record is stamped with
+// the arrival of the line's first byte rather than its completion, matching
+// the ANSI timestamper's start-of-line semantics in the Buildkite job log.
+func TestOTLPLineEmitterStartOfLineTimestamp(t *testing.T) {
+	t.Parallel()
+
+	cap := &captureLogger{}
+	l := newTestOTLPJobLogger(cap)
+	w := l.outputWriter()
+
+	before := time.Now()
+	if _, err := w.Write([]byte("slow line")); err != nil {
+		t.Fatalf("Write() error = %v", err)
+	}
+	after := time.Now()
+
+	time.Sleep(20 * time.Millisecond)
+	if _, err := w.Write([]byte(" done\n")); err != nil {
+		t.Fatalf("Write() error = %v", err)
 	}
 
 	cap.mu.Lock()
 	defer cap.mu.Unlock()
 
-	if len(cap.bodies) != 1 {
-		t.Fatalf("emitted %d records, want 1: %q", len(cap.bodies), cap.bodies)
+	if len(cap.timestamps) != 1 {
+		t.Fatalf("emitted %d records, want 1: %q", len(cap.timestamps), cap.bodies)
 	}
-	if body := cap.bodies[0]; strings.Contains(body, secret) {
-		t.Errorf("OTLP record body leaked mid-stream secret: %q", body)
+	ts := cap.timestamps[0]
+	if ts.Before(before) || ts.After(after) {
+		t.Errorf("record timestamp = %v, want within [%v, %v]", ts, before, after)
 	}
 }
 
@@ -147,147 +234,17 @@ func TestOTLPJobLoggerControlWriter(t *testing.T) {
 			t.Errorf("record[%d] = %q, want %q", i, cap.bodies[i], line)
 		}
 	}
-}
-
-// TestOTLPJobLoggerControlWriterReused ensures repeated controlWriter calls
-// return the same emitter so all control output shares one line buffer.
-func TestOTLPJobLoggerControlWriterReused(t *testing.T) {
-	t.Parallel()
-
-	l := newTestOTLPJobLogger(&captureLogger{})
-	if l.controlWriter() != l.controlWriter() {
-		t.Error("controlWriter() returned different writers; want a single shared emitter")
+	if got := cap.lastKVs["source"]; got != "job" {
+		t.Errorf("source attribute = %q, want %q", got, "job")
 	}
 }
 
-// TestOTLPJobLoggerRedactsSecretsSplitAcrossWrites ensures a secret that is
-// split across multiple Write calls is still redacted in the OTLP output.
-func TestOTLPJobLoggerRedactsSecretsSplitAcrossWrites(t *testing.T) {
-	t.Parallel()
-
-	const secret = "supersekret-value"
-	cap := &captureLogger{}
-	l := newTestOTLPJobLogger(cap, secret)
-
-	w := l.Wrap(t.Context(), &bytes.Buffer{}, nil)
-
-	// Split the secret across writes and withhold the trailing newline so the
-	// line is only emitted on Flush.
-	if _, err := w.Write([]byte("start super")); err != nil {
-		t.Fatalf("Write() error = %v", err)
-	}
-	if _, err := w.Write([]byte("sekret-value end\n")); err != nil {
-		t.Fatalf("Write() error = %v", err)
-	}
-	if f, ok := w.(interface{ Flush() }); ok {
-		f.Flush()
-	}
-
-	cap.mu.Lock()
-	defer cap.mu.Unlock()
-
-	if len(cap.bodies) != 1 {
-		t.Fatalf("emitted %d records, want 1: %q", len(cap.bodies), cap.bodies)
-	}
-	if body := cap.bodies[0]; strings.Contains(body, secret) {
-		t.Errorf("OTLP record body leaked secret split across writes: %q", body)
-	}
-}
-
-// TestOTLPJobLoggerRedactsSecretsSplitAcrossCommands ensures the OTLP redactor
-// retains partial matches across wrappers for sequential commands that share
-// the same downstream job-log stream.
-func TestOTLPJobLoggerRedactsSecretsSplitAcrossCommands(t *testing.T) {
-	t.Parallel()
-
-	const secret = "supersekret-value"
-	cap := &captureLogger{}
-	l := newTestOTLPJobLogger(cap, secret)
-	var downstream bytes.Buffer
-
-	first := l.Wrap(t.Context(), &downstream, map[string]string{"buildkite.phase": "checkout"})
-	if _, err := first.Write([]byte("start super")); err != nil {
-		t.Fatalf("first Write() error = %v", err)
-	}
-	if f, ok := first.(interface{ Flush() }); ok {
-		f.Flush()
-	}
-
-	second := l.Wrap(t.Context(), &downstream, map[string]string{"buildkite.phase": "command"})
-	if _, err := second.Write([]byte("sekret-value end\n")); err != nil {
-		t.Fatalf("second Write() error = %v", err)
-	}
-	if f, ok := second.(interface{ Flush() }); ok {
-		f.Flush()
-	}
-	if err := l.Close(t.Context()); err != nil {
-		t.Fatalf("Close() error = %v", err)
-	}
-
-	cap.mu.Lock()
-	defer cap.mu.Unlock()
-	body := strings.Join(cap.bodies, "")
-	if strings.Contains(body, secret) || strings.Contains(body, "super") || strings.Contains(body, "sekret-value") {
-		t.Errorf("OTLP records leaked secret fragments across commands: %q", cap.bodies)
-	}
-	if !strings.Contains(body, "[REDACTED]") {
-		t.Errorf("OTLP records = %q, want them to contain [REDACTED]", cap.bodies)
-	}
-	if got := downstream.String(); got != "start "+secret+" end\n" {
-		t.Errorf("downstream = %q, want unmodified command output", got)
-	}
-}
-
-// TestOTLPJobLoggerFlushRedactorsMatchesExecutorBoundary ensures an explicit
-// executor redactor flush ends a partial match and emits it using the phase
-// that produced it, while ordinary per-command flushes do not.
-func TestOTLPJobLoggerFlushRedactorsMatchesExecutorBoundary(t *testing.T) {
-	t.Parallel()
-
-	const secret = "supersekret-value"
-	cap := &captureLogger{}
-	l := newTestOTLPJobLogger(cap, secret)
-	var downstream bytes.Buffer
-
-	first := l.Wrap(t.Context(), &downstream, map[string]string{"buildkite.phase": "hook"})
-	if _, err := first.Write([]byte("start super")); err != nil {
-		t.Fatalf("first Write() error = %v", err)
-	}
-	if f, ok := first.(interface{ Flush() }); ok {
-		f.Flush()
-	}
-	l.FlushRedactors()
-
-	second := l.Wrap(t.Context(), &downstream, map[string]string{"buildkite.phase": "command"})
-	if _, err := second.Write([]byte("sekret-value end\n")); err != nil {
-		t.Fatalf("second Write() error = %v", err)
-	}
-	if f, ok := second.(interface{ Flush() }); ok {
-		f.Flush()
-	}
-
-	cap.mu.Lock()
-	defer cap.mu.Unlock()
-	// The first command flush has already emitted the safe prefix. The
-	// executor boundary then releases the withheld partial match before the
-	// next phase starts.
-	want := []string{"start ", "super", "sekret-value end"}
-	if len(cap.bodies) != len(want) {
-		t.Fatalf("emitted records = %q, want %q", cap.bodies, want)
-	}
-	for i := range want {
-		if cap.bodies[i] != want[i] {
-			t.Errorf("record[%d] = %q, want %q", i, cap.bodies[i], want[i])
-		}
-	}
-}
-
-func TestOTLPJobLoggerChunksUnterminatedOutput(t *testing.T) {
+func TestOTLPLineEmitterChunksUnterminatedOutput(t *testing.T) {
 	t.Parallel()
 
 	cap := &captureLogger{}
 	l := newTestOTLPJobLogger(cap)
-	w := l.Wrap(t.Context(), &bytes.Buffer{}, nil)
+	w := l.outputWriter()
 	line := strings.Repeat("x", otlpLogRecordMaxBytes*2+17)
 
 	if _, err := w.Write([]byte(line)); err != nil {
@@ -297,18 +254,16 @@ func TestOTLPJobLoggerChunksUnterminatedOutput(t *testing.T) {
 	cap.mu.Lock()
 	if got, want := len(cap.bodies), 2; got != want {
 		cap.mu.Unlock()
-		t.Fatalf("records before Flush = %d, want %d", got, want)
+		t.Fatalf("records before flush = %d, want %d", got, want)
 	}
 	cap.mu.Unlock()
 
-	if f, ok := w.(interface{ Flush() }); ok {
-		f.Flush()
-	}
+	l.output.flush()
 
 	cap.mu.Lock()
 	defer cap.mu.Unlock()
 	if got, want := len(cap.bodies), 3; got != want {
-		t.Fatalf("records after Flush = %d, want %d", got, want)
+		t.Fatalf("records after flush = %d, want %d", got, want)
 	}
 	if got := strings.Join(cap.bodies, ""); got != line {
 		t.Errorf("rejoined record bodies differ from input: got %d bytes, want %d", len(got), len(line))

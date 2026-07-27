@@ -384,8 +384,8 @@ var BootstrapCommand = cli.Command{
 		},
 		cli.BoolFlag{
 			Name:   "job-logs-otlp",
+			Usage:  "Export job logs directly as OpenTelemetry log records using the OTEL_EXPORTER_OTLP_LOGS_* / OTEL_EXPORTER_OTLP_* environment configuration (default: false)",
 			EnvVar: "BUILDKITE_JOB_LOGS_OTLP",
-			Hidden: true,
 		},
 		cli.StringSliceFlag{
 			Name:   "disable-warnings-for",

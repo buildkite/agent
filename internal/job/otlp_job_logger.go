@@ -9,8 +9,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/buildkite/agent/v3/internal/redact"
-	"github.com/buildkite/agent/v3/internal/replacer"
 	"github.com/buildkite/agent/v3/version"
 	"go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploggrpc"
 	"go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploghttp"
@@ -25,17 +23,36 @@ import (
 // avoids buffering an arbitrarily large process write until command exit.
 const otlpLogRecordMaxBytes = 64 * 1024
 
+// otlpJobLogger exports job log output as OpenTelemetry log records. It is fed
+// already-redacted bytes from the two tee points downstream of the job's
+// redactors (child-process output and shell logger control output), so the
+// exported records carry the same [REDACTED] markers as the customer-facing
+// job log without a second redaction pass.
+//
+// Log records are correlated with the job's trace: the executor calls
+// setSpanContext at span boundaries (phases and hooks), and every record
+// emitted until the next boundary carries that span's context (when tracing
+// is enabled).
 type otlpJobLogger struct {
-	log       otellog.Logger
-	provider  *sdklog.LoggerProvider
-	attrs     []otellog.KeyValue
-	redactors *replacer.Mux
-	streamsMu sync.Mutex
-	streams   map[io.Writer]*otlpJobLogStream
+	log      otellog.Logger
+	provider *sdklog.LoggerProvider
 
-	// control mirrors bootstrap-generated control output (section headers,
-	// prompts, comments, warnings) into OTLP so the exported records match the
-	// Buildkite job log stream. It is created lazily by controlWriter.
+	baseAttrs []otellog.KeyValue
+
+	// mu guards the current emit context.
+	mu sync.Mutex
+	// ctx is stored, despite the general rule against keeping contexts in
+	// structs (https://go.dev/blog/context-and-structs), because lines reach
+	// the emitters through io.Writer, which cannot carry a per-write context.
+	// It is used only as the carrier of the current span context for
+	// stamping records at emit time: setSpanContext detaches it from
+	// cancellation and deadlines, so no lifetime is smuggled in with it.
+	ctx context.Context
+
+	// output emits child-process output (hook/command stdout and stderr).
+	output *otlpLineEmitter
+	// control emits bootstrap control output (section headers, prompts,
+	// comments, warnings) so the exported records match the Buildkite job log.
 	control *otlpLineEmitter
 }
 
@@ -78,75 +95,67 @@ func newOTLPJobLogger(ctx context.Context, e *Executor) (*otlpJobLogger, error) 
 		sdklog.WithResource(resources),
 	)
 
-	return &otlpJobLogger{
-		log: provider.Logger(
-			"buildkite-agent",
-			otellog.WithInstrumentationVersion(version.Version()),
-			otellog.WithSchemaURL(semconv.SchemaURL),
-		),
+	return newOTLPJobLoggerWithLogger(ctx, provider.Logger(
+		"buildkite-agent",
+		otellog.WithInstrumentationVersion(version.Version()),
+		otellog.WithSchemaURL(semconv.SchemaURL),
+	), provider, otlpJobAttributes(e)), nil
+}
+
+// newOTLPJobLoggerWithLogger assembles an otlpJobLogger from already-built
+// parts. The span context in ctx (the root job span, when tracing is enabled)
+// becomes the base emit context that records fall back to outside any
+// setSpanContext boundary.
+func newOTLPJobLoggerWithLogger(ctx context.Context, log otellog.Logger, provider *sdklog.LoggerProvider, baseAttrs []otellog.KeyValue) *otlpJobLogger {
+	l := &otlpJobLogger{
+		log:       log,
 		provider:  provider,
-		attrs:     otlpJobAttributes(e),
-		redactors: e.redactors,
-	}, nil
+		baseAttrs: baseAttrs,
+		ctx:       context.WithoutCancel(ctx),
+	}
+	l.output = &otlpLineEmitter{logger: l}
+	l.control = &otlpLineEmitter{logger: l}
+	return l
 }
 
-func (l *otlpJobLogger) Wrap(ctx context.Context, out io.Writer, attrs map[string]string) io.Writer {
-	emitter := &otlpLineEmitter{
-		ctx:   context.WithoutCancel(ctx),
-		log:   l.log,
-		attrs: appendLogAttrs(l.attrs, attrs),
+// setSpanContext makes ctx the emit context for subsequent log records, and
+// returns a function that restores the previous context when the span ends,
+// so nested boundaries (a hook inside a phase) unwind correctly. Both
+// emitters are flushed at each transition so buffered partial lines are
+// attributed to the span that produced them. The stored context is detached
+// from cancellation, preserving only trace context, so records emitted during
+// cleanup do not inherit a canceled context.
+func (l *otlpJobLogger) setSpanContext(ctx context.Context) func() {
+	set := func(ctx context.Context) context.Context {
+		l.output.flush()
+		l.control.flush()
+		l.mu.Lock()
+		defer l.mu.Unlock()
+		prevCtx := l.ctx
+		l.ctx = ctx
+		return prevCtx
 	}
 
-	// Keep one redaction stream for each shared downstream job-log writer. The
-	// visible job-log redactor also persists across command boundaries, so OTLP
-	// must retain partial matches across Wrap calls to avoid leaking fragments
-	// of a secret split between two commands. Executor output passes pointer-
-	// based writers, so the io.Writer interface values are valid map keys.
-	l.streamsMu.Lock()
-	if l.streams == nil {
-		l.streams = make(map[io.Writer]*otlpJobLogStream)
-	}
-	stream := l.streams[out]
-	if stream == nil {
-		stream = &otlpJobLogStream{out: out, live: l.redactors}
-		stream.redactor = replacer.New(
-			otlpRedactedWriter{stream: stream},
-			l.redactors.Needles(),
-			redact.Redacted,
-		)
-		l.streams[out] = stream
-	}
-	l.streamsMu.Unlock()
-
-	return &otlpJobLogWriter{
-		stream:  stream,
-		emitter: emitter,
-	}
+	prevCtx := set(context.WithoutCancel(ctx))
+	return func() { set(prevCtx) }
 }
 
-// controlWriter returns an io.Writer that mirrors bootstrap control output
-// (section headers, prompts, comments, warnings) into OTLP as log records, so
-// the exported records contain the same lines a customer sees in the Buildkite
-// UI. It is fed post-redaction bytes from the shell logger's redactor, so it
-// does not redact again. Lines carry the base job attributes but no per-hook
-// phase or span context (control output is bootstrap narration, not the output
-// of a specific traced hook/command).
-func (l *otlpJobLogger) controlWriter() io.Writer {
-	if l.control == nil {
-		l.control = &otlpLineEmitter{
-			ctx:   context.Background(),
-			log:   l.log,
-			attrs: l.attrs,
-		}
-	}
-	return l.control
+// emitContext returns the current emit context and attributes.
+func (l *otlpJobLogger) emitContext() (context.Context, []otellog.KeyValue) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.ctx, l.baseAttrs
 }
+
+// outputWriter accepts already-redacted child-process output.
+func (l *otlpJobLogger) outputWriter() io.Writer { return l.output }
+
+// controlWriter accepts already-redacted bootstrap control output.
+func (l *otlpJobLogger) controlWriter() io.Writer { return l.control }
 
 func (l *otlpJobLogger) Close(ctx context.Context) error {
-	if l.control != nil {
-		l.control.flush()
-	}
-	l.FlushRedactors()
+	l.output.flush()
+	l.control.flush()
 	if l.provider == nil {
 		return nil
 	}
@@ -161,107 +170,17 @@ func (l *otlpJobLogger) Close(ctx context.Context) error {
 	return shutdownErr
 }
 
-// FlushRedactors ends the current shared OTLP redaction streams. The executor
-// calls this at the same explicit hook/default-command boundaries where it
-// flushes the customer-facing redactors. Individual subprocesses within one of
-// those phases deliberately do not flush this state.
-func (l *otlpJobLogger) FlushRedactors() {
-	l.streamsMu.Lock()
-	streams := make([]*otlpJobLogStream, 0, len(l.streams))
-	for _, stream := range l.streams {
-		streams = append(streams, stream)
-	}
-	l.streamsMu.Unlock()
-	for _, stream := range streams {
-		stream.flush()
-	}
-}
-
-// otlpJobLogWriter tees process output to the normal (already redacting) job-log
-// writer and to a redacting OTLP line emitter, so OTLP records carry the same
-// redacted content as the customer-facing job log.
-type otlpJobLogWriter struct {
-	stream  *otlpJobLogStream
-	emitter *otlpLineEmitter
-}
-
-func (w *otlpJobLogWriter) Write(data []byte) (int, error) {
-	w.stream.mu.Lock()
-	defer w.stream.mu.Unlock()
-
-	n, err := w.stream.out.Write(data)
-	// Keep the OTLP redactor's needles in sync with the live job redactor
-	// before redacting, so secrets added mid-command (e.g. via the Job API)
-	// are redacted in OTLP output too. Replacer.Add deduplicates, so re-adding
-	// the full needle set each write is safe.
-	if w.stream.live != nil {
-		w.stream.redactor.Add(w.stream.live.Needles()...)
-	}
-	// Feed the OTLP copy through the redactor, which streams redacted bytes to
-	// this command's line emitter. Errors here must not affect the primary job
-	// log. The stream retains partial redaction matches for the next command.
-	w.stream.emitter = w.emitter
-	_, _ = w.stream.redactor.Write(data)
-	return n, err
-}
-
-func (w *otlpJobLogWriter) Flush() {
-	w.stream.mu.Lock()
-	defer w.stream.mu.Unlock()
-	// Flush this command's complete line data, but deliberately do not flush
-	// the shared redactor: it may be withholding the prefix of a secret that
-	// continues in the next command.
-	w.emitter.flush()
-}
-
-// otlpJobLogStream owns redaction state shared by command writers that feed the
-// same downstream job-log stream.
-type otlpJobLogStream struct {
-	mu       sync.Mutex
-	out      io.Writer
-	live     *replacer.Mux
-	redactor *replacer.Replacer
-	emitter  *otlpLineEmitter
-}
-
-func (s *otlpJobLogStream) flush() {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	_ = s.redactor.Flush()
-	if s.emitter != nil {
-		s.emitter.flush()
-	}
-}
-
-// otlpRedactedWriter routes bytes released by the persistent redactor to the
-// emitter for the command whose write released them. Its stream mutex is held
-// by all callers.
-type otlpRedactedWriter struct {
-	stream *otlpJobLogStream
-}
-
-func (w otlpRedactedWriter) Write(data []byte) (int, error) {
-	if w.stream.emitter == nil {
-		return len(data), nil
-	}
-	return w.stream.emitter.Write(data)
-}
-
 // otlpLineEmitter line-buffers (already redacted) output and emits each line as
 // an OpenTelemetry log record with a native timestamp. Write and flush are
-// guarded by mu because control output may be written from multiple goroutines
-// (e.g. the cancellation handler emitting a comment).
+// guarded by mu because output may be written from multiple goroutines (e.g.
+// the cancellation handler emitting a comment).
 type otlpLineEmitter struct {
-	// An io.Writer does not carry a context, and line/redaction buffering can
-	// emit after the call that supplied these bytes. Retain the detached context
-	// selected by Wrap so delayed records keep command trace correlation after
-	// cancellation. A future record-aware buffer could retain a context with
-	// each buffered chunk instead.
-	ctx   context.Context
-	log   otellog.Logger
-	attrs []otellog.KeyValue
-	mu    sync.Mutex
-	buf   []byte
+	logger *otlpJobLogger
+	mu     sync.Mutex
+	buf    []byte
+	// lineStart is when the first byte of the buffered line arrived. Zero
+	// while the buffer is empty.
+	lineStart time.Time
 }
 
 func (e *otlpLineEmitter) Write(data []byte) (int, error) {
@@ -291,6 +210,9 @@ func (e *otlpLineEmitter) Write(data []byte) (int, error) {
 func (e *otlpLineEmitter) appendChunks(data []byte) bool {
 	emitted := false
 	for len(data) > 0 {
+		if len(e.buf) == 0 {
+			e.lineStart = time.Now()
+		}
 		// Keep one full chunk buffered until we see either more data or a line
 		// terminator. This lets Write strip a trailing carriage return when a
 		// CRLF sequence arrives across separate writes without exceeding the
@@ -322,16 +244,29 @@ func (e *otlpLineEmitter) flush() {
 }
 
 func (e *otlpLineEmitter) emit(line string) {
+	ctx, attrs := e.logger.emitContext()
 	now := time.Now()
 
+	// Stamp the record with the start of the line, matching the ANSI
+	// timestamper's start-of-line semantics in the Buildkite job log as
+	// closely as we can. It cannot match exactly: the timestamper also
+	// injects mid-line timestamps for slow lines, which a single log record
+	// cannot represent, and bytes withheld by the redactors reach this
+	// emitter later than they were produced.
+	start := e.lineStart
+	e.lineStart = time.Time{}
+	if start.IsZero() {
+		start = now
+	}
+
 	var record otellog.Record
-	record.SetTimestamp(now)
+	record.SetTimestamp(start)
 	record.SetObservedTimestamp(now)
 	record.SetSeverity(otellog.SeverityInfo)
 	record.SetSeverityText("INFO")
 	record.SetBody(otellog.StringValue(line))
-	record.AddAttributes(e.attrs...)
-	e.log.Emit(e.ctx, record)
+	record.AddAttributes(attrs...)
+	e.logger.log.Emit(ctx, record)
 }
 
 func otlpJobAttributes(e *Executor) []otellog.KeyValue {
@@ -358,15 +293,62 @@ func otlpJobAttributes(e *Executor) []otellog.KeyValue {
 	}
 }
 
-func appendLogAttrs(base []otellog.KeyValue, attrs map[string]string) []otellog.KeyValue {
-	if len(attrs) == 0 {
-		return base
+// setupOTLPJobLogger creates the OTLP job log exporter and mirrors the
+// redacted job log streams into it. It returns a cleanup function that
+// detaches the mirrors and flushes the exporter. The span context in ctx
+// (the root job span, when tracing is enabled) becomes the base emit context
+// that records fall back to outside any otlpLogSpan boundary.
+func (e *Executor) setupOTLPJobLogger(ctx context.Context) func() {
+	jobLogger, err := newOTLPJobLogger(ctx, e)
+	if err != nil {
+		e.shell.Warningf("Failed to initialize OTLP job log exporter: %v", err)
+		return func() {}
 	}
-	out := append([]otellog.KeyValue{}, base...)
-	for key, value := range attrs {
-		if value != "" {
-			out = append(out, otellog.String(key, value))
+
+	// Mirror the redacted child-process output and shell logger control output
+	// (section headers, prompts, comments, warnings) into OTLP so the exported
+	// records match the downloadable Buildkite job log and the UI stream.
+	e.otlpJobLogger = jobLogger
+	if e.stdoutTee != nil {
+		e.stdoutTee.setSecondary(jobLogger.outputWriter())
+	}
+	if e.stderrTee != nil {
+		e.stderrTee.setSecondary(jobLogger.controlWriter())
+	}
+
+	return func() {
+		if e.stdoutTee != nil {
+			e.stdoutTee.setSecondary(nil)
 		}
+		if e.stderrTee != nil {
+			e.stderrTee.setSecondary(nil)
+		}
+		if err := jobLogger.Close(ctx); err != nil {
+			e.shell.Warningf("Failed to close OTLP job log exporter: %v", err)
+		}
+		e.otlpJobLogger = nil
 	}
-	return out
+}
+
+// otlpLogSpan records ctx as the current span context for OTLP job log
+// records and returns a function that restores the previous context. Records
+// emitted while it is current carry its span context (when tracing is
+// enabled). No-op when OTLP job log export is disabled.
+//
+// Intended usage is a single statement right after starting a span:
+//
+//	defer e.otlpLogSpan(ctx)()
+//
+// otlpLogSpan runs immediately, installing the context before the function
+// body produces any output; only the returned restore function is deferred,
+// so nested boundaries (a hook inside a phase) unwind correctly on every
+// return path. Records are stamped with the current context at emit time, so
+// the install must precede any output. Registering the restore after the
+// span's FinishWithError defer means it runs first (LIFO), flushing buffered
+// partial lines while their span is still current.
+func (e *Executor) otlpLogSpan(ctx context.Context) func() {
+	if e.otlpJobLogger == nil {
+		return func() {}
+	}
+	return e.otlpJobLogger.setSpanContext(ctx)
 }
