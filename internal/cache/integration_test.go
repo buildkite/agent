@@ -686,6 +686,64 @@ func TestCacheIntegration_SaveAndRestoreSymlinkTarget(t *testing.T) {
 	}
 }
 
+// TestCacheIntegration_RestoreOverlapAfterHomeChange covers a portable anchor
+// converging onto another target at restore: save ["~/cache", homeB/cache] with
+// HOME=homeA (no overlap), then restore with HOME=homeB, where "~/cache"
+// re-resolves to homeB/cache and collides with the pinned target. Restore must
+// detect the overlap on the re-resolved paths and soft-fail to a miss, without
+// cleaning or extracting.
+func TestCacheIntegration_RestoreOverlapAfterHomeChange(t *testing.T) {
+	ctx := t.Context()
+
+	cacheClient, _, _ := setupTestCache(t, "local_file")
+
+	homeA := t.TempDir()
+	homeB := t.TempDir()
+	setHome := func(h string) {
+		t.Setenv("HOME", h)
+		t.Setenv("USERPROFILE", h)
+	}
+
+	// Both targets exist at save time so neither is skipped.
+	if err := os.WriteFile(filepath.Join(mkdir(t, filepath.Join(homeA, "cache")), "x"), []byte("a"), 0o600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	sentinel := filepath.Join(mkdir(t, filepath.Join(homeB, "cache")), "y")
+	if err := os.WriteFile(sentinel, []byte("b"), 0o600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	cacheClient.caches[0].TargetPaths = []string{"~/cache", filepath.Join(homeB, "cache")}
+
+	setHome(homeA) // "~/cache" -> homeA/cache; no overlap with homeB/cache
+	if _, err := cacheClient.Save(ctx, "test-cache"); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+
+	setHome(homeB) // "~/cache" now re-resolves to homeB/cache -> overlaps the pinned target
+	result, err := cacheClient.Restore(ctx, "test-cache")
+	if err != nil {
+		t.Fatalf("Restore with overlapping re-resolved targets should not error: %v", err)
+	}
+	if result.CacheRestored {
+		t.Error("overlapping targets at restore should soft-fail to a miss")
+	}
+
+	// Soft-failed before cleanup, so the target's content is untouched.
+	if content, err := os.ReadFile(sentinel); err != nil || string(content) != "b" {
+		t.Errorf("target should be untouched, content=%q err=%v", content, err)
+	}
+}
+
+// mkdir creates dir (and parents) and returns it, failing the test on error.
+func mkdir(t *testing.T, dir string) string {
+	t.Helper()
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	return dir
+}
+
 // TestCacheIntegration_RestoreUnrecognizedFormatInvalidates covers the clean-break migration path:
 // the entry still exists but points at an archive this agent can't read.
 // Restore must degrade to a cache miss AND invalidate the stale entry,

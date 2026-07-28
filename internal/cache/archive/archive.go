@@ -95,9 +95,8 @@ func readManifest(reader *zip.Reader) (Manifest, error) {
 		}
 
 		for namespace, anchor := range manifest.Mappings {
-			// A pinned-absolute anchor is a volume/filesystem root, which is "/"
-			// on POSIX but a drive root on Windows, so accept any
-			// root rather than only the AnchorRoot constant.
+			// The pinned-absolute anchor is a volume/filesystem root ("/" or a
+			// Windows drive root), so accept any root, not just AnchorRoot.
 			if anchor != AnchorHome && anchor != AnchorCWD && !isRootAnchor(anchor) {
 				return Manifest{}, fmt.Errorf("%w: unrecognized anchor %q for namespace %q", ErrUnrecognizedFormat, anchor, namespace)
 			}

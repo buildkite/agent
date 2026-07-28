@@ -21,10 +21,8 @@ const (
 	AnchorCWD = "."
 )
 
-// Mapping describes how one configured target path is represented in an archive.
-// Each mapping owns a numbered namespace ("_0", "_1", ...) inside the
-// archive; entries under that namespace carry the path relative to the
-// mapping's anchor.
+// Mapping describes how one configured target path maps into an archive: a
+// numbered namespace ("_0", "_1", ...) whose entries are relative to the anchor.
 type Mapping struct {
 	// Path is the target path exactly as configured.
 	Path string
@@ -37,9 +35,8 @@ type Mapping struct {
 	ResolvedPath string
 }
 
-// homeDir returns the cleaned home directory. os.UserHomeDir returns $HOME
-// verbatim on Unix. Cleaning it keeps save classification and
-// restore anchor resolution byte-consistent.
+// homeDir returns the cleaned home directory (os.UserHomeDir returns $HOME
+// verbatim), keeping save and restore resolution consistent.
 func homeDir() (string, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -93,10 +90,8 @@ func classifyPath(path, home, cwd string) (anchor, resolved string) {
 
 	case filepath.IsAbs(path):
 		resolved := filepath.Clean(path)
-		// Absolute paths are pinned - they restore to their exact
-		// location and never follow $HOME — even when they happen to sit under
-		// it. The anchor is the path's volume root, so a Windows drive is
-		// retained ("C:\"); on POSIX it is always "/".
+		// Absolute paths are pinned — never follow $HOME, even under it. The
+		// anchor is the volume root, so a Windows drive is retained.
 		return volumeRoot(resolved), resolved
 
 	default:
@@ -104,17 +99,14 @@ func classifyPath(path, home, cwd string) (anchor, resolved string) {
 	}
 }
 
-// volumeRoot returns the filesystem/volume root of an absolute path: "/" on
-// POSIX, or the drive root ("C:\") on Windows. This is the pinned-absolute
-// anchor — storing the volume keeps a Windows drive from being lost while
-// still pinning the path to its exact location.
+// volumeRoot returns the volume/filesystem root of an absolute path: "/" on
+// POSIX, a drive root ("C:\") on Windows. This is the pinned-absolute anchor.
 func volumeRoot(p string) string {
 	return filepath.VolumeName(p) + string(filepath.Separator)
 }
 
-// isRootAnchor reports whether an anchor is a volume/filesystem root — the
-// pinned-absolute anchor produced by volumeRoot ("/" on POSIX, "C:\" on
-// Windows).
+// isRootAnchor reports whether an anchor is a volume/filesystem root ("/" or
+// "C:\") — the pinned-absolute anchor produced by volumeRoot.
 func isRootAnchor(anchor string) bool {
 	return anchor != "" && anchor == volumeRoot(anchor)
 }

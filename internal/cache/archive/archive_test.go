@@ -256,64 +256,96 @@ func TestV2_AbsolutePathUnderHomeIsPinned(t *testing.T) {
 	assertFileContent(t, filepath.Join(absUnderHome, "caches", "x.bin"), "data")
 }
 
-// TestV2_OverlappingTargetsRejected ensures a target path nested inside another
-// is rejected at save, rather than archiving the shared files twice and racing
-// on the same destination at restore.
-func TestV2_OverlappingTargetsRejected(t *testing.T) {
+// TestV2_TargetOverlap checks BuildArchive rejects overlapping targets and
+// accepts non-overlapping ones across nesting, symlink, and spelling shapes.
+func TestV2_TargetOverlap(t *testing.T) {
 	mustTrace(t)
 
-	home := t.TempDir()
-	setHomeDir(t, home)
-	writeTestFile(t, filepath.Join(home, ".cache", "sub", "x.bin"), "data")
-
-	cases := [][]string{
-		{"~/.cache", "~/.cache/sub"},                // nested
-		{"~/.cache/sub", "~/.cache"},                // nested, order reversed
-		{"~/.cache", filepath.Join(home, ".cache")}, // same dir, different spellings
+	tests := []struct {
+		name    string
+		symlink bool // needs symlink privileges
+		setup   func(t *testing.T, base string) []string
+		wantErr bool
+	}{
+		{
+			name: "nested",
+			setup: func(t *testing.T, base string) []string {
+				writeTestFile(t, filepath.Join(base, "cache", "sub", "x"), "data")
+				return []string{filepath.Join(base, "cache"), filepath.Join(base, "cache", "sub")}
+			},
+			wantErr: true,
+		},
+		{
+			name: "tilde and absolute spelling of one dir",
+			setup: func(t *testing.T, base string) []string {
+				setHomeDir(t, base)
+				writeTestFile(t, filepath.Join(base, "cache", "x"), "data")
+				return []string{"~/cache", filepath.Join(base, "cache")}
+			},
+			wantErr: true,
+		},
+		{
+			name:    "symlink alias to the same dir",
+			symlink: true,
+			setup: func(t *testing.T, base string) []string {
+				real := filepath.Join(base, "real")
+				writeTestFile(t, filepath.Join(real, "sub", "x"), "data")
+				mustSymlink(t, real, filepath.Join(base, "alias"))
+				return []string{filepath.Join(real, "sub"), filepath.Join(base, "alias", "sub")}
+			},
+			wantErr: true,
+		},
+		{
+			name:    "symlinked parent, lexically nested",
+			symlink: true,
+			setup: func(t *testing.T, base string) []string {
+				cacheDir := filepath.Join(base, "cache")
+				if err := os.MkdirAll(cacheDir, 0o755); err != nil {
+					t.Fatalf("MkdirAll: %v", err)
+				}
+				writeTestFile(t, filepath.Join(base, "other", "sub", "x"), "data")
+				mustSymlink(t, filepath.Join(base, "other"), filepath.Join(cacheDir, "link"))
+				return []string{cacheDir, filepath.Join(cacheDir, "link", "sub")}
+			},
+			wantErr: true,
+		},
+		{
+			// A final symlink is archived as the link, not its referent.
+			name:    "final symlink does not overlap its referent",
+			symlink: true,
+			setup: func(t *testing.T, base string) []string {
+				real := filepath.Join(base, "real")
+				writeTestFile(t, filepath.Join(real, "sub", "x"), "data")
+				alias := filepath.Join(base, "alias")
+				mustSymlink(t, real, alias)
+				return []string{alias, filepath.Join(real, "sub")}
+			},
+			wantErr: false,
+		},
 	}
 
-	for _, paths := range cases {
-		_, err := BuildArchive(t.Context(), paths, "overlap")
-		if err == nil {
-			t.Errorf("BuildArchive(%v): expected overlap error, got nil", paths)
-			continue
-		}
-		if !strings.Contains(err.Error(), "overlap") {
-			t.Errorf("BuildArchive(%v): error %q should mention overlap", paths, err.Error())
-		}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.symlink && runtime.GOOS == "windows" {
+				t.Skip("creating a symlink needs privileges on Windows")
+			}
+			paths := tt.setup(t, t.TempDir())
+			_, err := BuildArchive(t.Context(), paths, "overlap")
+			switch {
+			case tt.wantErr && (err == nil || !strings.Contains(err.Error(), "overlap")):
+				t.Errorf("BuildArchive(%v) = %v, want overlap error", paths, err)
+			case !tt.wantErr && err != nil:
+				t.Errorf("BuildArchive(%v) = %v, want no error", paths, err)
+			}
+		})
 	}
 }
 
-// TestV2_OverlappingTargetsViaSymlinkRejected covers overlaps that are only
-// visible after resolving symlinks: "real/sub" and "alias/sub" (alias -> real)
-// are lexically different but the same physical files, so they must still be
-// rejected.
-func TestV2_OverlappingTargetsViaSymlinkRejected(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("creating a symlink needs privileges on Windows")
-	}
-	mustTrace(t)
-	setHomeDir(t, t.TempDir())
-
-	base := t.TempDir()
-	realDir := filepath.Join(base, "real")
-	writeTestFile(t, filepath.Join(realDir, "sub", "x.bin"), "data")
-
-	alias := filepath.Join(base, "alias")
-	if err := os.Symlink(realDir, alias); err != nil {
+// mustSymlink creates a symlink or fails the test.
+func mustSymlink(t *testing.T, target, link string) {
+	t.Helper()
+	if err := os.Symlink(target, link); err != nil {
 		t.Fatalf("Symlink: %v", err)
-	}
-
-	// real/sub and alias/sub resolve to the same physical directory.
-	_, err := BuildArchive(t.Context(), []string{
-		filepath.Join(realDir, "sub"),
-		filepath.Join(alias, "sub"),
-	}, "overlap-symlink")
-	if err == nil {
-		t.Fatal("expected overlap error for symlinked-equal targets, got nil")
-	}
-	if !strings.Contains(err.Error(), "overlap") {
-		t.Errorf("error %q should mention overlap", err.Error())
 	}
 }
 
@@ -346,104 +378,90 @@ func TestPathsOverlap(t *testing.T) {
 	}
 }
 
-// TestV2_OverlappingTargetsCaseVariant covers case-only path differences.
-// On a case-insensitive filesystem (Windows, a default macOS volume) "Cache"
-// and "cache" are the same directory and must be rejected as overlapping; on a
-// case-sensitive filesystem they are distinct. The test detects which it's on
-// and asserts accordingly, so it exercises the real behaviour on any host.
-func TestV2_OverlappingTargetsCaseVariant(t *testing.T) {
+// TestV2_TargetOverlapCaseVariant covers case-only differences via BuildArchive,
+// adapting to the host filesystem's case behaviour (existing targets).
+func TestV2_TargetOverlapCaseVariant(t *testing.T) {
 	mustTrace(t)
-	setHomeDir(t, t.TempDir())
 
-	dir := t.TempDir()
-	upper := filepath.Join(dir, "Cache")
-	lower := filepath.Join(dir, "cache")
-	writeTestFile(t, filepath.Join(upper, "x.bin"), "data")
-
-	// Independently detect case-insensitivity: does "cache" name the same file
-	// as the "Cache" we created?
-	caseInsensitive := false
-	if a, e1 := os.Stat(upper); e1 == nil {
-		if b, e2 := os.Stat(lower); e2 == nil && os.SameFile(a, b) {
-			caseInsensitive = true
-		}
+	tests := []struct{ name, upper, lower string }{
+		{"leaf", "Cache", "cache"},
+		{"numeric leaf under a cased parent", filepath.Join("Cache", "2024"), filepath.Join("cache", "2024")},
 	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			setHomeDir(t, t.TempDir())
+			base := t.TempDir()
+			upper := filepath.Join(base, tt.upper)
+			writeTestFile(t, filepath.Join(upper, "x.bin"), "data")
 
-	_, err := BuildArchive(t.Context(), []string{upper, lower}, "case")
-	if caseInsensitive {
-		if err == nil || !strings.Contains(err.Error(), "overlap") {
-			t.Errorf("case-insensitive filesystem: expected overlap error, got %v", err)
-		}
-	} else {
-		// "cache" is a distinct, non-existent path — skipped, so no overlap.
-		if err != nil {
-			t.Errorf("case-sensitive filesystem: unexpected error %v", err)
-		}
+			_, err := BuildArchive(t.Context(), []string{upper, filepath.Join(base, tt.lower)}, "case")
+			if caseInsensitiveFS(t, base) {
+				if err == nil || !strings.Contains(err.Error(), "overlap") {
+					t.Errorf("case-insensitive: BuildArchive = %v, want overlap error", err)
+				}
+			} else if err != nil {
+				t.Errorf("case-sensitive: BuildArchive = %v, want no error", err)
+			}
+		})
 	}
 }
 
-// TestV2_NonOverlappingSymlinkTargetsAccepted guards against over-rejecting: a
-// target that is *itself* a symlink (alias -> real) is archived as the symlink,
-// not its referent, so it does not overlap with a separate target under the
-// referent (real/sub). Overlap detection must resolve symlinked parents but
-// preserve a final symlink, so this config is accepted.
-func TestV2_NonOverlappingSymlinkTargetsAccepted(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("creating a symlink needs privileges on Windows")
-	}
-	mustTrace(t)
-	setHomeDir(t, t.TempDir())
-
+// TestOverlappingPathsAbsentCaseVariant covers a fresh restore: case-variant
+// targets that don't exist yet must overlap iff the filesystem folds case.
+func TestOverlappingPathsAbsentCaseVariant(t *testing.T) {
 	base := t.TempDir()
-	realDir := filepath.Join(base, "real")
-	writeTestFile(t, filepath.Join(realDir, "sub", "x.bin"), "data")
-
-	alias := filepath.Join(base, "alias")
-	if err := os.Symlink(realDir, alias); err != nil {
-		t.Fatalf("Symlink: %v", err)
+	want := caseInsensitiveFS(t, base)
+	_, _, ok := OverlappingPaths([]string{
+		filepath.Join(base, "Cache"),
+		filepath.Join(base, "cache"),
+	})
+	if ok != want {
+		t.Errorf("OverlappingPaths overlap = %v, want %v (case-insensitive=%v)", ok, want, want)
 	}
-
-	// "alias" (the symlink itself) and "real/sub" do not overlap on disk.
-	info, err := BuildArchive(t.Context(), []string{alias, filepath.Join(realDir, "sub")}, "no-overlap")
-	if err != nil {
-		t.Fatalf("BuildArchive should accept non-overlapping symlink targets, got: %v", err)
-	}
-	defer func() { _ = os.Remove(info.ArchivePath) }()
 }
 
-// TestV2_OverlappingTargetsLexicalNestedRejected covers a lexical overlap whose
-// child resolves elsewhere via a symlink: "cache" and "cache/link/sub" (with
-// cache/link -> other) are not canonically nested, but archiving both would
-// make restore create cache/link as a directory and then fail to lay down the
-// cache/link symlink. The lexical check must still reject it.
-func TestV2_OverlappingTargetsLexicalNestedRejected(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("creating a symlink needs privileges on Windows")
+// TestOverlappingPathsReadOnlyCaseVariant covers existing case-variant targets
+// whose destination is read-only (0555), so the writable probe (MkdirTemp)
+// fails — file identity must still detect the overlap. The numeric-leaf variant
+// exercises re-casing an ancestor rather than the (all-digit) leaf.
+func TestOverlappingPathsReadOnlyCaseVariant(t *testing.T) {
+	tests := []struct{ name, upper, lower string }{
+		{"lettered leaf", "Cache", "cache"},
+		{"numeric leaf under a cased parent", filepath.Join("Cache", "123"), filepath.Join("cache", "123")},
 	}
-	mustTrace(t)
-	setHomeDir(t, t.TempDir())
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			base := t.TempDir()
+			if !caseInsensitiveFS(t, base) {
+				t.Skip("requires a case-insensitive filesystem")
+			}
+			upper := filepath.Join(base, tt.upper)
+			if err := os.MkdirAll(upper, 0o755); err != nil {
+				t.Fatalf("MkdirAll: %v", err)
+			}
+			// Make the target read-only so MkdirTemp inside it fails; detection
+			// must fall back to file identity.
+			if err := os.Chmod(upper, 0o555); err != nil {
+				t.Fatalf("Chmod: %v", err)
+			}
+			t.Cleanup(func() { _ = os.Chmod(upper, 0o755) })
 
-	base := t.TempDir()
-	cacheDir := filepath.Join(base, "cache")
-	if err := os.MkdirAll(cacheDir, 0o755); err != nil {
+			if _, _, ok := OverlappingPaths([]string{upper, filepath.Join(base, tt.lower)}); !ok {
+				t.Error("case-variant targets in a read-only dir should overlap via identity")
+			}
+		})
+	}
+}
+
+// caseInsensitiveFS reports whether dir's filesystem folds case, via a marker.
+func caseInsensitiveFS(t *testing.T, dir string) bool {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Join(dir, "Marker"), 0o755); err != nil {
 		t.Fatalf("MkdirAll: %v", err)
 	}
-	writeTestFile(t, filepath.Join(base, "other", "sub", "x.bin"), "data")
-	if err := os.Symlink(filepath.Join(base, "other"), filepath.Join(cacheDir, "link")); err != nil {
-		t.Fatalf("Symlink: %v", err)
-	}
-
-	// cache/link/sub is lexically under cache even though it resolves to other/sub.
-	_, err := BuildArchive(t.Context(), []string{
-		cacheDir,
-		filepath.Join(cacheDir, "link", "sub"),
-	}, "overlap-lexical")
-	if err == nil {
-		t.Fatal("expected overlap error for lexically-nested targets, got nil")
-	}
-	if !strings.Contains(err.Error(), "overlap") {
-		t.Errorf("error %q should mention overlap", err.Error())
-	}
+	a, e1 := os.Stat(filepath.Join(dir, "Marker"))
+	b, e2 := os.Stat(filepath.Join(dir, "marker"))
+	return e1 == nil && e2 == nil && os.SameFile(a, b)
 }
 
 // TestV2_HomePortability proves a "~" cache saved under one home directory

@@ -84,26 +84,14 @@ func BuildArchive(ctx context.Context, paths []string, key string) (*ArchiveInfo
 		manifest.Mappings[mapping.Namespace] = mapping.Anchor
 	}
 
-	// Reject overlapping targets: nested/equal paths archive shared files twice
-	// and collide on the same restore destination (a race, or a symlink-vs-dir
-	// conflict). Check lexical and canonical paths — lexical catches nesting at
-	// the restore destination ("/cache" + "/cache/link/sub"), canonical catches
-	// symlink aliases and Windows case variants. EvalSymlinks falls back to
-	// lexical on error (plans only hold existing paths).
-	canonical := make([]string, len(plans))
-	caseInsensitive := make([]bool, len(plans))
+	// Reject overlapping targets: they archive shared files twice and collide on
+	// one restore destination. Restore re-checks the re-resolved paths.
+	resolved := make([]string, len(plans))
 	for i, p := range plans {
-		canonical[i] = canonicalizeForOverlap(p.mapping.ResolvedPath)
-		caseInsensitive[i] = pathCaseInsensitive(p.mapping.ResolvedPath)
+		resolved[i] = p.mapping.ResolvedPath
 	}
-	for i := 0; i < len(plans); i++ {
-		for j := i + 1; j < len(plans); j++ {
-			insensitive := caseInsensitive[i] || caseInsensitive[j]
-			if pathsOverlap(plans[i].mapping.ResolvedPath, plans[j].mapping.ResolvedPath, insensitive) ||
-				pathsOverlap(canonical[i], canonical[j], insensitive) {
-				return nil, fmt.Errorf("cache target_paths overlap: %q and %q resolve to nested or aliased locations; remove the redundant one", plans[i].mapping.Path, plans[j].mapping.Path)
-			}
-		}
+	if i, j, ok := OverlappingPaths(resolved); ok {
+		return nil, fmt.Errorf("cache target_paths overlap: %q and %q resolve to nested or aliased locations; remove the redundant one", plans[i].mapping.Path, plans[j].mapping.Path)
 	}
 
 	if err := writeManifest(zw, manifest); err != nil {
@@ -144,9 +132,29 @@ func BuildArchive(ctx context.Context, paths []string, key string) (*ArchiveInfo
 	}, nil
 }
 
+// OverlappingPaths returns the indices of the first pair of resolved paths that
+// are nested or equal — by lexical and canonical spelling, case-folded on
+// case-insensitive filesystems — or ok=false if none overlap.
+func OverlappingPaths(paths []string) (i, j int, ok bool) {
+	canonical := make([]string, len(paths))
+	insensitive := make([]bool, len(paths))
+	for k, p := range paths {
+		canonical[k] = canonicalizeForOverlap(p)
+		insensitive[k] = pathCaseInsensitive(p)
+	}
+	for a := 0; a < len(paths); a++ {
+		for b := a + 1; b < len(paths); b++ {
+			ci := insensitive[a] || insensitive[b]
+			if pathsOverlap(paths[a], paths[b], ci) || pathsOverlap(canonical[a], canonical[b], ci) {
+				return a, b, true
+			}
+		}
+	}
+	return 0, 0, false
+}
+
 // pathsOverlap reports whether two paths are nested or equal, folding case when
-// the filesystem is case-insensitive. (Only the overlap check needs this;
-// isUnder stays case-sensitive for its other callers.)
+// caseInsensitive (isUnder stays case-sensitive for its other callers).
 func pathsOverlap(a, b string, caseInsensitive bool) bool {
 	if caseInsensitive {
 		a, b = strings.ToLower(a), strings.ToLower(b)
@@ -154,33 +162,61 @@ func pathsOverlap(a, b string, caseInsensitive bool) bool {
 	return isUnder(a, b) || isUnder(b, a)
 }
 
-// pathCaseInsensitive reports whether the filesystem holding p is
-// case-insensitive, by probing at runtime: it stats p under a
-// different-case spelling of its final component and checks
-// whether that names the same file. p is expected to exist; assumed
-// case-sensitive if the probe can't confirm.
+// pathCaseInsensitive reports whether the filesystem that will hold p folds
+// case. When p already exists it decides from p's own casing by identity (no
+// write, so it works on a read-only 0555 target); otherwise it creates a temp
+// entry in the nearest existing directory and re-cases it. Assumed
+// case-sensitive if it can't confirm.
 func pathCaseInsensitive(p string) bool {
-	dir, base := filepath.Split(p)
-
-	other := strings.ToUpper(base)
-	if other == base {
-		other = strings.ToLower(base)
+	if orig, err := os.Lstat(p); err == nil {
+		seg := strings.Split(p, string(filepath.Separator))
+		for i := len(seg) - 1; i >= 0; i-- {
+			if recase(seg[i]) == seg[i] {
+				continue
+			}
+			seg[i] = recase(seg[i])
+			alt, err2 := os.Lstat(strings.Join(seg, string(filepath.Separator)))
+			return err2 == nil && os.SameFile(orig, alt)
+		}
 	}
-	if other == base {
-		return false // no letters to re-case — nothing to probe
+
+	dir := p
+	for {
+		if fi, err := os.Stat(dir); err == nil && fi.IsDir() {
+			break
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return false // no existing ancestor directory
+		}
+		dir = parent
 	}
 
-	orig, err1 := os.Stat(p)
-	alt, err2 := os.Stat(filepath.Join(dir, other))
+	// The "bk-case-probe-" prefix guarantees a letter to re-case (MkdirTemp's
+	// random suffix is numeric).
+	marker, err := os.MkdirTemp(dir, "bk-case-probe-")
+	if err != nil {
+		return false
+	}
+	defer func() { _ = os.Remove(marker) }()
+
+	orig, err1 := os.Stat(marker)
+	alt, err2 := os.Stat(filepath.Join(dir, recase(filepath.Base(marker))))
 	return err1 == nil && err2 == nil && os.SameFile(orig, alt)
 }
 
-// canonicalizeForOverlap resolves symlinks in a path's *parent* but preserves
-// the final component. This matches how filepath.Walk archives a target: a
-// symlinked parent means two targets touch the same physical files (they must
-// overlap-check as equal), but a target that is *itself* a symlink is archived
-// as the symlink — not its referent — so it doesn't overlap with writes into
-// the referent. Falls back to the lexical path if the parent can't be resolved.
+// recase returns s with its case flipped (upper, else lower). It returns s
+// unchanged when there is no letter to re-case.
+func recase(s string) string {
+	if up := strings.ToUpper(s); up != s {
+		return up
+	}
+	return strings.ToLower(s)
+}
+
+// canonicalizeForOverlap resolves symlinks in a path's parent but preserves the
+// final component — matching filepath.Walk, which archives a final symlink as
+// the link, not its referent. Falls back to the lexical path on error.
 func canonicalizeForOverlap(p string) string {
 	dir, base := filepath.Split(p)
 	realDir, err := filepath.EvalSymlinks(filepath.Clean(dir))
@@ -200,12 +236,9 @@ func saveLayout(m Mapping, home, cwd string) (chroot, prefix string, err error) 
 	case m.Anchor == AnchorCWD:
 		return cwd, m.Namespace + "/", nil
 	case isRootAnchor(m.Anchor):
-		// Pinned absolute path. m.Anchor is the volume root ("/" or "C:\"),
-		// which is what the entries are relative to — so a Windows drive is
-		// retained. quickzip can't chroot at a bare root, so chroot at the
-		// target itself; the chroot-root "." entry is renamed onto the
-		// namespace in archiveMapping, which handles a file, a symlink, or a
-		// (possibly empty) directory alike. Only the root itself is rejected.
+		// Pinned absolute path, entries relative to the volume root (m.Anchor).
+		// quickzip can't chroot at a bare root, so chroot at the target itself;
+		// archiveMapping renames the "." entry onto the namespace.
 		if m.ResolvedPath == m.Anchor {
 			return "", "", fmt.Errorf("cannot archive the volume/filesystem root %q", m.ResolvedPath)
 		}
@@ -276,13 +309,10 @@ func archiveMapping(ctx context.Context, zw *zip.Writer, resolvedPath, chroot, p
 	for _, f := range reader.File {
 		hdr := f.FileHeader
 
-		// The chroot root entry (quickzip names it "." or "./") is the target
-		// path itself — for a root-anchored path the chroot *is* the target.
-		// Map it onto the namespace rather than dropping it, so an empty
-		// directory, a directory symlink, and the target's own mode/metadata
-		// all survive a round trip. `prefix` ends in "/", which klauspost reads
-		// as a directory entry, so trim it for a non-directory root (a symlink
-		// carries its link target as content and would be rejected otherwise).
+		// The chroot root entry (named "." by quickzip) is the target itself.
+		// Map it onto the namespace so an empty dir, a symlink, or the target's
+		// own mode survive. prefix ends in "/" (a dir entry to klauspost), so
+		// trim it for a non-directory root, which carries content.
 		switch {
 		case path.Clean(f.Name) != ".":
 			hdr.Name = prefix + f.Name

@@ -224,13 +224,9 @@ func (c *client) Restore(ctx context.Context, cacheID string) (RestoreResult, er
 		expectedDigest = retrieveResp.Blobs[0].Digest.Value
 	}
 	if err := verifyDownloadedArchive(archiveFile, transferInfo.BytesTransferred, expectedDigest); err != nil {
-		// Any failure to make sense of the downloaded blob — an unrecognized
-		// format, or an unreadable/corrupt archive — degrades to a
-		// cache miss rather than failing the job; a bad cache must never block a
-		// build. Invalidate the entry so a later save re-uploads, and leave the
-		// target paths untouched (detection runs before cleaning). The
-		// unrecognized_format attribute distinguishes the expected clean-break
-		// case from actual corruption.
+		// A bad cache must never block a build: any unreadable/corrupt archive
+		// degrades to a miss and invalidates the entry (targets untouched — this
+		// runs before cleaning).
 		unrecognized := errors.Is(err, archive.ErrUnrecognizedFormat)
 		slog.Warn("cache archive unreadable, treating as miss and invalidating entry",
 			"cache_id", cacheID, "unrecognized_format", unrecognized, "err", err)
@@ -247,6 +243,36 @@ func (c *client) Restore(ctx context.Context, cacheID string) (RestoreResult, er
 		)
 		span.SetStatus(codes.Ok, "cache miss (unreadable archive)")
 		c.callProgress(cacheID, "complete", "Cache miss (unreadable archive, invalidated stale entry)", 0, 0)
+		return result, nil
+	}
+
+	// Portable anchors (~, .) re-resolve here, so targets that didn't overlap at
+	// save can converge (e.g. "~/cache" and "/home/b/cache" when HOME=/home/b).
+	// Re-check the resolved paths and soft-fail before touching the filesystem.
+	resolvedTargets := make([]string, len(cacheConfig.TargetPaths))
+	for i, path := range cacheConfig.TargetPaths {
+		resolved, err := archive.ResolveConfigPath(path)
+		if err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, "failed to resolve target path")
+			return result, fmt.Errorf("failed to resolve target path %q: %w", path, err)
+		}
+		resolvedTargets[i] = resolved
+	}
+	if a, b, ok := archive.OverlappingPaths(resolvedTargets); ok {
+		slog.Warn("configured cache targets overlap after re-resolving anchors, treating as miss",
+			"cache_id", cacheID, "target_a", cacheConfig.TargetPaths[a], "target_b", cacheConfig.TargetPaths[b])
+		result.CacheHit = false
+		result.FallbackUsed = false
+		result.CacheRestored = false
+		result.TotalDuration = time.Since(startTime)
+		span.SetAttributes(
+			attribute.Bool("cache.hit", false),
+			attribute.Bool("cache.restored", false),
+			attribute.Bool("cache.targets_overlap", true),
+		)
+		span.SetStatus(codes.Ok, "cache miss (targets overlap at restore)")
+		c.callProgress(cacheID, "complete", "Cache miss (targets overlap at restore)", 0, 0)
 		return result, nil
 	}
 
@@ -405,11 +431,9 @@ func (c *client) downloadCache(ctx context.Context, retrieveResp api.CacheEntryR
 	return tmpDir, archiveFile, transferInfo, nil
 }
 
-// verifyDownloadedArchive checks a downloaded blob is safe to extract: its bytes
-// must hash to the expected content-addressed digest (integrity — catches
-// corruption anywhere, including payload members), and it must be a readable
-// archive (format). Both run before the target paths are cleaned. A blank
-// expectedDigest skips the integrity check (e.g. an unknown digest algorithm).
+// verifyDownloadedArchive checks a blob is safe to extract: its bytes hash to
+// expectedDigest (integrity, catches any corruption) and it's a readable archive
+// (format). A blank expectedDigest skips the hash check.
 func verifyDownloadedArchive(archiveFile string, archiveSize int64, expectedDigest string) error {
 	if expectedDigest != "" {
 		if err := verifyArchiveDigest(archiveFile, expectedDigest); err != nil {
@@ -419,10 +443,8 @@ func verifyDownloadedArchive(archiveFile string, archiveSize int64, expectedDige
 	return detectArchiveFormat(archiveFile, archiveSize)
 }
 
-// verifyArchiveDigest re-hashes a downloaded blob and compares it to the digest
-// its object name promised. Download doesn't verify this, so without it a blob
-// corrupted in storage would only surface as a CRC error mid-extraction, after
-// the target paths were already cleaned.
+// verifyArchiveDigest re-hashes a blob and compares it to the digest its object
+// name promised (Download doesn't verify this).
 func verifyArchiveDigest(archiveFile, expected string) error {
 	f, err := os.Open(archiveFile)
 	if err != nil {
@@ -507,14 +529,12 @@ func cleanPath(ctx context.Context, dir string) error {
 	if runtime.GOOS == "windows" && len(clean) == 3 && clean[1] == ':' && clean[2] == '\\' {
 		return fmt.Errorf("cleanPath: refusing to remove drive root %q", clean)
 	}
-	// os.Lstat leaves a final symlink undereferenced, so the guards below run only for a real
-	// (non-symlink) target; a symlink falls straight through to RemoveAll.
+	// A final symlink is only unlinked by RemoveAll, so the guards below run only
+	// for a real (non-symlink) target; os.Lstat doesn't dereference it.
 	if lstat, err := os.Lstat(clean); err == nil && lstat.Mode()&os.ModeSymlink == 0 {
-		// Refuse if the target is, or is an ancestor of, a protected directory
-		// (working dir, home, or filesystem root) — removing it would delete
-		// that directory too. Comparison is by file identity (walking each
-		// protected dir up to the root), so symlinked parents and
-		// case-insensitive spellings are handled, not just an exact match.
+		// Refuse if the target is, or is an ancestor of, a protected dir (cwd,
+		// home, root) — removing it would delete that dir too. By file identity,
+		// so symlinked parents and case variants count, not just an exact match.
 		for _, p := range protectedDirs() {
 			if pathContains(lstat, p) {
 				return fmt.Errorf("cleanPath: refusing to remove %q (it is or contains protected directory %q)", clean, p)

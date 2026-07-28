@@ -162,13 +162,9 @@ func ExtractFiles(ctx context.Context, zipFile *os.File, zipFileLen int64, paths
 	}, nil
 }
 
-// discardName maps an archive entry that won't be restored (the manifest, or a
-// namespace absent from local config) to an opaque, separator-free path under
-// discardDir. Hashing the entry name guarantees the result stays inside
-// discardDir regardless of "/", "\", or ".." segments in the name — a crafted
-// archive must not escape the throwaway directory on any OS (on Windows,
-// filepath.Join would otherwise resolve a backslash-laden name like
-// `..\..\victim` outside discardDir).
+// discardName maps a not-restored entry (the manifest, or an unconfigured
+// namespace) to an opaque, separator-free path under discardDir. Hashing keeps
+// it inside discardDir even if the name contains "/", "\" or ".." segments.
 func discardName(discardDir, name string) string {
 	sum := sha256.Sum256([]byte(name))
 	return filepath.Join(discardDir, hex.EncodeToString(sum[:]))
