@@ -557,10 +557,10 @@ func TestPatchEnvRejectsSparseCheckoutPathsUnderStrict(t *testing.T) {
 	})
 }
 
-func TestPatchEnvRejectsSparseCheckoutNoConeUnderStrict(t *testing.T) {
+func TestPatchEnvRejectsSparseCheckoutModeUnderStrict(t *testing.T) {
 	t.Parallel()
 
-	environ := testEnvironWith("BUILDKITE_GIT_SPARSE_CHECKOUT_NO_CONE", "false")
+	environ := testEnvironWith("BUILDKITE_GIT_SPARSE_CHECKOUT_MODE", "cone")
 	srv, token, err := testServer(t, environ, replacer.NewMux(), jobapi.WithCheckoutOverrideMode(env.CheckoutOverrideStrict))
 	if err != nil {
 		t.Fatalf("creating server: %v", err)
@@ -577,7 +577,7 @@ func TestPatchEnvRejectsSparseCheckoutNoConeUnderStrict(t *testing.T) {
 
 	buf := bytes.NewBuffer(nil)
 	if err := json.NewEncoder(buf).Encode(&jobapi.EnvUpdateRequestPayload{
-		Env: map[string]*string{"BUILDKITE_GIT_SPARSE_CHECKOUT_NO_CONE": pt("true")},
+		Env: map[string]*string{"BUILDKITE_GIT_SPARSE_CHECKOUT_MODE": pt("no-cone")},
 	}); err != nil {
 		t.Fatalf("encoding request body: %v", err)
 	}
@@ -591,9 +591,9 @@ func TestPatchEnvRejectsSparseCheckoutNoConeUnderStrict(t *testing.T) {
 	testAPI(t, environ, req, testSocketClient(srv.SocketPath), apiTestCase[jobapi.EnvUpdateRequestPayload, jobapi.EnvUpdateResponse]{
 		expectedStatus: http.StatusUnprocessableEntity,
 		expectedError: &jobapi.ErrorResponse{
-			Error: "the following environment variables are protected, and cannot be modified: [BUILDKITE_GIT_SPARSE_CHECKOUT_NO_CONE]. Checkout-related variables are locked because BUILDKITE_CHECKOUT_OVERRIDE_MODE=strict",
+			Error: "the following environment variables are protected, and cannot be modified: [BUILDKITE_GIT_SPARSE_CHECKOUT_MODE]. Checkout-related variables are locked because BUILDKITE_CHECKOUT_OVERRIDE_MODE=strict",
 		},
-		expectedEnv: testEnvironWith("BUILDKITE_GIT_SPARSE_CHECKOUT_NO_CONE", "false").Dump(),
+		expectedEnv: testEnvironWith("BUILDKITE_GIT_SPARSE_CHECKOUT_MODE", "cone").Dump(),
 	})
 }
 

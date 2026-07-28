@@ -84,13 +84,12 @@ type ExecutorConfig struct {
 	// Skip the checkout phase entirely
 	SkipCheckout bool `env:"BUILDKITE_SKIP_CHECKOUT"`
 
-	// Comma-separated list of paths for git sparse checkout.
-	// Interpreted as cone-mode directories unless GitSparseCheckoutNoCone is set.
+	// Comma-separated list of paths for git sparse checkout
 	GitSparseCheckoutPaths []string `env:"BUILDKITE_GIT_SPARSE_CHECKOUT_PATHS"`
 
-	// When true, pass --no-cone to git sparse-checkout so paths are treated as
-	// gitignore-style patterns instead of cone-mode directories.
-	GitSparseCheckoutNoCone bool `env:"BUILDKITE_GIT_SPARSE_CHECKOUT_NO_CONE"`
+	// How git interprets the sparse checkout paths; one of SparseCheckoutModes.
+	// Empty means the default (cone).
+	GitSparseCheckoutMode string `env:"BUILDKITE_GIT_SPARSE_CHECKOUT_MODE"`
 
 	// Skip git fetch if the commit already exists locally
 	GitSkipFetchExistingCommits bool `env:"BUILDKITE_GIT_SKIP_FETCH_EXISTING_COMMITS"`

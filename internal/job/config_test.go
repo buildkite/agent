@@ -20,7 +20,7 @@ func TestEnvVarsAreMappedToConfig(t *testing.T) {
 		AutomaticArtifactUploadPaths: "llamas/",
 		GitCloneFlags:                "--prune",
 		GitSparseCheckoutPaths:       []string{"old-path/"},
-		GitSparseCheckoutNoCone:      false,
+		GitSparseCheckoutMode:        "cone",
 		GitCleanFlags:                "-v",
 		GitSSHKey:                    "original-key",
 		AgentName:                    "myAgent",
@@ -33,7 +33,7 @@ func TestEnvVarsAreMappedToConfig(t *testing.T) {
 		"BUILDKITE_ARTIFACT_PATHS=newpath",
 		"BUILDKITE_GIT_CLONE_FLAGS=-f",
 		"BUILDKITE_GIT_SPARSE_CHECKOUT_PATHS=.buildkite/,src/",
-		"BUILDKITE_GIT_SPARSE_CHECKOUT_NO_CONE=true",
+		"BUILDKITE_GIT_SPARSE_CHECKOUT_MODE=no-cone",
 		"BUILDKITE_SOMETHING_ELSE=1",
 		"BUILDKITE_REPO=https://my.mirror/repo.git",
 		"BUILDKITE_CLEAN_CHECKOUT=true",
@@ -44,15 +44,15 @@ func TestEnvVarsAreMappedToConfig(t *testing.T) {
 
 	changes := config.ReadFromEnvironment(environ)
 	wantChanges := map[string]string{
-		"BUILDKITE_ARTIFACT_PATHS":              "newpath",
-		"BUILDKITE_GIT_CLONE_FLAGS":             "-f",
-		"BUILDKITE_GIT_SPARSE_CHECKOUT_PATHS":   ".buildkite/,src/",
-		"BUILDKITE_GIT_SPARSE_CHECKOUT_NO_CONE": "true",
-		"BUILDKITE_REPO":                        "https://my.mirror/repo.git",
-		"BUILDKITE_CLEAN_CHECKOUT":              "true",
-		"BUILDKITE_GIT_SSH_KEY":                 "new-key",
-		"BUILDKITE_PLUGINS_ALWAYS_CLONE_FRESH":  "true",
-		"BUILDKITE_GIT_SUBMODULES":              "true",
+		"BUILDKITE_ARTIFACT_PATHS":             "newpath",
+		"BUILDKITE_GIT_CLONE_FLAGS":            "-f",
+		"BUILDKITE_GIT_SPARSE_CHECKOUT_PATHS":  ".buildkite/,src/",
+		"BUILDKITE_GIT_SPARSE_CHECKOUT_MODE":   "no-cone",
+		"BUILDKITE_REPO":                       "https://my.mirror/repo.git",
+		"BUILDKITE_CLEAN_CHECKOUT":             "true",
+		"BUILDKITE_GIT_SSH_KEY":                "new-key",
+		"BUILDKITE_PLUGINS_ALWAYS_CLONE_FRESH": "true",
+		"BUILDKITE_GIT_SUBMODULES":             "true",
 	}
 
 	if diff := cmp.Diff(changes, wantChanges); diff != "" {
@@ -89,8 +89,8 @@ func TestEnvVarsAreMappedToConfig(t *testing.T) {
 	if got, want := strings.Join(config.GitSparseCheckoutPaths, ","), ".buildkite/,src/"; got != want {
 		t.Errorf("config.GitSparseCheckoutPaths = %q, want %q", got, want)
 	}
-	if got, want := config.GitSparseCheckoutNoCone, true; got != want {
-		t.Errorf("config.GitSparseCheckoutNoCone = %t, want %t", got, want)
+	if got, want := config.GitSparseCheckoutMode, "no-cone"; got != want {
+		t.Errorf("config.GitSparseCheckoutMode = %q, want %q", got, want)
 	}
 }
 
