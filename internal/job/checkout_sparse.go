@@ -78,16 +78,65 @@ func (s sparseCheckout) active() bool { return len(s.paths) > 0 }
 
 func (s sparseCheckout) noCone() bool { return s.mode == SparseCheckoutModeNoCone }
 
-// lfsInclude returns the paths to scope Git LFS to, or nil to fetch all LFS
-// objects. Only cone-mode paths can be reused for LFS: `git lfs fetch --include`
-// has no negation (that's --exclude), and `git lfs checkout` takes pathspecs, so
-// a non-cone pattern such as "!/docs/" would silently match nothing and leave
-// LFS files inside the sparse set as pointer files.
+// lfsInclude returns directory paths to pass as `git lfs fetch --include`, or
+// nil to fetch all LFS objects. Only cone-mode paths can be reused: `--include`
+// has no negation (that's --exclude), so a non-cone pattern such as "!/docs/"
+// can't express the sparse set. Callers that fetch unscoped must still scope
+// `git lfs checkout` via materializedLFSPaths, or LFS will recreate
+// sparse-excluded files.
 func (s sparseCheckout) lfsInclude() []string {
 	if !s.active() || s.noCone() {
 		return nil
 	}
 	return s.paths
+}
+
+// materializedLFSPaths returns LFS-tracked paths that are part of the sparse
+// working tree (index entries without the skip-worktree bit). These are safe
+// pathspecs for `git lfs checkout` when the configured sparse patterns can't be
+// reused as LFS includes.
+func (e *Executor) materializedLFSPaths(ctx context.Context) ([]string, error) {
+	skipWorktree, err := e.skipWorktreePaths(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("listing skip-worktree paths for sparse LFS checkout: %w", err)
+	}
+
+	lfsOutput, err := e.shell.Command("git", "lfs", "ls-files", "-n").RunAndCaptureStdout(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("listing Git LFS files for sparse checkout: %w", err)
+	}
+
+	var paths []string
+	for path := range strings.SplitSeq(strings.TrimRight(lfsOutput, "\n"), "\n") {
+		if path == "" {
+			continue
+		}
+		if _, skip := skipWorktree[path]; skip {
+			continue
+		}
+		paths = append(paths, path)
+	}
+	return paths, nil
+}
+
+// skipWorktreePaths returns the set of index paths with the skip-worktree bit
+// set, as reported by `git ls-files -t -z`.
+func (e *Executor) skipWorktreePaths(ctx context.Context) (map[string]struct{}, error) {
+	output, err := e.shell.Command("git", "ls-files", "-t", "-z").RunAndCaptureStdout(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	skip := make(map[string]struct{})
+	for entry := range strings.SplitSeq(strings.TrimRight(output, "\x00"), "\x00") {
+		// Format is "<status> <path>"; skip-worktree entries use status "S".
+		status, path, ok := strings.Cut(entry, " ")
+		if !ok || status != "S" || path == "" {
+			continue
+		}
+		skip[path] = struct{}{}
+	}
+	return skip, nil
 }
 
 // resolveSparseCheckout returns the sparse-checkout configuration for this

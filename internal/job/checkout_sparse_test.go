@@ -380,6 +380,51 @@ func TestSetupSparseCheckout_VersionFallbackDisablesPriorSparseConfig(t *testing
 	git.Check(t)
 }
 
+func TestMaterializedLFSPaths(t *testing.T) {
+	executor, git, _ := newSparseCheckoutTestExecutor(t)
+	defer git.Close() //nolint:errcheck // Best-effort cleanup.
+
+	git.Expect("ls-files", "-t", "-z").
+		AndWriteToStdout("H src/keep.bin\x00S docs/skip.bin\x00H README.md\x00").
+		AndExitWith(0)
+	git.Expect("lfs", "ls-files", "-n").
+		AndWriteToStdout("src/keep.bin\ndocs/skip.bin\nlib/also.bin\n").
+		AndExitWith(0)
+
+	got, err := executor.materializedLFSPaths(t.Context())
+	if err != nil {
+		t.Fatalf("executor.materializedLFSPaths(ctx) error = %v, want nil", err)
+	}
+	want := []string{"src/keep.bin", "lib/also.bin"}
+	if diff := cmp.Diff(got, want); diff != "" {
+		t.Errorf("materializedLFSPaths() diff (-got +want):\n%s", diff)
+	}
+
+	git.Check(t)
+}
+
+func TestMaterializedLFSPaths_NoneInSparseTree(t *testing.T) {
+	executor, git, _ := newSparseCheckoutTestExecutor(t)
+	defer git.Close() //nolint:errcheck // Best-effort cleanup.
+
+	git.Expect("ls-files", "-t", "-z").
+		AndWriteToStdout("S docs/skip.bin\x00").
+		AndExitWith(0)
+	git.Expect("lfs", "ls-files", "-n").
+		AndWriteToStdout("docs/skip.bin\n").
+		AndExitWith(0)
+
+	got, err := executor.materializedLFSPaths(t.Context())
+	if err != nil {
+		t.Fatalf("executor.materializedLFSPaths(ctx) error = %v, want nil", err)
+	}
+	if len(got) != 0 {
+		t.Errorf("materializedLFSPaths() = %v, want empty", got)
+	}
+
+	git.Check(t)
+}
+
 func newSparseCheckoutTestExecutor(t *testing.T) (*Executor, *bintest.Mock, *bytes.Buffer) {
 	t.Helper()
 

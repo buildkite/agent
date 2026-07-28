@@ -564,18 +564,25 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context, previousAttempts in
 	}
 
 	// When sparse-checkout is active, scope LFS to the same paths so we don't pull
-	// objects outside the sparse set (SUP-6529). Whether the paths can be reused
-	// for LFS at all is sparseCheckout.lfsInclude's call; when they can't, or when
-	// sparse fell back to a full checkout, fetch unscoped so files in the working
-	// tree still get their LFS content.
+	// objects outside the sparse set (SUP-6529). Cone-mode directories can be reused
+	// for both fetch and checkout; non-cone patterns can't (no negation on
+	// --include, and pathspecs don't understand gitignore exclusions), so we
+	// fetch unscoped and restrict checkout to LFS paths that aren't
+	// skip-worktree — otherwise `git lfs checkout` recreates sparse-excluded
+	// files and they survive the later git clean.
 	if e.GitLFSEnabled {
 		lfsArgs := gitLFSFetchCheckoutArgs{
-			Shell:   e.shell,
-			Retry:   true,
-			Include: sparse.lfsInclude(),
+			Shell:        e.shell,
+			Retry:        true,
+			FetchInclude: sparse.lfsInclude(),
 		}
-		if sparseCheckoutActive && len(lfsArgs.Include) == 0 {
-			e.shell.Commentf("Fetching all Git LFS objects: sparse checkout paths can't scope Git LFS in %s mode", sparse.mode)
+		if sparseCheckoutActive && len(lfsArgs.FetchInclude) == 0 {
+			paths, err := e.materializedLFSPaths(ctx)
+			if err != nil {
+				return err
+			}
+			lfsArgs.CheckoutPaths = &paths
+			e.shell.Commentf("Fetching all Git LFS objects; checking out %d path(s) present in the sparse working tree (%s mode)", len(paths), sparse.mode)
 		}
 		if err := e.traceOp(ctx, "git.lfs.fetch", func(ctx context.Context) error {
 			return gitLFSFetchCheckout(ctx, lfsArgs)
