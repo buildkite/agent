@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/buildkite/agent/v3/internal/shell"
@@ -34,20 +35,11 @@ const (
 // When addBloblessFilter is true, --filter=blob:none is prepended to the fetch
 // flags — the caller decides based on sparse-checkout state and user-supplied
 // filters.
-func (e *Executor) fetchSource(ctx context.Context, addBloblessFilter bool) error {
-	// If configured, skip the fetch when the commit already exists locally.
-	// This is useful when a pre-populated git mirror is used with --reference,
-	// as the commit objects are already reachable and fetching is redundant.
-	if e.GitSkipFetchExistingCommits && e.Commit != "HEAD" &&
-		hasGitCommit(ctx, e.shell, ".git", e.Commit) {
-		e.shell.Commentf("Commit %q already exists locally, skipping fetch", e.Commit)
-		return nil
-	}
-
-	gitFetchFlags := e.GitFetchFlags
-	if addBloblessFilter {
-		gitFetchFlags = "--filter=blob:none " + gitFetchFlags
-	}
+func (e *Executor) fetchSource(ctx context.Context, addBloblessFilter bool) (retErr error) {
+	// Start span here so attributes can be set on the in-scope span; covers the
+	// whole fetch including retries (up to 10 attempts, ~2m), not per-attempt.
+	span, ctx := e.traceOpSpan(ctx, "git.fetch")
+	defer func() { span.FinishWithError(retErr) }()
 
 	// Classify the refspec kind once and dispatch on it in the switch below.
 	kind := refspecCommit
@@ -62,6 +54,29 @@ func (e *Executor) fetchSource(ctx context.Context, addBloblessFilter bool) erro
 		}
 	case e.Commit == "HEAD":
 		kind = refspecBranch
+	}
+
+	span.AddAttributes(map[string]string{
+		"git.pull_request": strconv.FormatBool(e.PullRequest != "false"),
+		"git.refspec_kind": string(kind),
+	})
+
+	// If configured, skip the fetch when the commit already exists locally.
+	// This is useful when a pre-populated git mirror is used with --reference,
+	// as the commit objects are already reachable and fetching is redundant.
+	skipFetch := e.GitSkipFetchExistingCommits && e.Commit != "HEAD" &&
+		hasGitCommit(ctx, e.shell, ".git", e.Commit)
+
+	span.AddAttributes(map[string]string{"git.skipped": strconv.FormatBool(skipFetch)})
+
+	if skipFetch {
+		e.shell.Commentf("Commit %q already exists locally, skipping fetch", e.Commit)
+		return nil
+	}
+
+	gitFetchFlags := e.GitFetchFlags
+	if addBloblessFilter {
+		gitFetchFlags = "--filter=blob:none " + gitFetchFlags
 	}
 
 	switch kind {
