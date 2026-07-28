@@ -4,7 +4,7 @@ For general build/test/lint commands and architecture, see [`AGENT.md`](AGENT.md
 [`README.md`](README.md) (Development section), [`mise.toml`](mise.toml), and
 [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
-## Cursor Cloud specific instructions
+## Development environment notes
 
 This is a single Go CLI application (the Buildkite Agent). There is no long-running
 server to keep up for development; you build a binary and/or run subcommands directly.
@@ -25,10 +25,9 @@ Non-obvious environment/run caveats:
 - Some integration tests need `ruby` on `PATH` (polyglot hook tests, e.g.
   `TestPolyglotScriptHooksCanBeRun`). `ruby` is installed system-wide.
 - `internal/job` test `TestResolvingGitHostAliasesWithFlagSupport` only runs when
-  `/.dockerenv` exists (which it does in the Cloud VM) and expects the SSH aliases from
-  `.buildkite/build/ssh.conf` to be present at `/etc/ssh/ssh_config.d/`. That file is
-  copied there during setup (mirroring `.buildkite/Dockerfile-compile`). If this test
-  fails with unresolved aliases, re-copy it:
+  `/.dockerenv` exists (i.e. inside a container) and expects the SSH aliases from
+  `.buildkite/build/ssh.conf` to be present at `/etc/ssh/ssh_config.d/` (mirroring
+  `.buildkite/Dockerfile-compile`). If this test fails with unresolved aliases, copy it:
   `sudo cp .buildkite/build/ssh.conf /etc/ssh/ssh_config.d/`
 - Cold-cache flakiness: `internal/job/integration` tests spawn many `bintest` mock
   binaries that are compiled on first use. On a completely cold Go build cache, the
