@@ -350,7 +350,220 @@ modes; split checkout/command phases in agent-stack-k8s (env must reach the
 checkout container, and the snapshot-teardown caveat in `snapshotMirror` already
 applies).
 
-## 6. Questions for the backend side
+## 6. Strawman implementation plan
+
+This is deliberately a strawman: the slicing and the defaults are there to be
+argued with. It is ordered so that each slice is independently shippable and
+independently revertible, and so that the risky parts come last, after we can
+measure whether they are worth doing.
+
+### 6.0 Invariants the plan is built on
+
+These are the load-bearing decisions. If any of them changes, most of the plan
+changes with it.
+
+1. **The mirror is only ever asked for exact 40-hex commit SHAs.** Everything
+   name-based — branches, tags, `refs/pull/*`, custom refspecs, the
+   "all heads and tags" recovery — goes to canonical. See §5.4.
+2. **Canonical stays `origin`, forever.** The mirror is never a named remote and
+   never persisted into any `.git/config`. It is a URL passed as an argument to a
+   single `git fetch`, with any credentials supplied per-invocation.
+3. **Fail open, always.** Any mirror failure — miss, timeout, DNS, auth, 500 —
+   falls back to canonical. No job ever fails because a mirror is unhealthy.
+   There is no "required" mode in v1.
+4. **Off unless the backend opts the job in**, and additionally gated by an
+   agent-side experiment for the first releases.
+5. **Telemetry ships with the behaviour, not after it.** A mirror that misses
+   100% of the time and silently falls back looks identical to a working one
+   from the outside.
+
+### 6.1 Slice 1 — fetch error classification (no new config, ships alone)
+
+Prerequisite for everything else, and worth shipping on its own merits: today an
+exact-SHA fetch miss against *canonical* (a force-push race, say) is classified
+`gitErrorFetchRetryClean` and deletes the whole checkout directory, six times
+over. Wiping the checkout cannot possibly help when the remote doesn't have the
+object.
+
+- `internal/job/git.go`: add smelt strings for `not our ref` and
+  `Server does not allow request for unadvertised object`; add
+  `gitErrorFetchRefNotOnRemote`.
+- `internal/job/checkout.go`: add that type to the retry switch so it does *not*
+  wipe the checkout directory.
+- Tests in `git_test.go`, plus an integration test using `githttptest` with a
+  repo that lacks the requested SHA.
+
+Exit criteria: a canonical-side SHA miss no longer re-clones, and the failure
+message names the actual problem.
+
+### 6.2 Slice 2 — inert config plumbing
+
+- Env: `BUILDKITE_GIT_REMOTE_MIRROR_URL` and `BUILDKITE_GIT_REMOTE_MIRROR_MODE`
+  (`off` | `fetch` | `mirror-update` | `both`, default `off`). Note
+  `BUILDKITE_REPO_MIRROR` is already taken — it is the local mirror *directory*.
+- `internal/job/config.go`: `RemoteMirrorURL`, `RemoteMirrorMode`.
+- Flags in `clicommand/global.go`; fields in `clicommand/bootstrap.go`,
+  `clicommand/agent_start.go`, `agent.AgentConfiguration`; wiring in
+  `createEnvironment`. `clicommand/config_completeness_test.go` keeps this honest.
+- `env/protected.go`: both vars into `protectedEnv` **without**
+  `mutableFromWithinJob`. Because that map's job-env enforcement is implicit (it
+  works by `createEnvironment` overriding what the agent sets), a
+  backend-supplied value still lands, while hooks, plugins, the Job API and
+  secrets are all blocked from injecting one. Update the map's doc comment and
+  the disjointness test.
+- Agent-side kill switch: an `--no-remote-git-mirror` style flag that forces
+  mode `off` regardless of what the backend sends.
+- Validation, at setup rather than at fetch time: URL parses, scheme is in an
+  allowlist, mode is a known value, and the mirror URL is included in
+  `validateConfigAllowlists` so `--allowed-repositories` can't be sidestepped.
+  Reject the mirror outright when `BUILDKITE_REPO` is empty.
+- Redaction: if the URL carries userinfo, register the credential with
+  `e.redactors.Add(...)` (as `startJobAPI` does for the agent token) and log the
+  URL only through `redact.URLCredentials`. The default `--redacted-vars` globs
+  match names like `*_TOKEN`, so a `*_URL` name gets no automatic protection.
+- `EXPERIMENTS.md`: add `remote-git-mirror`.
+
+Exit criteria: the agent accepts, validates, redacts and traces the config
+(`git.remote_mirror.configured`, `git.remote_mirror.mode`) and changes no
+behaviour.
+
+### 6.3 Slice 3 — mirror-assisted fetch (the core)
+
+New file `internal/job/checkout_remote_mirror.go`, holding the whole policy in
+one place so the decision is auditable:
+
+```go
+// remoteMirrorFetchURL returns the mirror URL to try for this fetch, or "" to
+// go straight to canonical. This is where invariant 1 is enforced.
+func (e *Executor) remoteMirrorFetchURL(kind refspecKind) string
+
+// fetchViaRemoteMirror fetches refspec from the mirror, and on a
+// mirror-doesn't-have-it or mirror-is-unhealthy classification retries against
+// origin. Returns which source served the fetch, for tracing.
+func (e *Executor) fetchViaRemoteMirror(ctx context.Context, gitFetchFlags, refspec string) (source string, err error)
+```
+
+- `checkout_fetch.go`: route the `refspecCommit` case through the helper. Leave
+  `refspecCustom`, `refspecBranch` and the PR-ref fetches on canonical. The
+  commit component of the PR case can come later, once the simple case is proven.
+- Mirror attempts use `Retry: false` and a short per-attempt deadline; only the
+  canonical fallback keeps today's retry budget. Otherwise a lagging mirror adds
+  minutes to every attempt, multiplied by the outer 6-attempt checkout retrier.
+- **Commit verification interaction:** a mirror fetch of a bare SHA gives us the
+  object but does not advance `refs/remotes/origin/<branch>`, which
+  `checkCommitOnBranch` compares against. When
+  `BUILDKITE_GIT_COMMIT_VERIFICATION` is set, either keep fetching the branch
+  from canonical as well (cheap, since the objects are already local) or skip the
+  mirror for that job. Pick one explicitly rather than discovering it in
+  production.
+- Spans: `git.remote_mirror.attempted`, `.result` (`hit` / `miss` / `error`),
+  `.duration_ms`, and the canonical fallback duration alongside.
+
+Exit criteria: with the experiment on and a healthy mirror, the common
+"build this SHA" checkout fetches from the mirror; with a stale, broken or
+absent mirror, the job behaves exactly as it does today, only slower by one
+failed round trip.
+
+### 6.4 Slice 4 — feed the on-host mirror from the remote mirror
+
+The `both` mode, and the one that actually saves bulk transfer on hosts that
+have a local mirror, because the expensive `git clone --mirror` is the thing
+being amortised.
+
+- `checkout_mirror.go`: `updateGitMirror`'s fetch takes the mirror URL with an
+  `origin` fallback; the initial `git clone --mirror` may source from the mirror.
+- Keep keying the mirror directory on `dirForRepository(<canonical URL>)`.
+- Never `git remote set-url origin <mirrorURL>` in the mirror — `updateRemoteURL`
+  would then see a changed URL and run `git fsck` + `git gc` on the *shared*
+  mirror on every job (§4.6).
+- While here: fetch the commit SHA into the mirror in addition to the branch, so
+  a hit is complete and detectable rather than dependent on branch-ref freshness.
+
+Exit criteria: on a host with local mirrors enabled, a cold mirror populates
+from the remote mirror and a job whose commit the mirror lacks still succeeds.
+
+### 6.5 Slice 5 — clone from the mirror (deferred, decide with data)
+
+This is the biggest win for ephemeral agents with no local mirror, and the
+riskiest change. Do not start it before slices 3 and 4 have produced hit-rate
+numbers. When we do:
+
+- Prefer "clone from mirror, then `git remote set-url origin <canonical>`" over
+  rewriting clone as `git init` + fetch, because the latter discards user
+  `BUILDKITE_GIT_CLONE_FLAGS` semantics (`--depth`, `--filter`, `--sparse`,
+  `--reference`).
+- Treat every remote-tracking ref created by a mirror-sourced clone as
+  untrusted: nothing may rely on `refs/remotes/origin/*` unless canonical
+  populated it. That specifically means commit verification must fetch the branch
+  from canonical (§5.4).
+- Refuse to clone from the mirror when a partial-clone filter is in play,
+  including the `--filter=blob:none` that sparse checkout adds automatically —
+  the clone source becomes the promisor remote for every later lazy blob fetch,
+  with no fallback (§5.6). Same for `--depth` (§5.7).
+
+### 6.6 Cross-cutting: the auth seam
+
+Auth details are TBA, so slice 2 should land the *seam* and nothing more: a
+single function that runs immediately before a mirror fetch and returns
+per-invocation git config (`-c credential.<mirror-url>.helper=...`, or
+`GIT_CONFIG_COUNT`/`GIT_CONFIG_KEY_n` env), so no credential is ever written to
+disk in a directory reused by later jobs (§5.3).
+
+Two things must be fixed whatever the scheme turns out to be:
+
+- Host-scope the GitHub App credential helper. It is registered as a global
+  `credential.helper` with `credential.useHttpPath=true`, so as things stand git
+  will invoke it for the mirror host and ask the Buildkite API to mint a GitHub
+  token for a non-GitHub URL.
+- Keyscan the mirror host in `addRepositoryHostToSSHKnownHosts` if SSH mirror
+  URLs are in scope.
+
+If the mirror needs a Buildkite-minted credential, the natural shape is a
+sibling of `GenerateGithubCodeAccessToken` plus a `git-credentials-helper`
+action, reusing the existing plumbing.
+
+### 6.7 Test plan
+
+`internal/job/githttptest` already serves several repositories from one HTTP test
+server, which covers most of what we need:
+
+- mirror has the SHA → mirror serves it, canonical is never contacted;
+- mirror lacks the SHA → one failed fetch, then canonical, job succeeds;
+- mirror's branch tip is *behind* canonical → still correct, because we only ask
+  for SHAs (this is the regression test for invariant 1);
+- mirror returns 500 / connection refused / hangs → fallback;
+- mirror configured but mode `off`, and mode set with no URL;
+- commit verification enabled with a mirror-served fetch.
+
+Expect churn in `checkout_integration_test.go` and
+`checkout_git_mirrors_integration_test.go`: they assert exact git argv via
+`ExpectAll`, so any change to the fetch command shape touches many expectations.
+
+### 6.8 Rollout
+
+Experiment flag → internal pipelines → a small number of opted-in orgs with
+mirror hit rate and fallback rate on a dashboard → default on for jobs where the
+backend advertises a mirror → remove the experiment. The gate to advance at each
+step is the fallback rate, split by classification: a high `miss` rate means the
+staleness contract (§7) isn't holding, whereas a high `error` rate means an
+infrastructure problem.
+
+### 6.9 Open decisions in this plan
+
+Strawman answers, offered to be overridden:
+
+| Decision | Strawman |
+| --- | --- |
+| Mirror used for name-based refspecs? | No, ever. SHA-only. |
+| Mirror used for the clone? | Not in v1 (slice 5). |
+| One URL or a list? | One in v1; the helper signature takes a list so it can grow. |
+| Behaviour when the mirror is unhealthy? | Fail open, always. No required mode. |
+| Where does the config live? | `protectedEnv`, backend + agent only. |
+| Who owns the fallback decision? | The agent. The backend advertises; it does not command. |
+| Local and remote mirror together? | Yes — remote feeds local (slice 4), local feeds the checkout as today. |
+| Submodules? | Out of scope in v1; needs URL rewriting (§5.8). |
+
+## 7. Questions for the backend side
 
 - One mirror URL or an ordered list? Per job, per pipeline, per queue, per region?
 - Rotation / TTL: can the URL change between jobs, and can it carry a credential?
