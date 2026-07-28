@@ -93,6 +93,7 @@ func TestPluginEnvironmentHookCheckoutOverrideMode(t *testing.T) {
 		{name: "default_allows_plugin_to_override_skip_checkout", envVar: "BUILDKITE_SKIP_CHECKOUT", envValue: "true"},
 		{name: "strict_blocks_plugin_skip_checkout_override", envVar: "BUILDKITE_SKIP_CHECKOUT", envValue: "true", mode: "strict", wantBlocked: true},
 		{name: "strict_blocks_plugin_sparse_checkout_paths_override", envVar: "BUILDKITE_GIT_SPARSE_CHECKOUT_PATHS", envValue: "a/b", mode: "strict", wantBlocked: true},
+		{name: "strict_blocks_plugin_sparse_checkout_no_cone_override", envVar: "BUILDKITE_GIT_SPARSE_CHECKOUT_NO_CONE", envValue: "true", mode: "strict", wantBlocked: true},
 	}
 
 	for _, tc := range tests {

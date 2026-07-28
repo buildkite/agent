@@ -29,6 +29,7 @@ type AgentConfiguration struct {
 	GitCommitVerification           string
 	GitFetchFlags                   string
 	GitSparseCheckoutPaths          []string
+	GitSparseCheckoutNoCone         bool
 	GitSubmodules                   bool
 	GitSubmoduleCloneConfig         []string
 	SkipCheckout                    bool

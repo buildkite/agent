@@ -78,6 +78,7 @@ type BootstrapConfig struct {
 	GitCloneFlags                string   `cli:"git-clone-flags"`
 	GitFetchFlags                string   `cli:"git-fetch-flags"`
 	GitSparseCheckoutPaths       []string `cli:"git-sparse-checkout-paths" normalize:"list"`
+	GitSparseCheckoutNoCone      bool     `cli:"git-sparse-checkout-no-cone"`
 	GitCloneMirrorFlags          string   `cli:"git-clone-mirror-flags"`
 	GitCleanFlags                string   `cli:"git-clean-flags"`
 	GitSSHKey                    string   `cli:"git-ssh-key"`
@@ -258,6 +259,7 @@ var BootstrapCommand = cli.Command{
 		GitCommitVerificationFlag,
 		GitFetchFlagsFlag,
 		GitSparseCheckoutPathsFlag,
+		GitSparseCheckoutNoConeFlag,
 		cli.StringFlag{
 			Name:   "git-ssh-key",
 			Usage:  "SSH private key to use for git checkout",
@@ -484,6 +486,7 @@ var BootstrapCommand = cli.Command{
 			GitFetchFlags:                cfg.GitFetchFlags,
 			GitLFSEnabled:                cfg.GitLFSEnabled,
 			GitSparseCheckoutPaths:       cfg.GitSparseCheckoutPaths,
+			GitSparseCheckoutNoCone:      cfg.GitSparseCheckoutNoCone,
 			GitSSHKey:                    cfg.GitSSHKey,
 			GitMirrorsLockTimeout:        cfg.GitMirrorsLockTimeout,
 			GitMirrorsPath:               cfg.GitMirrorsPath,

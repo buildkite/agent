@@ -209,7 +209,7 @@ var (
 	CheckoutOverrideModeFlag = cli.StringFlag{
 		Name:   "checkout-override-mode",
 		Value:  "from-job",
-		Usage:  fmt.Sprintf("Controls which sources may override the agent's checkout settings; one of %v. ′strict′ makes the agent authoritative against pipeline/step env, secrets, hooks, plugins, and the Job API. ′from-job′ (default) lets hooks, plugins, and the Job API set checkout vars, blocks secrets, and keeps the agent's checkout flags authoritative over pipeline/step env; pipeline/step env may still set the checkout timeout, submodules, skip-checkout, and skip-fetch-existing-commits toggles that the agent leaves unset, matching earlier agent behaviour, and may set the sparse-checkout paths outright. ′none′ additionally lets pipeline/step env and secrets set them. All mirror configuration and submodule clone config stay agent-authoritative in every mode. The checkout SSH key and Git LFS toggle are not governed by this flag and stay job-settable in every mode. Disabling command-eval forces this to ′strict′.", env.CheckoutOverrideModeNames),
+		Usage:  fmt.Sprintf("Controls which sources may override the agent's checkout settings; one of %v. ′strict′ makes the agent authoritative against pipeline/step env, secrets, hooks, plugins, and the Job API. ′from-job′ (default) lets hooks, plugins, and the Job API set checkout vars, blocks secrets, and keeps the agent's checkout flags authoritative over pipeline/step env; pipeline/step env may still set the checkout timeout, submodules, skip-checkout, and skip-fetch-existing-commits toggles that the agent leaves unset, matching earlier agent behaviour, and may set the sparse-checkout paths and no-cone toggle outright. ′none′ additionally lets pipeline/step env and secrets set them. All mirror configuration and submodule clone config stay agent-authoritative in every mode. The checkout SSH key and Git LFS toggle are not governed by this flag and stay job-settable in every mode. Disabling command-eval forces this to ′strict′.", env.CheckoutOverrideModeNames),
 		EnvVar: "BUILDKITE_CHECKOUT_OVERRIDE_MODE",
 	}
 
@@ -261,8 +261,14 @@ var (
 	GitSparseCheckoutPathsFlag = cli.StringSliceFlag{
 		Name:   "git-sparse-checkout-paths",
 		Value:  &cli.StringSlice{},
-		Usage:  "Comma-separated list of paths for git sparse checkout (cone mode). When set, only the listed paths are materialized in the working tree.",
+		Usage:  "Comma-separated list of paths for git sparse checkout. When set, only the listed paths are materialized in the working tree. Paths are cone-mode directories unless --git-sparse-checkout-no-cone is set.",
 		EnvVar: "BUILDKITE_GIT_SPARSE_CHECKOUT_PATHS",
+	}
+
+	GitSparseCheckoutNoConeFlag = cli.BoolFlag{
+		Name:   "git-sparse-checkout-no-cone",
+		Usage:  "Pass --no-cone to git sparse-checkout so paths are treated as gitignore-style patterns instead of cone-mode directories (default: false)",
+		EnvVar: "BUILDKITE_GIT_SPARSE_CHECKOUT_NO_CONE",
 	}
 
 	GitMirrorsPathFlag = cli.StringFlag{

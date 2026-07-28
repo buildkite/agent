@@ -155,6 +155,13 @@ func TestEnvironmentHookCheckoutOverrideMode(t *testing.T) {
 			mode:               "strict",
 			wantBlockedWarning: true,
 		},
+		{
+			name:               "strict_blocks_sparse_checkout_no_cone",
+			envVar:             "BUILDKITE_GIT_SPARSE_CHECKOUT_NO_CONE",
+			envValue:           "true",
+			mode:               "strict",
+			wantBlockedWarning: true,
+		},
 	}
 
 	for _, tc := range tests {

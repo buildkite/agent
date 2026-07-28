@@ -110,6 +110,7 @@ var checkoutOverrideScope = map[string]struct{}{
 	"BUILDKITE_GIT_COMMIT_VERIFICATION":         {},
 	"BUILDKITE_GIT_FETCH_FLAGS":                 {},
 	"BUILDKITE_GIT_SKIP_FETCH_EXISTING_COMMITS": {},
+	"BUILDKITE_GIT_SPARSE_CHECKOUT_NO_CONE":     {},
 	"BUILDKITE_GIT_SPARSE_CHECKOUT_PATHS":       {},
 	"BUILDKITE_GIT_SUBMODULES":                  {},
 	"BUILDKITE_SKIP_CHECKOUT":                   {},
@@ -118,13 +119,15 @@ var checkoutOverrideScope = map[string]struct{}{
 // checkoutJobEnvFromJobFloor lists the checkout-scoped vars whose backend job env
 // (pipeline/step checkout config) floor is from-job rather than none: the backend
 // may set them under the default mode, and only strict locks them. Sparse-checkout
-// paths qualify because they are handed to `git sparse-checkout set --cone` as argv,
-// not word-split into a git command line, so a step's checkout.sparse config can't
-// bypass no-command-eval or otherwise escalate the way the flag vars can. The flag
-// vars and commit_verification stay at the none floor (see IsCheckoutLockedForJobEnv).
+// paths and the no-cone toggle qualify because they are handed to
+// `git sparse-checkout set [--cone|--no-cone]` as argv, not word-split into a git
+// command line, so a step's checkout.sparse config can't bypass no-command-eval or
+// otherwise escalate the way the flag vars can. The flag vars and
+// commit_verification stay at the none floor (see IsCheckoutLockedForJobEnv).
 // Entries must also appear in checkoutOverrideScope.
 var checkoutJobEnvFromJobFloor = map[string]struct{}{
-	"BUILDKITE_GIT_SPARSE_CHECKOUT_PATHS": {},
+	"BUILDKITE_GIT_SPARSE_CHECKOUT_NO_CONE": {},
+	"BUILDKITE_GIT_SPARSE_CHECKOUT_PATHS":   {},
 }
 
 // Some checkout-related vars are intentionally governed by neither the mode nor
@@ -250,9 +253,9 @@ func IsCheckoutLocked(name string, mode CheckoutOverrideMode) bool {
 // createEnvironment, agent/job_runner.go), except that under from-job it still
 // lets pipeline/step env set the submodules/skip-checkout/skip-fetch/timeout
 // toggles on their default side to match historical behaviour, and set sparse-
-// checkout paths outright (see IsCheckoutLockedForJobEnv); secrets have no such
-// history, so they stay blocked. Vars that aren't checkout-scoped are governed by
-// IsProtected instead.
+// checkout paths and the no-cone toggle outright (see IsCheckoutLockedForJobEnv);
+// secrets have no such history, so they stay blocked. Vars that aren't
+// checkout-scoped are governed by IsProtected instead.
 func IsCheckoutLockedForSecrets(name string, mode CheckoutOverrideMode) bool {
 	if !IsCheckoutOverrideScoped(name) {
 		return false

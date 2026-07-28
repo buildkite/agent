@@ -165,6 +165,7 @@ type AgentStartConfig struct {
 	GitCleanFlags               string   `cli:"git-clean-flags"`
 	GitFetchFlags               string   `cli:"git-fetch-flags"`
 	GitSparseCheckoutPaths      []string `cli:"git-sparse-checkout-paths" normalize:"list"`
+	GitSparseCheckoutNoCone     bool     `cli:"git-sparse-checkout-no-cone"`
 	GitMirrorsPath              string   `cli:"git-mirrors-path" normalize:"filepath"`
 	GitMirrorCheckoutMode       string   `cli:"git-mirror-checkout-mode"`
 	GitMirrorsLockTimeout       int      `cli:"git-mirrors-lock-timeout"`
@@ -550,6 +551,7 @@ var AgentStartCommand = cli.Command{
 		GitCommitVerificationFlag,
 		GitFetchFlagsFlag,
 		GitSparseCheckoutPathsFlag,
+		GitSparseCheckoutNoConeFlag,
 		GitCloneMirrorFlagsFlag,
 		GitMirrorsPathFlag,
 		GitMirrorCheckoutModeFlag,
@@ -1117,6 +1119,7 @@ var AgentStartCommand = cli.Command{
 			GitCommitVerification:           cfg.GitCommitVerification,
 			GitFetchFlags:                   cfg.GitFetchFlags,
 			GitSparseCheckoutPaths:          cfg.GitSparseCheckoutPaths,
+			GitSparseCheckoutNoCone:         cfg.GitSparseCheckoutNoCone,
 			GitSubmodules:                   !cfg.NoGitSubmodules,
 			GitSubmoduleCloneConfig:         cfg.GitSubmoduleCloneConfig,
 			SkipCheckout:                    cfg.SkipCheckout,

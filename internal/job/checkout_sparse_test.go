@@ -65,7 +65,29 @@ func TestSetupSparseCheckout_Enable(t *testing.T) {
 	if !active {
 		t.Fatalf("executor.setupSparseCheckout(ctx, sparsePaths) active = false, want true")
 	}
-	if got, want := out.String(), "Setting up sparse checkout for paths: .buildkite/,src/"; !strings.Contains(got, want) {
+	if got, want := out.String(), "Setting up sparse checkout (cone mode) for paths: .buildkite/,src/"; !strings.Contains(got, want) {
+		t.Fatalf("shell output = %q, want to contain %q", got, want)
+	}
+
+	git.Check(t)
+}
+
+func TestSetupSparseCheckout_NoCone(t *testing.T) {
+	executor, git, out := newSparseCheckoutTestExecutor(t)
+	defer git.Close() //nolint:errcheck // Best-effort cleanup.
+	executor.GitSparseCheckoutNoCone = true
+
+	paths := []string{"/*", "!/docs/"}
+	git.Expect("sparse-checkout", "set", "--no-cone", "/*", "!/docs/").AndExitWith(0)
+
+	active, err := executor.setupSparseCheckout(t.Context(), paths)
+	if err != nil {
+		t.Fatalf("executor.setupSparseCheckout(ctx, sparsePaths) error = %v, want nil", err)
+	}
+	if !active {
+		t.Fatalf("executor.setupSparseCheckout(ctx, sparsePaths) active = false, want true")
+	}
+	if got, want := out.String(), "Setting up sparse checkout (no-cone mode) for paths: /*,!/docs/"; !strings.Contains(got, want) {
 		t.Fatalf("shell output = %q, want to contain %q", got, want)
 	}
 

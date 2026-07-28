@@ -12,7 +12,7 @@ import (
 	"github.com/buildkite/agent/v3/internal/shell"
 )
 
-// resolveSparseCheckout returns the cone paths to check out for this build, or
+// resolveSparseCheckout returns the sparse-checkout paths for this build, or
 // nil to check out the full tree — either because no paths were requested or
 // because git is too old (< 2.27).
 func (e *Executor) resolveSparseCheckout(ctx context.Context) []string {
@@ -22,9 +22,9 @@ func (e *Executor) resolveSparseCheckout(ctx context.Context) []string {
 	}
 
 	// We require git >= 2.27 because setupSparseCheckout runs
-	// `git sparse-checkout set --cone <paths>`, which was promoted
-	// from experimental to stable in git 2.27. On older git versions,
-	// fall back to a full checkout by returning nil.
+	// `git sparse-checkout set [--cone|--no-cone] <paths>`, which was
+	// promoted from experimental to stable in git 2.27. On older git
+	// versions, fall back to a full checkout by returning nil.
 	ok, got, err := gitVersionAtLeast(ctx, e.shell, 2, 27)
 	if err != nil {
 		e.shell.Warningf("Sparse checkout requires git >= 2.27; falling back to full checkout (%v)", err)
@@ -78,19 +78,28 @@ func parseGitVersion(output string) (major, minor int, ok bool) {
 	return major, minor, true
 }
 
-// setupSparseCheckout configures git sparse checkout for the given cone paths.
-// When sparsePaths is empty it does a full checkout instead, disabling any
-// prior sparse checkout configuration. It returns true when sparse checkout is
-// applied, so callers can skip steps that need the full tree (e.g. submodule
-// init).
+// setupSparseCheckout configures git sparse checkout for the given paths.
+// Paths are treated as cone-mode directories by default, or as non-cone
+// gitignore-style patterns when GitSparseCheckoutNoCone is set (matching the
+// sparse-checkout plugin's no_cone option). When sparsePaths is empty it does
+// a full checkout instead, disabling any prior sparse checkout configuration.
+// It returns true when sparse checkout is applied, so callers can skip steps
+// that need the full tree (e.g. submodule init).
 func (e *Executor) setupSparseCheckout(ctx context.Context, sparsePaths []string) (bool, error) {
 	if len(sparsePaths) == 0 {
 		e.disableSparseCheckoutIfConfigured(ctx)
 		return false, nil
 	}
 
-	e.shell.Commentf("Setting up sparse checkout for paths: %s", strings.Join(sparsePaths, ","))
-	args := append([]string{"sparse-checkout", "set", "--cone"}, sparsePaths...)
+	mode := "cone"
+	coneFlag := "--cone"
+	if e.GitSparseCheckoutNoCone {
+		mode = "no-cone"
+		coneFlag = "--no-cone"
+	}
+
+	e.shell.Commentf("Setting up sparse checkout (%s mode) for paths: %s", mode, strings.Join(sparsePaths, ","))
+	args := append([]string{"sparse-checkout", "set", coneFlag}, sparsePaths...)
 	if err := e.shell.Command("git", args...).Run(ctx); err != nil {
 		return false, fmt.Errorf("setting sparse checkout paths: %w", err)
 	}

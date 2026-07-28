@@ -393,6 +393,53 @@ func TestCheckingOutLocalGitProjectWithSparseCheckout(t *testing.T) {
 	requireCheckoutPath(t, tester.CheckoutDir(), "docs/readme.md", false)
 }
 
+func TestCheckingOutLocalGitProjectWithSparseCheckoutNoCone(t *testing.T) {
+	t.Parallel()
+	skipIfGitSparseCheckoutUnsupported(t)
+
+	tester, err := NewExecutorTester(mainCtx)
+	if err != nil {
+		t.Fatalf("NewExecutorTester() error = %v", err)
+	}
+	defer tester.Close()
+	addSparseCheckoutFixture(t, tester.Repo)
+
+	// Non-cone mode treats paths as gitignore-style patterns: include everything
+	// at the top level and under .buildkite/ and src/, but exclude docs/.
+	env := []string{
+		"BUILDKITE_GIT_CLONE_FLAGS=-v --filter=blob:none --sparse",
+		"BUILDKITE_GIT_CLEAN_FLAGS=-fdq",
+		"BUILDKITE_GIT_FETCH_FLAGS=-v --filter=blob:none",
+		"BUILDKITE_GIT_SPARSE_CHECKOUT_PATHS=/*,!/docs/",
+		"BUILDKITE_GIT_SPARSE_CHECKOUT_NO_CONE=true",
+	}
+
+	git := tester.
+		MustMock(t, "git").
+		PassthroughToLocalCommand()
+
+	git.ExpectAll([][]any{
+		{"--version"},
+		{"clone", "-v", "--filter=blob:none", "--sparse", "--", tester.Repo.Path, "."},
+		{"clean", "-fdq"},
+		{"fetch", "-v", "--filter=blob:none", "--", "origin", "main"},
+		{"sparse-checkout", "set", "--no-cone", "/*", "!/docs/"},
+		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
+		{"clean", "-fdq"},
+		{"--no-pager", "log", "-1", "HEAD", "-s", "--no-color", gitShowFormatArg},
+	})
+
+	agent := tester.MockAgent(t)
+	agent.Expect("meta-data", "exists", job.CommitMetadataKey).AndExitWith(1)
+	agent.Expect("meta-data", "set", job.CommitMetadataKey).WithStdin(commitPattern)
+
+	tester.RunAndCheck(t, env...)
+
+	requireCheckoutPath(t, tester.CheckoutDir(), ".buildkite/pipeline.yml", true)
+	requireCheckoutPath(t, tester.CheckoutDir(), "src/main.txt", true)
+	requireCheckoutPath(t, tester.CheckoutDir(), "docs/readme.md", false)
+}
+
 func TestCheckingOutLocalGitProjectWithGitSSHKey(t *testing.T) {
 	t.Parallel()
 
