@@ -35,8 +35,9 @@ const (
 	defaultDownloadPartSizeMB  = 32
 	// Upload defaults are fixed, never URL-tunable. defaultUploadConcurrency is
 	// the maximum parallelism; uploadConcurrencyForSize lowers it for large
-	// objects so the pool UploadObject eagerly allocates — (concurrency+1) ×
-	// partSize — stays within uploadMemoryBudget.
+	// objects so UploadObject's peak part buffers — (concurrency+2) × partSize
+	// (the concurrency+1 eager pool plus a separately-held first chunk) — stay
+	// within uploadMemoryBudget.
 	defaultUploadConcurrency   = 5
 	defaultUploadPartSizeBytes = 5 * 1024 * 1024
 	// defaultUploadMultipartThreshold is pinned rather than inherited from the
@@ -325,21 +326,26 @@ func resolveTransferSettings(opts *Options) transferSettings {
 }
 
 // uploadConcurrencyForSize picks how many part buffers UploadObject may hold in
-// parallel for an object of the given size, so the pool it eagerly allocates —
-// (concurrency+1) × partSize — stays within uploadMemoryBudget.
+// parallel for an object of the given size, so its peak allocation stays within
+// uploadMemoryBudget. That peak is (concurrency+2) × partSize: the eager pool
+// holds concurrency+1 buffers, and UploadObject reads the first chunk into a
+// separate buffer outside the pool.
 //
 // transfermanager raises the part size to size/uploadMaxParts once an object
 // would exceed S3's 10,000-part limit, so for large objects the part buffers
 // grow with the object and we trade away concurrency to compensate. Multi-TiB
-// objects bottom out at concurrency 1: one part buffer is unavoidable, so the
-// budget is a ceiling for normal sizes, not a hard cap at every size.
+// objects bottom out at concurrency 1, where three part buffers are still
+// unavoidable, so the budget is a ceiling for normal sizes, not a hard cap at
+// every size.
 func uploadConcurrencyForSize(size int64, maxConcurrency int) int {
 	partSize := int64(defaultUploadPartSizeBytes)
 	if forced := size/uploadMaxParts + 1; forced > partSize {
 		partSize = forced
 	}
 
-	concurrency := int(uploadMemoryBudget/partSize) - 1
+	// Peak = (concurrency+1) pool buffers + 1 separately-held first chunk, so
+	// solve (concurrency+2) × partSize <= budget.
+	concurrency := int(uploadMemoryBudget/partSize) - 2
 	if concurrency > maxConcurrency {
 		concurrency = maxConcurrency
 	}

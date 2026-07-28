@@ -439,7 +439,7 @@ func TestUploadConcurrencyForSize(t *testing.T) {
 	}{
 		{name: "small file keeps full concurrency", size: 10 * mib, want: defaultUploadConcurrency},
 		{name: "hundreds of GiB still full", size: 300 * gib, want: defaultUploadConcurrency},
-		{name: "large object throttles to stay under budget", size: 800 * gib, want: 2},
+		{name: "large object throttles to stay under budget", size: 600 * gib, want: 2},
 		{name: "multi-TiB bottoms out at 1", size: 2 * tib, want: 1},
 	}
 
@@ -449,15 +449,15 @@ func TestUploadConcurrencyForSize(t *testing.T) {
 			if got != tt.want {
 				t.Errorf("uploadConcurrencyForSize(%d) = %d, want %d", tt.size, got, tt.want)
 			}
-			// The resulting pool must never exceed the budget unless we're already
-			// at the concurrency-1 floor (unavoidable for very large objects).
+			// Peak allocation is (concurrency+2) × partSize: the concurrency+1
+			// pool plus the separately-held first chunk.
 			partSize := int64(defaultUploadPartSizeBytes)
 			if forced := tt.size/uploadMaxParts + 1; forced > partSize {
 				partSize = forced
 			}
-			pool := int64(got+1) * partSize
-			if pool > uploadMemoryBudget && got != 1 {
-				t.Errorf("pool %d exceeds budget %d at concurrency %d", pool, int64(uploadMemoryBudget), got)
+			peak := int64(got+2) * partSize
+			if peak > uploadMemoryBudget && got != 1 {
+				t.Errorf("peak %d exceeds budget %d at concurrency %d", peak, int64(uploadMemoryBudget), got)
 			}
 		})
 	}
