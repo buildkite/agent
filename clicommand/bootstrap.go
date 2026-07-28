@@ -438,7 +438,8 @@ var BootstrapCommand = cli.Command{
 			return fmt.Errorf("invalid git mirror checkout mode %q, must be one of %v", cfg.GitMirrorCheckoutMode, mirrorCheckoutModes)
 		}
 
-		if _, err := job.ParseSparseCheckoutMode(cfg.GitSparseCheckoutMode); err != nil {
+		sparseCheckoutMode, err := job.ParseSparseCheckoutMode(cfg.GitSparseCheckoutMode)
+		if err != nil {
 			return err
 		}
 
@@ -490,7 +491,7 @@ var BootstrapCommand = cli.Command{
 			GitFetchFlags:                cfg.GitFetchFlags,
 			GitLFSEnabled:                cfg.GitLFSEnabled,
 			GitSparseCheckoutPaths:       cfg.GitSparseCheckoutPaths,
-			GitSparseCheckoutMode:        cfg.GitSparseCheckoutMode,
+			GitSparseCheckoutMode:        sparseCheckoutMode.String(),
 			GitSSHKey:                    cfg.GitSSHKey,
 			GitMirrorsLockTimeout:        cfg.GitMirrorsLockTimeout,
 			GitMirrorsPath:               cfg.GitMirrorsPath,

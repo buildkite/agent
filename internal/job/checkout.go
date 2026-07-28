@@ -145,6 +145,13 @@ func (e *Executor) checkout(ctx context.Context) error {
 			}
 		}
 
+		// Also fail fast on an unusable sparse checkout mode. resolveSparseCheckout
+		// rejects it again during the checkout, but it can arrive from job env, and
+		// retrying a typo for the whole attempt budget only delays the failure.
+		if _, err := ParseSparseCheckoutMode(e.GitSparseCheckoutMode); err != nil {
+			return err
+		}
+
 		maxAttempts := e.CheckoutAttempts
 		if maxAttempts <= 0 {
 			maxAttempts = 6
@@ -505,7 +512,7 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context, previousAttempts in
 	sparseSpan, sparseCtx := e.traceOpSpan(ctx, "git.sparse_checkout")
 	sparseMode := "none"
 	if sparse.active() {
-		sparseMode = sparse.mode
+		sparseMode = sparse.mode.String()
 	}
 	sparseSpan.AddAttributes(map[string]string{
 		"git.path_count":  strconv.Itoa(len(sparse.paths)),
@@ -556,19 +563,19 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context, previousAttempts in
 		}
 	}
 
-	// When cone-mode sparse-checkout is active, scope LFS to the same paths so we
-	// don't pull objects outside the sparse set (SUP-6529). If sparse fell back to
-	// a full checkout (e.g. git < 2.27), or the paths are non-cone patterns that
-	// LFS can't interpret (see sparseCheckout.lfsInclude), fetch unscoped so files
-	// in the working tree still get their LFS content.
+	// When sparse-checkout is active, scope LFS to the same paths so we don't pull
+	// objects outside the sparse set (SUP-6529). Whether the paths can be reused
+	// for LFS at all is sparseCheckout.lfsInclude's call; when they can't, or when
+	// sparse fell back to a full checkout, fetch unscoped so files in the working
+	// tree still get their LFS content.
 	if e.GitLFSEnabled {
 		lfsArgs := gitLFSFetchCheckoutArgs{
 			Shell:   e.shell,
 			Retry:   true,
 			Include: sparse.lfsInclude(),
 		}
-		if sparse.noCone() {
-			e.shell.Commentf("Fetching all Git LFS objects: non-cone sparse checkout patterns can't scope Git LFS")
+		if sparseCheckoutActive && len(lfsArgs.Include) == 0 {
+			e.shell.Commentf("Fetching all Git LFS objects: sparse checkout paths can't scope Git LFS in %s mode", sparse.mode)
 		}
 		if err := e.traceOp(ctx, "git.lfs.fetch", func(ctx context.Context) error {
 			return gitLFSFetchCheckout(ctx, lfsArgs)

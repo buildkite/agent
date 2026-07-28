@@ -8,6 +8,7 @@ import (
 	"path"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -56,6 +57,30 @@ func skipIfGitOlderThan(t *testing.T, minMinor int, what string) {
 		t.Skipf("%s requires git >= 2.%d, got %s", what, minMinor, strings.TrimSpace(string(out)))
 	}
 }
+
+// envVars is an ordered set of "NAME=value" job env entries, for tests that run
+// several builds and change one variable at a time. Setting by name keeps those
+// tests from depending on the position of an entry in the slice.
+type envVars struct {
+	entries []string
+}
+
+func newEnvVars(entries ...string) *envVars {
+	return &envVars{entries: entries}
+}
+
+func (e *envVars) set(name, value string) {
+	entry := name + "=" + value
+	for i, existing := range e.entries {
+		if strings.HasPrefix(existing, name+"=") {
+			e.entries[i] = entry
+			return
+		}
+	}
+	e.entries = append(e.entries, entry)
+}
+
+func (e *envVars) slice() []string { return slices.Clone(e.entries) }
 
 func addSparseCheckoutFixture(t *testing.T, repo *gitRepository) {
 	t.Helper()
@@ -469,13 +494,13 @@ func TestCheckingOutLocalGitProjectSwitchingSparseCheckoutModes(t *testing.T) {
 	defer tester.Close()
 	addSparseCheckoutFixture(t, tester.Repo)
 
-	env := []string{
+	env := newEnvVars(
 		"BUILDKITE_GIT_CLONE_FLAGS=-v --filter=blob:none --sparse",
 		"BUILDKITE_GIT_CLEAN_FLAGS=-fdq",
 		"BUILDKITE_GIT_FETCH_FLAGS=-v --filter=blob:none",
 		"BUILDKITE_GIT_SPARSE_CHECKOUT_PATHS=src/",
 		"BUILDKITE_GIT_SPARSE_CHECKOUT_MODE=cone",
-	}
+	)
 
 	git := tester.
 		MustMock(t, "git").
@@ -496,7 +521,7 @@ func TestCheckingOutLocalGitProjectSwitchingSparseCheckoutModes(t *testing.T) {
 		{"--no-pager", "log", "-1", "HEAD", "-s", "--no-color", gitShowFormatArg},
 	})
 
-	tester.RunAndCheck(t, env...)
+	tester.RunAndCheck(t, env.slice()...)
 	requireCheckoutPath(t, tester.CheckoutDir(), "src/main.txt", true)
 	requireCheckoutPath(t, tester.CheckoutDir(), ".buildkite/pipeline.yml", false)
 	requireCheckoutPath(t, tester.CheckoutDir(), "docs/readme.md", false)
@@ -505,8 +530,8 @@ func TestCheckingOutLocalGitProjectSwitchingSparseCheckoutModes(t *testing.T) {
 	// only docs/. --no-cone has to actually take effect over the cone config the
 	// first build left behind, otherwise git would reject the leading-slash
 	// patterns or silently treat them as directory names.
-	env[len(env)-2] = "BUILDKITE_GIT_SPARSE_CHECKOUT_PATHS=/*,!/docs/"
-	env[len(env)-1] = "BUILDKITE_GIT_SPARSE_CHECKOUT_MODE=no-cone"
+	env.set("BUILDKITE_GIT_SPARSE_CHECKOUT_PATHS", "/*,!/docs/")
+	env.set("BUILDKITE_GIT_SPARSE_CHECKOUT_MODE", "no-cone")
 	agent.Expect("meta-data", "exists", job.CommitMetadataKey).AndExitWith(0)
 	git.ExpectAll([][]any{
 		{"--version"},
@@ -518,14 +543,14 @@ func TestCheckingOutLocalGitProjectSwitchingSparseCheckoutModes(t *testing.T) {
 		{"clean", "-fdq"},
 	})
 
-	tester.RunAndCheck(t, env...)
+	tester.RunAndCheck(t, env.slice()...)
 	requireCheckoutPath(t, tester.CheckoutDir(), "src/main.txt", true)
 	requireCheckoutPath(t, tester.CheckoutDir(), ".buildkite/pipeline.yml", true)
 	requireCheckoutPath(t, tester.CheckoutDir(), "docs/readme.md", false)
 
 	// Third build: back to cone mode, which must not inherit the non-cone patterns.
-	env[len(env)-2] = "BUILDKITE_GIT_SPARSE_CHECKOUT_PATHS=docs/"
-	env[len(env)-1] = "BUILDKITE_GIT_SPARSE_CHECKOUT_MODE=cone"
+	env.set("BUILDKITE_GIT_SPARSE_CHECKOUT_PATHS", "docs/")
+	env.set("BUILDKITE_GIT_SPARSE_CHECKOUT_MODE", "cone")
 	agent.Expect("meta-data", "exists", job.CommitMetadataKey).AndExitWith(0)
 	git.ExpectAll([][]any{
 		{"--version"},
@@ -537,10 +562,77 @@ func TestCheckingOutLocalGitProjectSwitchingSparseCheckoutModes(t *testing.T) {
 		{"clean", "-fdq"},
 	})
 
-	tester.RunAndCheck(t, env...)
+	tester.RunAndCheck(t, env.slice()...)
 	requireCheckoutPath(t, tester.CheckoutDir(), "docs/readme.md", true)
 	requireCheckoutPath(t, tester.CheckoutDir(), "src/main.txt", false)
 	requireCheckoutPath(t, tester.CheckoutDir(), ".buildkite/pipeline.yml", false)
+}
+
+// TestCheckingOutLocalGitProjectWithFlagShapedSparseCheckoutPath pins the `--`
+// separator in front of the sparse paths. Sparse paths can come from the
+// pipeline, and `git sparse-checkout set` quietly accepts an option in their
+// place: without the separator, a path named "--stdin" is consumed as the
+// --stdin option, git reads its patterns from an empty stdin, and the directory
+// silently disappears from the checkout instead of being the only thing in it.
+func TestCheckingOutLocalGitProjectWithFlagShapedSparseCheckoutPath(t *testing.T) {
+	t.Parallel()
+	// The expectations below include the mode flag, which the agent only sends
+	// when git accepts it.
+	skipIfGitOlderThan(t, 35, "pinning the sparse checkout mode")
+
+	tester, err := NewExecutorTester(mainCtx)
+	if err != nil {
+		t.Fatalf("NewExecutorTester() error = %v", err)
+	}
+	defer tester.Close()
+	addSparseCheckoutFixture(t, tester.Repo)
+
+	// A directory whose name looks like a git option.
+	const flagShapedDir = "--stdin"
+	path := filepath.Join(tester.Repo.Path, flagShapedDir, "file.txt")
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatalf("os.MkdirAll(%q) error = %v, want nil", filepath.Dir(path), err)
+	}
+	if err := os.WriteFile(path, []byte("hello from a flag-shaped directory\n"), 0o600); err != nil {
+		t.Fatalf("os.WriteFile(%q) error = %v, want nil", path, err)
+	}
+	if err := tester.Repo.Add(flagShapedDir + "/file.txt"); err != nil {
+		t.Fatalf("tester.Repo.Add(%q) error = %v, want nil", flagShapedDir, err)
+	}
+	if err := tester.Repo.Commit("Add flag-shaped directory"); err != nil {
+		t.Fatalf("tester.Repo.Commit() error = %v, want nil", err)
+	}
+
+	env := []string{
+		"BUILDKITE_GIT_CLONE_FLAGS=-v --filter=blob:none --sparse",
+		"BUILDKITE_GIT_CLEAN_FLAGS=-fdq",
+		"BUILDKITE_GIT_FETCH_FLAGS=-v --filter=blob:none",
+		"BUILDKITE_GIT_SPARSE_CHECKOUT_PATHS=" + flagShapedDir,
+	}
+
+	git := tester.
+		MustMock(t, "git").
+		PassthroughToLocalCommand()
+
+	git.ExpectAll([][]any{
+		{"--version"},
+		{"clone", "-v", "--filter=blob:none", "--sparse", "--", tester.Repo.Path, "."},
+		{"clean", "-fdq"},
+		{"fetch", "-v", "--filter=blob:none", "--", "origin", "main"},
+		{"sparse-checkout", "set", "--cone", "--", flagShapedDir},
+		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
+		{"clean", "-fdq"},
+		{"--no-pager", "log", "-1", "HEAD", "-s", "--no-color", gitShowFormatArg},
+	})
+
+	agent := tester.MockAgent(t)
+	agent.Expect("meta-data", "exists", job.CommitMetadataKey).AndExitWith(1)
+	agent.Expect("meta-data", "set", job.CommitMetadataKey).WithStdin(commitPattern)
+
+	tester.RunAndCheck(t, env...)
+
+	requireCheckoutPath(t, tester.CheckoutDir(), flagShapedDir+"/file.txt", true)
+	requireCheckoutPath(t, tester.CheckoutDir(), "src/main.txt", false)
 }
 
 func TestCheckingOutLocalGitProjectWithGitSSHKey(t *testing.T) {

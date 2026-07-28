@@ -881,7 +881,8 @@ var AgentStartCommand = cli.Command{
 			return fmt.Errorf("invalid git mirror checkout mode %q, must be one of %v", cfg.GitMirrorCheckoutMode, mirrorCheckoutModes)
 		}
 
-		if _, err := job.ParseSparseCheckoutMode(cfg.GitSparseCheckoutMode); err != nil {
+		sparseCheckoutMode, err := job.ParseSparseCheckoutMode(cfg.GitSparseCheckoutMode)
+		if err != nil {
 			return err
 		}
 
@@ -1124,7 +1125,7 @@ var AgentStartCommand = cli.Command{
 			GitCommitVerification:           cfg.GitCommitVerification,
 			GitFetchFlags:                   cfg.GitFetchFlags,
 			GitSparseCheckoutPaths:          cfg.GitSparseCheckoutPaths,
-			GitSparseCheckoutMode:           cfg.GitSparseCheckoutMode,
+			GitSparseCheckoutMode:           sparseCheckoutMode,
 			GitSubmodules:                   !cfg.NoGitSubmodules,
 			GitSubmoduleCloneConfig:         cfg.GitSubmoduleCloneConfig,
 			SkipCheckout:                    cfg.SkipCheckout,

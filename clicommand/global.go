@@ -267,7 +267,7 @@ var (
 
 	GitSparseCheckoutModeFlag = cli.StringFlag{
 		Name:   "git-sparse-checkout-mode",
-		Value:  job.SparseCheckoutModeCone,
+		Value:  job.SparseCheckoutModeCone.String(),
 		Usage:  fmt.Sprintf("Changes how the sparse checkout paths are interpreted; available modes are %v. ′cone′ treats each path as a directory to include, which is git's default and enables its faster sparse index, but it accepts only directory names. ′no-cone′ treats each path as a gitignore-style pattern, which allows globs and exclusions such as ′!/docs/′, and requires git >= 2.35. Git LFS objects are not scoped to the sparse paths in ′no-cone′ mode.", job.SparseCheckoutModes),
 		EnvVar: "BUILDKITE_GIT_SPARSE_CHECKOUT_MODE",
 	}
