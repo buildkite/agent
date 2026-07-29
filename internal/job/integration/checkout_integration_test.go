@@ -8,6 +8,7 @@ import (
 	"path"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -1771,14 +1772,23 @@ func TestCommitVerificationWithValidCommit(t *testing.T) {
 		MustMock(t, "git").
 		PassthroughToLocalCommand()
 
-	// Expect the normal checkout flow with merge-base --is-ancestor inserted
-	// between fetch and checkout. Since this is a full clone (not shallow),
-	// merge-base succeeds immediately — no rev-parse --is-shallow-repository needed.
+	// Expect the normal checkout flow with commit verification inserted between
+	// fetch and checkout: fetch the branch tip into a dedicated ref (source
+	// refs/heads/main, so a same-named tag can't win the ref lookup) rather than
+	// reading FETCH_HEAD, resolve that ref, then merge-base --is-ancestor against
+	// the SHA. Here the branch (main) tip is the build commit itself, so both
+	// merge-base args are commitHash. Since this is a full clone (not shallow) and
+	// the commit verifies, merge-base succeeds immediately, so no rev-parse
+	// --is-shallow-repository is needed. The dedicated ref is deleted on return.
+	const branchTipRef = "refs/buildkite-agent/commit-verification-branch-tip"
 	git.ExpectAll([][]any{
 		{"clone", "-v", "--", tester.Repo.Path, "."},
 		{"clean", "-fdq"},
 		{"fetch", "-v", "--", "origin", commitHash},
-		{"merge-base", "--is-ancestor", commitHash, "main"},
+		{"fetch", "-v", "--", "origin", "+refs/heads/main:" + branchTipRef},
+		{"rev-parse", branchTipRef},
+		{"merge-base", "--is-ancestor", commitHash, commitHash},
+		{"update-ref", "-d", branchTipRef},
 		{"-c", "advice.detachedHead=false", "checkout", "-f", commitHash},
 		{"clean", "-fdq"},
 		{"--no-pager", "log", "-1", commitHash, "-s", "--no-color", gitShowFormatArg},
@@ -1789,6 +1799,66 @@ func TestCommitVerificationWithValidCommit(t *testing.T) {
 	agent.Expect("meta-data", "set", job.CommitMetadataKey).WithStdin(commitPattern)
 
 	tester.RunAndCheck(t, env...)
+}
+
+// TestCommitVerificationRetriesTransientBranchFetch proves the branch-tip fetch
+// survives a transient failure. Without a retry a single fetch blip degrades the
+// check to "unavailable" (warn, never blocking) with no second chance, since the
+// outer checkout retry loop does not re-run a verification that returned nil.
+func TestCommitVerificationRetriesTransientBranchFetch(t *testing.T) {
+	t.Parallel()
+
+	tester, err := NewExecutorTester(mainCtx)
+	if err != nil {
+		t.Fatalf("NewExecutorTester() error = %v", err)
+	}
+	defer tester.Close()
+
+	commitHash, err := tester.Repo.RevParse("main")
+	if err != nil {
+		t.Fatalf("RevParse(main) error = %v", err)
+	}
+	commitHash = strings.TrimSpace(commitHash)
+
+	env := []string{
+		"BUILDKITE_GIT_CLONE_FLAGS=-v",
+		"BUILDKITE_GIT_CLEAN_FLAGS=-fdq",
+		"BUILDKITE_GIT_FETCH_FLAGS=-v",
+		"BUILDKITE_GIT_COMMIT_VERIFICATION=strict",
+		fmt.Sprintf("BUILDKITE_COMMIT=%s", commitHash),
+	}
+
+	// Fail the first branch-tip fetch (its refspec sources refs/heads/main) to
+	// simulate a transient blip, then let the retry pass through to real git. A
+	// Before error exits the mocked git non-zero, which is what the retrier sees.
+	var branchFetchAttempts atomic.Int32
+	git := tester.MustMock(t, "git").PassthroughToLocalCommand().Before(func(i bintest.Invocation) error {
+		isBranchTipFetch := i.Args[0] == "fetch" && slices.ContainsFunc(i.Args, func(a string) bool {
+			return strings.Contains(a, "refs/heads/main")
+		})
+		if isBranchTipFetch {
+			if branchFetchAttempts.Add(1) == 1 {
+				return fmt.Errorf("simulated transient fetch failure")
+			}
+		}
+		return nil
+	})
+	git.Expect().AtLeastOnce().WithAnyArguments()
+
+	agent := tester.MockAgent(t)
+	agent.Expect("meta-data", "exists", job.CommitMetadataKey).AndExitWith(1)
+	agent.Expect("meta-data", "set", job.CommitMetadataKey).WithStdin(commitPattern)
+
+	if err := tester.Run(t, env...); err != nil {
+		t.Fatalf("tester.Run() error = %v, want nil (build should pass after the fetch retries). Output:\n%s", err, tester.Output)
+	}
+	if got := branchFetchAttempts.Load(); got < 2 {
+		t.Errorf("branch-tip fetch attempts = %d, want >= 2 (fetch should retry after a transient failure)", got)
+	}
+	// The retry must let verification actually run, not degrade to "unavailable".
+	if strings.Contains(tester.Output, "verification unavailable") {
+		t.Errorf("verification degraded to unavailable despite the retry; output:\n%s", tester.Output)
+	}
 }
 
 func TestCommitVerificationFailsWithInvalidCommit(t *testing.T) {
@@ -1812,29 +1882,141 @@ func TestCommitVerificationFailsWithInvalidCommit(t *testing.T) {
 		"BUILDKITE_GIT_CLEAN_FLAGS=-fdq",
 		"BUILDKITE_GIT_FETCH_FLAGS=-v",
 		"BUILDKITE_GIT_COMMIT_VERIFICATION=strict",
+		// The non-PR sentinel. The agent sets this on every ordinary build, so
+		// verification must still run (a naive PullRequest != "" skip would disable
+		// it for almost every build).
+		"BUILDKITE_PULL_REQUEST=false",
 		fmt.Sprintf("BUILDKITE_COMMIT=%s", commitHash),
 	}
 
-	git := tester.
-		MustMock(t, "git").
-		PassthroughToLocalCommand()
-
-	// Expect fetch, then merge-base which should return exit 1 (not ancestor).
-	// No checkout should happen after verification fails.
-	git.ExpectAll([][]any{
-		{"clone", "-v", "--", tester.Repo.Path, "."},
-		{"clean", "-fdq"},
-		{"fetch", "-v", "--", "origin", commitHash},
-		{"merge-base", "--is-ancestor", commitHash, "main"},
-	})
-
+	// Use real git (no mock) and assert on the outcome rather than the exact
+	// command sequence: the build must fail because the commit is not on the branch.
 	agent := tester.MockAgent(t)
-	agent.Expect("meta-data", "exists", job.CommitMetadataKey).AndExitWith(1)
+	agent.Expect("meta-data", "exists", job.CommitMetadataKey).Min(0).Max(bintest.InfiniteTimes).AndExitWith(1)
+	agent.IgnoreUnexpectedInvocations()
 
-	// This should fail — the commit is not on main
+	// This should fail: the commit is not on main.
 	err = tester.Run(t, env...)
 	if err == nil {
 		t.Fatalf("expected build to fail with commit verification error, but it passed")
+	}
+	if !strings.Contains(tester.Output, "is not on branch") {
+		t.Errorf("expected a commit-verification failure in the output, got:\n%s", tester.Output)
+	}
+	// The retry loop fast-breaks on a provably-off-branch commit, so verification
+	// runs once rather than re-cloning through the full backoff (default 6
+	// attempts). checkCommitOnBranch logs "Verifying commit" once per attempt.
+	if got := strings.Count(tester.Output, "Verifying commit"); got != 1 {
+		t.Errorf("commit verification ran %d times, want 1 (fast-break should prevent retries)", got)
+	}
+}
+
+// TestCommitVerificationFailsForCommitNotOnNonDefaultBranch is the regression
+// test for the case the old bare-branch-name check missed: a build on a branch
+// other than the repository default. The clone only materialises the default
+// branch as a local ref, so checking a commit against the bare build-branch name
+// used to resolve to nothing and silently degrade to "unavailable" (warn, never
+// block), even for a commit that is genuinely not on that branch.
+func TestCommitVerificationFailsForCommitNotOnNonDefaultBranch(t *testing.T) {
+	t.Parallel()
+
+	tester, err := NewExecutorTester(mainCtx)
+	if err != nil {
+		t.Fatalf("NewExecutorTester() error = %v", err)
+	}
+	defer tester.Close()
+
+	// Add a commit on main (the default branch) that diverges from update-test-txt,
+	// so it is genuinely not reachable from that non-default branch.
+	if err := tester.Repo.CheckoutBranch("main"); err != nil {
+		t.Fatalf("CheckoutBranch(main) error = %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(tester.Repo.Path, "main-only.txt"), []byte("main only"), 0o600); err != nil {
+		t.Fatalf("WriteFile error = %v", err)
+	}
+	if err := tester.Repo.Add("main-only.txt"); err != nil {
+		t.Fatalf("Add error = %v", err)
+	}
+	if err := tester.Repo.Commit("Commit only on main"); err != nil {
+		t.Fatalf("Commit error = %v", err)
+	}
+	offBranchCommit, err := tester.Repo.RevParse("main")
+	if err != nil {
+		t.Fatalf("RevParse(main) error = %v", err)
+	}
+	offBranchCommit = strings.TrimSpace(offBranchCommit)
+
+	env := []string{
+		"BUILDKITE_GIT_CLONE_FLAGS=-v",
+		"BUILDKITE_GIT_CLEAN_FLAGS=-fdq",
+		"BUILDKITE_GIT_FETCH_FLAGS=-v",
+		"BUILDKITE_GIT_COMMIT_VERIFICATION=strict",
+		"BUILDKITE_BRANCH=update-test-txt",
+		fmt.Sprintf("BUILDKITE_COMMIT=%s", offBranchCommit),
+	}
+
+	// Use real git (no mock) and assert on the outcome rather than the exact
+	// command sequence: the build must fail because the commit is not on the branch.
+	agent := tester.MockAgent(t)
+	agent.Expect("meta-data", "exists", job.CommitMetadataKey).Min(0).Max(bintest.InfiniteTimes).AndExitWith(1)
+	agent.IgnoreUnexpectedInvocations()
+
+	err = tester.Run(t, env...)
+	if err == nil {
+		t.Fatalf("expected build to fail: commit %s is not on branch update-test-txt, but it passed. Output:\n%s", offBranchCommit, tester.Output)
+	}
+	if !strings.Contains(tester.Output, "is not on branch") {
+		t.Errorf("expected a commit-verification failure in the output, got:\n%s", tester.Output)
+	}
+}
+
+// TestCommitVerificationPassesForCommitOnNonDefaultBranch is the happy-path
+// companion to the failure regression above: a valid commit that IS on a
+// non-default branch must verify and let the build proceed. The clone only
+// materialises the default branch as a local ref, so this exercises the
+// branch-tip fetch end-to-end, proving non-default verification passes rather
+// than silently degrading to "unavailable".
+func TestCommitVerificationPassesForCommitOnNonDefaultBranch(t *testing.T) {
+	t.Parallel()
+
+	tester, err := NewExecutorTester(mainCtx)
+	if err != nil {
+		t.Fatalf("NewExecutorTester() error = %v", err)
+	}
+	defer tester.Close()
+
+	// The tip of update-test-txt is genuinely on that non-default branch.
+	onBranchCommit, err := tester.Repo.RevParse("update-test-txt")
+	if err != nil {
+		t.Fatalf("RevParse(update-test-txt) error = %v", err)
+	}
+	onBranchCommit = strings.TrimSpace(onBranchCommit)
+
+	env := []string{
+		"BUILDKITE_GIT_CLONE_FLAGS=-v",
+		"BUILDKITE_GIT_CLEAN_FLAGS=-fdq",
+		"BUILDKITE_GIT_FETCH_FLAGS=-v",
+		"BUILDKITE_GIT_COMMIT_VERIFICATION=strict",
+		"BUILDKITE_BRANCH=update-test-txt",
+		fmt.Sprintf("BUILDKITE_COMMIT=%s", onBranchCommit),
+	}
+
+	agent := tester.MockAgent(t)
+	agent.Expect("meta-data", "exists", job.CommitMetadataKey).AndExitWith(1)
+	agent.Expect("meta-data", "set", job.CommitMetadataKey).WithStdin(commitPattern)
+
+	if err := tester.Run(t, env...); err != nil {
+		t.Fatalf("tester.Run() error = %v, want nil (commit is on update-test-txt). Output:\n%s", err, tester.Output)
+	}
+	// Verification must actually run and pass, not skip or degrade.
+	if !strings.Contains(tester.Output, "Verifying commit") {
+		t.Errorf("expected verification to run (%q not in output):\n%s", "Verifying commit", tester.Output)
+	}
+	if strings.Contains(tester.Output, "is not on branch") {
+		t.Errorf("verification wrongly reported the commit off-branch; output:\n%s", tester.Output)
+	}
+	if strings.Contains(tester.Output, "verification unavailable") {
+		t.Errorf("verification degraded to unavailable; output:\n%s", tester.Output)
 	}
 }
 
