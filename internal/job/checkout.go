@@ -25,6 +25,7 @@ import (
 func (e *Executor) CheckoutPhase(ctx context.Context) (retErr error) {
 	span, ctx := tracetools.StartSpanFromContext(ctx, "checkout", e.TracingBackend)
 	defer func() { span.FinishWithError(retErr) }()
+	defer e.otlpLogSpan(ctx)()
 
 	if err := e.executeGlobalHook(ctx, "pre-checkout"); err != nil {
 		return err
