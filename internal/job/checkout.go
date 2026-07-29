@@ -146,6 +146,13 @@ func (e *Executor) checkout(ctx context.Context) error {
 			}
 		}
 
+		// Also fail fast on an unusable sparse checkout mode. resolveSparseCheckout
+		// rejects it again during the checkout, but it can arrive from job env, and
+		// retrying a typo for the whole attempt budget only delays the failure.
+		if _, err := ParseSparseCheckoutMode(e.GitSparseCheckoutMode); err != nil {
+			return err
+		}
+
 		maxAttempts := e.CheckoutAttempts
 		if maxAttempts <= 0 {
 			maxAttempts = 6
@@ -345,8 +352,11 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context, previousAttempts in
 		return fmt.Errorf("creating checkout dir: %w", err)
 	}
 
-	// Resolve the cone paths to check out (nil means a full checkout).
-	sparsePaths := e.resolveSparseCheckout(ctx)
+	// Resolve the sparse checkout for this build (inactive means a full checkout).
+	sparse, err := e.resolveSparseCheckout(ctx)
+	if err != nil {
+		return err
+	}
 
 	// Split the git clone flags into an array of strings, so we can append
 	// additional flags if needed (e.g., --reference, --dissociate, --sparse, --filter=blob:none).
@@ -419,7 +429,7 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context, previousAttempts in
 		//   --filter=blob:none   make it a partial clone, so blobs outside the
 		//                        sparse set aren't downloaded up front
 		// Each flag is added only if the user hasn't already supplied their own.
-		if len(sparsePaths) > 0 {
+		if sparse.active() {
 			if slices.Contains(gitCloneFlags, "--sparse") {
 				e.shell.Commentf("Sparse checkout is configured and BUILDKITE_GIT_CLONE_FLAGS already contains a --sparse flag (preserving user-supplied sparse checkout).")
 			} else {
@@ -440,7 +450,7 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context, previousAttempts in
 		}
 		cloneSpan.AddAttributes(map[string]string{
 			"git.mirror_mode":     mirrorMode,
-			"git.sparse":          strconv.FormatBool(len(sparsePaths) > 0),
+			"git.sparse":          strconv.FormatBool(sparse.active()),
 			"git.blobless_filter": strconv.FormatBool(hasPartialFilterFlags(gitCloneFlags)),
 		})
 
@@ -487,7 +497,7 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context, previousAttempts in
 		return fmt.Errorf("splitting --git-fetch-flags %q: %w", e.GitFetchFlags, err)
 	}
 
-	addBloblessFilter := len(sparsePaths) > 0 &&
+	addBloblessFilter := sparse.active() &&
 		!userSuppliedCloneFilter &&
 		!hasPartialFilterFlags(gitFetchFlags)
 	if err := e.fetchSource(ctx, addBloblessFilter); err != nil {
@@ -501,9 +511,16 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context, previousAttempts in
 	}
 
 	sparseSpan, sparseCtx := e.traceOpSpan(ctx, "git.sparse_checkout")
-	sparseSpan.AddAttributes(map[string]string{"git.path_count": strconv.Itoa(len(sparsePaths))})
+	sparseMode := "none"
+	if sparse.active() {
+		sparseMode = sparse.mode.String()
+	}
+	sparseSpan.AddAttributes(map[string]string{
+		"git.path_count":  strconv.Itoa(len(sparse.paths)),
+		"git.sparse_mode": sparseMode,
+	})
 
-	sparseCheckoutActive, err := e.setupSparseCheckout(sparseCtx, sparsePaths)
+	sparseCheckoutActive, err := e.setupSparseCheckout(sparseCtx, sparse)
 
 	sparseSpan.FinishWithError(err)
 
@@ -547,17 +564,40 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context, previousAttempts in
 		}
 	}
 
-	// When sparse-checkout is active, scope LFS to the same paths so we don't
-	// pull objects outside the sparse set (SUP-6529). If sparse fell back to a
-	// full checkout (e.g. git < 2.27), fetch unscoped so files outside the
-	// requested paths still get their LFS content.
+	// Git LFS vs sparse-checkout (SUP-6529). How far we can reuse the sparse
+	// paths depends on the mode:
+	//
+	//	mode     | git lfs fetch                 | git lfs checkout
+	//	---------|-------------------------------|----------------------------------
+	//	(none)   | all objects                   | all objects
+	//	cone     | --include=<sparse dirs>       | pathspecs = same dirs
+	//	no-cone  | all objects                   | only non-skip-worktree LFS paths
+	//
+	// Cone paths are plain directories, so they work as both --include filters and
+	// checkout pathspecs. Non-cone paths are gitignore-style patterns (globs,
+	// "!/docs/"); --include has no negation, and pathspecs don't understand
+	// those patterns, so lfsInclude returns nil and fetch stays unscoped.
+	// Fetching everything is fine (objects just sit in .git/lfs), but an
+	// unscoped `lfs checkout` walks every pointer in HEAD and recreates
+	// sparse-excluded files that only have skip-worktree set — they then
+	// survive the later git clean. In that case we call materializedLFSPaths
+	// and pass the result as CheckoutPaths so checkout stays inside the sparse
+	// working tree.
 	if e.GitLFSEnabled {
 		lfsArgs := gitLFSFetchCheckoutArgs{
-			Shell: e.shell,
-			Retry: true,
+			Shell:        e.shell,
+			Retry:        true,
+			FetchInclude: sparse.lfsInclude(), // cone dirs; nil when inactive or no-cone
 		}
-		if sparseCheckoutActive {
-			lfsArgs.Include = cleanGitSparseCheckoutPaths(e.GitSparseCheckoutPaths)
+		if sparse.noCone() {
+			// FetchInclude is empty on purpose (see table above). Scope checkout
+			// to LFS paths that are still in the sparse working tree.
+			paths, err := e.materializedLFSPaths(ctx)
+			if err != nil {
+				return err
+			}
+			lfsArgs.CheckoutPaths = &paths
+			e.shell.Commentf("Fetching all Git LFS objects; checking out %d path(s) present in the sparse working tree (%s mode)", len(paths), sparse.mode)
 		}
 		if err := e.traceOp(ctx, "git.lfs.fetch", func(ctx context.Context) error {
 			return gitLFSFetchCheckout(ctx, lfsArgs)

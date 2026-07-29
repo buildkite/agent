@@ -78,6 +78,7 @@ type BootstrapConfig struct {
 	GitCloneFlags                string   `cli:"git-clone-flags"`
 	GitFetchFlags                string   `cli:"git-fetch-flags"`
 	GitSparseCheckoutPaths       []string `cli:"git-sparse-checkout-paths" normalize:"list"`
+	GitSparseCheckoutMode        string   `cli:"git-sparse-checkout-mode"`
 	GitCloneMirrorFlags          string   `cli:"git-clone-mirror-flags"`
 	GitCleanFlags                string   `cli:"git-clean-flags"`
 	GitSSHKey                    string   `cli:"git-ssh-key"`
@@ -259,6 +260,7 @@ var BootstrapCommand = cli.Command{
 		GitCommitVerificationFlag,
 		GitFetchFlagsFlag,
 		GitSparseCheckoutPathsFlag,
+		GitSparseCheckoutModeFlag,
 		cli.StringFlag{
 			Name:   "git-ssh-key",
 			Usage:  "SSH private key to use for git checkout",
@@ -441,6 +443,11 @@ var BootstrapCommand = cli.Command{
 			return fmt.Errorf("invalid git mirror checkout mode %q, must be one of %v", cfg.GitMirrorCheckoutMode, mirrorCheckoutModes)
 		}
 
+		sparseCheckoutMode, err := job.ParseSparseCheckoutMode(cfg.GitSparseCheckoutMode)
+		if err != nil {
+			return err
+		}
+
 		cancelSig, err := process.ParseSignal(cfg.CancelSignal)
 		if err != nil {
 			return fmt.Errorf("failed to parse cancel-signal: %w", err)
@@ -489,6 +496,7 @@ var BootstrapCommand = cli.Command{
 			GitFetchFlags:                cfg.GitFetchFlags,
 			GitLFSEnabled:                cfg.GitLFSEnabled,
 			GitSparseCheckoutPaths:       cfg.GitSparseCheckoutPaths,
+			GitSparseCheckoutMode:        sparseCheckoutMode.String(),
 			GitSSHKey:                    cfg.GitSSHKey,
 			GitMirrorsLockTimeout:        cfg.GitMirrorsLockTimeout,
 			GitMirrorsPath:               cfg.GitMirrorsPath,

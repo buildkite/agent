@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 
@@ -18,6 +19,10 @@ import (
 	"github.com/buildkite/roko"
 	"github.com/buildkite/shellwords"
 )
+
+// gitLFSCheckoutPathBatchSize bounds pathspecs passed to a single
+// `git lfs checkout` invocation so large sparse working trees don't hit ARG_MAX.
+const gitLFSCheckoutPathBatchSize = 1000
 
 const (
 	gitErrorCheckout = iota
@@ -176,10 +181,14 @@ func gitCleanSubmodules(ctx context.Context, sh *shell.Shell, gitCleanFlags stri
 type gitLFSFetchCheckoutArgs struct {
 	Shell *shell.Shell
 	Retry bool // Whether to retry the fetch+checkout on failure
-	// Include scopes LFS to these paths: passed as --include=<csv> to
-	// `git lfs fetch` and as positional pathspecs to `git lfs checkout`.
-	// Empty means fetch/checkout all LFS objects.
-	Include []string
+	// FetchInclude is passed as --include=<csv> to `git lfs fetch`. Empty means
+	// fetch all LFS objects.
+	FetchInclude []string
+	// CheckoutPaths, when non-nil, are pathspecs for `git lfs checkout`
+	// (overriding FetchInclude). A non-nil empty slice means there is nothing
+	// to materialise. When nil, checkout uses FetchInclude if set, otherwise
+	// all LFS objects.
+	CheckoutPaths *[]string
 }
 
 // gitLFSFetchCheckout fetches LFS objects for the current HEAD then materialises
@@ -212,11 +221,11 @@ func gitLFSFetchCheckout(ctx context.Context, args gitLFSFetchCheckoutArgs) erro
 	}
 
 	fetchCmd := []string{"lfs", "fetch"}
-	checkoutCmd := []string{"lfs", "checkout"}
-	if len(args.Include) > 0 {
-		fetchCmd = append(fetchCmd, "--include="+strings.Join(args.Include, ","))
-		checkoutCmd = append(checkoutCmd, args.Include...)
+	if len(args.FetchInclude) > 0 {
+		fetchCmd = append(fetchCmd, "--include="+strings.Join(args.FetchInclude, ","))
 	}
+
+	checkoutPathspecs, checkoutScoped := args.checkoutPathspecs()
 
 	err := retrier.DoWithContext(ctx, func(retrier *roko.Retrier) error {
 		if err := args.Shell.Command("git", fetchCmd...).Run(ctx); err != nil {
@@ -225,11 +234,26 @@ func gitLFSFetchCheckout(ctx context.Context, args gitLFSFetchCheckoutArgs) erro
 			}
 			return fmt.Errorf("git lfs fetch: %w", err)
 		}
-		if err := args.Shell.Command("git", checkoutCmd...).Run(ctx); err != nil {
-			if args.Retry {
-				args.Shell.Commentf("%s", retrier)
+		if checkoutScoped && len(checkoutPathspecs) == 0 {
+			return nil
+		}
+		if !checkoutScoped {
+			if err := args.Shell.Command("git", "lfs", "checkout").Run(ctx); err != nil {
+				if args.Retry {
+					args.Shell.Commentf("%s", retrier)
+				}
+				return fmt.Errorf("git lfs checkout: %w", err)
 			}
-			return fmt.Errorf("git lfs checkout: %w", err)
+			return nil
+		}
+		for batch := range slices.Chunk(checkoutPathspecs, gitLFSCheckoutPathBatchSize) {
+			checkoutCmd := append([]string{"lfs", "checkout"}, batch...)
+			if err := args.Shell.Command("git", checkoutCmd...).Run(ctx); err != nil {
+				if args.Retry {
+					args.Shell.Commentf("%s", retrier)
+				}
+				return fmt.Errorf("git lfs checkout: %w", err)
+			}
 		}
 		return nil
 	})
@@ -238,6 +262,20 @@ func gitLFSFetchCheckout(ctx context.Context, args gitLFSFetchCheckoutArgs) erro
 		return &gitError{error: err, Type: gitErrorLFS, WasRetried: args.Retry}
 	}
 	return err
+}
+
+// checkoutPathspecs returns the pathspecs for `git lfs checkout` and whether
+// checkout is scoped. When scoped is false, checkout should materialise every
+// LFS object. When scoped is true, only the returned pathspecs are materialised
+// (and an empty list means nothing to materialise).
+func (args gitLFSFetchCheckoutArgs) checkoutPathspecs() (paths []string, scoped bool) {
+	if args.CheckoutPaths != nil {
+		return *args.CheckoutPaths, true
+	}
+	if len(args.FetchInclude) > 0 {
+		return args.FetchInclude, true
+	}
+	return nil, false
 }
 
 func gitRepack(ctx context.Context, sh *shell.Shell, args ...string) error {

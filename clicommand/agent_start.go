@@ -33,6 +33,7 @@ import (
 	awssigner "github.com/buildkite/agent/v3/internal/cryptosigner/aws"
 	gcpsigner "github.com/buildkite/agent/v3/internal/cryptosigner/gcp"
 	"github.com/buildkite/agent/v3/internal/experiments"
+	"github.com/buildkite/agent/v3/internal/job"
 	"github.com/buildkite/agent/v3/internal/job/hook"
 	"github.com/buildkite/agent/v3/internal/osutil"
 	"github.com/buildkite/agent/v3/internal/process"
@@ -166,6 +167,7 @@ type AgentStartConfig struct {
 	GitCleanFlags               string   `cli:"git-clean-flags"`
 	GitFetchFlags               string   `cli:"git-fetch-flags"`
 	GitSparseCheckoutPaths      []string `cli:"git-sparse-checkout-paths" normalize:"list"`
+	GitSparseCheckoutMode       string   `cli:"git-sparse-checkout-mode"`
 	GitMirrorsPath              string   `cli:"git-mirrors-path" normalize:"filepath"`
 	GitMirrorCheckoutMode       string   `cli:"git-mirror-checkout-mode"`
 	GitMirrorsLockTimeout       int      `cli:"git-mirrors-lock-timeout"`
@@ -556,6 +558,7 @@ var AgentStartCommand = cli.Command{
 		GitCommitVerificationFlag,
 		GitFetchFlagsFlag,
 		GitSparseCheckoutPathsFlag,
+		GitSparseCheckoutModeFlag,
 		GitCloneMirrorFlagsFlag,
 		GitMirrorsPathFlag,
 		GitMirrorCheckoutModeFlag,
@@ -884,6 +887,11 @@ var AgentStartCommand = cli.Command{
 			return fmt.Errorf("invalid git mirror checkout mode %q, must be one of %v", cfg.GitMirrorCheckoutMode, mirrorCheckoutModes)
 		}
 
+		sparseCheckoutMode, err := job.ParseSparseCheckoutMode(cfg.GitSparseCheckoutMode)
+		if err != nil {
+			return err
+		}
+
 		if !slices.Contains(pingModes, cfg.PingMode) {
 			return fmt.Errorf("invalid ping mode %q, must be one of %v", cfg.PingMode, pingModes)
 		}
@@ -1123,6 +1131,7 @@ var AgentStartCommand = cli.Command{
 			GitCommitVerification:           cfg.GitCommitVerification,
 			GitFetchFlags:                   cfg.GitFetchFlags,
 			GitSparseCheckoutPaths:          cfg.GitSparseCheckoutPaths,
+			GitSparseCheckoutMode:           sparseCheckoutMode,
 			GitSubmodules:                   !cfg.NoGitSubmodules,
 			GitSubmoduleCloneConfig:         cfg.GitSubmoduleCloneConfig,
 			SkipCheckout:                    cfg.SkipCheckout,

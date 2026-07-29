@@ -408,10 +408,11 @@ func (r *JobRunner) createEnvironment(ctx context.Context) ([]string, error) {
 	// Most checkout-scoped vars are locked against the backend job env in every
 	// mode except none; only none lets pipeline/step env override agent config,
 	// matching the rule secrets follow (see IsCheckoutLockedForSecrets). The
-	// exception is sparse-checkout paths, which have a from-job floor: a step's
-	// checkout.sparse config is honored under the default mode too, and only strict
-	// locks it (see IsCheckoutLockedForJobEnv). Within-job sources (hooks, plugins,
-	// the Job API) are governed separately and only strict locks them.
+	// exception is the sparse-checkout paths and mode, which have a from-job floor:
+	// a step's checkout.sparse config is honored under the default mode too, and
+	// only strict locks them (see IsCheckoutLockedForJobEnv). Within-job sources
+	// (hooks, plugins, the Job API) are governed separately and only strict locks
+	// them.
 	checkoutMode := r.conf.AgentConfiguration.CheckoutOverrideMode
 
 	// Create a clone of our jobs environment. We'll then set the
@@ -669,6 +670,7 @@ BUILDKITE_AGENT_JWKS_KEY_ID`
 	setCheckoutEnv("BUILDKITE_GIT_CLONE_FLAGS", r.conf.AgentConfiguration.GitCloneFlags)
 	setCheckoutEnv("BUILDKITE_GIT_FETCH_FLAGS", r.conf.AgentConfiguration.GitFetchFlags)
 	setCheckoutEnv("BUILDKITE_GIT_SPARSE_CHECKOUT_PATHS", strings.Join(r.conf.AgentConfiguration.GitSparseCheckoutPaths, ","))
+	setCheckoutEnv("BUILDKITE_GIT_SPARSE_CHECKOUT_MODE", r.conf.AgentConfiguration.GitSparseCheckoutMode.String())
 	setEnv("BUILDKITE_GIT_CLONE_MIRROR_FLAGS", r.conf.AgentConfiguration.GitCloneMirrorFlags)
 	setEnv("BUILDKITE_GIT_MIRROR_CHECKOUT_MODE", r.conf.AgentConfiguration.GitMirrorCheckoutMode)
 	setCheckoutEnv("BUILDKITE_GIT_CLEAN_FLAGS", r.conf.AgentConfiguration.GitCleanFlags)
