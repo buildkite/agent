@@ -79,11 +79,11 @@ func (s sparseCheckout) active() bool { return len(s.paths) > 0 }
 func (s sparseCheckout) noCone() bool { return s.mode == SparseCheckoutModeNoCone }
 
 // lfsInclude returns directory paths to pass as `git lfs fetch --include`, or
-// nil to fetch all LFS objects. Only cone-mode paths can be reused: `--include`
-// has no negation (that's --exclude), so a non-cone pattern such as "!/docs/"
-// can't express the sparse set. Callers that fetch unscoped must still scope
-// `git lfs checkout` via materializedLFSPaths, or LFS will recreate
-// sparse-excluded files.
+// nil to fetch all LFS objects. Only cone-mode paths are returned: non-cone
+// patterns can't express the sparse set as an --include filter (no negation).
+// When this returns nil for an active no-cone checkout, the caller must still
+// scope `git lfs checkout` via materializedLFSPaths — see the mode table on
+// the LFS block in defaultCheckoutPhase.
 func (s sparseCheckout) lfsInclude() []string {
 	if !s.active() || s.noCone() {
 		return nil

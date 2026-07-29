@@ -563,20 +563,34 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context, previousAttempts in
 		}
 	}
 
-	// When sparse-checkout is active, scope LFS to the same paths so we don't pull
-	// objects outside the sparse set (SUP-6529). Cone-mode directories can be reused
-	// for both fetch and checkout; non-cone patterns can't (no negation on
-	// --include, and pathspecs don't understand gitignore exclusions), so we
-	// fetch unscoped and restrict checkout to LFS paths that aren't
-	// skip-worktree — otherwise `git lfs checkout` recreates sparse-excluded
-	// files and they survive the later git clean.
+	// Git LFS vs sparse-checkout (SUP-6529). How far we can reuse the sparse
+	// paths depends on the mode:
+	//
+	//	mode     | git lfs fetch                 | git lfs checkout
+	//	---------|-------------------------------|----------------------------------
+	//	(none)   | all objects                   | all objects
+	//	cone     | --include=<sparse dirs>       | pathspecs = same dirs
+	//	no-cone  | all objects                   | only non-skip-worktree LFS paths
+	//
+	// Cone paths are plain directories, so they work as both --include filters and
+	// checkout pathspecs. Non-cone paths are gitignore-style patterns (globs,
+	// "!/docs/"); --include has no negation, and pathspecs don't understand
+	// those patterns, so lfsInclude returns nil and fetch stays unscoped.
+	// Fetching everything is fine (objects just sit in .git/lfs), but an
+	// unscoped `lfs checkout` walks every pointer in HEAD and recreates
+	// sparse-excluded files that only have skip-worktree set — they then
+	// survive the later git clean. In that case we call materializedLFSPaths
+	// and pass the result as CheckoutPaths so checkout stays inside the sparse
+	// working tree.
 	if e.GitLFSEnabled {
 		lfsArgs := gitLFSFetchCheckoutArgs{
 			Shell:        e.shell,
 			Retry:        true,
-			FetchInclude: sparse.lfsInclude(),
+			FetchInclude: sparse.lfsInclude(), // cone dirs; nil when inactive or no-cone
 		}
-		if sparseCheckoutActive && len(lfsArgs.FetchInclude) == 0 {
+		if sparse.noCone() {
+			// FetchInclude is empty on purpose (see table above). Scope checkout
+			// to LFS paths that are still in the sparse working tree.
 			paths, err := e.materializedLFSPaths(ctx)
 			if err != nil {
 				return err
