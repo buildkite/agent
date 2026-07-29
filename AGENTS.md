@@ -1,19 +1,45 @@
-# Agent Guidelines
+# Buildkite Agent Development Guide
 
-For general build/test/lint commands and architecture, see [`AGENT.md`](AGENT.md),
-[`README.md`](README.md) (Development section), [`mise.toml`](mise.toml), and
-[`CONTRIBUTING.md`](CONTRIBUTING.md).
+## Build/Test/Lint Commands
+
+- **Build:** `go build -o buildkite-agent .` or `go run *.go <command>`
+- **Test:** `go test ./...` (run all tests)
+- **Test (single package):** `go test ./path/to/package`
+- **Test (race detection):** `go test -race ./...`
+- **Lint/Format:** `go tool gofumpt -extra -w .` and `golangci-lint run`
+- **Generate:** `go generate ./...`
+- **Deps:** `go mod tidy`
+
+## Architecture
+
+Go CLI application with main packages:
+- **[`agent/`](agent/)**: Core agent worker, job runner, log streaming, pipeline upload
+- **[`api/`](api/)**: HTTP client for Buildkite API communication
+- **[`core/`](core/)**: Programmatic job control interface
+- **[`jobapi/`](jobapi/)**: Local HTTP server for job introspection during execution
+- **[`clicommand/`](clicommand/)**: CLI command implementations
+- **[`internal/`](internal/)**: Internal utilities (shell, sockets, artifacts, etc.)
+- **[`process/`](process/)**: Process execution, signal handling, output streaming
+- **[`logger/`](logger/)**: Structured logging
+- **[`env/`](env/)**: Environment variable management
+
+## Code Style
+
+- Formatting with `gofumpt` in extra mode: `go tool gofumpt -extra -w .`
+- Struct-based configuration patterns (e.g., `AgentWorkerConfig`, `JobRunnerConfig`)
+- Context-aware functions: `func Name(ctx context.Context, ...)`
+- Import organization: stdlib, then everything else (gofumpt groups all non-stdlib imports together)
+- Error handling: explicit errors, wrapped with context
+- Naming: PascalCase for exported, camelCase for private, ALL_CAPS for constants
+- Interface types end with -er suffix where appropriate
+- Use `github.com/urfave/cli` for CLI commands
 
 ## Development environment notes
 
 This is a single Go CLI application (the Buildkite Agent). There is no long-running
 server to keep up for development; you build a binary and/or run subcommands directly.
-
-Standard commands (already documented in `AGENT.md` / `mise.toml`):
-- Build: `go build -o buildkite-agent .`
-- Test: `go tool gotestsum --format pkgname -- ./...` (or `go test ./...`)
-- Lint: `go tool gofumpt -extra -w .` then `golangci-lint run`
-- Run a job locally (core functionality): `./buildkite-agent bootstrap ...` (see below)
+See also [`README.md`](README.md) (Development section), [`mise.toml`](mise.toml), and
+[`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 Prerequisites (a plain checkout does not install these for you):
 - Go toolchain matching `mise.toml` (`mise install` sets up the pinned versions).
