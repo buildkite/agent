@@ -15,6 +15,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/buildkite/agent/v3/env"
 	"github.com/buildkite/agent/v3/internal/process"
 	"github.com/buildkite/agent/v3/internal/replacer"
 	"github.com/buildkite/agent/v3/internal/shell"
@@ -688,5 +689,78 @@ func TestRound(t *testing.T) {
 				t.Errorf("shell.Round(%v): got %q, want %v", tt.in, got.String(), tt.wantStr)
 			}
 		})
+	}
+}
+
+// TestRunDoesNotReportCleanHookAsFailedWhenChildLeaksStdout is a regression
+// test for the WaitResult()/lifecycle-hook path. When a hook exits cleanly but
+// a backgrounded grandchild inherits (and holds open) the write-end of the
+// output pipe, os/exec's post-exit copy goroutine never sees EOF and Cmd.Wait
+// returns exec.ErrWaitDelay once WaitDelay elapses. process.complete treats
+// that as a clean exit and makes Process.Run return nil, but it also stores the
+// raw wait result — and shell.executeCommand returns Process.WaitResult() to
+// callers (e.g. agentLifecycleHook) whenever Run returned nil. So without
+// clearing the stored sentinel, an otherwise-clean hook is still reported as a
+// failure. This test drives a leaking command through Command.Run (the shell
+// path lifecycle hooks use) and asserts the returned error is nil.
+//
+// A process-package test asserting Run(...) == nil does NOT catch this, because
+// Run already returns nil; the leak surfaces only via WaitResult(), which is
+// what this shell-level test exercises.
+func TestRunDoesNotReportCleanHookAsFailedWhenChildLeaksStdout(t *testing.T) {
+	// Not parallel: this temporarily mutates the process-package global
+	// WaitDelayBuffer, which other parallel tests running commands would race.
+	if runtime.GOOS == "windows" {
+		t.Skip("the stdout fd-inheritance pipe-leak mechanism is POSIX-specific")
+	}
+
+	// Shorten the post-exit wait so the test is fast while still exercising the
+	// WaitDelay-elapsed path. Restored on cleanup; production value is unchanged.
+	origBuffer := process.WaitDelayBuffer
+	process.WaitDelayBuffer = 500 * time.Millisecond
+	t.Cleanup(func() { process.WaitDelayBuffer = origBuffer })
+
+	// The shell's stdout must NOT be an *os.File, so os/exec allocates an
+	// internal OS pipe plus a copy goroutine — the path that carries the
+	// ErrWaitDelay sentinel. Drain the reader so the copy goroutine only ever
+	// blocks on the leaked write-end, not on us.
+	r, w := io.Pipe()
+	go io.Copy(io.Discard, r)       //nolint:errcheck // best-effort drain
+	t.Cleanup(func() { w.Close() }) //nolint:errcheck // best-effort cleanup
+
+	sh, err := shell.New(
+		shell.WithStdout(w),
+		shell.WithLogger(shell.DiscardLogger),
+	)
+	if err != nil {
+		t.Fatalf("shell.New() error = %v", err)
+	}
+
+	// Kill the leaked grandchild (it lives in the command's process group)
+	// regardless of outcome.
+	t.Cleanup(func() { _ = sh.Terminate() })
+
+	cmd := sh.Command(os.Args[0])
+
+	done := make(chan error, 1)
+	go func() {
+		done <- cmd.Run(t.Context(),
+			shell.ShowPrompt(false),
+			shell.WithExtraEnv(env.FromMap(map[string]string{"TEST_MAIN_LEAK_STDOUT": "1"})),
+		)
+	}()
+
+	// The bound must exceed WaitDelay (so the fixed code has time to bound the
+	// wait and return) but be far below the grandchild's lifetime (so an
+	// unbounded wait would fail deterministically instead of passing by luck).
+	const bound = 30 * time.Second
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("cmd.Run() = %v (errors.Is ErrWaitDelay = %v), want nil: a clean hook whose child leaked stdout must not be reported as failed",
+				err, errors.Is(err, exec.ErrWaitDelay))
+		}
+	case <-time.After(bound):
+		t.Fatalf("cmd.Run() did not return within %s: Cmd.Wait is hung on a leaked stdout pipe", bound)
 	}
 }
