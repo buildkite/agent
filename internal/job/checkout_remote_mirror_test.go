@@ -79,11 +79,11 @@ func TestShouldAttemptRemoteMirror(t *testing.T) {
 func TestRemoteMirrorTimeoutReservesCanonicalFallbackBudget(t *testing.T) {
 	t.Parallel()
 
-	if got := remoteMirrorTimeout(context.Background()); got != remoteMirrorAttemptTimeout {
+	if got := remoteMirrorTimeout(t.Context()); got != remoteMirrorAttemptTimeout {
 		t.Errorf("remoteMirrorTimeout(without deadline) = %s, want %s", got, remoteMirrorAttemptTimeout)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 9*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 9*time.Second)
 	defer cancel()
 	got := remoteMirrorTimeout(ctx)
 	if got <= 2*time.Second || got > 3*time.Second {
