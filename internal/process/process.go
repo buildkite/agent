@@ -34,7 +34,7 @@ const termType = "xterm-256color"
 // packages such as internal/shell — can temporarily shorten it (with a
 // defer/restore) to keep leaked-pipe regression tests fast. Production code
 // never modifies it, so behaviour is identical to the previous const.
-var WaitDelayBuffer = 10 * time.Second
+var WaitDelayBuffer = 1 * time.Second
 
 // afterPTYStartHook lets tests force work to happen after the PTY helper
 // returns so they can verify raw-mode ordering around process startup.
@@ -320,11 +320,7 @@ func (p *Process) startWithoutPTY(context.Context) (func(), error) {
 // cancellation; this keeps cancellation behaviour identical to before while
 // still bounding the post-exit I/O wait for the leaked-pipe case.
 func (p *Process) waitDelay() time.Duration {
-	if d := p.conf.SignalGracePeriod + WaitDelayBuffer; d > WaitDelayBuffer {
-		return d
-	}
-	// SignalGracePeriod unset (or non-positive): fall back to the buffer alone.
-	return WaitDelayBuffer
+	return max(p.conf.SignalGracePeriod, 0) + WaitDelayBuffer
 }
 
 // copyPTYToStdout copies pty to p.conf.Stdout. It should be a new goroutine.
