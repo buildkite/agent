@@ -113,7 +113,7 @@ func TestSetupSparseCheckout_NoCone(t *testing.T) {
 // are interpreted the way the job asked rather than however the repository was
 // last configured.
 func TestSetupSparseCheckout_PinsModeWithoutModeFlag(t *testing.T) {
-	executor, git, _ := newSparseCheckoutTestExecutor(t)
+	executor, git, out := newSparseCheckoutTestExecutor(t)
 	defer git.Close() //nolint:errcheck // Best-effort cleanup.
 
 	sc := sparseCheckout{paths: []string{"src/"}, mode: SparseCheckoutModeCone}
@@ -122,6 +122,9 @@ func TestSetupSparseCheckout_PinsModeWithoutModeFlag(t *testing.T) {
 
 	if _, err := executor.setupSparseCheckout(t.Context(), sc); err != nil {
 		t.Fatalf("executor.setupSparseCheckout(ctx, sc) error = %v, want nil", err)
+	}
+	if got, want := out.String(), "Enabling cone mode via config: this git is older than 2.35 and takes no mode option"; !strings.Contains(got, want) {
+		t.Errorf("shell output = %q, want to contain %q", got, want)
 	}
 
 	git.Check(t)

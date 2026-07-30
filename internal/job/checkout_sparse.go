@@ -208,7 +208,10 @@ func (e *Executor) setupSparseCheckout(ctx context.Context, sc sparseCheckout) (
 	args := []string{"sparse-checkout", "set"}
 	if sc.modeFlagSupported {
 		args = append(args, "--"+sc.mode.String())
-	} else if err := e.pinSparseCheckoutMode(ctx, sc); err != nil {
+	} else if err := e.pinConeMode(ctx); err != nil {
+		// Old git has no --cone on `set`. resolveSparseCheckout already rejects
+		// no-cone below minGitSparseCheckoutMode, so the only live path here is
+		// cone — pin it through config before `set` runs without a mode flag.
 		return false, err
 	}
 	// `--` keeps git from parsing a path as an option: paths can come from the
@@ -223,25 +226,18 @@ func (e *Executor) setupSparseCheckout(ctx context.Context, sc sparseCheckout) (
 	return true, nil
 }
 
-// pinSparseCheckoutMode makes the requested mode take effect on git versions
-// whose `sparse-checkout set` has no --cone/--no-cone option, by writing the
-// config git consults instead. `sparse-checkout init` has accepted --cone since
-// git 2.25, comfortably below minGitSparseCheckout.
+// pinConeMode writes core.sparseCheckoutCone=true on git versions whose
+// `sparse-checkout set` has no --cone/--no-cone option. `sparse-checkout init`
+// has accepted --cone since git 2.25, comfortably below minGitSparseCheckout.
 //
 // Without this, the interpretation comes from whatever core.sparseCheckoutCone
 // the repository already has — and `git clone --sparse` on these versions runs
 // `sparse-checkout init` with no --cone, so a cone-mode request quietly gets
 // non-cone pattern matching: paths match a directory of that name at any depth,
 // and top-level files are left out of the working tree.
-func (e *Executor) pinSparseCheckoutMode(ctx context.Context, sc sparseCheckout) error {
-	// Only cone mode reaches here: resolveSparseCheckout falls back to a full
-	// checkout when no-cone is requested on a git this old.
-	if sc.noCone() {
-		return nil
-	}
-
+func (e *Executor) pinConeMode(ctx context.Context) error {
 	e.shell.Commentf("Enabling cone mode via config: this git is older than %s and takes no mode option", minGitSparseCheckoutMode)
-	if err := e.shell.Command("git", "sparse-checkout", "init", "--cone").Run(ctx); err != nil {
+	if err := e.shell.Command("git", "sparse-checkout", "init", "--"+SparseCheckoutModeCone.String()).Run(ctx); err != nil {
 		return fmt.Errorf("enabling sparse checkout cone mode: %w", err)
 	}
 	return nil
