@@ -56,7 +56,7 @@ func (e *Executor) tryRemoteMirrorSource(
 		span.FinishWithError(nil)
 	}()
 
-	mirrorCtx, cancel := context.WithTimeout(mirrorCtx, remoteMirrorAttemptTimeout)
+	mirrorCtx, cancel := context.WithTimeout(mirrorCtx, remoteMirrorTimeout(mirrorCtx))
 	defer cancel()
 
 	e.shell.Commentf("Attempting checkout from remote Git mirror")
@@ -117,7 +117,7 @@ func (e *Executor) acquireRemoteMirrorSource(ctx context.Context, gitCloneFlags 
 		}); err != nil {
 			return fmt.Errorf("fetching exact commit from remote mirror: %w", err)
 		}
-		if _, err := e.updateRemoteURL(ctx, "", e.Repository); err != nil {
+		if err := e.shell.Command("git", "remote", "set-url", "origin", e.Repository).Run(ctx); err != nil {
 			return fmt.Errorf("setting canonical origin after mirror clone: %w", err)
 		}
 		if err := removeGitRefs(ctx, e, "refs/heads", "refs/remotes", "refs/tags"); err != nil {
@@ -129,6 +129,23 @@ func (e *Executor) acquireRemoteMirrorSource(ctx context.Context, gitCloneFlags 
 		return errors.New("exact commit is not present after remote mirror fetch")
 	}
 	return nil
+}
+
+// remoteMirrorTimeout reserves most of a checkout attempt's remaining deadline
+// for canonical fallback. Without a parent deadline the mirror gets a fixed,
+// bounded initial budget.
+func remoteMirrorTimeout(ctx context.Context) time.Duration {
+	timeout := remoteMirrorAttemptTimeout
+	if deadline, ok := ctx.Deadline(); ok {
+		remaining := time.Until(deadline)
+		if reserved := remaining / 3; reserved < timeout {
+			timeout = reserved
+		}
+	}
+	if timeout <= 0 {
+		return time.Nanosecond
+	}
+	return timeout
 }
 
 func removeGitRefs(ctx context.Context, e *Executor, prefixes ...string) error {
