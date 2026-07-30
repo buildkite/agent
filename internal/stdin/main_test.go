@@ -2,6 +2,7 @@ package stdin_test
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"runtime"
@@ -20,6 +21,14 @@ func TestMain(m *testing.M) {
 
 	case "1":
 		fmt.Printf("%v", stdin.IsReadable())
+		// Drain stdin before exiting. IsReadable only Stat()s stdin, it does
+		// not consume it, so for the piped case (`echo output | helper`) data
+		// is left unread in the pipe. On Windows, if the helper exits without
+		// draining that data, the upstream writer (cmd/echo) fails with
+		// "The process tried to write to a nonexistent pipe." and that message
+		// leaks into the parent's CombinedOutput, corrupting the assertion.
+		// Draining lets the pipe close cleanly and keeps stdout exactly "true".
+		_, _ = io.Copy(io.Discard, os.Stdin)
 		os.Exit(0)
 	}
 }
