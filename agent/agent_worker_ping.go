@@ -213,7 +213,7 @@ func (a *AgentWorker) Ping(ctx context.Context) (jobID, action string, err error
 	if ping != nil {
 		// Is there a message that should be shown in the logs?
 		if ping.Message != "" {
-			a.logger.Infof(ping.Message)
+			a.logger.Infof("%s", ping.Message)
 		}
 
 		action = ping.Action

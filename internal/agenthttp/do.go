@@ -108,7 +108,7 @@ func (t *tracer) LogDuration(event string, d time.Duration) {
 
 // Currently logger.Logger doesn't give us a way to set the level we want to emit logs at dynamically
 func (t *tracer) EmitTraceToLog(level logger.Level) {
-	msg := "HTTP Timing Trace"
+	const msg = "HTTP Timing Trace"
 	switch level {
 	case logger.DEBUG:
 		t.Debugf(msg)

@@ -1665,7 +1665,7 @@ func agentLifecycleHook(hookName string, log logger.Logger, cfg AgentStartConfig
 		scan := bufio.NewScanner(r) // log each line separately
 		log = log.WithFields(logger.StringField("hook", hookName))
 		for scan.Scan() {
-			log.Infof(scan.Text())
+			log.Infof("%s", scan.Text())
 		}
 	})
 	defer func() {
