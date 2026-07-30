@@ -9,7 +9,7 @@ import (
 
 	"github.com/buildkite/go-pipeline/jwkutil"
 	petname "github.com/dustinkirkland/golang-petname"
-	"github.com/lestrrat-go/jwx/v2/jwa"
+	"github.com/lestrrat-go/jwx/v3/jwa"
 	"github.com/urfave/cli"
 )
 
@@ -77,7 +77,10 @@ for information about JWKS, see https://tools.ietf.org/html/rfc7517`,
 			l.Infof("No key ID provided, using a randomly generated one: %s", cfg.KeyID)
 		}
 
-		sigAlg := jwa.SignatureAlgorithm(cfg.Alg)
+		sigAlg, ok := jwa.LookupSignatureAlgorithm(cfg.Alg)
+		if !ok {
+			l.Fatalf("Invalid signing algorithm: %s. Valid signing algorithms are: %s", cfg.Alg, jwkutil.ValidSigningAlgorithms)
+		}
 
 		if !slices.Contains(jwkutil.ValidSigningAlgorithms, sigAlg) {
 			l.Fatalf("Invalid signing algorithm: %s. Valid signing algorithms are: %s", cfg.Alg, jwkutil.ValidSigningAlgorithms)

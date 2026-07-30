@@ -702,6 +702,7 @@ func TestSecretsIntegration_CheckoutOverrideMode(t *testing.T) {
 		{name: "from_job_rejects_checkout_scoped_secret", envVar: "BUILDKITE_GIT_CLONE_FLAGS", secretValue: "--mirror", mode: "from-job", wantErr: true},
 		{name: "strict_rejects_checkout_locked_secret", envVar: "BUILDKITE_GIT_CLONE_FLAGS", secretValue: "--mirror", mode: "strict", wantErr: true},
 		{name: "strict_rejects_sparse_checkout_paths_secret", envVar: "BUILDKITE_GIT_SPARSE_CHECKOUT_PATHS", secretValue: "a/b", mode: "strict", wantErr: true},
+		{name: "strict_rejects_sparse_checkout_mode_secret", envVar: "BUILDKITE_GIT_SPARSE_CHECKOUT_MODE", secretValue: "no-cone", mode: "strict", wantErr: true},
 		// The lock must not over-block: a non-checkout secret is still allowed.
 		{name: "strict_allows_unscoped_secret", envVar: "MY_CUSTOM_VAR", secretValue: "hello", mode: "strict"},
 		// Disabling command-eval floors the mode to strict, so a secret that none

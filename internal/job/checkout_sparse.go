@@ -6,35 +6,181 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/buildkite/agent/v3/internal/osutil"
 	"github.com/buildkite/agent/v3/internal/shell"
 )
 
-// resolveSparseCheckout returns the cone paths to check out for this build, or
-// nil to check out the full tree — either because no paths were requested or
-// because git is too old (< 2.27).
-func (e *Executor) resolveSparseCheckout(ctx context.Context) []string {
-	paths := cleanGitSparseCheckoutPaths(e.GitSparseCheckoutPaths)
-	if len(paths) == 0 {
+// SparseCheckoutMode selects how git interprets the configured sparse-checkout
+// paths. It is set by BUILDKITE_GIT_SPARSE_CHECKOUT_MODE.
+type SparseCheckoutMode string
+
+const (
+	// SparseCheckoutModeCone treats each path as a directory to include, along
+	// with files in its ancestors. This is git's own default and only accepts
+	// directory names, not patterns.
+	SparseCheckoutModeCone SparseCheckoutMode = "cone"
+
+	// SparseCheckoutModeNoCone treats each path as a gitignore-style pattern,
+	// which allows exclusions ("!/docs/") and globs at the cost of the
+	// performance benefits of cone mode.
+	SparseCheckoutModeNoCone SparseCheckoutMode = "no-cone"
+)
+
+// SparseCheckoutModes lists the accepted mode values, default first.
+var SparseCheckoutModes = []SparseCheckoutMode{SparseCheckoutModeCone, SparseCheckoutModeNoCone}
+
+func (m SparseCheckoutMode) String() string { return string(m) }
+
+// ParseSparseCheckoutMode returns the canonical mode for a configured value. An
+// empty string selects the default (cone).
+func ParseSparseCheckoutMode(mode string) (SparseCheckoutMode, error) {
+	if mode == "" {
+		return SparseCheckoutModeCone, nil
+	}
+	if m := SparseCheckoutMode(mode); slices.Contains(SparseCheckoutModes, m) {
+		return m, nil
+	}
+	return "", fmt.Errorf("invalid sparse checkout mode %q, must be one of %v", mode, SparseCheckoutModes)
+}
+
+// git version floors for sparse checkout.
+var (
+	// minGitSparseCheckout is the first version with a stable
+	// `git sparse-checkout set`.
+	minGitSparseCheckout = gitVer{2, 27}
+
+	// minGitSparseCheckoutMode is the first version whose `sparse-checkout set`
+	// accepts --cone/--no-cone. Below it, git parses an unrecognised option as
+	// just another pattern rather than rejecting it, so the mode can only be
+	// requested from 2.35 on.
+	minGitSparseCheckoutMode = gitVer{2, 35}
+)
+
+// sparseCheckout is the sparse-checkout configuration resolved for this build.
+// The zero value means check out the full tree.
+type sparseCheckout struct {
+	paths []string
+	mode  SparseCheckoutMode
+
+	// modeEnforced reports whether mode is what git will actually apply. Below
+	// minGitSparseCheckoutMode the mode option can't be passed, so git falls
+	// back to the repository's core.sparseCheckoutCone, which `git clone
+	// --sparse` leaves unset on those versions — meaning cone mode is requested
+	// but non-cone interpretation is what happens. setupSparseCheckout warns
+	// when that's the case.
+	modeEnforced bool
+}
+
+func (s sparseCheckout) active() bool { return len(s.paths) > 0 }
+
+func (s sparseCheckout) noCone() bool { return s.mode == SparseCheckoutModeNoCone }
+
+// lfsInclude returns directory paths to pass as `git lfs fetch --include`, or
+// nil to fetch all LFS objects. Only cone-mode paths are returned: non-cone
+// patterns can't express the sparse set as an --include filter (no negation).
+// When this returns nil for an active no-cone checkout, the caller must still
+// scope `git lfs checkout` via materializedLFSPaths — see the mode table on
+// the LFS block in defaultCheckoutPhase.
+func (s sparseCheckout) lfsInclude() []string {
+	if !s.active() || s.noCone() {
 		return nil
+	}
+	return s.paths
+}
+
+// materializedLFSPaths returns LFS-tracked paths that are part of the sparse
+// working tree (index entries without the skip-worktree bit). These are safe
+// pathspecs for `git lfs checkout` when the configured sparse patterns can't be
+// reused as LFS includes.
+func (e *Executor) materializedLFSPaths(ctx context.Context) ([]string, error) {
+	skipWorktree, err := e.skipWorktreePaths(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("listing skip-worktree paths for sparse LFS checkout: %w", err)
 	}
 
-	// We require git >= 2.27 because setupSparseCheckout runs
-	// `git sparse-checkout set --cone <paths>`, which was promoted
-	// from experimental to stable in git 2.27. On older git versions,
-	// fall back to a full checkout by returning nil.
-	ok, got, err := gitVersionAtLeast(ctx, e.shell, 2, 27)
+	lfsOutput, err := e.shell.Command("git", "lfs", "ls-files", "-n").RunAndCaptureStdout(ctx)
 	if err != nil {
-		e.shell.Warningf("Sparse checkout requires git >= 2.27; falling back to full checkout (%v)", err)
-		return nil
+		return nil, fmt.Errorf("listing Git LFS files for sparse checkout: %w", err)
 	}
-	if !ok {
-		e.shell.Warningf("Sparse checkout requires git >= 2.27, got %s; falling back to full checkout", got)
-		return nil
+
+	var paths []string
+	for path := range strings.SplitSeq(strings.TrimRight(lfsOutput, "\n"), "\n") {
+		if path == "" {
+			continue
+		}
+		if _, skip := skipWorktree[path]; skip {
+			continue
+		}
+		paths = append(paths, path)
 	}
-	return paths
+	return paths, nil
+}
+
+// skipWorktreePaths returns the set of index paths with the skip-worktree bit
+// set, as reported by `git ls-files -t -z`.
+func (e *Executor) skipWorktreePaths(ctx context.Context) (map[string]struct{}, error) {
+	output, err := e.shell.Command("git", "ls-files", "-t", "-z").RunAndCaptureStdout(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	skip := make(map[string]struct{})
+	for entry := range strings.SplitSeq(strings.TrimRight(output, "\x00"), "\x00") {
+		// Format is "<status> <path>"; skip-worktree entries use status "S".
+		status, path, ok := strings.Cut(entry, " ")
+		if !ok || status != "S" || path == "" {
+			continue
+		}
+		skip[path] = struct{}{}
+	}
+	return skip, nil
+}
+
+// resolveSparseCheckout returns the sparse-checkout configuration for this
+// build. It resolves to the zero value (a full checkout) when no paths were
+// configured, and warns and does the same when git is too old to honour the
+// requested mode. The only error is an unusable mode: that's job configuration
+// we can't interpret, and failing the checkout beats guessing which files the
+// job wanted.
+func (e *Executor) resolveSparseCheckout(ctx context.Context) (sparseCheckout, error) {
+	paths := cleanGitSparseCheckoutPaths(e.GitSparseCheckoutPaths)
+	if len(paths) == 0 {
+		return sparseCheckout{}, nil
+	}
+
+	mode, err := ParseSparseCheckoutMode(e.GitSparseCheckoutMode)
+	if err != nil {
+		return sparseCheckout{}, err
+	}
+
+	// Cone mode is available as soon as `sparse-checkout set` is, because git
+	// takes the interpretation from the repository config when the mode option
+	// is missing. Non-cone mode can only be requested via the option, so it
+	// needs the higher floor; below it, fall back to a full checkout rather than
+	// checking out the wrong files.
+	required, requirement := minGitSparseCheckout, "Sparse checkout"
+	if mode == SparseCheckoutModeNoCone {
+		required, requirement = minGitSparseCheckoutMode, "Sparse checkout in no-cone mode"
+	}
+
+	version, err := gitVersion(ctx, e.shell)
+	if err != nil {
+		e.shell.Warningf("%s requires git >= %s; falling back to full checkout (%v)", requirement, required, err)
+		return sparseCheckout{}, nil
+	}
+	if !version.atLeast(required) {
+		e.shell.Warningf("%s requires git >= %s, got %s; falling back to full checkout", requirement, required, version)
+		return sparseCheckout{}, nil
+	}
+
+	return sparseCheckout{
+		paths:        paths,
+		mode:         mode,
+		modeEnforced: version.atLeast(minGitSparseCheckoutMode),
+	}, nil
 }
 
 func cleanGitSparseCheckoutPaths(paths []string) []string {
@@ -48,49 +194,30 @@ func cleanGitSparseCheckoutPaths(paths []string) []string {
 	return cleaned
 }
 
-// gitVersionAtLeast reports whether the local git binary is at least
-// major.minor. It also returns the parsed "M.m" version string so callers can
-// include it in log output. The err return is reserved for actual failures
-// (git command failure, unparseable version output) — a git that is simply
-// too old returns (false, "M.m", nil), not an error.
-func gitVersionAtLeast(ctx context.Context, sh *shell.Shell, major, minor int) (ok bool, got string, err error) {
-	output, err := sh.Command("git", "--version").RunAndCaptureStdout(ctx)
-	if err != nil {
-		return false, "", err
-	}
-
-	gitMajor, gitMinor, parseOK := parseGitVersion(strings.TrimSpace(output))
-	if !parseOK {
-		return false, "", fmt.Errorf("parsing git version from %q", strings.TrimSpace(output))
-	}
-
-	got = fmt.Sprintf("%d.%d", gitMajor, gitMinor)
-	if gitMajor != major {
-		return gitMajor > major, got, nil
-	}
-	return gitMinor >= minor, got, nil
-}
-
-func parseGitVersion(output string) (major, minor int, ok bool) {
-	if _, err := fmt.Sscanf(output, "git version %d.%d", &major, &minor); err != nil {
-		return 0, 0, false
-	}
-	return major, minor, true
-}
-
-// setupSparseCheckout configures git sparse checkout for the given cone paths.
-// When sparsePaths is empty it does a full checkout instead, disabling any
-// prior sparse checkout configuration. It returns true when sparse checkout is
+// setupSparseCheckout configures git sparse checkout for the resolved paths.
+// When sc is inactive it does a full checkout instead, disabling any prior
+// sparse checkout configuration. It returns true when sparse checkout is
 // applied, so callers can skip steps that need the full tree (e.g. submodule
 // init).
-func (e *Executor) setupSparseCheckout(ctx context.Context, sparsePaths []string) (bool, error) {
-	if len(sparsePaths) == 0 {
+func (e *Executor) setupSparseCheckout(ctx context.Context, sc sparseCheckout) (bool, error) {
+	if !sc.active() {
 		e.disableSparseCheckoutIfConfigured(ctx)
 		return false, nil
 	}
 
-	e.shell.Commentf("Setting up sparse checkout for paths: %s", strings.Join(sparsePaths, ","))
-	args := append([]string{"sparse-checkout", "set", "--cone"}, sparsePaths...)
+	e.shell.Commentf("Setting up sparse checkout (%s mode) for paths: %s", sc.mode, strings.Join(sc.paths, ","))
+
+	args := []string{"sparse-checkout", "set"}
+	if sc.modeEnforced {
+		args = append(args, "--"+sc.mode.String())
+	} else {
+		e.shell.Warningf("This git is older than %s and can't be told which sparse checkout mode to use: the paths will be interpreted using the repository's existing core.sparseCheckoutCone setting, which may not be %s mode. Upgrade git to pin the mode.", minGitSparseCheckoutMode, sc.mode)
+	}
+	// `--` keeps git from parsing a path as an option: paths can come from the
+	// pipeline, and git quietly accepts an unrecognised option as a pattern.
+	args = append(args, "--")
+	args = append(args, sc.paths...)
+
 	if err := e.shell.Command("git", args...).Run(ctx); err != nil {
 		return false, fmt.Errorf("setting sparse checkout paths: %w", err)
 	}

@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/buildkite/agent/v3/env"
+	"github.com/buildkite/agent/v3/internal/job"
 )
 
 // AgentConfiguration is the run-time configuration for an agent that
@@ -29,6 +30,7 @@ type AgentConfiguration struct {
 	GitCommitVerification           string
 	GitFetchFlags                   string
 	GitSparseCheckoutPaths          []string
+	GitSparseCheckoutMode           job.SparseCheckoutMode
 	GitSubmodules                   bool
 	GitSubmoduleCloneConfig         []string
 	SkipCheckout                    bool
@@ -69,6 +71,7 @@ type AgentConfiguration struct {
 	EnableJobLogTmpfile          bool
 	JobLogPath                   string
 	WriteJobLogsToStdout         bool
+	JobLogsOTLP                  bool
 	LogFormat                    string
 	Shell                        string
 	HooksShell                   string

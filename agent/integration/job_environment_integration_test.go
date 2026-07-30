@@ -536,6 +536,45 @@ func TestCheckoutScopedJobEnvOverrideHonorsCheckoutOverrideMode(t *testing.T) {
 			},
 			wantEnvValue: "job/path",
 		},
+		// The sparse-checkout mode shares the from-job floor with paths: pipeline/step
+		// env may set it under the default mode; only strict locks it to agent config.
+		{
+			name:    "from_job_allows_job_env_sparse_checkout_mode",
+			varName: "BUILDKITE_GIT_SPARSE_CHECKOUT_MODE",
+			jobEnv: map[string]string{
+				"BUILDKITE_GIT_SPARSE_CHECKOUT_MODE": "no-cone",
+			},
+			agentCfg: agent.AgentConfiguration{
+				GitSparseCheckoutMode: "cone",
+				CheckoutOverrideMode:  env.CheckoutOverrideFromJob,
+			},
+			wantEnvValue: "no-cone",
+		},
+		{
+			name:    "strict_locks_sparse_checkout_mode_to_agent_config",
+			varName: "BUILDKITE_GIT_SPARSE_CHECKOUT_MODE",
+			jobEnv: map[string]string{
+				"BUILDKITE_GIT_SPARSE_CHECKOUT_MODE": "no-cone",
+			},
+			agentCfg: agent.AgentConfiguration{
+				GitSparseCheckoutMode: "cone",
+				CheckoutOverrideMode:  env.CheckoutOverrideStrict,
+			},
+			wantEnvValue:       "cone",
+			wantIgnoredEnvVars: []string{"BUILDKITE_GIT_SPARSE_CHECKOUT_MODE"},
+		},
+		{
+			name:    "none_allows_job_env_to_override_sparse_checkout_mode",
+			varName: "BUILDKITE_GIT_SPARSE_CHECKOUT_MODE",
+			jobEnv: map[string]string{
+				"BUILDKITE_GIT_SPARSE_CHECKOUT_MODE": "no-cone",
+			},
+			agentCfg: agent.AgentConfiguration{
+				GitSparseCheckoutMode: "cone",
+				CheckoutOverrideMode:  env.CheckoutOverrideNone,
+			},
+			wantEnvValue: "no-cone",
+		},
 		// Inverse cases: when the agent config sits on the side that emits no var
 		// by default, the lock must still force the agent value (regression for the
 		// leak where backend job env survived while checkout override was locked).

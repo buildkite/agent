@@ -16,6 +16,7 @@ func (e *Executor) artifactPhase(ctx context.Context) error {
 	span, ctx := tracetools.StartSpanFromContext(ctx, spanName, e.TracingBackend)
 	var err error
 	defer func() { span.FinishWithError(err) }()
+	defer e.otlpLogSpan(ctx)()
 
 	err = e.preArtifactHooks(ctx)
 	if err != nil {

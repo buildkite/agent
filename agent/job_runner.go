@@ -408,10 +408,11 @@ func (r *JobRunner) createEnvironment(ctx context.Context) ([]string, error) {
 	// Most checkout-scoped vars are locked against the backend job env in every
 	// mode except none; only none lets pipeline/step env override agent config,
 	// matching the rule secrets follow (see IsCheckoutLockedForSecrets). The
-	// exception is sparse-checkout paths, which have a from-job floor: a step's
-	// checkout.sparse config is honored under the default mode too, and only strict
-	// locks it (see IsCheckoutLockedForJobEnv). Within-job sources (hooks, plugins,
-	// the Job API) are governed separately and only strict locks them.
+	// exception is the sparse-checkout paths and mode, which have a from-job floor:
+	// a step's checkout.sparse config is honored under the default mode too, and
+	// only strict locks them (see IsCheckoutLockedForJobEnv). Within-job sources
+	// (hooks, plugins, the Job API) are governed separately and only strict locks
+	// them.
 	checkoutMode := r.conf.AgentConfiguration.CheckoutOverrideMode
 
 	// Create a clone of our jobs environment. We'll then set the
@@ -432,7 +433,7 @@ func (r *JobRunner) createEnvironment(ctx context.Context) ([]string, error) {
 	if pluginsJSON := env["BUILDKITE_PLUGINS"]; pluginsJSON != "" && r.conf.KubernetesExec {
 		filtered, err := removeKubernetesPlugin([]byte(pluginsJSON))
 		if err != nil {
-			r.agentLogger.Errorf("Invalid BUILDKITE_PLUGINS: %w", err)
+			r.agentLogger.Errorf("Invalid BUILDKITE_PLUGINS: %v", err)
 		}
 		if string(filtered) == "" {
 			delete(env, "BUILDKITE_PLUGINS")
@@ -669,6 +670,7 @@ BUILDKITE_AGENT_JWKS_KEY_ID`
 	setCheckoutEnv("BUILDKITE_GIT_CLONE_FLAGS", r.conf.AgentConfiguration.GitCloneFlags)
 	setCheckoutEnv("BUILDKITE_GIT_FETCH_FLAGS", r.conf.AgentConfiguration.GitFetchFlags)
 	setCheckoutEnv("BUILDKITE_GIT_SPARSE_CHECKOUT_PATHS", strings.Join(r.conf.AgentConfiguration.GitSparseCheckoutPaths, ","))
+	setCheckoutEnv("BUILDKITE_GIT_SPARSE_CHECKOUT_MODE", r.conf.AgentConfiguration.GitSparseCheckoutMode.String())
 	setEnv("BUILDKITE_GIT_CLONE_MIRROR_FLAGS", r.conf.AgentConfiguration.GitCloneMirrorFlags)
 	setEnv("BUILDKITE_GIT_MIRROR_CHECKOUT_MODE", r.conf.AgentConfiguration.GitMirrorCheckoutMode)
 	setCheckoutEnv("BUILDKITE_GIT_CLEAN_FLAGS", r.conf.AgentConfiguration.GitCleanFlags)
@@ -748,24 +750,29 @@ BUILDKITE_AGENT_JWKS_KEY_ID`
 		setEnv("BUILDKITE_TRACING_BACKEND", r.conf.AgentConfiguration.TracingBackend)
 		setEnv("BUILDKITE_TRACING_SERVICE_NAME", r.conf.AgentConfiguration.TracingServiceName)
 
-		// Buildkite backend can provide a traceparent property on the job
-		// which can be propagated to the job tracing if OpenTelemetry is used
-		//
-		// https://www.w3.org/TR/trace-context/#traceparent-header
-		if r.conf.Job.TraceParent != "" {
-			setEnv("BUILDKITE_TRACING_TRACEPARENT", r.conf.Job.TraceParent)
-		}
-		// Buildkite backend may also provide a tracestate property on the job,
-		// which carries vendor-specific trace context alongside the traceparent.
-		//
-		// https://www.w3.org/TR/trace-context/#tracestate-header
-		if r.conf.Job.TraceState != "" {
-			setEnv("BUILDKITE_TRACING_TRACESTATE", r.conf.Job.TraceState)
-		}
 		if r.conf.AgentConfiguration.TracingPropagateTraceparent {
+			// Buildkite backend can provide a traceparent property on the job
+			// which can be propagated to the job tracing if OpenTelemetry is used.
+			//
+			// https://www.w3.org/TR/trace-context/#traceparent-header
+			if r.conf.Job.TraceParent != "" {
+				setEnv("BUILDKITE_TRACING_TRACEPARENT", r.conf.Job.TraceParent)
+			}
+			// Buildkite backend may also provide a tracestate property on the job,
+			// which carries vendor-specific trace context alongside traceparent.
+			//
+			// https://www.w3.org/TR/trace-context/#tracestate-header
+			if r.conf.Job.TraceState != "" {
+				setEnv("BUILDKITE_TRACING_TRACESTATE", r.conf.Job.TraceState)
+			}
 			setEnv("BUILDKITE_TRACING_PROPAGATE_TRACEPARENT", "true")
 		}
 	}
+
+	// This is an agent-operator setting, not a pipeline setting. Always
+	// overwrite the job-provided value so a pipeline cannot enable OTLP export
+	// or choose its destination when the agent operator has not opted in.
+	setEnv("BUILDKITE_JOB_LOGS_OTLP", fmt.Sprint(r.conf.AgentConfiguration.JobLogsOTLP))
 
 	setEnv("BUILDKITE_AGENT_DISABLE_WARNINGS_FOR", strings.Join(r.conf.AgentConfiguration.DisableWarningsFor, ","))
 

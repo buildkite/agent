@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/lestrrat-go/jwx/v2/jwa"
+	"github.com/lestrrat-go/jwx/v3/jwa"
 )
 
 func TestNewKMS_InvalidKeyResourceName(t *testing.T) {
@@ -43,11 +43,15 @@ func TestKMS_Close(t *testing.T) {
 // TestKMS_Algorithm tests that the Algorithm method returns the correct JWA algorithm
 func TestKMS_Algorithm(t *testing.T) {
 	k := &KMS{
-		jwaAlg: jwa.ES256,
+		jwaAlg: jwa.ES256(),
 	}
 
-	if alg := k.Algorithm(); alg.String() != "ES256" {
-		t.Errorf("Algorithm() = %v, want ES256", alg)
+	alg, has := k.Algorithm()
+	if !has {
+		t.Error("(*KMS).Algorithm() = (_, false), want (_, true)")
+	}
+	if alg != jwa.ES256() {
+		t.Errorf("(*KMS).Algorithm() = %v, want %v", alg, jwa.ES256())
 	}
 }
 

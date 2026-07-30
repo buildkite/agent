@@ -78,6 +78,7 @@ type BootstrapConfig struct {
 	GitCloneFlags                string   `cli:"git-clone-flags"`
 	GitFetchFlags                string   `cli:"git-fetch-flags"`
 	GitSparseCheckoutPaths       []string `cli:"git-sparse-checkout-paths" normalize:"list"`
+	GitSparseCheckoutMode        string   `cli:"git-sparse-checkout-mode"`
 	GitCloneMirrorFlags          string   `cli:"git-clone-mirror-flags"`
 	GitCleanFlags                string   `cli:"git-clean-flags"`
 	GitSSHKey                    string   `cli:"git-ssh-key"`
@@ -119,6 +120,7 @@ type BootstrapConfig struct {
 	TracingPropagateTraceparent  bool     `cli:"tracing-propagate-traceparent"`
 	TraceContextEncoding         string   `cli:"trace-context-encoding"`
 	NoJobAPI                     bool     `cli:"no-job-api"`
+	JobLogsOTLP                  bool     `cli:"job-logs-otlp"`
 	DisableWarningsFor           []string `cli:"disable-warnings-for" normalize:"list"`
 	CheckoutAttempts             int      `cli:"checkout-attempts"`
 }
@@ -258,6 +260,7 @@ var BootstrapCommand = cli.Command{
 		GitCommitVerificationFlag,
 		GitFetchFlagsFlag,
 		GitSparseCheckoutPathsFlag,
+		GitSparseCheckoutModeFlag,
 		cli.StringFlag{
 			Name:   "git-ssh-key",
 			Usage:  "SSH private key to use for git checkout",
@@ -376,11 +379,15 @@ var BootstrapCommand = cli.Command{
 			Usage:  "Accept traceparent from Buildkite control plane (default: false)",
 			EnvVar: "BUILDKITE_TRACING_PROPAGATE_TRACEPARENT",
 		},
-
 		cli.BoolFlag{
 			Name:   "no-job-api",
 			Usage:  "Disables the Job API, which gives commands in jobs some abilities to introspect and mutate the state of the job (default: false)",
 			EnvVar: "BUILDKITE_AGENT_NO_JOB_API",
+		},
+		cli.BoolFlag{
+			Name:   "job-logs-otlp",
+			Usage:  "Export job logs directly as OpenTelemetry log records using the OTEL_EXPORTER_OTLP_LOGS_* / OTEL_EXPORTER_OTLP_* environment configuration (default: false)",
+			EnvVar: "BUILDKITE_JOB_LOGS_OTLP",
 		},
 		cli.StringSliceFlag{
 			Name:   "disable-warnings-for",
@@ -436,6 +443,11 @@ var BootstrapCommand = cli.Command{
 			return fmt.Errorf("invalid git mirror checkout mode %q, must be one of %v", cfg.GitMirrorCheckoutMode, mirrorCheckoutModes)
 		}
 
+		sparseCheckoutMode, err := job.ParseSparseCheckoutMode(cfg.GitSparseCheckoutMode)
+		if err != nil {
+			return err
+		}
+
 		cancelSig, err := process.ParseSignal(cfg.CancelSignal)
 		if err != nil {
 			return fmt.Errorf("failed to parse cancel-signal: %w", err)
@@ -484,6 +496,7 @@ var BootstrapCommand = cli.Command{
 			GitFetchFlags:                cfg.GitFetchFlags,
 			GitLFSEnabled:                cfg.GitLFSEnabled,
 			GitSparseCheckoutPaths:       cfg.GitSparseCheckoutPaths,
+			GitSparseCheckoutMode:        sparseCheckoutMode.String(),
 			GitSSHKey:                    cfg.GitSSHKey,
 			GitMirrorsLockTimeout:        cfg.GitMirrorsLockTimeout,
 			GitMirrorsPath:               cfg.GitMirrorsPath,
@@ -523,6 +536,7 @@ var BootstrapCommand = cli.Command{
 			TracingTraceState:            cfg.TracingTraceState,
 			TracingPropagateTraceparent:  cfg.TracingPropagateTraceparent,
 			JobAPI:                       !cfg.NoJobAPI,
+			JobLogsOTLP:                  cfg.JobLogsOTLP,
 			DisabledWarnings:             cfg.DisableWarningsFor,
 			Secrets:                      cfg.Secrets,
 			CheckoutAttempts:             cfg.CheckoutAttempts,

@@ -74,10 +74,26 @@ type Executor struct {
 	// In order for the latter to happen, a reference is passed into the the Job API server as well
 	redactors *replacer.Mux
 
+	// otlpJobLogger exports job log output as OTLP log records while job log
+	// export is enabled. The executor updates its current span context at
+	// phase and hook boundaries via otlpLogSpan.
+	otlpJobLogger *otlpJobLogger
+
 	// jobAPI is the Job API server for this job. It's retained so the executor
 	// can consume out-of-band requests made by hooks, such as a working
 	// directory set by an unwrapped hook via the /workdir endpoint.
 	jobAPI *jobapi.Server
+
+	// stdoutTee carries the redacted child-process output (hook/command stdout
+	// and stderr) to stdout and, when OTLP job logging is enabled, mirrors it
+	// into the OTLP exporter.
+	stdoutTee *teeWriter
+
+	// stderrTee carries the redacted shell logger output (section headers,
+	// prompts, comments, warnings) to stderr and, when OTLP job logging is
+	// enabled, mirrors it into the OTLP exporter so the exported records match
+	// the customer-facing Buildkite job log.
+	stderrTee *teeWriter
 }
 
 // New returns a new executor instance
@@ -155,6 +171,16 @@ func (e *Executor) Run(ctx context.Context) (exitCode int) {
 
 	// Create an empty env for us to keep track of our env changes in
 	e.shell.Env = env.FromSlice(os.Environ())
+
+	// OTLP job log export lives entirely in the bootstrap process, which is the
+	// single home for this feature. When OpenTelemetry tracing is enabled, log
+	// records carry the span context of the nearest enclosing phase/hook span,
+	// falling back to the root job span. With tracing disabled, records are
+	// still emitted but remain uncorrelated.
+	if e.JobLogsOTLP {
+		cleanup := e.setupOTLPJobLogger(ctx)
+		defer cleanup()
+	}
 
 	// Initialize the job API, iff the experiment is enabled. Noop otherwise
 	if e.JobAPI {
@@ -390,6 +416,7 @@ func (e *Executor) executeHook(ctx context.Context, hookCfg HookConfig) (retErr 
 		"hook.command": hookCfg.Path,
 	})
 	span.AddAttributes(hookCfg.SpanAttributes)
+	defer e.otlpLogSpan(ctx)()
 
 	hookName := hookCfg.Scope
 	if hookCfg.PluginName != "" {
@@ -877,6 +904,7 @@ func addRepositoryHostToSSHKnownHosts(ctx context.Context, sh *shell.Shell, repo
 func (e *Executor) setUp(ctx context.Context) (retErr error) {
 	span, ctx := tracetools.StartSpanFromContext(ctx, "environment", e.TracingBackend)
 	defer func() { span.FinishWithError(retErr) }()
+	defer e.otlpLogSpan(ctx)()
 
 	// Add the $BUILDKITE_BIN_PATH to the $PATH if we've been given one
 	if e.BinPath != "" {
@@ -1037,6 +1065,7 @@ func (e *Executor) fetchAndSetSecrets(ctx context.Context) error {
 func (e *Executor) tearDown(ctx context.Context) (retErr error) {
 	span, ctx := tracetools.StartSpanFromContext(ctx, "pre-exit", e.TracingBackend)
 	defer func() { span.FinishWithError(retErr) }()
+	defer e.otlpLogSpan(ctx)()
 
 	// In vanilla agent usage, there's always a command phase.
 	// But over in agent-stack-k8s, which splits the agent phases among
@@ -1129,6 +1158,7 @@ func (e *Executor) CommandPhase(ctx context.Context) (hookErr, commandErr error)
 			span.FinishWithError(commandErr)
 		}
 	}()
+	defer e.otlpLogSpan(ctx)()
 
 	// Run postCommandHooks, even if there is an error from the command, but not if there is an
 	// error from the pre-command hooks. Note: any post-command hook error will be returned.
@@ -1188,12 +1218,6 @@ func (e *Executor) CommandPhase(ctx context.Context) (hookErr, commandErr error)
 
 // defaultCommandPhase is executed if there is no global or plugin command hook
 func (e *Executor) defaultCommandPhase(ctx context.Context) (retErr error) {
-	defer func() {
-		if err := e.redactors.Flush(); err != nil {
-			e.shell.Errorf("Error flushing redactors: %v", err)
-		}
-	}()
-
 	spanName := e.implementationSpecificSpanName("default command hook", "hook.execute")
 	span, ctx := tracetools.StartSpanFromContext(ctx, spanName, e.TracingBackend)
 	defer func() { span.FinishWithError(retErr) }()
@@ -1201,6 +1225,15 @@ func (e *Executor) defaultCommandPhase(ctx context.Context) (retErr error) {
 		"hook.name": "command",
 		"hook.type": "default",
 	})
+	defer e.otlpLogSpan(ctx)()
+
+	// Flush the redactors before the OTLP span restore above runs, so any
+	// withheld bytes are released and attributed to this span.
+	defer func() {
+		if err := e.redactors.Flush(); err != nil {
+			e.shell.Errorf("Error flushing redactors: %v", err)
+		}
+	}()
 
 	// Make sure we actually have a command to run
 	if strings.TrimSpace(e.Command) == "" {
@@ -1419,9 +1452,19 @@ func (e *Executor) setupRedactors(log shell.Logger, environ *env.Environment, st
 	}
 	needles = redact.AppendGoEscaped(needles)
 
-	stdoutRedactor := replacer.New(stdout, needles, redact.Redacted)
+	// Child-process output writes through this redactor into stdoutTee, whose
+	// primary sink is stdout. When OTLP job logging is enabled, a secondary
+	// sink is attached so the same already-redacted output is mirrored into
+	// the OTLP exporter.
+	e.stdoutTee = &teeWriter{primary: stdout}
+	stdoutRedactor := replacer.New(e.stdoutTee, needles, redact.Redacted)
 	e.redactors.Append(stdoutRedactor)
-	loggerRedactor := replacer.New(stderr, needles, redact.Redacted)
+	// The shell logger writes through this redactor into stderrTee, whose
+	// primary sink is stderr. When OTLP job logging is enabled, a secondary
+	// sink is attached so the same already-redacted control output is mirrored
+	// into the OTLP exporter.
+	e.stderrTee = &teeWriter{primary: stderr}
+	loggerRedactor := replacer.New(e.stderrTee, needles, redact.Redacted)
 	e.redactors.Append(loggerRedactor)
 
 	logger := shell.NewWriterLogger(loggerRedactor, true, e.DisabledWarnings)

@@ -33,6 +33,7 @@ import (
 	awssigner "github.com/buildkite/agent/v3/internal/cryptosigner/aws"
 	gcpsigner "github.com/buildkite/agent/v3/internal/cryptosigner/gcp"
 	"github.com/buildkite/agent/v3/internal/experiments"
+	"github.com/buildkite/agent/v3/internal/job"
 	"github.com/buildkite/agent/v3/internal/job/hook"
 	"github.com/buildkite/agent/v3/internal/osutil"
 	"github.com/buildkite/agent/v3/internal/process"
@@ -43,7 +44,7 @@ import (
 	"github.com/buildkite/agent/v3/tracetools"
 	"github.com/buildkite/agent/v3/version"
 	"github.com/buildkite/shellwords"
-	"github.com/lestrrat-go/jwx/v2/jwk"
+	"github.com/lestrrat-go/jwx/v3/jwk"
 	"github.com/urfave/cli"
 )
 
@@ -127,6 +128,7 @@ type AgentStartConfig struct {
 
 	LogFormat            string   `cli:"log-format"`
 	WriteJobLogsToStdout bool     `cli:"write-job-logs-to-stdout"`
+	JobLogsOTLP          bool     `cli:"job-logs-otlp"`
 	DisableWarningsFor   []string `cli:"disable-warnings-for" normalize:"list"`
 
 	BuildPath            string   `cli:"build-path" normalize:"filepath" validate:"required"`
@@ -165,6 +167,7 @@ type AgentStartConfig struct {
 	GitCleanFlags               string   `cli:"git-clean-flags"`
 	GitFetchFlags               string   `cli:"git-fetch-flags"`
 	GitSparseCheckoutPaths      []string `cli:"git-sparse-checkout-paths" normalize:"list"`
+	GitSparseCheckoutMode       string   `cli:"git-sparse-checkout-mode"`
 	GitMirrorsPath              string   `cli:"git-mirrors-path" normalize:"filepath"`
 	GitMirrorCheckoutMode       string   `cli:"git-mirror-checkout-mode"`
 	GitMirrorsLockTimeout       int      `cli:"git-mirrors-lock-timeout"`
@@ -446,6 +449,11 @@ var AgentStartCommand = cli.Command{
 			Usage:  "Writes job logs to the agent process' stdout. This simplifies log collection if running agents in Docker (default: false)",
 			EnvVar: "BUILDKITE_WRITE_JOB_LOGS_TO_STDOUT",
 		},
+		cli.BoolFlag{
+			Name:   "job-logs-otlp",
+			Usage:  "Export job logs directly as OpenTelemetry log records using the OTEL_EXPORTER_OTLP_LOGS_* / OTEL_EXPORTER_OTLP_* environment configuration (default: false)",
+			EnvVar: "BUILDKITE_JOB_LOGS_OTLP",
+		},
 		cli.StringFlag{
 			Name:   "shell",
 			Value:  DefaultShell(),
@@ -550,6 +558,7 @@ var AgentStartCommand = cli.Command{
 		GitCommitVerificationFlag,
 		GitFetchFlagsFlag,
 		GitSparseCheckoutPathsFlag,
+		GitSparseCheckoutModeFlag,
 		GitCloneMirrorFlagsFlag,
 		GitMirrorsPathFlag,
 		GitMirrorCheckoutModeFlag,
@@ -878,6 +887,11 @@ var AgentStartCommand = cli.Command{
 			return fmt.Errorf("invalid git mirror checkout mode %q, must be one of %v", cfg.GitMirrorCheckoutMode, mirrorCheckoutModes)
 		}
 
+		sparseCheckoutMode, err := job.ParseSparseCheckoutMode(cfg.GitSparseCheckoutMode)
+		if err != nil {
+			return err
+		}
+
 		if !slices.Contains(pingModes, cfg.PingMode) {
 			return fmt.Errorf("invalid ping mode %q, must be one of %v", cfg.PingMode, pingModes)
 		}
@@ -1117,6 +1131,7 @@ var AgentStartCommand = cli.Command{
 			GitCommitVerification:           cfg.GitCommitVerification,
 			GitFetchFlags:                   cfg.GitFetchFlags,
 			GitSparseCheckoutPaths:          cfg.GitSparseCheckoutPaths,
+			GitSparseCheckoutMode:           sparseCheckoutMode,
 			GitSubmodules:                   !cfg.NoGitSubmodules,
 			GitSubmoduleCloneConfig:         cfg.GitSubmoduleCloneConfig,
 			SkipCheckout:                    cfg.SkipCheckout,
@@ -1142,6 +1157,7 @@ var AgentStartCommand = cli.Command{
 			EnableJobLogTmpfile:             cfg.EnableJobLogTmpfile,
 			JobLogPath:                      cfg.JobLogPath,
 			WriteJobLogsToStdout:            cfg.WriteJobLogsToStdout,
+			JobLogsOTLP:                     cfg.JobLogsOTLP,
 			LogFormat:                       cfg.LogFormat,
 			Shell:                           cfg.Shell,
 			HooksShell:                      cfg.HooksShell,
@@ -1466,7 +1482,7 @@ var AgentStartCommand = cli.Command{
 	},
 }
 
-func parseAndValidateJWKS(ctx context.Context, keysetType, path string) (jwk.Set, error) {
+func parseAndValidateJWKS(_ context.Context, keysetType, path string) (jwk.Set, error) {
 	jwksBytes, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read job %s keyset: %w", keysetType, err)
@@ -1481,16 +1497,10 @@ func parseAndValidateJWKS(ctx context.Context, keysetType, path string) (jwk.Set
 		return nil, fmt.Errorf("job %s keyset is empty", keysetType)
 	}
 
-	iter := jwks.Keys(ctx)
-	for iter.Next(ctx) {
-		keyI := iter.Pair().Value
-		key, ok := keyI.(jwk.Key)
-		if !ok {
-			return nil, fmt.Errorf("job %s keyset contains a non-key at index %d", keysetType, iter.Pair().Index)
-		}
-
-		if _, ok = key.Get(jwk.AlgorithmKey); !ok {
-			return nil, fmt.Errorf("job %s keyset contains a key without an algorithm at index %d. all keys used for signing and verification in the agent must have their `alg` key set", keysetType, iter.Pair().Index)
+	for i := range jwks.Len() {
+		key, _ := jwks.Key(i)
+		if _, ok := key.Algorithm(); !ok {
+			return nil, fmt.Errorf("job %s keyset contains a key without an algorithm at index %d. all keys used for signing and verification in the agent must have their `alg` key set", keysetType, i)
 		}
 	}
 
@@ -1649,7 +1659,7 @@ func agentLifecycleHook(hookName string, log logger.Logger, cfg AgentStartConfig
 		scan := bufio.NewScanner(r) // log each line separately
 		log = log.WithFields(logger.StringField("hook", hookName))
 		for scan.Scan() {
-			log.Infof(scan.Text())
+			log.Infof("%s", scan.Text())
 		}
 	})
 	defer func() {

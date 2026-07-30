@@ -227,7 +227,9 @@ func copyFile(src, dst string, mode os.FileMode) error {
 }
 
 func (gr *gitRepository) Add(path string) error {
-	if _, err := gr.Execute("add", path); err != nil {
+	// `--` so a path that looks like an option (a fixture directory named
+	// "--stdin", say) is added rather than parsed as one.
+	if _, err := gr.Execute("add", "--", path); err != nil {
 		return err
 	}
 	return nil

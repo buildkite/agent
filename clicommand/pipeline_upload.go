@@ -436,7 +436,7 @@ var PipelineUploadCommand = cli.Command{
 					RetrySleepFunc: time.Sleep,
 				}
 				if err := uploader.Upload(ctx, l); err != nil {
-					l.Errorf(err.Error())
+					l.Errorf("Couldn't upload: %v", err)
 					return NewSilentExitError(1)
 				}
 
@@ -975,7 +975,7 @@ func (ica *ifChangedApplicator) gatherChangedPaths(l logger.Logger) ([]string, e
 			refspec = ica.diffBase
 		}
 		if err := exec.Command("git", "fetch", "--", remote, refspec).Run(); err != nil {
-			l.Errorf("Couldn't fetch %q from origin: %v", err)
+			l.Errorf("Couldn't fetch %q from origin: %v", refspec, err)
 			var exitErr *exec.ExitError
 			if errors.As(err, &exitErr) && len(exitErr.Stderr) > 0 {
 				// stderr came from git, which is typically human readable

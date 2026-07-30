@@ -84,8 +84,15 @@ type ExecutorConfig struct {
 	// Skip the checkout phase entirely
 	SkipCheckout bool `env:"BUILDKITE_SKIP_CHECKOUT"`
 
-	// Comma-separated list of paths for git sparse checkout (cone mode).
+	// Comma-separated list of paths for git sparse checkout
 	GitSparseCheckoutPaths []string `env:"BUILDKITE_GIT_SPARSE_CHECKOUT_PATHS"`
+
+	// How git interprets the sparse checkout paths; one of SparseCheckoutModes,
+	// where empty means the default (cone). Kept as a raw string rather than a
+	// SparseCheckoutMode because hooks, plugins and the Job API can rewrite it
+	// after startup, so it isn't known to be valid until ParseSparseCheckoutMode
+	// runs at checkout time.
+	GitSparseCheckoutMode string `env:"BUILDKITE_GIT_SPARSE_CHECKOUT_MODE"`
 
 	// Skip git fetch if the commit already exists locally
 	GitSkipFetchExistingCommits bool `env:"BUILDKITE_GIT_SKIP_FETCH_EXISTING_COMMITS"`
@@ -210,9 +217,9 @@ type ExecutorConfig struct {
 	TracingTraceParent string
 
 	// W3C tracestate accompanying TracingTraceParent. Plumbed through to the
-	// bootstrap environment whenever the server provides a value, but only
-	// attached to the OTel span context when TracingPropagateTraceparent is
-	// enabled (same opt-in gate as TracingTraceParent).
+	// bootstrap environment and attached to the OTel span context only when
+	// TracingPropagateTraceparent is enabled (same opt-in gate as
+	// TracingTraceParent).
 	TracingTraceState string
 
 	// Accept traceparent context from Buildkite control plane
@@ -223,6 +230,9 @@ type ExecutorConfig struct {
 
 	// Whether to start the JobAPI
 	JobAPI bool
+
+	// Whether to emit visible job process output as OTLP log records.
+	JobLogsOTLP bool
 
 	// The warnings that have been disabled by the user
 	DisabledWarnings []string
