@@ -144,6 +144,7 @@ type gitCloneArgs struct {
 	GitCloneFlags []string
 	Repository    string
 	Dir           string
+	Quiet         bool
 }
 
 func gitCloneWithArgs(ctx context.Context, args gitCloneArgs) error {
@@ -159,7 +160,11 @@ func gitCloneWithArgs(ctx context.Context, args gitCloneArgs) error {
 	commandArgs = append(commandArgs, args.GitCloneFlags...)
 	commandArgs = append(commandArgs, "--", args.Repository, args.Dir)
 
-	if err := args.Shell.Command("git", commandArgs...).Run(ctx); err != nil {
+	var runOpts []shell.RunCommandOpt
+	if args.Quiet {
+		runOpts = append(runOpts, shell.ShowPrompt(false), shell.ShowStderr(false))
+	}
+	if err := args.Shell.Command("git", commandArgs...).Run(ctx, runOpts...); err != nil {
 		return &gitError{error: err, Type: gitErrorClone}
 	}
 
@@ -324,6 +329,7 @@ type gitFetchArgs struct {
 	Repository    string       // The remote to fetch from
 	Retry         bool         // Whether to retry the fetch on certain errors
 	RefSpecs      []string     // Refspecs to fetch
+	Quiet         bool         // Hide command prompts and stderr (for sensitive URLs)
 }
 
 func gitFetch(ctx context.Context, args gitFetchArgs) error {
@@ -385,7 +391,11 @@ func gitFetch(ctx context.Context, args gitFetchArgs) error {
 	}
 
 	return retrier.DoWithContext(ctx, func(retrier *roko.Retrier) error {
-		if err := args.Shell.Command("git", commandArgs...).Run(ctx, shell.WithStringSearch(smelt)); err != nil {
+		runOpts := []shell.RunCommandOpt{shell.WithStringSearch(smelt)}
+		if args.Quiet {
+			runOpts = append(runOpts, shell.ShowPrompt(false), shell.ShowStderr(false))
+		}
+		if err := args.Shell.Command("git", commandArgs...).Run(ctx, runOpts...); err != nil {
 			// "fatal: [Cc]ouldn't find remote ref" happens when the remote ref does not exist (e.g. a branch that was deleted)
 			// Sometimes we want to wait for the remote ref to be created (eg in the case of the PR HEAD ref `refs/pulls/123/head
 			// that github creates asynchronously), so this case gets retried -- we don't call r.Break()

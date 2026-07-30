@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -45,6 +46,7 @@ func (e *Executor) tryRemoteMirrorSource(
 	startedAt := time.Now()
 	result := "hit"
 	fallback := false
+	var spanErr error
 	defer func() {
 		span.AddAttributes(map[string]string{
 			"git.remote_mirror.attempted": "true",
@@ -52,8 +54,9 @@ func (e *Executor) tryRemoteMirrorSource(
 			"git.remote_mirror.fallback":  fmt.Sprintf("%t", fallback),
 			"git.remote_mirror.duration":  time.Since(startedAt).String(),
 		})
-		// Mirror errors are expected optimization misses, not checkout failures.
-		span.FinishWithError(nil)
+		// Mirror errors are expected optimization misses. Only failure to
+		// discard their checkout state is a checkout failure.
+		span.FinishWithError(spanErr)
 	}()
 
 	mirrorCtx, cancel := context.WithTimeout(mirrorCtx, remoteMirrorTimeout(mirrorCtx))
@@ -69,11 +72,10 @@ func (e *Executor) tryRemoteMirrorSource(
 	result = remoteMirrorResult(mirrorCtx, err)
 	e.shell.Commentf("Remote Git mirror unavailable (%s); falling back to canonical repository", result)
 
-	if cleanupErr := e.removeCheckoutDir(); cleanupErr != nil {
-		return false, fmt.Errorf("discarding remote mirror checkout state: %w", cleanupErr)
-	}
-	if createErr := e.createCheckoutDir(); createErr != nil {
-		return false, fmt.Errorf("recreating checkout directory after remote mirror attempt: %w", createErr)
+	if cleanupErr := e.discardRemoteMirrorCheckout(ctx); cleanupErr != nil {
+		result = "error"
+		spanErr = fmt.Errorf("discarding remote mirror checkout state: %w", cleanupErr)
+		return false, spanErr
 	}
 	return false, nil
 }
@@ -93,6 +95,7 @@ func (e *Executor) acquireRemoteMirrorSource(ctx context.Context, gitCloneFlags 
 			Repository:    e.GitRemoteMirrorURL,
 			Retry:         false,
 			RefSpecs:      []string{e.Commit},
+			Quiet:         true,
 		}); err != nil {
 			return fmt.Errorf("fetching exact commit from remote mirror: %w", err)
 		}
@@ -104,6 +107,7 @@ func (e *Executor) acquireRemoteMirrorSource(ctx context.Context, gitCloneFlags 
 			GitCloneFlags: mirrorCloneFlags,
 			Repository:    e.GitRemoteMirrorURL,
 			Dir:           ".",
+			Quiet:         true,
 		}); err != nil {
 			return fmt.Errorf("cloning remote mirror: %w", err)
 		}
@@ -114,6 +118,7 @@ func (e *Executor) acquireRemoteMirrorSource(ctx context.Context, gitCloneFlags 
 			Repository:    e.GitRemoteMirrorURL,
 			Retry:         false,
 			RefSpecs:      []string{e.Commit},
+			Quiet:         true,
 		}); err != nil {
 			return fmt.Errorf("fetching exact commit from remote mirror: %w", err)
 		}
@@ -129,6 +134,39 @@ func (e *Executor) acquireRemoteMirrorSource(ctx context.Context, gitCloneFlags 
 		return errors.New("exact commit is not present after remote mirror fetch")
 	}
 	return nil
+}
+
+// discardRemoteMirrorCheckout removes all state from a failed optimization
+// attempt without using the canonical checkout's long Windows retry loop.
+// Retries are short and context-aware so canonical fallback keeps its budget.
+func (e *Executor) discardRemoteMirrorCheckout(ctx context.Context) error {
+	checkoutPath, _ := e.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH")
+	if e.checkoutRoot != nil {
+		_ = e.checkoutRoot.Close()
+		e.checkoutRoot = nil
+	}
+
+	var lastErr error
+	for range 3 {
+		e.shell.Commentf("Removing %s", checkoutPath)
+		if err := os.RemoveAll(checkoutPath); err != nil {
+			lastErr = err
+		} else if _, err := os.Stat(checkoutPath); os.IsNotExist(err) {
+			if err := e.createCheckoutDir(); err != nil {
+				return fmt.Errorf("recreating checkout directory: %w", err)
+			}
+			return nil
+		} else {
+			lastErr = fmt.Errorf("checkout directory still exists after removal")
+		}
+
+		select {
+		case <-ctx.Done():
+			return errors.Join(lastErr, ctx.Err())
+		case <-time.After(100 * time.Millisecond):
+		}
+	}
+	return lastErr
 }
 
 // remoteMirrorTimeout reserves most of a checkout attempt's remaining deadline
