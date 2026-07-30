@@ -393,6 +393,12 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context, previousAttempts in
 			return fmt.Errorf("getting/updating git mirror: %w", err)
 		}
 		e.shell.Env.Set("BUILDKITE_REPO_MIRROR", mirrorDir)
+
+		// Mirror updates run from GitMirrorsPath. Return to the checkout
+		// directory before inspecting or cloning the working repository.
+		if err := e.createCheckoutDir(); err != nil {
+			return fmt.Errorf("returning to checkout dir after updating git mirror: %w", err)
+		}
 	}
 
 	// On mirrors and dissociation:
