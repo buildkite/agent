@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/exec"
 	"os/signal"
 	"strings"
 	"syscall"
@@ -81,6 +82,29 @@ func TestMain(m *testing.M) {
 		)
 		fmt.Println("Ready")
 		fmt.Printf("SIG %v", <-signals)
+		os.Exit(0)
+
+	// leak-stdout spawns a grandchild that inherits our stdout/stderr (the
+	// write-end of the OS pipe that os/exec created for the parent, since the
+	// parent's Stdout is an *io.PipeWriter rather than an *os.File) and lives on
+	// after we exit immediately. The grandchild keeps that pipe write-end open,
+	// so the parent's Cmd.Wait copy goroutine never sees EOF. This reproduces
+	// the agent hook-hang from the CI goroutine dump.
+	case "leak-stdout":
+		grandchild := exec.Command(os.Args[0])
+		grandchild.Env = append(os.Environ(), "TEST_MAIN=leak-grandchild")
+		grandchild.Stdout = os.Stdout
+		grandchild.Stderr = os.Stderr
+		if err := grandchild.Start(); err != nil {
+			log.Fatalf("failed to start grandchild: %v", err)
+		}
+		fmt.Println("parent-exiting")
+		os.Exit(0)
+
+	// leak-grandchild holds the inherited stdout/stderr open well beyond the
+	// parent's WaitDelay so the leaked-pipe condition is exercised.
+	case "leak-grandchild":
+		time.Sleep(60 * time.Second)
 		os.Exit(0)
 
 	case "tester-pgid":

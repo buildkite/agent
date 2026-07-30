@@ -430,6 +430,63 @@ func TestProcessSetsProcessGroupID(t *testing.T) {
 	assertProcessDoesntExist(t, p)
 }
 
+// TestProcessRunDoesNotHangWhenChildLeaksStdout is a regression test for a
+// hook-hang: when Stdout/Stderr is an io.Writer that is not an *os.File (e.g.
+// an *io.PipeWriter, as the agent uses to pipe hook output to its logger),
+// os/exec allocates an internal OS pipe and a background copy goroutine.
+// Cmd.Wait cannot return until that copy goroutine sees EOF, which requires
+// every copy of the pipe write-end fd to be closed. A hook whose child
+// backgrounds a grandchild that inherits stdout keeps the write-end open after
+// the direct child exits, so without a bounded wait Cmd.Wait blocks forever
+// (observed in CI as a 10-minute test timeout). The fix bounds the post-exit
+// wait so Run returns promptly, and does not report the leaked pipe as a
+// failure of an otherwise-clean process exit.
+func TestProcessRunDoesNotHangWhenChildLeaksStdout(t *testing.T) {
+	t.Parallel()
+
+	if runtime.GOOS == "windows" {
+		t.Skip("the stdout fd-inheritance pipe-leak mechanism is POSIX-specific")
+	}
+
+	// *io.PipeWriter is deliberately NOT an *os.File, forcing os/exec down the
+	// internal-OS-pipe + copy-goroutine path that can hang.
+	r, w := io.Pipe()
+
+	// Drain the reader so the copy goroutine is never blocked on the write side.
+	go io.Copy(io.Discard, r) //nolint:errcheck // best-effort drain
+
+	p := process.New(logger.Discard, process.Config{
+		Path:   os.Args[0],
+		Env:    []string{"TEST_MAIN=leak-stdout"},
+		Stdout: w,
+		Stderr: w,
+	})
+
+	// Ensure the leaked grandchild is cleaned up regardless of outcome.
+	t.Cleanup(func() {
+		_ = p.Terminate()
+		_ = w.Close()
+	})
+
+	done := make(chan error, 1)
+	go func() { done <- p.Run(context.Background()) }()
+
+	// The bound must exceed the fix's WaitDelay (so the fixed code has time to
+	// bound the wait and return) but be far below the grandchild's lifetime (so
+	// an unbounded wait fails deterministically).
+	const bound = 30 * time.Second
+	select {
+	case err := <-done:
+		// A clean process exit whose only wrinkle is the leaked pipe must not be
+		// surfaced as a failure.
+		if err != nil {
+			t.Fatalf("p.Run() = %v, want nil (a leaked stdout pipe must not fail a clean exit)", err)
+		}
+	case <-time.After(bound):
+		t.Fatalf("p.Run() did not return within %s: Cmd.Wait is hung on a leaked stdout pipe", bound)
+	}
+}
+
 func assertProcessDoesntExist(t *testing.T, p *process.Process) {
 	t.Helper()
 

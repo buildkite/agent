@@ -23,6 +23,14 @@ import (
 
 const (
 	termType = "xterm-256color"
+
+	// waitDelayBuffer is added to the configured signal grace period to derive
+	// Cmd.WaitDelay for the non-PTY path (see (*Process).waitDelay). It provides
+	// headroom above the grace period so the agent's own group-SIGKILL always
+	// fires before os/exec's WaitDelay-triggered kill, keeping cancellation
+	// behaviour unchanged, while still bounding the post-exit I/O wait so a
+	// leaked stdout/stderr pipe can never hang Cmd.Wait indefinitely.
+	waitDelayBuffer = 10 * time.Second
 )
 
 // afterPTYStartHook lets tests force work to happen after the PTY helper
@@ -283,10 +291,37 @@ func (p *Process) startWithoutPTY(context.Context) (func(), error) {
 	p.command.Stdout = p.conf.Stdout
 	p.command.Stderr = p.conf.Stderr
 
+	// Bound how long Cmd.Wait will block after the process has exited waiting
+	// for stdout/stderr to be fully copied. When Stdout/Stderr is not an
+	// *os.File (e.g. the agent pipes hook output through an io.Pipe), os/exec
+	// allocates an internal OS pipe plus a background copy goroutine, and
+	// Cmd.Wait cannot return until that goroutine sees EOF — which requires
+	// every copy of the pipe write-end fd to be closed. If a hook backgrounds a
+	// child (or a sibling races on the fd) that inherits stdout, the write-end
+	// never closes and, without a bound, Cmd.Wait blocks forever (observed in
+	// CI as a 10-minute test timeout). WaitDelay only starts counting *after*
+	// the process exits, so normal fast or briefly-streaming hooks are
+	// unaffected. It must be set before Start.
+	p.command.WaitDelay = p.waitDelay()
+
 	if err := p.command.Start(); err != nil {
 		return nil, fmt.Errorf("error starting command: %w", err)
 	}
 	return func() {}, nil
+}
+
+// waitDelay returns the Cmd.WaitDelay to use for the non-PTY path. It is derived
+// from the signal grace period plus a buffer so that the agent's own
+// interrupt-then-group-SIGKILL sequence (see onContextCancel) always completes
+// before os/exec's WaitDelay-triggered kill would fire on context
+// cancellation; this keeps cancellation behaviour identical to before while
+// still bounding the post-exit I/O wait for the leaked-pipe case.
+func (p *Process) waitDelay() time.Duration {
+	if d := p.conf.SignalGracePeriod + waitDelayBuffer; d > waitDelayBuffer {
+		return d
+	}
+	// SignalGracePeriod unset (or non-positive): fall back to the buffer alone.
+	return waitDelayBuffer
 }
 
 // copyPTYToStdout copies pty to p.conf.Stdout. It should be a new goroutine.
@@ -328,15 +363,28 @@ func (p *Process) complete(waitResult error) error {
 	// Convert the wait result into a native WaitStatus
 	if waitResult != nil {
 		var exitErr *exec.ExitError
-		if !errors.As(waitResult, &exitErr) {
+		switch {
+		case errors.As(waitResult, &exitErr):
+			waitStatus, isWS := exitErr.Sys().(syscall.WaitStatus)
+			if !isWS {
+				return ErrNotWaitStatus
+			}
+			p.status = waitStatus
+
+		case errors.Is(waitResult, exec.ErrWaitDelay):
+			// The process itself exited cleanly (a zero exit status; otherwise
+			// Wait would have returned an *exec.ExitError above), but WaitDelay
+			// elapsed before os/exec finished copying stdout/stderr. This
+			// happens when a child leaked a copy of the output pipe's write-end
+			// fd (e.g. a hook that backgrounds a subprocess) so the pipe never
+			// EOFed. Without WaitDelay this manifested as Cmd.Wait blocking
+			// indefinitely. A clean exit must not be reported as a
+			// hook/command failure, so log and treat it as success (exit 0).
+			p.logger.Warnf("[Process] Command exited cleanly but its output pipe stayed open past the wait delay (a child likely leaked stdout/stderr); continuing")
+
+		default:
 			return fmt.Errorf("unexpected waitResult error type %[1]T: %[1]w", waitResult)
 		}
-
-		waitStatus, isWS := exitErr.Sys().(syscall.WaitStatus)
-		if !isWS {
-			return ErrNotWaitStatus
-		}
-		p.status = waitStatus
 	}
 
 	// Find the exit status or terminating signal of the script
