@@ -348,7 +348,7 @@ func NewJobRunner(ctx context.Context, l logger.Logger, apiClient *api.Client, c
 			return nil, fmt.Errorf("failed to parse BUILDKITE_CONTAINER_COUNT: %w", err)
 		}
 		r.process = kubernetes.NewRunner(r.agentLogger, kubernetes.RunnerConfig{
-			SocketPath:         kubernetes.SocketPath(jobContextDir(conf)),
+			SocketPath:         kubernetes.SocketPath(contextDir),
 			Stdout:             r.jobLogs,
 			Stderr:             r.jobLogs,
 			ClientCount:        containerCount,
@@ -1006,22 +1006,22 @@ func jobContextDir(conf JobRunnerConfig) string {
 	return os.TempDir()
 }
 
-func createJobEnvFiles(l logger.Logger, jobID, tempDir string) (shellFile, jsonFile *os.File, err error) {
-	// tempDir is not guaranteed to exist
-	if _, err := os.Stat(tempDir); os.IsNotExist(err) {
+func createJobEnvFiles(l logger.Logger, jobID, contextDir string) (shellFile, jsonFile *os.File, err error) {
+	// contextDir is not guaranteed to exist
+	if _, err := os.Stat(contextDir); os.IsNotExist(err) {
 		// Actual file permissions will be reduced by umask, and won't be 0o777 unless the user has manually changed the umask to 000
-		if err = os.MkdirAll(tempDir, 0o777); err != nil {
+		if err = os.MkdirAll(contextDir, 0o777); err != nil {
 			return nil, nil, err
 		}
 	}
 
-	shellFile, err = os.CreateTemp(tempDir, fmt.Sprintf("job-env-%s", jobID))
+	shellFile, err = os.CreateTemp(contextDir, fmt.Sprintf("job-env-%s", jobID))
 	if err != nil {
 		return nil, nil, err
 	}
 	l.Debugf("[JobRunner] Created env file (shell format): %s", shellFile.Name())
 
-	jsonFile, err = os.CreateTemp(tempDir, fmt.Sprintf("job-env-json-%s", jobID))
+	jsonFile, err = os.CreateTemp(contextDir, fmt.Sprintf("job-env-json-%s", jobID))
 	if err != nil {
 		_ = shellFile.Close()
 		_ = os.Remove(shellFile.Name())
@@ -1032,11 +1032,11 @@ func createJobEnvFiles(l logger.Logger, jobID, tempDir string) (shellFile, jsonF
 	return shellFile, jsonFile, nil
 }
 
-// jobTimeoutFilePath returns a deterministic path within the job temp
+// jobTimeoutFilePath returns a deterministic path within the job context
 // directory used to signal to the bootstrap that the job was cancelled
 // because of a Buildkite job-level timeout. The file is not created until
 // the timeout actually fires; the bootstrap detects the timeout by checking
 // whether the file exists.
-func jobTimeoutFilePath(jobID, tempDir string) string {
-	return filepath.Join(tempDir, fmt.Sprintf("job-timeout-%s", jobID))
+func jobTimeoutFilePath(jobID, contextDir string) string {
+	return filepath.Join(contextDir, fmt.Sprintf("job-timeout-%s", jobID))
 }

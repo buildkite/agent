@@ -113,9 +113,12 @@ var (
 		Usage: "The directory for files the agent uses to coordinate with the " +
 			"processes running the job: the job env files, the job timeout marker " +
 			"file, and, in Kubernetes mode, the coordination socket " +
-			"(buildkite.sock). In Kubernetes mode this defaults to /workspace and " +
-			"must be on a volume mounted by all containers in the pod; otherwise " +
-			"it defaults to the system temporary directory",
+			"(buildkite.sock). With agent-stack-k8s, leave this unset: the stack " +
+			"manages the shared /workspace volume that Kubernetes mode defaults " +
+			"to. When running --kubernetes-exec under your own orchestration, set " +
+			"this on every container to the path where the shared volume is " +
+			"mounted in that container. Outside Kubernetes mode it defaults to " +
+			"the system temporary directory and rarely needs changing",
 		EnvVar: "BUILDKITE_JOB_CONTEXT_DIR",
 	}
 
