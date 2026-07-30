@@ -283,7 +283,12 @@ func (e *ExecutorTester) ExpectGlobalHook(name string) *bintest.Expectation {
 func (e *ExecutorTester) Run(t *testing.T, env ...string) error {
 	t.Helper()
 
+	// Hold cmdLock across setup and Start so Cancel can't observe a nil
+	// Process (and so it blocks until the command is actually running).
+	e.cmdLock.Lock()
+
 	if err := e.flushPendingLocalHooks(); err != nil {
+		e.cmdLock.Unlock()
 		return err
 	}
 
@@ -298,10 +303,10 @@ func (e *ExecutorTester) Run(t *testing.T, env ...string) error {
 
 	path, err := exec.LookPath(e.Name)
 	if err != nil {
+		e.cmdLock.Unlock()
 		return err
 	}
 
-	e.cmdLock.Lock()
 	e.cmd = exec.Command(path, e.Args...)
 
 	buf := &buffer{}
@@ -331,10 +336,9 @@ func (e *ExecutorTester) Run(t *testing.T, env ...string) error {
 }
 
 func (e *ExecutorTester) Cancel() error {
-	// Run does setup (hooks, mocks) before acquiring cmdLock and calling Start,
-	// so Cancel can land while e.cmd / e.cmd.Process is still nil. Wait briefly
-	// for the process rather than nil-dereferencing.
-	deadline := time.Now().Add(5 * time.Second)
+	// Run may not have reached Start yet (caller races a sleep against setup).
+	// Wait for a live Process rather than nil-dereferencing.
+	deadline := time.Now().Add(30 * time.Second)
 	for {
 		e.cmdLock.Lock()
 		if e.cmd != nil && e.cmd.Process != nil {
