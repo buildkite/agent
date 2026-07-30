@@ -18,6 +18,7 @@ import (
 	"sync"
 	"syscall"
 	"testing"
+	"time"
 
 	"github.com/buildkite/agent/v3/clicommand"
 	"github.com/buildkite/agent/v3/env"
@@ -330,10 +331,25 @@ func (e *ExecutorTester) Run(t *testing.T, env ...string) error {
 }
 
 func (e *ExecutorTester) Cancel() error {
-	e.cmdLock.Lock()
-	defer e.cmdLock.Unlock()
-	log.Printf("Killing pid %d", e.cmd.Process.Pid)
-	return e.cmd.Process.Signal(syscall.SIGINT)
+	// Run does setup (hooks, mocks) before acquiring cmdLock and calling Start,
+	// so Cancel can land while e.cmd / e.cmd.Process is still nil. Wait briefly
+	// for the process rather than nil-dereferencing.
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		e.cmdLock.Lock()
+		if e.cmd != nil && e.cmd.Process != nil {
+			log.Printf("Killing pid %d", e.cmd.Process.Pid)
+			err := e.cmd.Process.Signal(syscall.SIGINT)
+			e.cmdLock.Unlock()
+			return err
+		}
+		e.cmdLock.Unlock()
+
+		if time.Now().After(deadline) {
+			return fmt.Errorf("timed out waiting for command to start before cancel")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
 }
 
 func (e *ExecutorTester) CheckMocks(t *testing.T) {
