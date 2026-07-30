@@ -28,13 +28,28 @@ func (e *Executor) configureGitCredentialHelper(ctx context.Context) error {
 		return fmt.Errorf("enabling git credential.useHttpPath: %w", err)
 	}
 
-	helper := fmt.Sprintf(`%s git-credentials-helper`, self.Path(ctx))
+	helper := gitCredentialHelperCommand(ctx)
 	err = e.shell.Command("git", "config", "--global", "credential.helper", helper).Run(ctx, shell.ShowPrompt(false))
 	if err != nil {
 		return fmt.Errorf("configuring git credential.helper: %w", err)
 	}
 
 	return nil
+}
+
+func gitCredentialHelperCommand(ctx context.Context) string {
+	return fmt.Sprintf(`%s git-credentials-helper`, self.Path(ctx))
+}
+
+// gitCredentialHelperFlags returns per-invocation Git configuration for the
+// existing Buildkite credential helper. Clearing credential.helper first keeps
+// inherited helpers from receiving credentials for the remote mirror.
+func gitCredentialHelperFlags(ctx context.Context) string {
+	return strings.Join([]string{
+		"-c", "credential.useHttpPath=true",
+		"-c", "credential.helper=",
+		"-c", "credential.helper=" + shellwords.Quote(gitCredentialHelperCommand(ctx)),
+	}, " ")
 }
 
 // Disables SSH keyscan and configures git to use HTTPS instead of SSH for github.

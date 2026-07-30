@@ -220,7 +220,13 @@ func (r *JobRunner) Run(ctx context.Context, ignoreAgentInDispatches *bool) (err
 func (r *JobRunner) validateConfigAllowlists(job *api.Job) error {
 	validations := map[string]func() error{
 		"repo": func() error {
-			return validateJobValue(r.conf.AgentConfiguration.AllowedRepositories, job.Env["BUILDKITE_REPO"])
+			if err := validateJobValue(r.conf.AgentConfiguration.AllowedRepositories, job.Env["BUILDKITE_REPO"]); err != nil {
+				return err
+			}
+			if mirrorURL := job.Env["BUILDKITE_GIT_REMOTE_MIRROR_URL"]; mirrorURL != "" {
+				return validateJobValue(r.conf.AgentConfiguration.AllowedRepositories, mirrorURL)
+			}
+			return nil
 		},
 		"environment variables": func() error {
 			return validateEnv(job.Env, r.conf.AgentConfiguration.AllowedEnvironmentVariables)
