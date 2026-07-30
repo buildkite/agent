@@ -183,7 +183,7 @@ func (r *JobRunner) Run(ctx context.Context, ignoreAgentInDispatches *bool) (err
 	// Validate the repository if the list of allowed repositories is set.
 	if err := r.validateConfigAllowlists(job); err != nil {
 		_, _ = fmt.Fprintln(r.jobLogs, err.Error())
-		r.agentLogger.Errorf(err.Error())
+		r.agentLogger.Errorf("%v", err)
 
 		exit.Status = -1
 		exit.SignalReason = SignalReasonAgentRefused

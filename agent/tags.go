@@ -136,7 +136,7 @@ func (t *tagFetcher) Fetch(ctx context.Context, l logger.Logger, conf FetchTagsC
 			if conf.FailOnMissingTags {
 				return nil, fmt.Errorf("failed to fetch EC2 meta-data: %w", err)
 			}
-			l.Errorf(fmt.Sprintf("Failed to fetch EC2 meta-data: %s", err.Error()))
+			l.Errorf("Failed to fetch EC2 meta-data: %v", err)
 		}
 	}
 
@@ -144,7 +144,7 @@ func (t *tagFetcher) Fetch(ctx context.Context, l logger.Logger, conf FetchTagsC
 	if len(conf.TagsFromEC2MetaDataPaths) > 0 {
 		paths, err := parseTagValuePathPairs(conf.TagsFromEC2MetaDataPaths)
 		if err != nil {
-			l.Errorf(fmt.Sprintf("Error parsing meta-data tag and path pairs: %s", err.Error()))
+			l.Errorf("Error parsing meta-data tag and path pairs: %v", err)
 		}
 
 		ec2Tags, err := t.ec2MetaDataPaths(paths)
@@ -152,7 +152,7 @@ func (t *tagFetcher) Fetch(ctx context.Context, l logger.Logger, conf FetchTagsC
 			if conf.FailOnMissingTags {
 				return nil, fmt.Errorf("failed to fetch EC2 meta-data from paths: %w", err)
 			}
-			l.Errorf(fmt.Sprintf("Failed to fetch EC2 meta-data: %s", err.Error()))
+			l.Errorf("Failed to fetch EC2 meta-data: %v", err)
 		} else {
 			for tag, value := range ec2Tags {
 				tags = append(tags, fmt.Sprintf("%s=%s", tag, value))
@@ -190,7 +190,7 @@ func (t *tagFetcher) Fetch(ctx context.Context, l logger.Logger, conf FetchTagsC
 			if conf.FailOnMissingTags {
 				return nil, fmt.Errorf("failed to fetch EC2 tags: %w", err)
 			}
-			l.Errorf(fmt.Sprintf("Failed to find EC2 tags: %s", err.Error()))
+			l.Errorf("Failed to find EC2 tags: %v", err)
 		}
 	}
 
@@ -220,7 +220,7 @@ func (t *tagFetcher) Fetch(ctx context.Context, l logger.Logger, conf FetchTagsC
 			if conf.FailOnMissingTags {
 				return nil, fmt.Errorf("failed to fetch ECS meta-data: %w", err)
 			}
-			l.Errorf(fmt.Sprintf("Failed to fetch ECS meta-data: %s", err.Error()))
+			l.Errorf("Failed to fetch ECS meta-data: %v", err)
 		}
 	}
 
@@ -236,7 +236,7 @@ func (t *tagFetcher) Fetch(ctx context.Context, l logger.Logger, conf FetchTagsC
 			gcpTags, err := t.gcpMetaDataDefault()
 			if err != nil {
 				// Don't blow up if we can't find them, just show a nasty error.
-				l.Errorf(fmt.Sprintf("Failed to fetch Google Cloud meta-data: %s", err.Error()))
+				l.Errorf("Failed to fetch Google Cloud meta-data: %v", err)
 				return err
 			}
 
@@ -250,7 +250,7 @@ func (t *tagFetcher) Fetch(ctx context.Context, l logger.Logger, conf FetchTagsC
 			if conf.FailOnMissingTags {
 				return nil, fmt.Errorf("failed to fetch GCP meta-data: %w", err)
 			}
-			l.Errorf(fmt.Sprintf("Failed to fetch GCP meta-data: %s", err.Error()))
+			l.Errorf("Failed to fetch GCP meta-data: %v", err)
 		}
 	}
 
@@ -258,7 +258,7 @@ func (t *tagFetcher) Fetch(ctx context.Context, l logger.Logger, conf FetchTagsC
 	if len(conf.TagsFromGCPMetaDataPaths) > 0 {
 		paths, err := parseTagValuePathPairs(conf.TagsFromGCPMetaDataPaths)
 		if err != nil {
-			l.Errorf(fmt.Sprintf("Error parsing meta-data tag and path pairs: %s", err.Error()))
+			l.Errorf("Error parsing meta-data tag and path pairs: %v", err)
 		}
 
 		gcpTags, err := t.gcpMetaDataPaths(paths)
@@ -266,7 +266,7 @@ func (t *tagFetcher) Fetch(ctx context.Context, l logger.Logger, conf FetchTagsC
 			if conf.FailOnMissingTags {
 				return nil, fmt.Errorf("failed to fetch GCP meta-data from paths: %w", err)
 			}
-			l.Errorf(fmt.Sprintf("Failed to fetch Google Cloud meta-data: %s", err.Error()))
+			l.Errorf("Failed to fetch Google Cloud meta-data: %v", err)
 		} else {
 			for tag, value := range gcpTags {
 				tags = append(tags, fmt.Sprintf("%s=%s", tag, value))
@@ -301,7 +301,7 @@ func (t *tagFetcher) Fetch(ctx context.Context, l logger.Logger, conf FetchTagsC
 			if conf.FailOnMissingTags {
 				return nil, fmt.Errorf("failed to fetch GCP instance labels: %w", err)
 			}
-			l.Errorf(fmt.Sprintf("Failed to find GCP instance labels: %s", err.Error()))
+			l.Errorf("Failed to find GCP instance labels: %v", err)
 		}
 	}
 

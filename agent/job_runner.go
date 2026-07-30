@@ -433,7 +433,7 @@ func (r *JobRunner) createEnvironment(ctx context.Context) ([]string, error) {
 	if pluginsJSON := env["BUILDKITE_PLUGINS"]; pluginsJSON != "" && r.conf.KubernetesExec {
 		filtered, err := removeKubernetesPlugin([]byte(pluginsJSON))
 		if err != nil {
-			r.agentLogger.Errorf("Invalid BUILDKITE_PLUGINS: %w", err)
+			r.agentLogger.Errorf("Invalid BUILDKITE_PLUGINS: %v", err)
 		}
 		if string(filtered) == "" {
 			delete(env, "BUILDKITE_PLUGINS")
