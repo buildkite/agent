@@ -469,7 +469,7 @@ func TestProcessRunDoesNotHangWhenChildLeaksStdout(t *testing.T) {
 	})
 
 	done := make(chan error, 1)
-	go func() { done <- p.Run(context.Background()) }()
+	go func() { done <- p.Run(t.Context()) }()
 
 	// The bound must exceed the fix's WaitDelay (so the fixed code has time to
 	// bound the wait and return) but be far below the grandchild's lifetime (so
