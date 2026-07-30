@@ -303,3 +303,66 @@ func TestCancelDoesNotSetTimedOutWhenMarkerMissing(t *testing.T) {
 		t.Errorf("BUILDKITE_JOB_TIMED_OUT was set despite missing marker file, want unset")
 	}
 }
+
+func TestShFallback(t *testing.T) {
+	t.Parallel()
+
+	pathWith := func(available ...string) func(string) (string, error) {
+		return func(executable string) (string, error) {
+			for _, a := range available {
+				if executable == a {
+					return "/bin/" + a, nil
+				}
+			}
+			return "", errors.New("not found")
+		}
+	}
+
+	tests := []struct {
+		name        string
+		interpreter []string
+		absPath     func(string) (string, error)
+		want        []string
+	}{
+		{
+			name:        "no fallback when bash is on PATH",
+			interpreter: []string{"/usr/bin/env", "bash", "-e", "-c"},
+			absPath:     pathWith("bash", "sh"),
+			want:        nil,
+		},
+		{
+			name:        "falls back to sh when bash is absent",
+			interpreter: []string{"/usr/bin/env", "bash", "-e", "-c"},
+			absPath:     pathWith("sh"),
+			want:        []string{"/bin/sh", "-e", "-c"},
+		},
+		{
+			name:        "no fallback for explicit bash path",
+			interpreter: []string{"/bin/bash", "-e", "-c"},
+			absPath:     pathWith("sh"),
+			want:        nil,
+		},
+		{
+			name:        "no fallback for other interpreters",
+			interpreter: []string{"/usr/bin/env", "zsh", "-e", "-c"},
+			absPath:     pathWith("sh"),
+			want:        nil,
+		},
+		{
+			name:        "no fallback when sh is also absent",
+			interpreter: []string{"/usr/bin/env", "bash", "-e", "-c"},
+			absPath:     pathWith(),
+			want:        nil,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			got := shFallback(test.interpreter, test.absPath)
+			if diff := cmp.Diff(test.want, got); diff != "" {
+				t.Errorf("shFallback() diff (-want +got):\n%s", diff)
+			}
+		})
+	}
+}

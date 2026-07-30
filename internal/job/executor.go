@@ -1272,6 +1272,11 @@ func (e *Executor) defaultCommandPhase(ctx context.Context) (retErr error) {
 		return fmt.Errorf("no shell set for job")
 	}
 
+	if fallback := shFallback(interpreter, e.shell.AbsolutePath); fallback != nil {
+		e.shell.Warningf("Couldn't find bash. Falling back to %s. Commands that rely on bash features may fail.", fallback[0])
+		interpreter = fallback
+	}
+
 	// Windows CMD.EXE is horrible and can't handle newline delimited commands. We write
 	// a batch script so that it works, but we don't like it
 	if strings.ToUpper(filepath.Base(interpreter[0])) == "CMD.EXE" {
@@ -1356,6 +1361,25 @@ func (e *Executor) defaultCommandPhase(ctx context.Context) (retErr error) {
 
 	err = e.shell.Command(cmd[0], cmd[1:]...).Run(ctx, shell.ShowPrompt(false))
 	return err
+}
+
+// shFallback returns a replacement interpreter that uses sh when the given
+// interpreter relies on finding bash via PATH but no bash is available, such
+// as in minimal (e.g. Alpine-based) images. This is only the case for the
+// default shell on systems without /bin/bash; interpreters with explicit
+// paths are left alone. It returns nil when no fallback is needed or possible.
+func shFallback(interpreter []string, absPath func(string) (string, error)) []string {
+	if len(interpreter) < 2 || interpreter[0] != "/usr/bin/env" || interpreter[1] != "bash" {
+		return nil
+	}
+	if _, err := absPath("bash"); err == nil {
+		return nil
+	}
+	shPath, err := absPath("sh")
+	if err != nil {
+		return nil
+	}
+	return append([]string{shPath}, interpreter[2:]...)
 }
 
 /*
