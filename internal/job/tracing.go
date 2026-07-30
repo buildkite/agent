@@ -222,11 +222,58 @@ func (e *Executor) contextWithTraceparentIfEnabled(ctx context.Context) context.
 	return propagation.TraceContext{}.Extract(ctx, carrier)
 }
 
+// jobTracingValues holds the job identity values needed by
+// genericTracingExtras. They can come from the Executor config or, in
+// per-job processes, directly from the environment.
+type jobTracingValues struct {
+	AgentName        string
+	Queue            string
+	OrganizationSlug string
+	PipelineSlug     string
+	Branch           string
+	JobID            string
+}
+
 func GenericTracingExtras(e *Executor, env *env.Environment) map[string]any {
+	return genericTracingExtras(jobTracingValues{
+		AgentName:        e.AgentName,
+		Queue:            e.Queue,
+		OrganizationSlug: e.OrganizationSlug,
+		PipelineSlug:     e.PipelineSlug,
+		Branch:           e.Branch,
+		JobID:            e.JobID,
+	}, env)
+}
+
+// OTelResourceAttributesFromEnv derives the generic tracing attributes from
+// the environment alone, as OpenTelemetry attributes. It is used when
+// initialising the TracerProvider in a per-job process (such as bootstrap),
+// so that job attributes like buildkite.retry become resource attributes
+// inherited by every span, matching agent versions before v3.116.0.
+func OTelResourceAttributesFromEnv(environ *env.Environment) []attribute.KeyValue {
+	get := func(key string) string {
+		v, _ := environ.Get(key)
+		return v
+	}
+	extras := genericTracingExtras(jobTracingValues{
+		AgentName:        get("BUILDKITE_AGENT_NAME"),
+		Queue:            get("BUILDKITE_AGENT_META_DATA_QUEUE"),
+		OrganizationSlug: get("BUILDKITE_ORGANIZATION_SLUG"),
+		PipelineSlug:     get("BUILDKITE_PIPELINE_SLUG"),
+		Branch:           get("BUILDKITE_BRANCH"),
+		JobID:            get("BUILDKITE_JOB_ID"),
+	}, environ)
+	// genericTracingExtras only produces strings and ints, so no attributes
+	// can be dropped for having an unknown type.
+	attrs, _ := toOpenTelemetryAttributes(extras)
+	return attrs
+}
+
+func genericTracingExtras(v jobTracingValues, env *env.Environment) map[string]any {
 	buildID, _ := env.Get("BUILDKITE_BUILD_ID")
 	buildNumber, _ := env.Get("BUILDKITE_BUILD_NUMBER")
 	buildURL, _ := env.Get("BUILDKITE_BUILD_URL")
-	jobURL := api.JobURL(buildURL, e.JobID)
+	jobURL := api.JobURL(buildURL, v.JobID)
 	source, _ := env.Get("BUILDKITE_SOURCE")
 
 	retry := 0
@@ -264,15 +311,15 @@ func GenericTracingExtras(e *Executor, env *env.Environment) map[string]any {
 	}
 
 	result := map[string]any{
-		"buildkite.agent":             e.AgentName,
+		"buildkite.agent":             v.AgentName,
 		"buildkite.version":           version.Version(),
-		"buildkite.queue":             e.Queue,
-		"buildkite.org":               e.OrganizationSlug,
-		"buildkite.pipeline":          e.PipelineSlug,
-		"buildkite.branch":            e.Branch,
+		"buildkite.queue":             v.Queue,
+		"buildkite.org":               v.OrganizationSlug,
+		"buildkite.pipeline":          v.PipelineSlug,
+		"buildkite.branch":            v.Branch,
 		"buildkite.job_label":         jobLabel,
 		"buildkite.job_key":           jobKey,
-		"buildkite.job_id":            e.JobID,
+		"buildkite.job_id":            v.JobID,
 		"buildkite.job_url":           jobURL,
 		"buildkite.build_id":          buildID,
 		"buildkite.build_number":      buildNumber,

@@ -20,6 +20,7 @@ import (
 	"github.com/oleiade/reflections"
 	"github.com/urfave/cli"
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/propagation"
 )
 
@@ -614,7 +615,15 @@ func setupLoggerAndConfig[T any](ctx context.Context, c *cli.Context, opts ...co
 				serviceName = snStr
 			}
 		}
-		traceProvider, err := job.InitOTelTracerProvider(ctx, serviceName, nil)
+		// When this process runs within a job (e.g. bootstrap or a subcommand
+		// invoked from a hook), attach the job's attributes to the provider
+		// resource so that every span inherits them, not just the root span.
+		var resourceAttrs []attribute.KeyValue
+		if os.Getenv("BUILDKITE_JOB_ID") != "" {
+			resourceAttrs = job.OTelResourceAttributesFromEnv(env.FromSlice(os.Environ()))
+		}
+
+		traceProvider, err := job.InitOTelTracerProvider(ctx, serviceName, resourceAttrs)
 		if err != nil {
 			l.Warnf("Failed to initialize tracing: %v", err)
 		} else {
