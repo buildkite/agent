@@ -15,7 +15,7 @@ import (
 	"io"
 
 	kms "cloud.google.com/go/kms/apiv1"
-	"github.com/lestrrat-go/jwx/v2/jwa"
+	"github.com/lestrrat-go/jwx/v3/jwa"
 	"google.golang.org/api/option"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 
@@ -71,26 +71,26 @@ func NewKMS(ctx context.Context, keyResourceName string, opts ...option.ClientOp
 
 	switch pubKeyResp.Algorithm {
 	case kmspb.CryptoKeyVersion_EC_SIGN_P256_SHA256:
-		jwaAlg = jwa.ES256
+		jwaAlg = jwa.ES256()
 		hashAlg = crypto.SHA256
 	case kmspb.CryptoKeyVersion_EC_SIGN_P384_SHA384:
-		jwaAlg = jwa.ES384
+		jwaAlg = jwa.ES384()
 		hashAlg = crypto.SHA384
 	case kmspb.CryptoKeyVersion_RSA_SIGN_PKCS1_2048_SHA256,
 		kmspb.CryptoKeyVersion_RSA_SIGN_PKCS1_3072_SHA256,
 		kmspb.CryptoKeyVersion_RSA_SIGN_PKCS1_4096_SHA256:
-		jwaAlg = jwa.RS256
+		jwaAlg = jwa.RS256()
 		hashAlg = crypto.SHA256
 	case kmspb.CryptoKeyVersion_RSA_SIGN_PSS_2048_SHA256,
 		kmspb.CryptoKeyVersion_RSA_SIGN_PSS_3072_SHA256,
 		kmspb.CryptoKeyVersion_RSA_SIGN_PSS_4096_SHA256:
-		jwaAlg = jwa.PS256
+		jwaAlg = jwa.PS256()
 		hashAlg = crypto.SHA256
 	case kmspb.CryptoKeyVersion_RSA_SIGN_PKCS1_4096_SHA512:
-		jwaAlg = jwa.RS512
+		jwaAlg = jwa.RS512()
 		hashAlg = crypto.SHA512
 	case kmspb.CryptoKeyVersion_RSA_SIGN_PSS_4096_SHA512:
-		jwaAlg = jwa.PS512
+		jwaAlg = jwa.PS512()
 		hashAlg = crypto.SHA512
 	default:
 		_ = client.Close()
@@ -242,8 +242,8 @@ func (k *KMS) GetPublicKey() (crypto.PublicKey, error) {
 }
 
 // Algorithm returns the JWA key algorithm for this key.
-func (k *KMS) Algorithm() jwa.KeyAlgorithm {
-	return k.jwaAlg
+func (k *KMS) Algorithm() (jwa.KeyAlgorithm, bool) {
+	return k.jwaAlg, true
 }
 
 // Close closes the underlying KMS client connection.
