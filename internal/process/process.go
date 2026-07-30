@@ -23,18 +23,13 @@ import (
 
 const termType = "xterm-256color"
 
-// WaitDelayBuffer is added to the configured signal grace period to derive
+// waitDelayBuffer is added to the configured signal grace period to derive
 // Cmd.WaitDelay for the non-PTY path (see (*Process).waitDelay). It provides
 // headroom above the grace period so the agent's own group-SIGKILL always
 // fires before os/exec's WaitDelay-triggered kill, keeping cancellation
 // behaviour unchanged, while still bounding the post-exit I/O wait so a
 // leaked stdout/stderr pipe can never hang Cmd.Wait indefinitely.
-//
-// It is a var rather than a const so tests — including those in dependent
-// packages such as internal/shell — can temporarily shorten it (with a
-// defer/restore) to keep leaked-pipe regression tests fast. Production code
-// never modifies it, so behaviour is identical to the previous const.
-var WaitDelayBuffer = 1 * time.Second
+const waitDelayBuffer = 1 * time.Second
 
 // afterPTYStartHook lets tests force work to happen after the PTY helper
 // returns so they can verify raw-mode ordering around process startup.
@@ -320,7 +315,7 @@ func (p *Process) startWithoutPTY(context.Context) (func(), error) {
 // cancellation; this keeps cancellation behaviour identical to before while
 // still bounding the post-exit I/O wait for the leaked-pipe case.
 func (p *Process) waitDelay() time.Duration {
-	return max(p.conf.SignalGracePeriod, 0) + WaitDelayBuffer
+	return max(p.conf.SignalGracePeriod, 0) + waitDelayBuffer
 }
 
 // copyPTYToStdout copies pty to p.conf.Stdout. It should be a new goroutine.

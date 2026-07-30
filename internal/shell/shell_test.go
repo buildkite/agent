@@ -708,17 +708,9 @@ func TestRound(t *testing.T) {
 // Run already returns nil; the leak surfaces only via WaitResult(), which is
 // what this shell-level test exercises.
 func TestRunDoesNotReportCleanHookAsFailedWhenChildLeaksStdout(t *testing.T) {
-	// Not parallel: this temporarily mutates the process-package global
-	// WaitDelayBuffer, which other parallel tests running commands would race.
 	if runtime.GOOS == "windows" {
 		t.Skip("the stdout fd-inheritance pipe-leak mechanism is POSIX-specific")
 	}
-
-	// Shorten the post-exit wait so the test is fast while still exercising the
-	// WaitDelay-elapsed path. Restored on cleanup; production value is unchanged.
-	origBuffer := process.WaitDelayBuffer
-	process.WaitDelayBuffer = 500 * time.Millisecond
-	t.Cleanup(func() { process.WaitDelayBuffer = origBuffer })
 
 	// The shell's stdout must NOT be an *os.File, so os/exec allocates an
 	// internal OS pipe plus a copy goroutine — the path that carries the
