@@ -240,6 +240,39 @@ func TestGitClone(t *testing.T) {
 	}
 }
 
+func TestGitCloneWithGlobalFlags(t *testing.T) {
+	t.Parallel()
+	ctx := t.Context()
+
+	var gotLog [][]string
+	sh := shell.NewTestShell(t, shell.WithDryRun(true), shell.WithCommandLog(&gotLog))
+	absoluteGit, err := sh.AbsolutePath("git")
+	if err != nil {
+		t.Fatalf("sh.AbsolutePath(git) = %v", err)
+	}
+
+	err = gitCloneWithArgs(ctx, gitCloneArgs{
+		Shell:         sh,
+		GitFlags:      "-c credential.helper= -c 'credential.helper=agent git-credentials-helper'",
+		GitCloneFlags: []string{"--no-checkout"},
+		Repository:    "repo",
+		Dir:           "dir",
+	})
+	if err != nil {
+		t.Fatalf("gitCloneWithArgs() error = %v", err)
+	}
+
+	wantLog := [][]string{{
+		absoluteGit,
+		"-c", "credential.helper=",
+		"-c", "credential.helper=agent git-credentials-helper",
+		"clone", "--no-checkout", "--", "repo", "dir",
+	}}
+	if diff := cmp.Diff(gotLog, wantLog); diff != "" {
+		t.Errorf("executed commands diff (-got +want):\n%s", diff)
+	}
+}
+
 func TestHasPartialFilterFlags(t *testing.T) {
 	t.Parallel()
 
