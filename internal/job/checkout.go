@@ -315,7 +315,7 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context, previousAttempts in
 	// Adopt the repo-checkout child ctx so git.* spans nest under it.
 	ctx = spanCtx
 
-	if e.SSHKeyscan {
+	if e.SSHKeyscan && !e.skipRepositorySSHKeyscan {
 		addRepositoryHostToSSHKnownHosts(ctx, e.shell, e.Repository)
 	}
 

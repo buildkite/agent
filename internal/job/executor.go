@@ -56,6 +56,10 @@ type Executor struct {
 	// The checkout directory root
 	checkoutRoot *os.Root
 
+	// Whether keyscan should be skipped for the primary repository because its
+	// SSH URL is rewritten to HTTPS. Plugins and submodules still use SSHKeyscan.
+	skipRepositorySSHKeyscan bool
+
 	// Plugins to use
 	plugins []*plugin.Plugin
 
@@ -375,7 +379,7 @@ func (e *Executor) configureRepositoryProviderGitCredentials(ctx context.Context
 	}
 
 	if strings.HasPrefix(e.Repository, "git@github.com:") {
-		e.SSHKeyscan = false
+		e.skipRepositorySSHKeyscan = true
 		if err := e.configureHTTPSInsteadOfSSH(ctx); err != nil {
 			return err
 		}
