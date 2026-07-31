@@ -224,7 +224,7 @@ func (e *Executor) checkout(ctx context.Context) error {
 				switch errGit.Type {
 				case gitErrorClean, gitErrorCleanSubmodules, gitErrorClone,
 					gitErrorCheckoutRetryClean, gitErrorFetchRetryClean,
-					gitErrorFetchBadObject:
+					gitErrorFetchBadObject, gitErrorFetchRefNotOnRemote:
 					// Checkout can fail because of corrupted files in the checkout which can leave the agent in a state where it
 					// keeps failing. This removes the checkout dir, which means the next checkout will be a lot slower (clone vs
 					// fetch), but hopefully will allow the agent to self-heal
@@ -332,27 +332,6 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context, previousAttempts in
 		}()
 	}
 
-	var mirrorDir string
-
-	// If we can, get a mirror of the git repository to use for reference later
-	if e.GitMirrorsPath != "" && e.Repository != "" {
-		span.AddAttributes(map[string]string{"checkout.is_using_git_mirrors": "true"})
-
-		var err error
-
-		mirrorSpan, mirrorCtx := e.traceOpSpan(ctx, "git.mirror.update")
-		mirrorSpan.AddAttributes(map[string]string{"git.repo": redact.URLCredentials(e.Repository)})
-
-		mirrorDir, err = e.getOrUpdateMirrorDir(mirrorCtx, e.Repository)
-
-		mirrorSpan.FinishWithError(err)
-
-		if err != nil {
-			return fmt.Errorf("getting/updating git mirror: %w", err)
-		}
-		e.shell.Env.Set("BUILDKITE_REPO_MIRROR", mirrorDir)
-	}
-
 	// Make sure the build directory exists and that we change directory into it
 	if err := e.createCheckoutDir(); err != nil {
 		return fmt.Errorf("creating checkout dir: %w", err)
@@ -376,6 +355,52 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context, previousAttempts in
 	// original user-supplied state, not on flags we auto-add here.
 	userSuppliedCloneFilter := hasPartialFilterFlags(gitCloneFlags)
 
+	// When sparse checkout applies, add two clone flags:
+	//   --sparse             clone in sparse mode
+	//   --filter=blob:none   make it a partial clone, so blobs outside the
+	//                        sparse set aren't downloaded up front
+	// Each flag is added only if the user hasn't already supplied their own.
+	if sparse.active() {
+		if slices.Contains(gitCloneFlags, "--sparse") {
+			e.shell.Commentf("Sparse checkout is configured and BUILDKITE_GIT_CLONE_FLAGS already contains a --sparse flag (preserving user-supplied sparse checkout).")
+		} else {
+			gitCloneFlags = append(gitCloneFlags, "--sparse")
+		}
+		if userSuppliedCloneFilter {
+			e.shell.Commentf("Sparse checkout is configured and BUILDKITE_GIT_CLONE_FLAGS already contains a --filter (preserving user-supplied filter).")
+		} else {
+			gitCloneFlags = append(gitCloneFlags, "--filter=blob:none")
+		}
+	}
+
+	sourceAcquired, err := e.tryRemoteMirrorSource(ctx, previousAttempts, gitCloneFlags)
+	if err != nil {
+		return err
+	}
+
+	var mirrorDir string
+	if !sourceAcquired && e.GitMirrorsPath != "" && e.Repository != "" {
+		span.AddAttributes(map[string]string{"checkout.is_using_git_mirrors": "true"})
+
+		mirrorSpan, mirrorCtx := e.traceOpSpan(ctx, "git.mirror.update")
+		mirrorSpan.AddAttributes(map[string]string{"git.repo": redact.URLCredentials(e.Repository)})
+
+		mirrorDir, err = e.getOrUpdateMirrorDir(mirrorCtx, e.Repository)
+
+		mirrorSpan.FinishWithError(err)
+
+		if err != nil {
+			return fmt.Errorf("getting/updating git mirror: %w", err)
+		}
+		e.shell.Env.Set("BUILDKITE_REPO_MIRROR", mirrorDir)
+
+		// Mirror updates run from GitMirrorsPath. Return to the checkout
+		// directory before inspecting or cloning the working repository.
+		if err := e.createCheckoutDir(); err != nil {
+			return fmt.Errorf("returning to checkout dir after updating git mirror: %w", err)
+		}
+	}
+
 	// On mirrors and dissociation:
 	//
 	// --reference makes the clone reuse objects from the mirror, using the
@@ -391,81 +416,65 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context, previousAttempts in
 	// is important even when CleanCheckout is enabled, because auto-maintenance
 	// can happen on the mirror at any time!
 
-	// Does the git directory exist?
-	existingGitDir := filepath.Join(e.shell.Getwd(), ".git")
-	if osutil.FileExists(existingGitDir) {
-		// Ensure the origin matches the configured repo, so we can
-		// gracefully handle repository renames.
-		if _, err := e.updateRemoteURL(ctx, "", e.Repository); err != nil {
-			return fmt.Errorf("setting origin: %w", err)
-		}
+	if !sourceAcquired {
+		// Does the git directory exist?
+		existingGitDir := filepath.Join(e.shell.Getwd(), ".git")
+		if osutil.FileExists(existingGitDir) {
+			// Ensure the origin matches the configured repo, so we can
+			// gracefully handle repository renames.
+			if _, err := e.updateRemoteURL(ctx, "", e.Repository); err != nil {
+				return fmt.Errorf("setting origin: %w", err)
+			}
 
-		if mirrorDir != "" {
-			switch e.GitMirrorCheckoutMode {
-			case "dissociate":
-				// If the existing repo is still relying on the reference, then
-				// "dissociate" it (git repack, and delete the alternates file).
-				if err := e.traceOp(ctx, "git.dissociate", func(ctx context.Context) error {
-					return e.dissociateIfNeeded(ctx, existingGitDir)
-				}); err != nil {
-					return fmt.Errorf("dissociating existing reference clone: %w", err)
+			if mirrorDir != "" {
+				switch e.GitMirrorCheckoutMode {
+				case "dissociate":
+					// If the existing repo is still relying on the reference, then
+					// "dissociate" it (git repack, and delete the alternates file).
+					if err := e.traceOp(ctx, "git.dissociate", func(ctx context.Context) error {
+						return e.dissociateIfNeeded(ctx, existingGitDir)
+					}); err != nil {
+						return fmt.Errorf("dissociating existing reference clone: %w", err)
+					}
+				case "reference":
+					// If the existing repo does not have a reference to the mirror,
+					// create one. Existing objects don't need cleaning up.
+					if err := e.reassociateIfNeeded(ctx, existingGitDir, mirrorDir); err != nil {
+						return fmt.Errorf("reassociating existing clone: %w", err)
+					}
 				}
-			case "reference":
-				// If the existing repo does not have a reference to the mirror,
-				// create one. Existing objects don't need cleaning up.
-				if err := e.reassociateIfNeeded(ctx, existingGitDir, mirrorDir); err != nil {
-					return fmt.Errorf("reassociating existing clone: %w", err)
+			}
+
+		} else { // the .git directory does not already exist
+
+			// Compute the clone flags. For mirrors we need --reference, and usually
+			// --dissociate.
+			if mirrorDir != "" {
+				gitCloneFlags = append(gitCloneFlags, "--reference", mirrorDir)
+				if e.GitMirrorCheckoutMode == "dissociate" {
+					gitCloneFlags = append(gitCloneFlags, "--dissociate")
 				}
 			}
-		}
 
-	} else { // the .git directory does not already exist
-
-		// Compute the clone flags. For mirrors we need --reference, and usually
-		// --dissociate.
-		if mirrorDir != "" {
-			gitCloneFlags = append(gitCloneFlags, "--reference", mirrorDir)
-			if e.GitMirrorCheckoutMode == "dissociate" {
-				gitCloneFlags = append(gitCloneFlags, "--dissociate")
+			// Do the clone.
+			cloneSpan, cloneCtx := e.traceOpSpan(ctx, "git.clone")
+			mirrorMode := "none"
+			if mirrorDir != "" {
+				mirrorMode = e.GitMirrorCheckoutMode
 			}
-		}
+			cloneSpan.AddAttributes(map[string]string{
+				"git.mirror_mode":     mirrorMode,
+				"git.sparse":          strconv.FormatBool(sparse.active()),
+				"git.blobless_filter": strconv.FormatBool(hasPartialFilterFlags(gitCloneFlags)),
+			})
 
-		// When sparse checkout applies, add two clone flags:
-		//   --sparse             clone in sparse mode
-		//   --filter=blob:none   make it a partial clone, so blobs outside the
-		//                        sparse set aren't downloaded up front
-		// Each flag is added only if the user hasn't already supplied their own.
-		if sparse.active() {
-			if slices.Contains(gitCloneFlags, "--sparse") {
-				e.shell.Commentf("Sparse checkout is configured and BUILDKITE_GIT_CLONE_FLAGS already contains a --sparse flag (preserving user-supplied sparse checkout).")
-			} else {
-				gitCloneFlags = append(gitCloneFlags, "--sparse")
+			cloneErr := gitClone(cloneCtx, e.shell, gitCloneFlags, e.Repository, ".")
+
+			cloneSpan.FinishWithError(cloneErr)
+
+			if cloneErr != nil {
+				return fmt.Errorf("cloning git repository: %w", cloneErr)
 			}
-			if userSuppliedCloneFilter {
-				e.shell.Commentf("Sparse checkout is configured and BUILDKITE_GIT_CLONE_FLAGS already contains a --filter (preserving user-supplied filter).")
-			} else {
-				gitCloneFlags = append(gitCloneFlags, "--filter=blob:none")
-			}
-		}
-
-		// Do the clone.
-		cloneSpan, cloneCtx := e.traceOpSpan(ctx, "git.clone")
-		mirrorMode := "none"
-		if mirrorDir != "" {
-			mirrorMode = e.GitMirrorCheckoutMode
-		}
-		cloneSpan.AddAttributes(map[string]string{
-			"git.mirror_mode":     mirrorMode,
-			"git.sparse":          strconv.FormatBool(sparse.active()),
-			"git.blobless_filter": strconv.FormatBool(hasPartialFilterFlags(gitCloneFlags)),
-		})
-
-		cloneErr := gitClone(cloneCtx, e.shell, gitCloneFlags, e.Repository, ".")
-
-		cloneSpan.FinishWithError(cloneErr)
-
-		if cloneErr != nil {
-			return fmt.Errorf("cloning git repository: %w", cloneErr)
 		}
 	}
 
@@ -506,8 +515,10 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context, previousAttempts in
 	addBloblessFilter := sparse.active() &&
 		!userSuppliedCloneFilter &&
 		!hasPartialFilterFlags(gitFetchFlags)
-	if err := e.fetchSource(ctx, addBloblessFilter); err != nil {
-		return err
+	if !sourceAcquired {
+		if err := e.fetchSource(ctx, addBloblessFilter); err != nil {
+			return err
+		}
 	}
 
 	if err := e.traceOp(ctx, "git.verify_commit", func(ctx context.Context) error {

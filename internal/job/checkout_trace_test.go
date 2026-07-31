@@ -80,6 +80,45 @@ func TestTraceGitCheckout_Mirrors(t *testing.T) {
 	assertSpanChildOf(t, spans, "git.dissociate", "repo-checkout")
 }
 
+func TestTraceGitCheckout_RemoteMirror(t *testing.T) {
+	sh, err := shell.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	e := &Executor{
+		shell: sh,
+		ExecutorConfig: ExecutorConfig{
+			Branch:         "feature-branch",
+			GitCleanFlags:  "-f -d -x",
+			PullRequest:    "false",
+			TracingBackend: tracetools.BackendOpenTelemetry,
+		},
+	}
+	_, commit := setupCheckoutTestRepo(t, e, "trace-remote-mirror")
+	e.Commit = commit
+	e.GitRemoteMirrorURL = e.Repository
+
+	recorder := installGlobalSpanRecorder(t)
+	if err := e.defaultCheckoutPhase(t.Context(), 0); err != nil {
+		t.Fatalf("defaultCheckoutPhase error = %v, want nil", err)
+	}
+
+	spans := recorder.Ended()
+	assertSpanChildOf(t, spans, "git.remote_mirror.attempt", "repo-checkout")
+	mirrorAttempt := findOnlySpan(t, spans, "git.remote_mirror.attempt")
+	assertSpanAttr(t, mirrorAttempt, "git.remote_mirror.attempted", "true")
+	assertSpanAttr(t, mirrorAttempt, "git.remote_mirror.result", "hit")
+	assertSpanAttr(t, mirrorAttempt, "git.remote_mirror.fallback", "false")
+	if _, ok := spanAttr(mirrorAttempt, "git.remote_mirror.duration"); !ok {
+		t.Error("remote mirror attempt span is missing duration")
+	}
+	for _, attr := range mirrorAttempt.Attributes() {
+		if strings.Contains(attr.Value.AsString(), e.GitRemoteMirrorURL) {
+			t.Errorf("remote mirror attempt span attribute %q contains repository URL", attr.Key)
+		}
+	}
+}
+
 // TestTraceGitCheckout_Submodules asserts the git.submodules and
 // git.submodule.update spans are emitted for a repo with a submodule.
 func TestTraceGitCheckout_Submodules(t *testing.T) {
