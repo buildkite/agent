@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/buildkite/agent/v3/env"
@@ -301,5 +302,157 @@ func TestCancelDoesNotSetTimedOutWhenMarkerMissing(t *testing.T) {
 	}
 	if _, ok := e.shell.Env.Get("BUILDKITE_JOB_TIMED_OUT"); ok {
 		t.Errorf("BUILDKITE_JOB_TIMED_OUT was set despite missing marker file, want unset")
+	}
+}
+
+func TestUseRepositoryProviderGitCredentials(t *testing.T) {
+	tests := []struct {
+		name string
+		env  map[string]string
+		want bool
+	}{
+		{name: "generic flag", env: map[string]string{"BUILDKITE_USE_REPOSITORY_PROVIDER_GIT_CREDENTIALS": "true"}, want: true},
+		{name: "legacy flag", env: map[string]string{"BUILDKITE_USE_GITHUB_APP_GIT_CREDENTIALS": "true"}, want: true},
+		{name: "both flags", env: map[string]string{
+			"BUILDKITE_USE_REPOSITORY_PROVIDER_GIT_CREDENTIALS": "true",
+			"BUILDKITE_USE_GITHUB_APP_GIT_CREDENTIALS":          "true",
+		}, want: true},
+		{name: "generic false", env: map[string]string{"BUILDKITE_USE_REPOSITORY_PROVIDER_GIT_CREDENTIALS": "false"}},
+		{name: "unset"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			e := New(ExecutorConfig{})
+			sh, err := shell.New(shell.WithEnv(env.New()))
+			if err != nil {
+				t.Fatal(err)
+			}
+			e.shell = sh
+			for key, value := range test.env {
+				sh.Env.Set(key, value)
+			}
+			if got := e.useRepositoryProviderGitCredentials(); got != test.want {
+				t.Errorf("useRepositoryProviderGitCredentials() = %t, want %t", got, test.want)
+			}
+		})
+	}
+}
+
+func TestConfigureRepositoryProviderGitCredentials(t *testing.T) {
+	tests := []struct {
+		name              string
+		repository        string
+		refreshRepository string
+		env               map[string]string
+		wantSSHKeyscan    bool
+		wantSkipRepoScan  bool
+		wantGitHubRewrite bool
+	}{
+		{
+			name:              "GitHub SSH primary rewrites under provider flag",
+			repository:        "git@github.com:acme/widgets.git",
+			env:               map[string]string{"BUILDKITE_USE_REPOSITORY_PROVIDER_GIT_CREDENTIALS": "true"},
+			wantSSHKeyscan:    true,
+			wantSkipRepoScan:  true,
+			wantGitHubRewrite: true,
+		},
+		{
+			name:              "later non-GitHub repository restores primary keyscan",
+			repository:        "git@github.com:acme/widgets.git",
+			refreshRepository: "git@git.example.com:acme/widgets.git",
+			env:               map[string]string{"BUILDKITE_USE_REPOSITORY_PROVIDER_GIT_CREDENTIALS": "true"},
+			wantSSHKeyscan:    true,
+			wantGitHubRewrite: true,
+		},
+		{
+			name:              "later GitHub SSH repository enables rewrite and skips primary keyscan",
+			repository:        "git@git.example.com:acme/widgets.git",
+			refreshRepository: "git@github.com:acme/widgets.git",
+			env:               map[string]string{"BUILDKITE_USE_REPOSITORY_PROVIDER_GIT_CREDENTIALS": "true"},
+			wantSSHKeyscan:    true,
+			wantSkipRepoScan:  true,
+			wantGitHubRewrite: true,
+		},
+		{
+			name:           "provider HTTPS does not rewrite unrelated GitHub SSH remotes",
+			repository:     "https://git.example.com/acme/widgets.git",
+			env:            map[string]string{"BUILDKITE_USE_REPOSITORY_PROVIDER_GIT_CREDENTIALS": "true"},
+			wantSSHKeyscan: true,
+		},
+		{
+			name:           "provider non-GitHub SSH keeps keyscan without rewrite",
+			repository:     "git@git.example.com:acme/widgets.git",
+			env:            map[string]string{"BUILDKITE_USE_REPOSITORY_PROVIDER_GIT_CREDENTIALS": "true"},
+			wantSSHKeyscan: true,
+		},
+		{
+			name:              "legacy flag always rewrites GitHub SSH remotes and disables keyscan",
+			repository:        "https://git.example.com/acme/widgets.git",
+			env:               map[string]string{"BUILDKITE_USE_GITHUB_APP_GIT_CREDENTIALS": "true"},
+			wantGitHubRewrite: true,
+		},
+		{
+			name:       "both flags preserve legacy behavior before setUp",
+			repository: "https://git.example.com/acme/widgets.git",
+			env: map[string]string{
+				"BUILDKITE_USE_REPOSITORY_PROVIDER_GIT_CREDENTIALS": "true",
+				"BUILDKITE_USE_GITHUB_APP_GIT_CREDENTIALS":          "true",
+			},
+			wantGitHubRewrite: true,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			home := t.TempDir()
+			shEnv := env.New()
+			shEnv.Set("HOME", home)
+			shEnv.Set("GIT_CONFIG_GLOBAL", filepath.Join(home, ".gitconfig"))
+			shEnv.Set("GIT_CONFIG_NOSYSTEM", "1")
+			shEnv.Set("PATH", os.Getenv("PATH"))
+			for key, value := range test.env {
+				shEnv.Set(key, value)
+			}
+			sh, err := shell.New(shell.WithEnv(shEnv), shell.WithLogger(shell.DiscardLogger))
+			if err != nil {
+				t.Fatal(err)
+			}
+			e := New(ExecutorConfig{
+				Repository: test.repository,
+				SSHKeyscan: true,
+			})
+			e.shell = sh
+
+			if err := e.configureRepositoryProviderGitCredentials(t.Context(), false); err != nil {
+				t.Fatal(err)
+			}
+			if err := e.configureRepositoryProviderGitCredentials(t.Context(), true); err != nil {
+				t.Fatal(err)
+			}
+			if test.refreshRepository != "" {
+				e.Repository = test.refreshRepository
+				if err := e.configureRepositoryProviderGitCredentials(t.Context(), true); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if got := e.SSHKeyscan; got != test.wantSSHKeyscan {
+				t.Errorf("SSHKeyscan = %t, want %t", got, test.wantSSHKeyscan)
+			}
+			if got := e.skipRepositorySSHKeyscan; got != test.wantSkipRepoScan {
+				t.Errorf("skipRepositorySSHKeyscan = %t, want %t", got, test.wantSkipRepoScan)
+			}
+
+			config, err := sh.Command("git", "config", "--global", "--list").RunAndCaptureStdout(t.Context())
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !strings.Contains(config, "credential.usehttppath=true") ||
+				!strings.Contains(config, "credential.helper=") {
+				t.Errorf("global Git config does not contain credential helper settings:\n%s", config)
+			}
+			hasRewrite := strings.Contains(config, "url.https://github.com/.insteadof=git@github.com:")
+			if hasRewrite != test.wantGitHubRewrite {
+				t.Errorf("GitHub rewrite present = %t, want %t\n%s", hasRewrite, test.wantGitHubRewrite, config)
+			}
+		})
 	}
 }

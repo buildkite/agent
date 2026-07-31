@@ -56,6 +56,10 @@ type Executor struct {
 	// The checkout directory root
 	checkoutRoot *os.Root
 
+	// Whether keyscan should be skipped for the primary repository because its
+	// SSH URL is rewritten to HTTPS. Plugins and submodules still use SSHKeyscan.
+	skipRepositorySSHKeyscan bool
+
 	// Plugins to use
 	plugins []*plugin.Plugin
 
@@ -207,24 +211,13 @@ func (e *Executor) Run(ctx context.Context) (exitCode int) {
 		}
 	}()
 
-	if env, ok := e.shell.Env.Get("BUILDKITE_USE_GITHUB_APP_GIT_CREDENTIALS"); ok && env == "true" {
-		// On hosted compute, we are not going to use SSH keys, so we don't need to scan for SSH keys.
-		//
-		// TODO: This may break non-GitHub SSH checkout for other SCMs on self-hosted compute.
-		// So we need to revise this before enabling the code access app on self-hosted agents.
-		e.SSHKeyscan = false
-
-		err := e.configureGitCredentialHelper(ctx)
-		if err != nil {
-			e.shell.Errorf("Error configuring git credential helper: %v", err)
-			retErr = err
-			return shell.ExitCode(err)
-		}
-
-		// so that the new credential helper will be used for all github urls
-		err = e.configureHTTPSInsteadOfSSH(ctx)
-		if err != nil {
-			e.shell.Errorf("Error configuring https instead of ssh: %v", err)
+	// Install the credential helper (and legacy GitHub App rewrite) before
+	// setUp so environment hooks can clone private repositories. Provider-
+	// specific rewrite/keyscan decisions that depend on BUILDKITE_REPO wait
+	// until after setUp refreshes the repository URL.
+	if e.useRepositoryProviderGitCredentials() {
+		if err := e.configureRepositoryProviderGitCredentials(ctx, false); err != nil {
+			e.shell.Errorf("Error configuring repository credentials: %v", err)
 			retErr = err
 			return shell.ExitCode(err)
 		}
@@ -243,6 +236,14 @@ func (e *Executor) Run(ctx context.Context) (exitCode int) {
 			return exitErr.Code
 		}
 		return ExitCodeSetupFailure
+	}
+
+	if e.useRepositoryProviderGitCredentials() {
+		if err := e.configureRepositoryProviderGitCredentials(ctx, true); err != nil {
+			e.shell.Errorf("Error configuring repository credentials: %v", err)
+			retErr = err
+			return shell.ExitCode(err)
+		}
 	}
 
 	// Execute the job phases in order
@@ -339,6 +340,54 @@ func (e *Executor) Run(ctx context.Context) (exitCode int) {
 	exitStatusCode, _ := strconv.Atoi(exitStatus)
 
 	return exitStatusCode
+}
+
+func (e *Executor) useRepositoryProviderGitCredentials() bool {
+	return e.shell.Env.GetString("BUILDKITE_USE_REPOSITORY_PROVIDER_GIT_CREDENTIALS", "") == "true" ||
+		e.shell.Env.GetString("BUILDKITE_USE_GITHUB_APP_GIT_CREDENTIALS", "") == "true"
+}
+
+// configureRepositoryProviderGitCredentials installs managed git credentials.
+// When afterSetUp is false, it installs the credential helper and applies the
+// legacy GitHub App's unconditional rewrite/keyscan behavior. When true, it
+// applies only the provider-neutral flag's repository-dependent rewrite using
+// the latest repository URL. Checkout refreshes this after pre-checkout hooks
+// in case a later hook changed BUILDKITE_REPO.
+//
+// When both flags are set, preserve legacy behavior so existing jobs retain
+// their pre-setUp GitHub rewrite while the provider-neutral flag rolls out.
+func (e *Executor) configureRepositoryProviderGitCredentials(ctx context.Context, afterSetUp bool) error {
+	genericFlag := e.shell.Env.GetString("BUILDKITE_USE_REPOSITORY_PROVIDER_GIT_CREDENTIALS", "") == "true"
+	legacyFlag := e.shell.Env.GetString("BUILDKITE_USE_GITHUB_APP_GIT_CREDENTIALS", "") == "true"
+	legacyGithubApp := legacyFlag
+	providerNeutral := genericFlag && !legacyFlag
+
+	if !afterSetUp {
+		if err := e.configureGitCredentialHelper(ctx); err != nil {
+			return err
+		}
+		if legacyGithubApp {
+			e.SSHKeyscan = false
+			if err := e.configureHTTPSInsteadOfSSH(ctx); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+
+	if !providerNeutral {
+		return nil
+	}
+
+	e.skipRepositorySSHKeyscan = strings.HasPrefix(e.Repository, "git@github.com:")
+	// Intentionally sticky for the job: once enabled, this rewrite remains active
+	// if hooks change BUILDKITE_REPO, so later GitHub URLs use managed credentials.
+	if e.skipRepositorySSHKeyscan {
+		if err := e.configureHTTPSInsteadOfSSH(ctx); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (e *Executor) includePhase(phase string) bool {

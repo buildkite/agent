@@ -35,6 +35,15 @@ func (e *Executor) CheckoutPhase(ctx context.Context) (retErr error) {
 		return err
 	}
 
+	// Environment and pre-checkout hooks can change BUILDKITE_REPO. Refresh the
+	// provider-neutral rewrite and primary-repository keyscan decision using the
+	// repository that the checkout will actually use.
+	if e.useRepositoryProviderGitCredentials() {
+		if err := e.configureRepositoryProviderGitCredentials(ctx, true); err != nil {
+			return fmt.Errorf("refreshing repository credentials before checkout: %w", err)
+		}
+	}
+
 	// Remove the checkout directory if BUILDKITE_CLEAN_CHECKOUT is present
 	if e.CleanCheckout {
 		e.shell.Headerf("Cleaning pipeline checkout")
@@ -315,7 +324,7 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context, previousAttempts in
 	// Adopt the repo-checkout child ctx so git.* spans nest under it.
 	ctx = spanCtx
 
-	if e.SSHKeyscan {
+	if e.SSHKeyscan && !e.skipRepositorySSHKeyscan {
 		addRepositoryHostToSSHKnownHosts(ctx, e.shell, e.Repository)
 	}
 
