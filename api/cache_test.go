@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -242,6 +243,66 @@ func TestCacheEntryRetrieve_Success(t *testing.T) {
 	}
 }
 
+// Pins the retrieve→expire contract at the wire: a literal server payload (not
+// our Go type) with a `scopes` key must decode into resp.Scopes, so the agent
+// can echo it back on expire. A symmetric struct round-trip can't catch a wrong
+// or renamed json tag; a literal payload can.
+func TestCacheEntryRetrieve_DecodesScopesWireKey(t *testing.T) {
+	const body = `{"target_paths":["node_modules"],` +
+		`"cache_key":[{"value":"test-key","mandatory":true}],` +
+		`"blobs":[],"fallback":false,` +
+		`"scopes":{"branch":"main","pipeline":"web-app"}}`
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(body))
+	}))
+	defer server.Close()
+
+	client := newTestCacheClient(t, server.URL)
+
+	resp, found, _, err := client.CacheEntryRetrieve(t.Context(), "test-slug", api.CacheEntryRetrieveReq{
+		TargetPaths: []string{"node_modules"},
+		CacheKey:    []api.CacheKeyPart{{Value: "test-key", Mandatory: true}},
+	})
+	if err != nil {
+		t.Fatalf("CacheEntryRetrieve error = %v, want nil", err)
+	}
+	if !found {
+		t.Error("found = false, want true")
+	}
+	if got, want := resp.Scopes, (map[string]string{"branch": "main", "pipeline": "web-app"}); !reflect.DeepEqual(got, want) {
+		t.Errorf("resp.Scopes = %v, want %v", got, want)
+	}
+}
+
+// The omitempty tag must not surface a spurious key: an unscoped retrieve payload
+// (no `scopes`) decodes to a nil map, which the agent then omits on expire.
+func TestCacheEntryRetrieve_UnscopedHasNilScopes(t *testing.T) {
+	const body = `{"target_paths":["node_modules"],"cache_key":[{"value":"test-key","mandatory":true}],"blobs":[]}`
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(body))
+	}))
+	defer server.Close()
+
+	client := newTestCacheClient(t, server.URL)
+
+	resp, _, _, err := client.CacheEntryRetrieve(t.Context(), "test-slug", api.CacheEntryRetrieveReq{
+		TargetPaths: []string{"node_modules"},
+		CacheKey:    []api.CacheKeyPart{{Value: "test-key", Mandatory: true}},
+	})
+	if err != nil {
+		t.Fatalf("CacheEntryRetrieve error = %v, want nil", err)
+	}
+	if resp.Scopes != nil {
+		t.Errorf("resp.Scopes = %v, want nil", resp.Scopes)
+	}
+}
+
 func TestCacheEntryRetrieve_NotFound(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -325,12 +386,18 @@ func TestCacheEntryExpire_Success(t *testing.T) {
 		if !strings.HasSuffix(r.URL.Path, "/cache_registries/test-slug/expire") {
 			t.Errorf("path = %q, want suffix %q", r.URL.Path, "/cache_registries/test-slug/expire")
 		}
-		var req api.CacheEntryExpireReq
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		// Decode into a generic map rather than the typed request, so the
+		// assertions pin the literal wire keys — a symmetric round-trip through
+		// CacheEntryExpireReq would pass even if a json tag were wrong.
+		var body map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 			t.Fatalf("decode request body: %v", err)
 		}
-		if len(req.TargetPaths) != 1 || req.TargetPaths[0] != "node_modules" {
-			t.Errorf("req.TargetPaths = %v, want [node_modules]", req.TargetPaths)
+		if paths, ok := body["target_paths"].([]any); !ok || len(paths) != 1 || paths[0] != "node_modules" {
+			t.Errorf("body[\"target_paths\"] = %v, want [node_modules]", body["target_paths"])
+		}
+		if got, want := body["scopes"], map[string]any{"branch": "main"}; !reflect.DeepEqual(got, want) {
+			t.Errorf("body[\"scopes\"] = %v, want %v", got, want)
 		}
 
 		w.Header().Set("Content-Type", "application/json")
@@ -344,6 +411,7 @@ func TestCacheEntryExpire_Success(t *testing.T) {
 	_, err := client.CacheEntryExpire(t.Context(), "test-slug", api.CacheEntryExpireReq{
 		TargetPaths: []string{"node_modules"},
 		CacheKey:    []api.CacheKeyPart{{Value: "v1", Mandatory: true}},
+		Scopes:      map[string]string{"branch": "main"},
 	})
 	if err != nil {
 		t.Fatalf("CacheEntryExpire error = %v, want nil", err)

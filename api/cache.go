@@ -79,22 +79,24 @@ type CacheEntryRetrieveReq struct {
 
 // CacheEntryRetrieveResp describes the cache entry to download.
 type CacheEntryRetrieveResp struct {
-	TargetPaths          []string       `json:"target_paths"`
-	CacheKey             []CacheKeyPart `json:"cache_key"`
-	Blobs                []CacheBlob    `json:"blobs"`
-	ExpiresAt            time.Time      `json:"expires_at"`
-	Store                string         `json:"store"`
-	Fallback             bool           `json:"fallback"`
-	Multipart            bool           `json:"multipart"`
-	DownloadInstructions []string       `json:"download_instructions"`
-	Message              string         `json:"message"`
+	TargetPaths          []string          `json:"target_paths"`
+	CacheKey             []CacheKeyPart    `json:"cache_key"`
+	Blobs                []CacheBlob       `json:"blobs"`
+	ExpiresAt            time.Time         `json:"expires_at"`
+	Store                string            `json:"store"`
+	Fallback             bool              `json:"fallback"`
+	Multipart            bool              `json:"multipart"`
+	DownloadInstructions []string          `json:"download_instructions"`
+	Message              string            `json:"message"`
+	Scopes               map[string]string `json:"scopes,omitempty"`
 }
 
 // CacheEntryExpireReq is the request body for invalidating a cache entry.
 // The address should be the resolved entry, as echoed by the retrieve response.
 type CacheEntryExpireReq struct {
-	TargetPaths []string       `json:"target_paths"`
-	CacheKey    []CacheKeyPart `json:"cache_key"`
+	TargetPaths []string          `json:"target_paths"`
+	CacheKey    []CacheKeyPart    `json:"cache_key"`
+	Scopes      map[string]string `json:"scopes,omitempty"`
 }
 
 // CacheEntryPeekReq is the request body for checking whether an entry exists.

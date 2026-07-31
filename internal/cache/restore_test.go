@@ -5,9 +5,12 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"strings"
 	"testing"
+
+	"github.com/buildkite/agent/v3/api"
 )
 
 func TestCleanPath(t *testing.T) {
@@ -143,5 +146,34 @@ func TestCleanPathWindowsDriveRoot(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "refusing to remove drive root") {
 		t.Errorf("error %q should contain %q", err.Error(), "refusing to remove drive root")
+	}
+}
+
+// A scoped entry lives at a distinct address, so invalidating it requires the
+// matched entry's scopes. invalidateStaleEntry must echo the scopes from the
+// retrieve response into the expire request, or a scoped registry's stale entry
+// can never be busted.
+func TestInvalidateStaleEntryEchoesScopes(t *testing.T) {
+	ctx := t.Context()
+
+	cacheClient, _, _ := setupTestCache(t, "local_file")
+	mockClient := cacheClient.api.(*mockAPIClient)
+
+	scopes := map[string]string{"branch": "main", "pipeline": "app"}
+	retrieveResp := api.CacheEntryRetrieveResp{
+		TargetPaths: []string{"node_modules"},
+		CacheKey:    []api.CacheKeyPart{{Value: "v1-key"}},
+		Scopes:      scopes,
+	}
+
+	if ok := cacheClient.invalidateStaleEntry(ctx, retrieveResp); !ok {
+		t.Fatal("invalidateStaleEntry returned false, want true")
+	}
+
+	if len(mockClient.expireCalls) != 1 {
+		t.Fatalf("expire calls = %d, want 1", len(mockClient.expireCalls))
+	}
+	if got := mockClient.expireCalls[0].Scopes; !reflect.DeepEqual(got, scopes) {
+		t.Errorf("expire request Scopes = %v, want %v", got, scopes)
 	}
 }

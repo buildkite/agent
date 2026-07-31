@@ -285,6 +285,8 @@ func (c *client) invalidateStaleEntry(ctx context.Context, retrieveResp api.Cach
 	req := api.CacheEntryExpireReq{
 		TargetPaths: retrieveResp.TargetPaths,
 		CacheKey:    retrieveResp.CacheKey,
+		// Echo the matched entry's scopes so expire addresses this exact scoped entry.
+		Scopes: retrieveResp.Scopes,
 	}
 	err := roko.NewRetrier(
 		roko.WithMaxAttempts(5),
