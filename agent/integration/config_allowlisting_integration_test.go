@@ -78,6 +78,36 @@ func TestConfigAllowlisting(t *testing.T) {
 			wantExitStatus:           "0",
 		},
 		{
+			name: "when allowlisting repos, the job is refused if the remote mirror does not match the configured allowlist",
+			extraEnv: map[string]string{
+				"BUILDKITE_REPO":                  "https://canonical.example.com/acme/widgets.git",
+				"BUILDKITE_GIT_REMOTE_MIRROR_URL": "https://mirror.example.com/acme/widgets.git",
+			},
+			agentConfig: agent.AgentConfiguration{
+				AllowedRepositories: []*regexp.Regexp{
+					regexp.MustCompile("^https://canonical.example.com/.*$"),
+				},
+			},
+			mockBootstrapExpectation: func(bm *bintest.Mock) { bm.Expect().NotCalled() },
+			wantExitStatus:           "-1",
+			wantLogsContain:          []string{"failed to validate repo: https://mirror.example.com/acme/widgets.git has no match"},
+			wantSignalReason:         agent.SignalReasonAgentRefused,
+		},
+		{
+			name: "when allowlisting repos, the job is accepted if both canonical and remote mirror match the configured allowlist",
+			extraEnv: map[string]string{
+				"BUILDKITE_REPO":                  "https://canonical.example.com/acme/widgets.git",
+				"BUILDKITE_GIT_REMOTE_MIRROR_URL": "https://mirror.example.com/acme/widgets.git",
+			},
+			agentConfig: agent.AgentConfiguration{
+				AllowedRepositories: []*regexp.Regexp{
+					regexp.MustCompile(`^https://(canonical|mirror)\.example\.com/.*$`),
+				},
+			},
+			mockBootstrapExpectation: func(bm *bintest.Mock) { bm.Expect().Once().AndExitWith(0) },
+			wantExitStatus:           "0",
+		},
+		{
 			name:     "when allowlisting plugins, if the plugin source doesn't match the configured allowlist, the job is refused",
 			extraEnv: map[string]string{"BUILDKITE_PLUGINS": `[{"github.com/crime-org/super-nasty-plugin#1.0.0":{"some":"config"}}]`},
 			agentConfig: agent.AgentConfiguration{
