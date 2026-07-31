@@ -16,15 +16,12 @@ import (
 
 const gitCredentialsHelperHelpDescription = `Usage:
 
-    buildkite-agent git-credential-helper [options...]
+    buildkite-agent git-credentials-helper [options...]
 
 Description:
 
-Ask buildkite for credentials to use to authenticate with Github when cloning via HTTPS.
+Ask Buildkite for repository credentials when cloning via HTTPS.
 The credentials are returned in the git-credential format.
-
-This command will only work if the organization running the job has connected a Github app with Code Access enabled, and
-if the pipeline has this feature enabled. All hosted compute jobs automatically qualify for this feature.
 
 This command is intended to be used as a git credential helper, and not called directly.`
 
@@ -43,7 +40,7 @@ type GitCredentialsHelperConfig struct {
 
 var GitCredentialsHelperCommand = cli.Command{
 	Name:        "git-credentials-helper",
-	Usage:       "Internal process used by hosted compute jobs to authenticate with Github",
+	Usage:       "Internal process used to authenticate with repository providers",
 	Category:    categoryInternal,
 	Description: gitCredentialsHelperHelpDescription,
 	Flags: append(globalFlags(),
@@ -86,9 +83,7 @@ var GitCredentialsHelperCommand = cli.Command{
 			return handleAuthError(c, l, fmt.Errorf("failed to read stdin: %w", err))
 		}
 
-		l.Debugf("Git credential input:\n%s\n", string(stdin))
-
-		l.Debugf("Authenticating checkout using Buildkite Github App Credentials...")
+		l.Debugf("Requesting repository credentials from Buildkite")
 
 		repo, err := parseGitURLFromCredentialInput(string(stdin))
 		if err != nil {
@@ -96,9 +91,12 @@ var GitCredentialsHelperCommand = cli.Command{
 		}
 
 		client := api.NewClient(l, loadAPIClientConfig(cfg, "AgentAccessToken"))
-		tok, _, err := client.GenerateGithubCodeAccessToken(ctx, repo, cfg.JobID)
+		tok, _, err := client.GenerateRepositoryAccessToken(ctx, repo, cfg.JobID)
 		if err != nil {
-			return handleAuthError(c, l, fmt.Errorf("failed to get github app credentials: %w", err))
+			return handleAuthError(c, l, fmt.Errorf("failed to get repository credentials: %w", err))
+		}
+		if tok == "" {
+			return handleAuthError(c, l, errors.New("repository credential response contained an empty token"))
 		}
 
 		_, _ = fmt.Fprintln(c.App.Writer, "username=token")
@@ -126,7 +124,7 @@ func handleAuthError(c *cli.Context, l logger.Logger, err error) error {
 
 var (
 	errMissingComponent = errors.New("missing component in git credential input")
-	errNotHTTPS         = errors.New("git remote must be using the https protocol to use Github App authentication")
+	errNotHTTPS         = errors.New("git remote must use the https protocol for repository credentials")
 )
 
 func parseGitURLFromCredentialInput(input string) (string, error) {
