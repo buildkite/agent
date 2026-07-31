@@ -548,6 +548,28 @@ func TestRemoteMirrorCompatibleCloneConfigs(t *testing.T) {
 	if _, ok := remoteMirrorCompatibleCloneConfigs([]string{"--depth", "1"}); ok {
 		t.Fatal("expected depth clone flags to be incompatible")
 	}
+
+	// git clone overwrites its own remote config, but the mirror path would
+	// add a second value, giving git push an extra destination.
+	for _, flags := range [][]string{
+		{"--config", "remote.origin.url=https://example.com/evil.git"},
+		{"--config=remote.origin.url=https://example.com/evil.git"},
+		{"--config", "REMOTE.origin.URL=https://example.com/evil.git"},
+		{"--config", "remote.origin.pushurl=https://example.com/evil.git"},
+	} {
+		if _, ok := remoteMirrorCompatibleCloneConfigs(flags); ok {
+			t.Errorf("remoteMirrorCompatibleCloneConfigs(%q) reported compatible, want incompatible", flags)
+		}
+	}
+
+	// A remote the mirror path does not create is reproducible.
+	configs, ok = remoteMirrorCompatibleCloneConfigs([]string{"--config", "remote.upstream.url=https://example.com/upstream.git"})
+	if !ok {
+		t.Fatal("expected non-origin remote clone flags to be compatible")
+	}
+	if len(configs) != 1 || configs[0] != [2]string{"remote.upstream.url", "https://example.com/upstream.git"} {
+		t.Fatalf("configs = %#v, want remote.upstream.url", configs)
+	}
 }
 
 func TestRemoteMirrorHitDoesNotTouchOnHostMirror(t *testing.T) {

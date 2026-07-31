@@ -236,22 +236,50 @@ func remoteMirrorCompatibleCloneConfigs(gitCloneFlags []string) ([][2]string, bo
 				return nil, false
 			}
 			i++
-			key, value, ok := strings.Cut(gitCloneFlags[i], "=")
-			if !ok || key == "" {
+			config, ok := parseCloneConfig(gitCloneFlags[i])
+			if !ok {
 				return nil, false
 			}
-			configs = append(configs, [2]string{key, value})
+			configs = append(configs, config)
 		case strings.HasPrefix(flag, "--config="):
-			key, value, ok := strings.Cut(strings.TrimPrefix(flag, "--config="), "=")
-			if !ok || key == "" {
+			config, ok := parseCloneConfig(strings.TrimPrefix(flag, "--config="))
+			if !ok {
 				return nil, false
 			}
-			configs = append(configs, [2]string{key, value})
+			configs = append(configs, config)
 		default:
 			return nil, false
 		}
 	}
 	return configs, true
+}
+
+// parseCloneConfig parses a git clone --config key=value argument, reporting
+// false when the mirror path cannot reproduce clone's semantics for that key.
+func parseCloneConfig(arg string) ([2]string, bool) {
+	key, value, ok := strings.Cut(arg, "=")
+	if !ok || key == "" || configuresOriginRemote(key) {
+		return [2]string{}, false
+	}
+	return [2]string{key, value}, true
+}
+
+// configuresOriginRemote reports whether key configures the origin remote.
+//
+// git clone writes that remote itself and overwrites any --config for it, but
+// the mirror path creates it with git remote add before adding clone config.
+// An added remote.origin.url would therefore survive as a second value, which
+// Git treats as an extra push destination.
+//
+// Config section and variable names are case-insensitive; the subsection (the
+// remote name) is case-sensitive.
+func configuresOriginRemote(key string) bool {
+	section, rest, ok := strings.Cut(key, ".")
+	if !ok || !strings.EqualFold(section, "remote") {
+		return false
+	}
+	subsection, _, ok := strings.Cut(rest, ".")
+	return ok && subsection == "origin"
 }
 
 func remoteMirrorFetchFlags(gitFetchFlags string) (string, error) {
