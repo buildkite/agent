@@ -173,6 +173,51 @@ func TestRemoteMirrorHitPreservesRepeatedCloneConfigs(t *testing.T) {
 	}
 }
 
+func TestRemoteMirrorFetchDoesNotSendCanonicalCloneHeaders(t *testing.T) {
+	e := newRemoteMirrorTestExecutor(t)
+	canonical, commit := setupCheckoutTestRepo(t, e, "canonical")
+	mirror := copyRemoteMirrorRepository(t, canonical.RepoURL("canonical"), "mirror")
+
+	mirrorURL, err := url.Parse(mirror.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	proxy := httputil.NewSingleHostReverseProxy(mirrorURL)
+	var leakedRequests atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
+		if req.Header.Get("Authorization") != "" {
+			leakedRequests.Add(1)
+		}
+		proxy.ServeHTTP(rw, req)
+	}))
+	t.Cleanup(server.Close)
+
+	e.Commit = commit
+	e.Branch = "feature-branch"
+	e.PullRequest = "false"
+	e.GitRemoteMirrorURL = server.URL + "/mirror.git"
+	// Credentials supplied for the canonical clone must not reach the mirror.
+	e.GitCloneFlags = `-v --config "http.extraHeader=Authorization: Bearer canonical-secret"`
+	canonical.Close()
+
+	if err := e.defaultCheckoutPhase(t.Context(), 0); err != nil {
+		t.Fatalf("defaultCheckoutPhase() error = %v", err)
+	}
+
+	assertCheckedOutCommit(t, e, commit)
+	if got := leakedRequests.Load(); got != 0 {
+		t.Errorf("mirror received %d requests carrying the canonical clone Authorization header, want 0", got)
+	}
+	// The value must still be persisted for checkout and canonical transport.
+	got, err := e.shell.Command("git", "config", "--local", "--get-all", "http.extraHeader").RunAndCaptureStdout(t.Context())
+	if err != nil {
+		t.Fatalf("reading http.extraHeader: %v", err)
+	}
+	if want := "Authorization: Bearer canonical-secret"; got != want {
+		t.Errorf("http.extraHeader = %q, want %q", got, want)
+	}
+}
+
 func TestAuthenticatedRemoteMirrorUsesRepositoryAccessToken(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("credential helper subprocess shim is POSIX-only")

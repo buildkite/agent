@@ -167,13 +167,6 @@ func (e *Executor) acquireRemoteMirrorSource(ctx context.Context, cloneConfigs [
 		if err := e.shell.Command("git", "init").Run(ctx, quiet...); err != nil {
 			return true, fmt.Errorf("initializing repository for remote mirror: %w", err)
 		}
-		for _, kv := range cloneConfigs {
-			// git clone --config is additive for repeated keys, so use
-			// --add to preserve every value (e.g. multiple http.extraHeader).
-			if err := e.shell.Command("git", "config", "--add", kv[0], kv[1]).Run(ctx, quiet...); err != nil {
-				return true, fmt.Errorf("applying git clone --config %s=%s for remote mirror: %w", kv[0], kv[1], err)
-			}
-		}
 		if err := e.shell.Command("git", "remote", "add", "origin", e.Repository).Run(ctx, quiet...); err != nil {
 			return true, fmt.Errorf("adding canonical origin for remote mirror: %w", err)
 		}
@@ -196,7 +189,32 @@ func (e *Executor) acquireRemoteMirrorSource(ctx context.Context, cloneConfigs [
 	if !hasGitCommit(ctx, e.shell, ".git", e.Commit) {
 		return createdCheckout, errors.New("exact commit is not present after remote mirror fetch")
 	}
+
+	if createdCheckout {
+		if err := e.applyRemoteMirrorCloneConfigs(ctx, cloneConfigs, quiet); err != nil {
+			return true, err
+		}
+	}
 	return createdCheckout, nil
+}
+
+// applyRemoteMirrorCloneConfigs persists git clone --config values into a
+// checkout created by the mirror path.
+//
+// These values are supplied for the canonical repository, so they are applied
+// only after the mirror fetch: keys such as http.extraHeader are read by Git
+// immediately and would otherwise send canonical clone credentials to the
+// mirror host. Applying them here still makes them cover the checkout and any
+// later canonical transport, as git clone --config does.
+func (e *Executor) applyRemoteMirrorCloneConfigs(ctx context.Context, cloneConfigs [][2]string, quiet []shell.RunCommandOpt) error {
+	for _, kv := range cloneConfigs {
+		// git clone --config is additive for repeated keys, so use --add to
+		// preserve every value (e.g. multiple http.extraHeader).
+		if err := e.shell.Command("git", "config", "--add", kv[0], kv[1]).Run(ctx, quiet...); err != nil {
+			return fmt.Errorf("applying git clone --config %s=%s for remote mirror: %w", kv[0], kv[1], err)
+		}
+	}
+	return nil
 }
 
 // remoteMirrorCompatibleCloneConfigs returns --config key/value pairs that can
