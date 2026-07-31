@@ -380,6 +380,8 @@ func (e *Executor) configureRepositoryProviderGitCredentials(ctx context.Context
 	}
 
 	e.skipRepositorySSHKeyscan = strings.HasPrefix(e.Repository, "git@github.com:")
+	// Intentionally sticky for the job: once enabled, this rewrite remains active
+	// if hooks change BUILDKITE_REPO, so later GitHub URLs use managed credentials.
 	if e.skipRepositorySSHKeyscan {
 		if err := e.configureHTTPSInsteadOfSSH(ctx); err != nil {
 			return err
