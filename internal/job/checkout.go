@@ -555,7 +555,7 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context, previousAttempts in
 	if hasGitSubmodules(e.shell) {
 		switch {
 		case sparseCheckoutActive:
-			e.shell.Commentf("Submodule initialization skipped during sparse checkout")
+			e.shell.OptionalWarningf("submodules-init-skipped", "Submodule initialization skipped during sparse checkout")
 		case e.GitSubmodules:
 			e.shell.Commentf("Git submodules detected")
 			gitSubmodules = true
