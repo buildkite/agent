@@ -344,12 +344,15 @@ func TestConfigureRepositoryProviderGitCredentials(t *testing.T) {
 		repository        string
 		env               map[string]string
 		wantSSHKeyscan    bool
+		wantSkipRepoScan  bool
 		wantGitHubRewrite bool
 	}{
 		{
 			name:              "GitHub SSH primary rewrites under provider flag",
 			repository:        "git@github.com:acme/widgets.git",
 			env:               map[string]string{"BUILDKITE_USE_REPOSITORY_PROVIDER_GIT_CREDENTIALS": "true"},
+			wantSSHKeyscan:    true,
+			wantSkipRepoScan:  true,
 			wantGitHubRewrite: true,
 		},
 		{
@@ -409,6 +412,9 @@ func TestConfigureRepositoryProviderGitCredentials(t *testing.T) {
 			}
 			if got := e.SSHKeyscan; got != test.wantSSHKeyscan {
 				t.Errorf("SSHKeyscan = %t, want %t", got, test.wantSSHKeyscan)
+			}
+			if got := e.skipRepositorySSHKeyscan; got != test.wantSkipRepoScan {
+				t.Errorf("skipRepositorySSHKeyscan = %t, want %t", got, test.wantSkipRepoScan)
 			}
 
 			config, err := sh.Command("git", "config", "--global", "--list").RunAndCaptureStdout(t.Context())
