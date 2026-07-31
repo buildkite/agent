@@ -5,6 +5,7 @@ import (
 
 	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/env"
+	"github.com/buildkite/agent/v3/tracetools"
 )
 
 func TestEncodeOTLPHeaders(t *testing.T) {
@@ -46,8 +47,7 @@ func TestScrubPipelineOTelExporterEnv(t *testing.T) {
 }
 
 func TestApplyControlPlaneTracingExporter(t *testing.T) {
-	// Uses t.Setenv — cannot run in parallel with other tests that touch process env.
-	t.Run("applies when host has no OTEL config", func(t *testing.T) {
+	t.Run("applies when host has no OTEL config and backend is opentelemetry", func(t *testing.T) {
 		for _, key := range env.OTelExporterKeys {
 			t.Setenv(key, "")
 		}
@@ -55,7 +55,7 @@ func TestApplyControlPlaneTracingExporter(t *testing.T) {
 		got := map[string]string{}
 		setEnv := func(name, value string) { got[name] = value }
 
-		applyControlPlaneTracingExporter(setEnv, &api.TracingExporter{
+		applyControlPlaneTracingExporter(setEnv, tracetools.BackendOpenTelemetry, &api.TracingExporter{
 			Endpoint: "https://otel.example/v1/traces",
 			Protocol: "http/protobuf",
 			Headers:  map[string]string{"Authorization": "Bearer from-cp"},
@@ -72,13 +72,30 @@ func TestApplyControlPlaneTracingExporter(t *testing.T) {
 		}
 	})
 
+	t.Run("skips when tracing backend is not opentelemetry", func(t *testing.T) {
+		got := map[string]string{}
+		setEnv := func(name, value string) { got[name] = value }
+
+		applyControlPlaneTracingExporter(setEnv, tracetools.BackendDatadog, &api.TracingExporter{
+			Endpoint: "https://otel.example/v1/traces",
+			Headers:  map[string]string{"Authorization": "Bearer from-cp"},
+		})
+		applyControlPlaneTracingExporter(setEnv, "", &api.TracingExporter{
+			Endpoint: "https://otel.example/v1/traces",
+		})
+
+		if len(got) != 0 {
+			t.Fatalf("expected no apply without opentelemetry backend, got %#v", got)
+		}
+	})
+
 	t.Run("skips when host already configured", func(t *testing.T) {
 		t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "https://local.example")
 
 		got := map[string]string{}
 		setEnv := func(name, value string) { got[name] = value }
 
-		applyControlPlaneTracingExporter(setEnv, &api.TracingExporter{
+		applyControlPlaneTracingExporter(setEnv, tracetools.BackendOpenTelemetry, &api.TracingExporter{
 			Endpoint: "https://otel.example/v1/traces",
 			Headers:  map[string]string{"Authorization": "Bearer from-cp"},
 		})
@@ -92,8 +109,8 @@ func TestApplyControlPlaneTracingExporter(t *testing.T) {
 		got := map[string]string{}
 		setEnv := func(name, value string) { got[name] = value }
 
-		applyControlPlaneTracingExporter(setEnv, nil)
-		applyControlPlaneTracingExporter(setEnv, &api.TracingExporter{})
+		applyControlPlaneTracingExporter(setEnv, tracetools.BackendOpenTelemetry, nil)
+		applyControlPlaneTracingExporter(setEnv, tracetools.BackendOpenTelemetry, &api.TracingExporter{})
 		if len(got) != 0 {
 			t.Fatalf("expected no apply, got %#v", got)
 		}
@@ -119,5 +136,17 @@ func TestStripOTelExporter(t *testing.T) {
 	}
 	if v, _ := environ.Get("BUILDKITE_JOB_ID"); v != "abc" {
 		t.Fatalf("job id = %q", v)
+	}
+}
+
+func TestOTelExporterKeysAreProtected(t *testing.T) {
+	t.Parallel()
+	for _, key := range env.OTelExporterKeys {
+		if !env.IsProtected(key) {
+			t.Fatalf("%s should be protected", key)
+		}
+		if !env.IsProtectedFromWithinJob(key) {
+			t.Fatalf("%s should be protected from within job", key)
+		}
 	}
 }

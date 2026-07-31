@@ -3,14 +3,6 @@ package agenthttp
 import (
 	"bytes"
 	"encoding/json"
-	"regexp"
-)
-
-// tracingExporterHeadersRE matches JSON "headers" objects nested under
-// tracing_exporter in debug HTTP dumps. Values are redacted so vendor tokens
-// are not written to agent logs when --debug-http is enabled.
-var tracingExporterHeadersRE = regexp.MustCompile(
-	`("tracing_exporter"\s*:\s*\{[^}]*"headers"\s*:\s*)\{[^}]*\}`,
 )
 
 func redactTracingExporterHeadersInDump(dump []byte) []byte {
@@ -18,13 +10,43 @@ func redactTracingExporterHeadersInDump(dump []byte) []byte {
 	if !bytes.Contains(dump, []byte(`"tracing_exporter"`)) {
 		return dump
 	}
-
-	// Prefer structured redaction when the dump body is JSON (response body
-	// after headers). Fall back to a conservative regex on the whole dump.
 	if redacted, ok := redactTracingExporterInJSONBody(dump); ok {
 		return redacted
 	}
-	return tracingExporterHeadersRE.ReplaceAll(dump, []byte(`${1}{"[REDACTED]":"[REDACTED]"}`))
+	// If the dump is not parseable JSON (partial dump on error), blank the
+	// headers object with a conservative textual replacement.
+	const needle = `"headers":`
+	out := append([]byte(nil), dump...)
+	searchFrom := 0
+	for {
+		idx := bytes.Index(out[searchFrom:], []byte(`"tracing_exporter"`))
+		if idx < 0 {
+			break
+		}
+		idx += searchFrom
+		headersIdx := bytes.Index(out[idx:], []byte(needle))
+		if headersIdx < 0 {
+			break
+		}
+		headersIdx += idx + len(needle)
+		// Skip whitespace
+		for headersIdx < len(out) && (out[headersIdx] == ' ' || out[headersIdx] == '\t' || out[headersIdx] == '\n' || out[headersIdx] == '\r') {
+			headersIdx++
+		}
+		if headersIdx >= len(out) || out[headersIdx] != '{' {
+			searchFrom = idx + 1
+			continue
+		}
+		end := bytes.IndexByte(out[headersIdx:], '}')
+		if end < 0 {
+			break
+		}
+		end += headersIdx
+		replacement := []byte(`{"[REDACTED]":"[REDACTED]"}`)
+		out = append(out[:headersIdx], append(replacement, out[end+1:]...)...)
+		searchFrom = headersIdx + len(replacement)
+	}
+	return out
 }
 
 func redactTracingExporterInJSONBody(dump []byte) ([]byte, bool) {

@@ -62,10 +62,11 @@ func Do(l logger.Logger, client *http.Client, req *http.Request, opts ...DoOptio
 
 	if cfg.debugHTTP {
 		responseDump, err := httputil.DumpResponse(resp, true)
+		safeDump := redactTracingExporterHeadersInDump(responseDump)
 		if err != nil {
-			l.Debugf("\nERR: %s\n%s", err, string(responseDump))
+			l.Debugf("\nERR: %s\n%s", err, string(safeDump))
 		} else {
-			l.Debugf("\n%s", string(redactTracingExporterHeadersInDump(responseDump)))
+			l.Debugf("\n%s", string(safeDump))
 		}
 	}
 	if cfg.traceHTTP {

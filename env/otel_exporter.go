@@ -1,5 +1,7 @@
 package env
 
+import "os"
+
 // OTelExporterKeys are standard OTLP exporter environment variables that carry
 // destination and auth. They must not come from pipeline job.env, and must be
 // stripped from the command/hook shell environment after the TracerProvider has
@@ -22,5 +24,14 @@ func StripOTelExporter(environ *Environment) {
 	}
 	for _, key := range OTelExporterKeys {
 		environ.Remove(key)
+	}
+}
+
+// ClearOTelExporterFromProcess unsets OTLP exporter credentials from the
+// current process environment after TracerProvider init so child processes
+// cannot read them via /proc/$PPID/environ.
+func ClearOTelExporterFromProcess() {
+	for _, key := range OTelExporterKeys {
+		_ = os.Unsetenv(key)
 	}
 }

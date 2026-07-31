@@ -1,12 +1,14 @@
 package agent
 
 import (
+	"maps"
 	"os"
 	"slices"
 	"strings"
 
 	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/env"
+	"github.com/buildkite/agent/v3/tracetools"
 )
 
 // ControlPlaneOTLPTracingFeature is advertised at registration when this agent
@@ -15,15 +17,14 @@ import (
 const ControlPlaneOTLPTracingFeature = "control-plane-otlp-tracing"
 
 // hostHasOTelExporterConfig reports whether the agent process already has local
-// OTLP exporter configuration. Local operator config takes precedence over
-// control-plane injection.
+// OTLP endpoint or headers. Protocol-only leftovers do not count as a full
+// local override. Local operator config takes precedence over control-plane
+// injection when an endpoint or headers are set.
 func hostHasOTelExporterConfig() bool {
-	for _, key := range env.OTelExporterKeys {
-		if os.Getenv(key) != "" {
-			return true
-		}
-	}
-	return false
+	return os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT") != "" ||
+		os.Getenv("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT") != "" ||
+		os.Getenv("OTEL_EXPORTER_OTLP_HEADERS") != "" ||
+		os.Getenv("OTEL_EXPORTER_OTLP_TRACES_HEADERS") != ""
 }
 
 // scrubPipelineOTelExporterEnv removes OTLP exporter vars from the job env map
@@ -46,26 +47,26 @@ func encodeOTLPHeaders(headers map[string]string) string {
 	if len(headers) == 0 {
 		return ""
 	}
-	keys := make([]string, 0, len(headers))
-	for k, v := range headers {
+	parts := make([]string, 0, len(headers))
+	for _, k := range slices.Sorted(maps.Keys(headers)) {
+		v := headers[k]
 		if k == "" || v == "" {
 			continue
 		}
-		keys = append(keys, k)
-	}
-	slices.Sort(keys)
-	parts := make([]string, 0, len(keys))
-	for _, k := range keys {
-		parts = append(parts, k+"="+headers[k])
+		parts = append(parts, k+"="+v)
 	}
 	return strings.Join(parts, ",")
 }
 
 // applyControlPlaneTracingExporter sets bootstrap-only OTEL_* vars from the job
-// payload when the control plane supplied tracing_exporter and the agent host
-// has not already configured an exporter. Call this after writing
-// BUILDKITE_ENV_FILE so secrets are not persisted there.
-func applyControlPlaneTracingExporter(setEnv func(name, value string), exporter *api.TracingExporter) {
+// payload when the control plane supplied tracing_exporter, the agent is using
+// the OpenTelemetry backend, and the agent host has not already configured an
+// exporter. Call this after writing BUILDKITE_ENV_FILE so secrets are not
+// persisted there.
+func applyControlPlaneTracingExporter(setEnv func(name, value string), tracingBackend string, exporter *api.TracingExporter) {
+	if tracingBackend != tracetools.BackendOpenTelemetry {
+		return
+	}
 	if exporter == nil || exporter.Endpoint == "" {
 		return
 	}

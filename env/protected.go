@@ -86,6 +86,13 @@ var protectedEnv = map[string]protection{
 	"BUILDKITE_REPO":                        {mutableFromWithinJob: true},
 	"BUILDKITE_SHELL":                       {},
 	"BUILDKITE_SSH_KEYSCAN":                 {},
+	// OTLP exporter destination/auth is operator / control-plane only.
+	"OTEL_EXPORTER_OTLP_ENDPOINT":        {},
+	"OTEL_EXPORTER_OTLP_TRACES_ENDPOINT": {},
+	"OTEL_EXPORTER_OTLP_HEADERS":         {},
+	"OTEL_EXPORTER_OTLP_PROTOCOL":        {},
+	"OTEL_EXPORTER_OTLP_TRACES_PROTOCOL": {},
+	"OTEL_EXPORTER_OTLP_TRACES_HEADERS":  {},
 }
 
 // checkoutOverrideScope contains checkout-related vars whose write-protection

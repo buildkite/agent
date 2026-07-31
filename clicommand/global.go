@@ -662,6 +662,11 @@ func setupLoggerAndConfig[T any](ctx context.Context, c *cli.Context, opts ...co
 				_ = traceProvider.Shutdown(flushCtx)
 			}
 		}
+
+		// Drop exporter credentials from the process environment once the
+		// provider is configured (or failed). Otherwise same-UID job commands
+		// can read them from /proc/$PPID/environ even when shell.Env is clean.
+		env.ClearOTelExporterFromProcess()
 	}
 
 	return ctx, cfg, l, loader.File, done
