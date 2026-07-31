@@ -276,6 +276,12 @@ func TestRemoteMirrorFetchDoesNotSendCanonicalCloneHeaders(t *testing.T) {
 	e.shell.Env.Set("GIT_CONFIG_COUNT", "1")
 	e.shell.Env.Set("GIT_CONFIG_KEY_0", "http.extraHeader")
 	e.shell.Env.Set("GIT_CONFIG_VALUE_0", "Authorization: Bearer ambient-secret")
+	templateDir := t.TempDir()
+	templateConfig := []byte("[http]\n\textraHeader = Authorization: Bearer template-secret\n")
+	if err := os.WriteFile(filepath.Join(templateDir, "config"), templateConfig, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	e.shell.Env.Set("GIT_TEMPLATE_DIR", templateDir)
 	canonical.Close()
 
 	if err := e.defaultCheckoutPhase(t.Context(), 0); err != nil {
@@ -625,7 +631,7 @@ func TestPlanRemoteMirrorCheckout(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if want := []string{"-v", "--prune", "--depth=50", "--filter=blob:none"}; !slices.Equal(fetchFlags, want) {
+	if want := []string{"-v", "--prune", "--depth=50", "--filter=blob:none", "--no-tags"}; !slices.Equal(fetchFlags, want) {
 		t.Errorf("fetch flags = %q, want %q", fetchFlags, want)
 	}
 	if len(plan.cloneConfigs) != 2 {
@@ -642,6 +648,8 @@ func TestPlanRemoteMirrorCheckout(t *testing.T) {
 		{"--config=remote.origin.url=https://example.com/evil.git"},
 		{"--config", "REMOTE.origin.URL=https://example.com/evil.git"},
 		{"--config", "remote.origin.pushurl=https://example.com/evil.git"},
+		{"--config", "branch.main.remote=upstream"},
+		{"--config", "branch.main.merge=refs/heads/other"},
 	} {
 		if _, ok, err := planRemoteMirrorCheckout(flags, "-v --prune"); err != nil {
 			t.Errorf("planRemoteMirrorCheckout(%q) error = %v", flags, err)
@@ -668,6 +676,11 @@ func TestPlanRemoteMirrorCheckout(t *testing.T) {
 		t.Fatal(err)
 	} else if ok {
 		t.Fatal("expected upload-pack fetch flag to disable the remote mirror")
+	}
+	if _, ok, err := planRemoteMirrorCheckout([]string{"-v"}, "-v --tags"); err != nil {
+		t.Fatal(err)
+	} else if ok {
+		t.Fatal("expected --tags to disable the remote mirror")
 	}
 
 	// Only HTTPS packfile URIs are accepted on the mirror trust boundary.

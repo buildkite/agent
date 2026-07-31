@@ -123,8 +123,11 @@ func (e *Executor) acquireRemoteMirrorSource(ctx context.Context, plan remoteMir
 		gitFlags += " -c " + shellwords.Quote(config[0]+"="+config[1])
 	}
 	quiet := []shell.RunCommandOpt{shell.ShowPrompt(false), shell.ShowStderr(false)}
+	fetchEnv := remoteMirrorFetchEnv()
 
-	if err := e.shell.Command("git", "init").Run(ctx, quiet...); err != nil {
+	initOpts := append([]shell.RunCommandOpt{}, quiet...)
+	initOpts = append(initOpts, shell.WithExtraEnv(fetchEnv))
+	if err := e.shell.Command("git", "init").Run(ctx, initOpts...); err != nil {
 		return true, fmt.Errorf("initializing repository for remote mirror: %w", err)
 	}
 	if err := e.shell.Command("git", "remote", "add", "origin", e.Repository).Run(ctx, quiet...); err != nil {
@@ -139,7 +142,7 @@ func (e *Executor) acquireRemoteMirrorSource(ctx context.Context, plan remoteMir
 		Retry:         false,
 		RefSpecs:      []string{e.Commit},
 		Quiet:         true,
-		ExtraEnv:      remoteMirrorFetchEnv(),
+		ExtraEnv:      fetchEnv,
 	}); err != nil {
 		return true, fmt.Errorf("fetching exact commit from remote mirror: %w", err)
 	}
@@ -170,6 +173,7 @@ func remoteMirrorFetchEnv() *env.Environment {
 	environ.Set("GIT_CONFIG_GLOBAL", os.DevNull)
 	environ.Set("GIT_CONFIG_COUNT", "0")
 	environ.Set("GIT_CONFIG_PARAMETERS", "")
+	environ.Set("GIT_TEMPLATE_DIR", "")
 	return environ
 }
 
@@ -266,6 +270,8 @@ func planRemoteMirrorCheckout(gitCloneFlags []string, gitFetchFlags string) (rem
 			// Sparse worktree setup happens after source acquisition. The
 			// mirror fetch already requests only the exact immutable commit.
 			continue
+		case flag == "--no-tags":
+			cloneFetchOptions = append(cloneFetchOptions, []string{flag})
 		case isGitFilterFlag(flag):
 			option, consumed, ok := gitOptionWithValue(gitCloneFlags, i, isGitFilterFlag)
 			if !ok {
@@ -327,6 +333,11 @@ func planRemoteMirrorCheckout(gitCloneFlags []string, gitFetchFlags string) (rem
 			break
 		}
 	}
+	if !hasGitOption(fetchParts, "--no-tags") {
+		// The mirror is an immutable-object source, not an authority for
+		// mutable refs. Explicit --tags is rejected by the safety check.
+		fetchParts = append(fetchParts, "--no-tags")
+	}
 	plan.fetchFlags = quoteGitArgs(fetchParts)
 	return plan, true, nil
 }
@@ -335,10 +346,22 @@ func planRemoteMirrorCheckout(gitCloneFlags []string, gitFetchFlags string) (rem
 // false when the mirror path cannot reproduce clone's semantics for that key.
 func parseCloneConfig(arg string) ([2]string, bool) {
 	key, value, ok := strings.Cut(arg, "=")
-	if !ok || key == "" || configuresOriginRemote(key) {
+	if !ok || key == "" || configuresOriginRemote(key) || configuresCloneOwnedBranch(key) {
 		return [2]string{}, false
 	}
 	return [2]string{key, value}, true
+}
+
+// configuresCloneOwnedBranch reports branch config that git clone derives from
+// the cloned repository and checked-out branch. Applying it after acquisition
+// would preserve values that a canonical clone overwrites.
+func configuresCloneOwnedBranch(key string) bool {
+	section, rest, ok := strings.Cut(key, ".")
+	if !ok || !strings.EqualFold(section, "branch") {
+		return false
+	}
+	_, _, ok = strings.Cut(rest, ".")
+	return ok
 }
 
 // configuresOriginRemote reports whether key configures the origin remote.
@@ -409,8 +432,8 @@ func remoteMirrorFetchFlagsAreSafe(parts []string) bool {
 func isSafeFetchFlagWithoutValue(flag string) bool {
 	switch flag {
 	case "-v", "--verbose", "-q", "--quiet",
-		"-f", "--force", "--prune", "--no-prune", "--prune-tags",
-		"--tags", "--no-tags", "--keep", "--progress", "--no-progress",
+		"-f", "--force", "--prune", "--no-prune",
+		"--no-tags", "--keep", "--progress", "--no-progress",
 		"--write-fetch-head", "--no-write-fetch-head", "--update-shallow",
 		"--unshallow", "--refetch", "--show-forced-updates",
 		"--no-show-forced-updates", "--ipv4", "--ipv6":
@@ -449,6 +472,12 @@ func gitOptionWithValue(parts []string, i int, matches func(string) bool) ([]str
 
 func hasGitOption(parts []string, candidate string) bool {
 	switch {
+	case candidate == "--no-tags":
+		for _, part := range parts {
+			if part == candidate {
+				return true
+			}
+		}
 	case isGitFilterFlag(candidate):
 		for _, part := range parts {
 			if isGitFilterFlag(part) {
