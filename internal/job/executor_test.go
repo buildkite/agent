@@ -313,6 +313,10 @@ func TestUseRepositoryProviderGitCredentials(t *testing.T) {
 	}{
 		{name: "generic flag", env: map[string]string{"BUILDKITE_USE_REPOSITORY_PROVIDER_GIT_CREDENTIALS": "true"}, want: true},
 		{name: "legacy flag", env: map[string]string{"BUILDKITE_USE_GITHUB_APP_GIT_CREDENTIALS": "true"}, want: true},
+		{name: "both flags", env: map[string]string{
+			"BUILDKITE_USE_REPOSITORY_PROVIDER_GIT_CREDENTIALS": "true",
+			"BUILDKITE_USE_GITHUB_APP_GIT_CREDENTIALS":          "true",
+		}, want: true},
 		{name: "generic false", env: map[string]string{"BUILDKITE_USE_REPOSITORY_PROVIDER_GIT_CREDENTIALS": "false"}},
 		{name: "unset"},
 	}
@@ -364,6 +368,24 @@ func TestConfigureRepositoryProviderGitCredentials(t *testing.T) {
 			name:              "legacy flag always rewrites GitHub SSH remotes and disables keyscan",
 			repository:        "https://git.example.com/acme/widgets.git",
 			env:               map[string]string{"BUILDKITE_USE_GITHUB_APP_GIT_CREDENTIALS": "true"},
+			wantGitHubRewrite: true,
+		},
+		{
+			name:       "both flags prefer provider-neutral for non-GitHub primary",
+			repository: "https://git.example.com/acme/widgets.git",
+			env: map[string]string{
+				"BUILDKITE_USE_REPOSITORY_PROVIDER_GIT_CREDENTIALS": "true",
+				"BUILDKITE_USE_GITHUB_APP_GIT_CREDENTIALS":          "true",
+			},
+			wantSSHKeyscan: true,
+		},
+		{
+			name:       "both flags prefer provider-neutral rewrite for GitHub SSH primary",
+			repository: "git@github.com:acme/widgets.git",
+			env: map[string]string{
+				"BUILDKITE_USE_REPOSITORY_PROVIDER_GIT_CREDENTIALS": "true",
+				"BUILDKITE_USE_GITHUB_APP_GIT_CREDENTIALS":          "true",
+			},
 			wantGitHubRewrite: true,
 		},
 	}

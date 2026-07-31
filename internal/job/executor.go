@@ -344,13 +344,18 @@ func (e *Executor) useRepositoryProviderGitCredentials() bool {
 }
 
 // configureRepositoryProviderGitCredentials installs managed git credentials.
-// When afterSetUp is false, it installs the credential helper and applies the
-// legacy GitHub App's unconditional rewrite/keyscan behavior. When true, it
-// applies only the provider-neutral flag's repository-dependent rewrite using
-// the post-environment-hook repository URL.
+// When afterSetUp is false, it installs the credential helper and, for
+// legacy-only activation, applies the GitHub App's unconditional rewrite.
+// When true, it applies the provider-neutral repository-dependent rewrite
+// using the post-environment-hook repository URL.
+//
+// When both env flags are set, the provider-neutral flag takes precedence so
+// servers that dual-emit during rollout exercise the generic path.
 func (e *Executor) configureRepositoryProviderGitCredentials(ctx context.Context, afterSetUp bool) error {
-	legacyGithubApp := e.shell.Env.GetString("BUILDKITE_USE_GITHUB_APP_GIT_CREDENTIALS", "") == "true"
-	providerNeutral := e.shell.Env.GetString("BUILDKITE_USE_REPOSITORY_PROVIDER_GIT_CREDENTIALS", "") == "true"
+	genericFlag := e.shell.Env.GetString("BUILDKITE_USE_REPOSITORY_PROVIDER_GIT_CREDENTIALS", "") == "true"
+	legacyFlag := e.shell.Env.GetString("BUILDKITE_USE_GITHUB_APP_GIT_CREDENTIALS", "") == "true"
+	providerNeutral := genericFlag
+	legacyGithubApp := legacyFlag && !genericFlag
 
 	if !afterSetUp {
 		if err := e.configureGitCredentialHelper(ctx); err != nil {
@@ -365,7 +370,7 @@ func (e *Executor) configureRepositoryProviderGitCredentials(ctx context.Context
 		return nil
 	}
 
-	if !providerNeutral || legacyGithubApp {
+	if !providerNeutral {
 		return nil
 	}
 
