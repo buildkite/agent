@@ -41,6 +41,17 @@ func gitCredentialHelperCommand(ctx context.Context) string {
 	return fmt.Sprintf(`%s git-credentials-helper`, self.Path(ctx))
 }
 
+// gitCredentialHelperFlags returns per-invocation Git configuration for the
+// existing Buildkite credential helper. Clearing credential.helper first keeps
+// inherited helpers from receiving credentials for the remote mirror.
+func gitCredentialHelperFlags(ctx context.Context) string {
+	return strings.Join([]string{
+		"-c", "credential.useHttpPath=true",
+		"-c", "credential.helper=",
+		"-c", "credential.helper=" + shellwords.Quote(gitCredentialHelperCommand(ctx)),
+	}, " ")
+}
+
 // configureHTTPSInsteadOfSSH configures GitHub SSH URLs to use HTTPS.
 func (e *Executor) configureHTTPSInsteadOfSSH(ctx context.Context) error {
 	return e.shell.Command(
