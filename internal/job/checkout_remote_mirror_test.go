@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -180,7 +181,6 @@ func TestRemoteMirrorHitPreservesShallowDepth(t *testing.T) {
 	e.GitRemoteMirrorURL = mirror.RepoURL("mirror")
 	e.GitCloneFlags = "-v --depth=2"
 	e.GitFetchFlags = "-v --prune --depth=2"
-	canonical.Close()
 
 	if err := e.defaultCheckoutPhase(t.Context(), 0); err != nil {
 		t.Fatalf("defaultCheckoutPhase() error = %v", err)
@@ -196,6 +196,78 @@ func TestRemoteMirrorHitPreservesShallowDepth(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(e.shell.Getwd(), ".git", "shallow")); err != nil {
 		t.Errorf("shallow boundary file: %v", err)
+	}
+	assertNoMutableRefs(t, e)
+}
+
+func TestRemoteMirrorHitPreservesCanonicalOriginConfig(t *testing.T) {
+	tests := []struct {
+		name  string
+		flags []string
+	}{
+		{name: "depth", flags: []string{"--depth=2"}},
+		{name: "depth with no single branch", flags: []string{"--depth=2", "--no-single-branch"}},
+		{name: "explicit single branch", flags: []string{"--single-branch"}},
+		{name: "no tags", flags: []string{"--no-tags"}},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			e := newRemoteMirrorTestExecutor(t)
+			canonical, commit := setupCheckoutTestRepo(t, e, "canonical")
+			mirror := copyRemoteMirrorRepository(t, canonical.RepoURL("canonical"), "mirror")
+
+			canonicalCheckout := t.TempDir()
+			cloneArgs := append([]string{"clone"}, tc.flags...)
+			cloneArgs = append(cloneArgs, canonical.RepoURL("canonical"), canonicalCheckout)
+			runGitForRemoteMirrorTest(t, "", cloneArgs...)
+
+			e.Commit = commit
+			e.Branch = "feature-branch"
+			e.PullRequest = "false"
+			e.GitRemoteMirrorURL = mirror.RepoURL("mirror")
+			e.GitCloneFlags = quoteGitArgs(tc.flags)
+
+			if err := e.defaultCheckoutPhase(t.Context(), 0); err != nil {
+				t.Fatalf("defaultCheckoutPhase() error = %v", err)
+			}
+			assertCheckedOutCommit(t, e, commit)
+			assertNoMutableRefs(t, e)
+
+			for _, key := range []string{"remote.origin.fetch", "remote.origin.tagOpt"} {
+				want := localGitConfigValues(t, canonicalCheckout, key)
+				got := localGitConfigValues(t, e.shell.Getwd(), key)
+				if !slices.Equal(got, want) {
+					t.Errorf("%s = %q, want canonical clone values %q", key, got, want)
+				}
+			}
+		})
+	}
+}
+
+func TestRemoteMirrorSingleBranchFallsBackWhenCanonicalHEADIsUnresolved(t *testing.T) {
+	e := newRemoteMirrorTestExecutor(t)
+	canonical, commit := setupCheckoutTestRepo(t, e, "canonical")
+	if err := canonical.ConfigureRepository("canonical", "receive.denyDeleteCurrent", "ignore"); err != nil {
+		t.Fatal(err)
+	}
+	canonicalClone := t.TempDir()
+	runGitForRemoteMirrorTest(t, "", "clone", canonical.RepoURL("canonical"), canonicalClone)
+	runGitForRemoteMirrorTest(t, canonicalClone, "push", "origin", "--delete", "main")
+	mirror := copyRemoteMirrorRepository(t, canonical.RepoURL("canonical"), "mirror")
+
+	e.Commit = commit
+	e.Branch = "feature-branch"
+	e.PullRequest = "false"
+	e.GitRemoteMirrorURL = mirror.RepoURL("mirror")
+	e.GitCloneFlags = "--single-branch"
+
+	if err := e.defaultCheckoutPhase(t.Context(), 0); err != nil {
+		t.Fatalf("defaultCheckoutPhase() error = %v", err)
+	}
+
+	assertCheckedOutCommit(t, e, commit)
+	if got := localGitConfigValues(t, e.shell.Getwd(), "remote.origin.fetch"); got != nil {
+		t.Errorf("remote.origin.fetch = %q, want no refspec from canonical clone fallback", got)
 	}
 }
 
@@ -658,6 +730,40 @@ func TestPlanRemoteMirrorCheckout(t *testing.T) {
 	if len(plan.mirrorConfigs) != 1 || plan.mirrorConfigs[0] != [2]string{"fetch.uriProtocols", "https"} {
 		t.Fatalf("mirror configs = %#v, want fetch.uriProtocols=https", plan.mirrorConfigs)
 	}
+	if !plan.singleBranch {
+		t.Error("depth did not imply single-branch origin config")
+	}
+	if plan.noTags {
+		t.Error("forced mirror --no-tags was treated as canonical clone config")
+	}
+
+	for _, tc := range []struct {
+		name             string
+		flags            []string
+		wantSingleBranch bool
+		wantNoTags       bool
+	}{
+		{name: "single branch", flags: []string{"--single-branch"}, wantSingleBranch: true},
+		{name: "depth", flags: []string{"--depth=2"}, wantSingleBranch: true},
+		{name: "depth no single branch", flags: []string{"--depth=2", "--no-single-branch"}},
+		{name: "no single branch before depth", flags: []string{"--no-single-branch", "--depth=2"}},
+		{name: "last single branch wins", flags: []string{"--no-single-branch", "--single-branch"}, wantSingleBranch: true},
+		{name: "last no single branch wins", flags: []string{"--single-branch", "--no-single-branch"}},
+		{name: "no tags", flags: []string{"--no-tags"}, wantNoTags: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			plan, ok, err := planRemoteMirrorCheckout(tc.flags, "-v --prune")
+			if err != nil || !ok {
+				t.Fatalf("planRemoteMirrorCheckout(%q) = (%#v, %t, %v), want compatible", tc.flags, plan, ok, err)
+			}
+			if plan.singleBranch != tc.wantSingleBranch {
+				t.Errorf("singleBranch = %t, want %t", plan.singleBranch, tc.wantSingleBranch)
+			}
+			if plan.noTags != tc.wantNoTags {
+				t.Errorf("noTags = %t, want %t", plan.noTags, tc.wantNoTags)
+			}
+		})
+	}
 
 	// git clone overwrites its own remote config, but the mirror path would
 	// add a second value, giving git push an extra destination.
@@ -837,6 +943,20 @@ func runGitForRemoteMirrorTest(t *testing.T, dir string, args ...string) {
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("git %v error = %v\n%s", args, err, out)
 	}
+}
+
+func localGitConfigValues(t *testing.T, dir, key string) []string {
+	t.Helper()
+	cmd := exec.Command("git", "config", "--local", "--get-all", key)
+	cmd.Dir = dir
+	out, err := cmd.Output()
+	if err != nil {
+		if exitErr := new(exec.ExitError); errors.As(err, &exitErr) && exitErr.ExitCode() == 1 {
+			return nil
+		}
+		t.Fatalf("git config --local --get-all %s error = %v", key, err)
+	}
+	return strings.Split(strings.TrimSuffix(string(out), "\n"), "\n")
 }
 
 func assertCheckedOutCommit(t *testing.T, e *Executor, want string) {

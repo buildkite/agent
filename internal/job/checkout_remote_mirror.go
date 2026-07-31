@@ -155,6 +155,16 @@ func (e *Executor) acquireRemoteMirrorSource(ctx context.Context, plan remoteMir
 	}
 	quiet := []shell.RunCommandOpt{shell.ShowPrompt(false), shell.ShowStderr(false)}
 	fetchEnv := remoteMirrorFetchEnv()
+	var originFetch string
+	if plan.singleBranch {
+		branch, err := e.remoteMirrorCanonicalHEAD(ctx, plan.cloneConfigs, quiet)
+		if err != nil {
+			// No repository state exists yet, so canonical checkout can proceed
+			// without cleanup and reproduce git clone's handling of this HEAD.
+			return false, fmt.Errorf("resolving canonical repository HEAD for remote mirror: %w", err)
+		}
+		originFetch = "+" + branch + ":refs/remotes/origin/" + strings.TrimPrefix(branch, "refs/heads/")
+	}
 
 	initOpts := append([]shell.RunCommandOpt{}, quiet...)
 	initOpts = append(initOpts, shell.WithExtraEnv(fetchEnv))
@@ -165,6 +175,16 @@ func (e *Executor) acquireRemoteMirrorSource(ctx context.Context, plan remoteMir
 	}
 	if err := e.shell.Command("git", "remote", "add", "origin", e.Repository).Run(ctx, quiet...); err != nil {
 		return true, fmt.Errorf("adding canonical origin for remote mirror: %w", err)
+	}
+	if originFetch != "" {
+		if err := e.shell.Command("git", "config", "--local", "remote.origin.fetch", originFetch).Run(ctx, quiet...); err != nil {
+			return true, fmt.Errorf("configuring single-branch canonical fetch for remote mirror: %w", err)
+		}
+	}
+	if plan.noTags {
+		if err := e.shell.Command("git", "config", "--local", "remote.origin.tagOpt", "--no-tags").Run(ctx, quiet...); err != nil {
+			return true, fmt.Errorf("configuring canonical no-tags fetch for remote mirror: %w", err)
+		}
 	}
 
 	if err := gitFetch(ctx, gitFetchArgs{
@@ -194,6 +214,33 @@ func (e *Executor) acquireRemoteMirrorSource(ctx context.Context, plan remoteMir
 		return true, err
 	}
 	return true, nil
+}
+
+// remoteMirrorCanonicalHEAD resolves the canonical repository's default branch
+// without transferring its object graph. A single-branch clone persists this
+// branch in remote.origin.fetch, so mirror-backed clones need the canonical
+// advertisement rather than the mirror's potentially stale HEAD.
+func (e *Executor) remoteMirrorCanonicalHEAD(ctx context.Context, cloneConfigs [][2]string, opts []shell.RunCommandOpt) (string, error) {
+	args := make([]string, 0, 2*len(cloneConfigs)+4)
+	for _, config := range cloneConfigs {
+		args = append(args, "-c", config[0]+"="+config[1])
+	}
+	args = append(args, "ls-remote", "--symref", e.Repository, "HEAD")
+	out, err := e.shell.Command("git", args...).RunAndCaptureStdout(ctx, opts...)
+	if err != nil {
+		return "", err
+	}
+	for line := range strings.SplitSeq(out, "\n") {
+		ref, target, ok := strings.Cut(line, "\t")
+		if !ok || target != "HEAD" {
+			continue
+		}
+		branch, ok := strings.CutPrefix(ref, "ref: ")
+		if ok && strings.HasPrefix(branch, "refs/heads/") {
+			return branch, nil
+		}
+	}
+	return "", errors.New("canonical HEAD does not resolve to a branch")
 }
 
 // remoteMirrorFetchEnv hides ambient Git configuration from the mirror
@@ -277,6 +324,8 @@ type remoteMirrorCheckoutPlan struct {
 	mirrorConfigs [][2]string
 	fetchFlags    string
 	partialClone  bool
+	singleBranch  bool
+	noTags        bool
 }
 
 // planRemoteMirrorCheckout separates checkout semantics from mirror transport
@@ -294,17 +343,25 @@ func planRemoteMirrorCheckout(gitCloneFlags []string, gitFetchFlags string) (rem
 	}
 
 	var cloneFetchOptions [][]string
+	singleBranchSet := false
 	for i := 0; i < len(gitCloneFlags); i++ {
 		flag := gitCloneFlags[i]
 		switch {
 		case flag == "-v", flag == "--verbose", flag == "-q", flag == "--quiet", flag == "--no-checkout":
 			continue
-		case flag == "--sparse", flag == "--single-branch", flag == "--no-single-branch":
+		case flag == "--sparse":
 			// Sparse worktree setup happens after source acquisition. The
 			// mirror fetch already requests only the exact immutable commit.
 			continue
+		case flag == "--single-branch":
+			plan.singleBranch = true
+			singleBranchSet = true
+		case flag == "--no-single-branch":
+			plan.singleBranch = false
+			singleBranchSet = true
 		case flag == "--no-tags":
 			cloneFetchOptions = append(cloneFetchOptions, []string{flag})
+			plan.noTags = true
 		case isGitFilterFlag(flag):
 			option, consumed, ok := gitOptionWithValue(gitCloneFlags, i, isGitFilterFlag)
 			if !ok {
@@ -320,6 +377,9 @@ func planRemoteMirrorCheckout(gitCloneFlags []string, gitFetchFlags string) (rem
 			}
 			i += consumed
 			cloneFetchOptions = append(cloneFetchOptions, option)
+			if gitLongOption(flag, "--depth") && !singleBranchSet {
+				plan.singleBranch = true
+			}
 		case flag == "--config":
 			if i+1 >= len(gitCloneFlags) {
 				return plan, false, nil
