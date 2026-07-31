@@ -36,6 +36,8 @@ const (
 	gitErrorFetchBadObject
 	// can happen when just the short commit hash is given.
 	gitErrorFetchBadReference
+	// the server does not have, or will not advertise, the requested object.
+	gitErrorFetchRefNotOnRemote
 	gitErrorClean
 	gitErrorCleanSubmodules
 	gitErrorRepack
@@ -48,6 +50,8 @@ const (
 	gitErrStrBadObject             = "fatal: bad object"
 	gitErrStrBadReference          = "fatal: couldn't find remote ref"
 	gitErrStrBadReferencePreGit221 = "fatal: Couldn't find remote ref"
+	gitErrStrNotOurRef             = "not our ref"
+	gitErrStrUnadvertisedObject    = "Server does not allow request for unadvertised object"
 )
 
 var (
@@ -295,6 +299,7 @@ type gitFetchArgs struct {
 	Repository    string       // The remote to fetch from
 	Retry         bool         // Whether to retry the fetch on certain errors
 	RefSpecs      []string     // Refspecs to fetch
+	Quiet         bool         // Hide command prompts and stderr (for sensitive URLs)
 }
 
 func gitFetch(ctx context.Context, args gitFetchArgs) error {
@@ -334,6 +339,8 @@ func gitFetch(ctx context.Context, args gitFetchArgs) error {
 		gitErrStrBadObject:             false,
 		gitErrStrBadReference:          false,
 		gitErrStrBadReferencePreGit221: false,
+		gitErrStrNotOurRef:             false,
+		gitErrStrUnadvertisedObject:    false,
 	}
 
 	// The retry logic is used to handle rare cases where a commit ref is not yet available
@@ -354,13 +361,22 @@ func gitFetch(ctx context.Context, args gitFetchArgs) error {
 	}
 
 	return retrier.DoWithContext(ctx, func(retrier *roko.Retrier) error {
-		if err := args.Shell.Command("git", commandArgs...).Run(ctx, shell.WithStringSearch(smelt)); err != nil {
+		runOpts := []shell.RunCommandOpt{shell.WithStringSearch(smelt)}
+		if args.Quiet {
+			runOpts = append(runOpts, shell.ShowPrompt(false), shell.ShowStderr(false))
+		}
+		if err := args.Shell.Command("git", commandArgs...).Run(ctx, runOpts...); err != nil {
 			// "fatal: [Cc]ouldn't find remote ref" happens when the remote ref does not exist (e.g. a branch that was deleted)
 			// Sometimes we want to wait for the remote ref to be created (eg in the case of the PR HEAD ref `refs/pulls/123/head
 			// that github creates asynchronously), so this case gets retried -- we don't call r.Break()
 			if smelt[gitErrStrBadReference] || smelt[gitErrStrBadReferencePreGit221] {
 				args.Shell.Commentf("%s", retrier)
 				return &gitError{error: err, Type: gitErrorFetchBadReference, WasRetried: args.Retry}
+			}
+
+			if smelt[gitErrStrNotOurRef] || smelt[gitErrStrUnadvertisedObject] {
+				retrier.Break()
+				return &gitError{error: err, Type: gitErrorFetchRefNotOnRemote}
 			}
 
 			// "fatal: bad object" can happen when the local repo in the checkout
