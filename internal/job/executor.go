@@ -351,7 +351,8 @@ func (e *Executor) useRepositoryProviderGitCredentials() bool {
 // When afterSetUp is false, it installs the credential helper and applies the
 // legacy GitHub App's unconditional rewrite/keyscan behavior. When true, it
 // applies only the provider-neutral flag's repository-dependent rewrite using
-// the post-environment-hook repository URL.
+// the latest repository URL. Checkout refreshes this after pre-checkout hooks
+// in case a later hook changed BUILDKITE_REPO.
 //
 // When both flags are set, preserve legacy behavior so existing jobs retain
 // their pre-setUp GitHub rewrite while the provider-neutral flag rolls out.
@@ -378,8 +379,8 @@ func (e *Executor) configureRepositoryProviderGitCredentials(ctx context.Context
 		return nil
 	}
 
-	if strings.HasPrefix(e.Repository, "git@github.com:") {
-		e.skipRepositorySSHKeyscan = true
+	e.skipRepositorySSHKeyscan = strings.HasPrefix(e.Repository, "git@github.com:")
+	if e.skipRepositorySSHKeyscan {
 		if err := e.configureHTTPSInsteadOfSSH(ctx); err != nil {
 			return err
 		}
