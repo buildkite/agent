@@ -793,7 +793,12 @@ BUILDKITE_AGENT_JWKS_KEY_ID`
 	// Apply control-plane OTLP exporter config after BUILDKITE_ENV_FILE is
 	// written, so credentials are available to bootstrap InitOTelTracerProvider
 	// but not persisted in the clean env files or (after executor strip) commands.
-	applyControlPlaneTracingExporter(setEnv, r.conf.AgentConfiguration.TracingBackend, r.conf.Job.TracingExporter)
+	applyControlPlaneTracingExporter(
+		setEnv,
+		r.conf.AgentConfiguration.AcceptControlPlaneExporter,
+		r.conf.AgentConfiguration.TracingBackend,
+		r.conf.Job.TracingExporter,
+	)
 
 	setEnv("BUILDKITE_AGENT_DISABLE_WARNINGS_FOR", strings.Join(r.conf.AgentConfiguration.DisableWarningsFor, ","))
 

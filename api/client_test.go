@@ -21,7 +21,7 @@ func TestRegisteringAndConnectingClient(t *testing.T) {
 				return
 			}
 			rw.WriteHeader(http.StatusOK)
-			fmt.Fprint(rw, `{"id":"12-34-56-78-91", "name":"agent-1", "access_token":"alpacas"}`) //nolint:errcheck // The test would still fail
+			fmt.Fprint(rw, `{"id":"12-34-56-78-91", "name":"agent-1", "access_token":"alpacas", "tracing":{"backend":"opentelemetry","propagate_traceparent":true,"accept_control_plane_exporter":true}}`) //nolint:errcheck // The test would still fail
 
 		case "/connect":
 			if got, want := authToken(req), "alpacas"; got != want {
@@ -62,6 +62,10 @@ func TestRegisteringAndConnectingClient(t *testing.T) {
 
 	if got, want := reg.AccessToken, "alpacas"; got != want {
 		t.Errorf("regResp.AccessToken = %q, want %q", got, want)
+	}
+
+	if reg.Tracing == nil || reg.Tracing.Backend != "opentelemetry" || !reg.Tracing.PropagateTraceparent || !reg.Tracing.AcceptControlPlaneExporter {
+		t.Errorf("regResp.Tracing = %#v, want enabled OpenTelemetry tracing", reg.Tracing)
 	}
 
 	if got, want := httpResp.Proto, "HTTP/2.0"; got != want {

@@ -55,7 +55,7 @@ func TestApplyControlPlaneTracingExporter(t *testing.T) {
 		got := map[string]string{}
 		setEnv := func(name, value string) { got[name] = value }
 
-		applyControlPlaneTracingExporter(setEnv, tracetools.BackendOpenTelemetry, &api.TracingExporter{
+		applyControlPlaneTracingExporter(setEnv, true, tracetools.BackendOpenTelemetry, &api.TracingExporter{
 			Endpoint: "https://otel.example/v1/traces",
 			Protocol: "http/protobuf",
 			Headers:  map[string]string{"Authorization": "Bearer from-cp"},
@@ -76,11 +76,11 @@ func TestApplyControlPlaneTracingExporter(t *testing.T) {
 		got := map[string]string{}
 		setEnv := func(name, value string) { got[name] = value }
 
-		applyControlPlaneTracingExporter(setEnv, tracetools.BackendDatadog, &api.TracingExporter{
+		applyControlPlaneTracingExporter(setEnv, true, tracetools.BackendDatadog, &api.TracingExporter{
 			Endpoint: "https://otel.example/v1/traces",
 			Headers:  map[string]string{"Authorization": "Bearer from-cp"},
 		})
-		applyControlPlaneTracingExporter(setEnv, "", &api.TracingExporter{
+		applyControlPlaneTracingExporter(setEnv, true, "", &api.TracingExporter{
 			Endpoint: "https://otel.example/v1/traces",
 		})
 
@@ -95,7 +95,7 @@ func TestApplyControlPlaneTracingExporter(t *testing.T) {
 		got := map[string]string{}
 		setEnv := func(name, value string) { got[name] = value }
 
-		applyControlPlaneTracingExporter(setEnv, tracetools.BackendOpenTelemetry, &api.TracingExporter{
+		applyControlPlaneTracingExporter(setEnv, true, tracetools.BackendOpenTelemetry, &api.TracingExporter{
 			Endpoint: "https://otel.example/v1/traces",
 			Headers:  map[string]string{"Authorization": "Bearer from-cp"},
 		})
@@ -109,10 +109,83 @@ func TestApplyControlPlaneTracingExporter(t *testing.T) {
 		got := map[string]string{}
 		setEnv := func(name, value string) { got[name] = value }
 
-		applyControlPlaneTracingExporter(setEnv, tracetools.BackendOpenTelemetry, nil)
-		applyControlPlaneTracingExporter(setEnv, tracetools.BackendOpenTelemetry, &api.TracingExporter{})
+		applyControlPlaneTracingExporter(setEnv, true, tracetools.BackendOpenTelemetry, nil)
+		applyControlPlaneTracingExporter(setEnv, true, tracetools.BackendOpenTelemetry, &api.TracingExporter{})
 		if len(got) != 0 {
 			t.Fatalf("expected no apply, got %#v", got)
+		}
+	})
+
+	t.Run("skips when registration policy does not accept the exporter", func(t *testing.T) {
+		got := map[string]string{}
+		setEnv := func(name, value string) { got[name] = value }
+
+		applyControlPlaneTracingExporter(setEnv, false, tracetools.BackendOpenTelemetry, &api.TracingExporter{
+			Endpoint: "https://otel.example/v1/traces",
+			Headers:  map[string]string{"Authorization": "Bearer from-cp"},
+		})
+
+		if len(got) != 0 {
+			t.Fatalf("expected no apply without registration policy, got %#v", got)
+		}
+	})
+}
+
+func TestApplyRegistrationTracing(t *testing.T) {
+	t.Run("applies control-plane tracing policy", func(t *testing.T) {
+		conf := AgentConfiguration{}
+
+		conf.ApplyRegistrationTracing(&api.AgentRegistrationTracing{
+			Backend:                    tracetools.BackendOpenTelemetry,
+			PropagateTraceparent:       true,
+			AcceptControlPlaneExporter: true,
+		}, false, false)
+
+		if conf.TracingBackend != tracetools.BackendOpenTelemetry {
+			t.Fatalf("TracingBackend = %q", conf.TracingBackend)
+		}
+		if !conf.TracingPropagateTraceparent {
+			t.Fatal("TracingPropagateTraceparent = false")
+		}
+		if !conf.AcceptControlPlaneExporter {
+			t.Fatal("AcceptControlPlaneExporter = false")
+		}
+	})
+
+	t.Run("preserves local backend and propagation overrides", func(t *testing.T) {
+		conf := AgentConfiguration{
+			TracingBackend:              tracetools.BackendDatadog,
+			TracingPropagateTraceparent: false,
+		}
+
+		conf.ApplyRegistrationTracing(&api.AgentRegistrationTracing{
+			Backend:                    tracetools.BackendOpenTelemetry,
+			PropagateTraceparent:       true,
+			AcceptControlPlaneExporter: true,
+		}, true, true)
+
+		if conf.TracingBackend != tracetools.BackendDatadog {
+			t.Fatalf("TracingBackend = %q", conf.TracingBackend)
+		}
+		if conf.TracingPropagateTraceparent {
+			t.Fatal("TracingPropagateTraceparent = true")
+		}
+		if conf.AcceptControlPlaneExporter {
+			t.Fatal("AcceptControlPlaneExporter = true for non-OpenTelemetry backend")
+		}
+	})
+
+	t.Run("ignores unsupported control-plane backend", func(t *testing.T) {
+		conf := AgentConfiguration{}
+
+		conf.ApplyRegistrationTracing(&api.AgentRegistrationTracing{
+			Backend:                    "unknown",
+			PropagateTraceparent:       true,
+			AcceptControlPlaneExporter: true,
+		}, false, false)
+
+		if conf.TracingBackend != "" || conf.TracingPropagateTraceparent || conf.AcceptControlPlaneExporter {
+			t.Fatalf("unexpected config: %#v", conf)
 		}
 	})
 }

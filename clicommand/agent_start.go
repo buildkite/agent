@@ -1197,6 +1197,11 @@ var AgentStartCommand = cli.Command{
 		if configFile != nil {
 			agentConf.ConfigPath = configFile.Path
 		}
+		backendLocallyConfigured := agentConf.TracingBackend != ""
+		_, propagateTraceparentSetInEnv := os.LookupEnv("BUILDKITE_TRACING_PROPAGATE_TRACEPARENT")
+		propagateTraceparentLocallyConfigured := agentConf.TracingPropagateTraceparent ||
+			c.IsSet("tracing-propagate-traceparent") ||
+			propagateTraceparentSetInEnv
 
 		if cfg.LogFormat == "text" {
 			welcomeMessage := "\n" +
@@ -1408,6 +1413,13 @@ var AgentStartCommand = cli.Command{
 				return nil, err
 			}
 
+			workerAgentConf := agentConf
+			workerAgentConf.ApplyRegistrationTracing(
+				reg.Tracing,
+				backendLocallyConfigured,
+				propagateTraceparentLocallyConfigured,
+			)
+
 			// Create an agent worker to run the agent
 			return agent.NewAgentWorker(
 				l.WithFields(logger.StringField("agent", reg.Name)),
@@ -1415,7 +1427,7 @@ var AgentStartCommand = cli.Command{
 				mc,
 				apiClient,
 				agent.AgentWorkerConfig{
-					AgentConfiguration: agentConf,
+					AgentConfiguration: workerAgentConf,
 					CancelSignal:       cancelSig,
 					SignalGracePeriod:  signalGracePeriod,
 					Debug:              cfg.Debug,

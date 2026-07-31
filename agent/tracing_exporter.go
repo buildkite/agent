@@ -16,6 +16,30 @@ import (
 // and keep credentials out of the command environment / env files).
 const ControlPlaneOTLPTracingFeature = "control-plane-otlp-tracing"
 
+// ApplyRegistrationTracing merges non-secret control-plane policy into the
+// worker's runtime config. Explicit local backend and propagation settings win.
+func (c *AgentConfiguration) ApplyRegistrationTracing(
+	tracing *api.AgentRegistrationTracing,
+	backendLocallyConfigured bool,
+	propagateTraceparentLocallyConfigured bool,
+) {
+	if tracing == nil || tracing.Backend != tracetools.BackendOpenTelemetry {
+		return
+	}
+
+	if !backendLocallyConfigured {
+		c.TracingBackend = tracing.Backend
+	}
+	if c.TracingBackend != tracetools.BackendOpenTelemetry {
+		return
+	}
+
+	if !propagateTraceparentLocallyConfigured {
+		c.TracingPropagateTraceparent = tracing.PropagateTraceparent
+	}
+	c.AcceptControlPlaneExporter = tracing.AcceptControlPlaneExporter
+}
+
 // hostHasOTelExporterConfig reports whether the agent process already has local
 // OTLP endpoint or headers. Protocol-only leftovers do not count as a full
 // local override. Local operator config takes precedence over control-plane
@@ -63,8 +87,8 @@ func encodeOTLPHeaders(headers map[string]string) string {
 // the OpenTelemetry backend, and the agent host has not already configured an
 // exporter. Call this after writing BUILDKITE_ENV_FILE so secrets are not
 // persisted there.
-func applyControlPlaneTracingExporter(setEnv func(name, value string), tracingBackend string, exporter *api.TracingExporter) {
-	if tracingBackend != tracetools.BackendOpenTelemetry {
+func applyControlPlaneTracingExporter(setEnv func(name, value string), accepted bool, tracingBackend string, exporter *api.TracingExporter) {
+	if !accepted || tracingBackend != tracetools.BackendOpenTelemetry {
 		return
 	}
 	if exporter == nil || exporter.Endpoint == "" {
