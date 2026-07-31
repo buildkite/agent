@@ -437,6 +437,10 @@ func (r *JobRunner) createEnvironment(ctx context.Context) ([]string, error) {
 	// The agent registration token should never make it into the job environment
 	delete(env, "BUILDKITE_AGENT_TOKEN")
 
+	// Pipeline-supplied OTEL exporter config must not reach bootstrap or commands.
+	// Destination/auth is an operator / control-plane concern only.
+	ignoredOTel := scrubPipelineOTelExporterEnv(env)
+
 	// When in KubernetesExec mode, filter out the Kubernetes plugin,
 	// since it's not a real plugin. agent-stack-k8s reads it but we have no
 	// need for it. Supplying it when not using agent-stack-k8s is a mistake
@@ -456,6 +460,7 @@ func (r *JobRunner) createEnvironment(ctx context.Context) ([]string, error) {
 	// Wrap setting values in env, so that when any that were already present in
 	// supplied Job env are overwritten, they can be added to ignoredEnv.
 	var ignoredEnv []string
+	ignoredEnv = append(ignoredEnv, ignoredOTel...)
 	setEnv := func(name, value string) {
 		if _, exists := env[name]; exists {
 			ignoredEnv = append(ignoredEnv, name)
@@ -784,6 +789,11 @@ BUILDKITE_AGENT_JWKS_KEY_ID`
 	// overwrite the job-provided value so a pipeline cannot enable OTLP export
 	// or choose its destination when the agent operator has not opted in.
 	setEnv("BUILDKITE_JOB_LOGS_OTLP", fmt.Sprint(r.conf.AgentConfiguration.JobLogsOTLP))
+
+	// Apply control-plane OTLP exporter config after BUILDKITE_ENV_FILE is
+	// written, so credentials are available to bootstrap InitOTelTracerProvider
+	// but not persisted in the clean env files or (after executor strip) commands.
+	applyControlPlaneTracingExporter(setEnv, r.conf.Job.TracingExporter)
 
 	setEnv("BUILDKITE_AGENT_DISABLE_WARNINGS_FOR", strings.Join(r.conf.AgentConfiguration.DisableWarningsFor, ","))
 

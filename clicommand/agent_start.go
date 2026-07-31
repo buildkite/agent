@@ -275,6 +275,12 @@ func (asc AgentStartConfig) Features(ctx context.Context) []string {
 		features = append(features, "propagate-traceparent")
 	}
 
+	// Advertised whenever this binary can safely consume job.tracing_exporter
+	// (bootstrap-only application + command-env stripping). Independent of
+	// whether --tracing-backend is already set, so registration/zero-config
+	// enablement can turn tracing on later.
+	features = append(features, agent.ControlPlaneOTLPTracingFeature)
+
 	if asc.DisconnectAfterJob {
 		features = append(features, "disconnect-after-job")
 	}

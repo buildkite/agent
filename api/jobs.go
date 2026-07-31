@@ -30,7 +30,20 @@ type Job struct {
 	ChunksFailedCount     int                        `json:"chunks_failed_count"`
 	TraceParent           string                     `json:"traceparent"`
 	TraceState            string                     `json:"tracestate"`
-	Priority              int                        `json:"priority"`
+	// TracingExporter is optional OTLP exporter config injected by the control
+	// plane from the OpenTelemetry notification service. It is a top-level job
+	// field (never job.env) so credentials are not written to BUILDKITE_ENV_FILE.
+	TracingExporter *TracingExporter `json:"tracing_exporter,omitempty"`
+	Priority        int              `json:"priority"`
+}
+
+// TracingExporter is control-plane-supplied OTLP exporter configuration for
+// agent job spans. Protocol is typically "http/protobuf" to match Buildkite's
+// control-plane export path.
+type TracingExporter struct {
+	Endpoint string            `json:"endpoint"`
+	Protocol string            `json:"protocol"`
+	Headers  map[string]string `json:"headers"`
 }
 
 // JobURL returns the URL that deep-links to a specific job on its build page,

@@ -172,6 +172,11 @@ func (e *Executor) Run(ctx context.Context) (exitCode int) {
 	// Create an empty env for us to keep track of our env changes in
 	e.shell.Env = env.FromSlice(os.Environ())
 
+	// OTLP exporter credentials may be present in process env so
+	// InitOTelTracerProvider (at CLI startup) could configure the exporter.
+	// They must not remain visible to hooks, plugins, or the job command.
+	env.StripOTelExporter(e.shell.Env)
+
 	// OTLP job log export lives entirely in the bootstrap process, which is the
 	// single home for this feature. When OpenTelemetry tracing is enabled, log
 	// records carry the span context of the nearest enclosing phase/hook span,
