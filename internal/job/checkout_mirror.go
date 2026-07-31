@@ -14,6 +14,18 @@ import (
 	"github.com/buildkite/shellwords"
 )
 
+// gitMirrorFetchFlags returns the global Git flags used when updating a mirror.
+// Keep automatic maintenance enabled, but wait for it to finish before releasing
+// the update lock or creating a snapshot. gc.autoDetach covers older Git versions
+// that run auto-gc instead of `git maintenance`.
+func gitMirrorFetchFlags(mirrorDir string) []string {
+	return []string{
+		"-c", "maintenance.autoDetach=false",
+		"-c", "gc.autoDetach=false",
+		"--git-dir", mirrorDir,
+	}
+}
+
 func (e *Executor) getOrUpdateMirrorDir(ctx context.Context, repository string) (string, error) {
 	var mirrorDir string
 	// Skip updating the Git mirror before using it?
@@ -188,7 +200,7 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string) (dir 
 		if err := e.traceOp(ctx, "git.mirror.fetch", func(ctx context.Context) error {
 			return gitFetch(ctx, gitFetchArgs{
 				Shell:      e.shell,
-				GitFlags:   fmt.Sprintf("--git-dir=%s", mirrorDir),
+				GitFlags:   gitMirrorFetchFlags(mirrorDir),
 				Repository: "origin",
 				RefSpecs:   refspecs,
 				Retry:      retry,
@@ -205,7 +217,7 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string) (dir 
 		// a clean host or with a clean checkout.)
 		// TODO: Investigate getting the ref from the main repo and passing
 		// that in here.
-		cmd := e.shell.Command("git", "--git-dir", mirrorDir, "fetch", "origin")
+		cmd := e.shell.Command("git", append(gitMirrorFetchFlags(mirrorDir), "fetch", "origin")...)
 		if err := e.traceOp(ctx, "git.mirror.fetch", func(ctx context.Context) error {
 			return cmd.Run(ctx)
 		}); err != nil {
