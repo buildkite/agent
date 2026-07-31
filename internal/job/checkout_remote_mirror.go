@@ -127,7 +127,9 @@ func (e *Executor) acquireRemoteMirrorSource(ctx context.Context, plan remoteMir
 
 	initOpts := append([]shell.RunCommandOpt{}, quiet...)
 	initOpts = append(initOpts, shell.WithExtraEnv(fetchEnv))
-	if err := e.shell.Command("git", "init").Run(ctx, initOpts...); err != nil {
+	// Quiet the Git 2.x "Using 'master' as the name for the initial branch"
+	// advice. Git 3.x defaults to main, so this becomes a no-op then.
+	if err := e.shell.Command("git", "-c", "init.defaultBranch=main", "init").Run(ctx, initOpts...); err != nil {
 		return true, fmt.Errorf("initializing repository for remote mirror: %w", err)
 	}
 	if err := e.shell.Command("git", "remote", "add", "origin", e.Repository).Run(ctx, quiet...); err != nil {
