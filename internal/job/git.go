@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/buildkite/agent/v3/env"
 	"github.com/buildkite/agent/v3/internal/osutil"
 	"github.com/buildkite/agent/v3/internal/shell"
 	"github.com/buildkite/roko"
@@ -300,6 +301,7 @@ type gitFetchArgs struct {
 	Retry         bool         // Whether to retry the fetch on certain errors
 	RefSpecs      []string     // Refspecs to fetch
 	Quiet         bool         // Hide command prompts and stderr (for sensitive URLs)
+	ExtraEnv      *env.Environment
 }
 
 func gitFetch(ctx context.Context, args gitFetchArgs) error {
@@ -364,6 +366,9 @@ func gitFetch(ctx context.Context, args gitFetchArgs) error {
 		runOpts := []shell.RunCommandOpt{shell.WithStringSearch(smelt)}
 		if args.Quiet {
 			runOpts = append(runOpts, shell.ShowPrompt(false), shell.ShowStderr(false))
+		}
+		if args.ExtraEnv != nil {
+			runOpts = append(runOpts, shell.WithExtraEnv(args.ExtraEnv))
 		}
 		if err := args.Shell.Command("git", commandArgs...).Run(ctx, runOpts...); err != nil {
 			// "fatal: [Cc]ouldn't find remote ref" happens when the remote ref does not exist (e.g. a branch that was deleted)
