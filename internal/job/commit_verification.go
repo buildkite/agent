@@ -237,14 +237,9 @@ func stripRefSuppressingFetchFlags(flags []string) []string {
 	return out
 }
 
-// verifyCommit is called if the user has commit verification enabled. It ensures that the commit we are
-// asked to build exists and is reachable on the branch we are given.
+// verifyCommit ensures that the commit we are asked to build exists and is
+// reachable on the branch we are given.
 func (e *Executor) verifyCommit(ctx context.Context) error {
-	// Skip if not enabled
-	if e.GitCommitVerification == "" {
-		return nil
-	}
-
 	// Skip if commit is HEAD (nothing to verify)
 	if e.Commit == "HEAD" {
 		e.shell.Commentf("Skipping commit verification: commit is HEAD")
@@ -287,12 +282,11 @@ func (e *Executor) verifyCommit(ctx context.Context) error {
 
 	// Definitive failure — commit is provably not on the branch
 	if errors.Is(err, ErrCommitVerificationFailed) {
-		if e.GitCommitVerification == "strict" {
-			return err
+		if e.GitCommitVerification == "warn" {
+			e.shell.Warningf("Commit verification failed: %v", err)
+			return nil
 		}
-		// err already begins with "commit verification failed", so log it as-is.
-		e.shell.Warningf("%s", err)
-		return nil
+		return err
 	}
 
 	// Verification unavailable — infrastructure issue, not a security concern.

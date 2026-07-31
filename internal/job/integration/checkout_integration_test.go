@@ -1112,19 +1112,26 @@ func TestCheckingOutLocalGitProjectWithShortCommitHash(t *testing.T) {
 		t.Fatalf("tester.Repo.RevParse(%q) error = %v, want nil", "HEAD", err)
 	}
 	shortCommitHash := commitHash[:7]
+	branchTip := strings.TrimSpace(commitHash)
 
 	git := tester.
 		MustMock(t, "git").
 		PassthroughToLocalCommand()
 
 	// Git should attempt to fetch the shortHash, but fail. Then fallback to fetching
-	// all the heads and tags and checking out the short commit hash.
+	// all the heads and tags, verify the commit against main, and check out the
+	// short commit hash.
+	const branchTipRef = "refs/buildkite-agent/commit-verification-branch-tip"
 	git.ExpectAll([][]any{
 		{"config", "--get-all", "remote.origin.url"},
 		{"clean", "-ffxdq"},
 		{"fetch", "-v", "--prune", "--", "origin", shortCommitHash},
 		{"config", "remote.origin.fetch"},
 		{"fetch", "-v", "--prune", "--", "origin", "+refs/heads/*:refs/remotes/origin/*", "+refs/tags/*:refs/tags/*"},
+		{"fetch", "-v", "--prune", "--", "origin", "+refs/heads/main:" + branchTipRef},
+		{"rev-parse", branchTipRef},
+		{"merge-base", "--is-ancestor", shortCommitHash, branchTip},
+		{"update-ref", "-d", branchTipRef},
 		{"-c", "advice.detachedHead=false", "checkout", "-f", shortCommitHash},
 		{"clean", "-ffxdq"},
 		{"rev-parse", shortCommitHash},

@@ -839,9 +839,10 @@ var AgentStartCommand = &cli.Command{
 			}
 		}
 
-		// Validate the commit verification option input
-		if v := cfg.GitCommitVerification; v != "" && v != "strict" && v != "warn" {
-			return fmt.Errorf("invalid value for --git-commit-verification: %q (must be \"strict\" or \"warn\")", v)
+		// The config file is loaded after CLI flag validation, so validate its
+		// commit verification value here as well.
+		if err := validateGitCommitVerification(cfg.GitCommitVerification); err != nil {
+			return err
 		}
 
 		// Force some settings if on Windows (these aren't supported yet)

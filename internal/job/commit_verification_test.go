@@ -154,14 +154,6 @@ func TestVerifyCommit(t *testing.T) {
 		config ExecutorConfig
 	}{
 		{
-			name: "skips when verification is disabled",
-			config: ExecutorConfig{
-				GitCommitVerification: "",
-				Commit:                "abc123",
-				Branch:                "main",
-			},
-		},
-		{
 			name: "skips when commit is HEAD",
 			config: ExecutorConfig{
 				GitCommitVerification: "strict",
