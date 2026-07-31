@@ -168,7 +168,9 @@ func (e *Executor) acquireRemoteMirrorSource(ctx context.Context, cloneConfigs [
 			return true, fmt.Errorf("initializing repository for remote mirror: %w", err)
 		}
 		for _, kv := range cloneConfigs {
-			if err := e.shell.Command("git", "config", kv[0], kv[1]).Run(ctx, quiet...); err != nil {
+			// git clone --config is additive for repeated keys, so use
+			// --add to preserve every value (e.g. multiple http.extraHeader).
+			if err := e.shell.Command("git", "config", "--add", kv[0], kv[1]).Run(ctx, quiet...); err != nil {
 				return true, fmt.Errorf("applying git clone --config %s=%s for remote mirror: %w", kv[0], kv[1], err)
 			}
 		}

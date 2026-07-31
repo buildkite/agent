@@ -145,6 +145,34 @@ func TestRemoteMirrorHitChecksOutExactCommitWithCanonicalOrigin(t *testing.T) {
 	assertNoMutableRefs(t, e)
 }
 
+func TestRemoteMirrorHitPreservesRepeatedCloneConfigs(t *testing.T) {
+	e := newRemoteMirrorTestExecutor(t)
+	canonical, commit := setupCheckoutTestRepo(t, e, "canonical")
+	mirror := copyRemoteMirrorRepository(t, canonical.RepoURL("canonical"), "mirror")
+
+	e.Commit = commit
+	e.Branch = "feature-branch"
+	e.PullRequest = "false"
+	e.GitRemoteMirrorURL = mirror.RepoURL("mirror")
+	// git clone --config is additive for repeated keys, so a fresh mirror hit
+	// must persist every value rather than only the last one.
+	e.GitCloneFlags = "-v --config http.extraHeader=a --config http.extraHeader=b"
+	canonical.Close()
+
+	if err := e.defaultCheckoutPhase(t.Context(), 0); err != nil {
+		t.Fatalf("defaultCheckoutPhase() error = %v", err)
+	}
+
+	assertCheckedOutCommit(t, e, commit)
+	got, err := e.shell.Command("git", "config", "--local", "--get-all", "http.extraHeader").RunAndCaptureStdout(t.Context())
+	if err != nil {
+		t.Fatalf("reading http.extraHeader: %v", err)
+	}
+	if want := "a\nb"; got != want {
+		t.Errorf("http.extraHeader = %q, want %q", got, want)
+	}
+}
+
 func TestAuthenticatedRemoteMirrorUsesRepositoryAccessToken(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("credential helper subprocess shim is POSIX-only")
