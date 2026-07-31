@@ -4,12 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
 
+	"github.com/buildkite/agent/v3/env"
 	"github.com/buildkite/agent/v3/internal/osutil"
 	"github.com/buildkite/agent/v3/internal/shell"
 	"github.com/buildkite/shellwords"
@@ -25,11 +27,19 @@ func isFullCommitSHA(commit string) bool {
 
 func (e *Executor) shouldAttemptRemoteMirror(previousAttempts int) bool {
 	return previousAttempts == 0 &&
-		e.GitRemoteMirrorURL != "" &&
+		isSupportedRemoteMirrorURL(e.GitRemoteMirrorURL) &&
 		isFullCommitSHA(e.Commit) &&
 		e.RefSpec == "" &&
 		e.Tag == "" &&
 		e.PullRequest == "false"
+}
+
+func isSupportedRemoteMirrorURL(rawURL string) bool {
+	u, err := url.Parse(rawURL)
+	if err != nil || u.Host == "" {
+		return false
+	}
+	return u.Scheme == "https" || u.Scheme == "http"
 }
 
 // tryRemoteMirrorSource attempts source acquisition from the backend-provided
@@ -44,15 +54,20 @@ func (e *Executor) tryRemoteMirrorSource(
 		return false, nil
 	}
 
-	cloneConfigs, ok := remoteMirrorCompatibleCloneConfigs(gitCloneFlags)
-	if !ok {
+	// Existing checkouts can contain canonical credentials and transport
+	// configuration persisted by an earlier clone. Git reads that local config
+	// before fetching, so the mirror trust boundary cannot be isolated there.
+	// The canonical incremental fetch is already the efficient path for reuse.
+	existingGitDir := filepath.Join(e.shell.Getwd(), ".git")
+	if osutil.FileExists(existingGitDir) {
 		return false, nil
 	}
 
-	existingGitDir := filepath.Join(e.shell.Getwd(), ".git")
-	if osutil.FileExists(existingGitDir) && e.isPartialCloneCheckout(ctx) {
-		// Fetch negotiation against an existing promisor remote can treat
-		// promised objects as complete without backfilling blobs.
+	plan, ok, err := planRemoteMirrorCheckout(gitCloneFlags, e.GitFetchFlags)
+	if err != nil {
+		return false, err
+	}
+	if !ok {
 		return false, nil
 	}
 
@@ -76,21 +91,8 @@ func (e *Executor) tryRemoteMirrorSource(
 	mirrorCtx, cancel := context.WithTimeout(mirrorCtx, remoteMirrorTimeout(mirrorCtx))
 	defer cancel()
 
-	// Fetching an already-local SHA can succeed even when the remote does not
-	// have the object. Probe without promisor lazy-fetches from origin, which
-	// would otherwise escape this attempt's timeout on partial clones.
-	if alreadyLocal, err := e.hasLocalCommitWithoutLazyFetch(mirrorCtx, e.Commit); err != nil {
-		fallback = true
-		result = remoteMirrorResult(mirrorCtx, err)
-		e.shell.Commentf("Remote Git mirror unavailable (%s); falling back to canonical repository", result)
-		return false, nil
-	} else if alreadyLocal {
-		result = "local"
-		return false, nil
-	}
-
 	e.shell.Commentf("Attempting checkout from remote Git mirror")
-	createdCheckout, err := e.acquireRemoteMirrorSource(mirrorCtx, cloneConfigs)
+	createdCheckout, err := e.acquireRemoteMirrorSource(mirrorCtx, plan)
 	if err == nil {
 		return true, nil
 	}
@@ -111,91 +113,107 @@ func (e *Executor) tryRemoteMirrorSource(
 	return false, nil
 }
 
-func (e *Executor) isPartialCloneCheckout(ctx context.Context) bool {
-	// Filtered clones are marked by remote.<name>.promisor /
-	// remote.<name>.partialclonefilter, not extensions.partialclone.
-	quiet := []shell.RunCommandOpt{shell.ShowPrompt(false), shell.ShowStderr(false)}
-	for _, pattern := range []string{`^remote\..*\.promisor$`, `^remote\..*\.partialclonefilter$`} {
-		out, err := e.shell.Command(
-			"git", "config", "--local", "--get-regexp", pattern,
-		).RunAndCaptureStdout(ctx, quiet...)
-		if err == nil && strings.TrimSpace(out) != "" {
-			return true
-		}
-	}
-	return false
-}
-
-// hasLocalCommitWithoutLazyFetch reports whether commit is already present
-// locally without contacting promisor remotes.
-func (e *Executor) hasLocalCommitWithoutLazyFetch(ctx context.Context, commit string) (bool, error) {
-	previous, hadPrevious := e.shell.Env.Get("GIT_NO_LAZY_FETCH")
-	e.shell.Env.Set("GIT_NO_LAZY_FETCH", "1")
-	defer func() {
-		if hadPrevious {
-			e.shell.Env.Set("GIT_NO_LAZY_FETCH", previous)
-			return
-		}
-		e.shell.Env.Remove("GIT_NO_LAZY_FETCH")
-	}()
-
-	if err := ctx.Err(); err != nil {
-		return false, err
-	}
-	return hasGitCommit(ctx, e.shell, ".git", commit), nil
-}
-
 // acquireRemoteMirrorSource fetches the exact commit from the remote mirror
-// into either an existing checkout or a freshly initialized repository with
-// the canonical origin already configured. It returns whether this attempt
-// created the checkout directory's .git state.
-//
-// The fetch strips partial-clone filters. A filtered fetch would register the
-// one-shot mirror URL as a promisor remote in .git/config, and later lazy blob
-// fetches would escape this attempt's timeout and credential scope.
-func (e *Executor) acquireRemoteMirrorSource(ctx context.Context, cloneConfigs [][2]string) (bool, error) {
+// into a freshly initialized repository with the canonical origin configured.
+// Pipeline configuration that controls object selection is preserved, while
+// canonical transport configuration is withheld from the mirror request.
+func (e *Executor) acquireRemoteMirrorSource(ctx context.Context, plan remoteMirrorCheckoutPlan) (bool, error) {
 	gitFlags := gitCredentialHelperFlags(ctx)
-	fetchFlags, err := remoteMirrorFetchFlags(e.GitFetchFlags)
-	if err != nil {
-		return false, err
+	for _, config := range plan.mirrorConfigs {
+		gitFlags += " -c " + shellwords.Quote(config[0]+"="+config[1])
 	}
-	existingGitDir := filepath.Join(e.shell.Getwd(), ".git")
-	createdCheckout := !osutil.FileExists(existingGitDir)
 	quiet := []shell.RunCommandOpt{shell.ShowPrompt(false), shell.ShowStderr(false)}
 
-	if createdCheckout {
-		if err := e.shell.Command("git", "init").Run(ctx, quiet...); err != nil {
-			return true, fmt.Errorf("initializing repository for remote mirror: %w", err)
-		}
-		if err := e.shell.Command("git", "remote", "add", "origin", e.Repository).Run(ctx, quiet...); err != nil {
-			return true, fmt.Errorf("adding canonical origin for remote mirror: %w", err)
-		}
-	} else if _, err := e.updateRemoteURL(ctx, "", e.Repository); err != nil {
-		return false, fmt.Errorf("setting canonical origin before mirror fetch: %w", err)
+	if err := e.shell.Command("git", "init").Run(ctx, quiet...); err != nil {
+		return true, fmt.Errorf("initializing repository for remote mirror: %w", err)
+	}
+	if err := e.shell.Command("git", "remote", "add", "origin", e.Repository).Run(ctx, quiet...); err != nil {
+		return true, fmt.Errorf("adding canonical origin for remote mirror: %w", err)
 	}
 
 	if err := gitFetch(ctx, gitFetchArgs{
 		Shell:         e.shell,
 		GitFlags:      gitFlags,
-		GitFetchFlags: fetchFlags,
+		GitFetchFlags: plan.fetchFlags,
 		Repository:    e.GitRemoteMirrorURL,
 		Retry:         false,
 		RefSpecs:      []string{e.Commit},
 		Quiet:         true,
+		ExtraEnv:      remoteMirrorFetchEnv(),
 	}); err != nil {
-		return createdCheckout, fmt.Errorf("fetching exact commit from remote mirror: %w", err)
+		return true, fmt.Errorf("fetching exact commit from remote mirror: %w", err)
 	}
 
 	if !hasGitCommit(ctx, e.shell, ".git", e.Commit) {
-		return createdCheckout, errors.New("exact commit is not present after remote mirror fetch")
+		return true, errors.New("exact commit is not present after remote mirror fetch")
 	}
 
-	if createdCheckout {
-		if err := e.applyRemoteMirrorCloneConfigs(ctx, cloneConfigs, quiet); err != nil {
+	if plan.partialClone {
+		if err := e.retargetRemoteMirrorPromisor(ctx, quiet); err != nil {
 			return true, err
 		}
 	}
-	return createdCheckout, nil
+
+	if err := e.applyRemoteMirrorCloneConfigs(ctx, plan.cloneConfigs, quiet); err != nil {
+		return true, err
+	}
+	return true, nil
+}
+
+// remoteMirrorFetchEnv hides ambient Git configuration from the mirror
+// transport. Pipeline clone configuration is applied after acquisition, and
+// only explicitly allowlisted mirror configuration is supplied with -c.
+func remoteMirrorFetchEnv() *env.Environment {
+	environ := env.New()
+	environ.Set("GIT_CONFIG_NOSYSTEM", "1")
+	environ.Set("GIT_CONFIG_SYSTEM", os.DevNull)
+	environ.Set("GIT_CONFIG_GLOBAL", os.DevNull)
+	environ.Set("GIT_CONFIG_COUNT", "0")
+	environ.Set("GIT_CONFIG_PARAMETERS", "")
+	return environ
+}
+
+// retargetRemoteMirrorPromisor makes later lazy object fetches use canonical
+// origin rather than the one-shot mirror URL.
+func (e *Executor) retargetRemoteMirrorPromisor(ctx context.Context, quiet []shell.RunCommandOpt) error {
+	out, err := e.shell.Command(
+		"git", "config", "--local", "--get-regexp", `^remote\..*\.(promisor|partialclonefilter)$`,
+	).RunAndCaptureStdout(ctx, quiet...)
+	if err != nil || strings.TrimSpace(out) == "" {
+		// Servers may ignore filters they do not support, in which case Git
+		// writes no promisor configuration and the fetched commit is complete.
+		return nil
+	}
+
+	var filter string
+	foundPromisor := false
+	for line := range strings.SplitSeq(out, "\n") {
+		key, value, ok := strings.Cut(line, " ")
+		if !ok {
+			return fmt.Errorf("parsing remote mirror promisor config %q", line)
+		}
+		switch {
+		case strings.HasSuffix(strings.ToLower(key), ".promisor"):
+			foundPromisor = true
+		case strings.HasSuffix(strings.ToLower(key), ".partialclonefilter"):
+			filter = value
+		}
+		if err := e.shell.Command("git", "config", "--local", "--unset-all", key).Run(ctx, quiet...); err != nil {
+			return fmt.Errorf("removing remote mirror promisor config %s: %w", key, err)
+		}
+	}
+	if !foundPromisor && filter == "" {
+		return nil
+	}
+	if err := e.shell.Command("git", "config", "--local", "remote.origin.promisor", "true").Run(ctx, quiet...); err != nil {
+		return fmt.Errorf("configuring canonical origin as promisor: %w", err)
+	}
+	if filter != "" {
+		if err := e.shell.Command("git", "config", "--local", "remote.origin.partialclonefilter", filter).Run(ctx, quiet...); err != nil {
+			return fmt.Errorf("configuring canonical origin partial clone filter: %w", err)
+		}
+	}
+	return nil
 }
 
 // applyRemoteMirrorCloneConfigs persists git clone --config values into a
@@ -217,41 +235,100 @@ func (e *Executor) applyRemoteMirrorCloneConfigs(ctx context.Context, cloneConfi
 	return nil
 }
 
-// remoteMirrorCompatibleCloneConfigs returns --config key/value pairs that can
-// be applied after git init. It reports false when clone flags include options
-// whose semantics cannot be reproduced on the init+fetch mirror path.
-func remoteMirrorCompatibleCloneConfigs(gitCloneFlags []string) ([][2]string, bool) {
-	var configs [][2]string
+type remoteMirrorCheckoutPlan struct {
+	cloneConfigs  [][2]string
+	mirrorConfigs [][2]string
+	fetchFlags    string
+	partialClone  bool
+}
+
+// planRemoteMirrorCheckout separates checkout semantics from mirror transport
+// configuration. Data-shaping options are sent to the mirror so large
+// repositories remain shallow/filtered, while canonical credentials and
+// unknown transport controls never cross the mirror trust boundary.
+func planRemoteMirrorCheckout(gitCloneFlags []string, gitFetchFlags string) (remoteMirrorCheckoutPlan, bool, error) {
+	var plan remoteMirrorCheckoutPlan
+	fetchParts, err := shellwords.Split(gitFetchFlags)
+	if err != nil {
+		return plan, false, fmt.Errorf("splitting git fetch flags for remote mirror: %w", err)
+	}
+	if !remoteMirrorFetchFlagsAreSafe(fetchParts) {
+		return plan, false, nil
+	}
+
+	var cloneFetchOptions [][]string
 	for i := 0; i < len(gitCloneFlags); i++ {
 		flag := gitCloneFlags[i]
 		switch {
 		case flag == "-v", flag == "--verbose", flag == "-q", flag == "--quiet", flag == "--no-checkout":
 			continue
-		case isGitFilterFlag(flag), flag == "--sparse":
-			// Partial/sparse clone options are not reproducible here; skip the
-			// optimization so the canonical path owns those semantics.
-			return nil, false
+		case flag == "--sparse", flag == "--single-branch", flag == "--no-single-branch":
+			// Sparse worktree setup happens after source acquisition. The
+			// mirror fetch already requests only the exact immutable commit.
+			continue
+		case isGitFilterFlag(flag):
+			option, consumed, ok := gitOptionWithValue(gitCloneFlags, i, isGitFilterFlag)
+			if !ok {
+				return plan, false, nil
+			}
+			i += consumed
+			cloneFetchOptions = append(cloneFetchOptions, option)
+			plan.partialClone = true
+		case isShallowCloneFlag(flag):
+			option, consumed, ok := gitOptionWithValue(gitCloneFlags, i, isShallowCloneFlag)
+			if !ok {
+				return plan, false, nil
+			}
+			i += consumed
+			cloneFetchOptions = append(cloneFetchOptions, option)
 		case flag == "--config":
 			if i+1 >= len(gitCloneFlags) {
-				return nil, false
+				return plan, false, nil
 			}
 			i++
 			config, ok := parseCloneConfig(gitCloneFlags[i])
 			if !ok {
-				return nil, false
+				return plan, false, nil
 			}
-			configs = append(configs, config)
+			plan.cloneConfigs = append(plan.cloneConfigs, config)
+			mirrorConfig, safe := remoteMirrorConfig(config)
+			if !safe {
+				return plan, false, nil
+			}
+			if mirrorConfig {
+				plan.mirrorConfigs = append(plan.mirrorConfigs, config)
+			}
 		case strings.HasPrefix(flag, "--config="):
 			config, ok := parseCloneConfig(strings.TrimPrefix(flag, "--config="))
 			if !ok {
-				return nil, false
+				return plan, false, nil
 			}
-			configs = append(configs, config)
+			plan.cloneConfigs = append(plan.cloneConfigs, config)
+			mirrorConfig, safe := remoteMirrorConfig(config)
+			if !safe {
+				return plan, false, nil
+			}
+			if mirrorConfig {
+				plan.mirrorConfigs = append(plan.mirrorConfigs, config)
+			}
 		default:
-			return nil, false
+			return plan, false, nil
 		}
 	}
-	return configs, true
+
+	for _, option := range cloneFetchOptions {
+		if !hasGitOption(fetchParts, option[0]) {
+			fetchParts = append(fetchParts, option...)
+		}
+	}
+	for _, part := range fetchParts {
+		if isGitFilterFlag(part) {
+			plan.partialClone = true
+			break
+		}
+	}
+	plan.fetchFlags = quoteGitArgs(fetchParts)
+	return plan, true, nil
 }
 
 // parseCloneConfig parses a git clone --config key=value argument, reporting
@@ -282,25 +359,119 @@ func configuresOriginRemote(key string) bool {
 	return ok && subsection == "origin"
 }
 
-func remoteMirrorFetchFlags(gitFetchFlags string) (string, error) {
-	parts, err := shellwords.Split(gitFetchFlags)
-	if err != nil {
-		return "", fmt.Errorf("splitting git fetch flags for remote mirror: %w", err)
+// remoteMirrorConfig reports whether config should be supplied to the mirror
+// command and whether it is safe to use the mirror at all. Most clone config is
+// canonical-only and is persisted after acquisition.
+func remoteMirrorConfig(config [2]string) (mirror, safe bool) {
+	switch {
+	case strings.EqualFold(config[0], "fetch.uriProtocols"):
+		protocols := strings.Split(config[1], ",")
+		if len(protocols) == 0 {
+			return false, false
+		}
+		for _, protocol := range protocols {
+			if !strings.EqualFold(strings.TrimSpace(protocol), "https") {
+				return false, false
+			}
+		}
+		return true, true
+	case strings.EqualFold(config[0], "protocol.version"):
+		if config[1] != "2" {
+			return false, false
+		}
+		return true, true
+	default:
+		return false, true
 	}
-	kept := make([]string, 0, len(parts))
+}
+
+func remoteMirrorFetchFlagsAreSafe(parts []string) bool {
 	for i := 0; i < len(parts); i++ {
 		part := parts[i]
-		if isGitFilterFlag(part) {
-			if part == "--filter" || isGitFilterAbbreviationWithoutValue(part) {
-				if i+1 < len(parts) {
-					i++
-				}
-			}
+		switch {
+		case isSafeFetchFlagWithoutValue(part):
 			continue
+		case isGitFilterFlag(part), isShallowFetchFlag(part):
+			_, consumed, ok := gitOptionWithValue(parts, i, func(candidate string) bool {
+				return isGitFilterFlag(candidate) || isShallowFetchFlag(candidate)
+			})
+			if !ok {
+				return false
+			}
+			i += consumed
+		default:
+			return false
 		}
-		kept = append(kept, part)
 	}
-	return strings.Join(kept, " "), nil
+	return true
+}
+
+func isSafeFetchFlagWithoutValue(flag string) bool {
+	switch flag {
+	case "-v", "--verbose", "-q", "--quiet",
+		"-f", "--force", "--prune", "--no-prune", "--prune-tags",
+		"--tags", "--no-tags", "--keep", "--progress", "--no-progress",
+		"--write-fetch-head", "--no-write-fetch-head", "--update-shallow",
+		"--unshallow", "--refetch", "--show-forced-updates",
+		"--no-show-forced-updates", "--ipv4", "--ipv6":
+		return true
+	default:
+		return false
+	}
+}
+
+func isShallowCloneFlag(flag string) bool {
+	return gitLongOption(flag, "--depth") ||
+		gitLongOption(flag, "--shallow-since") ||
+		gitLongOption(flag, "--shallow-exclude")
+}
+
+func isShallowFetchFlag(flag string) bool {
+	return isShallowCloneFlag(flag) || gitLongOption(flag, "--deepen")
+}
+
+func gitLongOption(flag, name string) bool {
+	return flag == name || strings.HasPrefix(flag, name+"=")
+}
+
+func gitOptionWithValue(parts []string, i int, matches func(string) bool) ([]string, int, bool) {
+	if !matches(parts[i]) {
+		return nil, 0, false
+	}
+	if strings.Contains(parts[i], "=") {
+		return []string{parts[i]}, 0, true
+	}
+	if i+1 >= len(parts) {
+		return nil, 0, false
+	}
+	return []string{parts[i], parts[i+1]}, 1, true
+}
+
+func hasGitOption(parts []string, candidate string) bool {
+	switch {
+	case isGitFilterFlag(candidate):
+		for _, part := range parts {
+			if isGitFilterFlag(part) {
+				return true
+			}
+		}
+	case isShallowCloneFlag(candidate):
+		name := strings.SplitN(candidate, "=", 2)[0]
+		for _, part := range parts {
+			if gitLongOption(part, name) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func quoteGitArgs(parts []string) string {
+	quoted := make([]string, len(parts))
+	for i, part := range parts {
+		quoted[i] = shellwords.Quote(part)
+	}
+	return strings.Join(quoted, " ")
 }
 
 func isGitFilterFlag(part string) bool {
@@ -312,10 +483,6 @@ func isGitFilterFlag(part string) bool {
 		return true
 	}
 	return false
-}
-
-func isGitFilterAbbreviationWithoutValue(part string) bool {
-	return part != "--filter" && !strings.Contains(part, "=") && isGitFilterFlag(part)
 }
 
 // discardRemoteMirrorCheckout removes state created by a failed optimization

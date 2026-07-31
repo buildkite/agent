@@ -14,6 +14,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -62,6 +63,8 @@ func TestShouldAttemptRemoteMirror(t *testing.T) {
 	}{
 		{name: "eligible", want: true},
 		{name: "empty URL", mutate: func(c *ExecutorConfig) { c.GitRemoteMirrorURL = "" }},
+		{name: "local path", mutate: func(c *ExecutorConfig) { c.GitRemoteMirrorURL = "file:///tmp/mirror.git" }},
+		{name: "SSH URL", mutate: func(c *ExecutorConfig) { c.GitRemoteMirrorURL = "ssh://mirror.example.com/repo.git" }},
 		{name: "HEAD", mutate: func(c *ExecutorConfig) { c.Commit = "HEAD" }},
 		{name: "short SHA", mutate: func(c *ExecutorConfig) { c.Commit = commit[:12] }},
 		{name: "uppercase SHA", mutate: func(c *ExecutorConfig) { c.Commit = strings.ToUpper(commit) }},
@@ -145,6 +148,77 @@ func TestRemoteMirrorHitChecksOutExactCommitWithCanonicalOrigin(t *testing.T) {
 	assertNoMutableRefs(t, e)
 }
 
+func TestRemoteMirrorHitPreservesShallowDepth(t *testing.T) {
+	e := newRemoteMirrorTestExecutor(t)
+	canonical, commit := setupCheckoutTestRepo(t, e, "canonical")
+	for i := range 4 {
+		commit = pushUniqueCommit(t, canonical, "canonical", "feature-branch", fmt.Sprintf("depth-%d.txt", i), "depth")
+	}
+	mirror := copyRemoteMirrorRepository(t, canonical.RepoURL("canonical"), "mirror")
+
+	e.Commit = commit
+	e.Branch = "feature-branch"
+	e.PullRequest = "false"
+	e.GitRemoteMirrorURL = mirror.RepoURL("mirror")
+	e.GitCloneFlags = "-v --depth=2"
+	e.GitFetchFlags = "-v --prune --depth=2"
+	canonical.Close()
+
+	if err := e.defaultCheckoutPhase(t.Context(), 0); err != nil {
+		t.Fatalf("defaultCheckoutPhase() error = %v", err)
+	}
+
+	assertCheckedOutCommit(t, e, commit)
+	got, err := e.shell.Command("git", "rev-list", "--count", "HEAD").RunAndCaptureStdout(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "2" {
+		t.Errorf("shallow commit count = %q, want 2", got)
+	}
+	if _, err := os.Stat(filepath.Join(e.shell.Getwd(), ".git", "shallow")); err != nil {
+		t.Errorf("shallow boundary file: %v", err)
+	}
+}
+
+func TestRemoteMirrorHitRetargetsPartialCloneToCanonicalOrigin(t *testing.T) {
+	e := newRemoteMirrorTestExecutor(t)
+	canonical, commit := setupCheckoutTestRepo(t, e, "canonical")
+	mirror := copyRemoteMirrorRepository(t, canonical.RepoURL("canonical"), "mirror")
+	if err := canonical.ConfigureRepository("canonical", "uploadpack.allowFilter", "true"); err != nil {
+		t.Fatal(err)
+	}
+	if err := canonical.ConfigureRepository("canonical", "uploadpack.allowAnySHA1InWant", "true"); err != nil {
+		t.Fatal(err)
+	}
+	if err := mirror.ConfigureRepository("mirror", "uploadpack.allowFilter", "true"); err != nil {
+		t.Fatal(err)
+	}
+	if err := mirror.ConfigureRepository("mirror", "uploadpack.allowAnySHA1InWant", "true"); err != nil {
+		t.Fatal(err)
+	}
+
+	e.Commit = commit
+	e.Branch = "feature-branch"
+	e.PullRequest = "false"
+	e.GitRemoteMirrorURL = mirror.RepoURL("mirror")
+	e.GitCloneFlags = "-v --filter=blob:none"
+
+	if err := e.defaultCheckoutPhase(t.Context(), 0); err != nil {
+		t.Fatalf("defaultCheckoutPhase() error = %v", err)
+	}
+
+	assertCheckedOutCommit(t, e, commit)
+	assertOriginURL(t, e, e.Repository)
+	if got, err := e.shell.Command("git", "config", "--local", "--get", "remote.origin.promisor").RunAndCaptureStdout(t.Context()); err != nil || got != "true" {
+		t.Errorf("remote.origin.promisor = %q, %v; want true", got, err)
+	}
+	if got, err := e.shell.Command("git", "config", "--local", "--get", "remote.origin.partialclonefilter").RunAndCaptureStdout(t.Context()); err != nil || got != "blob:none" {
+		t.Errorf("remote.origin.partialclonefilter = %q, %v; want blob:none", got, err)
+	}
+	assertNoMutableRefs(t, e)
+}
+
 func TestRemoteMirrorHitPreservesRepeatedCloneConfigs(t *testing.T) {
 	e := newRemoteMirrorTestExecutor(t)
 	canonical, commit := setupCheckoutTestRepo(t, e, "canonical")
@@ -198,6 +272,10 @@ func TestRemoteMirrorFetchDoesNotSendCanonicalCloneHeaders(t *testing.T) {
 	e.GitRemoteMirrorURL = server.URL + "/mirror.git"
 	// Credentials supplied for the canonical clone must not reach the mirror.
 	e.GitCloneFlags = `-v --config "http.extraHeader=Authorization: Bearer canonical-secret"`
+	// Nor may equivalent ambient configuration bypass clone-config ordering.
+	e.shell.Env.Set("GIT_CONFIG_COUNT", "1")
+	e.shell.Env.Set("GIT_CONFIG_KEY_0", "http.extraHeader")
+	e.shell.Env.Set("GIT_CONFIG_VALUE_0", "Authorization: Bearer ambient-secret")
 	canonical.Close()
 
 	if err := e.defaultCheckoutPhase(t.Context(), 0); err != nil {
@@ -423,7 +501,7 @@ func TestRemoteMirrorAndCanonicalFailureReturnsCanonicalError(t *testing.T) {
 	}
 }
 
-func TestRemoteMirrorFetchesIntoReusedCanonicalCheckout(t *testing.T) {
+func TestRemoteMirrorSkipsReusedCanonicalCheckout(t *testing.T) {
 	e := newRemoteMirrorTestExecutor(t)
 	canonical, initialCommit := setupCheckoutTestRepo(t, e, "canonical")
 	e.Commit = initialCommit
@@ -434,23 +512,22 @@ func TestRemoteMirrorFetchesIntoReusedCanonicalCheckout(t *testing.T) {
 		t.Fatalf("initial defaultCheckoutPhase() error = %v", err)
 	}
 
-	mirror := copyRemoteMirrorRepository(t, canonical.RepoURL("canonical"), "mirror")
-	mirrorOnlyCommit := pushUniqueCommit(t, mirror, "mirror", "mirror-only", "mirror-only.txt", "mirror only")
-	if mirrorOnlyCommit == initialCommit {
+	canonicalCommit := pushUniqueCommit(t, canonical, "canonical", "feature-branch", "canonical-only.txt", "canonical only")
+	if canonicalCommit == initialCommit {
 		t.Fatal("pushUniqueCommit did not create a new commit")
 	}
 
-	e.Commit = mirrorOnlyCommit
-	e.Branch = "mirror-only"
-	e.GitRemoteMirrorURL = mirror.RepoURL("mirror")
+	e.Commit = canonicalCommit
+	// A reused checkout must not contact a mirror where canonical transport
+	// configuration may already be persisted in .git/config.
+	e.GitRemoteMirrorURL = "http://127.0.0.1:1/mirror.git"
 	canonicalURL := e.Repository
-	canonical.Close()
 
 	if err := e.defaultCheckoutPhase(t.Context(), 0); err != nil {
 		t.Fatalf("reused defaultCheckoutPhase() error = %v", err)
 	}
 
-	assertCheckedOutCommit(t, e, mirrorOnlyCommit)
+	assertCheckedOutCommit(t, e, canonicalCommit)
 	assertOriginURL(t, e, canonicalURL)
 }
 
@@ -490,26 +567,7 @@ func TestRemoteMirrorMissPreservesReusedCanonicalCheckout(t *testing.T) {
 	}
 }
 
-func TestRemoteMirrorFetchFlagsStripPartialCloneFilters(t *testing.T) {
-	t.Parallel()
-
-	got, err := remoteMirrorFetchFlags(`-v --prune --filter=blob:none --filter tree:0 --filt=blob:none`)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if want := "-v --prune"; got != want {
-		t.Errorf("remoteMirrorFetchFlags() = %q, want %q", got, want)
-	}
-	got, err = remoteMirrorFetchFlags("-v")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got != "-v" {
-		t.Errorf("remoteMirrorFetchFlags() = %q, want %q", got, "-v")
-	}
-}
-
-func TestIsPartialCloneCheckoutDetectsPromisorRemotes(t *testing.T) {
+func TestRetargetRemoteMirrorPromisor(t *testing.T) {
 	e := newRemoteMirrorTestExecutor(t)
 	dir := t.TempDir()
 	if err := e.shell.Chdir(dir); err != nil {
@@ -518,35 +576,63 @@ func TestIsPartialCloneCheckoutDetectsPromisorRemotes(t *testing.T) {
 	if err := e.shell.Command("git", "init").Run(t.Context()); err != nil {
 		t.Fatal(err)
 	}
-	if e.isPartialCloneCheckout(t.Context()) {
-		t.Fatal("fresh repo reported as partial clone")
-	}
-	if err := e.shell.Command("git", "config", "remote.origin.promisor", "true").Run(t.Context()); err != nil {
+	if err := e.shell.Command("git", "remote", "add", "origin", "https://canonical.example/repo.git").Run(t.Context()); err != nil {
 		t.Fatal(err)
 	}
-	if err := e.shell.Command("git", "config", "remote.origin.partialclonefilter", "blob:none").Run(t.Context()); err != nil {
+	if err := e.shell.Command("git", "config", "remote.mirror.promisor", "true").Run(t.Context()); err != nil {
 		t.Fatal(err)
 	}
-	if !e.isPartialCloneCheckout(t.Context()) {
-		t.Fatal("promisor remote not detected as partial clone")
+	if err := e.shell.Command("git", "config", "remote.mirror.partialclonefilter", "blob:none").Run(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := e.retargetRemoteMirrorPromisor(t.Context(), nil); err != nil {
+		t.Fatal(err)
+	}
+
+	if got, err := e.shell.Command("git", "config", "--local", "--get", "remote.origin.promisor").RunAndCaptureStdout(t.Context()); err != nil || got != "true" {
+		t.Errorf("remote.origin.promisor = %q, %v; want true", got, err)
+	}
+	if got, err := e.shell.Command("git", "config", "--local", "--get", "remote.origin.partialclonefilter").RunAndCaptureStdout(t.Context()); err != nil || got != "blob:none" {
+		t.Errorf("remote.origin.partialclonefilter = %q, %v; want blob:none", got, err)
+	}
+	if _, err := e.shell.Command("git", "config", "--local", "--get", "remote.mirror.promisor").RunAndCaptureStdout(t.Context()); err == nil {
+		t.Error("remote mirror promisor config remains")
 	}
 }
 
-func TestRemoteMirrorCompatibleCloneConfigs(t *testing.T) {
+func TestPlanRemoteMirrorCheckout(t *testing.T) {
 	t.Parallel()
 
-	configs, ok := remoteMirrorCompatibleCloneConfigs([]string{"-v", "--config", "core.autocrlf=false"})
+	plan, ok, err := planRemoteMirrorCheckout(
+		[]string{
+			"-v",
+			"--depth=50",
+			"--filter=blob:none",
+			"--sparse",
+			"--config", "core.autocrlf=false",
+			"--config", "fetch.uriProtocols=https",
+		},
+		"-v --prune --depth=50",
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if !ok {
-		t.Fatal("expected clone flags to be compatible")
+		t.Fatal("expected checkout configuration to support a remote mirror")
 	}
-	if len(configs) != 1 || configs[0] != [2]string{"core.autocrlf", "false"} {
-		t.Fatalf("configs = %#v, want core.autocrlf=false", configs)
+	fetchFlags, err := shellwords.Split(plan.fetchFlags)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if _, ok := remoteMirrorCompatibleCloneConfigs([]string{"-v", "--filter=blob:none"}); ok {
-		t.Fatal("expected filter clone flags to be incompatible")
+	if want := []string{"-v", "--prune", "--depth=50", "--filter=blob:none"}; !slices.Equal(fetchFlags, want) {
+		t.Errorf("fetch flags = %q, want %q", fetchFlags, want)
 	}
-	if _, ok := remoteMirrorCompatibleCloneConfigs([]string{"--depth", "1"}); ok {
-		t.Fatal("expected depth clone flags to be incompatible")
+	if len(plan.cloneConfigs) != 2 {
+		t.Fatalf("clone configs = %#v, want two values", plan.cloneConfigs)
+	}
+	if len(plan.mirrorConfigs) != 1 || plan.mirrorConfigs[0] != [2]string{"fetch.uriProtocols", "https"} {
+		t.Fatalf("mirror configs = %#v, want fetch.uriProtocols=https", plan.mirrorConfigs)
 	}
 
 	// git clone overwrites its own remote config, but the mirror path would
@@ -557,18 +643,41 @@ func TestRemoteMirrorCompatibleCloneConfigs(t *testing.T) {
 		{"--config", "REMOTE.origin.URL=https://example.com/evil.git"},
 		{"--config", "remote.origin.pushurl=https://example.com/evil.git"},
 	} {
-		if _, ok := remoteMirrorCompatibleCloneConfigs(flags); ok {
-			t.Errorf("remoteMirrorCompatibleCloneConfigs(%q) reported compatible, want incompatible", flags)
+		if _, ok, err := planRemoteMirrorCheckout(flags, "-v --prune"); err != nil {
+			t.Errorf("planRemoteMirrorCheckout(%q) error = %v", flags, err)
+		} else if ok {
+			t.Errorf("planRemoteMirrorCheckout(%q) reported compatible, want incompatible", flags)
 		}
 	}
 
-	// A remote the mirror path does not create is reproducible.
-	configs, ok = remoteMirrorCompatibleCloneConfigs([]string{"--config", "remote.upstream.url=https://example.com/upstream.git"})
-	if !ok {
-		t.Fatal("expected non-origin remote clone flags to be compatible")
+	// Transport-affecting configuration remains persisted for the canonical
+	// repository but is not exposed to the mirror.
+	plan, ok, err = planRemoteMirrorCheckout(
+		[]string{"--config", "http.extraHeader=Authorization: Bearer canonical-secret"},
+		"-v --prune",
+	)
+	if err != nil || !ok {
+		t.Fatalf("planRemoteMirrorCheckout() = (%#v, %t, %v), want compatible", plan, ok, err)
 	}
-	if len(configs) != 1 || configs[0] != [2]string{"remote.upstream.url", "https://example.com/upstream.git"} {
-		t.Fatalf("configs = %#v, want remote.upstream.url", configs)
+	if len(plan.mirrorConfigs) != 0 {
+		t.Errorf("mirror configs = %#v, want no canonical credentials", plan.mirrorConfigs)
+	}
+
+	// Mirror network commands never receive arbitrary transport controls.
+	if _, ok, err := planRemoteMirrorCheckout([]string{"-v"}, "-v --upload-pack=evil"); err != nil {
+		t.Fatal(err)
+	} else if ok {
+		t.Fatal("expected upload-pack fetch flag to disable the remote mirror")
+	}
+
+	// Only HTTPS packfile URIs are accepted on the mirror trust boundary.
+	if _, ok, err := planRemoteMirrorCheckout(
+		[]string{"--config", "fetch.uriProtocols=http,https"},
+		"-v --prune",
+	); err != nil {
+		t.Fatal(err)
+	} else if ok {
+		t.Fatal("expected non-HTTPS URI protocols to disable the remote mirror")
 	}
 }
 
