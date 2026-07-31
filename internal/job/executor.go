@@ -348,9 +348,14 @@ func (e *Executor) useRepositoryProviderGitCredentials() bool {
 // legacy GitHub App's unconditional rewrite/keyscan behavior. When true, it
 // applies only the provider-neutral flag's repository-dependent rewrite using
 // the post-environment-hook repository URL.
+//
+// When both flags are set, preserve legacy behavior so existing jobs retain
+// their pre-setUp GitHub rewrite while the provider-neutral flag rolls out.
 func (e *Executor) configureRepositoryProviderGitCredentials(ctx context.Context, afterSetUp bool) error {
-	legacyGithubApp := e.shell.Env.GetString("BUILDKITE_USE_GITHUB_APP_GIT_CREDENTIALS", "") == "true"
-	providerNeutral := e.shell.Env.GetString("BUILDKITE_USE_REPOSITORY_PROVIDER_GIT_CREDENTIALS", "") == "true"
+	genericFlag := e.shell.Env.GetString("BUILDKITE_USE_REPOSITORY_PROVIDER_GIT_CREDENTIALS", "") == "true"
+	legacyFlag := e.shell.Env.GetString("BUILDKITE_USE_GITHUB_APP_GIT_CREDENTIALS", "") == "true"
+	legacyGithubApp := legacyFlag
+	providerNeutral := genericFlag && !legacyFlag
 
 	if !afterSetUp {
 		if err := e.configureGitCredentialHelper(ctx); err != nil {
@@ -365,7 +370,7 @@ func (e *Executor) configureRepositoryProviderGitCredentials(ctx context.Context
 		return nil
 	}
 
-	if !providerNeutral || legacyGithubApp {
+	if !providerNeutral {
 		return nil
 	}
 

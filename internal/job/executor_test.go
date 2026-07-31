@@ -313,6 +313,10 @@ func TestUseRepositoryProviderGitCredentials(t *testing.T) {
 	}{
 		{name: "generic flag", env: map[string]string{"BUILDKITE_USE_REPOSITORY_PROVIDER_GIT_CREDENTIALS": "true"}, want: true},
 		{name: "legacy flag", env: map[string]string{"BUILDKITE_USE_GITHUB_APP_GIT_CREDENTIALS": "true"}, want: true},
+		{name: "both flags", env: map[string]string{
+			"BUILDKITE_USE_REPOSITORY_PROVIDER_GIT_CREDENTIALS": "true",
+			"BUILDKITE_USE_GITHUB_APP_GIT_CREDENTIALS":          "true",
+		}, want: true},
 		{name: "generic false", env: map[string]string{"BUILDKITE_USE_REPOSITORY_PROVIDER_GIT_CREDENTIALS": "false"}},
 		{name: "unset"},
 	}
@@ -366,12 +370,23 @@ func TestConfigureRepositoryProviderGitCredentials(t *testing.T) {
 			env:               map[string]string{"BUILDKITE_USE_GITHUB_APP_GIT_CREDENTIALS": "true"},
 			wantGitHubRewrite: true,
 		},
+		{
+			name:       "both flags preserve legacy behavior before setUp",
+			repository: "https://git.example.com/acme/widgets.git",
+			env: map[string]string{
+				"BUILDKITE_USE_REPOSITORY_PROVIDER_GIT_CREDENTIALS": "true",
+				"BUILDKITE_USE_GITHUB_APP_GIT_CREDENTIALS":          "true",
+			},
+			wantGitHubRewrite: true,
+		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			home := t.TempDir()
 			shEnv := env.New()
 			shEnv.Set("HOME", home)
+			shEnv.Set("GIT_CONFIG_GLOBAL", filepath.Join(home, ".gitconfig"))
+			shEnv.Set("GIT_CONFIG_NOSYSTEM", "1")
 			shEnv.Set("PATH", os.Getenv("PATH"))
 			for key, value := range test.env {
 				shEnv.Set(key, value)

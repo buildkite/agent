@@ -28,17 +28,13 @@ func (e *Executor) configureGitCredentialHelper(ctx context.Context) error {
 		return fmt.Errorf("enabling git credential.useHttpPath: %w", err)
 	}
 
-	helper := gitCredentialHelperCommand(ctx)
+	helper := fmt.Sprintf(`%s git-credentials-helper`, self.Path(ctx))
 	err = e.shell.Command("git", "config", "--global", "credential.helper", helper).Run(ctx, shell.ShowPrompt(false))
 	if err != nil {
 		return fmt.Errorf("configuring git credential.helper: %w", err)
 	}
 
 	return nil
-}
-
-func gitCredentialHelperCommand(ctx context.Context) string {
-	return fmt.Sprintf(`%s git-credentials-helper`, self.Path(ctx))
 }
 
 // configureHTTPSInsteadOfSSH configures GitHub SSH URLs to use HTTPS.
