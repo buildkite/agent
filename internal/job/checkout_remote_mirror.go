@@ -21,6 +21,19 @@ const remoteMirrorAttemptTimeout = 30 * time.Second
 
 var fullCommitSHA = regexp.MustCompile(`^[0-9a-f]{40}$`)
 
+var remoteMirrorRepositoryRedirectEnv = []string{
+	"GIT_DIR",
+	"GIT_WORK_TREE",
+	"GIT_COMMON_DIR",
+	"GIT_OBJECT_DIRECTORY",
+	"GIT_ALTERNATE_OBJECT_DIRECTORIES",
+	"GIT_INDEX_FILE",
+	"GIT_CONFIG",
+	"GIT_SHALLOW_FILE",
+	"GIT_NAMESPACE",
+	"GIT_REPLACE_REF_BASE",
+}
+
 func isFullCommitSHA(commit string) bool {
 	return fullCommitSHA.MatchString(commit)
 }
@@ -51,6 +64,15 @@ func (e *Executor) tryRemoteMirrorSource(
 	gitCloneFlags []string,
 ) (bool, error) {
 	if !e.shouldAttemptRemoteMirror(previousAttempts) {
+		return false, nil
+	}
+
+	// These variables redirect Git away from the checkout being created.
+	// Canonical git clone does not use them to choose its destination
+	// repository, and allowing the mirror sequence to inherit them could make
+	// it read credentials or objects from another checkout. Fall back rather
+	// than trying to reinterpret user-supplied repository layout.
+	if remoteMirrorRepositoryRedirected(e.shell.Env) {
 		return false, nil
 	}
 
@@ -111,6 +133,15 @@ func (e *Executor) tryRemoteMirrorSource(
 		}
 	}
 	return false, nil
+}
+
+func remoteMirrorRepositoryRedirected(environ *env.Environment) bool {
+	for _, name := range remoteMirrorRepositoryRedirectEnv {
+		if environ.Exists(name) {
+			return true
+		}
+	}
+	return false
 }
 
 // acquireRemoteMirrorSource fetches the exact commit from the remote mirror

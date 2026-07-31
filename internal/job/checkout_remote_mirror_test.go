@@ -20,6 +20,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/buildkite/agent/v3/env"
 	"github.com/buildkite/agent/v3/internal/job/githttptest"
 	"github.com/buildkite/agent/v3/internal/self"
 	"github.com/buildkite/agent/v3/internal/shell"
@@ -83,6 +84,23 @@ func TestShouldAttemptRemoteMirror(t *testing.T) {
 			e := &Executor{ExecutorConfig: cfg}
 			if got := e.shouldAttemptRemoteMirror(tc.previousAttempts); got != tc.want {
 				t.Errorf("shouldAttemptRemoteMirror(%d) = %t, want %t", tc.previousAttempts, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestRemoteMirrorRepositoryRedirected(t *testing.T) {
+	t.Parallel()
+
+	if remoteMirrorRepositoryRedirected(env.New()) {
+		t.Fatal("empty environment reported repository redirection")
+	}
+	for _, name := range remoteMirrorRepositoryRedirectEnv {
+		t.Run(name, func(t *testing.T) {
+			environ := env.New()
+			environ.Set(name, "/tmp/other-checkout")
+			if !remoteMirrorRepositoryRedirected(environ) {
+				t.Errorf("%s did not disable the remote mirror", name)
 			}
 		})
 	}
