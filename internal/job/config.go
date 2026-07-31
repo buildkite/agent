@@ -128,7 +128,7 @@ type ExecutorConfig struct {
 	// SSH private key to use for git checkout operations
 	GitSSHKey string `env:"BUILDKITE_GIT_SSH_KEY"`
 
-	// Enable git commit verification
+	// Controls git commit verification behavior
 	GitCommitVerification string `env:"BUILDKITE_GIT_COMMIT_VERIFICATION"`
 
 	// Config key=value pairs to pass to "git" when submodule init commands are invoked
