@@ -342,6 +342,7 @@ func TestConfigureRepositoryProviderGitCredentials(t *testing.T) {
 	tests := []struct {
 		name              string
 		repository        string
+		refreshRepository string
 		env               map[string]string
 		wantSSHKeyscan    bool
 		wantSkipRepoScan  bool
@@ -350,6 +351,23 @@ func TestConfigureRepositoryProviderGitCredentials(t *testing.T) {
 		{
 			name:              "GitHub SSH primary rewrites under provider flag",
 			repository:        "git@github.com:acme/widgets.git",
+			env:               map[string]string{"BUILDKITE_USE_REPOSITORY_PROVIDER_GIT_CREDENTIALS": "true"},
+			wantSSHKeyscan:    true,
+			wantSkipRepoScan:  true,
+			wantGitHubRewrite: true,
+		},
+		{
+			name:              "later non-GitHub repository restores primary keyscan",
+			repository:        "git@github.com:acme/widgets.git",
+			refreshRepository: "git@git.example.com:acme/widgets.git",
+			env:               map[string]string{"BUILDKITE_USE_REPOSITORY_PROVIDER_GIT_CREDENTIALS": "true"},
+			wantSSHKeyscan:    true,
+			wantGitHubRewrite: true,
+		},
+		{
+			name:              "later GitHub SSH repository enables rewrite and skips primary keyscan",
+			repository:        "git@git.example.com:acme/widgets.git",
+			refreshRepository: "git@github.com:acme/widgets.git",
 			env:               map[string]string{"BUILDKITE_USE_REPOSITORY_PROVIDER_GIT_CREDENTIALS": "true"},
 			wantSSHKeyscan:    true,
 			wantSkipRepoScan:  true,
@@ -409,6 +427,12 @@ func TestConfigureRepositoryProviderGitCredentials(t *testing.T) {
 			}
 			if err := e.configureRepositoryProviderGitCredentials(t.Context(), true); err != nil {
 				t.Fatal(err)
+			}
+			if test.refreshRepository != "" {
+				e.Repository = test.refreshRepository
+				if err := e.configureRepositoryProviderGitCredentials(t.Context(), true); err != nil {
+					t.Fatal(err)
+				}
 			}
 			if got := e.SSHKeyscan; got != test.wantSSHKeyscan {
 				t.Errorf("SSHKeyscan = %t, want %t", got, test.wantSSHKeyscan)
