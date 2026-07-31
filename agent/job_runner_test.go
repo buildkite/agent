@@ -66,14 +66,55 @@ func TestValidateJobValue(t *testing.T) {
 func TestJobTimeoutFilePath(t *testing.T) {
 	t.Parallel()
 
-	got := jobTimeoutFilePath("abc123", false)
+	got := jobTimeoutFilePath("abc123", jobContextDir(JobRunnerConfig{}))
 	want := filepath.Join(os.TempDir(), "job-timeout-abc123")
 	if got != want {
-		t.Errorf("jobTimeoutFilePath(%q, false) = %q, want %q", "abc123", got, want)
+		t.Errorf("jobTimeoutFilePath(%q, jobContextDir({})) = %q, want %q", "abc123", got, want)
 	}
 
-	if got, want := jobTimeoutFilePath("abc123", true), filepath.Join("/workspace", "job-timeout-abc123"); got != want {
-		t.Errorf("jobTimeoutFilePath(%q, true) = %q, want %q", "abc123", got, want)
+	k8sDir := jobContextDir(JobRunnerConfig{KubernetesExec: true})
+	if got, want := jobTimeoutFilePath("abc123", k8sDir), filepath.Join("/workspace", "job-timeout-abc123"); got != want {
+		t.Errorf("jobTimeoutFilePath(%q, %q) = %q, want %q", "abc123", k8sDir, got, want)
+	}
+}
+
+func TestJobContextDir(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		conf JobRunnerConfig
+		want string
+	}{
+		{
+			name: "default",
+			conf: JobRunnerConfig{},
+			want: os.TempDir(),
+		},
+		{
+			name: "explicit_dir",
+			conf: JobRunnerConfig{JobContextDir: "/var/lib/buildkite/job"},
+			want: "/var/lib/buildkite/job",
+		},
+		{
+			name: "kubernetes_default",
+			conf: JobRunnerConfig{KubernetesExec: true},
+			want: "/workspace",
+		},
+		{
+			name: "kubernetes_explicit_dir",
+			conf: JobRunnerConfig{
+				KubernetesExec: true,
+				JobContextDir:  "/buildkite-shared",
+			},
+			want: "/buildkite-shared",
+		},
+	}
+
+	for _, tc := range tests {
+		if got := jobContextDir(tc.conf); got != tc.want {
+			t.Errorf("%s: jobContextDir(%+v) = %q, want %q", tc.name, tc.conf, got, tc.want)
+		}
 	}
 }
 
