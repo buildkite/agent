@@ -17,14 +17,15 @@ backend passes the mirror URL to the agent as job env
 (`BUILDKITE_GIT_REMOTE_MIRROR_URL`). Wherever the checkout phase would
 transfer Git data over the network from the canonical repository, it prefers
 the mirror, and falls back to the canonical repository when the mirror doesn't
-(yet) have what the job needs. Mirror replication lag is the only situation in
-which using a mirror may be mildly slower than not configuring one.
+(yet) have what the job needs. For eligible builds against a correctly
+configured mirror, replication lag is the only situation in which using a
+mirror may be mildly slower than not configuring one.
 
-## Background: the three network transfer points that exist today
+## Background: the three bulk transfer points this design changes
 
 The default checkout (`defaultCheckoutPhase` in `internal/job/checkout.go`)
-already has a tiered structure. There are exactly three places where Git data
-is transferred from the canonical repository over the network:
+already has a tiered structure. The bulk of Git network transfer from the
+canonical repository happens at three points:
 
 1. **On-host mirror refresh** (`updateGitMirror` in
    `internal/job/checkout_mirror.go`): when the agent is configured with
@@ -40,9 +41,13 @@ is transferred from the canonical repository over the network:
    directory across jobs for the same pipeline, fetching just the new delta
    from `origin`.
 3. **Fresh clone** (`gitClone` from `defaultCheckoutPhase`): no existing
-   checkout and no on-host mirror; a full (or shallow/partial, per
-   `BUILDKITE_GIT_CLONE_FLAGS`) clone from the canonical repository, followed
-   by the same `fetchSource` delta fetch.
+   checkout; a full (or shallow/partial, per `BUILDKITE_GIT_CLONE_FLAGS`)
+   clone from the canonical repository, followed by the same `fetchSource`
+   delta fetch. (When an on-host mirror exists, the fresh clone uses
+   `--reference <mirror>` and most objects come from the mirror, but the
+   clone still contacts canonical for ref advertisement and any missing
+   objects — that residual traffic is covered by tier A refreshing the
+   mirror, not changed directly.)
 
 The design principle of this proposal is: **the remote mirror is an alternate
 URL for the same repository data, substituted at these existing transfer
@@ -57,10 +62,15 @@ per-invocation and never configured as a persistent remote.
   falls back to the canonical repository within the same checkout attempt.
   A configured mirror must never make a build fail that would otherwise
   succeed.
-- **R2 — Mirror lag is the only acceptable regression.** When the mirror does
-  not yet have the requested commit, the job pays for one wasted round trip
-  before falling back. In every other situation the mirror must not regress
-  performance relative to not configuring one.
+- **R2 — Mirror lag is the only acceptable steady-state regression.** For an
+  eligible build against a correctly configured mirror, the only acceptable
+  slowdown relative to not configuring a mirror is replication lag: the job
+  pays for one wasted attempt (a failed fetch, or on the fresh-clone tier a
+  slightly stale clone healed by a canonical delta fetch) before falling
+  back. Configurations that would make the mirror miss *every* time (see the
+  eligibility rules and caveat register) must disable the mirror attempt up
+  front rather than paying the miss per job, wherever we can detect them
+  cheaply.
 - **R3 — Respect checkout shape.** Pipelines using shallow clones, partial
   (blobless) clones, single-branch, no-tags, sparse checkout, etc. (via
   checkout attributes / `BUILDKITE_GIT_CLONE_FLAGS` / `BUILDKITE_GIT_FETCH_FLAGS`)
@@ -131,6 +141,12 @@ the agent config, hooks, and environment. Consequences:
   an older commit than the canonical ref currently points to. These builds
   use the canonical path. (In practice the backend resolves and pins full
   SHAs for the overwhelming majority of builds.)
+- **Tag builds** (`BUILDKITE_TAG` set): today's refresh paths rely on Git's
+  DWIM ref matching to resolve a tag name passed as the "branch", which the
+  explicit-refspec mirror fetch (tier A) does not reproduce; a lagged mirror
+  may also lack the tag. Tag builds use the canonical path (matching #4153's
+  `Tag == ""` eligibility gate); mirror-first tag fetches
+  (`+refs/tags/<tag>:refs/tags/<tag>`) are a possible follow-up.
 - **Custom refspecs and GitHub PR refs** (`refs/pull/N/head|merge`): mirror
   providers may not replicate these ref namespaces, so attempting them
   mirror-first would pay the R2 round-trip cost on every such build. Start
@@ -146,11 +162,15 @@ the agent config, hooks, and environment. Consequences:
 A mirror-first transfer is attempted when all of:
 
 - `BUILDKITE_GIT_REMOTE_MIRROR_URL` is set, parses as a URL, and has an
-  `http`/`https` scheme;
+  `http`/`https` scheme (note the credential helper hard-rejects non-HTTPS
+  URLs, so `http` mirrors are only viable unauthenticated — useful for
+  tests, unlikely in production);
 - `BUILDKITE_COMMIT` is a full 40-hex SHA (the immutable object whose
-  presence defines hit vs miss);
+  presence defines hit vs miss), and `BUILDKITE_TAG` is empty;
 - the fetch target is the build branch or the commit itself (not a custom
-  `BUILDKITE_REFSPEC`, not GitHub PR refs — see out of scope);
+  `BUILDKITE_REFSPEC`, not GitHub PR refs — see out of scope). Branch
+  targets only arise in the tier A mirror refresh; checkout-level fetches
+  of eligible builds always target the commit;
 - this is the first checkout attempt (retries after a failure go straight to
   canonical — retrying through an optimization only delays recovery);
 - `BUILDKITE_REPO` still equals the repository the backend provided the
@@ -159,7 +179,7 @@ A mirror-first transfer is attempted when all of:
   the mirror no longer corresponds to the repository being checked out, so
   it is skipped. This requires remembering the job's original repo value
   before hooks run.
-- if the agent is configured with `allowed-repositories-regex`, the mirror
+- if the agent is configured with `allowed-repositories`, the mirror
   URL must also match. Unlike #4153 (which refused the whole job), a
   non-matching mirror URL disables the mirror with a warning and the build
   proceeds via canonical: the operator's policy is enforced (we never fetch
@@ -190,9 +210,14 @@ miss:   fall back to the same <op> against canonical, exactly as today
   its existing retry behavior. `gitFetch` learns to classify
   `not our ref` / `Server does not allow request for unadvertised object`
   as a distinct non-retryable "ref not on remote" error (as in #4153), so
-  a lag miss is cheap and well-labelled in traces.
-- Mirror-directed operations pass the repository URL after a `--` argument
-  terminator, matching the existing clone/fetch hardening.
+  a lag miss is cheap and well-labelled in traces. This classification is
+  enabled only for mirror-directed invocations: canonical fetches keep
+  their existing error handling (today these strings fall into
+  `gitErrorFetchRetryClean` and trigger the remove-and-reclone recovery),
+  so no canonical behavior changes.
+- Mirror-directed operations go through the existing `gitFetch`/`gitClone`
+  helpers, which already pass the repository URL after a `--` argument
+  terminator; any *new* Git invocation added by this work must do the same.
 - Fetching an exact SHA requires the mirror server to allow unadvertised
   object requests (`uploadpack.allowAnySHA1InWant` or equivalent). This is a
   documented requirement on mirror providers; a server that refuses simply
@@ -207,7 +232,10 @@ miss:   fall back to the same <op> against canonical, exactly as today
   mirror-directed operations set `-c http.lowSpeedLimit=<bytes/s>
   -c http.lowSpeedTime=<seconds>` so a hung or trickling mirror aborts
   quickly while a healthy large transfer is not time-capped. Exact values to
-  be settled in the implementing PR.
+  be settled in the implementing PR. Residual window: these options cover
+  the HTTP transfer, not the TCP/TLS connect phase; a black-holed connect is
+  bounded by curl/OS connect defaults, and by the checkout timeout when the
+  operator sets one.
 
 ### Credentials (R7, R8)
 
@@ -226,19 +254,25 @@ as #4153 and is retained unchanged.
 In the other direction (canonical credentials reaching the mirror), the two
 realistic carriers are:
 
-- `BUILDKITE_GIT_CLONE_FLAGS` containing `--config http.extraHeader=…` (or
-  other `http.*` / `credential.*` / `url.*.insteadOf` keys). On the fresh
-  clone tier, these keys are withheld from the mirror-directed clone and
-  applied to the repository afterwards with `git config --add` (preserving
-  `git clone --config`'s additive semantics), so they cover the checkout and
-  all later canonical transport but are not sent to the mirror host. All
-  other `--config` keys pass through to the clone untouched.
-- Local config persisted in a **reused checkout** by an earlier clone (same
-  keys). Before a mirror-directed fetch into an existing checkout, the agent
-  checks `git config --local` for `http.*`/`credential.*`/`url.*.insteadof`
-  keys; if any are present, the mirror is skipped for that job (log line,
-  canonical fetch as today). This is a cheap targeted gate rather than an
-  attempt to sandbox Git's config resolution.
+- `BUILDKITE_GIT_CLONE_FLAGS` containing `--config` keys that carry
+  credentials: `http.extraHeader` (including URL-scoped
+  `http.<url>.extraHeader`), `credential.*`, and `url.*.insteadOf`. On the
+  fresh clone tier, these keys are withheld from the mirror-directed clone
+  and applied to the repository afterwards with `git config --add`
+  (preserving `git clone --config`'s additive semantics), so they cover the
+  checkout and all later canonical transport but are not sent to the mirror
+  host. All other `--config` keys — including transport-plumbing ones like
+  `http.proxy` or `http.sslCAInfo` that a mirror-directed clone may
+  genuinely need — pass through to the clone untouched. The list is
+  deliberately the bearer-credential carriers only, not all of `http.*`.
+- Local config persisted in a **reused checkout** by an earlier clone (the
+  same key list). Before a mirror-directed fetch into an existing checkout,
+  the agent checks `git config --local` for those keys; if any are present,
+  the mirror is skipped for that job (log line, canonical fetch as today).
+  This is a cheap targeted gate rather than an attempt to sandbox Git's
+  config resolution. Note the interaction with the fresh-clone deferral: a
+  pipeline whose clone flags include such a key gets the mirror-sourced
+  clone on the first job, and canonical delta fetches on reuse thereafter.
 
 Anything beyond that — hook-exported `GIT_CONFIG_*`, system/global
 gitconfig, credentials embedded by custom tooling — is the customer's own
@@ -255,21 +289,36 @@ In `updateGitMirror`, for the main repository only:
   instead of canonical, then `git remote set-url origin <canonical>` inside
   the new mirror so all subsequent behavior (including other agents' jobs
   racing on the same host) treats canonical as `origin`, exactly as today.
-  If the build's commit is missing afterwards (lag), the existing update
-  path fetches the delta from `origin` — the fallback *is* the status quo
-  code. If the mirror clone fails outright, remove the partial dir (as the
-  canonical clone failure path already does) and clone from canonical.
+  Today the initial-clone branch returns straight to snapshotting with no
+  commit-presence check (the clone came from the authoritative source);
+  with a mirror-sourced clone, new control flow is needed after the clone:
+  verify the build's commit, and on a miss (lag) continue into the existing
+  update-path code so the delta is fetched from `origin`. If the mirror
+  clone fails outright, remove the partial dir (as the canonical clone
+  failure path already does) and clone from canonical.
 - **Incremental refresh**: where today fetches `git fetch origin <refspec>`
   (branch, or the commit-presence check already short-circuits), first
-  `git --git-dir=<mirror> fetch -- <mirror-url> +refs/heads/<branch>:refs/heads/<branch>`
-  (explicit refspec, since an anonymous URL fetch doesn't map refs), then
-  verify the commit; on miss, run today's `git fetch origin <refspec>`.
+  `git --git-dir=<mirror> fetch --no-tags -- <mirror-url> +refs/heads/<branch>:refs/heads/<branch>`,
+  then verify the commit; on miss, run today's `git fetch origin <refspec>`.
+  Two deltas from the canonical form, both deliberate: the refspec is
+  explicit because an anonymous URL fetch doesn't map refs into the mirror,
+  and `--no-tags` is added because a fetch with an explicit destination
+  refspec auto-follows tags where today's destination-less
+  `git fetch origin <branch>` does not — without it, a mirror-directed
+  refresh would import (possibly lagged) tags that the canonical refresh
+  wouldn't have.
+- The mirror-directed fetch runs after the existing `updateRemoteURL`
+  rename handling, so `origin` is already correct for the fallback path.
 - Locking, snapshotting, `--git-mirrors-skip-update`,
   `git-clone-mirror-flags`, submodule mirrors and everything downstream
   (`--reference` checkout, dissociate/reference modes) are untouched. In
   particular the mirror's `origin` remains canonical at all times, so mixed
   fleets (some agents with newer agent versions than others) behave
-  correctly against the same shared mirror directory.
+  correctly against the same shared mirror directory. (One R8 note:
+  `--git-clone-mirror-flags` is operator-supplied agent config; if an
+  operator puts canonical credentials in it, the tier A initial clone will
+  send them to the mirror. Operator config is trust-model territory — see
+  caveat 3.)
 
 This tier alone delivers the hosted-agents use case: cache volumes are
 populated and refreshed from the fast mirror, and checkouts already source
@@ -289,12 +338,16 @@ today's `git fetch origin <sha>` (with its fallback-to-all-heads-and-tags
 behavior). Notes:
 
 - Fetching a bare SHA from a URL updates `FETCH_HEAD` and the object store
-  but no remote-tracking refs — which is byte-for-byte the same as today's
-  `git fetch origin <sha>`, so R9 parity holds with no compensation logic.
+  but no remote-tracking refs and no auto-followed tags — identical ref and
+  object effects to today's `git fetch origin <sha>`, so R9 parity holds
+  with no compensation logic. (Only the URL recorded in `FETCH_HEAD`
+  differs; caveat 2.)
 - The existing `GitSkipFetchExistingCommits` short-circuit runs first, as
   today. On a partial (blobless) clone, the commit-presence probes must not
   trigger a lazy fetch from origin (set `GIT_NO_LAZY_FETCH=1`, Git ≥ 2.45;
-  a review finding on #4144 worth keeping).
+  a review finding on #4144 worth keeping). Older Gits ignore the variable
+  and may lazy-fetch during the probe — accepted, since that is today's
+  behavior for those probes anyway.
 - The credential-bearing-local-config gate from the credentials section
   applies.
 - A mirror miss or failure must leave the checkout exactly as it found it —
@@ -311,7 +364,7 @@ origin at canonical:**
 ```text
 git clone <user flags, minus deferred --config keys> [-c scoped credentials] -- <mirror-url> .
 git remote set-url origin <canonical>
-git config --add <deferred --config keys>          # http.*/credential.*/url.*
+git config --add <deferred --config keys>   # extraHeader / credential.* / insteadOf
 # then the normal flow: fetchSource (tier B mirror-first logic), verify, checkout…
 ```
 
@@ -344,7 +397,10 @@ Letting `git clone` do the cloning gives us, for free:
 
 If the mirror clone fails, remove the created checkout dir and re-run the
 clone against canonical within the same attempt (reusing the existing
-remove/recreate helpers).
+remove/recreate helpers) — using the original, unmodified flag set,
+including the `--config` keys the mirror attempt deferred, since a
+canonical clone may depend on them (e.g. `http.extraHeader` to
+authenticate) before its fetch.
 
 The clone-vs-fetch decision, `--reference`/`--dissociate` handling, sparse
 checkout, LFS, submodules, commit signing verification and everything after
@@ -374,10 +430,11 @@ deliberately kept small enough for a single-sitting human review.
   integration test.
 - Shared eligibility helper (URL scheme, full-SHA check, refspec kind,
   original-repo-unchanged, first-attempt) with unit tests.
-- `gitFetch` support for what the later tiers need: explicit `--`
-  terminator, per-invocation extra `-c` config, and the
-  `gitErrorFetchRefNotOnRemote` classification (`not our ref` /
-  `unadvertised object`) with no-retry semantics.
+- `gitFetch` support for what the later tiers need: per-invocation extra
+  `-c` config, and the `gitErrorFetchRefNotOnRemote` classification
+  (`not our ref` / `Server does not allow request for unadvertised object`)
+  with no-retry semantics, opt-in per invocation so canonical fetch error
+  handling is untouched.
 - `gitCredentialHelperFlags` helper (scoped credential config) extracted
   beside `configureGitCredentialHelper`.
 - Trace attribute scaffolding (`git.remote_mirror.result` =
@@ -436,15 +493,15 @@ comment near the relevant code.
 
 | # | Feedback (source) | Disposition |
 |---|---|---|
-| 1 | Repository URLs must follow a `--` terminator to prevent option injection (buildsworth on #4153's `ls-remote`, unresolved there) | Built in: PR 1 makes `--` part of the shared fetch/clone helpers; the `ls-remote` in question doesn't exist in this design (no canonical-HEAD probe is needed when `git clone` runs for real). |
+| 1 | Repository URLs must follow a `--` terminator to prevent option injection (buildsworth on #4153's `ls-remote`, unresolved there) | Already satisfied: the shared `gitFetch`/`gitClone` helpers on `main` emit `--` before the URL, and the un-hardened `ls-remote` doesn't exist in this design (no canonical-HEAD probe is needed when `git clone` runs for real). New Git invocations must keep the discipline. |
 | 2 | Mirror URL persists in `.git/FETCH_HEAD` (Codex P1 on #4153) | Accepted: the mirror URL is by definition non-sensitive (no embedded credentials); scrubbing `FETCH_HEAD` would be surgery on Git-owned state for no security benefit. Code comment at the mirror fetch site. |
 | 3 | Hooks can change `BUILDKITE_REPO`, leaving the mirror bound to the wrong repository (Codex P2 on #4153) | Built in: eligibility requires the repo to be unchanged from the value the backend issued the mirror for; otherwise skip. |
 | 4 | Mirror hit produces different refs than a canonical checkout (`git describe`, `origin/main`) (buildsworth on #4153, unresolved) | Designed out: tier C uses a real `git clone` so refs exist as normal; tiers A/B change only the transfer source of operations whose ref effects are identical either way. Residual: refs reflect the mirror's replication point; see caveat register. |
 | 5 | Partial-clone promisor config must not leave lazy fetches pointing at the one-shot mirror URL (buildsworth, multiple rounds on #4144) | Designed out: promisor config is keyed by remote name (`origin`), and `origin`'s URL is set to canonical immediately after the clone. Covered by a PR 4 test. |
 | 6 | Canonical clone-config credentials (`http.extraHeader`) must not be sent to the mirror (buildsworth on #4144) | Built in: credentialish `--config` keys are deferred to post-clone application with `--add` (preserving repeated-key semantics, another #4144 round); proxy test asserts no leakage. |
-| 7 | Reused checkouts may carry persisted canonical transport config that a mirror fetch would read (the reason #4153 excluded them entirely) | Built in, narrowly: tier B skips the mirror when local config contains `http.*`/`credential.*`/`url.*.insteadof` keys, instead of excluding all reused checkouts. |
+| 7 | Reused checkouts may carry persisted canonical transport config that a mirror fetch would read (the reason #4153 excluded them entirely) | Built in, narrowly: tier B skips the mirror when local config contains bearer-credential carriers (`http.extraHeader` incl. URL-scoped, `credential.*`, `url.*.insteadOf`), instead of excluding all reused checkouts. |
 | 8 | Commit-presence probes on partial clones can trigger lazy fetches from origin, escaping the mirror attempt's bounds (buildsworth on #4144) | Built in: `GIT_NO_LAZY_FETCH=1` on probes (tier B). |
-| 9 | `--tags`/tag-following can import mutable refs from a lagged mirror (buildsworth on #4144) | Parity by construction: tier A/B fetches use the same refspecs as their canonical equivalents (tag auto-following behaves identically for both sources); tier C's clone takes tags from the mirror exactly as a canonical clone takes them from canonical, modulo lag (caveat register). No flag allowlisting. |
+| 9 | `--tags`/tag-following can import mutable refs from a lagged mirror (buildsworth on #4144) | Handled per tier: tier B's bare-SHA fetch auto-follows no tags from either source (parity by construction); tier A's explicit-refspec fetch *would* auto-follow tags where today's destination-less fetch does not, so it adds `--no-tags`; tier C's clone takes tags from the mirror exactly as a canonical clone takes them from canonical, modulo lag (caveat register). Tag *builds* are ineligible. No flag allowlisting. |
 | 10 | Hook-set `GIT_DIR`-style env can redirect Git operations (buildsworth on #4144; #4153 fail-closed on 10 env vars) | Accepted: such env redirects canonical operations equally; mirror operations inherit whatever environment the customer configured. Caveat register, not code. |
 | 11 | Unknown/unvetted clone/fetch flags could change mirror transport behavior (the driver of #4153's `planRemoteMirrorCheckout` fail-closed allowlist) | Designed out: flags are passed to real `git clone`/`git fetch` invocations against a customer-controlled host, so there is nothing to vet. The only flag inspection remaining is the credentialish `--config` deferral. |
 | 12 | Mirror attempt must not consume the whole checkout budget when the mirror hangs (buildsworth on #4144) | Built in: `http.lowSpeedLimit`/`http.lowSpeedTime` stall detection + no-retry + first-attempt-only, rather than a wall-clock cap that would kill legitimately large transfers. |
@@ -472,14 +529,21 @@ comment near the relevant code.
    different repository affects mirror and canonical operations alike; the
    agent does not detect or defend against it.
 5. **Mirror servers must support SHA fetches.** Without
-   `uploadpack.allowAnySHA1InWant` (or reachable-SHA equivalent), tiers A/B
-   miss every time and the feature degrades to canonical behavior plus one
-   wasted round trip. A provider requirement, not an agent guard.
-6. **Canonical still sees regular traffic.** Fallback traffic (lag windows,
+   `uploadpack.allowAnySHA1InWant` (or reachable-SHA equivalent), tier B
+   misses every time and the feature degrades to canonical behavior plus
+   one wasted round trip per job. A provider requirement, not an agent
+   guard. (Tier A's refresh fetches a branch ref, not a bare SHA, so it is
+   unaffected.)
+6. **Checkouts carrying canonical transport config skip tier B.** The
+   credential-bearing-local-config gate means a pipeline using
+   `--config http.extraHeader=…`-style clone flags gets mirror-sourced
+   fresh clones (tier C) but canonical delta fetches on reuse — a
+   deliberate trade of R8 over tier B coverage.
+7. **Canonical still sees regular traffic.** Fallback traffic (lag windows,
    ineligible builds, retries) keeps flowing to the canonical host; the
    mirror reduces canonical load, it does not eliminate it. This is inherent
    to fail-open design.
-7. **Shared on-host mirrors and mixed agent versions.** Tier A keeps the
+8. **Shared on-host mirrors and mixed agent versions.** Tier A keeps the
    shared mirror's `origin` canonical precisely so agents without
    remote-mirror support (or jobs without the env var) interoperate on the
    same mirror directory. A mirror directory never encodes whether it was
