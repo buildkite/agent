@@ -147,6 +147,10 @@ type JobRunner struct {
 	envShellFile *os.File
 	envJSONFile  *os.File
 
+	// Warning emitted when an optional remote mirror is removed before the
+	// bootstrap process environment is created.
+	remoteMirrorAllowlistWarning string
+
 	// jobTimeoutFilePath is the path to a marker file that, if present at
 	// post-command hook time, signals to the executor that the job was
 	// cancelled because of a Buildkite job-level timeout. The path is passed
@@ -180,6 +184,7 @@ func NewJobRunner(ctx context.Context, l logger.Logger, apiClient *api.Client, c
 		apiClient:   apiClient,
 		client:      &core.Client{APIClient: apiClient, Logger: l},
 	}
+	r.checkRemoteMirrorAllowlists()
 
 	var err error
 	r.VerificationFailureBehavior, err = r.normalizeVerificationBehavior(conf.AgentConfiguration.VerificationFailureBehaviour)
@@ -433,6 +438,9 @@ func (r *JobRunner) createEnvironment(ctx context.Context) ([]string, error) {
 	// the Buildkite-sent value unless the checkout-override mode locks them.
 	env := make(map[string]string)
 	maps.Copy(env, r.conf.Job.Env)
+	if r.remoteMirrorAllowlistWarning != "" {
+		delete(env, "BUILDKITE_GIT_REMOTE_MIRROR_URL")
+	}
 
 	// The agent registration token should never make it into the job environment
 	delete(env, "BUILDKITE_AGENT_TOKEN")

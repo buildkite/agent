@@ -181,6 +181,11 @@ func (r *JobRunner) Run(ctx context.Context, ignoreAgentInDispatches *bool) (err
 	}
 
 	// Validate the repository if the list of allowed repositories is set.
+	if r.remoteMirrorAllowlistWarning != "" {
+		delete(job.Env, "BUILDKITE_GIT_REMOTE_MIRROR_URL")
+		_, _ = fmt.Fprintf(r.jobLogs, "~~~ ⚠️ %s\n", r.remoteMirrorAllowlistWarning)
+		r.agentLogger.Warnf("%s", r.remoteMirrorAllowlistWarning)
+	}
 	if err := r.validateConfigAllowlists(job); err != nil {
 		_, _ = fmt.Fprintln(r.jobLogs, err.Error())
 		r.agentLogger.Errorf("%v", err)
@@ -217,17 +222,27 @@ func (r *JobRunner) Run(ctx context.Context, ignoreAgentInDispatches *bool) (err
 	return nil
 }
 
-func (r *JobRunner) validateConfigAllowlists(job *api.Job) error {
-	mirrorURL := job.Env["BUILDKITE_GIT_REMOTE_MIRROR_URL"]
-	if mirrorURL != "" {
-		if err := validateJobValue(r.conf.AgentConfiguration.AllowedRepositories, mirrorURL); err != nil {
-			message := fmt.Sprintf("Remote Git mirror URL %s is outside allowed repositories; using canonical repository", mirrorURL)
-			_, _ = fmt.Fprintf(r.jobLogs, "~~~ ⚠️ %s\n", message)
-			r.agentLogger.Warnf("%s", message)
-			delete(job.Env, "BUILDKITE_GIT_REMOTE_MIRROR_URL")
-		}
+func (r *JobRunner) checkRemoteMirrorAllowlists() {
+	const envVar = "BUILDKITE_GIT_REMOTE_MIRROR_URL"
+	mirrorURL := r.conf.Job.Env[envVar]
+	if mirrorURL == "" {
+		return
 	}
 
+	var warning string
+	switch {
+	case validateJobValue(r.conf.AgentConfiguration.AllowedRepositories, mirrorURL) != nil:
+		warning = fmt.Sprintf("Remote Git mirror URL %s is outside allowed repositories; using canonical repository", mirrorURL)
+	case validateJobValue(r.conf.AgentConfiguration.AllowedEnvironmentVariables, envVar) != nil:
+		warning = "Remote Git mirror URL is outside allowed environment variables; using canonical repository"
+	default:
+		return
+	}
+
+	r.remoteMirrorAllowlistWarning = warning
+}
+
+func (r *JobRunner) validateConfigAllowlists(job *api.Job) error {
 	validations := map[string]func() error{
 		"repo": func() error {
 			return validateJobValue(r.conf.AgentConfiguration.AllowedRepositories, job.Env["BUILDKITE_REPO"])

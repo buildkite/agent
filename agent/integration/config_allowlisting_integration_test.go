@@ -17,7 +17,7 @@ func TestConfigAllowlisting(t *testing.T) {
 	type testCase struct {
 		name                     string
 		extraEnv                 map[string]string
-		mockBootstrapExpectation func(*bintest.Mock)
+		mockBootstrapExpectation func(*testing.T, *bintest.Mock)
 		agentConfig              agent.AgentConfiguration
 		wantExitStatus           string
 		wantSignalReason         string
@@ -33,7 +33,7 @@ func TestConfigAllowlisting(t *testing.T) {
 					regexp.MustCompile("^BUILDKITE.*$"),
 				},
 			},
-			mockBootstrapExpectation: func(bm *bintest.Mock) { bm.Expect().NotCalled() },
+			mockBootstrapExpectation: func(_ *testing.T, bm *bintest.Mock) { bm.Expect().NotCalled() },
 			wantExitStatus:           "-1",
 			wantLogsContain:          []string{"failed to validate environment variables: BASH_ENV has no match in [^BUILDKITE.*$]"},
 			wantSignalReason:         agent.SignalReasonAgentRefused,
@@ -44,7 +44,7 @@ func TestConfigAllowlisting(t *testing.T) {
 				"BUILDKITE":               "true",
 				"MY_APP_SPECIFIC_ENV_VAR": "tesselate",
 			},
-			mockBootstrapExpectation: func(bm *bintest.Mock) { bm.Expect().Once().AndExitWith(0) },
+			mockBootstrapExpectation: func(_ *testing.T, bm *bintest.Mock) { bm.Expect().Once().AndExitWith(0) },
 			agentConfig: agent.AgentConfiguration{
 				AllowedEnvironmentVariables: []*regexp.Regexp{
 					regexp.MustCompile("^BUILDKITE.*$"),
@@ -61,7 +61,7 @@ func TestConfigAllowlisting(t *testing.T) {
 					regexp.MustCompile("^.*github.com/buildkite/agent$"),
 				},
 			},
-			mockBootstrapExpectation: func(bm *bintest.Mock) { bm.Expect().NotCalled() },
+			mockBootstrapExpectation: func(_ *testing.T, bm *bintest.Mock) { bm.Expect().NotCalled() },
 			wantExitStatus:           "-1",
 			wantLogsContain:          []string{"failed to validate repo: https://github.com/crimes/cryptohaxx.exe has no match in [^.*github.com/buildkite/agent$]"},
 			wantSignalReason:         agent.SignalReasonAgentRefused,
@@ -74,7 +74,7 @@ func TestConfigAllowlisting(t *testing.T) {
 					regexp.MustCompile("^https://github.com/buildkite/.*$"),
 				},
 			},
-			mockBootstrapExpectation: func(bm *bintest.Mock) { bm.Expect().Once().AndExitWith(0) },
+			mockBootstrapExpectation: func(_ *testing.T, bm *bintest.Mock) { bm.Expect().Once().AndExitWith(0) },
 			wantExitStatus:           "0",
 		},
 		{
@@ -93,9 +93,16 @@ func TestConfigAllowlisting(t *testing.T) {
 					regexp.MustCompile("^BUILDKITE_REPO$"),
 				},
 			},
-			mockBootstrapExpectation: func(bm *bintest.Mock) { bm.Expect().Once().AndExitWith(0) },
-			wantExitStatus:           "0",
-			wantLogsContain:          []string{"Remote Git mirror URL https://mirror.example.com/acme/widgets.git is outside allowed repositories; using canonical repository"},
+			mockBootstrapExpectation: func(t *testing.T, bm *bintest.Mock) {
+				bm.Expect().Once().AndCallFunc(func(call *bintest.Call) {
+					if _, ok := bintest.GetEnv("BUILDKITE_GIT_REMOTE_MIRROR_URL", call.Env); ok {
+						t.Error("bootstrap environment contains disallowed BUILDKITE_GIT_REMOTE_MIRROR_URL")
+					}
+					call.Exit(0)
+				})
+			},
+			wantExitStatus:  "0",
+			wantLogsContain: []string{"Remote Git mirror URL https://mirror.example.com/acme/widgets.git is outside allowed repositories; using canonical repository"},
 		},
 		{
 			name: "when allowlisting repos, a remote mirror inside the allowlist is retained",
@@ -108,8 +115,42 @@ func TestConfigAllowlisting(t *testing.T) {
 					regexp.MustCompile(`^https://(canonical|mirror)\.example\.com/.*$`),
 				},
 			},
-			mockBootstrapExpectation: func(bm *bintest.Mock) { bm.Expect().Once().AndExitWith(0) },
-			wantExitStatus:           "0",
+			mockBootstrapExpectation: func(t *testing.T, bm *bintest.Mock) {
+				bm.Expect().Once().AndCallFunc(func(call *bintest.Call) {
+					if got := call.GetEnv("BUILDKITE_GIT_REMOTE_MIRROR_URL"); got != "https://mirror.example.com/acme/widgets.git" {
+						t.Errorf("BUILDKITE_GIT_REMOTE_MIRROR_URL = %q, want retained mirror URL", got)
+					}
+					call.Exit(0)
+				})
+			},
+			wantExitStatus: "0",
+		},
+		{
+			name: "when allowlisting environment variables, a remote mirror variable outside the allowlist is ignored",
+			extraEnv: map[string]string{
+				"BUILDKITE_REPO":                  "https://canonical.example.com/acme/widgets.git",
+				"BUILDKITE_GIT_REMOTE_MIRROR_URL": "https://mirror.example.com/acme/widgets.git",
+			},
+			agentConfig: agent.AgentConfiguration{
+				AllowedRepositories: []*regexp.Regexp{
+					regexp.MustCompile(`^https://(canonical|mirror)\.example\.com/.*$`),
+				},
+				AllowedEnvironmentVariables: []*regexp.Regexp{
+					regexp.MustCompile("^BUILDKITE$"),
+					regexp.MustCompile("^BUILDKITE_COMMAND$"),
+					regexp.MustCompile("^BUILDKITE_REPO$"),
+				},
+			},
+			mockBootstrapExpectation: func(t *testing.T, bm *bintest.Mock) {
+				bm.Expect().Once().AndCallFunc(func(call *bintest.Call) {
+					if _, ok := bintest.GetEnv("BUILDKITE_GIT_REMOTE_MIRROR_URL", call.Env); ok {
+						t.Error("bootstrap environment contains disallowed BUILDKITE_GIT_REMOTE_MIRROR_URL")
+					}
+					call.Exit(0)
+				})
+			},
+			wantExitStatus:  "0",
+			wantLogsContain: []string{"Remote Git mirror URL is outside allowed environment variables; using canonical repository"},
 		},
 		{
 			name:     "when allowlisting plugins, if the plugin source doesn't match the configured allowlist, the job is refused",
@@ -120,7 +161,7 @@ func TestConfigAllowlisting(t *testing.T) {
 					regexp.MustCompile("^github.com/buildkite-plugins/.*$"),
 				},
 			},
-			mockBootstrapExpectation: func(bm *bintest.Mock) { bm.Expect().NotCalled() },
+			mockBootstrapExpectation: func(_ *testing.T, bm *bintest.Mock) { bm.Expect().NotCalled() },
 			wantExitStatus:           "-1",
 			wantLogsContain:          []string{"failed to validate plugins: github.com/crime-org/super-nasty-plugin#1.0.0 has no match in [^github.com/buildkite-plugins/.*$]"},
 			wantSignalReason:         agent.SignalReasonAgentRefused,
@@ -134,7 +175,7 @@ func TestConfigAllowlisting(t *testing.T) {
 					regexp.MustCompile("^github.com/buildkite-plugins/.*$"),
 				},
 			},
-			mockBootstrapExpectation: func(bm *bintest.Mock) { bm.Expect().Once().AndExitWith(0) },
+			mockBootstrapExpectation: func(_ *testing.T, bm *bintest.Mock) { bm.Expect().Once().AndExitWith(0) },
 			wantExitStatus:           "0",
 		},
 	}
@@ -162,7 +203,7 @@ func TestConfigAllowlisting(t *testing.T) {
 			defer server.Close()
 
 			mb := mockBootstrap(t)
-			tc.mockBootstrapExpectation(mb)
+			tc.mockBootstrapExpectation(t, mb)
 			defer mb.CheckAndClose(t) //nolint:errcheck // bintest logs to t
 
 			err := runJob(t, t.Context(), testRunJobConfig{
