@@ -189,6 +189,9 @@ func (e *Executor) fetchCommitFromRemoteMirror(
 	}
 
 	started := time.Now()
+	defer func() {
+		attempt.duration = time.Since(started)
+	}()
 	mirrorCtx, cancel := context.WithTimeout(ctx, remoteMirrorProbeTimeout)
 	defer cancel()
 
@@ -205,8 +208,6 @@ func (e *Executor) fetchCommitFromRemoteMirror(
 		Repository:    attempt.url,
 		RefSpecs:      []string{refspec},
 	})
-	attempt.duration = time.Since(started)
-
 	if parentErr := ctx.Err(); parentErr != nil {
 		return false, parentErr
 	}
@@ -223,10 +224,15 @@ func (e *Executor) fetchCommitFromRemoteMirror(
 		}
 		return false, nil
 	}
-	if !hasGitCommit(ctx, e.shell, gitDir, e.Commit) {
-		if err := ctx.Err(); err != nil {
-			return false, err
-		}
+	hasCommit := hasGitCommit(mirrorCtx, e.shell, gitDir, e.Commit)
+	if parentErr := ctx.Err(); parentErr != nil {
+		return false, parentErr
+	}
+	if errors.Is(mirrorCtx.Err(), context.DeadlineExceeded) {
+		attempt.outcome = remoteMirrorOutcomeTimeout
+		return false, nil
+	}
+	if !hasCommit {
 		attempt.outcome = remoteMirrorOutcomeMiss
 		return false, nil
 	}

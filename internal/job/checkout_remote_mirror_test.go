@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"maps"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -194,40 +195,84 @@ func TestRemoteMirrorOutcomeNotReachedIsZeroValue(t *testing.T) {
 	}
 }
 
-func TestRemoteMirrorTelemetryContainsNoURL(t *testing.T) {
+func TestRemoteMirrorTelemetrySchema(t *testing.T) {
 	t.Parallel()
 
-	span := &recordingRemoteMirrorSpan{}
-	e := New(ExecutorConfig{})
-	var logs bytes.Buffer
-	e.shell = shell.NewTestShell(t, shell.WithLogger(shell.NewWriterLogger(&logs, false, nil)))
-	attempt := remoteMirrorAttempt{
-		site:    remoteMirrorSiteFreshClone,
-		url:     "https://token:secret@mirror.example/acme/widgets.git",
-		outcome: remoteMirrorOutcomeNotReached,
+	tests := []struct {
+		name            string
+		attempt         remoteMirrorAttempt
+		wantAttrs       map[string]string
+		wantLogContains []string
+	}{
+		{
+			name: "not reached",
+			attempt: remoteMirrorAttempt{
+				site:    remoteMirrorSiteFreshClone,
+				url:     "https://token:secret@mirror.example/acme/widgets.git",
+				outcome: remoteMirrorOutcomeNotReached,
+			},
+			wantAttrs: map[string]string{
+				"git.remote_mirror.outcome": "notReached",
+				"git.remote_mirror.site":    "fresh-clone",
+			},
+			wantLogContains: []string{"outcome=notReached site=fresh-clone", "mirror.example"},
+		},
+		{
+			name: "skipped",
+			attempt: remoteMirrorAttempt{
+				outcome:    remoteMirrorOutcomeSkipped,
+				skipReason: remoteMirrorSkipNoURL,
+			},
+			wantAttrs: map[string]string{
+				"git.remote_mirror.outcome":     "skipped",
+				"git.remote_mirror.site":        "none",
+				"git.remote_mirror.skip_reason": "no-url",
+			},
+			wantLogContains: []string{"outcome=skipped site=none skip_reason=no-url"},
+		},
+		{
+			name: "hit with duration",
+			attempt: remoteMirrorAttempt{
+				site:     remoteMirrorSiteExistingCheckout,
+				url:      "https://mirror.example/acme/widgets.git",
+				outcome:  remoteMirrorOutcomeHit,
+				duration: 1500 * time.Millisecond,
+			},
+			wantAttrs: map[string]string{
+				"git.remote_mirror.outcome":     "hit",
+				"git.remote_mirror.site":        "existing-checkout",
+				"git.remote_mirror.duration_ms": "1500",
+			},
+			wantLogContains: []string{"outcome=hit site=existing-checkout duration=1.5s", "mirror.example"},
+		},
 	}
 
-	e.emitRemoteMirrorTelemetry(span, attempt)
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			span := &recordingRemoteMirrorSpan{}
+			e := New(ExecutorConfig{})
+			var logs bytes.Buffer
+			e.shell = shell.NewTestShell(t, shell.WithLogger(shell.NewWriterLogger(&logs, false, nil)))
 
-	if got, want := span.attributes["git.remote_mirror.outcome"], "notReached"; got != want {
-		t.Errorf("outcome attribute = %q, want %q", got, want)
-	}
-	if got, want := span.attributes["git.remote_mirror.site"], "fresh-clone"; got != want {
-		t.Errorf("site attribute = %q, want %q", got, want)
-	}
-	if got, want := len(span.attributes), 2; got != want {
-		t.Errorf("attribute count = %d, want %d: %v", got, want, span.attributes)
-	}
-	for key, value := range span.attributes {
-		if strings.Contains(key, "url") || strings.Contains(value, "mirror.example") || strings.Contains(value, "secret") {
-			t.Errorf("metric-shaped telemetry leaks URL data: %q=%q", key, value)
-		}
-	}
-	if got := logs.String(); !strings.Contains(got, "outcome=notReached site=fresh-clone") {
-		t.Errorf("job log = %q, want exact outcome and site", got)
-	}
-	if got := logs.String(); strings.Contains(got, "secret") || !strings.Contains(got, "mirror.example") {
-		t.Errorf("job log = %q, want redacted mirror URL", got)
+			e.emitRemoteMirrorTelemetry(span, tc.attempt)
+
+			if !maps.Equal(span.attributes, tc.wantAttrs) {
+				t.Errorf("attributes = %v, want %v", span.attributes, tc.wantAttrs)
+			}
+			for key, value := range span.attributes {
+				if strings.Contains(key, "url") || strings.Contains(value, "mirror.example") || strings.Contains(value, "secret") {
+					t.Errorf("metric-shaped telemetry leaks URL data: %q=%q", key, value)
+				}
+			}
+			for _, want := range tc.wantLogContains {
+				if got := logs.String(); !strings.Contains(got, want) {
+					t.Errorf("job log = %q, want substring %q", got, want)
+				}
+			}
+			if strings.Contains(logs.String(), "secret") {
+				t.Errorf("job log leaks URL credentials: %q", logs.String())
+			}
+		})
 	}
 }
 
@@ -297,22 +342,26 @@ func TestFetchCommitFromRemoteMirrorTimeout(t *testing.T) {
 	remoteMirrorProbeTimeout = 20 * time.Millisecond
 	t.Cleanup(func() { remoteMirrorProbeTimeout = oldTimeout })
 
-	commit := strings.Repeat("a", 40)
-	e := newRemoteMirrorShimExecutor(t, commit, "timeout")
-	attempt := remoteMirrorAttempt{
-		site: remoteMirrorSiteExistingCheckout,
-		url:  "https://mirror.example/acme/widgets.git",
-	}
+	for _, mode := range []string{"timeout", "timeout-confirmation"} {
+		t.Run(mode, func(t *testing.T) {
+			commit := strings.Repeat("a", 40)
+			e := newRemoteMirrorShimExecutor(t, commit, mode)
+			attempt := remoteMirrorAttempt{
+				site: remoteMirrorSiteExistingCheckout,
+				url:  "https://mirror.example/acme/widgets.git",
+			}
 
-	hit, err := e.fetchCommitFromRemoteMirror(t.Context(), &attempt, ".git", "", commit)
-	if err != nil {
-		t.Fatalf("fetchCommitFromRemoteMirror() error = %v", err)
-	}
-	if hit {
-		t.Error("hit = true, want false")
-	}
-	if attempt.outcome != remoteMirrorOutcomeTimeout {
-		t.Errorf("outcome = %q, want timeout", attempt.outcome)
+			hit, err := e.fetchCommitFromRemoteMirror(t.Context(), &attempt, ".git", "", commit)
+			if err != nil {
+				t.Fatalf("fetchCommitFromRemoteMirror() error = %v", err)
+			}
+			if hit {
+				t.Error("hit = true, want false")
+			}
+			if attempt.outcome != remoteMirrorOutcomeTimeout {
+				t.Errorf("outcome = %q, want timeout", attempt.outcome)
+			}
+		})
 	}
 }
 
@@ -371,16 +420,15 @@ func TestFetchCommitFromRemoteMirrorPassesURLAfterOptionTerminator(t *testing.T)
 	if len(gotLog) == 0 {
 		t.Fatal("fetchCommitFromRemoteMirror() ran no git command")
 	}
-	fetch := gotLog[0]
-	var separator int
-	for i, arg := range fetch {
-		if arg == "--" {
-			separator = i
-			break
-		}
+	absoluteGit, err := e.shell.AbsolutePath("git")
+	if err != nil {
+		t.Fatal(err)
 	}
-	if separator == 0 || separator+1 >= len(fetch) || fetch[separator+1] != attempt.url {
-		t.Errorf("git fetch args = %q, want -- immediately before mirror URL", fetch)
+	wantFetch := []string{absoluteGit, "--git-dir", ".git"}
+	wantFetch = append(wantFetch, remoteMirrorGitFlags(t.Context())...)
+	wantFetch = append(wantFetch, "fetch", "--", attempt.url, e.Commit)
+	if !slices.Equal(gotLog[0], wantFetch) {
+		t.Errorf("git fetch args = %q, want %q", gotLog[0], wantFetch)
 	}
 }
 
@@ -447,6 +495,7 @@ for arg do
 	rev-parse)
 		case "$FETCH_MODE" in
 		hit) printf '%s\n' "$EXPECTED_COMMIT"; exit 0 ;;
+		timeout-confirmation) /bin/sleep 30; exit 1 ;;
 		cancel-confirmation) : > "$REV_STARTED"; /bin/sleep 30; exit 1 ;;
 		*) exit 1 ;;
 		esac
