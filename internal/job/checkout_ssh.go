@@ -38,7 +38,10 @@ func (e *Executor) configureGitCredentialHelper(ctx context.Context) error {
 }
 
 func gitCredentialHelperCommand(ctx context.Context) string {
-	return fmt.Sprintf(`%s git-credentials-helper`, shellwords.Quote(self.Path(ctx)))
+	// The ! prefix tells Git this is a shell command. Without it, quoting an
+	// executable path containing spaces stops Git recognising the helper as
+	// an absolute path and makes it prepend "git credential-" instead.
+	return fmt.Sprintf(`!%s git-credentials-helper`, shellwords.Quote(self.Path(ctx)))
 }
 
 // gitCredentialHelperFlags returns per-invocation Git configuration for the

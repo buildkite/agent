@@ -1,6 +1,10 @@
 package job
 
 import (
+	"os"
+	"os/exec"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -92,11 +96,47 @@ func TestGitCredentialHelperFlagsAreInvocationScoped(t *testing.T) {
 		t.Errorf("gitCredentialHelperFlags() does not install the agent helper: %q", parts)
 	}
 	helperCommand := strings.TrimPrefix(parts[5], "credential.helper=")
-	commandParts, err := shellwords.Split(helperCommand)
+	if !strings.HasPrefix(helperCommand, "!") {
+		t.Fatalf("credential helper command %q does not use Git's shell-command form", helperCommand)
+	}
+	commandParts, err := shellwords.Split(strings.TrimPrefix(helperCommand, "!"))
 	if err != nil {
 		t.Fatalf("credential helper command %q is not valid shell syntax: %v", helperCommand, err)
 	}
 	if len(commandParts) != 2 || commandParts[0] != helperPath || commandParts[1] != "git-credentials-helper" {
 		t.Errorf("credential helper command split into %q, want [%q %q]", commandParts, helperPath, "git-credentials-helper")
+	}
+}
+
+func TestGitCredentialHelperCommandSupportsExecutablePathWithSpaces(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("credential helper test script is POSIX-only")
+	}
+
+	helperPath := filepath.Join(t.TempDir(), "buildkite agent helper")
+	script := `#!/bin/sh
+test "$1" = git-credentials-helper || exit 11
+test "$2" = get || exit 12
+printf 'username=buildkite\npassword=secret\n\n'
+`
+	if err := os.WriteFile(helperPath, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	ctx := self.OverridePath(t.Context(), helperPath)
+	cmd := exec.CommandContext(ctx,
+		"git",
+		"-c", "credential.helper=",
+		"-c", "credential.helper="+gitCredentialHelperCommand(ctx),
+		"credential", "fill",
+	)
+	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
+	cmd.Stdin = strings.NewReader("protocol=https\nhost=mirror.example.com\n\n")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("git credential fill failed: %v\n%s", err, out)
+	}
+	if got := string(out); !strings.Contains(got, "username=buildkite") || !strings.Contains(got, "password=secret") {
+		t.Errorf("git credential fill output = %q, want helper credentials", got)
 	}
 }
