@@ -3,21 +3,28 @@
 Status: review. This document compares three independently produced design and
 implementation plans for remote Git mirrors, recommends one, and records what
 to carry over from the others and why. It is a decision document, not a plan:
-the plan it recommends lives on its own branch.
+the plan it recommends lives on its own branch. Once §6's amendments have been
+folded into that plan, this document becomes a historical record: mark each
+folded amendment with the folding commit, and record the answers to §8's open
+questions in the plan of record's own open-questions section, not here.
 
 ## The three documents
 
-Each plan is a version of `docs/remote-git-mirrors.md` on its own branch. This
-review refers to them by short name:
+Each plan is the file `docs/remote-git-mirrors.md` on its own branch (the
+"requested as" names are the filenames used in the review request; they do not
+exist in the repository). Branch tips are pinned so citations survive branch
+pruning. This review refers to the plans by short name:
 
-| Name | Source file | Branch | Length |
+| Name | Requested as | Branch (tip at review time) | Length |
 | --- | --- | --- | --- |
-| **Opus** | `remote-git-mirrors-opus-5.md` | `pda/remote-git-mirrors-plan-c275` | 1177 lines |
-| **Fable** | `remote-git-mirrors-fable-5.md` | `pda/fable-remote-git-mirrors-plan-5858` | 563 lines |
-| **Sol** | `remote-git-mirrors-sol.md` | `pda/sol-remote-git-mirror-plan-23ea` | 650 lines |
+| **Opus** | `remote-git-mirrors-opus-5.md` | `pda/remote-git-mirrors-plan-c275` (`d1a4c7c4`) | 1177 lines |
+| **Fable** | `remote-git-mirrors-fable-5.md` | `pda/fable-remote-git-mirrors-plan-5858` (`2ffd3c01`) | 563 lines |
+| **Sol** | `remote-git-mirrors-sol.md` | `pda/sol-remote-git-mirror-plan-23ea` (`f3c40488`) | 650 lines |
 
 Citations use the document's own headings, e.g. (Opus §5.3), (Fable "Tier A"),
-(Sol "Fallback details").
+(Sol "Fallback details"). Requirement numbers are always qualified with their
+plan (Opus R2, Fable R9), because the plans' numbering schemes collide;
+rejected alternatives in §7 use RA-numbers to stay out of both namespaces.
 
 ### Method
 
@@ -35,33 +42,34 @@ Every consequential claim in this review was checked against one of:
 - empirical Git experiments run for this review on git 2.43.0 (the same
   version Opus cites), listed in the verification appendix.
 
-Claims that could not be re-verified here (HTTP-transport-specific behaviour,
-curl timing) are marked as such. Length and rhetorical confidence were treated
-as costs, not evidence: every plan's central factual claims were tested the
-same way.
+The appendix is the single record of what was and was not re-verified;
+statements in the body defer to it. Length and rhetorical confidence were
+treated as costs, not evidence: every plan's central factual claims were
+tested the same way.
 
 ---
 
 ## 1. Executive decision memo
 
-**Decision: adopt Opus as the plan of record, amended with eight specific
-items from Fable and Sol (listed in §6). Record Sol's `insteadOf` transport
-mechanism as the principal rejected alternative. Defer packfile-URI/CDN
-offload, per Opus §11, keeping Sol "Path 4" as the design sketch for when it
-is picked up.**
+**Decision: adopt Opus as the plan of record, amended with specific items
+from Fable, Sol, and this review's own measurements (§6, A1–A10). Record
+Sol's `insteadOf` transport mechanism as the principal rejected alternative.
+Defer packfile-URI/CDN offload, per Opus §11, keeping Sol "Path 4" as the
+design sketch for when it is picked up.**
 
 Rationale, in order of weight:
 
 1. **Correctness, verified.** Opus is the only plan whose factual foundation
    (its §4.2 G-table and its codebase mechanics in §4.1, §5.1–5.8) survived
    re-verification essentially intact — every claim tested for this review
-   reproduced, including exact exit codes (G2) and the silent `--filter`
-   degradation (G10). One Opus measurement was strengthened rather than
+   reproduced, including the exact exit code of G2's local-transport case and
+   the silent `--filter` degradation (G10); the appendix records which claims
+   were not re-tested. One Opus measurement was strengthened rather than
    contradicted: protocol v2 serves even *unreachable* SHAs on stock
    `git-upload-pack`, where Opus §11 only claimed the reachable case.
    By contrast, Fable's caveat 5 ("Mirror servers must support SHA
    fetches [via] `uploadpack.allowAnySHA1InWant`") is wrong as stated for
-   stock protocol-v2 servers (measured, appendix T1), and Sol's flat
+   stock protocol-v2 servers (measured, appendix T1a–T1c), and Sol's flat
    "conservative cap such as 30 seconds" on mirror attempts (Sol "Fail open
    without multiplying retries") reintroduces the exact failure Opus §5.3 and
    Fable's item 12 ("Anticipated review feedback") independently identify: a
@@ -81,10 +89,14 @@ Rationale, in order of weight:
    real control flow — the `hasGitCommit` short-circuit inside
    `isMainRepository`, the `urlChanged`-gated `fsck`/`gc`, the nil
    `r.jobLogs` at `createEnvironment` time, the `gitFetchArgs.GitFlags`
-   re-splitting hazard — all verified here. Fable and Sol are directionally
-   compatible with the code but leave these traps for the implementer to
-   rediscover; two of them (retrier interaction, allowlist refusal) are
-   fleet-visible if hit.
+   re-splitting hazard — all verified here. To be precise about what is
+   unique: all three plans settle the fleet-visible *semantics* (the
+   allowlist declines the mirror rather than refusing the job; mirror
+   attempts never retry), but only Opus grounds the *mechanics* — where the
+   drop must happen and why the warning cannot be logged from
+   `createEnvironment`, and which retrier arms the new error classification
+   must touch. Those mechanics are where the earlier attempts (#4144, #4153)
+   actually foundered.
 4. **The costs of choosing Opus are real but acceptable.** It is the most
    prescriptive document and its PR 1 is large; §6 amends the delivery plan
    to allow splitting it. Its eligibility is the narrowest (branch-name
@@ -146,7 +158,7 @@ one site per PR (§6).
   sets `clone_mirror_url`. The drop-in-`createEnvironment` mechanism, and the
   observation that `r.jobLogs` is nil at that point (verified in
   `agent/job_runner.go`), is the difference between a plan and an incident.
-- R9's telemetry design: `notReached` as the zero value, with the argument
+- Opus R9's telemetry design: `notReached` as the zero value, with the argument
   that a site is frequently selected and never reached (the `hasGitCommit`
   short-circuit — verified — makes `notReached` the *common* case on warm
   hosted caches, §5.1, §9).
@@ -180,16 +192,20 @@ rollout; no agent flag, no experiment (§9).
 - *C11 residual*: on the on-host-mirror site a hit still pays the canonical
   commit fetch from the checkout. Deliberate and argued (it keeps
   `refs/remotes/origin/*` advancing), but it concedes exactly the round trip
-  R2's own wording targets; the practical defence is that hosted fleets run
+  Opus R2's own wording targets; the practical defence is that hosted fleets run
   `--git-skip-fetch-existing-commits`.
 - *No answer for blobless reused checkouts.* On the existing-checkout path, a
   hit transfers commits/trees from the mirror, but the blobs a sparse
   checkout materialises still lazy-fetch from canonical (promisor = origin).
   Sol is the only plan that notices this gap (see §2.3).
 - *Unverified-here measurements.* G8/G9 (header reset), G12–G14 (low-speed
-  timer), the LFS smudge measurements, and PR 2's end-to-end object counts
-  were not reproduced for this review (HTTP/timing fixtures); they are
-  internally consistent and the mechanisms they rest on (G4, G5) reproduced.
+  timer), and the LFS smudge measurements were not reproduced for this review
+  — they need HTTP and timing fixtures — so conclusions that rest on them
+  (notably the stall-guard values and RA2's G12/G14 citations) carry Opus's
+  measurement plus consistency with documented curl behaviour, not a
+  reproduction. PR 2's end-to-end zero-object table was likewise not
+  reproduced in full; T5 verifies its mechanism (namespaced-ref negotiation)
+  on a small fixture, not the table itself.
 - *Open questions it leaves open* (§11) are the right ones: staleness
   contract, capability parity, URL rotation, `refs/pull/*`, LFS proxying.
 
@@ -254,14 +270,16 @@ an explicit follow-up ("Possible follow-ups").
 **Weaknesses, risks, unresolved questions.**
 
 - *Caveat 5 is factually wrong for stock v2 servers*, and the design omits
-  the one-flag fix. Measured here (T1): under protocol v2, default server
-  config serves exact-SHA fetches for reachable *and* unreachable objects;
-  `uploadpack.allowAnySHA1InWant` matters only under protocol v0. Fable never
-  pins `protocol.version=2` on mirror-directed operations, so a customer or
-  distribution that pins v0 produces a permanent, silent 100%-miss fleet —
-  exactly the configuration its own R2 says "must disable the mirror attempt
-  up front... wherever we can detect them cheaply". Opus §5.4 pins v2 for
-  precisely this reason.
+  the one-flag fix. Measured here (T1a–T1c): under protocol v2, default
+  server config serves exact-SHA fetches for reachable *and* unreachable
+  objects; `uploadpack.allowAnySHA1InWant` matters only under protocol v0.
+  Fable never pins `protocol.version=2` on mirror-directed operations, so a
+  customer or distribution that pins v0 produces a permanent, silent
+  100% miss rate on tier B (and on tier C's post-clone SHA fetch) — tier A's
+  branch-refspec refresh and the clone itself still work — exactly the
+  configuration Fable R2 says "must disable the mirror attempt up front...
+  wherever we can detect them cheaply". Opus §5.4 pins v2 for precisely this
+  reason.
 - *Tier A writes `refs/heads/<branch>` in the shared mirror from a lagging
   replica.* On the rebuild-of-an-older-commit hit (mirror lags canonical but
   contains the wanted commit), the shared mirror's branch ref is durably
@@ -394,8 +412,8 @@ pull request is not required").
 - *No error-classification telemetry.* Sol infers miss-versus-error from a
   presence check after the attempt ("Fallback details"), avoiding `gitError`
   changes. Coherent, but it cannot distinguish "mirror lagging" from "mirror
-  broken" in R9 terms, which is the distinction §9-style monitoring needs
-  during rollout (Opus §2 R9; Fable PR 1's `git.remote_mirror.result`).
+  broken" in Opus R9's terms, which is the distinction rollout monitoring
+  needs (Opus §2 R9; Fable PR 1's `git.remote_mirror.result`).
 - *Credential mechanics are thin.* Sol never specifies the per-invocation
   `credential.helper` reset, `credential.useHttpPath`, or a protocol pin
   outside packfile-URI ("Trust and credential model") — the concrete flags
@@ -419,12 +437,12 @@ this review.
 
 | Criterion | Opus | Fable | Sol |
 | --- | --- | --- | --- |
-| **Correctness** | **S** — every load-bearing claim tested here reproduced (T1, T3, T5; code checks §2.1). Unverified residue is timing/HTTP-specific and mechanism-consistent. | **A** — architecture sound; caveat 5 wrong for stock v2 (T1), missing protocol pin contradicts its own R2; tier A backward ref moves unexamined. Tag-follow claim verified correct (T2). | **A** — mechanism verified viable (T4), but the flat 30s cap inverts R2-equivalent goals for bulk transfers; two measured mechanism foot-guns unmentioned; materialisation fallback trusts an exit code that can be 0 on failure. |
-| **Simplicity** | **A** — three site-specific mechanisms, each individually simple; the *document* is not simple, and PR 1 concentrates complexity. | **S** — smallest conceptual delta: substitute the URL at three existing transfer points; lightest foundations PR. | **S** for the mechanism (one rewrite everywhere, no `set-url`); **W** for the boundary machinery ("source-attempt boundary", fetch selection/execution split) it layers on top. Net **A**. |
+| **Correctness** | **S** — every load-bearing claim tested here reproduced (T1a–T7; code checks §2.1). Unverified residue is timing/HTTP-specific (appendix). | **A** — architecture sound; caveat 5 wrong for stock v2 (T1a–T1c), missing protocol pin contradicts Fable R2; tier A backward ref moves unexamined (§2.2). Tag-follow claim verified correct (T2). | **A** — mechanism verified viable (T4), but the flat 30s cap caps the bulk transfers the feature exists for (RA2); two measured mechanism foot-guns unmentioned (RA1); materialisation fallback trusts an exit code that can be 0 on failure (§2.3). |
+| **Simplicity** | **A** — three site-specific mechanisms, each individually simple; the *document* is not simple, and PR 1 concentrates complexity. | **S** — smallest conceptual delta: substitute the URL at three existing transfer points; lightest foundations PR. | **A** — one rewrite everywhere and no `set-url`, offset by the boundary machinery ("source-attempt boundary", fetch selection/execution split) layered on top (§2.3). |
 | **Maintainability** | **S** — caveat register with named comment sites; shared helper contracts fixed before use; file-extraction plan for the 342-line `defaultCheckoutPhase` (PR 4). | **A** — caveat register present; dispositions link review threads to code comments; less prescriptive about where logic lives. | **A** — "one boundary" is a good shape, but the promised fetch-dispatcher refactor (PR 2) is the kind of extraction that grows; caveat-promotion rule is excellent governance. |
 | **Operational risk** | **A** — no kill switch beyond backend unset + `--allowed-repositories`; strongest telemetry design (`notReached`, dual sinks — verified that span-only telemetry is invisible on default fleets). | **A** — same rollout controls; good trace attributes; silent 100%-miss risk under v0 pinning is an operational blind spot its telemetry would catch but not prevent. | **S** on paper — kill switch, per-path enablement, explicit telemetry questions; **W** on the cap (a fleet-wide 30s clone ceiling is itself an incident); net **A**. Backend emission is currently unconditional (`app/models/job/environment.rb`), which strengthens Sol's kill-switch case — see §8 Q1. |
 | **Migration safety** | **S** — every PR inert without the backend value; no canonical-path behaviour change except one argued narrow case (protocol-v0 + local-path fetch classification, PR 1); mixed-fleet safe (origin never rewritten). | **S** — same shape; classification opt-in per invocation is even more conservative than Opus's global change; mixed-fleet constraint stated explicitly (caveat 8). | **A** — durable state untouched by construction (verified), but Path 1's shared-ref writes from a lagging replica are a cross-version behaviour change for concurrent readers of the shared mirror. |
-| **Performance** | **S** — hit skips the canonical round trip (§5.7); zero-object reference clone verified (T5); stall-guard preserves bulk transfers; residual: blobless materialisation still canonical, C11's deliberate round trip. | **A** — hit avoids canonical but tier C re-contacts the mirror once; tier B excluded on hosted fleets (the highest-traffic case) by design; stall-guard preserved. | **W→S split** — the cap is a performance defect on big-repo cold paths (the feature's core case); the materialisation routing is the best coverage of any plan for blobless reuse. Net **A** with high variance. |
+| **Performance** | **S** — hit skips the canonical round trip (§5.7); zero-object reference clone verified (T5); stall-guard preserves bulk transfers; residual: blobless materialisation still canonical, C11's deliberate round trip. | **A** — hit avoids canonical but tier C re-contacts the mirror once; tier B excluded on hosted fleets (the highest-traffic case) by design; stall-guard preserved. | **A**, with the widest spread of the three — the cap is a defect on big-repo cold paths (the feature's core case, RA2), while the materialisation routing is the best blobless-reuse coverage of any plan (F2). |
 | **Implementation effort** | **A** — most total work up front (threading, argv plumbing, error type, telemetry all in PR 1), but each later PR is small and the traps are pre-cleared. | **S** — least up-front work; each tier is a contained diff; effort deferred to implementers for budget values and tier A ordering. | **A** — mechanism is a small diff, but the fetch selection/execution extraction (PR 2) and materialisation-scoped rewrite are invasive in `fetchSource`/checkout, the code the other plans deliberately leave structurally unchanged. |
 | **Reversibility** | **S** — per-PR revert clean; decision resolves to `none` without the env var; no persisted state anywhere (C14's window self-heals). | **S** — same; tier D independently droppable. | **S** — same, plus the kill switch; minus: objects/refs already written to shared mirrors by Path 1 persist (its caveat 10 acknowledges the general form). |
 | **Future flexibility** | **A** — eligibility clauses designed to be relaxed (§5.2, §11); attempt struct extends to new sites; packfile/bundle-URI deferred with both options named (§11). | **A** — follow-ups section names the same extensions; tier D sketched. | **S** — the uniform rewrite extends naturally to materialisation, submodule mirrors (per-URL rewrites), and future transports; hash-format-agnostic eligibility wording. |
@@ -435,36 +453,31 @@ this review.
 
 ### 4.1 Genuine disagreements (must pick one)
 
+Where a decision has an expanded entry in §7, the rationale lives there once;
+the item here states the disagreement and the outcome.
+
 1. **Transport mechanism.** Explicit mirror-URL commands + `set-url`
    (Opus §5.6; Fable "Tier C") versus command-scoped
    `url.<mirror>.insteadOf=<canonical>` (Sol "Preserve the canonical
-   repository..."). Both verified workable (T4, T5). Decided for
-   explicit-URL: it bypasses customer `insteadOf` precedence games, has no
-   transposition foot-gun, and its one residual window (C14) self-heals;
-   Sol's variant is recorded in §7 as the strongest rejected alternative.
+   repository..."). Both verified workable (T4, T7). Decided for
+   explicit-URL — grounds in RA1.
 2. **Bulk-transfer budget.** Stall-guard, no wall clock (Opus §5.3; Fable
    item 12) versus flat 30s cap / half-remaining-deadline (Sol "Fail open
-   without multiplying retries"). Decided for the stall guard: two plans and
-   one measurement set (G12–G14) against an unargued number that caps the
-   feature's core case.
+   without multiplying retries"). Decided for the stall guard — grounds in
+   RA2.
 3. **On-host mirror ref writes.** Namespaced exact-SHA ref, `refs/heads/*`
    never touched (Opus §5.8) versus branch-ref writes from the mirror (Fable
-   "Tier A"; Sol "Path 1" via rewrite). Decided for the namespaced ref: the
-   backward-move/`gc` hazard on rebuild hits is real (analysis in §2.2), and
-   T5 verifies negotiation reads the namespaced ref, so nothing is lost.
-   Consequence, accepted: `refs/heads/*` in the mirror stop advancing on
-   steady-state hits (Opus C8).
+   "Tier A"; Sol "Path 1" via rewrite). Decided for the namespaced ref —
+   grounds in RA3. Consequence, accepted: `refs/heads/*` in the mirror stop
+   advancing on steady-state hits (Opus C8).
 4. **Mirror fetch placement in `updateGitMirror`.** Before `updateRemoteURL`
-   (Opus PR 2) versus after (Fable "Tier A"). Decided for before: verified
-   that an early return after `updateRemoteURL` skips the `urlChanged`
-   `fsck`/`gc`.
+   (Opus PR 2) versus after (Fable "Tier A"). Decided for before — grounds
+   in RA4.
 5. **Packfile-URI scope.** In the stack (Fable R6/Tier D/PR 5; Sol "Path 4")
    versus deferred pending provider answer and a measurement (Opus §11).
-   Decided for deferral: the client flag is trivial to add later, upstream's
-   server side offloads only large blobs, and bundle-URI may matter more for
-   clones — a provider decision, not an agent one. Sol Path 4 is the design
-   sketch of record for the eventual PR (its "let Git own the packs, https
-   only, no agent downloader" rules are correct and complete).
+   Decided for deferral — see F1; Sol Path 4 is the design sketch of record
+   for the eventual PR (its "let Git own the packs, https only, no agent
+   downloader" rules are correct and complete).
 6. **Agent-side kill switch.** Required (Sol "Configuration and binding") vs
    none (Opus §9) vs if-asked-for (Fable "Possible follow-ups"). Not decided
    here — sharpened and returned to humans (§8 Q1), with the new fact that
@@ -477,15 +490,17 @@ this review.
    "Out of scope") versus included with fallback (Sol "Correct checkout").
    Decided for exclusion: Fable's argument is the operative one — a provider
    that doesn't replicate `refs/pull/*` converts every PR build into a paid
-   miss, violating R2 systematically; relax when §8 Q3 is answered.
-9. **Miss classification.** New `gitError` type smelting the two miss strings
-   (Opus PR 1; Fable PR 1, opt-in per invocation) versus no classification,
-   presence-check only (Sol "Fallback details"). Decided for classification:
-   R9's miss/timeout/error distinction is the rollout instrument. Fable's
-   opt-in variant and Opus's global variant differ marginally; Opus's global
-   change is accepted because its one behavioural delta (protocol-v0 +
-   local-path canonical breaking on first attempt instead of retrying ten
-   times) is an improvement and is documented (PR 1).
+   miss, systematically violating the never-slower-than-no-mirror rule both
+   Opus R2 and Fable R2 state; relax when §8 Q3 is answered.
+9. **Miss classification.** New `gitError` type smelting the two miss
+   strings — "smelting" is Opus's coinage for matching Git's stderr text to
+   classify an error — (Opus PR 1; Fable PR 1, opt-in per invocation) versus
+   no classification, presence-check only (Sol "Fallback details"). Decided
+   for classification — grounds in RA6. Fable's opt-in variant and Opus's
+   global variant differ marginally; Opus's global change is accepted
+   because its one behavioural delta (protocol-v0 + local-path canonical
+   breaking on the first attempt instead of retrying ten times) is an
+   improvement and is documented (Opus PR 1).
 10. **First-attempt-only mechanism.** Derived from the attempt count already
     passed to `defaultCheckoutPhase` (Opus §5.1/§5.2; Fable eligibility)
     versus persisted executor state (Sol "One source-attempt boundary" step
@@ -497,6 +512,16 @@ this review.
     share the bounded-fetch helper and `fetchSource` threading, and
     "introduced by whichever lands first" is how shared contracts drift
     (Opus §6). §6 amends the split to keep any single review tractable.
+12. **Creation-arm lag healing.** When the initial on-host mirror clone comes
+    from a lagging mirror, Fable ("Tier A") and Sol ("Path 1", new local
+    mirror step 5) fetch the missing delta into the shared mirror from
+    canonical in the same job; Opus (PR 2 creation arm) deliberately does
+    not — the checkout's `--reference` clone gets its delta from canonical
+    and the shared mirror heals on the next job's update arm. Decided for
+    Opus's restraint: the checkout is correct either way, the extra
+    canonical fetch would run inside the creation lock, and the mirror
+    converges one job later. Low stakes; revisit only if telemetry shows
+    fresh-cache-volume jobs repeatedly paying the same delta.
 
 ### 4.2 Compatible, complementary ideas (adopted into §6)
 
@@ -511,10 +536,11 @@ this review.
   test rows → added to the PR test matrices.
 - Sol's caveat 10 (cache contents survive mirror removal) → Opus §10.
 - Sol's low-cardinality telemetry rule ("no URLs in metric labels") →
-  R9 emission guidance.
+  A8.
 - Sol's review-strategy items (before/after command sequences per PR;
-  "can this violate the product assumptions?" as the review question) →
-  PR description conventions; compatible with Fable's item-14 stance.
+  "can this violate the product assumptions?" as the review question) and
+  Fable's item-13 reviewer-sign-off flag on the allowlist semantics change →
+  A6's PR-description conventions.
 
 ### 4.3 Superficially compatible, not safely combinable
 
@@ -537,10 +563,12 @@ this review.
   The ref-write model and the skip model must be chosen as a pair.
 - **Sol's "checkout also prefers the remote mirror" after an on-host refresh
   + Opus's one-attempt accounting.** Two mirror-directed operations per
-  checkout breaks R2's "at most one bounded attempt" arithmetic and Opus §5.1's
-  single-site telemetry; adopting Sol's coverage requires re-deriving the
-  budget and the R9 model, which is why it is a gated follow-up, not a merge.
-- **Sol's no-classification stance + Opus/Fable's R9 precision.** Presence
+  checkout breaks Opus R2's "at most one bounded attempt" arithmetic and
+  Opus §5.1's single-site telemetry; adopting Sol's coverage requires
+  re-deriving the budget and the telemetry model, which is why it is a gated
+  follow-up, not a merge.
+- **Sol's no-classification stance + the miss/timeout/error precision that
+  Opus R9 requires (and Fable's PR 1 trace attributes provide).** Presence
   checks can say hit/miss but not miss/timeout/error; keeping both means the
   boundary owns outcomes while `gitFetch` owns classification — workable only
   if one of them is authoritative (in §6, the shared helper is).
@@ -563,8 +591,13 @@ this review.
   caveat 10; the caveat-promotion governance rule; the packfile-URI
   ownership rules (Git owns packs, https only).
 
-All of these are preserved either in §6's amendments or §7's rejected
-alternatives.
+Each of these has an explicit disposition. Opus's items are in the plan of
+record already. Fable's: tag auto-follow → A2; mixed-fleet → A3;
+item-13 sign-off → A6; `GIT_NO_LAZY_FETCH` → A5; the credential-carrier gate
+is deliberately superseded, with the reasoning recorded in RA9. Sol's:
+materialisation coverage → F2; cancellation rule → A4; hash-format wording →
+A9; caveat 10 → A3; caveat-promotion rule → A10; packfile-URI ownership
+rules → F1.
 
 ---
 
@@ -607,7 +640,8 @@ The plan of record is **Opus (`docs/remote-git-mirrors.md` on
 amendments are written as deltas so Opus's internal cross-references stay
 valid; they should be folded into that document, not maintained here.
 
-**A1 — Correct the provider-requirement framing (from this review's T1).**
+**A1 — Correct the provider-requirement framing (from this review's
+T1a–T1c).**
 In §4.2 and §11: stock `git-upload-pack` under protocol v2 serves wants for
 *any* object it has, reachable or not — `uploadpack.allowAnySHA1InWant` is a
 protocol-v0 concern. Rephrase §11's capability question as: "does the mirror
@@ -635,7 +669,7 @@ caveat 10).**
   valid content from a customer-controlled replica.
 
 **A4 — Cancellation rule (from Sol "Fail open without multiplying retries").**
-In §5.3 and the shared bounded-fetch helper's contract (§6/PR 1): the
+In §5.3 and the shared bounded-fetch helper's contract (Opus §6, PR 1): the
 canonical fallback runs only if the parent context is still live; a
 cancellation that kills the mirror attempt must not spend the cancelled job's
 time on canonical. Add Sol's "cancelled checkout → no fallback" row to each
@@ -647,22 +681,41 @@ Set it inside `hasGitCommit`. On git ≥ 2.45 it prevents a probe against a
 partial clone from lazy-fetching through the promisor; older gits ignore it.
 One line, benefits the pre-existing `GitSkipFetchExistingCommits` probe too.
 
-**A6 — Split PR 1 if review size demands (process, consistent with Opus §6's
-own "merging 2 and 3" concession).** The natural cut: PR 1a — `[]string`
-plumbing (§5.5) and the `gitErrorFetchRefNotOnRemote` classification, both
-no-behaviour-change and testable alone; PR 1b — config, binding, allowlist
-drop, resolved decision, R9 emission, shared helper. Do not let the helper or
-the `fetchSource` threading slip out of the foundations layer; that
-re-creates the drift Opus §6 warns about.
+**A6 — PR process (from Opus §6's own "merging 2 and 3" concession, Sol
+"Review strategy", and Fable item 13).** Two parts. *Splitting:* if review
+size demands, cut PR 1 into PR 1a — the `[]string` plumbing (§5.5) and the
+`gitErrorFetchRefNotOnRemote` classification (no behaviour change except the
+classification's one documented narrow delta, which needs its attempt-count
+assertion) — and PR 1b — config, binding, allowlist drop, resolved decision,
+Opus R9's emission, shared helper. Whether to split is a reviewer-capacity call for
+whoever reviews it; the plan supports both. Do not let the helper or the
+`fetchSource` threading slip out of the foundations layer; that re-creates
+the drift Opus §6 warns about. *Descriptions:* each PR description opens with
+the one checkout path that changes and a before/after command sequence for
+hit and lag fallback (Sol "Review strategy"); reviewers should ask whether a
+concern can violate the stated trust model before requesting defensive code
+(Sol, and Fable item 14); and PR 1's description explicitly flags the
+allowlist semantics change from #4153 for reviewer sign-off (Fable item 13).
 
 **A7 — Documentation ships with PR 2 (from Fable "Proposed PR stack").**
 Agent docs and buildkite/docs updates land with the first behaviour-changing
 PR, updated per site thereafter.
 
-**A8 — Telemetry hygiene (from Sol "Observability").** R9's span attributes
-and log line carry outcomes, durations, and skip reasons only — never URLs in
-metric-shaped fields; URLs appear in the job log via `redact.URLCredentials`
-as §3 already requires.
+**A8 — Telemetry hygiene (from Sol "Observability").** Opus R9's span
+attributes and log line carry outcomes, durations, and skip reasons only —
+never URLs in metric-shaped fields; URLs appear in the job log via
+`redact.URLCredentials` as §3 already requires.
+
+**A9 — Hash-format-agnostic eligibility wording (from Sol "Correct
+checkout").** In §5.2, note that the 40-hex clause is the SHA-1
+instantiation of "a full object ID for the repository's hash format"; if the
+agent grows SHA-256 repository support, the clause widens rather than the
+requirement changing.
+
+**A10 — Caveat-promotion rule (from Sol "Caveat register").** Add to §10's
+preamble: a caveat is promoted to a requirement when it is observed in
+ordinary customer configurations; it does not become implementation
+complexity solely because a pathological configuration can be constructed.
 
 **Follow-ups, explicitly not in the initial stack, each with its gate:**
 
@@ -671,9 +724,9 @@ as §3 already requires.
   against. Sol Path 4's rules (Git owns download/verify/retention; `https`
   only; no agent-side eligibility parsing) are the sketch of record.
 - **F2 — route blobless materialisation through the mirror** (Sol Path 2
-  step 4 / Path 3 step 2). Gate: R9 data showing meaningful lazy-fetch
-  volume from canonical on mirror-hit jobs (sparse pipelines on long-lived
-  agents). Implementation note from T4: a command-scoped
+  step 4 / Path 3 step 2). Gate: Opus R9 telemetry showing meaningful
+  lazy-fetch volume from canonical on mirror-hit jobs (sparse pipelines on
+  long-lived agents). Implementation note from T4: a command-scoped
   `-c url.<mirror>.insteadOf=<canonical>` on the materialisation commands
   composes with Opus's architecture (the promisor stays `origin`); it must
   be `git -c`, never `clone -c`/`--config`, and it inherits §5.4's transport
@@ -689,19 +742,25 @@ as §3 already requires.
 Everything else in Opus stands as written, including the decisions this
 review examined and endorses explicitly: the resolved-decision struct and
 `notReached` zero value (§5.1); eligibility including its deliberate
-over-breadth (§5.2, with the relaxation note kept); shaped budgets (§5.3);
-transport/credential flags including the v2 pin (§5.4); clone-then-`set-url`
-(§5.6, T4/T5-verified family); hit-skips-canonical-fetch with its two
+over-breadth (§5.2, with the relaxation note kept and A9's wording); shaped
+budgets (§5.3); transport/credential flags including the v2 pin (§5.4);
+clone-then-`set-url` (§5.6 — shape parity verified in T7, the
+promisor-follows-origin kernel in T4); hit-skips-canonical-fetch with its two
 site-specific expressions (§5.7); namespaced sanitised refs (§5.8, T5);
 the four-PR shape with PR 2 first (§6); assert-on-bytes testing (§8);
 no experiment / backend-gated rollout (§9, pending Q1); the caveat register
-(§10) plus A3's additions; and §11's open questions as amended by A1.
+(§10) plus A3's and A10's additions; and §11's open questions as amended by
+A1.
 
 ---
 
 ## 7. Rejected alternatives
 
-**R1 — Sol's command-scoped `insteadOf` as the transport mechanism**
+Numbered RA1–RA9 to avoid colliding with the plans' own requirement numbers.
+These are the canonical statements of each rejection's grounds; §4.1 points
+here.
+
+**RA1 — Sol's command-scoped `insteadOf` as the transport mechanism**
 (Sol "Preserve the canonical repository at stable boundaries"). Verified
 working (T4): transport from mirror, canonical `origin` persisted, nothing
 durable written, promisor follows `origin`. Rejected because: (a) the
@@ -716,48 +775,60 @@ one budget to all command shapes, which is how Sol's cap defect arose. The
 mechanism remains the recommended tool for F2, where the command already
 carries the canonical URL and no clone is involved.
 
-**R2 — flat wall-clock cap on all mirror attempts** (Sol "Fail open without
+**RA2 — flat wall-clock cap on all mirror attempts** (Sol "Fail open without
 multiplying retries"). Rejected: caps the bulk transfer the feature exists to
 accelerate; both other plans reject it independently (Opus §5.3 as its own
-corrected first draft; Fable item 12 against #4153's version); G12/G14 show
-the stall guard bounds the actual failure (hangs) in the right currency.
+corrected first draft; Fable item 12 against #4153's version); Opus's
+G12/G14 measurements — not reproduced here, but consistent with documented
+curl behaviour — show the stall guard bounds the actual failure (hangs) in
+the right currency.
 
-**R3 — writing `refs/heads/<branch>` in the on-host mirror from the mirror**
+**RA3 — writing `refs/heads/<branch>` in the on-host mirror from the mirror**
 (Fable "Tier A"; Sol "Path 1"). Rejected for the backward-move/unreferencing
 hazard on rebuild hits and lag windows (§2.2); T5 shows the namespaced ref
 achieves the same negotiation effect with no shared-ref writes. Cost
 accepted in exchange: mirror `refs/heads/*` staleness on steady-state hits
 (Opus C8).
 
-**R4 — mirror fetch after `updateRemoteURL`** (Fable "Tier A"). Rejected:
+**RA4 — mirror fetch after `updateRemoteURL`** (Fable "Tier A"). Rejected:
 verified that an early return there skips the `urlChanged` `fsck`/`gc`
 maintenance; Opus PR 2's placement is structurally identical to the existing
 short-circuit exit.
 
-**R5 — packfile-URI in the initial stack** (Fable R6/PR 5; Sol Path 4).
-Deferred, not refused — see F1. The client flag is one line whenever the
-provider contract exists; carrying it before then adds an experimental
-surface with no measurable benefit (Opus §11, including the bundle-URI
-alternative that may dominate for clones).
+**RA5 — packfile-URI in the initial stack** (Fable R6/PR 5; Sol Path 4).
+Deferred, not refused — the grounds and the design sketch of record are F1.
 
-**R6 — no miss classification, presence-check-only outcomes** (Sol "Fallback
-details"). Rejected: forfeits R9's miss/timeout/error distinction, the main
-rollout instrument; the classification cost is two smelt strings and a
+**RA6 — no miss classification, presence-check-only outcomes** (Sol "Fallback
+details"). Rejected: forfeits Opus R9's miss/timeout/error distinction, the
+main rollout instrument; the classification cost is two smelt strings and a
 `Break()` (verified against `gitFetch`'s retrier structure).
 
-**R7 — a fifth PR reproducing #4153's `git init` + fetch acquisition.** All
-three plans reject this independently (Opus §5.6/§7; Fable "Tier C"; Sol
-"Summary"), for the same reason: it forces re-implementing `git clone`'s flag
-semantics, which was the generative source of the #4144/#4153 review spiral.
-Recorded here only because the three-way agreement is itself evidence; no one
-should reopen it.
+**RA7 — #4153's `git init` + fetch acquisition, and RA8 — checking the
+mirror URL in `validateConfigAllowlists` (also #4153).** Neither is proposed
+by any of the three plans; both shipped in #4153, so the unanimous reversal
+is recorded. RA7: all three plans independently conclude that reproducing
+`git clone`'s flag semantics by hand was the generative source of the
+#4144/#4153 review spiral (Opus §5.6/§7; Fable "Tier C"; Sol "Summary").
+RA8: all three decline the mirror instead of the job (Opus §5.2; Fable
+eligibility; Sol "Configuration and binding"); verified here that the
+existing path refuses the job with `SignalReasonAgentRefused`, making #4153's
+version a fleet-outage-by-backend-setting. A6 carries Fable's item-13
+sign-off note for this change.
 
-**R8 — checking the mirror URL in `validateConfigAllowlists`** (the #4153
-behaviour). Rejected by all three plans (Opus §5.2; Fable eligibility item;
-Sol "Configuration and binding"); verified here that the existing path
-refuses the job with `SignalReasonAgentRefused`, making this a
-fleet-outage-by-backend-setting. Fable's item 13 note — flag the semantics
-change for explicit reviewer sign-off — is carried into PR 1's description.
+**RA9 — Fable's credential-carrier gate for reused checkouts** (Fable
+"Credentials", caveat 6): skip the mirror when a reused checkout's local
+config contains `http.extraHeader`, `credential.*`, or `url.*.insteadOf`.
+Superseded rather than adopted, deliberately: Opus §5.4's per-invocation
+flags already neutralise the carriers that can leak a canonical bearer
+credential to the mirror — `-c credential.helper=` resets inherited helpers
+including URL-scoped ones, `-c http.extraHeader=` resets the unscoped header
+list (Opus G8), and a URL-scoped `http.<url>.extraHeader` or an `insteadOf`
+can only reach the mirror if its base matches the mirror URL, which requires
+the customer to have keyed config on the mirror deliberately (Opus C5's
+topology argument, §3's trust model). Opus's resets keep the optimisation
+where Fable's gate forfeits it. Residual difference accepted: Fable's gate
+also declines the mirror under exotic carriers Opus does not reset; those
+fall under Opus C6's accepted ambient-config inheritance.
 
 ---
 
@@ -798,32 +869,36 @@ telemetry interpretation. Backend to confirm.
 
 **Q5 — Blobless materialisation coverage (F2; Sol Path 2/3 vs Opus C10
 scope).** Is the sparse/blobless-on-long-lived-agents population large enough
-to justify F2's added recovery complexity? Answer from R9 data after PR 3 has
-been in production; product/infra call, not an agent-code call.
-
-**Q6 — Review-size tolerance for PR 1 (A6).** Whether to ship Opus PR 1
-whole or as 1a/1b is a reviewer-capacity judgement for the humans who will
-review it; the plan supports both.
+to justify F2's added recovery complexity? Answer from Opus R9 telemetry
+after PR 3 has been in production; product/infra call, not an agent-code
+call.
 
 ---
 
 ## Appendix: verification record
 
 Empirical tests run for this review on git 2.43.0 (Linux), local and
-`file://` transports. HTTP-specific and timing claims (Opus G8/G9, G12–G14)
-were **not** reproduced here; they are marked where relied upon.
+`file://` transports. **Not reproduced here** (this list is the single
+authority the body defers to): Opus G8/G9 (HTTP header reset), G12–G14
+(low-speed timer behaviour), G2's exit-128-over-HTTP half, the LFS smudge
+measurements (Opus PR 4), and Opus PR 2's full end-to-end object-count table
+(its mechanism is T5). All of these need HTTP or timing fixtures; each is
+consistent with documented git/curl behaviour but carries only Opus's
+measurement.
 
 | # | Test | Result | Bears on |
 | --- | --- | --- | --- |
-| T1a2 | `git -c protocol.version=2 fetch <url> <full-sha>` for a reachable, **non-advertised** commit; default server config | succeeds | Opus G1 confirmed; Fable caveat 5 refuted for stock v2 |
-| T1b2 | same under `protocol.version=0` | fails, `Server does not allow request for unadvertised object`, exit 1 (local transport) | Opus G2 confirmed, exit code included |
-| T1c | same as T1a2 but the SHA is **unreachable** (pushed then branch deleted) | succeeds under v2, default config | stronger than Opus G1/§11's claim; stock v2 imposes no reachability check |
+| T1a | `git -c protocol.version=2 fetch <url> <full-sha>` for a reachable, **non-advertised** commit; default server config | succeeds | Opus G1 confirmed; Fable caveat 5 refuted for stock v2 |
+| T1b | same under `protocol.version=0` | fails, `Server does not allow request for unadvertised object`, exit 1 (local transport) | Opus G2 confirmed for local transport, exit code included |
+| T1c | same as T1a but the SHA is **unreachable** (pushed then branch deleted) | succeeds under v2, default config | stronger than Opus G1/§11's claim; stock v2 imposes no reachability check |
 | T2 | in a `--mirror` repo lagging its source: destination-less `git fetch origin main` vs `git fetch <url> +refs/heads/main:refs/heads/main` after a new tag appears upstream | destination-less: tag **not** fetched; explicit refspec: tag auto-followed | Fable "Tier A" `--no-tags` rationale confirmed |
 | T3 | `git clone --no-local --filter=blob:none` against a server without `uploadpack.allowFilter` | warning, exit 0, **full transfer** (9/9 objects), `remote.origin.promisor`/`partialclonefilter` still written | Opus G10 / C3 confirmed |
 | T4 | `git -c url.M.insteadOf=C clone C .` (file://), canonical unreachable; then partial-clone variant with the mirror deleted post-clone | transport from mirror; `remote.origin.url` = canonical; no rewrite persisted; lazy blob fetch succeeds from canonical | Sol's mechanism viable (its "Preserve the canonical repository..." claims hold) |
 | T4-fg1 | same but `git clone -c url.M.insteadOf=C ...` (clone's `--config`) | works **and persists the rewrite** in the new repo's config | Sol foot-gun: violates its own no-persistence rule; unmentioned |
 | T4-fg2 | same as T4 with plain local paths instead of `file://` | clone fails `repository does not exist` before the rewrite applies | Sol foot-gun: transport-dependent; affects test fixtures |
 | T5 | bare repo holding objects only under `refs/buildkite-agent/remote-mirror/main`, used as `--reference` for a clone of canonical | 0 objects transferred (control without warm reference: 9) | Opus G4/§5.8/PR 2 zero-object claim confirmed |
+| T6 | `git -c protocol.version=2 fetch <url> <sha-the-server-lacks>` | `fatal: remote error: upload-pack: not our ref <sha>`, exit 128 | Opus G3 confirmed — the miss string PR 1's classification smelts |
+| T7 | clone the mirror, `git remote set-url origin <canonical>`, then fetch+checkout a commit only canonical has; flag matrix: none, `--depth=2`, `--filter=blob:none`, `--single-branch`, `--no-tags` | `remote.origin.{fetch,tagopt,promisor,partialclonefilter}` and shallow state match a canonical clone in every row; fetch+checkout of the canonical-only commit succeeds in every row | Opus G6 confirmed — the §5.6 clone-then-`set-url` shape-parity claim |
 
 Codebase checks (all confirmed; file references as of `main` = `3a1d970a`):
 checkout retrier and wipe arm, `removeCheckoutDir` 10×10s loop,
