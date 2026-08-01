@@ -345,29 +345,38 @@ func TestGitFetch(t *testing.T) {
 }
 
 func TestGitFetchCanClassifyRefNotOnRemoteAsMirrorMiss(t *testing.T) {
-	git, err := bintest.NewMock("git")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer git.CheckAndClose(t) //nolint:errcheck // bintest logs to t
+	for name, stderr := range map[string]string{
+		"not our ref":         "fatal: remote error: upload-pack: not our ref deadbeef",
+		"unadvertised object": "fatal: Server does not allow request for unadvertised object deadbeef",
+	} {
+		t.Run(name, func(t *testing.T) {
+			git, err := bintest.NewMock("git")
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer git.CheckAndClose(t) //nolint:errcheck // bintest logs to t
 
-	git.Expect("fetch", "--", "https://mirror.example.com/repo.git", "deadbeef").
-		AndWriteToStderr("fatal: remote error: upload-pack: not our ref deadbeef").
-		AndExitWith(128)
+			git.Expect("fetch", "--", "https://mirror.example.com/repo.git", "deadbeef").
+				AndWriteToStderr(stderr).
+				Once().
+				AndExitWith(128)
 
-	sh := shell.NewTestShell(t)
-	sh.Env.Set("PATH", filepath.Dir(git.Path))
-	err = gitFetch(t.Context(), gitFetchArgs{
-		Shell:      sh,
-		Repository: "https://mirror.example.com/repo.git",
-		RefSpecs:   []string{"deadbeef"},
-	})
-	var gitErr *gitError
-	if !errors.As(err, &gitErr) {
-		t.Fatalf("gitFetch() error = %v, want *gitError", err)
-	}
-	if gitErr.Type != gitErrorFetchRefNotOnRemote {
-		t.Errorf("gitFetch() error type = %d, want %d", gitErr.Type, gitErrorFetchRefNotOnRemote)
+			sh := shell.NewTestShell(t)
+			sh.Env.Set("PATH", filepath.Dir(git.Path))
+			err = gitFetch(t.Context(), gitFetchArgs{
+				Shell:      sh,
+				Repository: "https://mirror.example.com/repo.git",
+				Retry:      true,
+				RefSpecs:   []string{"deadbeef"},
+			})
+			var gitErr *gitError
+			if !errors.As(err, &gitErr) {
+				t.Fatalf("gitFetch() error = %v, want *gitError", err)
+			}
+			if gitErr.Type != gitErrorFetchRefNotOnRemote {
+				t.Errorf("gitFetch() error type = %d, want %d", gitErr.Type, gitErrorFetchRefNotOnRemote)
+			}
+		})
 	}
 }
 
