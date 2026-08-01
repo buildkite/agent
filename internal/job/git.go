@@ -30,6 +30,7 @@ const (
 	gitErrorCheckoutReferenceIsNotATree
 	gitErrorCheckoutRetryClean
 	gitErrorClone
+	gitErrorCloneTimeout
 	gitErrorFetch
 	// exit code 128: broad error, most likely not recoverable.
 	gitErrorFetchRetryClean
@@ -52,6 +53,7 @@ const (
 	gitErrStrBadReference          = "fatal: couldn't find remote ref"
 	gitErrStrBadReferencePreGit221 = "fatal: Couldn't find remote ref"
 	gitErrStrNotOurRef             = "not our ref"
+	gitErrStrOperationTooSlow      = "Operation too slow"
 	gitErrStrUnadvertisedObject    = "Server does not allow request for unadvertised object"
 )
 
@@ -152,7 +154,11 @@ func gitClone(ctx context.Context, sh *shell.Shell, gitFlags, gitCloneFlags []st
 	commandArgs = append(commandArgs, gitCloneFlags...)
 	commandArgs = append(commandArgs, "--", repository, dir)
 
-	if err := sh.Command("git", commandArgs...).Run(ctx); err != nil {
+	smelt := map[string]bool{gitErrStrOperationTooSlow: false}
+	if err := sh.Command("git", commandArgs...).Run(ctx, shell.WithStringSearch(smelt)); err != nil {
+		if smelt[gitErrStrOperationTooSlow] {
+			return &gitError{error: err, Type: gitErrorCloneTimeout}
+		}
 		return &gitError{error: err, Type: gitErrorClone}
 	}
 

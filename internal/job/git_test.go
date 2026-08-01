@@ -252,6 +252,29 @@ func TestGitClone(t *testing.T) {
 	}
 }
 
+func TestGitCloneClassifiesLowSpeedTimeout(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("test git shim is POSIX-only")
+	}
+
+	sh := shell.NewTestShell(t)
+	binDir := t.TempDir()
+	script := "#!/bin/sh\nprintf '%s\\n' 'fatal: unable to access mirror: Operation too slow' >&2\nexit 128\n"
+	if err := os.WriteFile(filepath.Join(binDir, "git"), []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	sh.Env.Set("PATH", binDir)
+
+	err := gitClone(t.Context(), sh, nil, nil, "https://mirror.example/repo.git", "repo")
+	var gitErr *gitError
+	if !errors.As(err, &gitErr) {
+		t.Fatalf("gitClone() error = %v, want *gitError", err)
+	}
+	if gitErr.Type != gitErrorCloneTimeout {
+		t.Errorf("gitClone() error type = %d, want gitErrorCloneTimeout", gitErr.Type)
+	}
+}
+
 func TestHasPartialFilterFlags(t *testing.T) {
 	t.Parallel()
 

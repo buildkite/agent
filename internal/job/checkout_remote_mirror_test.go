@@ -290,6 +290,22 @@ func TestGitCredentialHelperCommandQuotesExecutablePath(t *testing.T) {
 	}
 }
 
+func TestRemoteMirrorBulkGitFlags(t *testing.T) {
+	t.Parallel()
+
+	flags := remoteMirrorBulkGitFlags(t.Context())
+	joined := strings.Join(flags, "\n")
+	for _, want := range []string{
+		"http.lowSpeedLimit=1000",
+		"http.lowSpeedTime=60",
+		"protocol.version=2",
+	} {
+		if !strings.Contains(joined, want) {
+			t.Errorf("remoteMirrorBulkGitFlags() = %q, want %q", flags, want)
+		}
+	}
+}
+
 func TestFetchCommitFromRemoteMirrorOutcomes(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("test git shim is POSIX-only")

@@ -19,7 +19,10 @@ const (
 	remoteMirrorBranchComponentMax = 240
 )
 
-var remoteMirrorProbeTimeout = 30 * time.Second
+var (
+	remoteMirrorProbeTimeout = 30 * time.Second
+	remoteMirrorLowSpeedTime = 60
+)
 
 var fullSHA1ObjectID = regexp.MustCompile(`^[0-9a-f]{40}$`)
 
@@ -170,6 +173,14 @@ func remoteMirrorGitFlags(ctx context.Context) []string {
 		"-c", "http.extraHeader=",
 		"-c", "protocol.version=2",
 	}
+}
+
+func remoteMirrorBulkGitFlags(ctx context.Context) []string {
+	flags := append([]string{}, remoteMirrorGitFlags(ctx)...)
+	return append(flags,
+		"-c", "http.lowSpeedLimit=1000",
+		"-c", "http.lowSpeedTime="+strconv.Itoa(remoteMirrorLowSpeedTime),
+	)
 }
 
 // fetchCommitFromRemoteMirror performs one bounded, non-retrying exact-object
