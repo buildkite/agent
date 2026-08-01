@@ -99,12 +99,22 @@ func TestGitCredentialHelperFlagsAreInvocationScoped(t *testing.T) {
 	if !strings.HasPrefix(helperCommand, "!") {
 		t.Fatalf("credential helper command %q does not use Git's shell-command form", helperCommand)
 	}
-	commandParts, err := shellwords.Split(strings.TrimPrefix(helperCommand, "!"))
+	commandParts, err := shellwords.SplitPosix(strings.TrimPrefix(helperCommand, "!"))
 	if err != nil {
 		t.Fatalf("credential helper command %q is not valid shell syntax: %v", helperCommand, err)
 	}
 	if len(commandParts) != 2 || commandParts[0] != helperPath || commandParts[1] != "git-credentials-helper" {
 		t.Errorf("credential helper command split into %q, want [%q %q]", commandParts, helperPath, "git-credentials-helper")
+	}
+
+	windowsPath := `C:\Program Files\Buildkite Agent\agent.exe`
+	windowsCommand := gitCredentialHelperCommand(self.OverridePath(t.Context(), windowsPath))
+	windowsParts, err := shellwords.SplitPosix(strings.TrimPrefix(windowsCommand, "!"))
+	if err != nil {
+		t.Fatalf("Windows credential helper command %q is not valid Git shell syntax: %v", windowsCommand, err)
+	}
+	if len(windowsParts) != 2 || windowsParts[0] != windowsPath || windowsParts[1] != "git-credentials-helper" {
+		t.Errorf("Windows credential helper command split into %q, want [%q %q]", windowsParts, windowsPath, "git-credentials-helper")
 	}
 }
 
