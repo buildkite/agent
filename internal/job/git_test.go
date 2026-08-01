@@ -378,6 +378,11 @@ func TestGitFetchClassifiesRemoteMissingObjectWithoutRetrying(t *testing.T) {
 			stderr: "error: Server does not allow request for unadvertised object " + strings.Repeat("a", 40),
 			exit:   1,
 		},
+		{
+			name:   "protocol v0 unadvertised object over HTTP",
+			stderr: "error: Server does not allow request for unadvertised object " + strings.Repeat("a", 40),
+			exit:   128,
+		},
 	}
 
 	for _, tc := range tests {
@@ -413,6 +418,21 @@ func TestGitFetchClassifiesRemoteMissingObjectWithoutRetrying(t *testing.T) {
 			}
 			if got, want := len(gotAttempts), 1; got != want {
 				t.Errorf("git fetch attempts = %d, want %d", got, want)
+			}
+
+			if err := os.WriteFile(attempts, nil, 0o600); err != nil {
+				t.Fatal(err)
+			}
+			err = gitFetchWithFallback(t.Context(), sh, "", strings.Repeat("a", 40))
+			if err == nil {
+				t.Fatal("gitFetchWithFallback() error = nil, want remote-missing error")
+			}
+			gotAttempts, readErr = os.ReadFile(attempts)
+			if readErr != nil {
+				t.Fatal(readErr)
+			}
+			if got, want := len(gotAttempts), 1; got != want {
+				t.Errorf("gitFetchWithFallback() git attempts = %d, want %d (no broad fallback)", got, want)
 			}
 		})
 	}

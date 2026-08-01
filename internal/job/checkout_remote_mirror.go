@@ -16,9 +16,10 @@ import (
 )
 
 const (
-	remoteMirrorProbeTimeout       = 30 * time.Second
 	remoteMirrorBranchComponentMax = 240
 )
+
+var remoteMirrorProbeTimeout = 30 * time.Second
 
 var fullSHA1ObjectID = regexp.MustCompile(`^[0-9a-f]{40}$`)
 
@@ -70,7 +71,7 @@ func (o remoteMirrorOutcome) String() string {
 	case remoteMirrorOutcomeSkipped:
 		return "skipped"
 	default:
-		return "not-reached"
+		return "notReached"
 	}
 }
 
@@ -223,6 +224,9 @@ func (e *Executor) fetchCommitFromRemoteMirror(
 		return false, nil
 	}
 	if !hasGitCommit(ctx, e.shell, gitDir, e.Commit) {
+		if err := ctx.Err(); err != nil {
+			return false, err
+		}
 		attempt.outcome = remoteMirrorOutcomeMiss
 		return false, nil
 	}

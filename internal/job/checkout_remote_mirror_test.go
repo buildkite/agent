@@ -1,14 +1,20 @@
 package job
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
+	"slices"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/buildkite/agent/v3/internal/self"
 	"github.com/buildkite/agent/v3/internal/shell"
+	"github.com/buildkite/shellwords"
 )
 
 func TestResolveRemoteMirrorAttempt(t *testing.T) {
@@ -193,7 +199,8 @@ func TestRemoteMirrorTelemetryContainsNoURL(t *testing.T) {
 
 	span := &recordingRemoteMirrorSpan{}
 	e := New(ExecutorConfig{})
-	e.shell = shell.NewTestShell(t)
+	var logs bytes.Buffer
+	e.shell = shell.NewTestShell(t, shell.WithLogger(shell.NewWriterLogger(&logs, false, nil)))
 	attempt := remoteMirrorAttempt{
 		site:    remoteMirrorSiteFreshClone,
 		url:     "https://token:secret@mirror.example/acme/widgets.git",
@@ -202,10 +209,146 @@ func TestRemoteMirrorTelemetryContainsNoURL(t *testing.T) {
 
 	e.emitRemoteMirrorTelemetry(span, attempt)
 
+	if got, want := span.attributes["git.remote_mirror.outcome"], "notReached"; got != want {
+		t.Errorf("outcome attribute = %q, want %q", got, want)
+	}
+	if got, want := span.attributes["git.remote_mirror.site"], "fresh-clone"; got != want {
+		t.Errorf("site attribute = %q, want %q", got, want)
+	}
+	if got, want := len(span.attributes), 2; got != want {
+		t.Errorf("attribute count = %d, want %d: %v", got, want, span.attributes)
+	}
 	for key, value := range span.attributes {
 		if strings.Contains(key, "url") || strings.Contains(value, "mirror.example") || strings.Contains(value, "secret") {
 			t.Errorf("metric-shaped telemetry leaks URL data: %q=%q", key, value)
 		}
+	}
+	if got := logs.String(); !strings.Contains(got, "outcome=notReached site=fresh-clone") {
+		t.Errorf("job log = %q, want exact outcome and site", got)
+	}
+	if got := logs.String(); strings.Contains(got, "secret") || !strings.Contains(got, "mirror.example") {
+		t.Errorf("job log = %q, want redacted mirror URL", got)
+	}
+}
+
+func TestGitCredentialHelperCommandQuotesExecutablePath(t *testing.T) {
+	t.Parallel()
+
+	ctx := self.OverridePath(t.Context(), "/path with spaces/buildkite-agent")
+	got, err := shellwords.Split(gitCredentialHelperCommand(ctx))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"/path with spaces/buildkite-agent", "git-credentials-helper"}
+	if !slices.Equal(got, want) {
+		t.Errorf("credential helper words = %q, want %q", got, want)
+	}
+}
+
+func TestFetchCommitFromRemoteMirrorOutcomes(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("test git shim is POSIX-only")
+	}
+
+	commit := strings.Repeat("a", 40)
+	tests := []struct {
+		name        string
+		mode        string
+		wantHit     bool
+		wantOutcome remoteMirrorOutcome
+	}{
+		{name: "hit", mode: "hit", wantHit: true, wantOutcome: remoteMirrorOutcomeHit},
+		{name: "successful fetch without commit", mode: "absent", wantOutcome: remoteMirrorOutcomeMiss},
+		{name: "remote does not have object", mode: "miss", wantOutcome: remoteMirrorOutcomeMiss},
+		{name: "transport error", mode: "error", wantOutcome: remoteMirrorOutcomeError},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			e := newRemoteMirrorShimExecutor(t, commit, tc.mode)
+			attempt := remoteMirrorAttempt{
+				site: remoteMirrorSiteExistingCheckout,
+				url:  "https://mirror.example/acme/widgets.git",
+			}
+
+			got, err := e.fetchCommitFromRemoteMirror(t.Context(), &attempt, ".git", "", commit)
+			if err != nil {
+				t.Fatalf("fetchCommitFromRemoteMirror() error = %v", err)
+			}
+			if got != tc.wantHit {
+				t.Errorf("hit = %t, want %t", got, tc.wantHit)
+			}
+			if attempt.outcome != tc.wantOutcome {
+				t.Errorf("outcome = %q, want %q", attempt.outcome, tc.wantOutcome)
+			}
+			if attempt.duration <= 0 {
+				t.Errorf("duration = %s, want positive", attempt.duration)
+			}
+		})
+	}
+}
+
+func TestFetchCommitFromRemoteMirrorTimeout(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("test git shim is POSIX-only")
+	}
+
+	oldTimeout := remoteMirrorProbeTimeout
+	remoteMirrorProbeTimeout = 20 * time.Millisecond
+	t.Cleanup(func() { remoteMirrorProbeTimeout = oldTimeout })
+
+	commit := strings.Repeat("a", 40)
+	e := newRemoteMirrorShimExecutor(t, commit, "timeout")
+	attempt := remoteMirrorAttempt{
+		site: remoteMirrorSiteExistingCheckout,
+		url:  "https://mirror.example/acme/widgets.git",
+	}
+
+	hit, err := e.fetchCommitFromRemoteMirror(t.Context(), &attempt, ".git", "", commit)
+	if err != nil {
+		t.Fatalf("fetchCommitFromRemoteMirror() error = %v", err)
+	}
+	if hit {
+		t.Error("hit = true, want false")
+	}
+	if attempt.outcome != remoteMirrorOutcomeTimeout {
+		t.Errorf("outcome = %q, want timeout", attempt.outcome)
+	}
+}
+
+func TestFetchCommitFromRemoteMirrorPropagatesCancellationDuringConfirmation(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("test git shim is POSIX-only")
+	}
+
+	commit := strings.Repeat("a", 40)
+	e := newRemoteMirrorShimExecutor(t, commit, "cancel-confirmation")
+	revStarted, _ := e.shell.Env.Get("REV_STARTED")
+	attempt := remoteMirrorAttempt{
+		site: remoteMirrorSiteExistingCheckout,
+		url:  "https://mirror.example/acme/widgets.git",
+	}
+	ctx, cancel := context.WithCancel(t.Context())
+	t.Cleanup(cancel)
+	go func() {
+		for {
+			if _, err := os.Stat(revStarted); err == nil {
+				cancel()
+				return
+			}
+			time.Sleep(time.Millisecond)
+		}
+	}()
+
+	hit, err := e.fetchCommitFromRemoteMirror(ctx, &attempt, ".git", "", commit)
+	if hit {
+		t.Error("hit = true after cancellation")
+	}
+	if !errors.Is(err, context.Canceled) {
+		t.Errorf("error = %v, want context.Canceled", err)
+	}
+	if attempt.outcome != remoteMirrorOutcomeNotReached {
+		t.Errorf("outcome = %q, want not reached", attempt.outcome)
 	}
 }
 
@@ -284,4 +427,43 @@ func checkoutPathForRemoteMirrorTest(t *testing.T, e *Executor) string {
 	checkout := t.TempDir()
 	e.shell.Env.Set("BUILDKITE_BUILD_CHECKOUT_PATH", checkout)
 	return checkout
+}
+
+func newRemoteMirrorShimExecutor(t *testing.T, commit, mode string) *Executor {
+	t.Helper()
+
+	binDir := t.TempDir()
+	script := `#!/bin/sh
+for arg do
+	case "$arg" in
+	fetch)
+		case "$FETCH_MODE" in
+		miss) printf '%s\n' "fatal: remote error: upload-pack: not our ref $EXPECTED_COMMIT" >&2; exit 128 ;;
+		error) printf '%s\n' "fatal: transport broke" >&2; exit 1 ;;
+		timeout) /bin/sleep 30; exit 1 ;;
+		*) exit 0 ;;
+		esac
+		;;
+	rev-parse)
+		case "$FETCH_MODE" in
+		hit) printf '%s\n' "$EXPECTED_COMMIT"; exit 0 ;;
+		cancel-confirmation) : > "$REV_STARTED"; /bin/sleep 30; exit 1 ;;
+		*) exit 1 ;;
+		esac
+		;;
+	esac
+done
+exit 1
+`
+	if err := os.WriteFile(filepath.Join(binDir, "git"), []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	e := New(ExecutorConfig{Commit: commit})
+	e.shell = shell.NewTestShell(t)
+	e.shell.Env.Set("PATH", binDir)
+	e.shell.Env.Set("FETCH_MODE", mode)
+	e.shell.Env.Set("EXPECTED_COMMIT", commit)
+	e.shell.Env.Set("REV_STARTED", filepath.Join(t.TempDir(), "rev-started"))
+	return e
 }
