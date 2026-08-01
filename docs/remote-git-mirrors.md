@@ -84,9 +84,14 @@ in the checkout and may be stale, but nothing the agent does resolves a name
 through the mirror to decide what to build.
 
 **R9 — Observability.** Every checkout reports what the mirror did:
-`hit`, `miss`, `timeout`, `error`, or `skipped` with a reason. Without this we
-cannot distinguish a working mirror from one that misses every time and silently
-falls back, and several of the degradations in §10 present as nothing else.
+`hit`, `miss`, `timeout`, `error`, `notReached`, or `skipped` with a reason.
+Without this we cannot distinguish a working mirror from one that misses every
+time and silently falls back, and several of the degradations in §10 present as
+nothing else. It goes to two sinks, because the aggregatable one is not
+universal: a span attribute on `repo-checkout`, and one line in the job log.
+`tracetools.StartSpanFromContext` returns a no-op span unless `--tracing-backend`
+is set, and it defaults to unset, so a span-only signal would be invisible on
+most agents — including, possibly, the first fleet this ships to.
 
 ## 3. Trust model, and what we are deliberately not doing
 
@@ -189,42 +194,74 @@ G10 is the plan's nastiest failure mode, because it is silent. See §10-C3.
 
 ## 5. Design decisions
 
-### 5.1 One resolved decision per checkout, made before the clone
+### 5.1 One resolved decision per checkout attempt
 
-The mirror is consulted at most once per checkout. Rather than a "first eligible
-caller claims it" flag, `defaultCheckoutPhase` resolves the decision **once**,
-early, where the two inputs that pick the site are both already in scope: the
-on-host `mirrorDir` and `osutil.FileExists(filepath.Join(wd, ".git"))`.
+The mirror is consulted at most once per checkout. `defaultCheckoutPhase`
+resolves the decision **once, at the top of the function**, before the on-host
+mirror block, and threads the result through the three sites.
 
-A mutable claim flag was the first design and it is wrong twice over. The three
-sites do not run in the order the rule wants — the on-host mirror update is at
-the top of `defaultCheckoutPhase`, the clone is in the middle, and `fetchSource`
-is at the bottom — so "first caller wins" gives the fresh-clone site priority
-over the existing-checkout site. Worse, after a mirror clone `.git` exists, so
-the existing-checkout site's own condition becomes true and it would attempt a
-second mirror round trip in the same checkout, violating R2. Resolving up front
-removes both problems and means landing the fresh-clone work does not silently
-change the existing-checkout work's behaviour.
+Both inputs that pick the site are available there:
 
-The resolution is a small value, not a boolean:
+- the on-host mirror will run — `e.GitMirrorsPath != "" && e.Repository != "" &&
+  !e.GitMirrorsSkipUpdate`, which is the guard at the top of the block plus the
+  early return in `getOrUpdateMirrorDir`;
+- a checkout already exists — probe `.git` under
+  `BUILDKITE_BUILD_CHECKOUT_PATH`, **not** under `e.shell.Getwd()`. The working
+  directory is only the checkout path after `createCheckoutDir` runs, and
+  `updateGitMirror` chdirs to `GitMirrorsPath` and never chdirs back, so a
+  `Getwd()`-relative probe placed early is testing the wrong directory.
+
+Do not resolve from `mirrorDir`. It only exists once `getOrUpdateMirrorDir` has
+returned — and PR 2's site lives *inside* that call, so a decision derived from
+its return value cannot reach the site it is meant to gate. That mistake is
+easy to make and the natural repair is to re-derive eligibility inside
+`updateGitMirror`, which is exactly the duplication this section exists to
+prevent.
+
+Why resolve up front rather than let each site check for itself and claim with a
+flag:
+
+- **R9 needs a skip reason produced where no site's code runs.** The most
+  interesting outcome — a mirror is configured and this job was never eligible —
+  has no site to report it, so it has to come from a resolution the whole
+  checkout can see.
+- **Landing one site must not change another's behaviour.** After a mirror
+  clone, `.git` exists, so the existing-checkout site's own local condition
+  becomes true. A claim flag prevents the second round trip, but it also means
+  the fresh-clone work silently alters what the existing-checkout work does,
+  which is the opposite of the "independently reviewable" property the stack is
+  sold on.
+
+The value is per checkout *attempt*, not per job. Do not hang it off `Executor`,
+which is job-lifetime state; today's "first attempt only" clause would mask the
+difference and leave a trap for whoever relaxes it.
 
 ```
-type remoteMirrorPlan struct {
+type remoteMirrorAttempt struct {
+    // Resolved once, read-only thereafter.
     site       // none | onHostMirror | existingCheckout | freshClone
     url        // the mirror URL, when there is a site
     skipReason // why there is no site, for R9
+
+    // Written once by whichever site ran.
+    outcome         // hit | miss | timeout | error | notReached
+    skipCommitFetch // set by a confirmed hit, read by fetchSource (§5.7)
 }
 ```
 
-R9 forces this shape by itself: a `bool` cannot carry a skip reason, and the
-most interesting reason ("a mirror is configured but this job was never
-eligible") arises at a point no site's code ever runs. So the outcome is written
-unconditionally onto the existing `repo-checkout` span, next to the
-`checkout.is_using_git_mirrors` attribute already there, from one place.
+`outcome` is not optional decoration. A site can be selected and still never
+run — `updateGitMirror` skips submodule mirrors via `isMainRepository`, and
+§5.8 declines an unusable branch name — so `hit | miss | timeout | error` is not
+a total enumeration of what can happen to a selected site. `notReached` closes
+it, and R9's emission point is then a single read rather than five sites each
+remembering to report.
 
-The plan value is resolved per checkout *attempt*, not per job. Do not hang it
-off `Executor`, which is job-lifetime state; today's "first attempt only" clause
-would mask the difference and leave a trap for whoever relaxes it.
+Two plumbing consequences worth stating so they are not discovered late.
+`getOrUpdateMirrorDir` is also called from `updateGitSubmodules`, which passes
+no attempt. And the emission must be registered as a `defer` *after*
+`defaultCheckoutPhase`'s existing `defer func() { span.FinishWithError(retErr) }()`
+so that it runs first; an implementer who writes the attributes at resolution
+time ships a PR 1 that can only ever report `skipped`.
 
 ### 5.2 Eligibility
 
@@ -233,15 +270,22 @@ mirror URL is non-empty and https
 && the mirror URL is permitted by --allowed-repositories, when that is set
 && canonical repository still matches the one the mirror was issued for
 && BUILDKITE_COMMIT is a full 40-hex lowercase SHA
+&& BUILDKITE_BRANCH is non-empty
 && BUILDKITE_REFSPEC == "" && BUILDKITE_TAG == "" && BUILDKITE_PULL_REQUEST == "false"
 && this is the first checkout attempt
 ```
 
+Every clause is a named skip reason, and every condition that can decline the
+mirror belongs here rather than at a site — §5.8 needs the branch, so the branch
+clause is in the predicate, not buried in the section about ref naming.
+
 Only the SHA clause is a correctness requirement. Everything the mirror is asked
 for is that SHA, and every eligible build ends at `git checkout <commit>`, so
 R8 holds on the SHA clause alone — a tag or PR build with a known SHA would be
-just as safe. The tag, PR and refspec clauses are pragmatism: they line up
-exactly with the conditions `verifyCommit` already skips on, and they avoid
+just as safe. The tag, PR and refspec clauses are pragmatism: they are close to
+the conditions `verifyCommit` already skips on (not identical — `verifyCommit`
+also skips an empty branch, and treats an empty `BUILDKITE_PULL_REQUEST` as a
+non-PR build where this predicate wants the literal `"false"`), and they avoid
 depending on answers we do not have yet (§11 has to ask whether the mirror even
 serves `refs/pull/*`). Relax them when those answers arrive.
 
@@ -269,8 +313,21 @@ across, the job runner drops `BUILDKITE_GIT_REMOTE_MIRROR_URL` from the job
 environment in `createEnvironment` when the allowlist does not permit it, and
 warns. That is the same shape as the `delete(env, "BUILDKITE_AGENT_TOKEN")`
 already there, and the executor then sees a job with no mirror and needs to know
-nothing about allowlists. The warning is where an operator learns why, since to
-the span this is indistinguishable from "no mirror configured".
+nothing about allowlists. The warning is where an operator learns why: to the
+executor this is indistinguishable from "no mirror configured", so it must not
+be described anywhere as a `skipped` reason.
+
+That leaves two readers of `--allowed-repositories` with opposite consequences —
+`validateJobValue` refuses the job for `BUILDKITE_REPO`, and this drops a var —
+so extract one `repositoryAllowed(url string) bool` on `JobRunner` and have both
+call it. Any later change to matching (trailing `.git`, case, normalisation)
+then cannot make the two disagree, and a disagreement here is either a job
+refused for a mirror the operator allowed or a mirror used that they excluded.
+
+The sibling check needs no work: `validateEnv` refuses a job for a
+non-allowlisted env var name, but `buildkiteSetEnvironmentVariables` always
+prepends `^BUILDKITE_.*$`, so a new `BUILDKITE_`-prefixed backend var can never
+trip `--allowed-environment-variables`.
 
 **Canonical binding** is one field and one clause, not a subsystem. Record the
 backend-supplied `BUILDKITE_REPO` when the executor is constructed and require
@@ -288,20 +345,38 @@ A's refs and tags into the checkout.
 
 ### 5.3 Budget
 
-Mirror commands run with retries disabled, under
-`context.WithTimeout(ctx, 30*time.Second)`.
+Every mirror command runs with retries disabled. The timeout depends on the
+shape of the command, and getting this wrong in either direction is expensive:
 
-That is the whole rule. `WithTimeout` never extends past a parent deadline, so
-when `--git-checkout-timeout` is set the attempt is already capped by whatever
-remains — no bespoke "reserve a fraction for canonical" arithmetic, which the
-first draft specified and which is not a number an implementer can act on
-anyway. The first-attempt-only clause bounds the worst case to one attempt out
-of six.
+- **Probe-shaped** — the exact-SHA fetches in PR 2's update arm and in PR 3.
+  `context.WithTimeout(ctx, 30*time.Second)`. A miss is the *expected* outcome
+  here and its cost is the whole R2 argument, so the cap is short and fixed.
+  `WithTimeout` never extends past a parent deadline, so when
+  `--git-checkout-timeout` is set the attempt is already capped by whatever
+  remains, for free. No "reserve a fraction for canonical" arithmetic, which the
+  first draft specified and which is not a number an implementer can act on.
+- **Bulk-transfer** — the clones in PR 2's creation arm and PR 4. **No extra
+  cap**; they inherit `--git-checkout-timeout` like every other part of the
+  checkout.
+
+Applying one flat 30-second rule to both was the first draft's error, and it
+inverts the feature. A mirror clone still transferring after 30 seconds is doing
+its job, on precisely the repositories large enough to justify a mirror. Capping
+it means burning 30 seconds of the fast host, discarding the transfer, and then
+cloning from the slow one anyway — worse than not enabling the feature, on the
+hit path, for the target workload. If a bound is ever wanted there, make it
+progress-based (no bytes for N seconds), which measures the thing that is
+actually wrong; a wall-clock cap measures repository size.
 
 Retries stay with canonical. `gitFetch` with `Retry: true` is 10 attempts over
 ~2m17s and the checkout sits inside a 6-attempt retrier, so a retrying mirror
 attempt would multiply into minutes per job for no benefit: a mirror that does
 not have the commit now will not have it 200ms later.
+
+One honest gap in "at most one bounded round trip": PR 4's discard arm calls
+`removeCheckoutDir`, whose ten-attempt loop sleeps a hard 10 seconds between
+tries and ignores the context. Reusing it is still right — see PR 4 — but it is
+not bounded by anything here.
 
 ### 5.4 Credentials and transport flags (R7)
 
@@ -368,9 +443,11 @@ The existing code is safe only because it hands the helper to `git config` as a
 single argv element. The same string round trip already mis-splits a
 `--git-mirrors-path` containing a space, today, in the one production caller.
 
-So: change `gitFetchArgs.GitFlags` to `[]string` and give `gitClone` a global
-flags parameter. One production caller and its tests to update. What not to do
-is quote the argv back into a string so it can be re-split on the other side;
+So: change `gitFetchArgs.GitFlags` to `[]string` (one production caller) and
+give `gitClone` a global flags parameter (three production call sites).
+`GitFetchFlags` and `RefSpecs` stay strings — their inputs are operator config
+and sanitised refs, and widening them is not this change. What not to do is
+quote the argv back into a string so it can be re-split on the other side;
 [#4153](https://github.com/buildkite/agent/pull/4153) grew a `quoteGitArgs`
 helper for exactly that, and Go already has the type for a list of arguments.
 
@@ -442,10 +519,17 @@ Each part of that earns its place:
   `feature/x`, whose ref write then fails while the objects still land. It also
   avoids needing a ref-name validator — the repository's `gitCheckRefFormat`
   explicitly does not implement the rules that matter here (its own doc comment
-  lists rules 1, 2, 5 and 6 as unimplemented), and it passes `''`, `foo/.bar`,
-  `x.lock`, `a//b` and `.hidden`, all of which git rejects. Collapsing to
-  alphanumerics sidesteps the whole category. Two branches can collide onto one
-  ref, which costs churn and never correctness.
+  lists rules 1, 2, 5, 6 and 8 as unimplemented), and it passes `''`,
+  `foo/.bar`, `x.lock`, `a//b` and `.hidden`, all of which git rejects.
+  Collapsing to alphanumerics sidesteps the character-class and D/F categories
+  outright. Two branches can collide onto one ref, which costs churn and never
+  correctness.
+- **Truncated, with a short digest of the raw branch name appended.**
+  Sanitisation is one-for-one, so a 400-character branch produces a
+  400-character path component and the loose-ref write fails on `NAME_MAX` —
+  objects landing with no ref, which is exactly the §10-C2 shape the rest of
+  this section is designed to avoid. Cap the component at around 100 bytes and
+  append the digest; collisions stay at the acknowledged churn-only level.
 
 ## 6. Delivery plan
 
@@ -453,20 +537,25 @@ Four stacked pull requests.
 
 | PR | Idea | Behaviour change | Touches |
 | --- | --- | --- | --- |
-| 1 | Config, the resolved decision, and R9 telemetry | telemetry only | `config.go`, `env/protected.go`, `job_runner.go`, `git.go`, new decision file |
-| 2 | On-host mirror is created and refreshed from the remote mirror | yes | `checkout_mirror.go` |
+| 1 | Config, the resolved decision, R9 telemetry, shared helpers | telemetry only | `config.go`, `env/protected.go`, `job_runner.go`, `git.go`, `checkout.go`, new `checkout_remote_mirror.go` |
+| 2 | On-host mirror is created and refreshed from the remote mirror | yes | `checkout_mirror.go`, `checkout.go` |
 | 3 | Existing checkout fetches from the remote mirror | yes | `checkout_fetch.go` |
-| 4 | Fresh checkout clones from the remote mirror | yes | new `checkout_clone.go` |
+| 4 | Fresh checkout clones from the remote mirror | yes | new `checkout_workdir.go`, `checkout.go`, `checkout_fetch.go` |
 
 PRs 2, 3 and 4 are mutually exclusive per checkout (§5.1) and can land in any
 order after PR 1. PR 2 first because it is worth the most.
 
-PRs 2 and 3 are the same operation with different parameters — fetch a commit
-from a URL into an existing git directory, retries off, bounded, then ask
-whether it landed — differing only in the git dir, the refspec and the fetch
-flags. They share one helper, introduced by whichever lands first. If reviewers
-would rather have three PRs than four, merging them is the natural cut; they are
-separate here because their risk surfaces and test fixtures are different.
+PRs 2 and 3 both fetch a commit from a URL into an existing git directory with
+retries off under §5.3's probe budget, then ask whether it landed. That much is
+one helper, and it goes in PR 1 with a fixed signature rather than being
+"introduced by whichever lands first" — otherwise the first arm shapes it around
+itself and the second adds a parameter, which is the pattern this document
+exists to avoid. Everything either side of the call genuinely differs: the git
+directory, the refspec form (`+<sha>:<ref>` versus a bare SHA), the flags (none
+versus the caller's, including an auto-added filter), and the post-conditions
+(PR 3 also retargets the promisor). If reviewers would rather have three PRs
+than four, merging 2 and 3 is the natural cut; they are separate here because
+their risk surfaces and test fixtures are different.
 
 There is no PR for CDN pack offload. See §11.
 
@@ -485,23 +574,29 @@ anything.
 - The bound canonical repository field, and the `createEnvironment` drop when
   `--allowed-repositories` does not permit the mirror URL (§5.2). Both are in
   this PR because both change what the executor sees, not what it does.
-- `remoteMirrorPlan` and its resolution (§5.1, §5.2), called from
-  `defaultCheckoutPhase`. No site acts on it yet.
-- Unconditional R9 emission onto the `repo-checkout` span, including
-  `skipped` with a reason. This is what stops PR 1 being a shape with no caller,
-  and it means the first behaviour-changing PR ships into a checkout that can
-  already report what happened.
+- `remoteMirrorAttempt` and its resolution (§5.1, §5.2), called from
+  `defaultCheckoutPhase` and threaded to where the sites will be. No site acts
+  on it yet.
+- Unconditional R9 emission, from that value. This is what stops PR 1 being a
+  shape with no caller, and it means the first behaviour-changing PR ships into
+  a checkout that can already report what happened.
+- The `[]string` plumbing of §5.5, and the shared bounded-fetch helper PRs 2 and
+  3 both call. Both are prerequisites for more than one later PR, so they belong
+  here; leaving them to "whichever lands first" is what would make the stack's
+  commutability and independent revertibility untrue. Neither changes behaviour.
 - `gitErrorFetchRefNotOnRemote`, smelting `not our ref` (protocol v2, G3) and
   `Server does not allow request for unadvertised object` (protocol v0, G2).
   Note these are two protocol versions, not two spellings, and test both.
 
-Three call sites branch on `gitError.Type`, and "canonical behaviour is
-unchanged" has to hold at each: `gitFetch`'s own retrier must `retrier.Break()`
-for the new type (omitting it silently converts an immediate failure into 10
-attempts over ~2m17s on the `Retry: true` paths), `gitFetchWithFallback` must
-keep returning rather than falling back, and the checkout retrier keeps the new
-type in the same wipe arm as `gitErrorFetchBadObject`. Assert attempt counts,
-not just the resulting error type.
+Three call sites branch on `gitError.Type` and "canonical behaviour is
+unchanged" has to hold at each, though only two need a change: `gitFetch`'s own
+retrier must `retrier.Break()` for the new type (omitting it silently converts
+an immediate failure into 10 attempts over ~2m17s on the `Retry: true` paths),
+and the checkout retrier keeps the new type in the same wipe arm as
+`gitErrorFetchBadObject`. `gitFetchWithFallback` needs nothing: its switch
+special-cases only `gitErrorFetchBadReference` and otherwise returns, so the new
+type already gets the right behaviour — assert it rather than change it. Assert
+attempt counts too, not just the resulting error type.
 
 **Tests:** eligibility table including each skip reason; env protection;
 an allowlist miss drops the mirror URL and warns rather than refusing the job;
@@ -538,7 +633,8 @@ special handling: the checkout's canonical clone with `--reference` transfers
 only the delta, which is the tiered fallback working as designed.
 
 **Update** (`mirrorDir` exists): immediately after the existing
-`hasGitCommit` short-circuit and **before** `updateRemoteURL` —
+`hasGitCommit` short-circuit, **inside** the `if isMainRepository` block that
+contains it, and **before** `updateRemoteURL` —
 
 ```
 git --git-dir=<mirrorDir> <transport flags> fetch --no-tags -- <mirrorURL> \
@@ -555,9 +651,15 @@ Placing it before `updateRemoteURL` rather than after is not cosmetic. After
 `updateRemoteURL` has run, `urlChanged` may be set, and its only consumer is the
 `fsck` + `gc` block *after* the fetch — so an early return there would silently
 skip the maintenance a repository rename needs. Before it, the new exit is
-structurally identical to the one it is modelled on. Factor the shared
-"present → snapshot and return" tail into one closure so the function has one
-exit rather than three.
+structurally identical to the one it is modelled on. Placing it inside the
+`isMainRepository` block matters for a different reason: the block closes
+immediately after the short-circuit, so "just after" would land outside the
+guard that keeps this away from submodule mirrors.
+
+Write it as a second straight-line `if` returning
+`e.snapshotMirror(ctx, repository, mirrorDir)`. That call is already repeated
+verbatim at three points in this function; hoisting it into a closure would
+rename the repetition rather than remove it.
 
 No user fetch flags are passed, matching the existing mirror-update fetch: the
 on-host mirror is always a full mirror regardless of the pipeline's
@@ -607,29 +709,46 @@ the configuration the agent auto-adds the filter for — reading the raw config
 field would send an *unfiltered* mirror fetch and, on a hit, leave the checkout
 with every blob present. That is R3 violated, not merely slower.
 
-**Then clean up the promisor config the fetch may have written.** A filtered
-fetch from a URL makes git record that URL as a promisor remote:
+**Then retarget the promisor the fetch wrote — do not just remove it.** A
+filtered fetch from a URL makes git record that URL as a promisor remote:
 
 ```
 remote.<mirrorURL>.promisor true
 remote.<mirrorURL>.partialclonefilter blob:none
+core.repositoryformatversion 1
 ```
 
 Left behind, a reused checkout consults the mirror URL for every future lazy
 object fetch, with none of §5.4's per-invocation credentials or bounding — the
 same objection raised against
 [#4144](https://github.com/buildkite/agent/pull/4144), reintroduced by a
-different route. So unset both keys after the fetch, and repoint
-`extensions.partialClone` at `origin` if git set it to the mirror URL. Three
-config commands, deterministic, testable. It degrades safely if missed (git
-falls back to another promisor), which is exactly why it needs a test rather
-than trust.
+different route. So after the fetch: unset both mirror-keyed keys, then set
+`remote.origin.promisor=true` and `remote.origin.partialclonefilter=<the
+filter>`.
+
+The second half is not optional, and unsetting alone is worse than doing
+nothing. When the checkout was **not** already a partial clone — a long-lived
+checkout that predates the pipeline enabling sparse, or a `--filter` supplied
+only in `BUILDKITE_GIT_FETCH_FLAGS` — the mirror fetch is what makes it partial,
+and the mirror is the only promisor it has. Removing both keys leaves a
+repository at format version 1 with lazily-absent blobs and nowhere to get them,
+and the failure is silent: `git checkout` exits **0** having logged
+`error: unable to read sha1 file`, and the job runs against a worktree with
+files missing. Setting `remote.origin.*` instead is a no-op when the checkout
+was already a partial clone of canonical, which is the common case, and repairs
+it when it was not. Measured both ways on git 2.43.0.
+
+Note that `git` does not write `extensions.partialClone` on this path at all —
+that is the pre-2.22 spelling modern git only reads — so there is nothing to
+repoint there.
 
 **Tests:** existing checkout advances via a mirror hit with canonical
 unreachable; miss falls back and leaves refs and worktree byte-identical; a
-sparse pipeline's mirror fetch carries `--filter=blob:none`; no `remote.<url>.*`
-or mirror-valued `extensions.partialClone` survives a hit; a partial clone still
-resolves lazily against canonical after the mirror is removed.
+sparse pipeline's mirror fetch carries `--filter=blob:none`; no
+`remote.<mirrorURL>.*` survives a hit; and — the one that matters — after a hit
+on a checkout that was **not** previously a partial clone, with the mirror then
+deleted, the worktree materialises. A config-shape assertion passes on the
+broken repository, so this has to assert on the file, per §8.
 
 ### PR 4 — Clone a fresh checkout from the remote mirror (R6)
 
@@ -640,15 +759,36 @@ all the bytes are.
 already branches on on-host mirror presence, mirror checkout mode,
 existing-versus-fresh, sparse (with two nested sub-branches), partial filter,
 LFS and submodules. Adding a fifth cross-cutting axis in place will not compose.
-The `.git`-exists reconcile-versus-clone block is already a coherent unit, and
-the package has an established convention for exactly this (`checkout_fetch.go`,
-`checkout_mirror.go`, `checkout_sparse.go`, `checkout_ssh.go`). Move it to
-`checkout_clone.go` in a no-behaviour-change commit, then add the mirror arm
-there, where the clone, its failure handling and the `set-url` are local and
-testable together.
+The `.git`-exists reconcile-versus-clone block is a coherent unit, and the
+package has an established convention for exactly this (`checkout_fetch.go`,
+`checkout_mirror.go`, `checkout_sparse.go`, `checkout_ssh.go`). Move it in a
+no-behaviour-change commit, then add the mirror arm there, where the clone, its
+failure handling and the `set-url` are local and testable together.
+
+Name the file for what the unit does. It owns both arms — reconciling an
+existing checkout *and* cloning a new one — so `checkout_workdir.go` keeps the
+file-to-concept mapping honest in a package whose convention is exactly that;
+`checkout_clone.go` would put existing-checkout reconciliation in the clone
+file while PR 3's existing-checkout work lands in `checkout_fetch.go`. The move
+is not parameter-free either: `sparse`, `mirrorDir`, `gitCloneFlags` and
+`userSuppliedCloneFilter` are all inputs, and the last is read again later at
+the `addBloblessFilter` computation. Say so in the extraction commit so its
+reviewer is not surprised by a four-parameter helper.
 
 Behaviour is §5.6, then the existing `git clean` / `fetchSource` / `checkout`
 flow, with `fetchSource`'s commit fetch skipped on a confirmed hit (§5.7).
+
+**Suppress LFS on the mirror clone.** `git lfs` resolves its endpoint from
+`remote.origin.url`, and during the clone that is still the mirror — the
+`set-url` has not run yet. On a host with a global `git lfs install` (routine on
+CI images, and independent of the agent's own `git lfs install --local`, which
+runs after the clone) the smudge filter is `required = true`, so a mirror that
+does not proxy LFS turns every LFS repository's mirror clone into a hard
+failure and a discarded transfer. `GIT_LFS_SKIP_SMUDGE=1` on the mirror clone
+writes pointers instead of downloading, and the agent's existing
+`gitLFSFetchCheckout` then materialises them from canonical afterwards, so
+nothing is lost. Put an LFS repository in PR 4's differential test matrix and
+confirm this rather than taking it on trust.
 
 **Failure handling, in order of likelihood:**
 
@@ -735,9 +875,10 @@ code that caused it no longer exists.
   touches many expectations in `checkout_integration_test.go` and
   `checkout_git_mirrors_integration_test.go`. Budget for that in PRs 2 and 4.
 - **Negative**: ineligible targets (HEAD, short SHA, tag, PR, custom refspec,
-  retry attempt, hook-rewritten repository, disallowed by
-  `--allowed-repositories`) never contact the mirror. A mirror URL pointing at a
-  closed port is the cheapest way to say so.
+  empty branch, retry attempt, hook-rewritten repository) never contact the
+  mirror. A mirror URL pointing at a closed port is the cheapest way to say so.
+  The `--allowed-repositories` case belongs with PR 1's job-runner tests, not
+  here — by the time the executor runs there is no mirror URL to observe.
 
 ## 9. Rollout
 
@@ -748,7 +889,9 @@ Two controls, both pre-existing:
   it at all. Nothing happens to any pipeline until someone opts in.
 - **Per fleet**, on the agent: `--allowed-repositories`, which now declines the
   mirror rather than the job (§5.2). An operator who has not allowed the mirror
-  host gets canonical behaviour and a `skipped` reason in telemetry.
+  host gets canonical behaviour and a warning in the job log — not a `skipped`
+  reason, because the drop happens in the job runner and the executor never
+  learns a mirror was offered.
 
 No new agent flag, and no `EXPERIMENTS.md` entry. An experiment is for behaviour
 the backend cannot gate, and this one it can.
@@ -764,7 +907,9 @@ resolves to `none` for every pipeline without a mirror URL.
 ## 10. Caveat register
 
 Each entry names where the acceptance comment goes, so a future reader hits the
-explanation before they file the bug.
+explanation before they file the bug. The comment is a one-liner pointing here,
+not a copy of the paragraph — two copies of the same reasoning, one of which
+moves with the code, is how the pair starts disagreeing.
 
 **C1 — Refs from a mirror clone are the mirror's snapshot.** After PR 4,
 `refs/remotes/origin/<branch>` and tags come from the mirror and may lag
@@ -776,7 +921,7 @@ commit verification is unaffected because `checkCommitOnBranch` fetches
 when the canonical fetch does run, add
 `+refs/heads/<branch>:refs/remotes/origin/<branch>` to it — no extra round trip.
 `checkCommitOnBranch` already documents the ref-name hazards such a refspec must
-respect. *Comment: beside the `set-url` in `checkout_clone.go`.*
+respect. *Comment: beside the `set-url` in `checkout_workdir.go`.*
 
 **C2 — Objects can arrive in the on-host mirror without the ref that pins
 them.** A ref write can fail while the fetch succeeds — measured, via a
@@ -800,7 +945,7 @@ the capabilities canonical does**, and where it does not, the degradation is
 silent. Detection after the fact does not recover the job's bytes, so the
 mitigation is telemetry plus §11's question to the mirror provider, and a test
 fixture that deliberately lacks the capability. *Comment: beside the mirror
-clone in `checkout_clone.go`.*
+clone in `checkout_workdir.go`.*
 
 **C4 — `.git/FETCH_HEAD` records the mirror URL** after a mirror-served fetch on
 the existing-checkout path. The mirror URL is a non-secret pipeline setting, and
@@ -839,33 +984,35 @@ growing it without bound. *Comment: in `checkout_mirror.go`.*
 repository; `.gitmodules` URLs are discovered at checkout time. Submodule
 on-host mirrors continue to refresh from their canonical URLs.
 
-**C10 — Git LFS is unaffected**, which is the good outcome: `git lfs` resolves
-its endpoint from `remote.origin.url`, which is always canonical. An LFS-heavy
-repository gets no mirror benefit for its LFS objects.
+**C10 — Git LFS objects always come from canonical**, because `git lfs` resolves
+its endpoint from `remote.origin.url`. An LFS-heavy repository therefore gets no
+mirror benefit for its LFS objects. The one window where that reasoning inverts
+is PR 4's clone, where `origin` is still the mirror; `GIT_LFS_SKIP_SMUDGE=1`
+closes it, and PR 4 says why.
 
-**C11 — Ineligible builds get no mirror at all**: `BUILDKITE_COMMIT=HEAD`, short
-SHAs, tag builds, PR builds, custom refspecs, `http` mirror URLs, and every
-checkout attempt after the first. First-attempt-only is cost control, not
-correctness — it keeps a failing checkout from re-paying the mirror cost on each
-of six retries.
+**C11 — The on-host-mirror site keeps the canonical commit fetch.** §5.7's skip
+applies to the existing-checkout and fresh-clone sites only. When
+`--git-mirrors-path` is configured and a checkout already exists, an on-host
+mirror hit makes the commit locally reachable through the alternates, and
+`fetchSource` still contacts canonical. That is a round trip the hit arguably
+made unnecessary, and it is deliberate: it is what keeps `refs/remotes/origin/*`
+advancing in the reused checkout, and it is not a regression against today.
+*Comment: in `checkout_fetch.go`, next to the skip.*
 
 **C12 — Mirror lag is visible as a slower job, not a failure.** Expected and
 bounded, and the reason R9 exists: a mirror missing 100% of the time looks
 exactly like no mirror, only slightly slower. A corporate proxy that strips the
 `Git-Protocol` header would present identically, via G2.
 
-**C13 — Checkout hooks and plugins bypass all of this,** as they bypass the
-whole default checkout.
-
-**C14 — Split checkout/command phases** (agent-stack-k8s) need
+**C13 — Split checkout/command phases** (agent-stack-k8s) need
 `BUILDKITE_GIT_REMOTE_MIRROR_URL` to reach the checkout container; the existing
 `snapshotMirror` caveat about split phases is unchanged.
 
-**C15 — A job killed between PR 4's clone and its `set-url` leaves a checkout
+**C14 — A job killed between PR 4's clone and its `set-url` leaves a checkout
 whose `origin` is the mirror.** The next job's existing-checkout path already
 reconciles `remote.origin.url` with `BUILDKITE_REPO`, so it self-heals at the
 cost of one confusing "the repository has been renamed" log line. Not worth a
-lock or a marker file. *Comment: beside the `set-url` in `checkout_clone.go`.*
+lock or a marker file. *Comment: beside the `set-url` in `checkout_workdir.go`.*
 
 ## 11. Open questions
 
