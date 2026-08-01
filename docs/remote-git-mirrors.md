@@ -222,19 +222,22 @@ miss:   fall back to the same <op> against canonical, exactly as today
   documented requirement on mirror providers; a server that refuses simply
   produces a permanent (but cheap and well-labelled) miss and canonical
   fallback.
-- Timeouts: mirror operations run under the existing per-attempt checkout
-  timeout (`BUILDKITE_GIT_CHECKOUT_TIMEOUT`) and checkout retry loop, with
-  the "first attempt only" gate guaranteeing that a retry never touches the
-  mirror. Rather than capping the mirror attempt at an arbitrary duration
-  (as #4153's 30s / one-third-of-deadline did, which would kill legitimate
-  large transfers), stalled-transfer detection is delegated to Git:
+- Timeouts: mirror and canonical fallback must fit within the same checkout
+  attempt; the outer retry loop is a backstop, not the fallback mechanism.
+  When `BUILDKITE_GIT_CHECKOUT_TIMEOUT` is set, the mirror operation uses a
+  child deadline that reserves at least half of the attempt budget for
+  canonical fallback. This can cut off a slow but progressing mirror, but a
+  configured checkout deadline necessarily requires that trade-off and the
+  canonical repository takes priority. When no checkout timeout is set,
+  healthy large transfers remain uncapped and stalled-transfer detection is
+  delegated to Git:
   mirror-directed operations set `-c http.lowSpeedLimit=<bytes/s>
   -c http.lowSpeedTime=<seconds>` so a hung or trickling mirror aborts
   quickly while a healthy large transfer is not time-capped. Exact values to
   be settled in the implementing PR. Residual window: these options cover
-  the HTTP transfer, not the TCP/TLS connect phase; a black-holed connect is
-  bounded by curl/OS connect defaults, and by the checkout timeout when the
-  operator sets one.
+  the HTTP transfer, not the TCP/TLS connect phase; without a configured
+  checkout timeout, a black-holed connect is bounded only by curl/OS connect
+  defaults.
 
 ### Credentials (R7, R8)
 
