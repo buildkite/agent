@@ -890,8 +890,10 @@ delta. Runs only when the on-host mirror site did not.
 
 In `fetchSource`, for the `refspecCommit` case: fetch the commit from the mirror
 first, retries off, transport flags of §5.4. On a confirmed hit skip the
-canonical fetch (§5.7); otherwise fetch from canonical as today. A miss leaves
-the checkout exactly as it was, so R2 holds by construction.
+canonical fetch (§5.7); otherwise fetch from canonical as today. A miss never
+deletes or re-clones the checkout. Refs and worktree stay unchanged by the
+mirror attempt; filtered attempts may repair promisor ownership in local config
+as described below.
 
 **Use the flag list the canonical fetch would have used, not `e.GitFetchFlags`.**
 `fetchSource` receives `addBloblessFilter` and prepends `--filter=blob:none`
@@ -900,7 +902,14 @@ the configuration the agent auto-adds the filter for — reading the raw config
 field would send an *unfiltered* mirror fetch and, on a hit, leave the checkout
 with every blob present. That is R3 violated, not merely slower.
 
-**Then retarget the promisor the fetch wrote — do not just remove it.** A
+An existing partial clone has a second source of effective fetch behavior:
+`remote.origin.partialclonefilter`. Named-remote fetches inherit it implicitly,
+but a direct-URL mirror fetch does not. When no explicit fetch filter or
+`--no-filter` override is present, append the stored origin filter to the mirror
+attempt so the transfer shape still matches canonical.
+
+**Then retarget the promisor the fetch wrote on every outcome — do not just
+remove it.** A
 filtered fetch from a URL makes git record that URL as a promisor remote:
 
 ```
@@ -909,13 +918,17 @@ remote.<mirrorURL>.partialclonefilter blob:none
 core.repositoryformatversion 1
 ```
 
-Left behind, a reused checkout consults the mirror URL for every future lazy
+Git can write these keys, and receive partial objects, before reporting a miss,
+transport error, timeout, or cancellation. Left behind, a reused checkout consults
+the mirror URL for every future lazy
 object fetch, with none of §5.4's per-invocation credentials or bounding — the
 same objection raised against
 [#4144](https://github.com/buildkite/agent/pull/4144), reintroduced by a
-different route. So after the fetch: unset both mirror-keyed keys, then set
-`remote.origin.promisor=true` and `remote.origin.partialclonefilter=<the
-filter>`.
+different route. So whenever those keys exist after an attempt, first set
+`remote.origin.promisor=true` and
+`remote.origin.partialclonefilter=<the filter>`, then remove the mirror-owned
+section. Canonical ownership is established before mirror ownership is removed;
+an interruption between those operations cannot strand missing objects.
 
 The second half is not optional, and unsetting alone is worse than doing
 nothing. When the checkout was **not** already a partial clone — a long-lived
@@ -927,29 +940,34 @@ and the failure is silent: `git checkout` exits **0** having logged
 `error: unable to read sha1 file`, and the job runs against a worktree with
 files missing. Setting `remote.origin.*` instead is a no-op when the checkout
 was already a partial clone of canonical under the same filter, which is the
-common case, and repairs it when it was not. Measured both ways on git 2.43.0.
+common case, and repairs it when it was not. On a filtered miss it is a
+deliberate config change: canonical fallback would establish the same promisor,
+and cancellation still leaves a safe source for any partial objects already
+received. Measured on git 2.43.0.
 
 Three details of the sequence, each of which is a bug if reversed. Read
 `remote.<mirrorURL>.partialclonefilter` **before** unsetting it — that is the
 most reliable source for the filter to write to `origin`, and the alternative is
 re-deriving it from the flag list, which needs a value-extracting helper the
-codebase does not have (`hasPartialFilterFlags` only reports presence). Run the
-cleanup **only when the fetch actually wrote those keys**, so a miss leaves
-`.git/config` untouched and R2's "exactly as it was" stays literally true. And
-a checkout already partial under a *different* filter has its
+codebase does not have (`hasPartialFilterFlags` only reports presence). Run
+cleanup under a short `context.WithoutCancel` deadline so cancellation cannot
+interrupt repository repair, but never start canonical network fallback after
+cancel. A checkout already partial under a *different* filter has its
 `remote.origin.partialclonefilter` overwritten, which is the intended outcome
 given the fetch it just took was filtered the new way.
 
 Note that `git` does not write `extensions.partialClone` on this path at all —
 that is the pre-2.22 spelling modern git only reads — so there is nothing to
-repoint there. And `git config --remove-section` is not a shortcut for the two
-unsets: it exits 128 with `fatal: no such section` when the section is absent,
-where `--unset` on a missing key exits 5 silently.
+repoint there. `git config --remove-section` is safe only after confirming the
+mirror promisor section exists; it exits 128 when the section is absent.
 
 **Tests:** existing checkout advances via a mirror hit with canonical
-unreachable; miss falls back and leaves refs, worktree **and `.git/config`**
-byte-identical; a sparse pipeline's mirror fetch carries `--filter=blob:none`;
-no `remote.<mirrorURL>.*` survives a hit; and — the one that matters — after a
+unreachable; unfiltered miss falls back with refs, worktree and config
+unchanged; filtered miss/error/timeout/cancel all remove mirror ownership and
+leave canonical promisor ownership; a sparse pipeline's mirror fetch carries
+`--filter=blob:none`; an existing origin filter is inherited unless
+`--no-filter` is explicit; no `remote.<mirrorURL>.*` survives any outcome; and —
+the one that matters — after a
 hit on a checkout that was **not** previously a partial clone, with the mirror
 then deleted, the worktree materialises. A config-shape assertion passes on the
 broken repository, so this has to assert on the file, per §8. Cancellation
