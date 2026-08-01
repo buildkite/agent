@@ -183,7 +183,9 @@ independently reproduced during review. These are the facts the plan rests on.
 | G9 | `git -c http.extraHeader= clone --config "http.extraHeader=…"` | header is not sent to the remote, but is still persisted into the new repository's config |
 | G10 | `git clone --filter=…` against a server without `uploadpack.allowFilter` | **warns and transfers everything**, exit 0, and still writes `remote.origin.promisor` and `partialclonefilter` locally. `--depth` against a server that cannot serve it fails loudly; `--filter` does not |
 | G11 | `fetch.uriProtocols` (packfile-uri / CDN offload) | defaults to empty; the client must opt in. Upstream's server-side implementation only offloads blobs (`uploadpack.blobPackfileUri`) |
-| G12 | `git clone` against a listener that completes the TCP handshake and then sends nothing | hangs indefinitely. With `-c http.lowSpeedLimit=1000 -c http.lowSpeedTime=10` it exits 128 after exactly 10s: `Operation too slow. Less than 1000 bytes/sec transferred the last 10 seconds` |
+| G12 | `git clone` against a listener that goes silent **after** the handshake | hangs indefinitely unguarded. With `-c http.lowSpeedLimit=1000 -c http.lowSpeedTime=10` it exits 128 after exactly 10s: `Operation too slow. Less than 1000 bytes/sec transferred the last 10 seconds`. The timer is per HTTP request, and the rate reads 0 during server think time, so the limit does no discriminating — only the time does |
+| G13 | Same listener, but silent **before** the TLS handshake completes, over `https` | the low-speed pair never engages; the clone hangs for curl's 300s default and then fails with `SSL connection timeout`. Git exposes no connect-timeout knob (`http.connectTimeout` is not a Git config) |
+| G14 | A healthy smart-HTTP server that pauses 15s before each response body | `lowSpeedTime=10` aborts it at 11s on the *ref advertisement*, before the pack; `lowSpeedTime=20` completes normally in 30s |
 
 G6 and G7 are what let this design stay small: `git clone` from the mirror
 followed by repointing `origin` reproduces canonical clone semantics exactly,
@@ -405,15 +407,31 @@ But "inherits `--git-checkout-timeout`" is not a bound: that flag defaults to
 `runDefaultCheckoutAttempt` skips `context.WithTimeout` entirely at zero. So on
 a default fleet an unguarded mirror clone against a host that accepts the
 connection and then goes silent — a load balancer with no healthy backend, a
-middlebox dropping packets — hangs until the backend job timeout, six times
-over. That is the miss path R2 promises to bound, so it has to be bounded. The
-low-speed pair does it in the right currency and exits 128, which lands cleanly
-in PR 4's "clone fails, fall back to canonical" arm (G12).
+middlebox dropping packets — hangs until the backend job timeout. Once per job,
+since eligibility stops at the first attempt, but that is still the miss path
+R2 promises to bound. The low-speed pair bounds it in the right currency and
+exits 128, which lands cleanly in PR 4's "clone fails, fall back to canonical"
+arm (G12).
 
-Pick `lowSpeedTime` generously — tens of seconds, not single digits. It is
-measured over the whole transfer, so it has to tolerate a server pausing to
-enumerate objects on a large repository as well as an ordinarily slow link.
-1000 bytes/sec is low enough that only a genuinely stalled connection trips it.
+**It only bounds stalls after the handshake.** Over `https` — the only scheme
+§5.2 allows — curl applies the low-speed limits to the transfer phase, not to
+connect or TLS, and Git has no connect-timeout config. A mirror that accepts TCP
+and then never completes TLS therefore costs curl's 300s default before falling
+back (G13). That is accepted rather than fixed: it needs a pre-flight dial or a
+wall-clock backstop, both of which cost more than the case is worth, and
+`--git-checkout-timeout` is the lever for an operator who disagrees. §10-C15.
+
+**Choose `lowSpeedTime` from time-to-first-byte, not from bandwidth.** The
+"1000 bytes/sec" reads like the discriminator and is not: during server think
+time the observed rate is exactly 0, so any positive limit trips and only the
+time separates "stalled" from "thinking". The timer runs per HTTP request, and
+the agent pipes git's stderr, so git asks for no progress and the server sends
+*nothing* until the pack starts — silence during ref advertisement and object
+enumeration is the normal case, not an edge. 10s aborts a perfectly healthy
+server that pauses 15s (G14), so the value has to exceed the worst plausible
+time-to-first-byte for a large repository on a cold, non-bitmapped mirror. Start
+at 60s, and put a delayed-first-byte fixture in PR 4's test matrix so the number
+is asserted rather than assumed.
 
 Retries stay with canonical. `gitFetch` with `Retry: true` is 10 attempts over
 ~2m17s and the checkout sits inside a 6-attempt retrier, so a retrying mirror
@@ -530,16 +548,25 @@ On a confirmed hit — the exact commit is present locally *and* the mirror
 command exited zero — the existing-checkout and fresh-clone sites skip
 `fetchSource`'s commit fetch. This is the same thing
 `BUILDKITE_GIT_SKIP_FETCH_EXISTING_COMMITS` does, scoped to a mirror hit instead
-of switched on globally, so it is written as a widening of the `skipFetch`
-expression `fetchSource` already computes rather than as a second mechanism:
+of switched on globally. When that option is already enabled the two agree and
+nothing changes.
+
+The two sites express it differently, because they sit on opposite sides of
+`fetchSource`'s early return. **PR 4** has cloned before `fetchSource` runs, so
+it widens the `skipFetch` expression already computed there — which re-verifies
+presence locally at the point of use, for free:
 
 ```
 skipFetch := (e.GitSkipFetchExistingCommits || attempt.hitOutsideOnHostMirror()) &&
     e.Commit != "HEAD" && hasGitCommit(ctx, e.shell, ".git", e.Commit)
 ```
 
-That re-verifies presence locally at the point of use for free, and when the
-option is already enabled the two agree and nothing changes.
+**PR 3's** fetch is inside the `refspecCommit` case, *below* that expression, so
+it cannot be covered by it — a widened term is evaluated before PR 3's mirror
+fetch has even run, and is necessarily false. PR 3 returns early from its own
+case on its own confirmed hit. That is a local branch beside the fetch it
+replaces, not a second mechanism, and building it the other way is caught by
+PR 3's own "hit with canonical unreachable" test.
 
 Two consequences, both already caveats: `refs/remotes/origin/*` keep the
 mirror's snapshot rather than being refreshed (§10-C1), and `FETCH_HEAD` is not
@@ -646,9 +673,9 @@ anything.
   `attempt` parameter on `fetchSource`, `getOrUpdateMirrorDir` and
   `updateGitMirror`, and the `hitOutsideOnHostMirror()` term in `fetchSource`'s
   `skipFetch` (§5.7). Every one of those is inert until a site writes an
-  outcome. Left to later PRs, the `skipFetch` term in particular ends up
-  co-owned by PRs 3 and 4 — and reverting whichever landed first then silently
-  restores a canonical round trip on the other's hit path, with no test failing.
+  outcome. `fetchSource` is the one both PR 3 and PR 4 reach into, so leaving its
+  signature to "whichever lands first" is what would make the stack's
+  commutability and independent revertibility untrue.
 - Unconditional R9 emission, from that value. This is what stops PR 1 being a
   shape with no caller, and it means the first behaviour-changing PR ships into
   a checkout that can already report what happened.
@@ -994,10 +1021,13 @@ Two controls, both pre-existing:
 No new agent flag, and no `EXPERIMENTS.md` entry. An experiment is for behaviour
 the backend cannot gate, and this one it can.
 
-What to watch, from the R9 attributes: the `hit`/`miss` ratio, the distribution
-of `skipped` reasons (a fleet-wide skip reason is a misconfiguration, not a lag
-problem), mirror attempt duration — a slow miss is what hurts — and total
-checkout duration against a comparable pipeline without a mirror.
+What to watch, from the R9 attributes: the share of jobs reporting `notReached`,
+which on a warm on-host mirror is expected to dominate and is the denominator
+the rest have to be read against; the `hit`/`miss` ratio among the jobs that did
+reach a site; the distribution of `skipped` reasons (a fleet-wide skip reason is
+a misconfiguration, not a lag problem); mirror attempt duration — a slow miss is
+what hurts — and total checkout duration against a comparable pipeline without a
+mirror.
 
 Every PR is revertible on its own: each adds one arm behind a decision that
 resolves to `none` for every pipeline without a mirror URL.
@@ -1112,6 +1142,12 @@ whose `origin` is the mirror.** The next job's existing-checkout path already
 reconciles `remote.origin.url` with `BUILDKITE_REPO`, so it self-heals at the
 cost of one confusing "the repository has been renamed" log line. Not worth a
 lock or a marker file. *Comment: beside the `set-url` in `checkout_workdir.go`.*
+
+**C15 — A mirror that accepts TCP and never completes TLS costs 300 seconds
+before the fallback.** §5.3's stall guard only covers the transfer phase, and
+Git has no connect-timeout config, so curl's default is the bound. Once per job,
+not once per checkout attempt, and `--git-checkout-timeout` bounds it for an
+operator who cares. *Comment: with the stall-guard flags.*
 
 ## 11. Open questions
 
