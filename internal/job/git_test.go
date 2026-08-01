@@ -2,7 +2,11 @@ package job
 
 import (
 	"errors"
+	"fmt"
 	"os"
+	"path/filepath"
+	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/buildkite/agent/v3/internal/shell"
@@ -230,11 +234,19 @@ func TestGitClone(t *testing.T) {
 		t.Fatalf("sh.AbsolutePath(git) = %v", err)
 	}
 
-	if err := gitClone(ctx, sh, []string{"-v", "--reference", "url"}, "repo", "dir"); err != nil {
+	if err := gitClone(ctx, sh,
+		[]string{"-c", "credential.helper=/path with spaces/helper"},
+		[]string{"-v", "--reference", "url"},
+		"repo", "dir",
+	); err != nil {
 		t.Fatalf(`gitClone(ctx, sh, [-v --reference url], "repo", "dir") = %v`, err)
 	}
 
-	wantLog := [][]string{{absoluteGit, "clone", "-v", "--reference", "url", "--", "repo", "dir"}}
+	wantLog := [][]string{{
+		absoluteGit,
+		"-c", "credential.helper=/path with spaces/helper",
+		"clone", "-v", "--reference", "url", "--", "repo", "dir",
+	}}
 	if diff := cmp.Diff(gotLog, wantLog); diff != "" {
 		t.Errorf("executed commands diff (-got +want):\n%s", diff)
 	}
@@ -328,6 +340,7 @@ func TestGitFetch(t *testing.T) {
 
 	if err := gitFetch(ctx, gitFetchArgs{
 		Shell:         sh,
+		GitFlags:      []string{"-c", "credential.helper=/path with spaces/helper"},
 		GitFetchFlags: "--foo --bar",
 		Repository:    "repo",
 		RefSpecs:      []string{"ref1", "ref2"},
@@ -335,9 +348,102 @@ func TestGitFetch(t *testing.T) {
 		t.Fatalf(`gitFetch(ctx, gitFetchArgs{Shell: sh, GitFetchFlags: "--foo --bar", Remote: "repo", RefSpecs: []string{"ref1", "ref2"}} = %v`, err)
 	}
 
-	wantLog := [][]string{{absoluteGit, "fetch", "--foo", "--bar", "--", "repo", "ref1", "ref2"}}
+	wantLog := [][]string{{
+		absoluteGit,
+		"-c", "credential.helper=/path with spaces/helper",
+		"fetch", "--foo", "--bar", "--", "repo", "ref1", "ref2",
+	}}
 	if diff := cmp.Diff(gotLog, wantLog); diff != "" {
 		t.Errorf("executed commands diff (-got +want):\n%s", diff)
+	}
+}
+
+func TestGitFetchClassifiesRemoteMissingObjectWithoutRetrying(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("test git shim is POSIX-only")
+	}
+
+	tests := []struct {
+		name   string
+		stderr string
+		exit   int
+	}{
+		{
+			name:   "protocol v2 not our ref",
+			stderr: "fatal: remote error: upload-pack: not our ref " + strings.Repeat("a", 40),
+			exit:   128,
+		},
+		{
+			name:   "protocol v0 unadvertised object",
+			stderr: "error: Server does not allow request for unadvertised object " + strings.Repeat("a", 40),
+			exit:   1,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			sh := shell.NewTestShell(t)
+			binDir := t.TempDir()
+			attempts := filepath.Join(t.TempDir(), "attempts")
+			script := "#!/bin/sh\nprintf x >> \"$ATTEMPTS\"\nprintf '%s\\n' \"$FETCH_STDERR\" >&2\nexit \"$FETCH_EXIT\"\n"
+			if err := os.WriteFile(filepath.Join(binDir, "git"), []byte(script), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			sh.Env.Set("PATH", binDir)
+			sh.Env.Set("ATTEMPTS", attempts)
+			sh.Env.Set("FETCH_STDERR", tc.stderr)
+			sh.Env.Set("FETCH_EXIT", fmt.Sprint(tc.exit))
+
+			err := gitFetch(t.Context(), gitFetchArgs{
+				Shell:      sh,
+				Repository: "https://mirror.example/repo.git",
+				Retry:      true,
+				RefSpecs:   []string{strings.Repeat("a", 40)},
+			})
+			var gitErr *gitError
+			if !errors.As(err, &gitErr) {
+				t.Fatalf("gitFetch() error = %v, want *gitError", err)
+			}
+			if gitErr.Type != gitErrorFetchRefNotOnRemote {
+				t.Errorf("gitFetch() error type = %d, want gitErrorFetchRefNotOnRemote", gitErr.Type)
+			}
+			gotAttempts, readErr := os.ReadFile(attempts)
+			if readErr != nil {
+				t.Fatal(readErr)
+			}
+			if got, want := len(gotAttempts), 1; got != want {
+				t.Errorf("git fetch attempts = %d, want %d", got, want)
+			}
+		})
+	}
+}
+
+func TestHasGitCommitDisablesLazyFetch(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("test git shim is POSIX-only")
+	}
+
+	commit := strings.Repeat("a", 40)
+	sh := shell.NewTestShell(t)
+	binDir := t.TempDir()
+	captured := filepath.Join(t.TempDir(), "git-no-lazy-fetch")
+	script := "#!/bin/sh\nprintf '%s' \"$GIT_NO_LAZY_FETCH\" > \"$CAPTURED_ENV\"\nprintf '%s\\n' \"$EXPECTED_COMMIT\"\n"
+	if err := os.WriteFile(filepath.Join(binDir, "git"), []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	sh.Env.Set("PATH", binDir)
+	sh.Env.Set("CAPTURED_ENV", captured)
+	sh.Env.Set("EXPECTED_COMMIT", commit)
+
+	if !hasGitCommit(t.Context(), sh, ".git", commit) {
+		t.Fatal("hasGitCommit() = false, want true")
+	}
+	got, err := os.ReadFile(captured)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != "1" {
+		t.Errorf("GIT_NO_LAZY_FETCH = %q, want 1", got)
 	}
 }
 

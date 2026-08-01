@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/buildkite/agent/v3/env"
 	"github.com/buildkite/agent/v3/internal/osutil"
 	"github.com/buildkite/agent/v3/internal/shell"
 	"github.com/buildkite/roko"
@@ -36,6 +37,8 @@ const (
 	gitErrorFetchBadObject
 	// can happen when just the short commit hash is given.
 	gitErrorFetchBadReference
+	// the remote does not have, or will not advertise, the requested object.
+	gitErrorFetchRefNotOnRemote
 	gitErrorClean
 	gitErrorCleanSubmodules
 	gitErrorRepack
@@ -48,6 +51,8 @@ const (
 	gitErrStrBadObject             = "fatal: bad object"
 	gitErrStrBadReference          = "fatal: couldn't find remote ref"
 	gitErrStrBadReferencePreGit221 = "fatal: Couldn't find remote ref"
+	gitErrStrNotOurRef             = "not our ref"
+	gitErrStrUnadvertisedObject    = "Server does not allow request for unadvertised object"
 )
 
 var (
@@ -70,8 +75,15 @@ func hasGitSubmodules(sh *shell.Shell) bool {
 }
 
 func hasGitCommit(ctx context.Context, sh *shell.Shell, gitDir, commit string) bool {
+	extraEnv := env.New()
+	extraEnv.Set("GIT_NO_LAZY_FETCH", "1")
+
 	// Resolve commit to an actual commit object
-	output, err := sh.Command("git", "--git-dir", gitDir, "rev-parse", commit+"^{commit}").RunAndCaptureStdout(ctx, shell.ShowStderr(false))
+	output, err := sh.Command("git", "--git-dir", gitDir, "rev-parse", commit+"^{commit}").RunAndCaptureStdout(
+		ctx,
+		shell.ShowStderr(false),
+		shell.WithExtraEnv(extraEnv),
+	)
 	if err != nil {
 		return false
 	}
@@ -134,8 +146,9 @@ func hasPartialFilterFlags(flags []string) bool {
 	return false
 }
 
-func gitClone(ctx context.Context, sh *shell.Shell, gitCloneFlags []string, repository, dir string) error {
-	commandArgs := []string{"clone"}
+func gitClone(ctx context.Context, sh *shell.Shell, gitFlags, gitCloneFlags []string, repository, dir string) error {
+	commandArgs := append([]string{}, gitFlags...)
+	commandArgs = append(commandArgs, "clone")
 	commandArgs = append(commandArgs, gitCloneFlags...)
 	commandArgs = append(commandArgs, "--", repository, dir)
 
@@ -290,7 +303,7 @@ func gitRepack(ctx context.Context, sh *shell.Shell, args ...string) error {
 
 type gitFetchArgs struct {
 	Shell         *shell.Shell // The shell to run the command in
-	GitFlags      string       // Global git flags to pass to the command
+	GitFlags      []string     // Global git flags to pass to the command
 	GitFetchFlags string       // Flags to pass to the fetch command
 	Repository    string       // The remote to fetch from
 	Retry         bool         // Whether to retry the fetch on certain errors
@@ -301,13 +314,7 @@ func gitFetch(ctx context.Context, args gitFetchArgs) error {
 	// Build the command: git [global gitFlags] fetch [fetchFlags] -- [repository] [refspecs...]
 	commandArgs := []string{}
 
-	if args.GitFlags != "" {
-		parts, err := shellwords.Split(args.GitFlags)
-		if err != nil {
-			return fmt.Errorf("failed to parse gitFlags: %w", err)
-		}
-		commandArgs = append(commandArgs, parts...)
-	}
+	commandArgs = append(commandArgs, args.GitFlags...)
 
 	commandArgs = append(commandArgs, "fetch")
 
@@ -334,6 +341,8 @@ func gitFetch(ctx context.Context, args gitFetchArgs) error {
 		gitErrStrBadObject:             false,
 		gitErrStrBadReference:          false,
 		gitErrStrBadReferencePreGit221: false,
+		gitErrStrNotOurRef:             false,
+		gitErrStrUnadvertisedObject:    false,
 	}
 
 	// The retry logic is used to handle rare cases where a commit ref is not yet available
@@ -361,6 +370,11 @@ func gitFetch(ctx context.Context, args gitFetchArgs) error {
 			if smelt[gitErrStrBadReference] || smelt[gitErrStrBadReferencePreGit221] {
 				args.Shell.Commentf("%s", retrier)
 				return &gitError{error: err, Type: gitErrorFetchBadReference, WasRetried: args.Retry}
+			}
+
+			if smelt[gitErrStrNotOurRef] || smelt[gitErrStrUnadvertisedObject] {
+				retrier.Break()
+				return &gitError{error: err, Type: gitErrorFetchRefNotOnRemote}
 			}
 
 			// "fatal: bad object" can happen when the local repo in the checkout

@@ -53,6 +53,11 @@ type Executor struct {
 	// Shell is the shell environment for the executor
 	shell *shell.Shell
 
+	// canonicalRepository is the backend-supplied repository captured before
+	// hooks may rewrite Repository. A remote mirror is only eligible while they
+	// still match.
+	canonicalRepository string
+
 	// The checkout directory root
 	checkoutRoot *os.Root
 
@@ -103,9 +108,10 @@ type Executor struct {
 // New returns a new executor instance
 func New(conf ExecutorConfig) *Executor {
 	return &Executor{
-		ExecutorConfig: conf,
-		cancelCh:       make(chan struct{}),
-		redactors:      replacer.NewMux(),
+		ExecutorConfig:      conf,
+		canonicalRepository: conf.Repository,
+		cancelCh:            make(chan struct{}),
+		redactors:           replacer.NewMux(),
 	}
 }
 
