@@ -218,6 +218,16 @@ func (r *JobRunner) Run(ctx context.Context, ignoreAgentInDispatches *bool) (err
 }
 
 func (r *JobRunner) validateConfigAllowlists(job *api.Job) error {
+	mirrorURL := job.Env["BUILDKITE_GIT_REMOTE_MIRROR_URL"]
+	if mirrorURL != "" {
+		if err := validateJobValue(r.conf.AgentConfiguration.AllowedRepositories, mirrorURL); err != nil {
+			message := fmt.Sprintf("Remote Git mirror URL %s is outside allowed repositories; using canonical repository", mirrorURL)
+			_, _ = fmt.Fprintf(r.jobLogs, "~~~ ⚠️ %s\n", message)
+			r.agentLogger.Warnf("%s", message)
+			delete(job.Env, "BUILDKITE_GIT_REMOTE_MIRROR_URL")
+		}
+	}
+
 	validations := map[string]func() error{
 		"repo": func() error {
 			return validateJobValue(r.conf.AgentConfiguration.AllowedRepositories, job.Env["BUILDKITE_REPO"])

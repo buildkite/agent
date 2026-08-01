@@ -23,6 +23,8 @@ func TestEnvVarsAreMappedToConfig(t *testing.T) {
 		GitSparseCheckoutMode:        "cone",
 		GitCleanFlags:                "-v",
 		GitSSHKey:                    "original-key",
+		GitRemoteMirrorURL:           "https://mirror.example.com/original.git",
+		GitRemoteMirrorRepository:    "https://original.host/repo.git",
 		AgentName:                    "myAgent",
 		CleanCheckout:                false,
 		PluginsAlwaysCloneFresh:      false,
@@ -38,6 +40,7 @@ func TestEnvVarsAreMappedToConfig(t *testing.T) {
 		"BUILDKITE_REPO=https://my.mirror/repo.git",
 		"BUILDKITE_CLEAN_CHECKOUT=true",
 		"BUILDKITE_GIT_SSH_KEY=new-key",
+		"BUILDKITE_GIT_REMOTE_MIRROR_URL=https://mirror.example.com/replaced.git",
 		"BUILDKITE_PLUGINS_ALWAYS_CLONE_FRESH=true",
 		"BUILDKITE_GIT_SUBMODULES=true",
 	})
@@ -69,6 +72,14 @@ func TestEnvVarsAreMappedToConfig(t *testing.T) {
 
 	if got, want := config.GitSSHKey, "new-key"; got != want {
 		t.Errorf("config.GitSSHKey = %q, want %q", got, want)
+	}
+
+	if got, want := config.GitRemoteMirrorURL, "https://mirror.example.com/original.git"; got != want {
+		t.Errorf("config.GitRemoteMirrorURL = %q, want %q", got, want)
+	}
+
+	if got, want := config.GitRemoteMirrorRepository, "https://original.host/repo.git"; got != want {
+		t.Errorf("config.GitRemoteMirrorRepository = %q, want %q", got, want)
 	}
 
 	if got, want := config.CleanCheckout, true; got != want {

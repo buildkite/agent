@@ -31,12 +31,13 @@ type protection struct {
 // submodule clones (an injection vector) and has no backend customization, so
 // it stays agent-authoritative rather than in checkoutOverrideScope.
 //
-// The mirror-infra vars (BUILDKITE_GIT_MIRRORS_PATH, _LOCK_TIMEOUT,
+// The on-host mirror-infra vars (BUILDKITE_GIT_MIRRORS_PATH, _LOCK_TIMEOUT,
 // _SKIP_UPDATE, BUILDKITE_GIT_MIRROR_CHECKOUT_MODE, and
-// BUILDKITE_GIT_CLONE_MIRROR_FLAGS) are likewise agent-only: the mirror is shared
+// BUILDKITE_GIT_CLONE_MIRROR_FLAGS) are likewise agent-only: that mirror is shared
 // across jobs on the host and the backend has no concept of it. CLONE_MIRROR_FLAGS
 // in particular is applied to the shared `git clone --mirror`, so letting a job
-// set it would be a cross-job injection vector.
+// set it would be a cross-job injection vector. BUILDKITE_GIT_REMOTE_MIRROR_URL
+// is backend-provided but always protected so hooks cannot redirect it.
 //
 // The actual enforcement of protected env within the agent level (overriding
 // job-level env vars based on agent configuration) happens implicitly rather
@@ -73,6 +74,7 @@ var protectedEnv = map[string]protection{
 	"BUILDKITE_GIT_MIRRORS_PATH":            {},
 	"BUILDKITE_GIT_MIRRORS_SKIP_UPDATE":     {},
 	"BUILDKITE_GIT_MIRROR_CHECKOUT_MODE":    {},
+	"BUILDKITE_GIT_REMOTE_MIRROR_URL":       {},
 	"BUILDKITE_GIT_SUBMODULE_CLONE_CONFIG":  {},
 	"BUILDKITE_HOOKS_PATH":                  {},
 	"BUILDKITE_HOOKS_SHELL":                 {},

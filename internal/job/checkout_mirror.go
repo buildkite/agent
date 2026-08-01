@@ -188,7 +188,7 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string) (dir 
 		if err := e.traceOp(ctx, "git.mirror.fetch", func(ctx context.Context) error {
 			return gitFetch(ctx, gitFetchArgs{
 				Shell:      e.shell,
-				GitFlags:   fmt.Sprintf("--git-dir=%s", mirrorDir),
+				GitFlags:   []string{fmt.Sprintf("--git-dir=%s", mirrorDir)},
 				Repository: "origin",
 				RefSpecs:   refspecs,
 				Retry:      retry,

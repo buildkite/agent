@@ -78,6 +78,40 @@ func TestConfigAllowlisting(t *testing.T) {
 			wantExitStatus:           "0",
 		},
 		{
+			name: "when allowlisting repos, a remote mirror outside the allowlist is ignored",
+			extraEnv: map[string]string{
+				"BUILDKITE_REPO":                  "https://canonical.example.com/acme/widgets.git",
+				"BUILDKITE_GIT_REMOTE_MIRROR_URL": "https://mirror.example.com/acme/widgets.git",
+			},
+			agentConfig: agent.AgentConfiguration{
+				AllowedRepositories: []*regexp.Regexp{
+					regexp.MustCompile("^https://canonical.example.com/.*$"),
+				},
+				AllowedEnvironmentVariables: []*regexp.Regexp{
+					regexp.MustCompile("^BUILDKITE$"),
+					regexp.MustCompile("^BUILDKITE_COMMAND$"),
+					regexp.MustCompile("^BUILDKITE_REPO$"),
+				},
+			},
+			mockBootstrapExpectation: func(bm *bintest.Mock) { bm.Expect().Once().AndExitWith(0) },
+			wantExitStatus:           "0",
+			wantLogsContain:          []string{"Remote Git mirror URL https://mirror.example.com/acme/widgets.git is outside allowed repositories; using canonical repository"},
+		},
+		{
+			name: "when allowlisting repos, a remote mirror inside the allowlist is retained",
+			extraEnv: map[string]string{
+				"BUILDKITE_REPO":                  "https://canonical.example.com/acme/widgets.git",
+				"BUILDKITE_GIT_REMOTE_MIRROR_URL": "https://mirror.example.com/acme/widgets.git",
+			},
+			agentConfig: agent.AgentConfiguration{
+				AllowedRepositories: []*regexp.Regexp{
+					regexp.MustCompile(`^https://(canonical|mirror)\.example\.com/.*$`),
+				},
+			},
+			mockBootstrapExpectation: func(bm *bintest.Mock) { bm.Expect().Once().AndExitWith(0) },
+			wantExitStatus:           "0",
+		},
+		{
 			name:     "when allowlisting plugins, if the plugin source doesn't match the configured allowlist, the job is refused",
 			extraEnv: map[string]string{"BUILDKITE_PLUGINS": `[{"github.com/crime-org/super-nasty-plugin#1.0.0":{"some":"config"}}]`},
 			agentConfig: agent.AgentConfiguration{

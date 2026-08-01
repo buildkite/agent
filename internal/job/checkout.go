@@ -233,7 +233,7 @@ func (e *Executor) checkout(ctx context.Context) error {
 				switch errGit.Type {
 				case gitErrorClean, gitErrorCleanSubmodules, gitErrorClone,
 					gitErrorCheckoutRetryClean, gitErrorFetchRetryClean,
-					gitErrorFetchBadObject:
+					gitErrorFetchBadObject, gitErrorFetchRefNotOnRemote:
 					// Checkout can fail because of corrupted files in the checkout which can leave the agent in a state where it
 					// keeps failing. This removes the checkout dir, which means the next checkout will be a lot slower (clone vs
 					// fetch), but hopefully will allow the agent to self-heal

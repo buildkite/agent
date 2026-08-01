@@ -30,6 +30,22 @@ const (
 	refspecCommit refspecKind = "commit"
 )
 
+func (e *Executor) fetchRefspecKind() refspecKind {
+	switch {
+	case e.RefSpec != "":
+		return refspecCustom
+	case e.PullRequest != "false" && strings.Contains(e.PipelineProvider, "github"):
+		if e.PullRequestUsingMergeRefspec {
+			return refspecGithubPRMerge
+		}
+		return refspecGithubPRHead
+	case e.Commit == "HEAD":
+		return refspecBranch
+	default:
+		return refspecCommit
+	}
+}
+
 // fetchSource fetches the git source for the job. If GitSkipFetchExistingCommits is
 // enabled and the commit already exists locally, the fetch is skipped entirely.
 // When addBloblessFilter is true, --filter=blob:none is prepended to the fetch
@@ -42,19 +58,7 @@ func (e *Executor) fetchSource(ctx context.Context, addBloblessFilter bool) (ret
 	defer func() { span.FinishWithError(retErr) }()
 
 	// Classify the refspec kind once and dispatch on it in the switch below.
-	kind := refspecCommit
-	switch {
-	case e.RefSpec != "":
-		kind = refspecCustom
-	case e.PullRequest != "false" && strings.Contains(e.PipelineProvider, "github"):
-		if e.PullRequestUsingMergeRefspec {
-			kind = refspecGithubPRMerge
-		} else {
-			kind = refspecGithubPRHead
-		}
-	case e.Commit == "HEAD":
-		kind = refspecBranch
-	}
+	kind := e.fetchRefspecKind()
 
 	span.AddAttributes(map[string]string{
 		"git.pull_request": strconv.FormatBool(e.PullRequest != "false"),

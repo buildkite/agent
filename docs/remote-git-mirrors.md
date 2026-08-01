@@ -210,11 +210,10 @@ miss:   fall back to the same <op> against canonical, exactly as today
   its existing retry behavior. `gitFetch` learns to classify
   `not our ref` / `Server does not allow request for unadvertised object`
   as a distinct non-retryable "ref not on remote" error (as in #4153), so
-  a lag miss is cheap and well-labelled in traces. This classification is
-  enabled only for mirror-directed invocations: canonical fetches keep
-  their existing error handling (today these strings fall into
-  `gitErrorFetchRetryClean` and trigger the remove-and-reclone recovery),
-  so no canonical behavior changes.
+  a lag miss is cheap and well-labelled in traces. Canonical checkout
+  recovery treats the new type exactly like the previous generic
+  `gitErrorFetchRetryClean` classification (remove and re-clone), so no
+  canonical behavior changes.
 - Mirror-directed operations go through the existing `gitFetch`/`gitClone`
   helpers, which already pass the repository URL after a `--` argument
   terminator; any *new* Git invocation added by this work must do the same.
@@ -433,8 +432,9 @@ deliberately kept small enough for a single-sitting human review.
 - `gitFetch` support for what the later tiers need: per-invocation extra
   `-c` config, and the `gitErrorFetchRefNotOnRemote` classification
   (`not our ref` / `Server does not allow request for unadvertised object`)
-  with no-retry semantics, opt-in per invocation so canonical fetch error
-  handling is untouched.
+  with no-retry semantics. Canonical checkout recovery handles the new type
+  exactly like its previous generic exit-128 classification, so canonical
+  behavior is unchanged while mirror callers can distinguish a miss.
 - `gitCredentialHelperFlags` helper (scoped credential config) extracted
   beside `configureGitCredentialHelper`.
 - Trace attribute scaffolding (`git.remote_mirror.result` =

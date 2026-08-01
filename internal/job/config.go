@@ -125,6 +125,15 @@ type ExecutorConfig struct {
 	// SSH private key to use for git checkout operations
 	GitSSHKey string `env:"BUILDKITE_GIT_SSH_KEY"`
 
+	// Backend-provided remote mirror used as an optional checkout source.
+	// Intentionally has no env tag so hooks cannot replace it at runtime.
+	GitRemoteMirrorURL string
+
+	// Repository for which the backend issued GitRemoteMirrorURL. Comparing
+	// this with Repository disables the mirror if a hook redirects checkout.
+	// Intentionally has no env tag so it remains the pre-hook value.
+	GitRemoteMirrorRepository string
+
 	// Enable git commit verification
 	GitCommitVerification string `env:"BUILDKITE_GIT_COMMIT_VERIFICATION"`
 

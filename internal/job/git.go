@@ -36,6 +36,8 @@ const (
 	gitErrorFetchBadObject
 	// can happen when just the short commit hash is given.
 	gitErrorFetchBadReference
+	// the server does not have, or will not advertise, the requested object.
+	gitErrorFetchRefNotOnRemote
 	gitErrorClean
 	gitErrorCleanSubmodules
 	gitErrorRepack
@@ -48,6 +50,8 @@ const (
 	gitErrStrBadObject             = "fatal: bad object"
 	gitErrStrBadReference          = "fatal: couldn't find remote ref"
 	gitErrStrBadReferencePreGit221 = "fatal: Couldn't find remote ref"
+	gitErrStrNotOurRef             = "not our ref"
+	gitErrStrUnadvertisedObject    = "Server does not allow request for unadvertised object"
 )
 
 var (
@@ -290,7 +294,7 @@ func gitRepack(ctx context.Context, sh *shell.Shell, args ...string) error {
 
 type gitFetchArgs struct {
 	Shell         *shell.Shell // The shell to run the command in
-	GitFlags      string       // Global git flags to pass to the command
+	GitFlags      []string     // Global git flags to pass to the command
 	GitFetchFlags string       // Flags to pass to the fetch command
 	Repository    string       // The remote to fetch from
 	Retry         bool         // Whether to retry the fetch on certain errors
@@ -301,13 +305,7 @@ func gitFetch(ctx context.Context, args gitFetchArgs) error {
 	// Build the command: git [global gitFlags] fetch [fetchFlags] -- [repository] [refspecs...]
 	commandArgs := []string{}
 
-	if args.GitFlags != "" {
-		parts, err := shellwords.Split(args.GitFlags)
-		if err != nil {
-			return fmt.Errorf("failed to parse gitFlags: %w", err)
-		}
-		commandArgs = append(commandArgs, parts...)
-	}
+	commandArgs = append(commandArgs, args.GitFlags...)
 
 	commandArgs = append(commandArgs, "fetch")
 
@@ -334,6 +332,8 @@ func gitFetch(ctx context.Context, args gitFetchArgs) error {
 		gitErrStrBadObject:             false,
 		gitErrStrBadReference:          false,
 		gitErrStrBadReferencePreGit221: false,
+		gitErrStrNotOurRef:             false,
+		gitErrStrUnadvertisedObject:    false,
 	}
 
 	// The retry logic is used to handle rare cases where a commit ref is not yet available
@@ -361,6 +361,11 @@ func gitFetch(ctx context.Context, args gitFetchArgs) error {
 			if smelt[gitErrStrBadReference] || smelt[gitErrStrBadReferencePreGit221] {
 				args.Shell.Commentf("%s", retrier)
 				return &gitError{error: err, Type: gitErrorFetchBadReference, WasRetried: args.Retry}
+			}
+
+			if smelt[gitErrStrNotOurRef] || smelt[gitErrStrUnadvertisedObject] {
+				retrier.Break()
+				return &gitError{error: err, Type: gitErrorFetchRefNotOnRemote}
 			}
 
 			// "fatal: bad object" can happen when the local repo in the checkout

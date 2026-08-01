@@ -3,9 +3,11 @@ package job
 import (
 	"errors"
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/buildkite/agent/v3/internal/shell"
+	"github.com/buildkite/bintest/v3"
 	"github.com/google/go-cmp/cmp"
 )
 
@@ -328,6 +330,7 @@ func TestGitFetch(t *testing.T) {
 
 	if err := gitFetch(ctx, gitFetchArgs{
 		Shell:         sh,
+		GitFlags:      []string{"-c", "credential.helper="},
 		GitFetchFlags: "--foo --bar",
 		Repository:    "repo",
 		RefSpecs:      []string{"ref1", "ref2"},
@@ -335,9 +338,36 @@ func TestGitFetch(t *testing.T) {
 		t.Fatalf(`gitFetch(ctx, gitFetchArgs{Shell: sh, GitFetchFlags: "--foo --bar", Remote: "repo", RefSpecs: []string{"ref1", "ref2"}} = %v`, err)
 	}
 
-	wantLog := [][]string{{absoluteGit, "fetch", "--foo", "--bar", "--", "repo", "ref1", "ref2"}}
+	wantLog := [][]string{{absoluteGit, "-c", "credential.helper=", "fetch", "--foo", "--bar", "--", "repo", "ref1", "ref2"}}
 	if diff := cmp.Diff(gotLog, wantLog); diff != "" {
 		t.Errorf("executed commands diff (-got +want):\n%s", diff)
+	}
+}
+
+func TestGitFetchCanClassifyRefNotOnRemoteAsMirrorMiss(t *testing.T) {
+	git, err := bintest.NewMock("git")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer git.CheckAndClose(t) //nolint:errcheck // bintest logs to t
+
+	git.Expect("fetch", "--", "https://mirror.example.com/repo.git", "deadbeef").
+		AndWriteToStderr("fatal: remote error: upload-pack: not our ref deadbeef").
+		AndExitWith(128)
+
+	sh := shell.NewTestShell(t)
+	sh.Env.Set("PATH", filepath.Dir(git.Path))
+	err = gitFetch(t.Context(), gitFetchArgs{
+		Shell:      sh,
+		Repository: "https://mirror.example.com/repo.git",
+		RefSpecs:   []string{"deadbeef"},
+	})
+	var gitErr *gitError
+	if !errors.As(err, &gitErr) {
+		t.Fatalf("gitFetch() error = %v, want *gitError", err)
+	}
+	if gitErr.Type != gitErrorFetchRefNotOnRemote {
+		t.Errorf("gitFetch() error type = %d, want %d", gitErr.Type, gitErrorFetchRefNotOnRemote)
 	}
 }
 
