@@ -361,7 +361,7 @@ Applies when there is no existing checkout and no on-host mirror.
 origin at canonical:**
 
 ```text
-git clone <user flags, minus deferred --config keys> [-c scoped credentials] -- <mirror-url> .
+git [-c scoped credentials] clone <user flags, minus deferred --config keys> -- <mirror-url> .
 git remote set-url origin <canonical>
 git config --add <deferred --config keys>   # extraHeader / credential.* / insteadOf
 # then the normal flow: fetchSource (tier B mirror-first logic), verify, checkout…
