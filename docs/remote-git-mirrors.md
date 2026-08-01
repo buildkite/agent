@@ -21,9 +21,9 @@ happens to share the word "mirror". This document uses:
 §§1–5 and §10 are durable: they describe the feature and the decisions behind
 it. §§6–9 and §11 are delivery-time content — once the stack has landed, fold
 anything still true into the durable sections and delete the rest rather than
-leaving a plan to rot next to the code it produced. Two durable passages (§5.2's
-`refs/pull/*` note and §10-C3) point into §11, so that fold has to inline the
-answers rather than drop the references.
+leaving a plan to rot next to the code it produced. Durable passages that point
+into §11 must inline the resulting decisions during that fold rather than drop
+the references.
 
 ## 1. Why
 
@@ -85,8 +85,10 @@ them ourselves and we clear the obvious inherited channels", not "we sandbox
 Git".
 
 **R8 — The built commit is never chosen by the mirror.** The agent checks out
-the SHA the backend named. Mirror-derived *names* (branch refs, tags) may end up
-in the checkout and may be stale, but nothing the agent does resolves a name
+the full object ID the backend named. For today's SHA-1 repositories that is a
+40-hex SHA; the requirement is the repository's complete immutable object ID,
+not SHA-1 specifically. Mirror-derived *names* (branch refs, tags) may end up in
+the checkout and may be stale, but nothing the agent does resolves a name
 through the mirror to decide what to build.
 
 **R9 — Observability.** Every checkout reports what the mirror did:
@@ -97,7 +99,10 @@ nothing else. It goes to two sinks, because the aggregatable one is not
 universal: a span attribute on `repo-checkout`, and one line in the job log.
 `tracetools.StartSpanFromContext` returns a no-op span unless `--tracing-backend`
 is set, and it defaults to unset, so a span-only signal would be invisible on
-most agents — including, possibly, the first fleet this ships to.
+most agents — including, possibly, the first fleet this ships to. Metric-shaped
+span attributes stay low-cardinality: outcomes, durations, sites and skip
+reasons only, never repository URLs. A URL may appear only in the job log after
+`redact.URLCredentials`.
 
 ## 3. Trust model, and what we are deliberately not doing
 
@@ -167,12 +172,12 @@ Four things are easy to get wrong, and the plan depends on all of them:
 
 ### 4.2 Measured Git behaviour
 
-Everything below was measured on git 2.43.0 while writing this document, and
-independently reproduced during review. These are the facts the plan rests on.
+Everything below was measured on git 2.43.0 while writing this document. These
+are the facts the plan rests on and the behaviours implementation tests preserve.
 
 | # | Behaviour | Result |
 | --- | --- | --- |
-| G1 | `git fetch <url> <full-sha>` for a SHA reachable from an advertised ref, protocol v2, default server config | succeeds — `uploadpack.allowAnySHA1InWant` is **not** required. Confirmed over local path, `file://`, `http://` and `git://` |
+| G1 | `git fetch <url> <full-sha>` for any object the server has, protocol v2, stock server config | succeeds for both reachable and unreachable objects — `uploadpack.allowAnySHA1InWant` is **not** required. Confirmed over local path, `file://`, `http://` and `git://` |
 | G2 | Same under protocol v0 | fails with `Server does not allow request for unadvertised object`; **exit 128 over HTTP**, exit 1 over local/`file://`/`git://` |
 | G3 | `git fetch <url> <full-sha>` for a SHA the server does not have, protocol v2 | `fatal: remote error: upload-pack: not our ref <sha>`, exit 128 |
 | G4 | `git clone --reference <repo>` where the objects are reachable only from a non-standard ref namespace in the reference repo | transfers **0** objects — negotiation enumerates every ref of the alternate, not just `refs/heads/*` |
@@ -190,6 +195,11 @@ independently reproduced during review. These are the facts the plan rests on.
 G6 and G7 are what let this design stay small: `git clone` from the mirror
 followed by repointing `origin` reproduces canonical clone semantics exactly,
 because it *is* `git clone`, and the promisor follows for free.
+
+G1 is a property of stock protocol-v2 `git-upload-pack`; a mirror provider may
+implement a stricter server. The capability question is therefore whether the
+provider restricts v2 wants, not whether stock Git has
+`uploadpack.allowAnySHA1InWant` enabled. That knob is a protocol-v0 concern.
 
 G3 explains why the mirror needs its own error classification: `gitFetch`
 currently smelts `fatal: bad object` and `fatal: [Cc]ouldn't find remote ref`,
@@ -296,7 +306,7 @@ time ships a PR 1 that can only ever report `skipped`.
 mirror URL is non-empty and https
 && the mirror URL is permitted by --allowed-repositories, when that is set
 && canonical repository still matches the one the mirror was issued for
-&& BUILDKITE_COMMIT is a full 40-hex lowercase SHA
+&& BUILDKITE_COMMIT is a full lowercase object ID for the repository hash format
 && BUILDKITE_BRANCH is non-empty and fits a path component once sanitised (§5.8)
 && BUILDKITE_REFSPEC == "" && BUILDKITE_TAG == "" && BUILDKITE_PULL_REQUEST == "false"
 && this is the first checkout attempt
@@ -310,23 +320,26 @@ branch clauses are in the predicate, not buried in the section about ref naming.
 a checkout that is failing and retrying from re-paying the mirror's cost on each
 of six attempts. It is the clause most likely to be worth relaxing later.
 
-Only the SHA clause is a correctness requirement. Everything the mirror is asked
-for is that SHA, and every eligible build ends at `git checkout <commit>`, so
-R8 holds on the SHA clause alone — a tag or PR build with a known SHA would be
-just as safe. The tag, PR and refspec clauses are pragmatism: they are close to
-the conditions `verifyCommit` already skips on (not identical — `verifyCommit`
-also skips an empty branch, and treats an empty `BUILDKITE_PULL_REQUEST` as a
-non-PR build where this predicate wants the literal `"false"`), and they avoid
-depending on answers we do not have yet (§11 has to ask whether the mirror even
-serves `refs/pull/*`). Relax them when those answers arrive.
+Only the full-object-ID clause is a correctness requirement. Today the agent
+supports SHA-1 repositories, so the implementation recognises a lowercase
+40-hex value. If the agent gains SHA-256 repository support, the validation
+widens to that repository hash format; the requirement does not change.
+Everything the mirror is asked for is that object ID, and every eligible build
+ends at `git checkout <commit>`, so R8 holds on that clause alone — a tag or PR
+build with a known immutable object ID would be just as safe. The tag, PR and
+refspec clauses are pragmatism: they are close to the conditions `verifyCommit`
+already skips on (not identical — `verifyCommit` also skips an empty branch, and
+treats an empty `BUILDKITE_PULL_REQUEST` as a non-PR build where this predicate
+wants the literal `"false"`), and they avoid depending on provider capabilities
+we do not have yet (§11.2). Relax them only through F3's gate (§11.1).
 
 `https` rather than `http(s)`: the credential helper rejects any other protocol
 (`errNotHTTPS` in `clicommand/git_credentials_helper.go`), so an `http` mirror
 could only ever work unauthenticated. One scheme, no half-supported case.
 
 **The allowlist clause makes the job mirror-ineligible; it does not refuse the
-job.** This is the one place the first draft of this plan had a fleet-breaking
-bug, so it is worth being explicit. `validateConfigAllowlists` in
+job.** A superficially natural implementation here is fleet-breaking, so it is
+worth being explicit. `validateConfigAllowlists` in
 `agent/run_job.go` is not advisory: a miss returns `SignalReasonAgentRefused`
 and the agent refuses the job. Operators anchor `--allowed-repositories` at
 their canonical host, and a mirror is by definition on a different one — so
@@ -390,17 +403,17 @@ shape of the command, and getting this wrong in either direction is expensive:
   `WithTimeout` never extends past a parent deadline, so when
   `--git-checkout-timeout` is set the attempt is already capped by whatever
   remains, for free. No "reserve a fraction for canonical" arithmetic, which the
-  first draft specified and which is not a number an implementer can act on.
+  implementation cannot turn into a stable, reviewable invariant.
 - **Bulk-transfer** — the clones in PR 2's creation arm and PR 4. No wall-clock
   cap. Instead, `-c http.lowSpeedLimit=1000 -c http.lowSpeedTime=<n>` alongside
   the §5.4 transport flags, so the bound is on *stalling* rather than on size.
 
-Applying one flat 30-second rule to both was the first draft's error, and it
-inverts the feature. A mirror clone still transferring after 30 seconds is doing
-its job, on precisely the repositories large enough to justify a mirror. Capping
-it means burning 30 seconds of the fast host, discarding the transfer, and then
-cloning from the slow one anyway — worse than not enabling the feature, on the
-hit path, for the target workload.
+Applying one flat 30-second rule to both inverts the feature. A mirror clone
+still transferring after 30 seconds is doing its job, on precisely the
+repositories large enough to justify a mirror. Capping it means burning 30
+seconds of the fast host, discarding the transfer, and then cloning from the slow
+one anyway — worse than not enabling the feature, on the hit path, for the
+target workload.
 
 But "inherits `--git-checkout-timeout`" is not a bound: that flag defaults to
 `0`, which its own usage text defines as no timeout, and
@@ -442,6 +455,11 @@ One honest gap in "at most one bounded round trip": PR 4's discard arm calls
 `removeCheckoutDir`, whose ten-attempt loop sleeps a hard 10 seconds between
 tries and ignores the context. Reusing it is still right — see PR 4 — but it is
 not bounded by anything here.
+
+**Cancellation is not a mirror miss.** Canonical fallback runs only while the
+parent checkout context remains live. If cancellation kills the mirror attempt,
+return the cancellation; do not spend a cancelled job's time starting canonical
+work. The shared helper owns this rule, and every site tests it.
 
 ### 5.4 Credentials and transport flags (R7)
 
@@ -492,6 +510,14 @@ Every mirror-addressed Git command gets these, per invocation, never persisted:
 Everything else — `GIT_CONFIG_*` beyond the two keys above, `init.templateDir`,
 `http.proxy`, `GIT_SSL_*`, other `http.*` keys, `GIT_SSH_COMMAND` — is
 inherited. §10-C6.
+
+Do not add a reused-checkout gate that scans local config for
+`http.extraHeader`, `credential.*`, or `url.*.insteadOf`. The invocation-scoped
+helper reset and unscoped-header reset neutralise the ordinary bearer carriers.
+A URL-scoped header or rewrite can affect the mirror only when the customer has
+aimed it at a URL that also matches the mirror, and exotic residual carriers
+are accepted under the trust model and C6. A broad gate would forfeit the
+optimisation without closing a meaningful boundary.
 
 ### 5.5 Plumbing prerequisite: the git wrappers must take `[]string`
 
@@ -576,6 +602,12 @@ written by the skipped fetch (§10-C4, and no eligible flow reads it).
 not enough — §10-C2 has a measured case where the objects arrive but the ref
 write fails, leaving them unreferenced and eligible for `gc`.
 
+Every `hasGitCommit` invocation runs with `GIT_NO_LAZY_FETCH=1`. On Git 2.45+
+that prevents a presence probe in a partial clone from satisfying itself through
+the promisor remote; older Git versions ignore it. This hardens the mirror
+checks and the pre-existing `GitSkipFetchExistingCommits` probe with one
+environment value.
+
 ### 5.8 Namespaced, sanitised refs in the on-host mirror
 
 When the remote mirror fetch targets the on-host mirror, it writes
@@ -617,6 +649,34 @@ Each part of that earns its place:
   "unusable branch name" and an algorithm to pin down. Not worth it until
   someone has such a branch.
 
+### 5.9 Decisions this plan intentionally does not revisit
+
+These choices are paired with the rest of the design; substituting one in
+isolation reintroduces failure modes the plan is meant to remove.
+
+- Mirror commands receive the **explicit mirror URL**. Fresh clones then run
+  `git remote set-url origin <canonical>`. A command-scoped
+  `url.<mirror>.insteadOf=<canonical>` rewrite is not the primary transport:
+  `git clone -c`/`--config` can persist it, local paths bypass it, and existing
+  canonical-keyed rewrites compete under longest-match precedence. A scoped
+  rewrite remains the right tool only for gated follow-up F2, where no clone is
+  involved.
+- Budgets are shape-dependent (§5.3), never one flat sub-deadline or a fraction
+  of the parent deadline for every mirror command.
+- Lagging mirror data never writes canonical `refs/heads/*`; the namespaced
+  exact-object-ID ref and its accepted staleness cost are one decision (§5.8,
+  C8).
+- The update-arm mirror fetch stays before `updateRemoteURL` (§6 PR 2), so a hit
+  cannot bypass rename maintenance.
+- CDN pack or bundle offload is outside this stack and gated as F1 (§11.1).
+- Misses are classified by the shared helper and `gitErrorFetchRefNotOnRemote`;
+  a presence-only outcome cannot distinguish lag, timeout and transport error.
+- Fresh acquisition is a real clone, never `git init` plus a reconstructed clone
+  contract (§5.6).
+- A disallowed mirror declines the optimisation, never the job (§5.2).
+- Mirror eligibility derives first-attempt-only from the attempt count; it is
+  not persisted as executor-lifetime mutable state.
+
 ## 6. Delivery plan
 
 Four stacked pull requests.
@@ -641,16 +701,30 @@ the refspec and the fetch flags, and it owns **both halves of §5.7's
 confirmation** — exit zero *and* `hasGitCommit` — and writes the resulting
 `outcome` onto the attempt. Callers get a `bool`. Leaving the confirmation to
 the callers gives §5.7 two implementations, which is how one of them ends up
-checking presence alone.
+checking presence alone. If the mirror command ends because the parent context
+is cancelled, the helper returns cancellation and forbids canonical fallback;
+only a live parent context may fail open to canonical.
 
 Everything either side of the call genuinely differs: the git directory, the
 refspec form (`+<sha>:<ref>` versus a bare SHA), the flags (none versus the
 caller's, including an auto-added filter), and the post-conditions (PR 3 also
-retargets the promisor). If reviewers would rather have three PRs than four,
-merging 2 and 3 is the natural cut; they are separate here because their risk
-surfaces and test fixtures are different.
+retargets the promisor). They remain separate PRs because their risk surfaces
+and test fixtures are different.
 
-There is no PR for CDN pack offload. See §11.
+There is no PR for CDN pack offload. See §11.1 F1.
+
+This delivery has exactly four implementation PRs. PR 1 may use two logical
+commits for reviewability — first `[]string` plumbing plus error classification,
+then config, binding, allowlist drop, decision, telemetry and helper — but both
+commits remain in the same foundations PR. The shared helper and `fetchSource`
+threading never slip into a behaviour PR.
+
+Every implementation PR description opens with the one checkout path it
+changes and gives before/after command sequences for a hit and a lag fallback.
+PR 1 explicitly calls out the allowlist semantics reversal from #4153 — decline
+the mirror rather than refuse the job — for reviewer sign-off. Review should ask
+whether a concern can violate §3's product assumptions before adding defensive
+code for it.
 
 ### PR 1 — Config, decision and telemetry
 
@@ -706,7 +780,9 @@ answer anyway.
 an allowlist miss drops the mirror URL and warns rather than refusing the job;
 error classification for
 all three fetch failure strings on both protocol versions; span attributes for
-`skipped` and for "no mirror configured"; `config_completeness_test`.
+`skipped` and for "no mirror configured"; `config_completeness_test`;
+cancellation causes no canonical fallback; and an option-like URL still appears
+after `--`. Presence probes assert `GIT_NO_LAZY_FETCH=1`.
 
 ### PR 2 — Create and refresh the on-host mirror from the remote mirror (R4)
 
@@ -750,6 +826,11 @@ one command both transfers the objects and pins them. Then, only if that exited
 zero **and** `hasGitCommit` now passes, take the same
 `return e.snapshotMirror(...)` exit the short-circuit above takes. Otherwise
 fall through to the existing canonical fetch, unchanged.
+
+`--no-tags` is required rather than decorative. A destination-less
+`git fetch origin <branch>` does not auto-follow tags, while fetching from a URL
+with the explicit destination refspec above does. Without `--no-tags`, a
+remote-mirror refresh would import lagged tags into the shared on-host mirror.
 
 Placing it before `updateRemoteURL` rather than after is not cosmetic. After
 `updateRemoteURL` has run, `urlChanged` may be set, and its only consumer is the
@@ -795,7 +876,12 @@ fetch-succeeded-but-ref-write-failed does **not** count as a hit; a commit
 already in the on-host mirror reports `notReached` and never contacts the
 mirror; timeout; mirror refuses auth; `--git-mirrors-skip-update` selects a
 checkout-side site instead; submodule mirrors untouched; `refs/heads/*` never
-written by the mirror path.
+written by the mirror path; and cancellation after starting mirror work causes
+no canonical fallback.
+
+This first behaviour-changing PR also ships the agent documentation and the
+corresponding `buildkite/docs` update. Later site PRs update those docs rather
+than waiting for the whole stack.
 
 ### PR 3 — Refresh an existing checkout from the remote mirror (R5)
 
@@ -866,7 +952,8 @@ byte-identical; a sparse pipeline's mirror fetch carries `--filter=blob:none`;
 no `remote.<mirrorURL>.*` survives a hit; and — the one that matters — after a
 hit on a checkout that was **not** previously a partial clone, with the mirror
 then deleted, the worktree materialises. A config-shape assertion passes on the
-broken repository, so this has to assert on the file, per §8.
+broken repository, so this has to assert on the file, per §8. Cancellation
+after the mirror attempt starts causes no canonical fallback.
 
 ### PR 4 — Clone a fresh checkout from the remote mirror (R6)
 
@@ -950,7 +1037,7 @@ produce the same `.git/config`, `remote.origin.fetch`, `remote.origin.tagOpt`
 and shallow state as a canonical clone; a mirror whose fixture lacks
 `uploadpack.allowFilter`, asserting on missing-object count rather than config
 equality; a mirror-cloned partial clone still resolves lazily after the mirror
-is removed.
+is removed; and cancellation during the mirror clone causes no canonical clone.
 
 ## 7. How this answers the review threads on #4144 and #4153
 
@@ -980,7 +1067,9 @@ code that caused it no longer exists.
 ## 8. Testing
 
 - **Unit** (`internal/job`): the eligibility table with a case per skip reason,
-  error classification on both protocol versions, transport flag construction.
+  error classification on both protocol versions, transport flag construction,
+  `GIT_NO_LAZY_FETCH=1` on commit-presence probes, option-like URLs after `--`,
+  and low-cardinality telemetry containing no URLs.
 - **HTTP-backed** (`internal/job` with `internal/job/githttptest`): hit, miss,
   timeout, authenticated mirror through the credential helper, mirror down. The
   package already serves several repositories from one test server, so
@@ -1004,6 +1093,10 @@ code that caused it no longer exists.
   mirror. A mirror URL pointing at a closed port is the cheapest way to say so.
   The `--allowed-repositories` case belongs with PR 1's job-runner tests, not
   here — by the time the executor runs there is no mirror URL to observe.
+- **Cancellation**: every site cancels mirror work and returns without starting
+  canonical fallback when the parent checkout context is cancelled. Cancellation
+  is asserted separately from a mirror timeout, which does fail open while the
+  parent remains live.
 
 ## 9. Rollout
 
@@ -1011,7 +1104,10 @@ Two controls, both pre-existing:
 
 - **Per pipeline and per organisation**, on the backend: `clone_mirror_url` is
   unset by default, and the `PipelineCloneMirror` feature flag gates who can set
-  it at all. Nothing happens to any pipeline until someone opts in.
+  it at all. Nothing happens to any pipeline until someone opts in. Today the
+  backend emits the URL unconditionally once the setting exists; that feature
+  flag gates setting the value, not emission. The incident-response consequence
+  is open question Q1 (§11.2) and gated follow-up F4 (§11.1).
 - **Per fleet**, on the agent: `--allowed-repositories`, which now declines the
   mirror rather than the job (§5.2). An operator who has not allowed the mirror
   host gets canonical behaviour and a warning in the job log — not a `skipped`
@@ -1027,12 +1123,18 @@ the rest have to be read against; the `hit`/`miss` ratio among the jobs that did
 reach a site; the distribution of `skipped` reasons (a fleet-wide skip reason is
 a misconfiguration, not a lag problem); mirror attempt duration — a slow miss is
 what hurts — and total checkout duration against a comparable pipeline without a
-mirror.
+mirror. These fields contain only the bounded outcome vocabulary, site, duration
+and skip reason. URLs never enter metric labels; job-log URLs are passed through
+`redact.URLCredentials`.
 
 Every PR is revertible on its own: each adds one arm behind a decision that
 resolves to `none` for every pipeline without a mirror URL.
 
 ## 10. Caveat register
+
+A caveat is promoted to a requirement when it is observed in ordinary customer
+configurations. It does not become implementation complexity solely because a
+pathological configuration can be constructed.
 
 Each entry names where the acceptance comment goes, so a future reader hits the
 explanation before they file the bug. The comment is a one-liner pointing here,
@@ -1071,7 +1173,7 @@ violated on a *hit*. `--depth` fails loudly in the same situation; `--filter`
 does not. The general rule this instance of: **the mirror must support at least
 the capabilities canonical does**, and where it does not, the degradation is
 silent. Detection after the fact does not recover the job's bytes, so the
-mitigation is telemetry plus §11's question to the mirror provider, and a test
+mitigation is telemetry plus §11.2 Q3, and a test
 fixture that deliberately lacks the capability. *Comment: beside the mirror
 clone in `checkout_workdir.go`.*
 
@@ -1149,30 +1251,92 @@ Git has no connect-timeout config, so curl's default is the bound. Once per job,
 not once per checkout attempt, and `--git-checkout-timeout` bounds it for an
 operator who cares. *Comment: with the stall-guard flags.*
 
-## 11. Open questions
+**C16 — Shared on-host mirrors must remain usable by older agents.** Agents
+predating this feature can use the same mirror volume, so
+`remote.origin.url` remaining canonical at all times is a mixed-fleet
+compatibility contract, not a preference. New agents may fetch from the mirror
+URL per invocation; durable shared state stays canonical. *Comment: beside the
+creation clone's immediate `set-url` in `checkout_mirror.go`.*
 
-For the backend and the mirror provider. The first two would each remove
-machinery from this plan.
+**C17 — `--git-clone-mirror-flags` is operator configuration passed to the
+mirror-directed creation clone.** If an operator embeds credentials or
+transport configuration there, Git applies it to the mirror. This is accepted
+under §3: the operator configured the agent and the customer chose both hosts.
+*Comment: beside the mirror creation clone.*
 
-- **Staleness contract.** Can the mirror URL be advertised only once the backend
-  knows the commit is present? That turns a miss from "expected, must be cheap"
-  into "a bug worth alerting on", and lets most of the fallback machinery relax.
-- **Capability parity.** Does the mirror advertise `uploadpack.allowFilter`, and
-  does it allow wants for *unreachable* objects (`uploadpack.allowAnySHA1InWant`,
-  needed to rebuild a commit that has been force-pushed away — G1 covers only
-  the reachable case)? C3 exists because the answer is currently unknown and the
-  failure is silent.
-- Can the mirror URL rotate between jobs of the same pipeline? PR 2 keys the
-  on-host mirror directory on the canonical URL specifically so rotation does
-  not fragment the cache, but it is worth confirming.
-- Does the mirror serve `refs/pull/*`? That is the precondition for extending
-  eligibility to PR builds.
-- Does it proxy Git LFS?
-- **CDN pack offload**, deliberately not a PR in §6. Two mechanisms exist and
-  each is one client flag: `-c fetch.uriProtocols=https` (packfile-uri, protocol
-  v2 only, client must opt in — G11; upstream's server side only offloads blobs
-  above a threshold via `uploadpack.blobPackfileUri`), and
-  `-c transfer.bundleURI=true` (bundle-uri, git ≥ 2.38, seeds a clone from
-  typically CDN-hosted bundle files and is likelier to shift the bulk of a full
-  clone). Which to use — if either — is the provider's answer, not ours, and
-  neither is worth carrying without a measurement from a landed PR 4.
+**C18 — Removing `clone_mirror_url` purges no cached objects.** It stops future
+mirror use, but objects already present in checkouts or on-host mirrors remain.
+They are valid content-addressed data from a customer-controlled replica, not
+credentials or mutable policy. *Operator guidance: §9 and the pipeline mirror
+documentation shipped in PR 2.*
+
+## 11. Gated follow-ups and open questions
+
+### 11.1 Follow-ups explicitly outside the initial stack
+
+**F1 — Packfile-URI or bundle-URI offload.** Git, not the agent, owns download,
+verification and retention. Accept `https` URIs only and do not add agent-side
+eligibility parsing. The two candidate client flags are
+`-c fetch.uriProtocols=https` (packfile-URI, protocol v2, G11) and
+`-c transfer.bundleURI=true` (bundle-URI, Git 2.38+). The latter may move more
+of a full clone than upstream's blob-only packfile-URI implementation.
+
+Gate: the provider says which mechanism it serves, and PR 4 has landed so the
+benefit can be measured against a real mirror clone baseline.
+
+**F2 — Route blobless materialisation through the mirror.** The initial stack
+leaves the promisor as canonical `origin`, so sparse/blobless jobs materialise
+lazy blobs from canonical even after a mirror hit. A future implementation may
+apply command-scoped
+`-c url.<mirror>.insteadOf=<canonical>` only to materialisation commands that
+already carry the canonical URL. It must be `git -c`, never clone
+`-c`/`--config`, it inherits §5.4's transport flags, and it needs an explicit
+post-checkout presence/materialisation assertion because Git can report the
+relevant failure at exit 0.
+
+Gate: Q5 and R9 telemetry show meaningful canonical lazy-fetch volume on
+mirror-hit jobs, especially sparse pipelines on long-lived agents. This is a
+product/infra decision, not an agent-code assumption.
+
+**F3 — Relax eligibility to PR and tag builds.** The immutable object-ID
+property remains sound, but a provider that does not replicate `refs/pull/*` or
+tags makes every such build pay a systematic miss.
+
+Gate: Q3 confirms provider replication of the required PR refs and tags.
+
+**F4 — Agent-side kill switch.** An agent flag such as
+`--no-git-remote-mirrors` would provide a fleet-local incident control.
+
+Gate: Q1. If the backend adds an emission-side kill switch, this follow-up is
+closed as unnecessary and §9's backend-gated rollout remains the design.
+
+### 11.2 Open questions requiring owner decisions
+
+**Q1 — Kill switch and emission gating.** The backend currently emits
+`BUILDKITE_GIT_REMOTE_MIRROR_URL` whenever `clone_mirror_url` is present;
+`PipelineCloneMirror` gates who can set the field, not whether it is emitted.
+Choose one: add a backend emission-side gate (preferred, and closes F4), add F4,
+or accept bounded fleet-wide degradation during a provider incident. Owner:
+backend and agent leads jointly.
+
+**Q2 — Staleness contract.** Can the backend advertise the mirror URL only when
+it believes the object ID has replicated? That turns a miss from expected into
+an alertable bug and may let the fallback machinery shrink.
+
+**Q3 — Provider capability parity.** For each provider: does its server
+implementation restrict protocol-v2 wants (stock `git-upload-pack` does not);
+does it advertise `uploadpack.allowFilter`; does it replicate `refs/pull/*` and
+tags; and does it proxy LFS? A missing filter silently performs a full transfer
+(C3), PR/tag replication gates F3, and LFS behaviour affects PR 4's fallback.
+The repository-token mint path is Cursor-Origin-specific today; every additional
+provider needs an equivalent confirmation.
+
+**Q4 — Mirror URL rotation.** May `clone_mirror_url` change between jobs of one
+pipeline? The on-host directory is keyed by canonical URL so rotation does not
+fragment the cache, but rotation still affects credential caching and telemetry
+interpretation.
+
+**Q5 — Blobless materialisation population.** Is sparse/blobless work on
+long-lived agents common enough, and its canonical lazy-fetch volume high
+enough, to justify F2's extra recovery states? Answer after PR 3 telemetry has
+run in production.
