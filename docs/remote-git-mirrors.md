@@ -507,10 +507,11 @@ Every mirror-addressed Git command gets these, per invocation, never persisted:
   per-invocation helper is the only mechanism available. Build the value from
   one shared function over `self.Path(ctx)`, used by both call sites; two
   independent `fmt.Sprintf`s of the same helper string will drift. The value
-  uses Git's leading-`!` shell-snippet form and shell-quotes the executable
-  path: `!<quoted-agent-path> git-credentials-helper`. Quoting without `!`
-  makes Git interpret the quoted value as a helper name and try
-  `git credential-<value>`.
+  uses Git's leading-`!` shell-snippet form and POSIX single-quote escaping for
+  the executable path: `!<quoted-agent-path> git-credentials-helper`. Generic
+  display-oriented quoting can preserve backslashes inside double quotes and
+  corrupt paths containing shell metacharacters. Quoting without `!` makes Git
+  interpret the value as a helper name and try `git credential-<value>`.
 - `credential.useHttpPath=true` scopes the helper call to the full mirror URL,
   which is what `repository_access_token` keys on. That the endpoint will answer
   for a URL other than the job's repository is the load-bearing assumption
@@ -1106,9 +1107,13 @@ Blobless, sparse and single-branch (R3) need no special handling: the same
 `BUILDKITE_GIT_CLONE_FLAGS` go to the mirror clone (G6). A lagging shallow clone
 is the exception. Fetching the missing commit into the mirror's shallow boundary
 retains the mirror tip as an extra shallow root and can make more history
-reachable than a canonical clone with the same depth. Re-clone canonically on a
-lag miss whenever clone flags contain `--depth`, `--shallow-since`, or
-`--shallow-exclude`; this is the smallest reliable way to preserve R3.
+reachable than a canonical clone with the same depth. Ask Git whether the
+resulting repository is shallow rather than reimplementing its accepted option
+spellings and abbreviations. If a shallow clone misses the commit, re-clone
+canonically. Also re-clone a shallow apparent hit when an alternates file is
+present: `hasGitCommit` follows alternates, so the target may come from a newer
+reference repository rather than the lagging mirror. This is the smallest
+reliable way to preserve R3.
 
 Clone flags may also initialize submodules before `origin` is repointed.
 `--recurse-submodules` and its `--recursive` alias resolve relative
@@ -1119,7 +1124,10 @@ contents, and persist those URLs in initialized submodule config. A later
 recursive-submodule clone flag therefore bypass the remote mirror and clone
 canonically in this round. The attempt reports
 `skipped/recursive-submodules`. This keeps submodule semantics exact without
-reconstructing clone-time recursive behavior.
+reconstructing clone-time recursive behavior. Git accepts unambiguous long
+option abbreviations, so the eligibility check conservatively recognizes
+positive `--rec*` and `--rem*` spellings rather than only the documented full
+names.
 
 **Tests:** hit with canonical unreachable, asserting canonical served zero
 objects rather than "was not contacted"; lagging mirror completed from
@@ -1172,8 +1180,10 @@ code that caused it no longer exists.
   the mirror and assert equal `.git/config`, `remote.origin.fetch`,
   `remote.origin.tagOpt` and shallow state across the flag matrix. Assert the
   mirror path actually ran, so a silent fallback cannot make the test pass
-  vacuously. Include a lagging depth case that compares shallow boundaries and
-  reachable commits after canonical fallback.
+  vacuously. Include a lagging depth case using a Git-accepted abbreviated flag
+  that compares shallow boundaries and reachable commits after canonical
+  fallback, plus a shallow-reference case where the target exists only through
+  alternates.
 - **Assert on bytes, not on abstinence.** "Canonical was never contacted" is not
   achievable — the checkout still resolves refs against canonical even on a hit
   (§4.1). Assert objects transferred, or missing-object counts for filtered
