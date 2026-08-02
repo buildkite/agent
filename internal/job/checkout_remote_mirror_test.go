@@ -76,6 +76,14 @@ func TestResolveRemoteMirrorAttempt(t *testing.T) {
 			wantSkipReason: remoteMirrorSkipNone,
 		},
 		{
+			name: "recursive submodule fresh clone",
+			mutate: func(e *Executor) {
+				e.GitCloneFlags = "--recurse-submodules"
+			},
+			wantOutcome:    remoteMirrorOutcomeSkipped,
+			wantSkipReason: remoteMirrorSkipRecursiveSubmodules,
+		},
+		{
 			name: "no URL",
 			mutate: func(e *Executor) {
 				e.GitRemoteMirrorURL = ""
@@ -183,6 +191,27 @@ func TestResolveRemoteMirrorAttempt(t *testing.T) {
 				t.Errorf("skipReason = %q, want %q", got.skipReason, tc.wantSkipReason)
 			}
 		})
+	}
+}
+
+func TestHasRecursiveSubmoduleCloneFlags(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		flags []string
+		want  bool
+	}{
+		{flags: nil},
+		{flags: []string{"--single-branch"}},
+		{flags: []string{"--recursive"}, want: true},
+		{flags: []string{"--recurse-submodules"}, want: true},
+		{flags: []string{"--recurse-submodules=lib/foo"}, want: true},
+		{flags: []string{"--remote-submodules"}, want: true},
+	}
+	for _, tc := range tests {
+		if got := hasRecursiveSubmoduleCloneFlags(tc.flags); got != tc.want {
+			t.Errorf("hasRecursiveSubmoduleCloneFlags(%q) = %t, want %t", tc.flags, got, tc.want)
+		}
 	}
 }
 
