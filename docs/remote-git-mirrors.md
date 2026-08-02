@@ -104,6 +104,15 @@ span attributes stay low-cardinality: outcomes, durations, sites and skip
 reasons only, never repository URLs. A URL may appear only in the job log after
 `redact.URLCredentials`.
 
+**R10 — Runtime support boundary.** Remote Git mirrors require Git 2.45.0 or
+newer. That is the first release where `GIT_NO_LAZY_FETCH=1` makes the
+commit-presence checks in §5.7 reliably local-only. The agent does not add a
+version probe or a compatibility implementation for older Git: operators that
+opt into remote mirrors are responsible for meeting this requirement. Remote
+mirror support on Windows is best-effort and rough-edged in this initial round;
+the ordinary canonical checkout remains the fallback, but exact parity for
+Windows-specific path, process and filesystem behavior is not a release gate.
+
 ## 3. Trust model, and what we are deliberately not doing
 
 The pipeline customer chooses the canonical host, chooses the mirror host,
@@ -126,6 +135,10 @@ Consequences, stated up front so review does not relitigate them:
   canonical. §10 records exactly where this shows.
 - **This can never be a policy mechanism.** A `checkout` hook or plugin replaces
   the whole checkout phase; `BUILDKITE_REPO` is mutable from within a job.
+- **We require Git 2.45.0+ and accept rough-edged Windows support.** These are
+  explicit feature support boundaries, not gaps to paper over with runtime
+  branches. The canonical checkout remains supported according to the agent's
+  existing platform contract.
 
 "Non-secret" is about redaction policy, not about logging hygiene: the mirror
 URL does not belong in `--redacted-vars`, but every mirror URL the agent logs or
@@ -353,12 +366,14 @@ switch, which is why this plan proposes no new agent flag for that job.
 
 Mechanically, the allowlist lives in the job runner and the rest of eligibility
 lives in the executor, two different processes. Rather than plumbing a verdict
-across, the job runner drops `BUILDKITE_GIT_REMOTE_MIRROR_URL` from the job
-environment in `createEnvironment` when the allowlist does not permit it. That
-is the same shape as the `delete(env, "BUILDKITE_AGENT_TOKEN")` already there,
-and the executor then sees a job with no mirror and needs to know nothing about
-allowlists. To the executor this is indistinguishable from "no mirror
-configured", so it must not be described anywhere as a `skipped` reason.
+across, `createEnvironment` sets `BUILDKITE_GIT_REMOTE_MIRROR_URL` to the empty
+string when the backend omitted it or the allowlist does not permit it. An
+explicit empty value is required: bootstrap inherits `os.Environ()`, so merely
+deleting the job-provided map entry would let an ambient agent-process value
+enable the mirror or bypass the allowlist. The executor then sees a job with no
+mirror and needs to know nothing about allowlists. To the executor this is
+indistinguishable from "no mirror configured", so it must not be described
+anywhere as a `skipped` reason.
 
 **The operator's only signal is a job-log line, and it cannot come from
 `createEnvironment`.** `r.jobLogs` is not assigned until well after
@@ -506,6 +521,11 @@ Every mirror-addressed Git command gets these, per invocation, never persisted:
   fails for anything that is not a ref tip (G2). Pinning v2 turns "the mirror
   never works and nobody notices" into "the mirror works"; a mirror that cannot
   speak v2 simply misses and canonical takes over.
+- The agent suppresses the shell command prompt for every mirror-addressed
+  clone and fetch. Otherwise the original argv logs the mirror URL before R9's
+  separately redacted line. Debug environment output also applies
+  `redact.URLCredentials` to `BUILDKITE_GIT_REMOTE_MIRROR_URL`. These are
+  logging-hygiene measures even though the mirror URL itself is not secret.
 
 Everything else — `GIT_CONFIG_*` beyond the two keys above, `init.templateDir`,
 `http.proxy`, `GIT_SSL_*`, other `http.*` keys, `GIT_SSH_COMMAND` — is
@@ -602,11 +622,13 @@ written by the skipped fetch (§10-C4, and no eligible flow reads it).
 not enough — §10-C2 has a measured case where the objects arrive but the ref
 write fails, leaving them unreferenced and eligible for `gc`.
 
-Every `hasGitCommit` invocation runs with `GIT_NO_LAZY_FETCH=1`. On Git 2.45+
-that prevents a presence probe in a partial clone from satisfying itself through
-the promisor remote; older Git versions ignore it. This hardens the mirror
-checks and the pre-existing `GitSkipFetchExistingCommits` probe with one
-environment value.
+Every `hasGitCommit` invocation runs with `GIT_NO_LAZY_FETCH=1`. Git 2.45+
+honors it and prevents a presence probe in a partial clone from satisfying
+itself through the promisor remote. Older Git ignores it and is deliberately
+outside the remote-mirror support boundary (R10); do not add a second local
+object-inspection implementation or runtime version branch. The same
+environment value also hardens the pre-existing
+`GitSkipFetchExistingCommits` probe.
 
 ### 5.8 Namespaced, sanitised refs in the on-host mirror
 
@@ -666,8 +688,10 @@ isolation reintroduces failure modes the plan is meant to remove.
 - Lagging mirror data never writes canonical `refs/heads/*`; the namespaced
   exact-object-ID ref and its accepted staleness cost are one decision (§5.8,
   C8).
-- The update-arm mirror fetch stays before `updateRemoteURL` (§6 PR 2), so a hit
-  cannot bypass rename maintenance.
+- The update arm reconciles canonical `origin` before the mirror fetch and lets
+  a hit continue through any `urlChanged` fsck/gc maintenance (§6 PR 2). A
+  mirror hit must not turn the lossy on-host directory key into a durable stale
+  origin.
 - CDN pack or bundle offload is outside this stack and gated as F1 (§11.1).
 - Misses are classified by the shared helper and `gitErrorFetchRefNotOnRemote`;
   a presence-only outcome cannot distinguish lag, timeout and transport error.
@@ -777,12 +801,15 @@ canonical with `protocol.version` pinned to 0, and one attempt is the better
 answer anyway.
 
 **Tests:** eligibility table including each skip reason; env protection;
-an allowlist miss drops the mirror URL and warns rather than refusing the job;
+an allowlist miss replaces the mirror URL with an explicit empty value and
+warns rather than refusing the job; an ambient process value cannot enable or
+resurrect the mirror;
 error classification for
 all three fetch failure strings on both protocol versions; span attributes for
 `skipped` and for "no mirror configured"; `config_completeness_test`;
 cancellation causes no canonical fallback; and an option-like URL still appears
-after `--`. Presence probes assert `GIT_NO_LAZY_FETCH=1`.
+after `--`. Mirror command prompts and debug env output contain no unredacted
+URL credentials. Presence probes assert `GIT_NO_LAZY_FETCH=1`.
 
 ### PR 2 — Create and refresh the on-host mirror from the remote mirror (R4)
 
@@ -794,27 +821,32 @@ touching the checkout at all.
 volume is the largest single transfer in the system, and it takes the creation
 arm, so covering only the update arm would miss it entirely.
 
-**Creation** (`mirrorDir` does not exist): clone the mirror rather than
-canonical, then hand the result to canonical immediately —
+**Creation** (`mirrorDir` does not exist): clone the mirror into a staging
+directory, hand the result to canonical, then atomically publish it —
 
 ```
-git <transport flags> clone --mirror <GitCloneMirrorFlags> -- <mirrorURL> <mirrorDir>
-git --git-dir=<mirrorDir> remote set-url origin <canonical>
+git <transport flags> clone --mirror <GitCloneMirrorFlags> -- <mirrorURL> <staging>
+git --git-dir=<staging> remote set-url origin <canonical>
+rename <staging> <mirrorDir>
 ```
 
-Same trick as §5.6, one layer down. Setting the URL at creation time means the
+Same trick as §5.6, one layer down. Atomic publication is required by C16: a
+process killed between clone and `set-url` must never leave a shared
+mirror-owned `origin` visible to older agents. The staging directory preserves
+the parent directory's shared permissions and is reclaimed under the existing
+clone lock after interruption. Setting the URL before publication means the
 next job's `updateRemoteURL` sees no change, so the `fsck` + `gc` churn a
-rotating URL would cause never fires. On failure, remove the mirror directory —
-the existing "Removing mirror dir due to failed clone" path — and clone from
-canonical as today. There is no canonical-sourced ref to move backwards here, so
-the mirror's own refs come across as-is and are reconciled by later canonical
-fetches. If the freshly created mirror turns out not to have the commit, no
-special handling: the checkout's canonical clone with `--reference` transfers
-only the delta, which is the tiered fallback working as designed.
+rotating URL would cause never fires. On failure, remove staging and clone from
+canonical as today. There is no canonical-sourced ref to move backwards here,
+so the mirror's own refs come across as-is and are reconciled by later canonical
+fetches. After publication, classify the attempt with the local-only presence
+check: commit present is `hit`; a successful but lagging clone is `miss`. Keep a
+lagging mirror because the checkout's canonical clone with `--reference`
+transfers only the delta.
 
 **Update** (`mirrorDir` exists): immediately after the existing
 `hasGitCommit` short-circuit, **inside** the `if isMainRepository` block that
-contains it, and **before** `updateRemoteURL` —
+contains it, first reconcile `origin` to canonical, then attempt —
 
 ```
 git --git-dir=<mirrorDir> <transport flags> fetch --no-tags -- <mirrorURL> \
@@ -822,9 +854,9 @@ git --git-dir=<mirrorDir> <transport flags> fetch --no-tags -- <mirrorURL> \
 ```
 
 A SHA source with an explicit destination is legal and writes the ref (G5), so
-one command both transfers the objects and pins them. Then, only if that exited
-zero **and** `hasGitCommit` now passes, take the same
-`return e.snapshotMirror(...)` exit the short-circuit above takes. Otherwise
+one command both transfers the objects and pins them. If that exited zero
+**and** `hasGitCommit` now passes, skip the canonical fetch but continue through
+the existing `urlChanged` fsck/gc maintenance before snapshotting. Otherwise
 fall through to the existing canonical fetch, unchanged.
 
 `--no-tags` is required rather than decorative. A destination-less
@@ -832,14 +864,14 @@ fall through to the existing canonical fetch, unchanged.
 with the explicit destination refspec above does. Without `--no-tags`, a
 remote-mirror refresh would import lagged tags into the shared on-host mirror.
 
-Placing it before `updateRemoteURL` rather than after is not cosmetic. After
-`updateRemoteURL` has run, `urlChanged` may be set, and its only consumer is the
-`fsck` + `gc` block *after* the fetch — so an early return there would silently
-skip the maintenance a repository rename needs. Before it, the new exit is
-structurally identical to the one it is modelled on. Placing it inside the
-`isMainRepository` block matters for a different reason: the block closes
-immediately after the short-circuit, so "just after" would land outside the
-guard that keeps this away from submodule mirrors.
+Reconciliation before the fetch is not cosmetic. `dirForRepository` is lossy,
+so distinct canonical URLs can share one on-host directory. A mirror hit that
+returns before `updateRemoteURL` can leave the old repository's origin durable
+for mixed-version agents. Conversely, an early return after reconciliation can
+skip the `urlChanged` fsck/gc maintenance. Represent the hit as a local boolean,
+skip only the canonical fetch, and share the existing maintenance and snapshot
+tail. Keep the remote attempt inside the `isMainRepository` guard so submodule
+mirrors remain untouched.
 
 Write it as a second straight-line `if` returning
 `e.snapshotMirror(ctx, repository, mirrorDir)`. That call is already repeated
@@ -876,8 +908,9 @@ fetch-succeeded-but-ref-write-failed does **not** count as a hit; a commit
 already in the on-host mirror reports `notReached` and never contacts the
 mirror; timeout; mirror refuses auth; `--git-mirrors-skip-update` selects a
 checkout-side site instead; submodule mirrors untouched; `refs/heads/*` never
-written by the mirror path; and cancellation after starting mirror work causes
-no canonical fallback.
+written by the mirror path; a colliding repository rename is reconciled on a
+remote hit and still runs rename maintenance; and cancellation after starting
+mirror work causes no canonical fallback.
 
 This first behaviour-changing PR also ships the agent documentation and the
 corresponding `buildkite/docs` update. Later site PRs update those docs rather
@@ -1025,7 +1058,8 @@ codes.
 | Outcome | Response |
 | --- | --- |
 | Clone succeeds, commit present | done — the common hit |
-| Clone succeeds, commit absent (mirror lagging) | keep the clone, let `fetchSource` fetch the delta from canonical. Strictly better than re-cloning: the mirror already supplied nearly everything |
+| Clone succeeds, commit absent (mirror lagging), non-shallow | keep the clone, let `fetchSource` fetch the delta from canonical. The mirror already supplied nearly everything |
+| Clone succeeds, commit absent, shallow clone flags present | discard and clone canonically so `.git/shallow` and reachable history match the canonical path |
 | Clone fails (mirror down, auth, 404, timeout) | discard what the clone left behind, clone from canonical |
 
 Only the third discards work, and only work the mirror attempt created. Two
@@ -1043,9 +1077,22 @@ things about it:
   error type for the mirror; the clone side needs the same care and gets it by
   swallowing rather than by a new type.
 
-Shallow, blobless, sparse and single-branch (R3) need no special handling: the
-same `BUILDKITE_GIT_CLONE_FLAGS` go to the mirror clone (G6). The exception is a
-mirror that cannot serve a filter, which is silent — §10-C3.
+Blobless, sparse and single-branch (R3) need no special handling: the same
+`BUILDKITE_GIT_CLONE_FLAGS` go to the mirror clone (G6). A lagging shallow clone
+is the exception. Fetching the missing commit into the mirror's shallow boundary
+retains the mirror tip as an extra shallow root and can make more history
+reachable than a canonical clone with the same depth. Re-clone canonically on a
+lag miss whenever clone flags contain `--depth`, `--shallow-since`, or
+`--shallow-exclude`; this is the smallest reliable way to preserve R3.
+
+Clone flags may also initialize submodules before `origin` is repointed.
+`--recurse-submodules` and its `--recursive` alias resolve relative
+`.gitmodules` URLs against the mirror and persist those URLs in initialized
+submodule config. After setting the superproject origin to canonical, run
+`git submodule sync --recursive` for those clone modes so initialized nested
+origins are canonical too. This is required even when the agent-managed
+`BUILDKITE_GIT_SUBMODULES` phase is disabled, because that phase is then the
+only later code that would normally perform the sync.
 
 **Tests:** hit with canonical unreachable, asserting canonical served zero
 objects rather than "was not contacted"; lagging mirror completed from
@@ -1055,7 +1102,8 @@ produce the same `.git/config`, `remote.origin.fetch`, `remote.origin.tagOpt`
 and shallow state as a canonical clone; a mirror whose fixture lacks
 `uploadpack.allowFilter`, asserting on missing-object count rather than config
 equality; a mirror-cloned partial clone still resolves lazily after the mirror
-is removed; and cancellation during the mirror clone causes no canonical clone.
+is removed; recursive clone flags leave initialized relative submodule origins
+canonical; and cancellation during the mirror clone causes no canonical clone.
 
 ## 7. How this answers the review threads on #4144 and #4153
 
@@ -1096,7 +1144,8 @@ code that caused it no longer exists.
   the mirror and assert equal `.git/config`, `remote.origin.fetch`,
   `remote.origin.tagOpt` and shallow state across the flag matrix. Assert the
   mirror path actually ran, so a silent fallback cannot make the test pass
-  vacuously.
+  vacuously. Include a lagging depth case that compares shallow boundaries and
+  reachable commits after canonical fallback.
 - **Assert on bytes, not on abstinence.** "Canonical was never contacted" is not
   achievable — the checkout still resolves refs against canonical even on a hit
   (§4.1). Assert objects transferred, or missing-object counts for filtered
@@ -1273,8 +1322,9 @@ operator who cares. *Comment: with the stall-guard flags.*
 predating this feature can use the same mirror volume, so
 `remote.origin.url` remaining canonical at all times is a mixed-fleet
 compatibility contract, not a preference. New agents may fetch from the mirror
-URL per invocation; durable shared state stays canonical. *Comment: beside the
-creation clone's immediate `set-url` in `checkout_mirror.go`.*
+URL per invocation; durable shared state stays canonical. Clone into staging,
+canonicalize there, and only then atomically publish. *Comment: beside the
+creation clone's pre-publication `set-url` in `checkout_mirror.go`.*
 
 **C17 — `--git-clone-mirror-flags` is operator configuration passed to the
 mirror-directed creation clone.** If an operator embeds credentials or
@@ -1287,6 +1337,18 @@ mirror use, but objects already present in checkouts or on-host mirrors remain.
 They are valid content-addressed data from a customer-controlled replica, not
 credentials or mutable policy. *Operator guidance: §9 and the pipeline mirror
 documentation shipped in PR 2.*
+
+**C19 — Remote mirrors require Git 2.45.0 or newer.** Older Git ignores
+`GIT_NO_LAZY_FETCH`, so a supposedly local hit/miss check can contact a
+promisor, make an extra mirror request, or fetch from canonical and misclassify
+the mirror as a hit. This feature deliberately has a newer minimum than the
+agent's canonical checkout path; no runtime compatibility branch is provided.
+*Comment: at `hasGitCommit`'s `GIT_NO_LAZY_FETCH` setting.*
+
+**C20 — Windows support is best-effort in the initial stack.** The stack keeps
+portable code and tests where practical, but Windows-specific helper quoting,
+process lifetime, path, ACL and atomic-filesystem edge cases may fall back or
+require follow-up. This does not relax canonical checkout support on Windows.
 
 ## 11. Gated follow-ups and open questions
 
