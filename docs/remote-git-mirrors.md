@@ -66,7 +66,9 @@ and must not silently upgrade a shallow or blobless transfer into a full one.
 This requires the opted-in mirror provider to support the canonical host's
 filter capabilities; a provider without filter support is ineligible for
 blobless rollout because Git otherwise warns and exits zero after a full
-transfer (C3).
+transfer (C3). "Same shape" means the configured depth/filter constraints are
+honored; refs and a shallow boundary derived from the mirror snapshot may differ
+from a canonical clone when canonical has advanced past the build commit (C1).
 
 **R4 — Tiered caching with the on-host mirror.** When `--git-mirrors-path` is
 configured, the on-host mirror is populated and refreshed from the remote mirror
@@ -1300,6 +1302,16 @@ when the canonical fetch does run, add
 `+refs/heads/<branch>:refs/remotes/origin/<branch>` to it — no extra round trip.
 `checkCommitOnBranch` already documents the ref-name hazards such a refspec must
 respect. *Comment: beside the `set-url` in `checkout_workdir.go`.*
+
+The same snapshot rule applies to a successful shallow hit. If mirror and build
+are at B while canonical has advanced to C, a mirror depth-1 clone has B as its
+sole shallow root; today's canonical path clones C and then exact-fetches B,
+which can expose B's parent. Canonical re-cloning every shallow hit would discard
+the optimization precisely for the shallow workloads it must accelerate.
+Accept the boundary difference while preserving the requested depth and exact
+backend commit. Lagging shallow misses and alternate-backed apparent hits still
+re-clone canonically because their boundary cannot be attributed to a confirmed
+mirror hit.
 
 **C2 — Objects can arrive in the on-host mirror without the ref that pins
 them.** A ref write can fail while the fetch succeeds — measured, via a
