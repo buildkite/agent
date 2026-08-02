@@ -107,8 +107,8 @@ type remoteMirrorAttempt struct {
 	duration time.Duration
 }
 
-func (a remoteMirrorAttempt) hitOutsideOnHostMirror() bool {
-	return a.outcome == remoteMirrorOutcomeHit && a.site != remoteMirrorSiteOnHostMirror
+func (a remoteMirrorAttempt) hit() bool {
+	return a.outcome == remoteMirrorOutcomeHit
 }
 
 func (e *Executor) resolveRemoteMirrorAttempt(previousAttempts int) remoteMirrorAttempt {

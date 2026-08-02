@@ -64,7 +64,7 @@ func (e *Executor) fetchSource(ctx context.Context, addBloblessFilter bool, atte
 	// If configured, skip the fetch when the commit already exists locally.
 	// This is useful when a pre-populated git mirror is used with --reference,
 	// as the commit objects are already reachable and fetching is redundant.
-	mirrorHit := attempt != nil && attempt.hitOutsideOnHostMirror()
+	mirrorHit := attempt != nil && attempt.hit()
 	skipFetch := (e.GitSkipFetchExistingCommits || mirrorHit) && e.Commit != "HEAD" &&
 		hasGitCommit(ctx, e.shell, ".git", e.Commit)
 

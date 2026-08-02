@@ -364,7 +364,12 @@ func TestGitCredentialHelperCommandQuotesExecutablePath(t *testing.T) {
 		t.Errorf("credential helper words = %q, want %q", got, want)
 	}
 
-	cmd := exec.Command("git", "-c", "credential.helper="+helper, "credential", "fill")
+	cmd := exec.Command(
+		"git",
+		"-c", "credential.helper=",
+		"-c", "credential.helper="+helper,
+		"credential", "fill",
+	)
 	cmd.Stdin = strings.NewReader("protocol=https\nhost=mirror.example\n\n")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
