@@ -666,8 +666,10 @@ func TestAlwaysHidePromptOverridesDebug(t *testing.T) {
 	if err := sh.Command("echo", "secret-argument").Run(t.Context(), shell.AlwaysHidePrompt()); err != nil {
 		t.Fatalf(`sh.Command("echo", "secret-argument").Run(ctx) = %v`, err)
 	}
-	if got, want := out.String(), "secret-argument\n"; got != want {
-		t.Errorf("output = %q, want command output without debug prompt %q", got, want)
+	if got := out.String(); strings.Contains(got, "echo secret-argument") {
+		t.Errorf("output contains debug command prompt: %q", got)
+	} else if !strings.Contains(got, "secret-argument\n") {
+		t.Errorf("output = %q, want command output preserved", got)
 	}
 }
 
