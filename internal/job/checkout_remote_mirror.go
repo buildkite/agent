@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -94,6 +95,7 @@ const (
 	remoteMirrorSkipPullRequest         remoteMirrorSkipReason = "pull-request"
 	remoteMirrorSkipNotFirstAttempt     remoteMirrorSkipReason = "not-first-attempt"
 	remoteMirrorSkipRecursiveSubmodules remoteMirrorSkipReason = "recursive-submodules"
+	remoteMirrorSkipSeparateGitDir      remoteMirrorSkipReason = "separate-git-dir"
 )
 
 type remoteMirrorAttempt struct {
@@ -167,6 +169,11 @@ func (e *Executor) resolveRemoteMirrorAttempt(previousAttempts int) remoteMirror
 			// the initial remote-mirror support rather than reconstructing it.
 			return skip(remoteMirrorSkipRecursiveSubmodules)
 		}
+		if err == nil && hasSeparateGitDirCloneFlag(cloneFlags) {
+			// Failed mirror cleanup only owns the checkout directory. An
+			// external Git directory would survive and block canonical fallback.
+			return skip(remoteMirrorSkipSeparateGitDir)
+		}
 	}
 	return attempt
 }
@@ -182,6 +189,13 @@ func hasRecursiveSubmoduleCloneFlags(flags []string) bool {
 		}
 	}
 	return false
+}
+
+func hasSeparateGitDirCloneFlag(flags []string) bool {
+	return slices.ContainsFunc(flags, func(flag string) bool {
+		// Git accepts unambiguous long-option abbreviations.
+		return strings.HasPrefix(flag, "--sep")
+	})
 }
 
 func (e *Executor) checkoutAlreadyExists() bool {

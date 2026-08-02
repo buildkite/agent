@@ -86,6 +86,14 @@ func TestResolveRemoteMirrorAttempt(t *testing.T) {
 			wantSkipReason: remoteMirrorSkipRecursiveSubmodules,
 		},
 		{
+			name: "separate git dir fresh clone",
+			mutate: func(e *Executor) {
+				e.GitCloneFlags = "--separate-git-dir=/cache/repo.git"
+			},
+			wantOutcome:    remoteMirrorOutcomeSkipped,
+			wantSkipReason: remoteMirrorSkipSeparateGitDir,
+		},
+		{
 			name: "no URL",
 			mutate: func(e *Executor) {
 				e.GitRemoteMirrorURL = ""
@@ -217,6 +225,19 @@ func TestHasRecursiveSubmoduleCloneFlags(t *testing.T) {
 	for _, tc := range tests {
 		if got := hasRecursiveSubmoduleCloneFlags(tc.flags); got != tc.want {
 			t.Errorf("hasRecursiveSubmoduleCloneFlags(%q) = %t, want %t", tc.flags, got, tc.want)
+		}
+	}
+}
+
+func TestHasSeparateGitDirCloneFlag(t *testing.T) {
+	t.Parallel()
+
+	for _, flags := range [][]string{
+		{"--sep=/cache/repo.git"},
+		{"--separate-git-dir", "/cache/repo.git"},
+	} {
+		if !hasSeparateGitDirCloneFlag(flags) {
+			t.Errorf("hasSeparateGitDirCloneFlag(%q) = false, want true", flags)
 		}
 	}
 }
