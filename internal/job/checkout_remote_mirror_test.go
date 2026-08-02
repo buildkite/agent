@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/buildkite/agent/v3/internal/process"
 	"github.com/buildkite/agent/v3/internal/self"
 	"github.com/buildkite/agent/v3/internal/shell"
 	"github.com/buildkite/shellwords"
@@ -434,7 +435,7 @@ func TestFetchCommitFromRemoteMirrorHidesURLPromptInDebug(t *testing.T) {
 	commit := strings.Repeat("a", 40)
 	e := newRemoteMirrorShimExecutor(t, commit, "hit")
 	logs := &bytes.Buffer{}
-	commandOutput := &bytes.Buffer{}
+	commandOutput := &process.Buffer{}
 	sh, err := shell.New(
 		shell.WithDebug(true),
 		shell.WithEnv(e.shell.Env),

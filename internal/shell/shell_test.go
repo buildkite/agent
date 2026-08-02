@@ -658,7 +658,7 @@ func TestAlwaysHidePromptOverridesDebug(t *testing.T) {
 	t.Parallel()
 
 	logs := &bytes.Buffer{}
-	commandOutput := &bytes.Buffer{}
+	commandOutput := &process.Buffer{}
 	sh, err := shell.New(
 		shell.WithDebug(true),
 		shell.WithLogger(shell.NewWriterLogger(logs, false, nil)),
@@ -674,7 +674,7 @@ func TestAlwaysHidePromptOverridesDebug(t *testing.T) {
 	if got := logs.String(); strings.Contains(got, "echo secret-argument") {
 		t.Errorf("output contains debug command prompt: %q", got)
 	}
-	if got := commandOutput.String(); !strings.Contains(got, "secret-argument\n") {
+	if got := string(commandOutput.ReadAndTruncate()); !strings.Contains(got, "secret-argument\n") {
 		t.Errorf("output = %q, want command output preserved", got)
 	}
 }
