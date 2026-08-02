@@ -286,9 +286,10 @@ type remoteMirrorAttempt struct {
 **`notReached` must be the zero value**, and it is the common case, not an edge.
 A site is frequently selected and then never reached:
 
-- `updateGitMirror`'s `hasGitCommit` short-circuit returns before the point PR 2
-  inserts at, so every job whose commit is already in the on-host mirror selects
-  the on-host site and never contacts the mirror. On a warm cache volume — the
+- `updateGitMirror`'s `hasGitCommit` check skips the PR 2 network attempt, so
+  every job whose commit is already in the on-host mirror selects the on-host
+  site and never contacts the mirror. Canonical-origin reconciliation and any
+  rename maintenance still run. On a warm cache volume — the
   deployment R4 targets first — this is probably the single most common outcome,
   and §9's watch list has to expect a large third bucket rather than reading
   `hit`/`miss` alone.
@@ -445,6 +446,13 @@ since eligibility stops at the first attempt, but that is still the miss path
 R2 promises to bound. The low-speed pair bounds it in the right currency and
 exits 128, which lands cleanly in PR 4's "clone fails, fall back to canonical"
 arm (G12).
+
+The shared on-host clone/update lock is also a bound on optional work. If a job
+with an eligible remote mirror cannot acquire it before
+`--git-mirrors-lock-timeout`, it reports a mirror timeout and continues the
+canonical checkout without an on-host `--reference`. A speculative mirror
+transfer held by another job must not turn lock contention into a checkout
+failure when canonical is healthy.
 
 **It only bounds stalls after the handshake.** Over `https` — the only scheme
 §5.2 allows — curl applies the low-speed limits to the transfer phase, not to
@@ -869,9 +877,9 @@ check: commit present is `hit`; a successful but lagging clone is `miss`. Keep a
 lagging mirror because the checkout's canonical clone with `--reference`
 transfers only the delta.
 
-**Update** (`mirrorDir` exists): immediately after the existing
-`hasGitCommit` short-circuit, **inside** the `if isMainRepository` block that
-contains it, first reconcile `origin` to canonical, then attempt —
+**Update** (`mirrorDir` exists): after checking whether the commit is already
+present, reconcile `origin` to canonical before either the remote attempt or a
+warm-cache exit. Then, **inside** the `isMainRepository` path, attempt —
 
 ```
 git --git-dir=<mirrorDir> <transport flags> fetch --no-tags -- <mirrorURL> \
@@ -892,11 +900,12 @@ remote-mirror refresh would import lagged tags into the shared on-host mirror.
 Reconciliation before the fetch is not cosmetic. `dirForRepository` is lossy,
 so distinct canonical URLs can share one on-host directory. A mirror hit that
 returns before `updateRemoteURL` can leave the old repository's origin durable
-for mixed-version agents. Conversely, an early return after reconciliation can
-skip the `urlChanged` fsck/gc maintenance. Represent the hit as a local boolean,
-skip only the canonical fetch, and share the existing maintenance and snapshot
-tail. Keep the remote attempt inside the `isMainRepository` guard so submodule
-mirrors remain untouched.
+for mixed-version agents; the same applies when the requested commit was already
+present. Conversely, an early return after reconciliation can skip the
+`urlChanged` fsck/gc maintenance. Represent presence and the remote hit as local
+booleans, skip only the applicable network fetch, and share the existing
+maintenance and snapshot tail. Keep the remote attempt inside the
+`isMainRepository` guard so submodule mirrors remain untouched.
 
 Write it as a second straight-line `if` returning
 `e.snapshotMirror(ctx, repository, mirrorDir)`. That call is already repeated
@@ -934,8 +943,9 @@ already in the on-host mirror reports `notReached` and never contacts the
 mirror; timeout; mirror refuses auth; `--git-mirrors-skip-update` selects a
 checkout-side site instead; submodule mirrors untouched; `refs/heads/*` never
 written by the mirror path; a colliding repository rename is reconciled on a
-remote hit and still runs rename maintenance; and cancellation after starting
-mirror work causes no canonical fallback.
+remote or warm-cache hit and still runs rename maintenance; clone-lock timeout
+continues canonically without an on-host reference; and cancellation after
+starting mirror work causes no canonical fallback.
 
 This first behaviour-changing PR also ships the agent documentation and the
 corresponding `buildkite/docs` update. Later site PRs update those docs rather
@@ -965,7 +975,9 @@ An existing partial clone has a second source of effective fetch behavior:
 `remote.origin.partialclonefilter`. Named-remote fetches inherit it implicitly,
 but a direct-URL mirror fetch does not. When no explicit fetch filter or
 `--no-filter` override is present, append the stored origin filter to the mirror
-attempt so the transfer shape still matches canonical.
+attempt so the transfer shape still matches canonical. Detect Git's accepted
+`--fil*` and `--no-fil*` long-option abbreviations too; otherwise an inherited
+filter can silently override the operator's effective flag.
 
 **Then retarget the promisor the fetch wrote on every outcome — do not just
 remove it.** A
@@ -1015,6 +1027,11 @@ cancel. A checkout already partial under a *different* filter has its
 `remote.origin.partialclonefilter` overwritten, which is the intended outcome
 given the fetch it just took was filtered the new way.
 
+If that bounded config repair fails, fail the checkout without putting the
+usable workdir through the outer retry's clean-and-reclone path. Re-cloning does
+not repair config permissions or locking and violates R5. A dedicated typed
+error tells the checkout retrier to preserve the workdir and stop.
+
 Note that `git` does not write `extensions.partialClone` on this path at all —
 that is the pre-2.22 spelling modern git only reads — so there is nothing to
 repoint there. `git config --remove-section` is safe only after confirming the
@@ -1025,7 +1042,9 @@ unreachable; unfiltered miss falls back with refs, worktree and config
 unchanged; filtered miss/error/timeout/cancel all remove mirror ownership and
 leave canonical promisor ownership; a sparse pipeline's mirror fetch carries
 `--filter=blob:none`; an existing origin filter is inherited unless
-`--no-filter` is explicit; no `remote.<mirrorURL>.*` survives any outcome; and —
+`--no-filter` (including accepted abbreviations) is explicit; cleanup failure
+does not delete the checkout; no `remote.<mirrorURL>.*` survives any successful
+cleanup; and —
 the one that matters — after a
 hit on a checkout that was **not** previously a partial clone, with the mirror
 then deleted, the worktree materialises. A config-shape assertion passes on the
