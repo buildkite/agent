@@ -38,7 +38,11 @@ func (e *Executor) configureGitCredentialHelper(ctx context.Context) error {
 }
 
 func gitCredentialHelperCommand(ctx context.Context) string {
-	return fmt.Sprintf(`!%s git-credentials-helper`, shellwords.Quote(self.Path(ctx)))
+	// Git executes a leading-! helper through a shell. Use POSIX single-quote
+	// escaping here: shellwords.Quote can leave backslash escapes inside double
+	// quotes, changing executable paths that contain shell metacharacters.
+	path := "'" + strings.ReplaceAll(self.Path(ctx), "'", `'\''`) + "'"
+	return fmt.Sprintf(`!%s git-credentials-helper`, path)
 }
 
 // configureHTTPSInsteadOfSSH configures GitHub SSH URLs to use HTTPS.

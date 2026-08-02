@@ -173,11 +173,11 @@ func (e *Executor) resolveRemoteMirrorAttempt(previousAttempts int) remoteMirror
 
 func hasRecursiveSubmoduleCloneFlags(flags []string) bool {
 	for _, flag := range flags {
-		switch {
-		case flag == "--recursive",
-			flag == "--recurse-submodules",
-			flag == "--remote-submodules",
-			strings.HasPrefix(flag, "--recurse-submodules="):
+		// Git accepts unambiguous long-option abbreviations. Conservatively
+		// keep every positive recursive/remote-submodule spelling canonical;
+		// an unrelated invalid --rec* or --rem* flag will then fail on the
+		// canonical clone exactly as it would without remote mirrors.
+		if strings.HasPrefix(flag, "--rec") || strings.HasPrefix(flag, "--rem") {
 			return true
 		}
 	}
