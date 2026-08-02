@@ -218,6 +218,7 @@ func (e *Executor) fetchCommitFromRemoteMirror(
 		GitFetchFlags: gitFetchFlags,
 		Repository:    attempt.url,
 		RefSpecs:      []string{refspec},
+		HidePrompt:    true,
 	})
 	if parentErr := ctx.Err(); parentErr != nil {
 		return false, parentErr

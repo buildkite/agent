@@ -442,10 +442,16 @@ func (r *JobRunner) createEnvironment(ctx context.Context) ([]string, error) {
 	// The agent registration token should never make it into the job environment
 	delete(env, "BUILDKITE_AGENT_TOKEN")
 
-	if mirrorURL := env["BUILDKITE_GIT_REMOTE_MIRROR_URL"]; mirrorURL != "" {
+	// Always override an ambient agent-process value. Without the explicit
+	// empty entry, bootstrap's inherited os.Environ could enable a mirror that
+	// the backend did not provide or that the repository allowlist rejected.
+	mirrorURL := env["BUILDKITE_GIT_REMOTE_MIRROR_URL"]
+	env["BUILDKITE_GIT_REMOTE_MIRROR_URL"] = ""
+	if mirrorURL != "" {
 		if err := validateJobValue(r.conf.AgentConfiguration.AllowedRepositories, mirrorURL); err != nil {
-			delete(env, "BUILDKITE_GIT_REMOTE_MIRROR_URL")
 			r.droppedRemoteMirrorURL = mirrorURL
+		} else {
+			env["BUILDKITE_GIT_REMOTE_MIRROR_URL"] = mirrorURL
 		}
 	}
 

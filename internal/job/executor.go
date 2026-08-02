@@ -996,10 +996,8 @@ func (e *Executor) setUp(ctx context.Context) (retErr error) {
 	if e.Debug {
 		e.shell.Headerf("Buildkite environment variables")
 		for _, envar := range e.shell.Env.ToSlice() {
-			if strings.HasPrefix(envar, "BUILDKITE_AGENT_ACCESS_TOKEN=") {
-				e.shell.Printf("BUILDKITE_AGENT_ACCESS_TOKEN=******************")
-			} else if strings.HasPrefix(envar, "BUILDKITE") || strings.HasPrefix(envar, "CI") || strings.HasPrefix(envar, "PATH") {
-				e.shell.Printf("%s", strings.ReplaceAll(envar, "\n", "\\n"))
+			if strings.HasPrefix(envar, "BUILDKITE") || strings.HasPrefix(envar, "CI") || strings.HasPrefix(envar, "PATH") {
+				e.shell.Printf("%s", formatDebugEnvironmentVariable(envar))
 			}
 		}
 	}
@@ -1035,6 +1033,20 @@ func (e *Executor) setUp(ctx context.Context) (retErr error) {
 	// to use the global environment hook to whitelist the plugins that are
 	// allowed to be used.
 	return e.executeGlobalHook(ctx, "environment")
+}
+
+func formatDebugEnvironmentVariable(envar string) string {
+	name, value, ok := strings.Cut(envar, "=")
+	if !ok {
+		return strings.ReplaceAll(envar, "\n", "\\n")
+	}
+	switch name {
+	case "BUILDKITE_AGENT_ACCESS_TOKEN":
+		value = "******************"
+	case "BUILDKITE_GIT_REMOTE_MIRROR_URL":
+		value = redact.URLCredentials(value)
+	}
+	return name + "=" + strings.ReplaceAll(value, "\n", "\\n")
 }
 
 // fetchAndSetSecrets handles secrets fetching and processing directly

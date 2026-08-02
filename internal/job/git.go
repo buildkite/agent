@@ -78,6 +78,10 @@ func hasGitSubmodules(sh *shell.Shell) bool {
 
 func hasGitCommit(ctx context.Context, sh *shell.Shell, gitDir, commit string) bool {
 	extraEnv := env.New()
+	// Remote Git mirrors require Git 2.45+, where GIT_NO_LAZY_FETCH keeps this
+	// presence check local in partial clones. Older Git versions intentionally
+	// fall outside the feature's support boundary rather than gaining a second
+	// object-inspection implementation.
 	extraEnv.Set("GIT_NO_LAZY_FETCH", "1")
 
 	// Resolve commit to an actual commit object
@@ -148,14 +152,21 @@ func hasPartialFilterFlags(flags []string) bool {
 	return false
 }
 
-func gitClone(ctx context.Context, sh *shell.Shell, gitFlags, gitCloneFlags []string, repository, dir string) error {
+func gitClone(
+	ctx context.Context,
+	sh *shell.Shell,
+	gitFlags, gitCloneFlags []string,
+	repository, dir string,
+	runOpts ...shell.RunCommandOpt,
+) error {
 	commandArgs := append([]string{}, gitFlags...)
 	commandArgs = append(commandArgs, "clone")
 	commandArgs = append(commandArgs, gitCloneFlags...)
 	commandArgs = append(commandArgs, "--", repository, dir)
 
 	smelt := map[string]bool{gitErrStrOperationTooSlow: false}
-	if err := sh.Command("git", commandArgs...).Run(ctx, shell.WithStringSearch(smelt)); err != nil {
+	runOpts = append(runOpts, shell.WithStringSearch(smelt))
+	if err := sh.Command("git", commandArgs...).Run(ctx, runOpts...); err != nil {
 		if smelt[gitErrStrOperationTooSlow] {
 			return &gitError{error: err, Type: gitErrorCloneTimeout}
 		}
@@ -314,6 +325,7 @@ type gitFetchArgs struct {
 	Repository    string       // The remote to fetch from
 	Retry         bool         // Whether to retry the fetch on certain errors
 	RefSpecs      []string     // Refspecs to fetch
+	HidePrompt    bool         // Never log argv, including in shell debug mode
 }
 
 func gitFetch(ctx context.Context, args gitFetchArgs) error {
@@ -369,7 +381,11 @@ func gitFetch(ctx context.Context, args gitFetchArgs) error {
 	}
 
 	return retrier.DoWithContext(ctx, func(retrier *roko.Retrier) error {
-		if err := args.Shell.Command("git", commandArgs...).Run(ctx, shell.WithStringSearch(smelt)); err != nil {
+		runOpts := []shell.RunCommandOpt{shell.WithStringSearch(smelt)}
+		if args.HidePrompt {
+			runOpts = append(runOpts, shell.AlwaysHidePrompt())
+		}
+		if err := args.Shell.Command("git", commandArgs...).Run(ctx, runOpts...); err != nil {
 			// "fatal: [Cc]ouldn't find remote ref" happens when the remote ref does not exist (e.g. a branch that was deleted)
 			// Sometimes we want to wait for the remote ref to be created (eg in the case of the PR HEAD ref `refs/pulls/123/head
 			// that github creates asynchronously), so this case gets retried -- we don't call r.Break()
