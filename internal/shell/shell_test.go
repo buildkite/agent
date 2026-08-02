@@ -654,6 +654,23 @@ func TestRunWithoutPrompt(t *testing.T) {
 	}
 }
 
+func TestAlwaysHidePromptOverridesDebug(t *testing.T) {
+	t.Parallel()
+
+	out := &bytes.Buffer{}
+	sh, err := shell.New(shell.WithDebug(true), shell.WithStdout(out))
+	if err != nil {
+		t.Fatalf("shell.New() error = %v", err)
+	}
+
+	if err := sh.Command("echo", "secret-argument").Run(t.Context(), shell.AlwaysHidePrompt()); err != nil {
+		t.Fatalf(`sh.Command("echo", "secret-argument").Run(ctx) = %v`, err)
+	}
+	if got, want := out.String(), "secret-argument\n"; got != want {
+		t.Errorf("output = %q, want command output without debug prompt %q", got, want)
+	}
+}
+
 func TestRound(t *testing.T) {
 	t.Parallel()
 

@@ -280,13 +280,31 @@ func TestGitCredentialHelperCommandQuotesExecutablePath(t *testing.T) {
 	t.Parallel()
 
 	ctx := self.OverridePath(t.Context(), "/path with spaces/buildkite-agent")
-	got, err := shellwords.Split(gitCredentialHelperCommand(ctx))
+	helper := gitCredentialHelperCommand(ctx)
+	if !strings.HasPrefix(helper, "!") {
+		t.Fatalf("credential helper = %q, want Git shell-snippet prefix !", helper)
+	}
+	got, err := shellwords.Split(strings.TrimPrefix(helper, "!"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	want := []string{"/path with spaces/buildkite-agent", "git-credentials-helper"}
 	if !slices.Equal(got, want) {
 		t.Errorf("credential helper words = %q, want %q", got, want)
+	}
+}
+
+func TestFormatDebugEnvironmentVariableRedactsRemoteMirrorCredentials(t *testing.T) {
+	t.Parallel()
+
+	got := formatDebugEnvironmentVariable(
+		"BUILDKITE_GIT_REMOTE_MIRROR_URL=https://token:secret@mirror.example/repo.git",
+	)
+	if strings.Contains(got, "secret") {
+		t.Errorf("formatDebugEnvironmentVariable() = %q, want URL credentials redacted", got)
+	}
+	if want := "BUILDKITE_GIT_REMOTE_MIRROR_URL=https://token:xxxxx@mirror.example/repo.git"; got != want {
+		t.Errorf("formatDebugEnvironmentVariable() = %q, want %q", got, want)
 	}
 }
 
@@ -346,6 +364,40 @@ func TestFetchCommitFromRemoteMirrorOutcomes(t *testing.T) {
 				t.Errorf("duration = %s, want positive", attempt.duration)
 			}
 		})
+	}
+}
+
+func TestFetchCommitFromRemoteMirrorHidesURLPromptInDebug(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("test git shim is POSIX-only")
+	}
+
+	commit := strings.Repeat("a", 40)
+	e := newRemoteMirrorShimExecutor(t, commit, "hit")
+	logs := &bytes.Buffer{}
+	sh, err := shell.New(
+		shell.WithDebug(true),
+		shell.WithEnv(e.shell.Env),
+		shell.WithStdout(logs),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	e.shell = sh
+	attempt := remoteMirrorAttempt{
+		site: remoteMirrorSiteExistingCheckout,
+		url:  "https://token:secret@mirror.example/acme/widgets.git",
+	}
+
+	hit, err := e.fetchCommitFromRemoteMirror(t.Context(), &attempt, ".git", "", commit)
+	if err != nil {
+		t.Fatalf("fetchCommitFromRemoteMirror() error = %v", err)
+	}
+	if !hit {
+		t.Fatal("fetchCommitFromRemoteMirror() hit = false, want true")
+	}
+	if strings.Contains(logs.String(), attempt.url) || strings.Contains(logs.String(), "secret") {
+		t.Errorf("debug job log leaks mirror URL credentials: %q", logs.String())
 	}
 }
 

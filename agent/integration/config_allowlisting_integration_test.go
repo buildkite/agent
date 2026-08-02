@@ -204,3 +204,61 @@ func TestConfigAllowlisting(t *testing.T) {
 		})
 	}
 }
+
+func TestRemoteMirrorAllowlistMasksAmbientEnvironment(t *testing.T) {
+	tests := []struct {
+		name         string
+		jobMirrorURL string
+	}{
+		{name: "backend mirror absent"},
+		{name: "backend mirror disallowed", jobMirrorURL: "https://disallowed.example/buildkite/agent"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("BUILDKITE_GIT_REMOTE_MIRROR_URL", "https://ambient.example/buildkite/agent")
+
+			jobID := defaultJobID
+			job := &api.Job{
+				ChunksMaxSizeBytes: 1024,
+				ID:                 jobID,
+				Env: map[string]string{
+					"BUILDKITE":         "true",
+					"BUILDKITE_COMMAND": "echo hello",
+					"BUILDKITE_REPO":    "https://github.com/buildkite/agent",
+				},
+				Token: "bkaj_job-token",
+			}
+			if tc.jobMirrorURL != "" {
+				job.Env["BUILDKITE_GIT_REMOTE_MIRROR_URL"] = tc.jobMirrorURL
+			}
+
+			e := createTestAgentEndpoint()
+			server := e.server()
+			defer server.Close()
+
+			mb := mockBootstrap(t)
+			mb.Expect().Once().AndExitWith(0).AndCallFunc(func(c *bintest.Call) {
+				if got := c.GetEnv("BUILDKITE_GIT_REMOTE_MIRROR_URL"); got != "" {
+					t.Errorf("BUILDKITE_GIT_REMOTE_MIRROR_URL = %q, want ambient value masked", got)
+				}
+				c.Exit(0)
+			})
+			defer mb.CheckAndClose(t) //nolint:errcheck // bintest logs to t
+
+			err := runJob(t, t.Context(), testRunJobConfig{
+				job:    job,
+				server: server,
+				agentCfg: agent.AgentConfiguration{
+					AllowedRepositories: []*regexp.Regexp{
+						regexp.MustCompile("^https://github.com/buildkite/.*$"),
+					},
+				},
+				mockBootstrap: mb,
+			})
+			if err != nil {
+				t.Fatalf("runJob() error = %v", err)
+			}
+		})
+	}
+}
