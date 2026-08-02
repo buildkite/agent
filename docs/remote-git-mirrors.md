@@ -49,13 +49,16 @@ Numbered so the delivery plan and tests can refer to them.
 pipeline's `clone_mirror_url` setting. No agent-side configuration is needed to
 benefit from it, and none is needed to avoid it.
 
-**R2 — Never slower on a hit.** On the hit path the mirror must not add work,
-including any round trip to canonical the hit made unnecessary. On a miss it may
-add at most one bounded, non-retrying attempt, after which the canonical path
-proceeds with no discarded work — no re-clone, no wiped checkout directory.
-"Bounded" means a wall-clock cap for the probe-shaped fetches and a stall guard
-for the bulk transfers; §5.3 explains why one number cannot serve both, and
-records the one place the bound is imperfect.
+**R2 — Bound the optimisation cost.** A probe-shaped mirror miss adds at most
+one bounded, non-retrying attempt before the canonical path continues without
+discarding the existing checkout. A successful bulk mirror clone is retained
+when its shape can be completed canonically; a failed clone may discard only
+state that attempt created, and a lagging shallow clone is explicitly re-cloned
+to preserve R3. On a hit, do not repeat the same commit acquisition against
+canonical, except for the pre-existing canonical ref refresh retained with
+on-host mirrors (C11). "Bounded" means a wall-clock cap for probe-shaped fetches
+and a stall guard for bulk transfers; §5.3 explains why one number cannot serve
+both, and records the bounds' imperfections.
 
 **R3 — Checkout shape is preserved.** Whatever `checkout:` attributes the
 pipeline sets (`depth`, clone/fetch flags, sparse paths, submodules, LFS), the
@@ -371,9 +374,9 @@ string when the backend omitted it or the allowlist does not permit it. An
 explicit empty value is required: bootstrap inherits `os.Environ()`, so merely
 deleting the job-provided map entry would let an ambient agent-process value
 enable the mirror or bypass the allowlist. The executor then sees a job with no
-mirror and needs to know nothing about allowlists. To the executor this is
-indistinguishable from "no mirror configured", so it must not be described
-anywhere as a `skipped` reason.
+mirror and needs to know nothing about allowlists. It reports the same
+`skipped/no-url` telemetry as an absent backend value; it must not invent an
+allowlist-specific skip reason it cannot observe.
 
 **The operator's only signal is a job-log line, and it cannot come from
 `createEnvironment`.** `r.jobLogs` is not assigned until well after
@@ -386,7 +389,9 @@ the person looking at the build.
 Reuse `validateJobValue` at the new site rather than extracting a `bool`
 wrapper. It is already the shared matcher for repositories, env names and
 plugins, so any later change to matching semantics reaches both callers by
-construction — and its error text is exactly what the warning wants to say.
+construction. Do not log its error: it embeds the rejected value. The
+job-facing warning is separately formatted and passes the URL through
+`redact.URLCredentials`.
 
 The sibling check needs no work: `validateEnv` refuses a job for a
 non-allowlisted env var name, but `buildkiteSetEnvironmentVariables` always
@@ -501,7 +506,11 @@ Every mirror-addressed Git command gets these, per invocation, never persisted:
   global helper would also intercept the canonical checkout — so a
   per-invocation helper is the only mechanism available. Build the value from
   one shared function over `self.Path(ctx)`, used by both call sites; two
-  independent `fmt.Sprintf`s of the same helper string will drift.
+  independent `fmt.Sprintf`s of the same helper string will drift. The value
+  uses Git's leading-`!` shell-snippet form and shell-quotes the executable
+  path: `!<quoted-agent-path> git-credentials-helper`. Quoting without `!`
+  makes Git interpret the quoted value as a helper name and try
+  `git credential-<value>`.
 - `credential.useHttpPath=true` scopes the helper call to the full mirror URL,
   which is what `repository_access_token` keys on. That the endpoint will answer
   for a URL other than the job's repository is the load-bearing assumption
@@ -521,9 +530,11 @@ Every mirror-addressed Git command gets these, per invocation, never persisted:
   fails for anything that is not a ref tip (G2). Pinning v2 turns "the mirror
   never works and nobody notices" into "the mirror works"; a mirror that cannot
   speak v2 simply misses and canonical takes over.
-- The agent suppresses the shell command prompt for every mirror-addressed
-  clone and fetch. Otherwise the original argv logs the mirror URL before R9's
-  separately redacted line. Debug environment output also applies
+- The agent force-suppresses the shell command prompt for every command whose
+  argv contains the mirror URL, including PR 3's `git config` cleanup commands.
+  Ordinary `ShowPrompt(false)` is insufficient because shell debug mode
+  deliberately overrides it. Otherwise the original argv logs the mirror URL
+  before R9's separately redacted line. Debug environment output also applies
   `redact.URLCredentials` to `BUILDKITE_GIT_REMOTE_MIRROR_URL`. These are
   logging-hygiene measures even though the mirror URL itself is not secret.
 
@@ -682,7 +693,11 @@ isolation reintroduces failure modes the plan is meant to remove.
   `git clone -c`/`--config` can persist it, local paths bypass it, and existing
   canonical-keyed rewrites compete under longest-match precedence. A scoped
   rewrite remains the right tool only for gated follow-up F2, where no clone is
-  involved.
+  involved. PR 3 also avoids it even though named-remote fetch would simplify
+  partial-filter inheritance: an existing longer-prefix customer rewrite can
+  silently win and send the supposedly bounded mirror attempt somewhere else.
+  The explicit URL makes the attempted source and its telemetry deterministic;
+  its promisor cleanup is the accepted cost.
 - Budgets are shape-dependent (§5.3), never one flat sub-deadline or a fraction
   of the parent deadline for every mirror command.
 - Lagging mirror data never writes canonical `refs/heads/*`; the namespaced
@@ -707,7 +722,7 @@ Four stacked pull requests.
 
 | PR | Idea | Behaviour change | Touches |
 | --- | --- | --- | --- |
-| 1 | Config, the resolved decision, R9 telemetry, shared helpers, threading | telemetry only | `config.go`, `env/protected.go`, `job_runner.go`, `run_job.go`, `git.go`, `checkout.go`, `checkout_fetch.go`, `checkout_mirror.go`, new `checkout_remote_mirror.go` |
+| 1 | Config, the resolved decision, R9 telemetry, shared helpers, threading | allowlist fallback, logging hardening, and narrow Git-wrapper deltas | `config.go`, `env/protected.go`, `job_runner.go`, `run_job.go`, `git.go`, `checkout.go`, `checkout_fetch.go`, `checkout_mirror.go`, new `checkout_remote_mirror.go` |
 | 2 | On-host mirror is created and refreshed from the remote mirror | yes | `checkout_mirror.go` |
 | 3 | Existing checkout fetches from the remote mirror | yes | `checkout_fetch.go` |
 | 4 | Fresh checkout clones from the remote mirror | yes | new `checkout_workdir.go`, `checkout.go` |
@@ -780,7 +795,9 @@ anything.
 - The `[]string` plumbing of §5.5, and the shared bounded-fetch helper PRs 2 and
   3 both call. Both are prerequisites for more than one later PR, so they belong
   here; leaving them to "whichever lands first" is what would make the stack's
-  commutability and independent revertibility untrue. Neither changes behaviour.
+  commutability and independent revertibility untrue. The helper is inert until
+  a site calls it; the `[]string` conversion also fixes the pre-existing
+  space-containing global-argument case described in §5.5.
 - `gitErrorFetchRefNotOnRemote`, smelting `not our ref` (protocol v2, G3) and
   `Server does not allow request for unadvertised object` (protocol v0, G2).
   Note these are two protocol versions, not two spellings, and test both.
@@ -799,6 +816,13 @@ a `file://` or local-path canonical currently exits 1 and retries ten times, and
 would now break on the first attempt. That combination requires a local-path
 canonical with `protocol.version` pinned to 0, and one attempt is the better
 answer anyway.
+
+PR 1 does not enable a mirror checkout site, but it is not literally
+behavior-free: a disallowed mirror now falls back instead of refusing the job,
+mirror-bearing commands gain force-hidden prompts, the `[]string` conversion
+fixes space-containing global arguments, and the protocol-v0 classification
+changes the narrow canonical failure above. Keep these deltas explicit rather
+than calling the PR telemetry-only.
 
 **Tests:** eligibility table including each skip reason; env protection;
 an allowlist miss replaces the mirror URL with an explicit empty value and
@@ -925,7 +949,8 @@ In `fetchSource`, for the `refspecCommit` case: fetch the commit from the mirror
 first, retries off, transport flags of §5.4. On a confirmed hit skip the
 canonical fetch (§5.7); otherwise fetch from canonical as today. A miss never
 deletes or re-clones the checkout. Refs and worktree stay unchanged by the
-mirror attempt; filtered attempts may repair promisor ownership in local config
+mirror attempt except for ref-mutating fetch flags the operator explicitly
+supplied (C21); filtered attempts may repair promisor ownership in local config
 as described below.
 
 **Use the flag list the canonical fetch would have used, not `e.GitFetchFlags`.**
@@ -1087,12 +1112,14 @@ lag miss whenever clone flags contain `--depth`, `--shallow-since`, or
 
 Clone flags may also initialize submodules before `origin` is repointed.
 `--recurse-submodules` and its `--recursive` alias resolve relative
-`.gitmodules` URLs against the mirror and persist those URLs in initialized
-submodule config. After setting the superproject origin to canonical, run
-`git submodule sync --recursive` for those clone modes so initialized nested
-origins are canonical too. This is required even when the agent-managed
-`BUILDKITE_GIT_SUBMODULES` phase is disabled, because that phase is then the
-only later code that would normally perform the sync.
+`.gitmodules` URLs against the mirror, check out mirror-selected submodule
+contents, and persist those URLs in initialized submodule config. A later
+`git submodule sync` repairs URLs but not the already-selected worktrees, and
+`--remote-submodules` makes the mismatch broader. Fresh checkouts with any
+recursive-submodule clone flag therefore bypass the remote mirror and clone
+canonically in this round. The attempt reports
+`skipped/recursive-submodules`. This keeps submodule semantics exact without
+reconstructing clone-time recursive behavior.
 
 **Tests:** hit with canonical unreachable, asserting canonical served zero
 objects rather than "was not contacted"; lagging mirror completed from
@@ -1103,7 +1130,8 @@ and shallow state as a canonical clone; a mirror whose fixture lacks
 `uploadpack.allowFilter`, asserting on missing-object count rather than config
 equality; a mirror-cloned partial clone still resolves lazily after the mirror
 is removed; recursive clone flags leave initialized relative submodule origins
-canonical; and cancellation during the mirror clone causes no canonical clone.
+bypass the mirror and retain canonical behavior; and cancellation during the
+mirror clone causes no canonical clone.
 
 ## 7. How this answers the review threads on #4144 and #4153
 
@@ -1279,7 +1307,9 @@ growing it without bound. *Comment: in `checkout_mirror.go`.*
 
 **C9 — Submodules never use the remote mirror.** The backend knows only the main
 repository; `.gitmodules` URLs are discovered at checkout time. Submodule
-on-host mirrors continue to refresh from their canonical URLs.
+on-host mirrors continue to refresh from their canonical URLs, and fresh-clone
+remote mirrors are skipped when clone flags request recursive submodule
+initialization.
 
 **C10 — Git LFS objects always come from canonical**, because `git lfs` resolves
 its endpoint from `remote.origin.url`. An LFS-heavy repository therefore gets no
@@ -1349,6 +1379,15 @@ agent's canonical checkout path; no runtime compatibility branch is provided.
 portable code and tests where practical, but Windows-specific helper quoting,
 process lifetime, path, ACL and atomic-filesystem edge cases may fall back or
 require follow-up. This does not relax canonical checkout support on Windows.
+
+**C21 — User-supplied ref-mutating fetch flags apply to PR 3's mirror fetch.**
+The existing-checkout path forwards the effective canonical fetch flags to
+preserve operator intent. Flags such as `--tags` or `--prune-tags` can therefore
+import or remove tags according to the mirror's lagging view even when the
+immutable commit fetch misses. Origin tracking branch refs are not targeted, and
+R8 still chooses the build by full object ID. Avoiding this would require
+silently changing user fetch semantics for one source. *Comment: at the direct
+mirror fetch in `checkout_fetch.go`.*
 
 ## 11. Gated follow-ups and open questions
 
