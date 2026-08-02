@@ -6,6 +6,7 @@ import (
 	"errors"
 	"maps"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"slices"
@@ -203,9 +204,13 @@ func TestHasRecursiveSubmoduleCloneFlags(t *testing.T) {
 	}{
 		{flags: nil},
 		{flags: []string{"--single-branch"}},
+		{flags: []string{"--rec"}, want: true},
+		{flags: []string{"--recurse"}, want: true},
 		{flags: []string{"--recursive"}, want: true},
+		{flags: []string{"--recursive=lib/foo"}, want: true},
 		{flags: []string{"--recurse-submodules"}, want: true},
 		{flags: []string{"--recurse-submodules=lib/foo"}, want: true},
+		{flags: []string{"--rem"}, want: true},
 		{flags: []string{"--remote-submodules"}, want: true},
 	}
 	for _, tc := range tests {
@@ -306,9 +311,24 @@ func TestRemoteMirrorTelemetrySchema(t *testing.T) {
 }
 
 func TestGitCredentialHelperCommandQuotesExecutablePath(t *testing.T) {
-	t.Parallel()
+	if runtime.GOOS == "windows" {
+		t.Skip("credential helper fixture is a POSIX shell script")
+	}
 
-	ctx := self.OverridePath(t.Context(), "/path with spaces/buildkite-agent")
+	agentDir := filepath.Join(t.TempDir(), "Buildkite Agent (arm64)")
+	if err := os.MkdirAll(agentDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	agentPath := filepath.Join(agentDir, "buildkite-agent")
+	if err := os.WriteFile(
+		agentPath,
+		[]byte("#!/bin/sh\nprintf 'username=test-user\\npassword=test-password\\n'\n"),
+		0o755,
+	); err != nil {
+		t.Fatal(err)
+	}
+
+	ctx := self.OverridePath(t.Context(), agentPath)
 	helper := gitCredentialHelperCommand(ctx)
 	if !strings.HasPrefix(helper, "!") {
 		t.Fatalf("credential helper = %q, want Git shell-snippet prefix !", helper)
@@ -317,9 +337,19 @@ func TestGitCredentialHelperCommandQuotesExecutablePath(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := []string{"/path with spaces/buildkite-agent", "git-credentials-helper"}
+	want := []string{agentPath, "git-credentials-helper"}
 	if !slices.Equal(got, want) {
 		t.Errorf("credential helper words = %q, want %q", got, want)
+	}
+
+	cmd := exec.Command("git", "-c", "credential.helper="+helper, "credential", "fill")
+	cmd.Stdin = strings.NewReader("protocol=https\nhost=mirror.example\n\n")
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("git credential fill error = %v\n%s", err, output)
+	}
+	if got := string(output); !strings.Contains(got, "username=test-user") || !strings.Contains(got, "password=test-password") {
+		t.Errorf("git credential fill output = %q, want helper credentials", got)
 	}
 }
 
@@ -404,10 +434,12 @@ func TestFetchCommitFromRemoteMirrorHidesURLPromptInDebug(t *testing.T) {
 	commit := strings.Repeat("a", 40)
 	e := newRemoteMirrorShimExecutor(t, commit, "hit")
 	logs := &bytes.Buffer{}
+	commandOutput := &bytes.Buffer{}
 	sh, err := shell.New(
 		shell.WithDebug(true),
 		shell.WithEnv(e.shell.Env),
-		shell.WithStdout(logs),
+		shell.WithLogger(shell.NewWriterLogger(logs, false, nil)),
+		shell.WithStdout(commandOutput),
 	)
 	if err != nil {
 		t.Fatal(err)
