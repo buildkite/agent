@@ -55,8 +55,7 @@ discarding the existing checkout. A successful bulk mirror clone is retained
 when its shape can be completed canonically; a failed clone may discard only
 state that attempt created, and a lagging shallow clone is explicitly re-cloned
 to preserve R3. On a hit, do not repeat the same commit acquisition against
-canonical, except for the pre-existing canonical ref refresh retained with
-on-host mirrors (C11). "Bounded" means a wall-clock cap for probe-shaped fetches
+canonical. "Bounded" means a wall-clock cap for probe-shaped fetches
 and a stall guard for bulk transfers; §5.3 explains why one number cannot serve
 both, and records the bounds' imperfections.
 
@@ -64,6 +63,10 @@ both, and records the bounds' imperfections.
 pipeline sets (`depth`, clone/fetch flags, sparse paths, submodules, LFS), the
 mirror-served path must produce the same checkout shape as the canonical path,
 and must not silently upgrade a shallow or blobless transfer into a full one.
+This requires the opted-in mirror provider to support the canonical host's
+filter capabilities; a provider without filter support is ineligible for
+blobless rollout because Git otherwise warns and exits zero after a full
+transfer (C3).
 
 **R4 — Tiered caching with the on-host mirror.** When `--git-mirrors-path` is
 configured, the on-host mirror is populated and refreshed from the remote mirror
@@ -94,7 +97,7 @@ not SHA-1 specifically. Mirror-derived *names* (branch refs, tags) may end up in
 the checkout and may be stale, but nothing the agent does resolves a name
 through the mirror to decide what to build.
 
-**R9 — Observability.** Every checkout reports what the mirror did:
+**R9 — Observability.** Every default checkout reports what the mirror did:
 `hit`, `miss`, `timeout`, `error`, `notReached`, or `skipped` with a reason.
 Without this we cannot distinguish a working mirror from one that misses every
 time and silently falls back, and several of the degradations in §10 present as
@@ -106,6 +109,9 @@ most agents — including, possibly, the first fleet this ships to. Metric-shape
 span attributes stay low-cardinality: outcomes, durations, sites and skip
 reasons only, never repository URLs. A URL may appear only in the job log after
 `redact.URLCredentials`.
+Custom checkout hooks and plugins replace the default checkout dispatcher and
+are outside this denominator; they neither use nor report the built-in mirror
+optimization.
 
 **R10 — Runtime support boundary.** Remote Git mirrors require Git 2.45.0 or
 newer. That is the first release where `GIT_NO_LAZY_FETCH=1` makes the
@@ -280,6 +286,7 @@ type remoteMirrorAttempt struct {
 
     // notReached at resolution; overwritten at most once by the site that ran.
     outcome    // notReached | hit | miss | timeout | error
+    duration   // wall-clock mirror-command duration; emitted in milliseconds
 }
 ```
 
@@ -914,10 +921,8 @@ would skip both sources and hand reference checkouts an object that `gc` may
 remove. Reachability forces the retry to publish the namespaced ref or complete
 the canonical fetch.
 
-Write it as a second straight-line `if` returning
-`e.snapshotMirror(ctx, repository, mirrorDir)`. That call is already repeated
-verbatim at three points in this function; hoisting it into a closure would
-rename the repetition rather than remove it.
+Do not return directly on the remote hit. Record it in the local boolean and let
+the common maintenance and snapshot tail run.
 
 No user fetch flags are passed, matching the existing mirror-update fetch: the
 on-host mirror is always a full mirror regardless of the pipeline's
@@ -1033,6 +1038,11 @@ interrupt repository repair, but never start canonical network fallback after
 cancel. A checkout already partial under a *different* filter has its
 `remote.origin.partialclonefilter` overwritten, which is the intended outcome
 given the fetch it just took was filtered the new way.
+
+Normal cancellation cleanup is not enough for process death or host reboot.
+Before every later fetch, scan URL-named promisor sections left by interrupted
+attempts, establish canonical `origin` ownership, and remove them—even when the
+backend mirror URL has since been removed or rotated.
 
 If that bounded config repair fails, the checkout is no longer safe to preserve:
 the mirror may remain registered as an unbounded promisor. Classify the failure
@@ -1216,11 +1226,12 @@ code that caused it no longer exists.
   that compares shallow boundaries and reachable commits after canonical
   fallback, plus a shallow-reference case where the target exists only through
   alternates.
-- **Assert on bytes, not on abstinence.** "Canonical was never contacted" is not
-  achievable — the checkout still resolves refs against canonical even on a hit
-  (§4.1). Assert objects transferred, or missing-object counts for filtered
-  cases. This matters most for G10, where config-shape assertions pass while the
-  transfer is wrong.
+- **Assert the avoided operation directly.** For existing/fresh mirror hits,
+  assert that no canonical commit-fetch request occurs while allowing separately
+  expected verification requests. A zero-byte assertion is insufficient because
+  an exact-SHA canonical fetch can contact the server and transfer nothing.
+  Object and missing-object counts remain appropriate for the on-host and
+  filtered-transfer cases.
 - **Integration** (`internal/job/integration`): the existing suites assert exact
   git argv through `bintest`'s `ExpectAll`, so any change to command shape
   touches many expectations in `checkout_integration_test.go` and
@@ -1360,14 +1371,11 @@ is PR 4's clone, where `origin` is still the mirror: an LFS repository whose
 mirror does not proxy LFS fails that clone and falls back to canonical, which is
 the correct outcome and is why PR 4 declines to suppress the smudge filter.
 
-**C11 — The on-host-mirror site keeps the canonical commit fetch.** §5.7's skip
-applies to the existing-checkout and fresh-clone sites only. When
-`--git-mirrors-path` is configured and a checkout already exists, an on-host
-mirror hit makes the commit locally reachable through the alternates, and
-`fetchSource` still contacts canonical. That is a round trip the hit arguably
-made unnecessary, and it is deliberate: it is what keeps `refs/remotes/origin/*`
-advancing in the reused checkout, and it is not a regression against today.
-*Comment: in `checkout_fetch.go`, next to the skip.*
+**C11 — On-host mirror hits also skip the canonical commit fetch.** A
+destination-less exact-SHA fetch updates `FETCH_HEAD`, not
+`refs/remotes/origin/*`, so repeating it does not provide the ref freshness once
+claimed here. The checkout consumes the commit through its reference alternate;
+canonical branch verification remains a separate explicit request.
 
 **C12 — Mirror lag is visible as a slower job, not a failure.** Expected and
 bounded, and the reason R9 exists: a mirror missing 100% of the time looks
