@@ -13,6 +13,7 @@ import (
 	"github.com/buildkite/agent/v3/internal/osutil"
 	"github.com/buildkite/agent/v3/internal/redact"
 	"github.com/buildkite/agent/v3/tracetools"
+	"github.com/buildkite/shellwords"
 )
 
 const (
@@ -81,17 +82,18 @@ func (o remoteMirrorOutcome) String() string {
 type remoteMirrorSkipReason string
 
 const (
-	remoteMirrorSkipNone             remoteMirrorSkipReason = ""
-	remoteMirrorSkipNoURL            remoteMirrorSkipReason = "no-url"
-	remoteMirrorSkipNotHTTPS         remoteMirrorSkipReason = "not-https"
-	remoteMirrorSkipCanonicalChanged remoteMirrorSkipReason = "canonical-changed"
-	remoteMirrorSkipNotFullObjectID  remoteMirrorSkipReason = "not-full-object-id"
-	remoteMirrorSkipEmptyBranch      remoteMirrorSkipReason = "empty-branch"
-	remoteMirrorSkipBranchTooLong    remoteMirrorSkipReason = "branch-too-long"
-	remoteMirrorSkipCustomRefspec    remoteMirrorSkipReason = "custom-refspec"
-	remoteMirrorSkipTagBuild         remoteMirrorSkipReason = "tag-build"
-	remoteMirrorSkipPullRequest      remoteMirrorSkipReason = "pull-request"
-	remoteMirrorSkipNotFirstAttempt  remoteMirrorSkipReason = "not-first-attempt"
+	remoteMirrorSkipNone                remoteMirrorSkipReason = ""
+	remoteMirrorSkipNoURL               remoteMirrorSkipReason = "no-url"
+	remoteMirrorSkipNotHTTPS            remoteMirrorSkipReason = "not-https"
+	remoteMirrorSkipCanonicalChanged    remoteMirrorSkipReason = "canonical-changed"
+	remoteMirrorSkipNotFullObjectID     remoteMirrorSkipReason = "not-full-object-id"
+	remoteMirrorSkipEmptyBranch         remoteMirrorSkipReason = "empty-branch"
+	remoteMirrorSkipBranchTooLong       remoteMirrorSkipReason = "branch-too-long"
+	remoteMirrorSkipCustomRefspec       remoteMirrorSkipReason = "custom-refspec"
+	remoteMirrorSkipTagBuild            remoteMirrorSkipReason = "tag-build"
+	remoteMirrorSkipPullRequest         remoteMirrorSkipReason = "pull-request"
+	remoteMirrorSkipNotFirstAttempt     remoteMirrorSkipReason = "not-first-attempt"
+	remoteMirrorSkipRecursiveSubmodules remoteMirrorSkipReason = "recursive-submodules"
 )
 
 type remoteMirrorAttempt struct {
@@ -157,7 +159,29 @@ func (e *Executor) resolveRemoteMirrorAttempt(previousAttempts int) remoteMirror
 	default:
 		attempt.site = remoteMirrorSiteFreshClone
 	}
+	if attempt.site == remoteMirrorSiteFreshClone {
+		cloneFlags, err := shellwords.Split(e.GitCloneFlags)
+		if err == nil && hasRecursiveSubmoduleCloneFlags(cloneFlags) {
+			// Clone-time recursive submodules resolve URLs and worktrees while
+			// origin still points at the mirror. Keep this rough edge outside
+			// the initial remote-mirror support rather than reconstructing it.
+			return skip(remoteMirrorSkipRecursiveSubmodules)
+		}
+	}
 	return attempt
+}
+
+func hasRecursiveSubmoduleCloneFlags(flags []string) bool {
+	for _, flag := range flags {
+		switch {
+		case flag == "--recursive",
+			flag == "--recurse-submodules",
+			flag == "--remote-submodules",
+			strings.HasPrefix(flag, "--recurse-submodules="):
+			return true
+		}
+	}
+	return false
 }
 
 func (e *Executor) checkoutAlreadyExists() bool {
