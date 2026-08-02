@@ -907,6 +907,13 @@ booleans, skip only the applicable network fetch, and share the existing
 maintenance and snapshot tail. Keep the remote attempt inside the
 `isMainRepository` guard so submodule mirrors remain untouched.
 
+The warm-cache check requires both object presence and reachability from a
+durable ref. A previous fetch can download an object and then fail its
+destination-ref write; if canonical fallback also fails, a presence-only retry
+would skip both sources and hand reference checkouts an object that `gc` may
+remove. Reachability forces the retry to publish the namespaced ref or complete
+the canonical fetch.
+
 Write it as a second straight-line `if` returning
 `e.snapshotMirror(ctx, repository, mirrorDir)`. That call is already repeated
 verbatim at three points in this function; hoisting it into a closure would
@@ -1027,10 +1034,11 @@ cancel. A checkout already partial under a *different* filter has its
 `remote.origin.partialclonefilter` overwritten, which is the intended outcome
 given the fetch it just took was filtered the new way.
 
-If that bounded config repair fails, fail the checkout without putting the
-usable workdir through the outer retry's clean-and-reclone path. Re-cloning does
-not repair config permissions or locking and violates R5. A dedicated typed
-error tells the checkout retrier to preserve the workdir and stop.
+If that bounded config repair fails, the checkout is no longer safe to preserve:
+the mirror may remain registered as an unbounded promisor. Classify the failure
+through the existing clean-and-retry path. The next checkout attempt is
+mirror-ineligible and clones canonically, trading R5's performance goal for a
+workdir that cannot lazily contact the mirror outside scoped credentials.
 
 Note that `git` does not write `extensions.partialClone` on this path at all —
 that is the pre-2.22 spelling modern git only reads — so there is nothing to
@@ -1043,7 +1051,7 @@ unchanged; filtered miss/error/timeout/cancel all remove mirror ownership and
 leave canonical promisor ownership; a sparse pipeline's mirror fetch carries
 `--filter=blob:none`; an existing origin filter is inherited unless
 `--no-filter` (including accepted abbreviations) is explicit; cleanup failure
-does not delete the checkout; no `remote.<mirrorURL>.*` survives any successful
+cleans and retries canonically; no `remote.<mirrorURL>.*` survives any successful
 cleanup; and —
 the one that matters — after a
 hit on a checkout that was **not** previously a partial clone, with the mirror
@@ -1147,6 +1155,11 @@ reconstructing clone-time recursive behavior. Git accepts unambiguous long
 option abbreviations, so the eligibility check conservatively recognizes
 positive `--rec*` and `--rem*` spellings rather than only the documented full
 names.
+
+`--separate-git-dir` (including Git-accepted abbreviations) also bypasses the
+remote mirror in this round. Mirror failure cleanup owns only the checkout
+directory; leaving an external Git directory behind would make canonical
+fallback fail because its destination already exists.
 
 **Tests:** hit with canonical unreachable, asserting canonical served zero
 objects rather than "was not contacted"; lagging mirror completed from
