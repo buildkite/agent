@@ -78,6 +78,49 @@ func TestConfigAllowlisting(t *testing.T) {
 			wantExitStatus:           "0",
 		},
 		{
+			name: "when the remote mirror does not match the repo allowlist, the mirror is dropped without refusing the job",
+			extraEnv: map[string]string{
+				"BUILDKITE_REPO":                  "https://github.com/buildkite/agent",
+				"BUILDKITE_GIT_REMOTE_MIRROR_URL": "https://mirror.example/buildkite/agent",
+			},
+			agentConfig: agent.AgentConfiguration{
+				AllowedRepositories: []*regexp.Regexp{
+					regexp.MustCompile("^https://github.com/buildkite/.*$"),
+				},
+			},
+			mockBootstrapExpectation: func(bm *bintest.Mock) {
+				bm.Expect().Once().AndExitWith(0).AndCallFunc(func(c *bintest.Call) {
+					if got := c.GetEnv("BUILDKITE_GIT_REMOTE_MIRROR_URL"); got != "" {
+						t.Errorf("BUILDKITE_GIT_REMOTE_MIRROR_URL = %q, want dropped", got)
+					}
+					c.Exit(0)
+				})
+			},
+			wantExitStatus:  "0",
+			wantLogsContain: []string{"Remote Git mirror is not permitted by --allowed-repositories; using canonical repository"},
+		},
+		{
+			name: "when both canonical and remote mirror match the repo allowlist, the mirror reaches bootstrap",
+			extraEnv: map[string]string{
+				"BUILDKITE_REPO":                  "https://github.com/buildkite/agent",
+				"BUILDKITE_GIT_REMOTE_MIRROR_URL": "https://mirror.example/buildkite/agent",
+			},
+			agentConfig: agent.AgentConfiguration{
+				AllowedRepositories: []*regexp.Regexp{
+					regexp.MustCompile(`^https://(github\.com|mirror\.example)/buildkite/.*$`),
+				},
+			},
+			mockBootstrapExpectation: func(bm *bintest.Mock) {
+				bm.Expect().Once().AndExitWith(0).AndCallFunc(func(c *bintest.Call) {
+					if got, want := c.GetEnv("BUILDKITE_GIT_REMOTE_MIRROR_URL"), "https://mirror.example/buildkite/agent"; got != want {
+						t.Errorf("BUILDKITE_GIT_REMOTE_MIRROR_URL = %q, want %q", got, want)
+					}
+					c.Exit(0)
+				})
+			},
+			wantExitStatus: "0",
+		},
+		{
 			name:     "when allowlisting plugins, if the plugin source doesn't match the configured allowlist, the job is refused",
 			extraEnv: map[string]string{"BUILDKITE_PLUGINS": `[{"github.com/crime-org/super-nasty-plugin#1.0.0":{"some":"config"}}]`},
 			agentConfig: agent.AgentConfiguration{
@@ -157,6 +200,64 @@ func TestConfigAllowlisting(t *testing.T) {
 
 			if got, want := finishedJob.SignalReason, tc.wantSignalReason; got != want {
 				t.Errorf("job.SignalReason = %q, want %q", got, want)
+			}
+		})
+	}
+}
+
+func TestRemoteMirrorAllowlistMasksAmbientEnvironment(t *testing.T) {
+	tests := []struct {
+		name         string
+		jobMirrorURL string
+	}{
+		{name: "backend mirror absent"},
+		{name: "backend mirror disallowed", jobMirrorURL: "https://disallowed.example/buildkite/agent"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("BUILDKITE_GIT_REMOTE_MIRROR_URL", "https://ambient.example/buildkite/agent")
+
+			jobID := defaultJobID
+			job := &api.Job{
+				ChunksMaxSizeBytes: 1024,
+				ID:                 jobID,
+				Env: map[string]string{
+					"BUILDKITE":         "true",
+					"BUILDKITE_COMMAND": "echo hello",
+					"BUILDKITE_REPO":    "https://github.com/buildkite/agent",
+				},
+				Token: "bkaj_job-token",
+			}
+			if tc.jobMirrorURL != "" {
+				job.Env["BUILDKITE_GIT_REMOTE_MIRROR_URL"] = tc.jobMirrorURL
+			}
+
+			e := createTestAgentEndpoint()
+			server := e.server()
+			defer server.Close()
+
+			mb := mockBootstrap(t)
+			mb.Expect().Once().AndExitWith(0).AndCallFunc(func(c *bintest.Call) {
+				if got := c.GetEnv("BUILDKITE_GIT_REMOTE_MIRROR_URL"); got != "" {
+					t.Errorf("BUILDKITE_GIT_REMOTE_MIRROR_URL = %q, want ambient value masked", got)
+				}
+				c.Exit(0)
+			})
+			defer mb.CheckAndClose(t) //nolint:errcheck // bintest logs to t
+
+			err := runJob(t, t.Context(), testRunJobConfig{
+				job:    job,
+				server: server,
+				agentCfg: agent.AgentConfiguration{
+					AllowedRepositories: []*regexp.Regexp{
+						regexp.MustCompile("^https://github.com/buildkite/.*$"),
+					},
+				},
+				mockBootstrap: mb,
+			})
+			if err != nil {
+				t.Fatalf("runJob() error = %v", err)
 			}
 		})
 	}

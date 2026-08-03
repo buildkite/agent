@@ -231,9 +231,9 @@ func (e *Executor) checkout(ctx context.Context) error {
 				}
 
 				switch errGit.Type {
-				case gitErrorClean, gitErrorCleanSubmodules, gitErrorClone,
+				case gitErrorClean, gitErrorCleanSubmodules, gitErrorClone, gitErrorCloneTimeout,
 					gitErrorCheckoutRetryClean, gitErrorFetchRetryClean,
-					gitErrorFetchBadObject:
+					gitErrorFetchBadObject, gitErrorFetchRefNotOnRemote:
 					// Checkout can fail because of corrupted files in the checkout which can leave the agent in a state where it
 					// keeps failing. This removes the checkout dir, which means the next checkout will be a lot slower (clone vs
 					// fetch), but hopefully will allow the agent to self-heal
@@ -321,6 +321,9 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context, previousAttempts in
 	})
 	defer func() { span.FinishWithError(retErr) }()
 
+	attempt := e.resolveRemoteMirrorAttempt(previousAttempts)
+	defer func() { e.emitRemoteMirrorTelemetry(span, attempt) }()
+
 	// Adopt the repo-checkout child ctx so git.* spans nest under it.
 	ctx = spanCtx
 
@@ -352,7 +355,7 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context, previousAttempts in
 		mirrorSpan, mirrorCtx := e.traceOpSpan(ctx, "git.mirror.update")
 		mirrorSpan.AddAttributes(map[string]string{"git.repo": redact.URLCredentials(e.Repository)})
 
-		mirrorDir, err = e.getOrUpdateMirrorDir(mirrorCtx, e.Repository)
+		mirrorDir, err = e.getOrUpdateMirrorDir(mirrorCtx, e.Repository, &attempt)
 
 		mirrorSpan.FinishWithError(err)
 
@@ -469,7 +472,7 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context, previousAttempts in
 			"git.blobless_filter": strconv.FormatBool(hasPartialFilterFlags(gitCloneFlags)),
 		})
 
-		cloneErr := gitClone(cloneCtx, e.shell, gitCloneFlags, e.Repository, ".")
+		cloneErr := gitClone(cloneCtx, e.shell, nil, gitCloneFlags, e.Repository, ".")
 
 		cloneSpan.FinishWithError(cloneErr)
 
@@ -515,7 +518,7 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context, previousAttempts in
 	addBloblessFilter := sparse.active() &&
 		!userSuppliedCloneFilter &&
 		!hasPartialFilterFlags(gitFetchFlags)
-	if err := e.fetchSource(ctx, addBloblessFilter); err != nil {
+	if err := e.fetchSource(ctx, addBloblessFilter, &attempt); err != nil {
 		return err
 	}
 
@@ -712,7 +715,7 @@ func (e *Executor) updateGitSubmodules(ctx context.Context) (retErr error) {
 		subMirrorSpan, subMirrorCtx := e.traceOpSpan(ctx, "git.mirror.update")
 		subMirrorSpan.AddAttributes(map[string]string{"git.repo": redact.URLCredentials(repository)})
 
-		mirrorDir, err := e.getOrUpdateMirrorDir(subMirrorCtx, repository)
+		mirrorDir, err := e.getOrUpdateMirrorDir(subMirrorCtx, repository, nil)
 
 		subMirrorSpan.FinishWithError(err)
 

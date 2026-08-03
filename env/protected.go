@@ -12,7 +12,8 @@ type protection struct {
 }
 
 // protectedEnv contains environment variables that can only be set by agent
-// configuration, or in some cases, from within the job.
+// configuration, by the Buildkite backend as immutable job inputs, or in some
+// cases from within the job.
 //
 // These variables cannot be overwritten by job-level environment variables or
 // secrets, but some may still be set in hooks or plugins.
@@ -37,6 +38,10 @@ type protection struct {
 // across jobs on the host and the backend has no concept of it. CLONE_MIRROR_FLAGS
 // in particular is applied to the shared `git clone --mirror`, so letting a job
 // set it would be a cross-job injection vector.
+//
+// BUILDKITE_GIT_REMOTE_MIRROR_URL is a third category: it is supplied by the
+// backend but immutable within the job. The executor intentionally snapshots it
+// at bootstrap and never refreshes it after hooks.
 //
 // The actual enforcement of protected env within the agent level (overriding
 // job-level env vars based on agent configuration) happens implicitly rather
@@ -73,6 +78,7 @@ var protectedEnv = map[string]protection{
 	"BUILDKITE_GIT_MIRRORS_PATH":            {},
 	"BUILDKITE_GIT_MIRRORS_SKIP_UPDATE":     {},
 	"BUILDKITE_GIT_MIRROR_CHECKOUT_MODE":    {},
+	"BUILDKITE_GIT_REMOTE_MIRROR_URL":       {},
 	"BUILDKITE_GIT_SUBMODULE_CLONE_CONFIG":  {},
 	"BUILDKITE_HOOKS_PATH":                  {},
 	"BUILDKITE_HOOKS_SHELL":                 {},

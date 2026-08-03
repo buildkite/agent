@@ -14,7 +14,7 @@ import (
 	"github.com/buildkite/shellwords"
 )
 
-func (e *Executor) getOrUpdateMirrorDir(ctx context.Context, repository string) (string, error) {
+func (e *Executor) getOrUpdateMirrorDir(ctx context.Context, repository string, attempt *remoteMirrorAttempt) (string, error) {
 	var mirrorDir string
 	// Skip updating the Git mirror before using it?
 	if e.GitMirrorsSkipUpdate {
@@ -33,7 +33,7 @@ func (e *Executor) getOrUpdateMirrorDir(ctx context.Context, repository string) 
 		return mirrorDir, nil
 	}
 
-	return e.updateGitMirror(ctx, repository)
+	return e.updateGitMirror(ctx, repository, attempt)
 }
 
 // updateGitMirror clones a new git mirror (git clone --mirror ...), or updates
@@ -45,7 +45,7 @@ func (e *Executor) getOrUpdateMirrorDir(ctx context.Context, repository string) 
 // For efficiency reasons, updating an existing mirror is done by fetching
 // specific refspecs rather than using `git remote update` to fetch everything
 // (see https://github.com/buildkite/agent/pull/1112).
-func (e *Executor) updateGitMirror(ctx context.Context, repository string) (dir string, finalErr error) {
+func (e *Executor) updateGitMirror(ctx context.Context, repository string, attempt *remoteMirrorAttempt) (dir string, finalErr error) {
 	// Create a unique directory for the repository mirror
 	mirrorDir := filepath.Join(e.GitMirrorsPath, dirForRepository(repository))
 	isMainRepository := repository == e.Repository
@@ -99,7 +99,7 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string) (dir 
 		}
 		flags = append(flags, mirrorFlags...)
 		if err := e.traceOp(ctx, "git.mirror.clone", func(ctx context.Context) error {
-			return gitClone(ctx, e.shell, flags, repository, mirrorDir)
+			return gitClone(ctx, e.shell, nil, flags, repository, mirrorDir)
 		}); err != nil {
 			e.shell.Commentf("Removing mirror dir %q due to failed clone", mirrorDir)
 			if err := os.RemoveAll(mirrorDir); err != nil {
@@ -188,7 +188,7 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string) (dir 
 		if err := e.traceOp(ctx, "git.mirror.fetch", func(ctx context.Context) error {
 			return gitFetch(ctx, gitFetchArgs{
 				Shell:      e.shell,
-				GitFlags:   fmt.Sprintf("--git-dir=%s", mirrorDir),
+				GitFlags:   []string{"--git-dir", mirrorDir},
 				Repository: "origin",
 				RefSpecs:   refspecs,
 				Retry:      retry,
@@ -304,7 +304,7 @@ func (e *Executor) snapshotMirror(ctx context.Context, repository, mirrorDir str
 	// Finally, clone the snapshot. Yes, it's a --mirror of a --mirror.
 	e.shell.Commentf("Creating mirror snapshot in %q", snapshotDir)
 	if err := e.traceOp(ctx, "git.mirror.snapshot", func(ctx context.Context) error {
-		return gitClone(ctx, e.shell, []string{"--mirror"}, mirrorDir, snapshotDir)
+		return gitClone(ctx, e.shell, nil, []string{"--mirror"}, mirrorDir, snapshotDir)
 	}); err != nil {
 		return "", err
 	}
