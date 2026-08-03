@@ -16,6 +16,70 @@ import (
 	"github.com/urfave/cli"
 )
 
+// Registration tracing policy must not override an operator's explicit
+// BUILDKITE_TRACING_PROPAGATE_TRACEPARENT=false. Presence has to be captured
+// before UnsetConfigFromEnvironment clears it, so this covers that ordering.
+func TestCaptureLocalTracingEnvSurvivesConfigUnset(t *testing.T) {
+	t.Setenv("BUILDKITE_TRACING_PROPAGATE_TRACEPARENT", "false")
+
+	tracingEnv := captureLocalTracingEnv()
+
+	// Only this flag is unset, so the shared process environment other tests in
+	// this package rely on is left alone.
+	c := cli.NewContext(cli.NewApp(), nil, nil)
+	c.Command = cli.Command{
+		Flags: []cli.Flag{
+			cli.BoolFlag{
+				Name:   "tracing-propagate-traceparent",
+				EnvVar: "BUILDKITE_TRACING_PROPAGATE_TRACEPARENT",
+			},
+		},
+	}
+	if err := UnsetConfigFromEnvironment(c); err != nil {
+		t.Fatalf("UnsetConfigFromEnvironment() error = %v", err)
+	}
+
+	// Guards the ordering: capturing after this point would see nothing.
+	if _, stillSet := os.LookupEnv("BUILDKITE_TRACING_PROPAGATE_TRACEPARENT"); stillSet {
+		t.Fatal("expected UnsetConfigFromEnvironment to clear the variable")
+	}
+	if captureLocalTracingEnv().propagateTraceparentSet {
+		t.Fatal("expected a post-unset capture to see the variable as absent")
+	}
+
+	if !tracingEnv.propagateTraceparentLocallyConfigured(false, false) {
+		t.Fatal("expected the environment value captured before unset to count as local config")
+	}
+
+	// An explicit false must survive registration policy that enables it.
+	conf := agent.AgentConfiguration{TracingPropagateTraceparent: false}
+	conf.ApplyRegistrationTracing(logger.Discard, &api.AgentRegistrationTracing{
+		Backend:              "opentelemetry",
+		PropagateTraceparent: true,
+	}, false, tracingEnv.propagateTraceparentLocallyConfigured(false, false))
+
+	if conf.TracingPropagateTraceparent {
+		t.Fatal("registration overwrote an explicit local propagate-traceparent=false")
+	}
+}
+
+func TestPropagateTraceparentLocallyConfiguredSources(t *testing.T) {
+	t.Parallel()
+
+	if (localTracingEnv{}).propagateTraceparentLocallyConfigured(false, false) {
+		t.Fatal("expected false when no source configures propagation")
+	}
+	if !(localTracingEnv{}).propagateTraceparentLocallyConfigured(true, false) {
+		t.Fatal("expected the command-line flag to count")
+	}
+	if !(localTracingEnv{}).propagateTraceparentLocallyConfigured(false, true) {
+		t.Fatal("expected the config file key to count")
+	}
+	if !(localTracingEnv{propagateTraceparentSet: true}).propagateTraceparentLocallyConfigured(false, false) {
+		t.Fatal("expected the captured environment value to count")
+	}
+}
+
 func setupHooksPath(t *testing.T) (string, func()) {
 	t.Helper()
 

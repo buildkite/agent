@@ -662,6 +662,9 @@ func setupLoggerAndConfig[T any](ctx context.Context, c *cli.Context, opts ...co
 				_ = traceProvider.Shutdown(flushCtx)
 			}
 		}
+		// Any control-plane exporter credentials stay in the process environ
+		// until Executor.Run has also finished optional OTLP job-log setup,
+		// which falls back to the generic OTEL_EXPORTER_OTLP_* variables.
 	}
 
 	return ctx, cfg, l, loader.File, done
