@@ -759,19 +759,19 @@ func TestCheckoutScopedJobEnvOverrideHonorsCheckoutOverrideMode(t *testing.T) {
 			wantIgnoredEnvVars: []string{"BUILDKITE_GIT_CHECKOUT_TIMEOUT"},
 		},
 		// Commit verification is an enum (not a flag) but is checkout-override
-		// scoped, so it follows the same mode rules. The first case is the reported
-		// scenario: agent leaves it unset, the pipeline requests strict, and none
-		// lets the job env win so verification actually runs.
+		// scoped, so it follows the same mode rules. With v4's strict default, none
+		// lets the backend job env select warn instead.
 		{
-			name:    "none_allows_job_env_to_enable_commit_verification_when_agent_unset",
+			name:    "none_allows_job_env_to_override_default_commit_verification",
 			varName: "BUILDKITE_GIT_COMMIT_VERIFICATION",
 			jobEnv: map[string]string{
-				"BUILDKITE_GIT_COMMIT_VERIFICATION": "strict",
+				"BUILDKITE_GIT_COMMIT_VERIFICATION": "warn",
 			},
 			agentCfg: agent.AgentConfiguration{
-				CheckoutOverrideMode: env.CheckoutOverrideNone,
+				GitCommitVerification: "strict",
+				CheckoutOverrideMode:  env.CheckoutOverrideNone,
 			},
-			wantEnvValue: "strict",
+			wantEnvValue: "warn",
 		},
 		{
 			name:    "none_allows_job_env_to_override_commit_verification",
