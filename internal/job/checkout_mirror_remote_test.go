@@ -610,6 +610,12 @@ func newOnHostMirrorExecutor(t *testing.T, repository, commit string) *Executor 
 		GitCloneMirrorFlags:   "-v",
 	})
 	e.shell = shell.NewTestShell(t, shell.WithSignalGracePeriod(10*time.Millisecond))
+	t.Cleanup(func() {
+		if e.checkoutRoot != nil {
+			_ = e.checkoutRoot.Close()
+			e.checkoutRoot = nil
+		}
+	})
 	return e
 }
 
