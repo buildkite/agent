@@ -45,13 +45,17 @@ func TestGitCommitVerificationFlag(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			flag := *GitCommitVerificationFlag
-			flag.Sources = cli.ValueSourceChain{}
+			flag := &cli.StringFlag{
+				Name:             GitCommitVerificationFlag.Name,
+				Value:            GitCommitVerificationFlag.Value,
+				ValidateDefaults: GitCommitVerificationFlag.ValidateDefaults,
+				Validator:        GitCommitVerificationFlag.Validator,
+			}
 
 			var got string
 			command := &cli.Command{
 				Name:  "test",
-				Flags: []cli.Flag{&flag},
+				Flags: []cli.Flag{flag},
 				Action: func(_ context.Context, command *cli.Command) error {
 					got = command.String("git-commit-verification")
 					return nil

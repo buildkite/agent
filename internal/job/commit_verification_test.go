@@ -370,18 +370,27 @@ func TestVerifyCommit(t *testing.T) {
 			t.Fatalf("git fetch error = %v", err)
 		}
 
-		e := &Executor{
-			shell: sh,
-			ExecutorConfig: ExecutorConfig{
-				GitCommitVerification: "strict",
-				Commit:                commit,      // commit from feature-a
-				Branch:                "feature-b", // but checking against feature-b
-			},
-		}
+		for _, mode := range []struct {
+			name  string
+			value string
+		}{
+			{name: "strict mode", value: "strict"},
+			{name: "empty mode fails closed", value: ""},
+		} {
+			t.Run(mode.name, func(t *testing.T) {
+				e := &Executor{
+					shell: sh,
+					ExecutorConfig: ExecutorConfig{
+						GitCommitVerification: mode.value,
+						Commit:                commit,      // commit from feature-a
+						Branch:                "feature-b", // but checking against feature-b
+					},
+				}
 
-		err = e.verifyCommit(ctx)
-		if err == nil {
-			t.Errorf("verifyCommit() error = nil, want error about commit not on branch")
+				if err := e.verifyCommit(ctx); !errors.Is(err, ErrCommitVerificationFailed) {
+					t.Errorf("verifyCommit() with mode %q error = %v, want ErrCommitVerificationFailed", mode.value, err)
+				}
+			})
 		}
 	})
 
