@@ -4,6 +4,7 @@ import (
 	"regexp"
 	"time"
 
+	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/env"
 	"github.com/buildkite/agent/v3/internal/job"
 )
@@ -82,6 +83,7 @@ type AgentConfiguration struct {
 	TracingBackend               string
 	TracingServiceName           string
 	TracingPropagateTraceparent  bool
+	TracingExporter              *api.TracingExporter
 	TraceContextEncoding         string
 	DisableWarningsFor           []string
 	AllowMultipartArtifactUpload bool

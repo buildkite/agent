@@ -242,12 +242,40 @@ func (cfg *AgentStartConfig) checkoutOverrideMode() (env.CheckoutOverrideMode, e
 	return resolveCheckoutOverrideMode(cfg.CheckoutOverrideMode, !cfg.NoCommandEval)
 }
 
+// localTracingEnv records local tracing configuration that later startup steps
+// destroy. UnsetConfigFromEnvironment clears config environment variables so
+// they do not reach bootstrap, and urfave/cli v1's IsSet only reports
+// command-line flags, so presence in the environment has to be captured before
+// config is loaded. Without it an explicit
+// BUILDKITE_TRACING_PROPAGATE_TRACEPARENT=false looks unset and registration
+// policy would overwrite it.
+type localTracingEnv struct {
+	propagateTraceparentSet bool
+}
+
+func captureLocalTracingEnv() localTracingEnv {
+	_, propagateTraceparentSet := os.LookupEnv("BUILDKITE_TRACING_PROPAGATE_TRACEPARENT")
+	return localTracingEnv{propagateTraceparentSet: propagateTraceparentSet}
+}
+
+// propagateTraceparentLocallyConfigured reports whether the operator set
+// traceparent propagation themselves, from any source, including an explicit
+// false.
+func (t localTracingEnv) propagateTraceparentLocallyConfigured(cliSet, configFileSet bool) bool {
+	return cliSet || configFileSet || t.propagateTraceparentSet
+}
+
 func (asc AgentStartConfig) Features(ctx context.Context) []string {
 	if asc.NoFeatureReporting {
 		return []string{}
 	}
 
-	features := make([]string, 0, 9)
+	features := make([]string, 0, 10)
+
+	// Capability: this agent can consume control-plane OTLP exporter config
+	// (bootstrap env application + pipeline scrub). Independent of whether
+	// --tracing-backend is already set, so registration can enable tracing.
+	features = append(features, agent.ControlPlaneOTLPTracingFeature)
 
 	if asc.GitMirrorsPath != "" {
 		features = append(features, "git-mirrors")
@@ -860,6 +888,8 @@ var AgentStartCommand = cli.Command{
 			_, _ = fmt.Fprintf(c.App.ErrWriter, "Couldn't re-exec to remove the registration token from the process command line/environment, continuing anyway: %v\n", err)
 		}
 
+		tracingEnv := captureLocalTracingEnv()
+
 		ctx := context.Background()
 		ctx, cfg, l, configFile, done := setupLoggerAndConfig[AgentStartConfig](ctx, c, withConfigFilePaths(
 			defaultConfigFilePaths(),
@@ -1192,6 +1222,16 @@ var AgentStartCommand = cli.Command{
 			agentConf.ConfigPath = configFile.Path
 		}
 
+		backendLocallyConfigured := agentConf.TracingBackend != ""
+		configFileSetsPropagate := false
+		if configFile != nil {
+			_, configFileSetsPropagate = configFile.Config["tracing-propagate-traceparent"]
+		}
+		propagateTraceparentLocallyConfigured := tracingEnv.propagateTraceparentLocallyConfigured(
+			c.IsSet("tracing-propagate-traceparent"),
+			configFileSetsPropagate,
+		)
+
 		if cfg.LogFormat == "text" {
 			welcomeMessage := "\n" +
 				"%s   _           _ _     _ _    _ _                                _\n" +
@@ -1402,14 +1442,26 @@ var AgentStartCommand = cli.Command{
 				return nil, err
 			}
 
+			workerLogger := l.WithFields(logger.StringField("agent", reg.Name))
+
+			// Per-worker copy so registration tracing policy does not race
+			// across spawned agents.
+			workerAgentConf := agentConf
+			workerAgentConf.ApplyRegistrationTracing(
+				workerLogger,
+				reg.Tracing,
+				backendLocallyConfigured,
+				propagateTraceparentLocallyConfigured,
+			)
+
 			// Create an agent worker to run the agent
 			return agent.NewAgentWorker(
-				l.WithFields(logger.StringField("agent", reg.Name)),
+				workerLogger,
 				reg,
 				mc,
 				apiClient,
 				agent.AgentWorkerConfig{
-					AgentConfiguration: agentConf,
+					AgentConfiguration: workerAgentConf,
 					CancelSignal:       cancelSig,
 					SignalGracePeriod:  signalGracePeriod,
 					Debug:              cfg.Debug,
