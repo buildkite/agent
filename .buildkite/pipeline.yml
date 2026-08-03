@@ -83,11 +83,17 @@ steps:
           - junit-*.xml
           - "coverage-*/**"
         plugins:
+          - tests#v1.0.0:
+              suite-slug: buildkite-agent
+              test-runner: gotest
+              result-path: junit.xml
+              install-client: false
+              upload-results: false
+              oidc-lifetime: 7200
           - docker-compose#v4.14.0:
               config: .buildkite/docker-compose.yml
               cli-version: 2
               propagate-environment: true
-              mount-buildkite-agent: true
               run: agent
           - test-collector#v1.11.0:
               files: "junit-*.xml"
@@ -107,11 +113,17 @@ steps:
         agents:
           queue: $AGENT_RUNNERS_LINUX_ARM64_QUEUE
         plugins:
+          - tests#v1.0.0:
+              suite-slug: buildkite-agent
+              test-runner: gotest
+              result-path: junit.xml
+              install-client: false
+              upload-results: false
+              oidc-lifetime: 7200
           - docker-compose#v4.14.0:
               config: .buildkite/docker-compose.yml
               cli-version: 2
               propagate-environment: true
-              mount-buildkite-agent: true
               run: agent
           - test-collector#v1.11.0:
               files: "junit-*.xml"
@@ -150,11 +162,17 @@ steps:
         agents:
           queue: $AGENT_RUNNERS_LINUX_ARM64_QUEUE
         plugins:
+          - tests#v1.0.0:
+              suite-slug: buildkite-agent
+              test-runner: gotest
+              result-path: junit.xml
+              install-client: false
+              upload-results: false
+              oidc-lifetime: 7200
           - docker-compose#v4.14.0:
               config: .buildkite/docker-compose.yml
               cli-version: 2
               propagate-environment: true
-              mount-buildkite-agent: true
               run: agent
           - test-collector#v1.11.0:
               files: "junit-*.xml"
