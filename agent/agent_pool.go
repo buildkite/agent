@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/buildkite/agent/v3/internal/systemdnotify"
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/agent/v3/status"
 
@@ -20,13 +21,18 @@ import (
 type AgentPool struct {
 	workers     []*AgentWorker
 	idleTimeout time.Duration
+	watchdog    watchdogNotifier
+	watchdogErr error
 }
 
 // NewAgentPool returns a new AgentPool.
 func NewAgentPool(workers []*AgentWorker, config *AgentConfiguration) *AgentPool {
+	watchdog, watchdogErr := systemdnotify.New()
 	return &AgentPool{
 		workers:     workers,
 		idleTimeout: config.DisconnectAfterIdleTimeout,
+		watchdog:    watchdog,
+		watchdogErr: watchdogErr,
 	}
 }
 
@@ -57,6 +63,29 @@ func (ap *AgentPool) StartStatusServer(ctx context.Context, l logger.Logger, add
 
 // Start kicks off the parallel AgentWorkers and waits for them to finish.
 func (r *AgentPool) Start(ctx context.Context) error {
+	if r.watchdogErr != nil {
+		return fmt.Errorf("configure systemd watchdog: %w", r.watchdogErr)
+	}
+
+	if r.watchdog != nil {
+		if watchdogInterval := r.watchdog.WatchdogInterval(); watchdogInterval > 0 {
+			var l logger.Logger = logger.Discard
+			if len(r.workers) > 0 {
+				l = r.workers[0].logger
+			}
+			watchdogCtx, stopWatchdog := context.WithCancel(ctx)
+			var watchdogWG sync.WaitGroup
+			watchdogWG.Go(func() {
+				r.runWatchdog(watchdogCtx, l, watchdogInterval)
+			})
+			defer func() {
+				stopWatchdog()
+				watchdogWG.Wait()
+			}()
+			l.Noticef("Systemd watchdog enabled with a %s timeout", watchdogInterval)
+		}
+	}
+
 	ctx, setStat, done := status.AddSimpleItem(ctx, "Agent Pool")
 	defer done()
 	setStat("🏃 Spawning workers...")
@@ -89,13 +118,25 @@ func runWorker(ctx context.Context, worker *AgentWorker, idleMon *idleMonitor) e
 
 	// Connect the worker to the API
 	if err := worker.Connect(ctx); err != nil {
+		if ctx.Err() != nil {
+			worker.watchdogMarkStopped()
+		} else {
+			worker.watchdogMarkFailed(err)
+		}
 		return err
 	}
 	// Ensure the worker is disconnected at the end of this function.
 	defer worker.Disconnect(ctx) //nolint:errcheck // Error is logged within core/client
 
 	// Starts the agent worker and wait for it to finish.
-	return worker.Start(ctx, idleMon)
+	worker.watchdogMarkRunning()
+	err := worker.Start(ctx, idleMon)
+	if err == nil || ctx.Err() != nil {
+		worker.watchdogMarkStopped()
+	} else {
+		worker.watchdogMarkFailed(err)
+	}
+	return err
 }
 
 // StopGracefully stops all workers in the pool gracefully.
