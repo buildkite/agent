@@ -71,6 +71,16 @@ func (s *Server) ConfigureRepository(repoName, key, value string) error {
 	return nil
 }
 
+func (s *Server) SetDefaultBranch(repoName, branch string) error {
+	repoPath := filepath.Join(s.repositories, repoName)
+	cmd := exec.Command("git", "symbolic-ref", "HEAD", "refs/heads/"+branch)
+	cmd.Dir = repoPath
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("setting default branch for repository %q: %w\n%s", repoName, err, out)
+	}
+	return nil
+}
+
 func (s *Server) InitRepository(repoName string) ([]byte, error) {
 	tempDir, err := os.MkdirTemp("", "git-init-")
 	if err != nil {
