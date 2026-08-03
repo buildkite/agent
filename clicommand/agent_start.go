@@ -591,7 +591,7 @@ var AgentStartCommand = cli.Command{
 		},
 		cli.BoolFlag{
 			Name:   "timestamp-lines",
-			Usage:  "Prepend timestamps on each line of job output. Has no effect unless --no-ansi-timestamps is also used (default: false)",
+			Usage:  "Prepend timestamps on each line of job output, except on lines a process used only to redraw, where the timestamp follows the redraw or is left off. Has no effect unless --no-ansi-timestamps is also used (default: false)",
 			EnvVar: "BUILDKITE_TIMESTAMP_LINES",
 		},
 		cli.StringFlag{

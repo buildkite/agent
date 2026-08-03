@@ -9,6 +9,7 @@ import (
 	"math/rand/v2"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -169,6 +170,56 @@ type jobProcess interface {
 	WaitStatus() process.WaitStatus
 }
 
+// Matches the leading run of control sequences on a line: the C0 characters,
+// the two-byte escapes terminal-to-html acts on, CSI sequences following the
+// ECMA-48 grammar of ESC '[' parameter* intermediate* final, and the OSC and APC
+// string commands up to their BEL or ST terminator. Wider than what the renderer
+// acts on, since it only has to find where the run ends, but ESC D, ESC E and
+// ESC c stay out: the renderer draws those as literal text, so they end the run.
+var leadingTerminalControlRE = regexp.MustCompile(`^(?:[\x08\v\f\r]|\x1b[78M]|\x1b\[[0-?]*[ -/]*[@-~]|\x1b[\]_][^\x07\x1b]*(?:\x07|\x1b\\))+`)
+
+// Matches a sequence within that run which would displace a timestamp written
+// at the start of the line: the C0 movement characters, the two-byte escapes
+// terminal-to-html relocates the cursor for, the CSI moves and erases it acts
+// on, and the OSC image commands, which force the image onto a line of its own
+// and leave a timestamp stranded on the line above. Colour codes are left
+// out, along with everything the renderer draws as literal text, because a
+// timestamp in front of those stays put. So is CSI C, which only ever moves
+// right, past a timestamp rather than over it. Private "?" sequences are
+// excluded the same way the renderer ignores them.
+var displacingControlRE = regexp.MustCompile(`[\r\x08]|\x1b[8M]|\x1b\[(?:[0-9;][0-9;?]*)?[ABD-HJKabd-hjk]|\x1b\](?:1337|1338);`)
+
+// timestampLine prefixes a log line with ts. When the leading control sequences
+// would displace it, the timestamp goes after them instead of at the start of
+// the line: cursor movement relocates the rest of the line to another row,
+// stranding a timestamp written in front of it, and an erase wipes one. Lines
+// the process used only to move the cursor are left alone, since timestamping
+// them puts visible output on a row it left empty.
+func timestampLine(line, ts string) string {
+	// A process that redraws without ever ending a line, as progress bars do,
+	// brings the cursor back over a timestamp written at the start of it. Only
+	// what follows the last carriage return survives on the row, so that is what
+	// the timestamp has to sit beside.
+	anchor := strings.LastIndex(strings.TrimRight(line, "\r"), "\r") + 1
+	prefix := line[:anchor] + leadingTerminalControlRE.FindString(line[anchor:])
+
+	// Unless nothing is redrawn after that return, in which case the row keeps
+	// what came before it and only the control the line opens with matters.
+	if len(prefix) == len(line) {
+		prefix = leadingTerminalControlRE.FindString(line)
+	}
+
+	if !displacingControlRE.MatchString(prefix) {
+		return fmt.Sprintf("[%s] %s", ts, line)
+	}
+
+	rest := line[len(prefix):]
+	if rest == "" {
+		return line
+	}
+	return fmt.Sprintf("%s[%s] %s", prefix, ts, rest)
+}
+
 // Initializes the job runner
 func NewJobRunner(ctx context.Context, l logger.Logger, apiClient *api.Client, conf JobRunnerConfig) (*JobRunner, error) {
 	// If the accept response has a token attached, we should use that instead of the Agent Access Token that
@@ -303,7 +354,7 @@ func NewJobRunner(ctx context.Context, l logger.Logger, apiClient *api.Client, c
 
 				// Prefix non-header log lines with timestamps
 				if !isHeaderOrExpansion {
-					line = fmt.Sprintf("[%s] %s", time.Now().UTC().Format(time.RFC3339), line)
+					line = timestampLine(line, time.Now().UTC().Format(time.RFC3339))
 				}
 
 				// Write the log line to the buffer
