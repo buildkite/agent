@@ -44,9 +44,10 @@ URLs rotate, and prevents lagging mirror data from overwriting canonical
 `refs/heads/*`.
 
 The remote mirror URL and credentials are supplied by Buildkite. The URL is not
-written into the on-host mirror or checkout configuration. For full
-requirements, caveats, and rollout decisions, see
-[`remote-git-mirrors.md`](remote-git-mirrors.md).
+written into the on-host mirror configuration or retained in checkout
+configuration after a completed fetch. An interrupted filtered fetch can leave
+promisor keys that the next fetch repairs. For full requirements, caveats, and
+rollout decisions, see [`remote-git-mirrors.md`](remote-git-mirrors.md).
 
 ## Mirrors? `--mirror`? 🪞
 

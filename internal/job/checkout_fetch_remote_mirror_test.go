@@ -219,6 +219,34 @@ func TestRepairInterruptedRemoteMirrorPromisorSupportsGitFile(t *testing.T) {
 	}
 }
 
+func TestResolveRemoteMirrorAttemptSkipsGitFileCheckout(t *testing.T) {
+	canonical := newOnHostMirrorHTTPRepo(t, "canonical")
+	checkout := filepath.Join(t.TempDir(), "checkout")
+	separateGitDir := filepath.Join(t.TempDir(), "checkout.git")
+	runGitForMirrorTest(
+		t,
+		"",
+		"clone",
+		"--separate-git-dir", separateGitDir,
+		canonical.RepoURL("canonical"),
+		checkout,
+	)
+	e, _ := newExistingCheckoutRemoteMirrorExecutor(
+		t,
+		checkout,
+		canonical.RepoURL("canonical"),
+		"https://mirror.example/repo.git",
+		strings.Repeat("a", 40),
+	)
+	e.shell.Env.Set("BUILDKITE_BUILD_CHECKOUT_PATH", checkout)
+
+	attempt := e.resolveRemoteMirrorAttempt(0)
+	if attempt.outcome != remoteMirrorOutcomeSkipped ||
+		attempt.skipReason != remoteMirrorSkipSeparateGitDir {
+		t.Errorf("resolveRemoteMirrorAttempt() = %+v, want separate-git-dir skip", attempt)
+	}
+}
+
 func TestFinishRemoteMirrorPromisorHidesURLCommandsInDebug(t *testing.T) {
 	canonical := newOnHostMirrorHTTPRepo(t, "canonical")
 	checkout := cloneExistingCheckoutForRemoteMirrorTest(t, canonical.RepoURL("canonical"))
@@ -444,8 +472,11 @@ func TestCheckoutCancellationCleanupFailureRemovesCheckout(t *testing.T) {
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("checkout() error = %v, want context.Canceled", err)
 	}
-	if osutil.FileExists(checkout) {
-		t.Fatal("checkout with unsafe promisor remains after cancellation cleanup failure")
+	if !osutil.FileExists(checkout) {
+		t.Fatal("checkout directory was not recreated for teardown hooks")
+	}
+	if osutil.FileExists(filepath.Join(checkout, ".git")) {
+		t.Fatal("unsafe Git state remains after cancellation cleanup failure")
 	}
 }
 
@@ -536,6 +567,12 @@ func newExistingCheckoutRemoteMirrorExecutor(
 	if err := e.shell.Chdir(checkout); err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() {
+		if e.checkoutRoot != nil {
+			_ = e.checkoutRoot.Close()
+			e.checkoutRoot = nil
+		}
+	})
 	return e, remoteMirrorAttempt{
 		site: remoteMirrorSiteExistingCheckout,
 		url:  mirrorURL,

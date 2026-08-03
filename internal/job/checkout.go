@@ -222,6 +222,9 @@ func (e *Executor) checkout(ctx context.Context) error {
 				if err := e.removeCheckoutDir(); err != nil {
 					e.shell.Warningf("Failed to remove checkout dir while cleaning up after a checkout error: %v", err)
 				}
+				if err := e.createCheckoutDir(); err != nil {
+					return err
+				}
 
 			case errors.Is(err, context.Canceled):
 				e.shell.Warningf("Checkout was cancelled")
