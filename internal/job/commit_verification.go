@@ -283,7 +283,7 @@ func (e *Executor) verifyCommit(ctx context.Context) error {
 	// Definitive failure — commit is provably not on the branch
 	if errors.Is(err, ErrCommitVerificationFailed) {
 		if e.GitCommitVerification == "warn" {
-			e.shell.Warningf("Commit verification failed: %v", err)
+			e.shell.Warningf("%s", err)
 			return nil
 		}
 		return err
