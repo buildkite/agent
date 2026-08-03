@@ -29,6 +29,14 @@ as an optional upstream for the on-host mirror:
 - a lagging, unavailable, or unauthorised remote mirror fails open to the
   canonical repository while the checkout is still active.
 
+When no on-host mirror update is configured and a checkout already exists, the
+agent fetches the exact build commit into that checkout from the remote mirror.
+A confirmed hit skips the redundant canonical commit fetch. A miss, timeout, or
+transport failure leaves the checkout in place and falls back to canonical;
+cancellation does not start new fallback work. Filtered fetches retarget their
+promisor configuration to canonical `origin`, so later lazy object reads never
+depend on the one-shot mirror URL.
+
 The shared mirror directory remains keyed by the canonical repository URL and
 its persisted `origin` is always canonical. This keeps the cache compatible with
 older agents sharing the same volume, avoids cache fragmentation when mirror
