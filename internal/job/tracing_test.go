@@ -92,3 +92,17 @@ func TestGenericTracingExtrasMatchesEnvDerivedExtras(t *testing.T) {
 		t.Errorf("executor-derived and env-derived extras differ (-executor +env):\n%s", diff)
 	}
 }
+
+func TestInitOTelTracerProviderEnvDefaults(t *testing.T) {
+	t.Setenv("OTEL_EXPORTER_OTLP_PROTOCOL", "http/protobuf")
+	t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://127.0.0.1:4318")
+
+	ctx := t.Context()
+	tp, err := InitOTelTracerProvider(ctx, "buildkite-agent-test", nil)
+	if err != nil {
+		t.Fatalf("InitOTelTracerProvider() error = %v", err)
+	}
+	t.Cleanup(func() {
+		_ = tp.Shutdown(ctx)
+	})
+}
