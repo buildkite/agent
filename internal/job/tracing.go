@@ -131,9 +131,16 @@ func (e *Executor) otRootSpanName() string {
 // InitOTelTracerProvider creates and globally registers an OpenTelemetry TracerProvider
 // and text map propagator. Caller must call ForceFlush and Shutdown
 // on the returned provider before the process exits.
+//
+// Exporter configuration comes from standard OTEL_EXPORTER_OTLP_* environment
+// variables (including control-plane values applied to bootstrap by the agent).
 func InitOTelTracerProvider(ctx context.Context, serviceName string, extraAttrs []attribute.KeyValue) (*sdktrace.TracerProvider, error) {
-	protocol := os.Getenv("OTEL_EXPORTER_OTLP_PROTOCOL")
-	// default to grpc to avoid breaking change
+	// Signal-specific configuration takes precedence over the generic variable.
+	protocol := os.Getenv("OTEL_EXPORTER_OTLP_TRACES_PROTOCOL")
+	if protocol == "" {
+		protocol = os.Getenv("OTEL_EXPORTER_OTLP_PROTOCOL")
+	}
+	// default to grpc to avoid breaking change for self-hosted env-based setup
 	if protocol == "" {
 		protocol = "grpc"
 	}

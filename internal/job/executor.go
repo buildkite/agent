@@ -182,6 +182,16 @@ func (e *Executor) Run(ctx context.Context) (exitCode int) {
 	// Create an empty env for us to keep track of our env changes in
 	e.shell.Env = env.FromSlice(os.Environ())
 
+	// Bootstrap needs the control-plane exporter credential to build the
+	// TracerProvider; nothing inside the job does. Keep it out of the environment
+	// hooks and the command are given, so a step that dumps its environment does
+	// not publish the organisation's vendor token to the job log. Any
+	// operator-supplied OTEL_EXPORTER_OTLP_* config is left alone.
+	//
+	// Removal from this process's own environ waits until after the optional
+	// job-log OTLP setup below, which falls back to the generic variables.
+	env.StripInjectedOTelExporter(e.shell.Env)
+
 	// OTLP job log export lives entirely in the bootstrap process, which is the
 	// single home for this feature. When OpenTelemetry tracing is enabled, log
 	// records carry the span context of the nearest enclosing phase/hook span,
@@ -191,6 +201,11 @@ func (e *Executor) Run(ctx context.Context) (exitCode int) {
 		cleanup := e.setupOTLPJobLogger(ctx)
 		defer cleanup()
 	}
+
+	// Both TracerProvider (CLI startup) and the optional job-log exporter have now
+	// read OTEL_*, so drop the injected values from this process's environ too.
+	// This does not hide them from a same-UID reader; see the function for why.
+	env.ClearInjectedOTelExporterFromProcess()
 
 	// Initialize the job API, iff the experiment is enabled. Noop otherwise
 	if e.JobAPI {
