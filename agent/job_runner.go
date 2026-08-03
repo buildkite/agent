@@ -26,6 +26,7 @@ import (
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/agent/v3/metrics"
 	"github.com/buildkite/agent/v3/status"
+	"github.com/buildkite/agent/v3/tracetools"
 	"github.com/buildkite/roko"
 	"github.com/buildkite/shellwords"
 )
@@ -442,6 +443,13 @@ func (r *JobRunner) createEnvironment(ctx context.Context) ([]string, error) {
 	// The agent registration token should never make it into the job environment
 	delete(env, "BUILDKITE_AGENT_TOKEN")
 
+	// The control-plane OTLP marker/restore vars are only ever set by the
+	// agent itself (below, after env files are written): a job-env spoof
+	// could otherwise trick bootstrap into stripping an operator's baked-in
+	// OTEL_* configuration, so scrub them before the env files are written.
+	delete(env, envutil.ControlPlaneOTLPMarker)
+	delete(env, envutil.ControlPlaneOTLPRestore)
+
 	// Always override an ambient agent-process value. Without the explicit
 	// empty entry, bootstrap's inherited os.Environ could enable a mirror that
 	// the backend did not provide or that the repository allowlist rejected.
@@ -796,6 +804,29 @@ BUILDKITE_AGENT_JWKS_KEY_ID`
 			}
 			setEnv("BUILDKITE_TRACING_PROPAGATE_TRACEPARENT", "true")
 		}
+	}
+
+	// Deliver control-plane OTLP exporter configuration (endpoint, protocol,
+	// and possibly credentialed headers, from agent registration) to the
+	// bootstrap process through the standard traces-specific OTel variables.
+	// This runs after the env files were written above, so none of it reaches
+	// BUILDKITE_ENV_FILE. Bootstrap removes these once its exporters are
+	// constructed and restores any displaced job-env values for hooks and the
+	// command (see Executor.cleanupControlPlaneOTLPEnv) — which is also why
+	// they're set directly rather than via setEnv: a colliding job-env value
+	// is masked for bootstrap, not ignored.
+	if exp := r.conf.AgentConfiguration.ControlPlaneTracingExporter; exp != nil && r.conf.AgentConfiguration.TracingBackend == tracetools.BackendOpenTelemetry {
+		effective := func(name string) (string, bool) {
+			if v, ok := env[name]; ok {
+				return v, true
+			}
+			return os.LookupEnv(name)
+		}
+		otlpEnv, err := controlPlaneOTLPEnv(exp, effective)
+		if err != nil {
+			return nil, fmt.Errorf("encoding control-plane OTLP exporter env: %w", err)
+		}
+		maps.Copy(env, otlpEnv)
 	}
 
 	// This is an agent-operator setting, not a pipeline setting. Always

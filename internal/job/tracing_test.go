@@ -8,6 +8,27 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 )
 
+func TestOTLPTracesProtocol(t *testing.T) {
+	// No t.Parallel: t.Setenv manipulates the process environment. Empty
+	// values behave the same as unset ones.
+	tests := []struct {
+		name, traces, generic, want string
+	}{
+		{"traces-specific takes precedence over generic", "http/protobuf", "grpc", "http/protobuf"},
+		{"generic fallback", "", "http", "http"},
+		{"default grpc", "", "", "grpc"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("OTEL_EXPORTER_OTLP_TRACES_PROTOCOL", tc.traces)
+			t.Setenv("OTEL_EXPORTER_OTLP_PROTOCOL", tc.generic)
+			if got := otlpTracesProtocol(); got != tc.want {
+				t.Errorf("otlpTracesProtocol() = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
 func TestOTelResourceAttributesFromEnv(t *testing.T) {
 	t.Parallel()
 
