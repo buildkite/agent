@@ -92,6 +92,9 @@ var protectedEnv = map[string]protection{
 	"BUILDKITE_REPO":                        {mutableFromWithinJob: true},
 	"BUILDKITE_SHELL":                       {},
 	"BUILDKITE_SSH_KEYSCAN":                 {},
+	// Set by the agent when it injects control-plane OTLP exporter config, and
+	// read by bootstrap before hooks run, so changing it later has no effect.
+	OTelExporterMarkerEnv: {},
 }
 
 // checkoutOverrideScope contains checkout-related vars whose write-protection
