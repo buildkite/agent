@@ -328,6 +328,7 @@ func TestGitFetch(t *testing.T) {
 
 	if err := gitFetch(ctx, gitFetchArgs{
 		Shell:         sh,
+		GitFlags:      gitMirrorFetchFlags("/tmp/mirror with spaces"),
 		GitFetchFlags: "--foo --bar",
 		Repository:    "repo",
 		RefSpecs:      []string{"ref1", "ref2"},
@@ -335,7 +336,13 @@ func TestGitFetch(t *testing.T) {
 		t.Fatalf(`gitFetch(ctx, gitFetchArgs{Shell: sh, GitFetchFlags: "--foo --bar", Remote: "repo", RefSpecs: []string{"ref1", "ref2"}} = %v`, err)
 	}
 
-	wantLog := [][]string{{absoluteGit, "fetch", "--foo", "--bar", "--", "repo", "ref1", "ref2"}}
+	wantLog := [][]string{{
+		absoluteGit,
+		"-c", "maintenance.autoDetach=false",
+		"-c", "gc.autoDetach=false",
+		"--git-dir", "/tmp/mirror with spaces",
+		"fetch", "--foo", "--bar", "--", "repo", "ref1", "ref2",
+	}}
 	if diff := cmp.Diff(gotLog, wantLog); diff != "" {
 		t.Errorf("executed commands diff (-got +want):\n%s", diff)
 	}

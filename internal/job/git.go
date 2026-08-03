@@ -290,7 +290,7 @@ func gitRepack(ctx context.Context, sh *shell.Shell, args ...string) error {
 
 type gitFetchArgs struct {
 	Shell         *shell.Shell // The shell to run the command in
-	GitFlags      string       // Global git flags to pass to the command
+	GitFlags      []string     // Global git flags to pass to the command
 	GitFetchFlags string       // Flags to pass to the fetch command
 	Repository    string       // The remote to fetch from
 	Retry         bool         // Whether to retry the fetch on certain errors
@@ -299,16 +299,7 @@ type gitFetchArgs struct {
 
 func gitFetch(ctx context.Context, args gitFetchArgs) error {
 	// Build the command: git [global gitFlags] fetch [fetchFlags] -- [repository] [refspecs...]
-	commandArgs := []string{}
-
-	if args.GitFlags != "" {
-		parts, err := shellwords.Split(args.GitFlags)
-		if err != nil {
-			return fmt.Errorf("failed to parse gitFlags: %w", err)
-		}
-		commandArgs = append(commandArgs, parts...)
-	}
-
+	commandArgs := append([]string{}, args.GitFlags...)
 	commandArgs = append(commandArgs, "fetch")
 
 	if args.GitFetchFlags != "" {
