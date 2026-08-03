@@ -437,8 +437,14 @@ func (r *JobRunner) createEnvironment(ctx context.Context) ([]string, error) {
 	// sent by Buildkite. The variables below should always take precedence,
 	// except the checkout-scoped vars set via setCheckoutEnv, which defer to
 	// the Buildkite-sent value unless the checkout-override mode locks them.
-	env := make(map[string]string)
-	maps.Copy(env, r.conf.Job.Env)
+	//
+	// Round-tripping through env.Environment normalizes key case on Windows
+	// (a no-op on Unix), so the exact-name scrubs, lookups, and overrides
+	// below can't be dodged with a case-variant name (e.g. a spoofed
+	// buildkite_control_plane_otlp surviving the delete of the canonical
+	// name and later being read as authentic by bootstrap, which normalizes
+	// on ingest).
+	env := envutil.FromMap(r.conf.Job.Env).Dump()
 
 	// The agent registration token should never make it into the job environment
 	delete(env, "BUILDKITE_AGENT_TOKEN")

@@ -85,6 +85,26 @@ func TestApplyControlPlaneTracing(t *testing.T) {
 			},
 		},
 		{
+			name: "unsupported server backend is ignored even with local otel backend",
+			conf: AgentConfiguration{TracingBackend: "opentelemetry"},
+			tracing: &api.AgentTracing{
+				Backend:              "quantum-entanglement",
+				PropagateTraceparent: true,
+				Exporter:             serverTracing().Exporter,
+			},
+			wantBackend: "opentelemetry",
+		},
+		{
+			name: "server datadog backend is ignored even with local otel backend",
+			conf: AgentConfiguration{TracingBackend: "opentelemetry"},
+			tracing: &api.AgentTracing{
+				Backend:              "datadog",
+				PropagateTraceparent: true,
+				Exporter:             serverTracing().Exporter,
+			},
+			wantBackend: "opentelemetry",
+		},
+		{
 			name: "exporter without endpoint is not applied",
 			tracing: &api.AgentTracing{
 				Backend:  "opentelemetry",
