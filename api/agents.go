@@ -21,15 +21,16 @@ type AgentRegisterRequest struct {
 
 // AgentRegisterResponse is the response from the Buildkite Agent API
 type AgentRegisterResponse struct {
-	UUID              string            `json:"id"`
-	Name              string            `json:"name"`
-	AccessToken       string            `json:"access_token"`
-	Endpoint          string            `json:"endpoint"`
-	RequestHeaders    map[string]string `json:"request_headers"`
-	PingInterval      int               `json:"ping_interval"`
-	JobStatusInterval int               `json:"job_status_interval"`
-	HeartbeatInterval int               `json:"heartbeat_interval"`
-	Tags              []string          `json:"meta_data"`
+	UUID              string                    `json:"id"`
+	Name              string                    `json:"name"`
+	AccessToken       string                    `json:"access_token"`
+	Endpoint          string                    `json:"endpoint"`
+	RequestHeaders    map[string]string         `json:"request_headers"`
+	PingInterval      int                       `json:"ping_interval"`
+	JobStatusInterval int                       `json:"job_status_interval"`
+	HeartbeatInterval int                       `json:"heartbeat_interval"`
+	Tags              []string                  `json:"meta_data"`
+	Tracing           *AgentRegistrationTracing `json:"tracing,omitempty"`
 }
 
 // Registers the agent against the Buildkite Agent API. The client for this

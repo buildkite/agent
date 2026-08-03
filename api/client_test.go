@@ -21,7 +21,7 @@ func TestRegisteringAndConnectingClient(t *testing.T) {
 				return
 			}
 			rw.WriteHeader(http.StatusOK)
-			fmt.Fprint(rw, `{"id":"12-34-56-78-91", "name":"agent-1", "access_token":"alpacas"}`) //nolint:errcheck // The test would still fail
+			fmt.Fprint(rw, `{"id":"12-34-56-78-91","name":"agent-1","access_token":"alpacas","tracing":{"backend":"opentelemetry","propagate_traceparent":true,"exporter":{"endpoint":"https://otel.example/v1/traces","protocol":"http/protobuf","headers":{"Authorization":"Bearer secret"}}}}`) //nolint:errcheck // The test would still fail
 
 		case "/connect":
 			if got, want := authToken(req), "alpacas"; got != want {
@@ -62,6 +62,13 @@ func TestRegisteringAndConnectingClient(t *testing.T) {
 
 	if got, want := reg.AccessToken, "alpacas"; got != want {
 		t.Errorf("regResp.AccessToken = %q, want %q", got, want)
+	}
+
+	if reg.Tracing == nil || reg.Tracing.Backend != "opentelemetry" {
+		t.Errorf("reg.Tracing = %#v, want opentelemetry backend", reg.Tracing)
+	}
+	if reg.Tracing == nil || reg.Tracing.Exporter == nil || reg.Tracing.Exporter.Endpoint != "https://otel.example/v1/traces" {
+		t.Errorf("reg.Tracing.Exporter = %#v", reg.Tracing)
 	}
 
 	if got, want := httpResp.Proto, "HTTP/2.0"; got != want {
