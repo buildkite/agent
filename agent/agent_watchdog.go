@@ -66,6 +66,8 @@ func (a *AgentWorker) watchdogHealth(now time.Time) error {
 }
 
 func (ap *AgentPool) runWatchdog(ctx context.Context, l logger.Logger, watchdogInterval time.Duration) {
+	ap.notifyWatchdog(l, time.Now())
+
 	// systemd recommends notifying every half of the configured interval.
 	ticker := time.NewTicker(watchdogInterval / 2)
 	defer ticker.Stop()
