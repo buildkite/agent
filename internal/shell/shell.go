@@ -418,7 +418,7 @@ func (c Command) Run(ctx context.Context, opts ...RunCommandOpt) error {
 
 	// If prompt is enabled, or we're in debug mode, display the "prompt" showing
 	// the command being run.
-	if !cfg.alwaysHidePrompt && (cfg.showPrompt || c.shell.debug) {
+	if cfg.showPrompt || c.shell.debug {
 		formatted := process.FormatCommand(c.command, c.args)
 		if c.shell.stdin == nil {
 			c.shell.Promptf("%s", formatted)
@@ -501,14 +501,13 @@ func (c Command) RunAndCaptureStdout(ctx context.Context, opts ...RunCommandOpt)
 }
 
 type runConfig struct {
-	captureStdout    *string
-	showPrompt       bool
-	alwaysHidePrompt bool
-	showStderr       bool
-	started          chan struct{}
-	done             chan struct{}
-	extraEnv         *env.Environment
-	smells           map[string]bool
+	captureStdout *string
+	showPrompt    bool
+	showStderr    bool
+	started       chan struct{}
+	done          chan struct{}
+	extraEnv      *env.Environment
+	smells        map[string]bool
 }
 
 // RunCommandOpt is the type of functional options that can be passed to
@@ -527,10 +526,6 @@ func ShowStderr(show bool) RunCommandOpt { return func(c *runConfig) { c.showStd
 // ShowPrompt causes the command and arguments being run to be printed in the
 // shell's stdout. By default this is enabled (prompt is shown).
 func ShowPrompt(show bool) RunCommandOpt { return func(c *runConfig) { c.showPrompt = show } }
-
-// AlwaysHidePrompt suppresses the command and arguments even when shell debug
-// logging is enabled. Use it when argv contains values that must not be logged.
-func AlwaysHidePrompt() RunCommandOpt { return func(c *runConfig) { c.alwaysHidePrompt = true } }
 
 // WithExtraEnv can be used to set additional env vars for this run.
 func WithExtraEnv(e *env.Environment) RunCommandOpt { return func(c *runConfig) { c.extraEnv = e } }

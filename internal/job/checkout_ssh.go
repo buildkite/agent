@@ -28,21 +28,13 @@ func (e *Executor) configureGitCredentialHelper(ctx context.Context) error {
 		return fmt.Errorf("enabling git credential.useHttpPath: %w", err)
 	}
 
-	helper := gitCredentialHelperCommand(ctx)
+	helper := fmt.Sprintf(`%s git-credentials-helper`, self.Path(ctx))
 	err = e.shell.Command("git", "config", "--global", "credential.helper", helper).Run(ctx, shell.ShowPrompt(false))
 	if err != nil {
 		return fmt.Errorf("configuring git credential.helper: %w", err)
 	}
 
 	return nil
-}
-
-func gitCredentialHelperCommand(ctx context.Context) string {
-	// Git executes a leading-! helper through a shell. Use POSIX single-quote
-	// escaping here: shellwords.Quote can leave backslash escapes inside double
-	// quotes, changing executable paths that contain shell metacharacters.
-	path := "'" + strings.ReplaceAll(self.Path(ctx), "'", `'\''`) + "'"
-	return fmt.Sprintf(`!%s git-credentials-helper`, path)
 }
 
 // configureHTTPSInsteadOfSSH configures GitHub SSH URLs to use HTTPS.

@@ -35,7 +35,7 @@ const (
 // When addBloblessFilter is true, --filter=blob:none is prepended to the fetch
 // flags — the caller decides based on sparse-checkout state and user-supplied
 // filters.
-func (e *Executor) fetchSource(ctx context.Context, addBloblessFilter bool, attempt *remoteMirrorAttempt) (retErr error) {
+func (e *Executor) fetchSource(ctx context.Context, addBloblessFilter bool) (retErr error) {
 	// Start span here so attributes can be set on the in-scope span; covers the
 	// whole fetch including retries (up to 10 attempts, ~2m), not per-attempt.
 	span, ctx := e.traceOpSpan(ctx, "git.fetch")
@@ -64,8 +64,7 @@ func (e *Executor) fetchSource(ctx context.Context, addBloblessFilter bool, atte
 	// If configured, skip the fetch when the commit already exists locally.
 	// This is useful when a pre-populated git mirror is used with --reference,
 	// as the commit objects are already reachable and fetching is redundant.
-	mirrorHit := attempt != nil && attempt.hit()
-	skipFetch := (e.GitSkipFetchExistingCommits || mirrorHit) && e.Commit != "HEAD" &&
+	skipFetch := e.GitSkipFetchExistingCommits && e.Commit != "HEAD" &&
 		hasGitCommit(ctx, e.shell, ".git", e.Commit)
 
 	span.AddAttributes(map[string]string{"git.skipped": strconv.FormatBool(skipFetch)})
