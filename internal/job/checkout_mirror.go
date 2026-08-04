@@ -271,10 +271,11 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string, attem
 		}
 	}()
 
-	if isMainRepository &&
-		attempt != nil &&
+	noURLAttempt := attempt != nil &&
 		attempt.outcome == remoteMirrorOutcomeSkipped &&
-		attempt.skipReason == remoteMirrorSkipNoURL &&
+		attempt.skipReason == remoteMirrorSkipNoURL
+	if isMainRepository &&
+		noURLAttempt &&
 		hasGitCommit(ctx, e.shell, mirrorDir, e.Commit) {
 		// Avoid the global reachability scan when remote mirroring is not configured.
 		e.shell.Commentf("Commit %q exists in mirror", e.Commit)
@@ -391,6 +392,7 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string, attem
 
 	// Unpinned objects are unsafe through --reference; fail open rather than manage recovery refs.
 	if isMainRepository &&
+		!noURLAttempt &&
 		hasGitCommit(ctx, e.shell, mirrorDir, e.Commit) &&
 		!hasGitCommitReachableFromRef(ctx, e.shell, mirrorDir, e.Commit) {
 		e.shell.Warningf("Commit %q exists in mirror without a durable ref; using canonical repository without it", e.Commit)

@@ -377,6 +377,52 @@ func TestUpdateGitMirrorNoRemoteURLUsesUnpinnedWarmCommit(t *testing.T) {
 	}
 }
 
+func TestUpdateGitMirrorNoRemoteURLSkipsPostFetchReachabilityScan(t *testing.T) {
+	canonical := newOnHostMirrorHTTPRepo(t, "canonical")
+	e := newOnHostMirrorExecutor(t, canonical.RepoURL("canonical"), "")
+	mirrorDir := expectedOnHostMirrorDir(e)
+	cloneOnHostMirrorToPath(t, e.Repository, mirrorDir)
+
+	commit, _, err := canonical.PushBranch("canonical", "feature-branch")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := canonical.CreateRef("canonical", "refs/pull/123/head", commit); err != nil {
+		t.Fatal(err)
+	}
+
+	var commandLog [][]string
+	e.shell = shell.NewTestShell(
+		t,
+		shell.WithSignalGracePeriod(10*time.Millisecond),
+		shell.WithCommandLog(&commandLog),
+	)
+	e.Commit = commit
+	e.PullRequest = "123"
+	e.PipelineProvider = "github"
+	attempt := e.resolveRemoteMirrorAttempt(0)
+	if attempt.outcome != remoteMirrorOutcomeSkipped ||
+		attempt.skipReason != remoteMirrorSkipNoURL {
+		t.Fatalf("attempt = %+v, want no-url skip", attempt)
+	}
+
+	gotDir, err := e.updateGitMirror(t.Context(), e.Repository, &attempt)
+	if err != nil {
+		t.Fatalf("updateGitMirror() error = %v", err)
+	}
+	if gotDir != mirrorDir {
+		t.Errorf("mirror dir = %q, want %q", gotDir, mirrorDir)
+	}
+	if !hasGitCommit(t.Context(), e.shell, mirrorDir, commit) {
+		t.Fatal("canonical pull request fetch did not add requested commit")
+	}
+	for _, command := range commandLog {
+		if slices.Contains(command, "for-each-ref") {
+			t.Errorf("post-fetch no-URL path ran global reachability scan: %q", command)
+		}
+	}
+}
+
 func TestGetOrUpdateMirrorDirCloneLockTimeoutFallsBackWithoutMirror(t *testing.T) {
 	canonical := newOnHostMirrorHTTPRepo(t, "canonical")
 	commit, _, err := canonical.PushBranch("canonical", "feature-branch")
