@@ -3,6 +3,7 @@ package job
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -141,6 +142,19 @@ func TestPrepareRemoteMirrorFetchHonorsExplicitFilterFlags(t *testing.T) {
 	}
 }
 
+func TestRemoteMirrorPromisorMarkerDoesNotContainCredentials(t *testing.T) {
+	mirrorURL := "https://token:secret@mirror.example/repo.git"
+	marker := remoteMirrorPromisorMarker(mirrorURL)
+	if strings.Contains(marker, mirrorURL) ||
+		strings.Contains(marker, "token") ||
+		strings.Contains(marker, "secret") {
+		t.Errorf("remoteMirrorPromisorMarker() = %q, want credential-free digest", marker)
+	}
+	if len(marker) != sha256.Size*2 {
+		t.Errorf("remoteMirrorPromisorMarker() length = %d, want %d", len(marker), sha256.Size*2)
+	}
+}
+
 func TestFetchSourceRepairsPreexistingMirrorPromisorOnMiss(t *testing.T) {
 	canonical := newOnHostMirrorHTTPRepo(t, "canonical")
 	if err := canonical.ConfigureRepository("canonical", "uploadpack.allowFilter", "true"); err != nil {
@@ -158,6 +172,13 @@ func TestFetchSourceRepairsPreexistingMirrorPromisorOnMiss(t *testing.T) {
 	runGitForMirrorTest(t, checkout, "config", "core.repositoryformatversion", "1")
 	runGitForMirrorTest(t, checkout, "config", "remote."+mirrorURL+".promisor", "true")
 	runGitForMirrorTest(t, checkout, "config", "remote."+mirrorURL+".partialclonefilter", "blob:none")
+	runGitForMirrorTest(
+		t,
+		checkout,
+		"config",
+		remoteMirrorPromisorMarkerKey,
+		remoteMirrorPromisorMarker(mirrorURL),
+	)
 	e, attempt := newExistingCheckoutRemoteMirrorExecutor(t, checkout, canonical.RepoURL("canonical"), mirrorURL, commit)
 
 	if err := e.fetchSource(t.Context(), true, &attempt); err != nil {
@@ -168,14 +189,85 @@ func TestFetchSourceRepairsPreexistingMirrorPromisorOnMiss(t *testing.T) {
 	if got := gitConfigForRemoteMirrorTest(t, checkout, "remote."+mirrorURL+".promisor"); got != "" {
 		t.Errorf("pre-existing mirror promisor remains after repair: %q", got)
 	}
+	if got := gitConfigForRemoteMirrorTest(t, checkout, remoteMirrorPromisorMarkerKey); got != "" {
+		t.Errorf("remote mirror promisor marker remains after repair: %q", got)
+	}
+}
+
+func TestFetchSourceMarkerFailureFallsBackToCanonical(t *testing.T) {
+	canonical := newOnHostMirrorHTTPRepo(t, "canonical")
+	checkout := cloneExistingCheckoutForRemoteMirrorTest(t, canonical.RepoURL("canonical"))
+	commit, _, err := canonical.PushBranch("canonical", "feature-branch")
+	if err != nil {
+		t.Fatal(err)
+	}
+	e, attempt := newExistingCheckoutRemoteMirrorExecutor(
+		t,
+		checkout,
+		canonical.RepoURL("canonical"),
+		"https://127.0.0.1:1/mirror.git",
+		commit,
+	)
+	configLock := filepath.Join(checkout, ".git", "config.lock")
+	if err := os.WriteFile(configLock, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Remove(configLock) })
+
+	if err := e.fetchSource(t.Context(), false, &attempt); err != nil {
+		t.Fatalf("fetchSource() error = %v", err)
+	}
+	if attempt.outcome != remoteMirrorOutcomeError {
+		t.Errorf("outcome = %q, want error", attempt.outcome)
+	}
+	if !hasGitCommit(t.Context(), e.shell, ".git", commit) {
+		t.Error("canonical fallback did not fetch requested commit")
+	}
+}
+
+func TestFetchSourceLeavesUnmarkedUserPromisorUntouched(t *testing.T) {
+	canonical := newOnHostMirrorHTTPRepo(t, "canonical")
+	checkout := cloneExistingCheckoutForRemoteMirrorTest(t, canonical.RepoURL("canonical"))
+	commit := gitOutputForRemoteCheckoutTest(t, checkout, "rev-parse", "refs/remotes/origin/main")
+	userURL := "https://user.example/repo.git"
+	runGitForMirrorTest(t, checkout, "config", "core.repositoryformatversion", "1")
+	runGitForMirrorTest(t, checkout, "config", "remote."+userURL+".promisor", "true")
+	runGitForMirrorTest(t, checkout, "config", "remote."+userURL+".partialclonefilter", "blob:none")
+	e, _ := newExistingCheckoutRemoteMirrorExecutor(
+		t,
+		checkout,
+		canonical.RepoURL("canonical"),
+		"",
+		commit,
+	)
+	e.GitSkipFetchExistingCommits = true
+
+	if err := e.fetchSource(t.Context(), false, nil); err != nil {
+		t.Fatalf("fetchSource() error = %v", err)
+	}
+	assertGitConfigForRemoteMirrorTest(t, checkout, "remote."+userURL+".promisor", "true")
+	assertGitConfigForRemoteMirrorTest(t, checkout, "remote."+userURL+".partialclonefilter", "blob:none")
+	if got := gitConfigForRemoteMirrorTest(t, checkout, "remote.origin.promisor"); got != "" {
+		t.Errorf("remote.origin.promisor = %q, want user promisor ownership unchanged", got)
+	}
 }
 
 func TestRepairInterruptedRemoteMirrorPromisorAfterURLRemoval(t *testing.T) {
 	canonical := newOnHostMirrorHTTPRepo(t, "canonical")
 	checkout := cloneExistingCheckoutForRemoteMirrorTest(t, canonical.RepoURL("canonical"))
 	oldMirrorURL := "https://old-mirror.example/repo.git"
+	userURL := "https://user.example/repo.git"
 	runGitForMirrorTest(t, checkout, "config", "remote."+oldMirrorURL+".promisor", "true")
 	runGitForMirrorTest(t, checkout, "config", "remote."+oldMirrorURL+".partialclonefilter", "blob:none")
+	runGitForMirrorTest(t, checkout, "config", "remote."+userURL+".promisor", "true")
+	runGitForMirrorTest(t, checkout, "config", "remote."+userURL+".partialclonefilter", "tree:0")
+	runGitForMirrorTest(
+		t,
+		checkout,
+		"config",
+		remoteMirrorPromisorMarkerKey,
+		remoteMirrorPromisorMarker(oldMirrorURL),
+	)
 	e, _ := newExistingCheckoutRemoteMirrorExecutor(
 		t,
 		checkout,
@@ -191,6 +283,38 @@ func TestRepairInterruptedRemoteMirrorPromisorAfterURLRemoval(t *testing.T) {
 	assertGitConfigForRemoteMirrorTest(t, checkout, "remote.origin.partialclonefilter", "blob:none")
 	if got := gitConfigForRemoteMirrorTest(t, checkout, "remote."+oldMirrorURL+".promisor"); got != "" {
 		t.Errorf("old mirror promisor remains after repair: %q", got)
+	}
+	assertGitConfigForRemoteMirrorTest(t, checkout, "remote."+userURL+".promisor", "true")
+	assertGitConfigForRemoteMirrorTest(t, checkout, "remote."+userURL+".partialclonefilter", "tree:0")
+	if got := gitConfigForRemoteMirrorTest(t, checkout, remoteMirrorPromisorMarkerKey); got != "" {
+		t.Errorf("remote mirror promisor marker remains after repair: %q", got)
+	}
+}
+
+func TestRepairInterruptedRemoteMirrorPromisorClearsMarkerWithoutPromisor(t *testing.T) {
+	canonical := newOnHostMirrorHTTPRepo(t, "canonical")
+	checkout := cloneExistingCheckoutForRemoteMirrorTest(t, canonical.RepoURL("canonical"))
+	oldMirrorURL := "https://old-mirror.example/repo.git"
+	runGitForMirrorTest(
+		t,
+		checkout,
+		"config",
+		remoteMirrorPromisorMarkerKey,
+		remoteMirrorPromisorMarker(oldMirrorURL),
+	)
+	e, _ := newExistingCheckoutRemoteMirrorExecutor(
+		t,
+		checkout,
+		canonical.RepoURL("canonical"),
+		"",
+		strings.Repeat("a", 40),
+	)
+
+	if err := e.repairInterruptedRemoteMirrorPromisors(t.Context()); err != nil {
+		t.Fatalf("repairInterruptedRemoteMirrorPromisors() error = %v", err)
+	}
+	if got := gitConfigForRemoteMirrorTest(t, checkout, remoteMirrorPromisorMarkerKey); got != "" {
+		t.Errorf("orphaned remote mirror promisor marker remains: %q", got)
 	}
 }
 
@@ -253,6 +377,13 @@ func TestFinishRemoteMirrorPromisorHidesURLCommandsInDebug(t *testing.T) {
 	mirrorURL := "https://token:secret@mirror.example/repo.git"
 	runGitForMirrorTest(t, checkout, "config", "remote."+mirrorURL+".promisor", "true")
 	runGitForMirrorTest(t, checkout, "config", "remote."+mirrorURL+".partialclonefilter", "blob:none")
+	runGitForMirrorTest(
+		t,
+		checkout,
+		"config",
+		remoteMirrorPromisorMarkerKey,
+		remoteMirrorPromisorMarker(mirrorURL),
+	)
 
 	e, _ := newExistingCheckoutRemoteMirrorExecutor(
 		t,

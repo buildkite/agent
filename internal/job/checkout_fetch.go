@@ -2,6 +2,7 @@ package job
 
 import (
 	"context"
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"net/url"
@@ -16,6 +17,8 @@ import (
 	"github.com/buildkite/agent/v3/internal/shell"
 	"github.com/buildkite/shellwords"
 )
+
+const remoteMirrorPromisorMarkerKey = "buildkite.remote-mirror-promisor"
 
 // refspecKind is the category of git refspec a fetch targets.
 type refspecKind string
@@ -177,35 +180,9 @@ func (e *Executor) fetchSource(ctx context.Context, addBloblessFilter bool, atte
 			if err != nil {
 				return fmt.Errorf("preparing remote mirror fetch: %w", err)
 			}
-			e.shell.Commentf("Fetch commit from remote Git mirror")
-			// C21: preserve the caller's effective fetch flags. Explicit
-			// ref-mutating flags such as --tags may therefore reflect the
-			// mirror's lagging view, while the build commit remains the
-			// backend-provided immutable object ID.
-			hit, fetchErr := e.fetchCommitFromRemoteMirror(
-				ctx,
-				attempt,
-				".git",
-				mirrorFetchFlags,
-				e.Commit,
-			)
-			// Cleanup is bounded but deliberately detached: cancellation can
-			// race with any individual config command, and leaving the one-shot
-			// mirror as a promisor is not a safe cancellation state.
-			cleanupCtx, cancelCleanup := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
-			cleanupErr := e.finishRemoteMirrorPromisor(cleanupCtx, attempt.url)
-			cancelCleanup()
-			if cleanupErr != nil {
-				return &gitError{
-					error: fmt.Errorf(
-						"cleaning up unsafe remote mirror promisor state: %w",
-						errors.Join(fetchErr, cleanupErr),
-					),
-					Type: gitErrorFetchRetryClean,
-				}
-			}
-			if fetchErr != nil {
-				return fetchErr
+			hit, err := e.fetchExistingCheckoutFromRemoteMirror(ctx, attempt, mirrorFetchFlags)
+			if err != nil {
+				return err
 			}
 			if hit {
 				// C4: FETCH_HEAD records the non-secret mirror URL. No
@@ -230,8 +207,71 @@ func isExistingCheckoutRemoteMirrorAttempt(attempt *remoteMirrorAttempt) bool {
 		attempt.outcome == remoteMirrorOutcomeNotReached
 }
 
+func (e *Executor) fetchExistingCheckoutFromRemoteMirror(
+	ctx context.Context,
+	attempt *remoteMirrorAttempt,
+	gitFetchFlags string,
+) (bool, error) {
+	if err := e.markRemoteMirrorPromisor(ctx, attempt.url); err != nil {
+		if ctx.Err() != nil {
+			return false, ctx.Err()
+		}
+		attempt.outcome = remoteMirrorOutcomeError
+		e.shell.Warningf("Could not mark remote Git mirror state; falling back to canonical")
+		return false, nil
+	}
+
+	e.shell.Commentf("Fetch commit from remote Git mirror")
+	// C21: preserve the caller's effective fetch flags. Explicit ref-mutating
+	// flags such as --tags may reflect the mirror's lagging view, while the
+	// build commit remains the backend-provided immutable object ID.
+	hit, fetchErr := e.fetchCommitFromRemoteMirror(
+		ctx,
+		attempt,
+		".git",
+		gitFetchFlags,
+		e.Commit,
+	)
+	// Cleanup is bounded but deliberately detached: cancellation can race with
+	// any individual config command, and leaving the one-shot mirror as a
+	// promisor is not a safe cancellation state.
+	cleanupCtx, cancelCleanup := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+	cleanupErr := e.finishRemoteMirrorPromisor(cleanupCtx, attempt.url)
+	cancelCleanup()
+	if cleanupErr != nil {
+		return false, &gitError{
+			error: fmt.Errorf(
+				"cleaning up unsafe remote mirror promisor state: %w",
+				errors.Join(fetchErr, cleanupErr),
+			),
+			Type: gitErrorFetchRetryClean,
+		}
+	}
+	return hit, fetchErr
+}
+
 func remoteMirrorPromisorKey(mirrorURL, name string) string {
 	return "remote." + mirrorURL + "." + name
+}
+
+func remoteMirrorPromisorMarker(mirrorURL string) string {
+	return fmt.Sprintf("%x", sha256.Sum256([]byte(mirrorURL)))
+}
+
+func (e *Executor) markRemoteMirrorPromisor(ctx context.Context, mirrorURL string) error {
+	return e.runSilentLocalGitConfig(
+		ctx,
+		remoteMirrorPromisorMarkerKey,
+		remoteMirrorPromisorMarker(mirrorURL),
+	)
+}
+
+func (e *Executor) clearRemoteMirrorPromisorMarker(ctx context.Context) error {
+	_, marked, err := e.localGitConfigValue(ctx, remoteMirrorPromisorMarkerKey)
+	if err != nil || !marked {
+		return err
+	}
+	return e.runSilentLocalGitConfig(ctx, "--unset-all", remoteMirrorPromisorMarkerKey)
 }
 
 func (e *Executor) prepareRemoteMirrorFetch(
@@ -265,13 +305,21 @@ func (e *Executor) finishRemoteMirrorPromisor(
 	ctx context.Context,
 	mirrorURL string,
 ) error {
+	marker, marked, err := e.localGitConfigValue(ctx, remoteMirrorPromisorMarkerKey)
+	if err != nil {
+		return fmt.Errorf("reading remote mirror promisor marker: %w", err)
+	}
+	if !marked || marker != remoteMirrorPromisorMarker(mirrorURL) {
+		return nil
+	}
+
 	promisorKey := remoteMirrorPromisorKey(mirrorURL, "promisor")
 	promisor, hasPromisor, err := e.localGitConfigValue(ctx, promisorKey)
 	if err != nil {
 		return fmt.Errorf("reading remote mirror promisor config: %w", err)
 	}
 	if !hasPromisor || promisor == "" {
-		return nil
+		return e.clearRemoteMirrorPromisorMarker(ctx)
 	}
 
 	filterKey := remoteMirrorPromisorKey(mirrorURL, "partialclonefilter")
@@ -300,7 +348,7 @@ func (e *Executor) finishRemoteMirrorPromisor(
 		return fmt.Errorf("removing remote mirror promisor config: %w", err)
 	}
 
-	return nil
+	return e.clearRemoteMirrorPromisorMarker(ctx)
 }
 
 func (e *Executor) repairInterruptedRemoteMirrorPromisors(ctx context.Context) error {
@@ -317,18 +365,24 @@ func (e *Executor) repairInterruptedRemoteMirrorPromisors(ctx context.Context) e
 		if err != nil {
 			return err
 		}
-		// Avoid adding a Git invocation to every ordinary checkout. Git writes
-		// URL remotes with this section shape for direct filtered fetches.
-		if !strings.Contains(string(config), `[remote "http`) ||
-			!strings.Contains(string(config), "promisor") {
+		// Avoid adding a Git invocation to checkouts the agent did not mark.
+		if !strings.Contains(string(config), "remote-mirror-promisor") {
 			return nil
 		}
+	}
+
+	marker, marked, err := e.localGitConfigValue(ctx, remoteMirrorPromisorMarkerKey)
+	if err != nil {
+		return err
+	}
+	if !marked {
+		return nil
 	}
 
 	output, err := e.runSilentLocalGitConfigOutput(ctx, "--get-regexp", `^remote\..*\.promisor$`)
 	if err != nil {
 		if shell.IsExitError(err) && shell.ExitCode(err) == 1 {
-			return nil
+			return e.clearRemoteMirrorPromisorMarker(ctx)
 		}
 		return err
 	}
@@ -342,11 +396,15 @@ func (e *Executor) repairInterruptedRemoteMirrorPromisors(ctx context.Context) e
 		if err != nil || (remoteURL.Scheme != "https" && remoteURL.Scheme != "http") || remoteURL.Host == "" {
 			continue
 		}
+		if remoteMirrorPromisorMarker(remoteName) != marker {
+			continue
+		}
 		if err := e.finishRemoteMirrorPromisor(ctx, remoteName); err != nil {
 			return err
 		}
+		return nil
 	}
-	return nil
+	return e.clearRemoteMirrorPromisorMarker(ctx)
 }
 
 func (e *Executor) localGitConfigValue(ctx context.Context, key string) (string, bool, error) {
