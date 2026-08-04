@@ -1,7 +1,6 @@
 package agent
 
 import (
-	"encoding/json"
 	"fmt"
 	"maps"
 	"net/url"
@@ -35,12 +34,7 @@ type LocalTracingConfig struct {
 // is empty: an operator who set the variable made a choice. Protocol-, cert-
 // or timeout-only variables deliberately do not count as a destination.
 func HasLocalOTLPDestination() bool {
-	for _, name := range []string{
-		"OTEL_EXPORTER_OTLP_ENDPOINT",
-		"OTEL_EXPORTER_OTLP_HEADERS",
-		envutil.OTELTracesEndpoint,
-		envutil.OTELTracesHeaders,
-	} {
+	for _, name := range envutil.OTLPDestinationVars {
 		if _, ok := os.LookupEnv(name); ok {
 			return true
 		}
@@ -109,32 +103,17 @@ func sanitizedEndpoint(endpoint string) string {
 	return u.Scheme + "://" + u.Host
 }
 
-// controlPlaneOTLPEnv builds the bootstrap-process-only environment additions
-// that deliver a control-plane exporter: the three standard traces-specific
-// OTel variables, the authenticity marker, and a restore snapshot. effective
-// reports the value each variable would otherwise have in the bootstrap
-// process environment (job env over agent process env), so bootstrap can
-// restore its exact present/empty/absent state for hooks and the command
-// after its exporters are constructed.
-func controlPlaneOTLPEnv(exporter *api.TracingExporter, effective func(name string) (string, bool)) (map[string]string, error) {
-	restore := make(map[string]string)
-	for _, name := range envutil.OTELTracesVars {
-		if v, ok := effective(name); ok {
-			restore[name] = v
-		}
-	}
-	restoreJSON, err := json.Marshal(restore)
-	if err != nil {
-		return nil, fmt.Errorf("marshaling restore snapshot: %w", err)
-	}
-
+// controlPlaneOTLPEnv builds the environment additions that deliver a
+// control-plane exporter to the bootstrap process: the three standard
+// traces-specific OTel variables. Hooks, plugins, and the job command inherit
+// them from bootstrap, so job-level OTel tooling can export spans to the same
+// collector as the agent's own trace.
+func controlPlaneOTLPEnv(exporter *api.TracingExporter) map[string]string {
 	return map[string]string{
-		envutil.OTELTracesEndpoint:      exporter.Endpoint,
-		envutil.OTELTracesProtocol:      exporter.Protocol,
-		envutil.OTELTracesHeaders:       otlpTracesHeaderValue(exporter.Headers),
-		envutil.ControlPlaneOTLPMarker:  "true",
-		envutil.ControlPlaneOTLPRestore: string(restoreJSON),
-	}, nil
+		envutil.OTELTracesEndpoint: exporter.Endpoint,
+		envutil.OTELTracesProtocol: exporter.Protocol,
+		envutil.OTELTracesHeaders:  otlpTracesHeaderValue(exporter.Headers),
+	}
 }
 
 // otlpTracesHeaderValue encodes exporter headers in the comma-separated

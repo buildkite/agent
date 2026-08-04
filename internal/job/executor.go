@@ -192,13 +192,6 @@ func (e *Executor) Run(ctx context.Context) (exitCode int) {
 		defer cleanup()
 	}
 
-	// Control-plane OTLP exporter delivery ends here: the tracer provider
-	// (constructed in CLI setup) and the optional OTLP job logger above have
-	// both built their exporters, so remove the injected credentials — and
-	// restore whatever job-env values they displaced — before the Job API
-	// serves the environment and before any hook or command runs.
-	e.cleanupControlPlaneOTLPEnv()
-
 	// Initialize the job API, iff the experiment is enabled. Noop otherwise
 	if e.JobAPI {
 		cleanup, err := e.startJobAPI()

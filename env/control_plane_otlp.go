@@ -3,26 +3,12 @@ package env
 // Control-plane OTLP exporter delivery: when agent registration supplies an
 // OTLP trace exporter (endpoint, protocol, and possibly credentialed
 // headers), the job runner delivers it to the bootstrap process through the
-// standard traces-specific OTel SDK variables below, plus two reserved
-// BUILDKITE_ variables. Bootstrap consumes them when constructing its
-// exporters, then removes them (and restores any displaced job-env values)
-// before any hook or the command runs. See
+// standard traces-specific OTel SDK variables below. Hooks, plugins, and the
+// job command inherit them, so job-level ("userspace") OTel tooling can join
+// the agent's trace via the propagated traceparent and export its spans to
+// the same collector — that pass-through is the point of the feature. See
 // docs/plans/2026-08-03-control-plane-otlp-exporter.md.
 const (
-	// ControlPlaneOTLPMarker marks the OTELTracesVars in the bootstrap
-	// process environment as injected by the agent from control-plane
-	// (registration) exporter configuration, as opposed to operator-baked
-	// values, which must never be touched. It is authentic only when set by
-	// the job runner: it is scrubbed from the backend job env before env
-	// files are written, and protected from within-job sources via
-	// protectedEnv.
-	ControlPlaneOTLPMarker = "BUILDKITE_CONTROL_PLANE_OTLP"
-
-	// ControlPlaneOTLPRestore carries a JSON object snapshotting the values
-	// the OTELTracesVars had before the agent overwrote them (absent names
-	// omitted), so bootstrap can restore them for hooks and the job command.
-	ControlPlaneOTLPRestore = "BUILDKITE_CONTROL_PLANE_OTLP_RESTORE"
-
 	// OTELTracesEndpoint, OTELTracesProtocol and OTELTracesHeaders are the
 	// standard OTel SDK signal-specific exporter variables used for delivery.
 	// Traces-specific rather than generic, so the exporter credential cannot
@@ -33,6 +19,19 @@ const (
 	OTELTracesHeaders  = "OTEL_EXPORTER_OTLP_TRACES_HEADERS"
 )
 
-// OTELTracesVars are the three standard variables a control-plane exporter is
-// delivered through, and whose displaced values are snapshotted for restore.
-var OTELTracesVars = []string{OTELTracesEndpoint, OTELTracesProtocol, OTELTracesHeaders}
+// OTLPDestinationVars are the variables whose presence — even with an empty
+// value — counts as an existing OTLP destination choice: whoever set one made
+// a decision about where trace data (or its credentials) go. A destination in
+// the agent's own environment makes registration ignore the server exporter
+// entirely (see agent.HasLocalOTLPDestination); a destination in a job's
+// backend env makes the job runner skip injection for that job. Both checks
+// are all-or-nothing so a server credential is never sent to a locally- or
+// pipeline-chosen endpoint, nor a local credential to the server's endpoint.
+// Protocol-, certificate- or timeout-only variables deliberately do not
+// count as a destination.
+var OTLPDestinationVars = []string{
+	"OTEL_EXPORTER_OTLP_ENDPOINT",
+	"OTEL_EXPORTER_OTLP_HEADERS",
+	OTELTracesEndpoint,
+	OTELTracesHeaders,
+}

@@ -168,28 +168,12 @@ func TestOTLPTracesHeaderValue(t *testing.T) {
 func TestControlPlaneOTLPEnv(t *testing.T) {
 	t.Parallel()
 
-	// The pipeline set its own traces endpoint and an explicitly-empty
-	// headers var; protocol is absent everywhere.
-	pipeline := map[string]string{
-		"OTEL_EXPORTER_OTLP_TRACES_ENDPOINT": "https://pipeline.example",
-		"OTEL_EXPORTER_OTLP_TRACES_HEADERS":  "",
-	}
-	effective := func(name string) (string, bool) {
-		v, ok := pipeline[name]
-		return v, ok
-	}
-
-	got, err := controlPlaneOTLPEnv(serverTracing().Exporter, effective)
-	if err != nil {
-		t.Fatalf("controlPlaneOTLPEnv() error = %v", err)
-	}
+	got := controlPlaneOTLPEnv(serverTracing().Exporter)
 
 	want := map[string]string{
-		"OTEL_EXPORTER_OTLP_TRACES_ENDPOINT":   "https://collector.example/v1/traces",
-		"OTEL_EXPORTER_OTLP_TRACES_PROTOCOL":   "http/protobuf",
-		"OTEL_EXPORTER_OTLP_TRACES_HEADERS":    "Authorization=Bearer%20super-secret-token",
-		"BUILDKITE_CONTROL_PLANE_OTLP":         "true",
-		"BUILDKITE_CONTROL_PLANE_OTLP_RESTORE": `{"OTEL_EXPORTER_OTLP_TRACES_ENDPOINT":"https://pipeline.example","OTEL_EXPORTER_OTLP_TRACES_HEADERS":""}`,
+		"OTEL_EXPORTER_OTLP_TRACES_ENDPOINT": "https://collector.example/v1/traces",
+		"OTEL_EXPORTER_OTLP_TRACES_PROTOCOL": "http/protobuf",
+		"OTEL_EXPORTER_OTLP_TRACES_HEADERS":  "Authorization=Bearer%20super-secret-token",
 	}
 	if diff := cmp.Diff(got, want); diff != "" {
 		t.Errorf("controlPlaneOTLPEnv() diff (-got +want):\n%s", diff)

@@ -43,14 +43,6 @@ type protection struct {
 // backend but immutable within the job. The executor intentionally snapshots it
 // at bootstrap and never refreshes it after hooks.
 //
-// BUILDKITE_CONTROL_PLANE_OTLP and BUILDKITE_CONTROL_PLANE_OTLP_RESTORE are
-// agent-authoritative markers for control-plane OTLP exporter delivery (see
-// control_plane_otlp.go): a within-job write could trick bootstrap into
-// stripping an operator's baked-in OTEL_* configuration or fabricating a
-// restore snapshot. The job runner additionally scrubs them from the backend
-// job env before env files are written (see createEnvironment in
-// agent/job_runner.go).
-//
 // The actual enforcement of protected env within the agent level (overriding
 // job-level env vars based on agent configuration) happens implicitly rather
 // than relying on this map - see createEnvironment in agent/job_runner.go.
@@ -81,8 +73,6 @@ var protectedEnv = map[string]protection{
 	"BUILDKITE_COMMAND_EVAL":                {},
 	"BUILDKITE_CONFIG_PATH":                 {},
 	"BUILDKITE_CONTAINER_COUNT":             {},
-	"BUILDKITE_CONTROL_PLANE_OTLP":          {},
-	"BUILDKITE_CONTROL_PLANE_OTLP_RESTORE":  {},
 	"BUILDKITE_GIT_CLONE_MIRROR_FLAGS":      {},
 	"BUILDKITE_GIT_MIRRORS_LOCK_TIMEOUT":    {},
 	"BUILDKITE_GIT_MIRRORS_PATH":            {},
