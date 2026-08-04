@@ -256,6 +256,20 @@ func TestAgentPoolWatchdogContinuesAfterNotificationError(t *testing.T) {
 	}
 }
 
+func TestAgentPoolWatchdogNotifiesImmediately(t *testing.T) {
+	t.Parallel()
+
+	notifier := &fakeWatchdogNotifier{}
+	pool := &AgentPool{watchdog: notifier}
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+
+	pool.runWatchdog(ctx, logger.Discard, time.Hour)
+	if got := notifier.watchdogCount(); got != 1 {
+		t.Errorf("Watchdog() calls = %d, want 1", got)
+	}
+}
+
 func TestAgentPoolWatchdogLoopStops(t *testing.T) {
 	t.Parallel()
 
