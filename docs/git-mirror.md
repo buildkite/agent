@@ -17,29 +17,6 @@ How do we do this? By:
 - Mirroring the repository in a central location (the git mirror directory), and
 - Making each checkout use a `--reference` clone of the mirror.
 
-## Server-provided remote mirrors
-
-When a pipeline has a server-provided remote Git mirror URL, the agent uses it
-as an optional upstream for the on-host mirror:
-
-- a missing on-host mirror is cloned from the remote mirror and immediately has
-  `origin` reset to the pipeline's canonical repository;
-- an existing on-host mirror fetches the build's exact immutable object ID from
-  the remote mirror into a `refs/buildkite-agent/remote-mirror/*` ref;
-- a lagging, unavailable, or unauthorised remote mirror fails open to the
-  canonical repository while the checkout is still active.
-
-The shared mirror directory remains keyed by the canonical repository URL and
-its persisted `origin` is always canonical. This keeps the cache compatible with
-older agents sharing the same volume, avoids cache fragmentation when mirror
-URLs rotate, and prevents lagging mirror data from overwriting canonical
-`refs/heads/*`.
-
-The remote mirror URL and credentials are supplied by Buildkite. The URL is not
-written into the on-host mirror or checkout configuration. For full
-requirements, caveats, and rollout decisions, see
-[`remote-git-mirrors.md`](remote-git-mirrors.md).
-
 ## Mirrors? `--mirror`? 🪞
 
 You're probably familiar with `git clone`: this gives you a copy of a repo you
