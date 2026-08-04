@@ -37,6 +37,20 @@ cancellation does not start new fallback work. Filtered fetches retarget their
 promisor configuration to canonical `origin`, so later lazy object reads never
 depend on the one-shot mirror URL.
 
+For a fresh checkout with no active on-host mirror update, the agent performs a
+real `git clone` from the remote mirror with the same clone flags it would use
+for canonical, then immediately repoints `origin` to canonical. This preserves
+depth, partial-clone, sparse, single-branch, no-tags, reference, and dissociate
+semantics. A lagging non-shallow clone is kept and completed with the canonical
+commit fetch. Lagging shallow clones and shallow clones whose apparent hit comes
+from an alternate are removed and cloned canonically so canonical owns the
+shallow boundary. Recursive-submodule and separate-Git-directory clone modes
+also stay canonical in this initial implementation. A failed clone is removed
+and retried canonically. The agent does not
+suppress LFS smudging specifically for the mirror—if the mirror cannot serve a
+required filter, the clone fails loudly and the canonical fallback produces the
+correct worktree.
+
 The shared mirror directory remains keyed by the canonical repository URL and
 its persisted `origin` is always canonical. This keeps the cache compatible with
 older agents sharing the same volume, avoids cache fragmentation when mirror
@@ -52,6 +66,9 @@ leaves unmarked user promisor configuration unchanged. If config for the exact
 mirror URL already exists without that marker, the agent preserves it and uses
 the canonical repository. For full requirements, caveats, and rollout
 decisions, see [`remote-git-mirrors.md`](remote-git-mirrors.md).
+
+Remote mirror optimization requires Git 2.45.0 or newer. Initial Windows support
+is best-effort and rough-edged; the canonical checkout path remains supported.
 
 ## Mirrors? `--mirror`? 🪞
 
