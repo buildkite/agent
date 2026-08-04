@@ -271,16 +271,6 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string, attem
 		}
 	}()
 
-	if isMainRepository &&
-		attempt != nil &&
-		attempt.outcome == remoteMirrorOutcomeSkipped &&
-		attempt.skipReason == remoteMirrorSkipNoURL &&
-		hasGitCommit(ctx, e.shell, mirrorDir, e.Commit) {
-		// Avoid the global reachability scan when remote mirroring is not configured.
-		e.shell.Commentf("Commit %q exists in mirror", e.Commit)
-		return e.snapshotMirror(ctx, repository, mirrorDir)
-	}
-
 	commitAlreadyPresent := false
 	if isMainRepository {
 		// Check again after we get a lock, in case the other process has already updated
