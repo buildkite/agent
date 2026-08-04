@@ -85,9 +85,12 @@ type AgentConfiguration struct {
 	TracingPropagateTraceparent bool
 	// ControlPlaneTracingExporter is an OTLP trace exporter destination
 	// supplied by the control plane at registration (see
-	// ApplyControlPlaneTracing). Its headers may hold credentials: it is
-	// delivered only to the bootstrap process environment, never job env
-	// files, and bootstrap strips it before hooks and the command run.
+	// ApplyControlPlaneTracing). It is delivered to the bootstrap process
+	// environment via the standard OTEL_EXPORTER_OTLP_TRACES_* variables and
+	// inherited by hooks and the job command, so job-level OTel tooling can
+	// export spans to the same collector. Its headers may hold credentials,
+	// which is why it is injected after the job env files are written (kept
+	// off disk) and skipped when the job env chose its own OTLP destination.
 	ControlPlaneTracingExporter  *api.TracingExporter
 	TraceContextEncoding         string
 	DisableWarningsFor           []string
