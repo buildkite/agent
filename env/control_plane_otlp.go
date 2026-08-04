@@ -6,8 +6,8 @@ package env
 // standard traces-specific OTel SDK variables below. Hooks, plugins, and the
 // job command inherit them, so job-level ("userspace") OTel tooling can join
 // the agent's trace via the propagated traceparent and export its spans to
-// the same collector — that pass-through is the point of the feature. See
-// docs/plans/2026-08-03-control-plane-otlp-exporter.md.
+// the same collector — that pass-through is the point of the feature.
+// Design: https://linear.app/buildkite/issue/A-1641
 const (
 	// OTELTracesEndpoint, OTELTracesProtocol and OTELTracesHeaders are the
 	// standard OTel SDK signal-specific exporter variables used for delivery.

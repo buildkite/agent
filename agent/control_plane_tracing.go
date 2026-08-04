@@ -16,7 +16,7 @@ import (
 
 // LocalTracingConfig captures the operator's explicit local tracing choices,
 // which always take precedence over control-plane (registration) tracing
-// policy. See docs/plans/2026-08-03-control-plane-otlp-exporter.md.
+// policy. Design: https://linear.app/buildkite/issue/A-1641
 type LocalTracingConfig struct {
 	// PropagateTraceparentSet is whether the operator explicitly configured
 	// tracing-propagate-traceparent (CLI flag, config file, or environment),
@@ -104,27 +104,38 @@ func sanitizedEndpoint(endpoint string) string {
 }
 
 // controlPlaneOTLPEnv builds the environment additions that deliver a
-// control-plane exporter to the bootstrap process: the three standard
+// control-plane exporter to the bootstrap process: the standard
 // traces-specific OTel variables. Hooks, plugins, and the job command inherit
 // them from bootstrap, so job-level OTel tooling can export spans to the same
-// collector as the agent's own trace.
+// collector as the agent's own trace. Protocol and headers are set only when
+// supplied: the OTel spec treats an empty variable as unset, but not every
+// SDK does, so absent fields are omitted rather than injected empty.
 func controlPlaneOTLPEnv(exporter *api.TracingExporter) map[string]string {
-	return map[string]string{
+	otlpEnv := map[string]string{
 		envutil.OTELTracesEndpoint: exporter.Endpoint,
-		envutil.OTELTracesProtocol: exporter.Protocol,
-		envutil.OTELTracesHeaders:  otlpTracesHeaderValue(exporter.Headers),
 	}
+	if exporter.Protocol != "" {
+		otlpEnv[envutil.OTELTracesProtocol] = exporter.Protocol
+	}
+	if headers := otlpTracesHeaderValue(exporter.Headers); headers != "" {
+		otlpEnv[envutil.OTELTracesHeaders] = headers
+	}
+	return otlpEnv
 }
 
 // otlpTracesHeaderValue encodes exporter headers in the comma-separated
 // key=value form the OTel SDK env parser expects. Values are path-escaped
 // (the SDK path-unescapes them), so commas or percent signs in a credential
-// cannot corrupt parsing. Keys are not escaped: the SDK validates them as
-// HTTP tokens without unescaping. Keys are sorted for deterministic output.
+// cannot corrupt parsing. Literal '+' is additionally escaped as %2B because
+// some SDK parsers (e.g. Java's) use form-style decoding that turns '+' into
+// a space; compliant path-unescaping leaves %2B as '+' either way. Keys are
+// not escaped: the SDK validates them as HTTP tokens without unescaping.
+// Keys are sorted for deterministic output.
 func otlpTracesHeaderValue(headers map[string]string) string {
 	pairs := make([]string, 0, len(headers))
 	for _, k := range slices.Sorted(maps.Keys(headers)) {
-		pairs = append(pairs, k+"="+url.PathEscape(headers[k]))
+		v := strings.ReplaceAll(url.PathEscape(headers[k]), "+", "%2B")
+		pairs = append(pairs, k+"="+v)
 	}
 	return strings.Join(pairs, ",")
 }

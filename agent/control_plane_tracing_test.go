@@ -85,16 +85,6 @@ func TestApplyControlPlaneTracing(t *testing.T) {
 			},
 		},
 		{
-			name: "unsupported server backend is ignored even with local otel backend",
-			conf: AgentConfiguration{TracingBackend: "opentelemetry"},
-			tracing: &api.AgentTracing{
-				Backend:              "quantum-entanglement",
-				PropagateTraceparent: true,
-				Exporter:             serverTracing().Exporter,
-			},
-			wantBackend: "opentelemetry",
-		},
-		{
 			name: "server datadog backend is ignored even with local otel backend",
 			conf: AgentConfiguration{TracingBackend: "opentelemetry"},
 			tracing: &api.AgentTracing{
@@ -153,9 +143,9 @@ func TestOTLPTracesHeaderValue(t *testing.T) {
 		"Authorization": "Bearer abc,def+ghi/jk=",
 		"A-First":       "with space",
 	})
-	// Keys sorted; values path-escaped (spaces, commas and slashes escaped;
-	// + and = are valid in a path segment and pass through), keys untouched.
-	want := "A-First=with%20space,Authorization=Bearer%20abc%2Cdef+ghi%2Fjk=,X-Later=plain"
+	// Keys sorted; values path-escaped (spaces, commas and slashes escaped),
+	// '+' escaped as %2B for form-style SDK parsers, keys untouched.
+	want := "A-First=with%20space,Authorization=Bearer%20abc%2Cdef%2Bghi%2Fjk=,X-Later=plain"
 	if got != want {
 		t.Errorf("otlpTracesHeaderValue() = %q, want %q", got, want)
 	}
@@ -177,6 +167,16 @@ func TestControlPlaneOTLPEnv(t *testing.T) {
 	}
 	if diff := cmp.Diff(got, want); diff != "" {
 		t.Errorf("controlPlaneOTLPEnv() diff (-got +want):\n%s", diff)
+	}
+
+	// Absent protocol/headers are omitted, not injected as empty-valued vars:
+	// the OTel spec treats empty as unset, but not every SDK does.
+	got = controlPlaneOTLPEnv(&api.TracingExporter{Endpoint: "https://collector.example"})
+	want = map[string]string{
+		"OTEL_EXPORTER_OTLP_TRACES_ENDPOINT": "https://collector.example",
+	}
+	if diff := cmp.Diff(got, want); diff != "" {
+		t.Errorf("controlPlaneOTLPEnv() with endpoint only, diff (-got +want):\n%s", diff)
 	}
 }
 

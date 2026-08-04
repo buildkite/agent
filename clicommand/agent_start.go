@@ -276,8 +276,8 @@ func (asc AgentStartConfig) Features(ctx context.Context) []string {
 	}
 
 	// This agent can consume control-plane OTLP exporter configuration from
-	// the registration response (see
-	// docs/plans/2026-08-03-control-plane-otlp-exporter.md).
+	// the registration response (design:
+	// https://linear.app/buildkite/issue/A-1641).
 	features = append(features, "control-plane-otlp-tracing")
 
 	if asc.DisconnectAfterJob {

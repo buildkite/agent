@@ -437,13 +437,8 @@ func (r *JobRunner) createEnvironment(ctx context.Context) ([]string, error) {
 	// sent by Buildkite. The variables below should always take precedence,
 	// except the checkout-scoped vars set via setCheckoutEnv, which defer to
 	// the Buildkite-sent value unless the checkout-override mode locks them.
-	//
-	// Round-tripping through env.Environment normalizes key case on Windows
-	// (a no-op on Unix), so the exact-name deletes, lookups, and overrides
-	// below — notably the OTLP-destination collision check, which must not
-	// miss a case-variant pipeline OTEL_* var — behave consistently with
-	// bootstrap's env.Environment, which normalizes on ingest.
-	env := envutil.FromMap(r.conf.Job.Env).Dump()
+	env := make(map[string]string, len(r.conf.Job.Env))
+	maps.Copy(env, r.conf.Job.Env)
 
 	// The agent registration token should never make it into the job environment
 	delete(env, "BUILDKITE_AGENT_TOKEN")
@@ -453,10 +448,13 @@ func (r *JobRunner) createEnvironment(ctx context.Context) ([]string, error) {
 	// overrides are applied. If it did, the control-plane exporter is not
 	// injected for this job (see below): mixing the server credential with a
 	// pipeline-chosen endpoint — or a pipeline credential with the server's
-	// endpoint — must never happen.
+	// endpoint — must never happen. The check goes through env.Environment,
+	// which normalizes key case on Windows (a no-op on Unix), so a
+	// case-variant pipeline OTEL_* var cannot dodge it.
 	jobEnvHasOTLPDestination := false
+	normalizedJobEnv := envutil.FromMap(r.conf.Job.Env)
 	for _, name := range envutil.OTLPDestinationVars {
-		if _, ok := env[name]; ok {
+		if normalizedJobEnv.Exists(name) {
 			jobEnvHasOTLPDestination = true
 			break
 		}
