@@ -37,9 +37,9 @@ func TestGitCommitVerificationFlag(t *testing.T) {
 			want: "strict",
 		},
 		{
-			name: "can be overridden with warn",
-			args: []string{"--git-commit-verification", "warn"},
-			want: "warn",
+			name: "can be overridden with off",
+			args: []string{"--git-commit-verification", "off"},
+			want: "off",
 		},
 	}
 

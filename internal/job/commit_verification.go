@@ -21,6 +21,13 @@ var ErrCommitVerificationFailed = errors.New("commit verification failed")
 // This is NOT evidence of an attack — it's an infrastructure problem.
 var ErrCommitVerificationUnavailable = errors.New("commit verification unavailable")
 
+const (
+	// GitCommitVerificationStrict checks branch ancestry and blocks a definitive mismatch.
+	GitCommitVerificationStrict = "strict"
+	// GitCommitVerificationOff skips branch ancestry verification entirely.
+	GitCommitVerificationOff = "off"
+)
+
 // checkCommitOnBranch performs the actual git ancestry check, handling shallow
 // clones by deepening or unshallowing as needed. It returns:
 //   - nil if the commit is verified on the branch
@@ -240,6 +247,23 @@ func stripRefSuppressingFetchFlags(flags []string) []string {
 // verifyCommit ensures that the commit we are asked to build exists and is
 // reachable on the branch we are given.
 func (e *Executor) verifyCommit(ctx context.Context) error {
+	switch e.GitCommitVerification {
+	case GitCommitVerificationOff:
+		e.shell.Commentf("Skipping commit verification: mode is off")
+		return nil
+	case GitCommitVerificationStrict, "":
+		// The zero value is treated as strict for programmatic ExecutorConfig
+		// consumers. The CLI rejects empty values, and only explicit off skips.
+		// Continue below.
+	default:
+		return fmt.Errorf(
+			"invalid git commit verification mode %q (must be %q or %q)",
+			e.GitCommitVerification,
+			GitCommitVerificationStrict,
+			GitCommitVerificationOff,
+		)
+	}
+
 	// Skip if commit is HEAD (nothing to verify)
 	if e.Commit == "HEAD" {
 		e.shell.Commentf("Skipping commit verification: commit is HEAD")
@@ -282,16 +306,11 @@ func (e *Executor) verifyCommit(ctx context.Context) error {
 
 	// Definitive failure — commit is provably not on the branch
 	if errors.Is(err, ErrCommitVerificationFailed) {
-		if e.GitCommitVerification == "warn" {
-			e.shell.Warningf("%s", err)
-			return nil
-		}
 		return err
 	}
 
-	// Verification unavailable — infrastructure issue, not a security concern.
-	// We always warn but never block, even in strict mode, to avoid users
-	// disabling verification entirely due to infrastructure false positives.
+	// Verification unavailable — infrastructure issue, not a definitive mismatch.
+	// We always warn but never block, even in strict mode.
 	// err already begins with "commit verification unavailable", so log it as-is.
 	e.shell.Warningf("%s", err)
 	return nil
