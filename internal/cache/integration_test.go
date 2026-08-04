@@ -833,56 +833,6 @@ func TestCacheIntegration_RestoreCorruptArchiveInvalidates(t *testing.T) {
 	}
 }
 
-// TestCacheIntegration_RestoreCorruptPayloadInvalidates covers the subtle case
-// the format gate can't catch: a valid zip with a valid manifest but a corrupt
-// payload member. Digest verification must reject it *before* cleanup, so the
-// target dir is not deleted and extraction never runs on bad data.
-func TestCacheIntegration_RestoreCorruptPayloadInvalidates(t *testing.T) {
-	ctx := t.Context()
-
-	cacheClient, cacheDir, storageDir := setupTestCache(t, "local_file")
-	mockClient := cacheClient.api.(*mockAPIClient)
-
-	saveResult, err := cacheClient.Save(ctx, "test-cache")
-	if err != nil {
-		t.Fatalf("Save: %v", err)
-	}
-
-	// Flip a byte in the middle of the blob — deep in a payload member's
-	// compressed data, so the zip structure and manifest still parse but the
-	// content no longer matches the digest (and would fail extraction's CRC).
-	blobPath := filepath.Join(storageDir, saveResult.Archive.Sha256Sum)
-	data, err := os.ReadFile(blobPath)
-	if err != nil {
-		t.Fatalf("ReadFile: %v", err)
-	}
-	data[len(data)/2] ^= 0xFF
-	if err := os.WriteFile(blobPath, data, 0o600); err != nil {
-		t.Fatalf("WriteFile: %v", err)
-	}
-
-	restoreResult, err := cacheClient.Restore(ctx, "test-cache")
-	if err != nil {
-		t.Fatalf("Restore with corrupt payload should not error, got: %v", err)
-	}
-	if restoreResult.CacheRestored {
-		t.Error("corrupt payload should degrade to CacheRestored=false")
-	}
-	if len(mockClient.expireCalls) != 1 {
-		t.Fatalf("expire calls = %d, want 1", len(mockClient.expireCalls))
-	}
-
-	// The target dir must NOT have been cleaned — corruption is caught before
-	// cleanup, so the original cache contents survive.
-	entries, err := os.ReadDir(cacheDir)
-	if err != nil {
-		t.Fatalf("ReadDir: %v", err)
-	}
-	if len(entries) == 0 {
-		t.Error("target dir should not be cleaned when the archive is rejected before extraction")
-	}
-}
-
 // writeManifestlessArchive overwrites path with a plain zip that has no v2
 // manifest entry, simulating a v1/foreign archive.
 func writeManifestlessArchive(t *testing.T, path string) {

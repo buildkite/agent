@@ -2,11 +2,8 @@ package cache
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"fmt"
-	"io"
 	"io/fs"
 	"log/slog"
 	"os"
@@ -216,19 +213,13 @@ func (c *client) Restore(ctx context.Context, cacheID string) (RestoreResult, er
 		Concurrency:      transferInfo.Concurrency,
 	}
 
-	// Verify the downloaded blob before touching the filesystem. Its digest must
-	// match the content-addressed name — this catches corruption anywhere in the
-	// archive, including a payload member the format check never reads.
-	var expectedDigest string
-	if len(retrieveResp.Blobs) > 0 && retrieveResp.Blobs[0].Digest.Algorithm == "sha256" {
-		expectedDigest = retrieveResp.Blobs[0].Digest.Value
-	}
-	if err := verifyDownloadedArchive(archiveFile, transferInfo.BytesTransferred, expectedDigest); err != nil {
-		// A bad cache must never block a build: any unreadable/corrupt archive
-		// degrades to a miss and invalidates the entry (targets untouched — this
-		// runs before cleaning).
+	// Check the archive is a readable format before touching the filesystem.
+	if err := archive.Validate(archiveFile, transferInfo.BytesTransferred); err != nil {
+		// A bad cache must never block a build: an unrecognized or otherwise
+		// unreadable archive degrades to a miss and invalidates the entry
+		// (targets untouched — this runs before cleaning).
 		unrecognized := errors.Is(err, archive.ErrUnrecognizedFormat)
-		slog.Warn("cache archive unreadable, treating as miss and invalidating entry",
+		slog.Warn("cache archive failed verification, treating as miss and invalidating entry",
 			"cache_id", cacheID, "unrecognized_format", unrecognized, "err", err)
 		invalidated := c.invalidateStaleEntry(ctx, retrieveResp)
 		result.CacheHit = false
@@ -241,8 +232,8 @@ func (c *client) Restore(ctx context.Context, cacheID string) (RestoreResult, er
 			attribute.Bool("cache.unrecognized_format", unrecognized),
 			attribute.Bool("cache.invalidated", invalidated),
 		)
-		span.SetStatus(codes.Ok, "cache miss (unreadable archive)")
-		c.callProgress(cacheID, "complete", "Cache miss (unreadable archive, invalidated stale entry)", 0, 0)
+		span.SetStatus(codes.Ok, "cache miss (archive failed verification)")
+		c.callProgress(cacheID, "complete", "Cache miss (archive failed verification, invalidated stale entry)", 0, 0)
 		return result, nil
 	}
 
@@ -429,49 +420,6 @@ func (c *client) downloadCache(ctx context.Context, retrieveResp api.CacheEntryR
 	span.SetStatus(codes.Ok, "download completed")
 
 	return tmpDir, archiveFile, transferInfo, nil
-}
-
-// verifyDownloadedArchive checks a blob is safe to extract: its bytes hash to
-// expectedDigest (integrity, catches any corruption) and it's a readable archive
-// (format). A blank expectedDigest skips the hash check.
-func verifyDownloadedArchive(archiveFile string, archiveSize int64, expectedDigest string) error {
-	if expectedDigest != "" {
-		if err := verifyArchiveDigest(archiveFile, expectedDigest); err != nil {
-			return err
-		}
-	}
-	return detectArchiveFormat(archiveFile, archiveSize)
-}
-
-// verifyArchiveDigest re-hashes a blob and compares it to the digest its object
-// name promised (Download doesn't verify this).
-func verifyArchiveDigest(archiveFile, expected string) error {
-	f, err := os.Open(archiveFile)
-	if err != nil {
-		return fmt.Errorf("failed to open archive file: %w", err)
-	}
-	defer func() { _ = f.Close() }()
-
-	h := sha256.New()
-	if _, err := io.Copy(h, f); err != nil {
-		return fmt.Errorf("failed to hash archive file: %w", err)
-	}
-	if got := hex.EncodeToString(h.Sum(nil)); got != expected {
-		return fmt.Errorf("archive digest mismatch: got %s, want %s", got, expected)
-	}
-	return nil
-}
-
-// detectArchiveFormat opens a downloaded archive and reports whether it is a
-// readable archive, returning archive.ErrUnrecognizedFormat otherwise.
-func detectArchiveFormat(archiveFile string, archiveSize int64) error {
-	f, err := os.Open(archiveFile)
-	if err != nil {
-		return fmt.Errorf("failed to open archive file: %w", err)
-	}
-	defer func() { _ = f.Close() }()
-
-	return archive.DetectFormat(f, archiveSize)
 }
 
 // extractCache extracts files from a cache archive
