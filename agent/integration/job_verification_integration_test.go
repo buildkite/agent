@@ -9,7 +9,7 @@ import (
 	"github.com/buildkite/bintest/v3"
 	"github.com/buildkite/go-pipeline"
 	"github.com/buildkite/go-pipeline/signature"
-	"github.com/lestrrat-go/jwx/v2/jwk"
+	"github.com/lestrrat-go/jwx/v3/jwk"
 )
 
 const (
@@ -772,7 +772,7 @@ func stepWithMatrix() pipeline.CommandStep {
 func symmetricJWKFor(t *testing.T, payload string) jwk.Key {
 	t.Helper()
 
-	key, err := jwk.FromRaw([]byte(payload)) // calling FromRaw on a []byte will always yield a symmetric key
+	key, err := jwk.Import([]byte(payload)) // calling FromRaw on a []byte will always yield a symmetric key
 	if err != nil {
 		t.Fatalf("creating jwk: %v", err)
 	}

@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 	"runtime"
 	"slices"
 	"strconv"
@@ -33,6 +32,15 @@ func (e *Executor) CheckoutPhase(ctx context.Context) (retErr error) {
 
 	if err := e.executePluginHook(ctx, "pre-checkout", e.pluginCheckouts); err != nil {
 		return err
+	}
+
+	// Environment and pre-checkout hooks can change BUILDKITE_REPO. Refresh the
+	// provider-neutral rewrite and primary-repository keyscan decision using the
+	// repository that the checkout will actually use.
+	if e.useRepositoryProviderGitCredentials() {
+		if err := e.configureRepositoryProviderGitCredentials(ctx, true); err != nil {
+			return fmt.Errorf("refreshing repository credentials before checkout: %w", err)
+		}
 	}
 
 	// Remove the checkout directory if BUILDKITE_CLEAN_CHECKOUT is present
@@ -146,6 +154,13 @@ func (e *Executor) checkout(ctx context.Context) error {
 			}
 		}
 
+		// Also fail fast on an unusable sparse checkout mode. resolveSparseCheckout
+		// rejects it again during the checkout, but it can arrive from job env, and
+		// retrying a typo for the whole attempt budget only delays the failure.
+		if _, err := ParseSparseCheckoutMode(e.GitSparseCheckoutMode); err != nil {
+			return err
+		}
+
 		maxAttempts := e.CheckoutAttempts
 		if maxAttempts <= 0 {
 			maxAttempts = 6
@@ -165,6 +180,12 @@ func (e *Executor) checkout(ctx context.Context) error {
 			var errGit *gitError
 
 			switch {
+			case errors.Is(err, ErrCommitVerificationFailed):
+				// A commit that is provably not on its branch won't become valid by
+				// retrying, so fail fast instead of re-cloning through the whole backoff.
+				e.shell.Warningf("Checkout failed! %s", err)
+				r.Break()
+
 			case errors.Is(err, errCheckoutAttemptTimedOut):
 				// The per-attempt timeout fired and git was signal-killed.
 				// Treat this like a generic transient failure: warn, clean
@@ -189,6 +210,21 @@ func (e *Executor) checkout(ctx context.Context) error {
 				// 94 chosen by fair die roll
 				return &shell.ExitError{Code: 94, Err: err}
 
+			case errors.As(err, &errGit) && errGit.Type == gitErrorFetchRetryClean:
+				// Cleanup failures can wrap cancellation; remove unsafe state first.
+				if errGit.WasRetried {
+					e.shell.Warningf("Checkout failed! %s", err)
+					r.Break()
+				} else {
+					e.shell.Warningf("Checkout failed! %s (%s)", err, r)
+				}
+				if err := e.removeCheckoutDir(); err != nil {
+					e.shell.Warningf("Failed to remove checkout dir while cleaning up after a checkout error: %v", err)
+				}
+				if err := e.createCheckoutDir(); err != nil {
+					return err
+				}
+
 			case errors.Is(err, context.Canceled):
 				e.shell.Warningf("Checkout was cancelled")
 				r.Break()
@@ -209,9 +245,9 @@ func (e *Executor) checkout(ctx context.Context) error {
 				}
 
 				switch errGit.Type {
-				case gitErrorClean, gitErrorCleanSubmodules, gitErrorClone,
-					gitErrorCheckoutRetryClean, gitErrorFetchRetryClean,
-					gitErrorFetchBadObject:
+				case gitErrorClean, gitErrorCleanSubmodules, gitErrorClone, gitErrorCloneTimeout,
+					gitErrorCheckoutRetryClean,
+					gitErrorFetchBadObject, gitErrorFetchRefNotOnRemote:
 					// Checkout can fail because of corrupted files in the checkout which can leave the agent in a state where it
 					// keeps failing. This removes the checkout dir, which means the next checkout will be a lot slower (clone vs
 					// fetch), but hopefully will allow the agent to self-heal
@@ -299,10 +335,13 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context, previousAttempts in
 	})
 	defer func() { span.FinishWithError(retErr) }()
 
+	attempt := e.resolveRemoteMirrorAttempt(previousAttempts)
+	defer func() { e.emitRemoteMirrorTelemetry(span, attempt) }()
+
 	// Adopt the repo-checkout child ctx so git.* spans nest under it.
 	ctx = spanCtx
 
-	if e.SSHKeyscan {
+	if e.SSHKeyscan && !e.skipRepositorySSHKeyscan {
 		addRepositoryHostToSSHKnownHosts(ctx, e.shell, e.Repository)
 	}
 
@@ -330,7 +369,7 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context, previousAttempts in
 		mirrorSpan, mirrorCtx := e.traceOpSpan(ctx, "git.mirror.update")
 		mirrorSpan.AddAttributes(map[string]string{"git.repo": redact.URLCredentials(e.Repository)})
 
-		mirrorDir, err = e.getOrUpdateMirrorDir(mirrorCtx, e.Repository)
+		mirrorDir, err = e.getOrUpdateMirrorDir(mirrorCtx, e.Repository, &attempt)
 
 		mirrorSpan.FinishWithError(err)
 
@@ -345,8 +384,11 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context, previousAttempts in
 		return fmt.Errorf("creating checkout dir: %w", err)
 	}
 
-	// Resolve the cone paths to check out (nil means a full checkout).
-	sparsePaths := e.resolveSparseCheckout(ctx)
+	// Resolve the sparse checkout for this build (inactive means a full checkout).
+	sparse, err := e.resolveSparseCheckout(ctx)
+	if err != nil {
+		return err
+	}
 
 	// Split the git clone flags into an array of strings, so we can append
 	// additional flags if needed (e.g., --reference, --dissociate, --sparse, --filter=blob:none).
@@ -360,97 +402,8 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context, previousAttempts in
 	// original user-supplied state, not on flags we auto-add here.
 	userSuppliedCloneFilter := hasPartialFilterFlags(gitCloneFlags)
 
-	// On mirrors and dissociation:
-	//
-	// --reference makes the clone reuse objects from the mirror, using the
-	// .git/objects/info/alternates file. On its own, it won't copy the objects
-	// from the mirror, just refer to them. This becomes a problem if they
-	// disappear, which happens during routine normal use of the mirror.
-	//
-	// --dissociate makes copies of the objects from the mirror, which makes the
-	// clone robust against that failure, at the expense of disk space and extra
-	// work up front.
-	//
-	// --dissociate is safer, so it's what we want, but it can be disabled. It
-	// is important even when CleanCheckout is enabled, because auto-maintenance
-	// can happen on the mirror at any time!
-
-	// Does the git directory exist?
-	existingGitDir := filepath.Join(e.shell.Getwd(), ".git")
-	if osutil.FileExists(existingGitDir) {
-		// Ensure the origin matches the configured repo, so we can
-		// gracefully handle repository renames.
-		if _, err := e.updateRemoteURL(ctx, "", e.Repository); err != nil {
-			return fmt.Errorf("setting origin: %w", err)
-		}
-
-		if mirrorDir != "" {
-			switch e.GitMirrorCheckoutMode {
-			case "dissociate":
-				// If the existing repo is still relying on the reference, then
-				// "dissociate" it (git repack, and delete the alternates file).
-				if err := e.traceOp(ctx, "git.dissociate", func(ctx context.Context) error {
-					return e.dissociateIfNeeded(ctx, existingGitDir)
-				}); err != nil {
-					return fmt.Errorf("dissociating existing reference clone: %w", err)
-				}
-			case "reference":
-				// If the existing repo does not have a reference to the mirror,
-				// create one. Existing objects don't need cleaning up.
-				if err := e.reassociateIfNeeded(ctx, existingGitDir, mirrorDir); err != nil {
-					return fmt.Errorf("reassociating existing clone: %w", err)
-				}
-			}
-		}
-
-	} else { // the .git directory does not already exist
-
-		// Compute the clone flags. For mirrors we need --reference, and usually
-		// --dissociate.
-		if mirrorDir != "" {
-			gitCloneFlags = append(gitCloneFlags, "--reference", mirrorDir)
-			if e.GitMirrorCheckoutMode == "dissociate" {
-				gitCloneFlags = append(gitCloneFlags, "--dissociate")
-			}
-		}
-
-		// When sparse checkout applies, add two clone flags:
-		//   --sparse             clone in sparse mode
-		//   --filter=blob:none   make it a partial clone, so blobs outside the
-		//                        sparse set aren't downloaded up front
-		// Each flag is added only if the user hasn't already supplied their own.
-		if len(sparsePaths) > 0 {
-			if slices.Contains(gitCloneFlags, "--sparse") {
-				e.shell.Commentf("Sparse checkout is configured and BUILDKITE_GIT_CLONE_FLAGS already contains a --sparse flag (preserving user-supplied sparse checkout).")
-			} else {
-				gitCloneFlags = append(gitCloneFlags, "--sparse")
-			}
-			if userSuppliedCloneFilter {
-				e.shell.Commentf("Sparse checkout is configured and BUILDKITE_GIT_CLONE_FLAGS already contains a --filter (preserving user-supplied filter).")
-			} else {
-				gitCloneFlags = append(gitCloneFlags, "--filter=blob:none")
-			}
-		}
-
-		// Do the clone.
-		cloneSpan, cloneCtx := e.traceOpSpan(ctx, "git.clone")
-		mirrorMode := "none"
-		if mirrorDir != "" {
-			mirrorMode = e.GitMirrorCheckoutMode
-		}
-		cloneSpan.AddAttributes(map[string]string{
-			"git.mirror_mode":     mirrorMode,
-			"git.sparse":          strconv.FormatBool(len(sparsePaths) > 0),
-			"git.blobless_filter": strconv.FormatBool(hasPartialFilterFlags(gitCloneFlags)),
-		})
-
-		cloneErr := gitClone(cloneCtx, e.shell, gitCloneFlags, e.Repository, ".")
-
-		cloneSpan.FinishWithError(cloneErr)
-
-		if cloneErr != nil {
-			return fmt.Errorf("cloning git repository: %w", cloneErr)
-		}
+	if err := e.prepareCheckoutWorkdir(ctx, &attempt, sparse, mirrorDir, gitCloneFlags, userSuppliedCloneFilter); err != nil {
+		return err
 	}
 
 	// Git clean prior to checkout, we do this even if submodules have been
@@ -487,10 +440,10 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context, previousAttempts in
 		return fmt.Errorf("splitting --git-fetch-flags %q: %w", e.GitFetchFlags, err)
 	}
 
-	addBloblessFilter := len(sparsePaths) > 0 &&
+	addBloblessFilter := sparse.active() &&
 		!userSuppliedCloneFilter &&
 		!hasPartialFilterFlags(gitFetchFlags)
-	if err := e.fetchSource(ctx, addBloblessFilter); err != nil {
+	if err := e.fetchSource(ctx, addBloblessFilter, &attempt); err != nil {
 		return err
 	}
 
@@ -501,9 +454,16 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context, previousAttempts in
 	}
 
 	sparseSpan, sparseCtx := e.traceOpSpan(ctx, "git.sparse_checkout")
-	sparseSpan.AddAttributes(map[string]string{"git.path_count": strconv.Itoa(len(sparsePaths))})
+	sparseMode := "none"
+	if sparse.active() {
+		sparseMode = sparse.mode.String()
+	}
+	sparseSpan.AddAttributes(map[string]string{
+		"git.path_count":  strconv.Itoa(len(sparse.paths)),
+		"git.sparse_mode": sparseMode,
+	})
 
-	sparseCheckoutActive, err := e.setupSparseCheckout(sparseCtx, sparsePaths)
+	sparseCheckoutActive, err := e.setupSparseCheckout(sparseCtx, sparse)
 
 	sparseSpan.FinishWithError(err)
 
@@ -532,7 +492,7 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context, previousAttempts in
 	if hasGitSubmodules(e.shell) {
 		switch {
 		case sparseCheckoutActive:
-			e.shell.Commentf("Submodule initialization skipped during sparse checkout")
+			e.shell.OptionalWarningf("submodules-init-skipped", "Submodule initialization skipped during sparse checkout")
 		case e.GitSubmodules:
 			e.shell.Commentf("Git submodules detected")
 			gitSubmodules = true
@@ -547,17 +507,40 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context, previousAttempts in
 		}
 	}
 
-	// When sparse-checkout is active, scope LFS to the same paths so we don't
-	// pull objects outside the sparse set (SUP-6529). If sparse fell back to a
-	// full checkout (e.g. git < 2.27), fetch unscoped so files outside the
-	// requested paths still get their LFS content.
+	// Git LFS vs sparse-checkout (SUP-6529). How far we can reuse the sparse
+	// paths depends on the mode:
+	//
+	//	mode     | git lfs fetch                 | git lfs checkout
+	//	---------|-------------------------------|----------------------------------
+	//	(none)   | all objects                   | all objects
+	//	cone     | --include=<sparse dirs>       | pathspecs = same dirs
+	//	no-cone  | all objects                   | only non-skip-worktree LFS paths
+	//
+	// Cone paths are plain directories, so they work as both --include filters and
+	// checkout pathspecs. Non-cone paths are gitignore-style patterns (globs,
+	// "!/docs/"); --include has no negation, and pathspecs don't understand
+	// those patterns, so lfsInclude returns nil and fetch stays unscoped.
+	// Fetching everything is fine (objects just sit in .git/lfs), but an
+	// unscoped `lfs checkout` walks every pointer in HEAD and recreates
+	// sparse-excluded files that only have skip-worktree set — they then
+	// survive the later git clean. In that case we call materializedLFSPaths
+	// and pass the result as CheckoutPaths so checkout stays inside the sparse
+	// working tree.
 	if e.GitLFSEnabled {
 		lfsArgs := gitLFSFetchCheckoutArgs{
-			Shell: e.shell,
-			Retry: true,
+			Shell:        e.shell,
+			Retry:        true,
+			FetchInclude: sparse.lfsInclude(), // cone dirs; nil when inactive or no-cone
 		}
-		if sparseCheckoutActive {
-			lfsArgs.Include = cleanGitSparseCheckoutPaths(e.GitSparseCheckoutPaths)
+		if sparse.noCone() {
+			// FetchInclude is empty on purpose (see table above). Scope checkout
+			// to LFS paths that are still in the sparse working tree.
+			paths, err := e.materializedLFSPaths(ctx)
+			if err != nil {
+				return err
+			}
+			lfsArgs.CheckoutPaths = &paths
+			e.shell.Commentf("Fetching all Git LFS objects; checking out %d path(s) present in the sparse working tree (%s mode)", len(paths), sparse.mode)
 		}
 		if err := e.traceOp(ctx, "git.lfs.fetch", func(ctx context.Context) error {
 			return gitLFSFetchCheckout(ctx, lfsArgs)
@@ -657,7 +640,7 @@ func (e *Executor) updateGitSubmodules(ctx context.Context) (retErr error) {
 		subMirrorSpan, subMirrorCtx := e.traceOpSpan(ctx, "git.mirror.update")
 		subMirrorSpan.AddAttributes(map[string]string{"git.repo": redact.URLCredentials(repository)})
 
-		mirrorDir, err := e.getOrUpdateMirrorDir(subMirrorCtx, repository)
+		mirrorDir, err := e.getOrUpdateMirrorDir(subMirrorCtx, repository, nil)
 
 		subMirrorSpan.FinishWithError(err)
 

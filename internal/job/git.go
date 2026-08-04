@@ -10,20 +10,27 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 
+	"github.com/buildkite/agent/v3/env"
 	"github.com/buildkite/agent/v3/internal/osutil"
 	"github.com/buildkite/agent/v3/internal/shell"
 	"github.com/buildkite/roko"
 	"github.com/buildkite/shellwords"
 )
 
+// gitLFSCheckoutPathBatchSize bounds pathspecs passed to a single
+// `git lfs checkout` invocation so large sparse working trees don't hit ARG_MAX.
+const gitLFSCheckoutPathBatchSize = 1000
+
 const (
 	gitErrorCheckout = iota
 	gitErrorCheckoutReferenceIsNotATree
 	gitErrorCheckoutRetryClean
 	gitErrorClone
+	gitErrorCloneTimeout
 	gitErrorFetch
 	// exit code 128: broad error, most likely not recoverable.
 	gitErrorFetchRetryClean
@@ -31,6 +38,8 @@ const (
 	gitErrorFetchBadObject
 	// can happen when just the short commit hash is given.
 	gitErrorFetchBadReference
+	// the remote does not have, or will not advertise, the requested object.
+	gitErrorFetchRefNotOnRemote
 	gitErrorClean
 	gitErrorCleanSubmodules
 	gitErrorRepack
@@ -43,6 +52,9 @@ const (
 	gitErrStrBadObject             = "fatal: bad object"
 	gitErrStrBadReference          = "fatal: couldn't find remote ref"
 	gitErrStrBadReferencePreGit221 = "fatal: Couldn't find remote ref"
+	gitErrStrNotOurRef             = "not our ref"
+	gitErrStrOperationTooSlow      = "Operation too slow"
+	gitErrStrUnadvertisedObject    = "Server does not allow request for unadvertised object"
 )
 
 var (
@@ -65,8 +77,19 @@ func hasGitSubmodules(sh *shell.Shell) bool {
 }
 
 func hasGitCommit(ctx context.Context, sh *shell.Shell, gitDir, commit string) bool {
+	extraEnv := env.New()
+	// Remote Git mirrors require Git 2.45+, where GIT_NO_LAZY_FETCH keeps this
+	// presence check local in partial clones. Older Git versions intentionally
+	// fall outside the feature's support boundary rather than gaining a second
+	// object-inspection implementation.
+	extraEnv.Set("GIT_NO_LAZY_FETCH", "1")
+
 	// Resolve commit to an actual commit object
-	output, err := sh.Command("git", "--git-dir", gitDir, "rev-parse", commit+"^{commit}").RunAndCaptureStdout(ctx, shell.ShowStderr(false))
+	output, err := sh.Command("git", "--git-dir", gitDir, "rev-parse", commit+"^{commit}").RunAndCaptureStdout(
+		ctx,
+		shell.ShowStderr(false),
+		shell.WithExtraEnv(extraEnv),
+	)
 	if err != nil {
 		return false
 	}
@@ -78,6 +101,20 @@ func hasGitCommit(ctx context.Context, sh *shell.Shell, gitDir, commit string) b
 
 	// Otherwise it's a commit in the repo
 	return true
+}
+
+func hasGitCommitReachableFromRef(ctx context.Context, sh *shell.Shell, gitDir, commit string) bool {
+	extraEnv := env.New()
+	extraEnv.Set("GIT_NO_LAZY_FETCH", "1")
+	output, err := sh.Command(
+		"git", "--git-dir", gitDir, "for-each-ref",
+		"--format=%(refname)", "--contains", commit,
+	).RunAndCaptureStdout(
+		ctx,
+		shell.ShowStderr(false),
+		shell.WithExtraEnv(extraEnv),
+	)
+	return err == nil && strings.TrimSpace(output) != ""
 }
 
 func gitCheckout(ctx context.Context, sh *shell.Shell, gitCheckoutFlags, reference string) error {
@@ -113,28 +150,38 @@ func gitCheckout(ctx context.Context, sh *shell.Shell, gitCheckoutFlags, referen
 	return nil
 }
 
-// hasPartialFilterFlags returns true if flags contains a
-// --filter=<spec> or --filter <spec> option.
+// hasPartialFilterFlags returns true if flags contains a filter option,
+// including Git's accepted --fi* long-option abbreviations.
 func hasPartialFilterFlags(flags []string) bool {
 	for i, f := range flags {
-		// Check for --filter=<spec>
-		if strings.HasPrefix(f, "--filter=") {
+		if strings.HasPrefix(f, "--fi") && strings.Contains(f, "=") {
 			return true
 		}
-		// The --filter <spec> form only counts when a value actually follows it
-		if f == "--filter" && i+1 < len(flags) {
+		if strings.HasPrefix(f, "--fi") && i+1 < len(flags) {
 			return true
 		}
 	}
 	return false
 }
 
-func gitClone(ctx context.Context, sh *shell.Shell, gitCloneFlags []string, repository, dir string) error {
-	commandArgs := []string{"clone"}
+func gitClone(
+	ctx context.Context,
+	sh *shell.Shell,
+	gitFlags, gitCloneFlags []string,
+	repository, dir string,
+	runOpts ...shell.RunCommandOpt,
+) error {
+	commandArgs := append([]string{}, gitFlags...)
+	commandArgs = append(commandArgs, "clone")
 	commandArgs = append(commandArgs, gitCloneFlags...)
 	commandArgs = append(commandArgs, "--", repository, dir)
 
-	if err := sh.Command("git", commandArgs...).Run(ctx); err != nil {
+	smelt := map[string]bool{gitErrStrOperationTooSlow: false}
+	runOpts = append(runOpts, shell.WithStringSearch(smelt))
+	if err := sh.Command("git", commandArgs...).Run(ctx, runOpts...); err != nil {
+		if smelt[gitErrStrOperationTooSlow] {
+			return &gitError{error: err, Type: gitErrorCloneTimeout}
+		}
 		return &gitError{error: err, Type: gitErrorClone}
 	}
 
@@ -176,10 +223,14 @@ func gitCleanSubmodules(ctx context.Context, sh *shell.Shell, gitCleanFlags stri
 type gitLFSFetchCheckoutArgs struct {
 	Shell *shell.Shell
 	Retry bool // Whether to retry the fetch+checkout on failure
-	// Include scopes LFS to these paths: passed as --include=<csv> to
-	// `git lfs fetch` and as positional pathspecs to `git lfs checkout`.
-	// Empty means fetch/checkout all LFS objects.
-	Include []string
+	// FetchInclude is passed as --include=<csv> to `git lfs fetch`. Empty means
+	// fetch all LFS objects.
+	FetchInclude []string
+	// CheckoutPaths, when non-nil, are pathspecs for `git lfs checkout`
+	// (overriding FetchInclude). A non-nil empty slice means there is nothing
+	// to materialise. When nil, checkout uses FetchInclude if set, otherwise
+	// all LFS objects.
+	CheckoutPaths *[]string
 }
 
 // gitLFSFetchCheckout fetches LFS objects for the current HEAD then materialises
@@ -212,11 +263,11 @@ func gitLFSFetchCheckout(ctx context.Context, args gitLFSFetchCheckoutArgs) erro
 	}
 
 	fetchCmd := []string{"lfs", "fetch"}
-	checkoutCmd := []string{"lfs", "checkout"}
-	if len(args.Include) > 0 {
-		fetchCmd = append(fetchCmd, "--include="+strings.Join(args.Include, ","))
-		checkoutCmd = append(checkoutCmd, args.Include...)
+	if len(args.FetchInclude) > 0 {
+		fetchCmd = append(fetchCmd, "--include="+strings.Join(args.FetchInclude, ","))
 	}
+
+	checkoutPathspecs, checkoutScoped := args.checkoutPathspecs()
 
 	err := retrier.DoWithContext(ctx, func(retrier *roko.Retrier) error {
 		if err := args.Shell.Command("git", fetchCmd...).Run(ctx); err != nil {
@@ -225,11 +276,26 @@ func gitLFSFetchCheckout(ctx context.Context, args gitLFSFetchCheckoutArgs) erro
 			}
 			return fmt.Errorf("git lfs fetch: %w", err)
 		}
-		if err := args.Shell.Command("git", checkoutCmd...).Run(ctx); err != nil {
-			if args.Retry {
-				args.Shell.Commentf("%s", retrier)
+		if checkoutScoped && len(checkoutPathspecs) == 0 {
+			return nil
+		}
+		if !checkoutScoped {
+			if err := args.Shell.Command("git", "lfs", "checkout").Run(ctx); err != nil {
+				if args.Retry {
+					args.Shell.Commentf("%s", retrier)
+				}
+				return fmt.Errorf("git lfs checkout: %w", err)
 			}
-			return fmt.Errorf("git lfs checkout: %w", err)
+			return nil
+		}
+		for batch := range slices.Chunk(checkoutPathspecs, gitLFSCheckoutPathBatchSize) {
+			checkoutCmd := append([]string{"lfs", "checkout"}, batch...)
+			if err := args.Shell.Command("git", checkoutCmd...).Run(ctx); err != nil {
+				if args.Retry {
+					args.Shell.Commentf("%s", retrier)
+				}
+				return fmt.Errorf("git lfs checkout: %w", err)
+			}
 		}
 		return nil
 	})
@@ -238,6 +304,20 @@ func gitLFSFetchCheckout(ctx context.Context, args gitLFSFetchCheckoutArgs) erro
 		return &gitError{error: err, Type: gitErrorLFS, WasRetried: args.Retry}
 	}
 	return err
+}
+
+// checkoutPathspecs returns the pathspecs for `git lfs checkout` and whether
+// checkout is scoped. When scoped is false, checkout should materialise every
+// LFS object. When scoped is true, only the returned pathspecs are materialised
+// (and an empty list means nothing to materialise).
+func (args gitLFSFetchCheckoutArgs) checkoutPathspecs() (paths []string, scoped bool) {
+	if args.CheckoutPaths != nil {
+		return *args.CheckoutPaths, true
+	}
+	if len(args.FetchInclude) > 0 {
+		return args.FetchInclude, true
+	}
+	return nil, false
 }
 
 func gitRepack(ctx context.Context, sh *shell.Shell, args ...string) error {
@@ -252,24 +332,19 @@ func gitRepack(ctx context.Context, sh *shell.Shell, args ...string) error {
 
 type gitFetchArgs struct {
 	Shell         *shell.Shell // The shell to run the command in
-	GitFlags      string       // Global git flags to pass to the command
+	GitFlags      []string     // Global git flags to pass to the command
 	GitFetchFlags string       // Flags to pass to the fetch command
 	Repository    string       // The remote to fetch from
 	Retry         bool         // Whether to retry the fetch on certain errors
 	RefSpecs      []string     // Refspecs to fetch
+	HidePrompt    bool         // Never log argv, including in shell debug mode
 }
 
 func gitFetch(ctx context.Context, args gitFetchArgs) error {
 	// Build the command: git [global gitFlags] fetch [fetchFlags] -- [repository] [refspecs...]
 	commandArgs := []string{}
 
-	if args.GitFlags != "" {
-		parts, err := shellwords.Split(args.GitFlags)
-		if err != nil {
-			return fmt.Errorf("failed to parse gitFlags: %w", err)
-		}
-		commandArgs = append(commandArgs, parts...)
-	}
+	commandArgs = append(commandArgs, args.GitFlags...)
 
 	commandArgs = append(commandArgs, "fetch")
 
@@ -296,6 +371,8 @@ func gitFetch(ctx context.Context, args gitFetchArgs) error {
 		gitErrStrBadObject:             false,
 		gitErrStrBadReference:          false,
 		gitErrStrBadReferencePreGit221: false,
+		gitErrStrNotOurRef:             false,
+		gitErrStrUnadvertisedObject:    false,
 	}
 
 	// The retry logic is used to handle rare cases where a commit ref is not yet available
@@ -316,13 +393,22 @@ func gitFetch(ctx context.Context, args gitFetchArgs) error {
 	}
 
 	return retrier.DoWithContext(ctx, func(retrier *roko.Retrier) error {
-		if err := args.Shell.Command("git", commandArgs...).Run(ctx, shell.WithStringSearch(smelt)); err != nil {
+		runOpts := []shell.RunCommandOpt{shell.WithStringSearch(smelt)}
+		if args.HidePrompt {
+			runOpts = append(runOpts, shell.AlwaysHidePrompt())
+		}
+		if err := args.Shell.Command("git", commandArgs...).Run(ctx, runOpts...); err != nil {
 			// "fatal: [Cc]ouldn't find remote ref" happens when the remote ref does not exist (e.g. a branch that was deleted)
 			// Sometimes we want to wait for the remote ref to be created (eg in the case of the PR HEAD ref `refs/pulls/123/head
 			// that github creates asynchronously), so this case gets retried -- we don't call r.Break()
 			if smelt[gitErrStrBadReference] || smelt[gitErrStrBadReferencePreGit221] {
 				args.Shell.Commentf("%s", retrier)
 				return &gitError{error: err, Type: gitErrorFetchBadReference, WasRetried: args.Retry}
+			}
+
+			if smelt[gitErrStrNotOurRef] || smelt[gitErrStrUnadvertisedObject] {
+				retrier.Break()
+				return &gitError{error: err, Type: gitErrorFetchRefNotOnRemote}
 			}
 
 			// "fatal: bad object" can happen when the local repo in the checkout

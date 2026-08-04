@@ -9,6 +9,7 @@ import (
 
 	"github.com/buildkite/agent/v3/internal/shell"
 	"github.com/buildkite/bintest/v3"
+	"github.com/google/go-cmp/cmp"
 )
 
 func TestCleanGitSparseCheckoutPaths(t *testing.T) {
@@ -26,26 +27,38 @@ func TestCleanGitSparseCheckoutPaths(t *testing.T) {
 	}
 }
 
-func TestParseGitVersion(t *testing.T) {
+func TestParseSparseCheckoutMode(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		output    string
-		wantMajor int
-		wantMinor int
-		wantOK    bool
+		name    string
+		mode    string
+		want    SparseCheckoutMode
+		wantErr bool
 	}{
-		{output: "git version 2.39.5", wantMajor: 2, wantMinor: 39, wantOK: true},
-		{output: "git version 2.26.0.windows.1", wantMajor: 2, wantMinor: 26, wantOK: true},
-		{output: "not git", wantOK: false},
+		{name: "empty_defaults_to_cone", want: SparseCheckoutModeCone},
+		{name: "cone", mode: "cone", want: SparseCheckoutModeCone},
+		{name: "no_cone", mode: "no-cone", want: SparseCheckoutModeNoCone},
+		{name: "wrong_case", mode: "Cone", wantErr: true},
+		{name: "missing_hyphen", mode: "nocone", wantErr: true},
+		{name: "flag_spelling", mode: "--no-cone", wantErr: true},
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.output, func(t *testing.T) {
+		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			gotMajor, gotMinor, gotOK := parseGitVersion(tt.output)
-			if gotMajor != tt.wantMajor || gotMinor != tt.wantMinor || gotOK != tt.wantOK {
-				t.Fatalf("parseGitVersion(%q) = (%d, %d, %t), want (%d, %d, %t)", tt.output, gotMajor, gotMinor, gotOK, tt.wantMajor, tt.wantMinor, tt.wantOK)
+			got, err := ParseSparseCheckoutMode(tt.mode)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("ParseSparseCheckoutMode(%q) error = nil, want non-nil", tt.mode)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("ParseSparseCheckoutMode(%q) error = %v, want nil", tt.mode, err)
+			}
+			if got != tt.want {
+				t.Errorf("ParseSparseCheckoutMode(%q) = %q, want %q", tt.mode, got, tt.want)
 			}
 		})
 	}
@@ -55,18 +68,240 @@ func TestSetupSparseCheckout_Enable(t *testing.T) {
 	executor, git, out := newSparseCheckoutTestExecutor(t)
 	defer git.Close() //nolint:errcheck // Best-effort cleanup.
 
-	paths := []string{".buildkite/", "src/"}
-	git.Expect("sparse-checkout", "set", "--cone", ".buildkite/", "src/").AndExitWith(0)
+	sc := sparseCheckout{paths: []string{".buildkite/", "src/"}, mode: SparseCheckoutModeCone, modeFlagSupported: true}
+	git.Expect("sparse-checkout", "set", "--cone", "--", ".buildkite/", "src/").AndExitWith(0)
 
-	active, err := executor.setupSparseCheckout(t.Context(), paths)
+	active, err := executor.setupSparseCheckout(t.Context(), sc)
 	if err != nil {
-		t.Fatalf("executor.setupSparseCheckout(ctx, sparsePaths) error = %v, want nil", err)
+		t.Fatalf("executor.setupSparseCheckout(ctx, sc) error = %v, want nil", err)
 	}
 	if !active {
-		t.Fatalf("executor.setupSparseCheckout(ctx, sparsePaths) active = false, want true")
+		t.Fatalf("executor.setupSparseCheckout(ctx, sc) active = false, want true")
 	}
-	if got, want := out.String(), "Setting up sparse checkout for paths: .buildkite/,src/"; !strings.Contains(got, want) {
+	if got, want := out.String(), "Setting up sparse checkout (cone mode) for paths: .buildkite/,src/"; !strings.Contains(got, want) {
 		t.Fatalf("shell output = %q, want to contain %q", got, want)
+	}
+
+	git.Check(t)
+}
+
+func TestSetupSparseCheckout_NoCone(t *testing.T) {
+	executor, git, out := newSparseCheckoutTestExecutor(t)
+	defer git.Close() //nolint:errcheck // Best-effort cleanup.
+
+	sc := sparseCheckout{paths: []string{"/*", "!/docs/"}, mode: SparseCheckoutModeNoCone, modeFlagSupported: true}
+	git.Expect("sparse-checkout", "set", "--no-cone", "--", "/*", "!/docs/").AndExitWith(0)
+
+	active, err := executor.setupSparseCheckout(t.Context(), sc)
+	if err != nil {
+		t.Fatalf("executor.setupSparseCheckout(ctx, sc) error = %v, want nil", err)
+	}
+	if !active {
+		t.Fatalf("executor.setupSparseCheckout(ctx, sc) active = false, want true")
+	}
+	if got, want := out.String(), "Setting up sparse checkout (no-cone mode) for paths: /*,!/docs/"; !strings.Contains(got, want) {
+		t.Fatalf("shell output = %q, want to contain %q", got, want)
+	}
+
+	git.Check(t)
+}
+
+// TestSetupSparseCheckout_PinsModeWithoutModeFlag covers git 2.27–2.34, where
+// `sparse-checkout set` has no --cone option and silently treats an unrecognised
+// one as a pattern. The flag must be omitted so it can't land in the
+// sparse-checkout file; cone mode is pinned through config instead, so the paths
+// are interpreted the way the job asked rather than however the repository was
+// last configured.
+func TestSetupSparseCheckout_PinsModeWithoutModeFlag(t *testing.T) {
+	executor, git, out := newSparseCheckoutTestExecutor(t)
+	defer git.Close() //nolint:errcheck // Best-effort cleanup.
+
+	sc := sparseCheckout{paths: []string{"src/"}, mode: SparseCheckoutModeCone}
+	git.Expect("sparse-checkout", "init", "--cone").AndExitWith(0)
+	git.Expect("sparse-checkout", "set", "--", "src/").AndExitWith(0)
+
+	if _, err := executor.setupSparseCheckout(t.Context(), sc); err != nil {
+		t.Fatalf("executor.setupSparseCheckout(ctx, sc) error = %v, want nil", err)
+	}
+	if got, want := out.String(), "Enabling cone mode via config: this git is older than 2.35 and takes no mode option"; !strings.Contains(got, want) {
+		t.Errorf("shell output = %q, want to contain %q", got, want)
+	}
+
+	git.Check(t)
+}
+
+func TestSetupSparseCheckout_PinModeFailureIsFatal(t *testing.T) {
+	executor, git, _ := newSparseCheckoutTestExecutor(t)
+	defer git.Close() //nolint:errcheck // Best-effort cleanup.
+
+	sc := sparseCheckout{paths: []string{"src/"}, mode: SparseCheckoutModeCone}
+	git.Expect("sparse-checkout", "init", "--cone").AndExitWith(1)
+	// Continuing would apply the paths under an unknown interpretation.
+	git.Expect("sparse-checkout", "set").WithAnyArguments().NotCalled()
+
+	active, err := executor.setupSparseCheckout(t.Context(), sc)
+	if err == nil {
+		t.Fatalf("executor.setupSparseCheckout(ctx, sc) error = nil, want non-nil")
+	}
+	if active {
+		t.Errorf("executor.setupSparseCheckout(ctx, sc) active = true, want false")
+	}
+
+	git.Check(t)
+}
+
+func TestResolveSparseCheckout_Modes(t *testing.T) {
+	tests := []struct {
+		name                  string
+		mode                  string
+		gitVersion            string
+		gitVersionExit        int
+		wantActive            bool
+		wantMode              SparseCheckoutMode
+		wantModeFlagSupported bool
+		wantWarning           string
+	}{
+		{
+			name:                  "cone_on_modern_git",
+			gitVersion:            "git version 2.43.0",
+			wantActive:            true,
+			wantMode:              SparseCheckoutModeCone,
+			wantModeFlagSupported: true,
+		},
+		{
+			// Cone mode is available as soon as `sparse-checkout set` is; below
+			// 2.35 git just takes the interpretation from the repository config
+			// rather than from the flag.
+			name:       "cone_below_mode_flag_support",
+			gitVersion: "git version 2.30.2",
+			wantActive: true,
+			wantMode:   SparseCheckoutModeCone,
+		},
+		{
+			name:                  "no_cone_on_modern_git",
+			mode:                  "no-cone",
+			gitVersion:            "git version 2.35.0",
+			wantActive:            true,
+			wantMode:              SparseCheckoutModeNoCone,
+			wantModeFlagSupported: true,
+		},
+		{
+			// `set` gained --no-cone in 2.35; older git would write the flag into
+			// the sparse-checkout file as a pattern and leave the mode alone.
+			name:        "no_cone_below_mode_flag_support_falls_back",
+			mode:        "no-cone",
+			gitVersion:  "git version 2.34.1",
+			wantWarning: "Sparse checkout in no-cone mode requires git >= 2.35, got 2.34; falling back to full checkout",
+		},
+		{
+			name:        "cone_below_minimum_falls_back",
+			gitVersion:  "git version 2.25.4",
+			wantWarning: "Sparse checkout requires git >= 2.27, got 2.25; falling back to full checkout",
+		},
+		{
+			// Unreadable version output is not a reason to fail the build, but it
+			// is a reason not to guess about sparse support.
+			name:        "unparseable_version_falls_back",
+			gitVersion:  "git version banana",
+			wantWarning: `Sparse checkout requires git >= 2.27; falling back to full checkout (parsing git version from "git version banana")`,
+		},
+		{
+			name:           "failing_version_command_falls_back",
+			gitVersion:     "",
+			gitVersionExit: 1,
+			wantWarning:    "Sparse checkout requires git >= 2.27; falling back to full checkout",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			executor, git, out := newSparseCheckoutTestExecutor(t)
+			defer git.Close() //nolint:errcheck // Best-effort cleanup.
+			executor.GitSparseCheckoutPaths = []string{"src/"}
+			executor.GitSparseCheckoutMode = tt.mode
+
+			git.Expect("--version").AndWriteToStdout(tt.gitVersion).AndExitWith(tt.gitVersionExit)
+			git.Expect("sparse-checkout").WithAnyArguments().NotCalled()
+
+			sc, err := executor.resolveSparseCheckout(t.Context())
+			if err != nil {
+				t.Fatalf("executor.resolveSparseCheckout(ctx) error = %v, want nil", err)
+			}
+			if got := sc.active(); got != tt.wantActive {
+				t.Errorf("sparseCheckout.active() = %t, want %t", got, tt.wantActive)
+			}
+			if got := sc.mode; got != tt.wantMode {
+				t.Errorf("sparseCheckout.mode = %q, want %q", got, tt.wantMode)
+			}
+			if got := sc.modeFlagSupported; got != tt.wantModeFlagSupported {
+				t.Errorf("sparseCheckout.modeFlagSupported = %t, want %t", got, tt.wantModeFlagSupported)
+			}
+			switch {
+			case tt.wantWarning != "":
+				if !strings.Contains(out.String(), tt.wantWarning) {
+					t.Errorf("shell output = %q, want to contain %q", out.String(), tt.wantWarning)
+				}
+			default:
+				// A supported git must resolve quietly: a stray warning here would
+				// tell every sparse build that something is wrong when it isn't.
+				if strings.Contains(out.String(), "falling back to full checkout") {
+					t.Errorf("shell output = %q, want no fallback warning", out.String())
+				}
+			}
+
+			git.Check(t)
+		})
+	}
+}
+
+func TestSparseCheckoutLFSInclude(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		sc   sparseCheckout
+		want []string
+	}{
+		{
+			name: "cone_paths_scope_lfs",
+			sc:   sparseCheckout{paths: []string{"src/"}, mode: SparseCheckoutModeCone, modeFlagSupported: true},
+			want: []string{"src/"},
+		},
+		{
+			// `git lfs fetch --include` has no negation and `git lfs checkout` takes
+			// pathspecs, so non-cone patterns must not be reused for LFS.
+			name: "no_cone_patterns_do_not_scope_lfs",
+			sc:   sparseCheckout{paths: []string{"/*", "!/docs/"}, mode: SparseCheckoutModeNoCone, modeFlagSupported: true},
+		},
+		{
+			name: "inactive_does_not_scope_lfs",
+			sc:   sparseCheckout{},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if diff := cmp.Diff(tt.sc.lfsInclude(), tt.want); diff != "" {
+				t.Errorf("sparseCheckout.lfsInclude() diff (-got +want):\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestResolveSparseCheckout_InvalidMode(t *testing.T) {
+	executor, git, _ := newSparseCheckoutTestExecutor(t)
+	defer git.Close() //nolint:errcheck // Best-effort cleanup.
+	executor.GitSparseCheckoutPaths = []string{"src/"}
+	executor.GitSparseCheckoutMode = "conical"
+
+	// An invalid mode must fail before any git command runs, rather than
+	// silently checking out the wrong files.
+	git.Expect("--version").WithAnyArguments().NotCalled()
+	git.Expect("sparse-checkout").WithAnyArguments().NotCalled()
+
+	if _, err := executor.resolveSparseCheckout(t.Context()); err == nil {
+		t.Fatalf("executor.resolveSparseCheckout(ctx) error = nil, want non-nil")
 	}
 
 	git.Check(t)
@@ -82,12 +317,12 @@ func TestSetupSparseCheckout_DisableWithPriorSparseConfig(t *testing.T) {
 	git.Expect("config", "--worktree", "--list").AndWriteToStdout("").AndExitWith(0)
 	git.Expect("config", "--unset", "extensions.worktreeConfig").AndExitWith(0)
 
-	active, err := executor.setupSparseCheckout(t.Context(), nil)
+	active, err := executor.setupSparseCheckout(t.Context(), sparseCheckout{})
 	if err != nil {
-		t.Fatalf("executor.setupSparseCheckout(ctx, sparsePaths) error = %v, want nil", err)
+		t.Fatalf("executor.setupSparseCheckout(ctx, sc) error = %v, want nil", err)
 	}
 	if active {
-		t.Fatalf("executor.setupSparseCheckout(ctx, sparsePaths) active = true, want false")
+		t.Fatalf("executor.setupSparseCheckout(ctx, sc) active = true, want false")
 	}
 	if got, want := out.String(), "Disabling sparse checkout from previous build"; !strings.Contains(got, want) {
 		t.Fatalf("shell output = %q, want to contain %q", got, want)
@@ -106,8 +341,8 @@ func TestSetupSparseCheckout_DisablePreservesOtherWorktreeConfig(t *testing.T) {
 	git.Expect("config", "--worktree", "--list").AndWriteToStdout("user.something=value\n").AndExitWith(0)
 	git.Expect("config", "--unset", "extensions.worktreeConfig").NotCalled()
 
-	if _, err := executor.setupSparseCheckout(t.Context(), nil); err != nil {
-		t.Fatalf("executor.setupSparseCheckout(ctx, sparsePaths) error = %v, want nil", err)
+	if _, err := executor.setupSparseCheckout(t.Context(), sparseCheckout{}); err != nil {
+		t.Fatalf("executor.setupSparseCheckout(ctx, sc) error = %v, want nil", err)
 	}
 
 	git.Check(t)
@@ -120,27 +355,8 @@ func TestSetupSparseCheckout_DisableWithoutPriorSparseConfig(t *testing.T) {
 	git.Expect("config").WithAnyArguments().NotCalled()
 	git.Expect("sparse-checkout").WithAnyArguments().NotCalled()
 
-	if _, err := executor.setupSparseCheckout(t.Context(), nil); err != nil {
-		t.Fatalf("executor.setupSparseCheckout(ctx, sparsePaths) error = %v, want nil", err)
-	}
-
-	git.Check(t)
-}
-
-func TestResolveSparseCheckout_VersionFallback(t *testing.T) {
-	executor, git, out := newSparseCheckoutTestExecutor(t)
-	defer git.Close() //nolint:errcheck // Best-effort cleanup.
-	executor.GitSparseCheckoutPaths = []string{"src/"}
-
-	git.Expect("--version").AndWriteToStdout("git version 2.25.4").AndExitWith(0)
-	git.Expect("sparse-checkout").WithAnyArguments().NotCalled()
-
-	paths := executor.resolveSparseCheckout(t.Context())
-	if len(paths) != 0 {
-		t.Fatalf("resolveSparseCheckout(ctx) = %#v, want nil (fallback to full checkout)", paths)
-	}
-	if got, want := out.String(), "Sparse checkout requires git >= 2.27, got 2.25; falling back to full checkout"; !strings.Contains(got, want) {
-		t.Fatalf("shell output = %q, want to contain %q", got, want)
+	if _, err := executor.setupSparseCheckout(t.Context(), sparseCheckout{}); err != nil {
+		t.Fatalf("executor.setupSparseCheckout(ctx, sc) error = %v, want nil", err)
 	}
 
 	git.Check(t)
@@ -152,7 +368,7 @@ func TestSetupSparseCheckout_VersionFallbackDisablesPriorSparseConfig(t *testing
 	executor.GitSparseCheckoutPaths = []string{"src/"}
 	createSparseCheckoutFile(t, executor.shell.Getwd())
 
-	// Old git: resolveSparseCheckout warns and returns nil paths, then
+	// Old git: resolveSparseCheckout warns and resolves to a full checkout, then
 	// setupSparseCheckout disables the prior sparse config left on disk.
 	git.Expect("--version").AndWriteToStdout("git version 2.25.4").AndExitWith(0)
 	git.Expect("config", "--get", "core.sparseCheckout").AndWriteToStdout("true\n").AndExitWith(0)
@@ -160,23 +376,71 @@ func TestSetupSparseCheckout_VersionFallbackDisablesPriorSparseConfig(t *testing
 	git.Expect("config", "--worktree", "--list").AndWriteToStdout("").AndExitWith(0)
 	git.Expect("config", "--unset", "extensions.worktreeConfig").AndExitWith(0)
 
-	sparsePaths := executor.resolveSparseCheckout(t.Context())
-	if len(sparsePaths) != 0 {
-		t.Fatalf("resolveSparseCheckout(ctx) = %#v, want nil (fallback to full checkout)", sparsePaths)
+	sc, err := executor.resolveSparseCheckout(t.Context())
+	if err != nil {
+		t.Fatalf("executor.resolveSparseCheckout(ctx) error = %v, want nil", err)
+	}
+	if sc.active() {
+		t.Fatalf("sparseCheckout.active() = true, want false (fallback to full checkout)")
 	}
 
-	active, err := executor.setupSparseCheckout(t.Context(), sparsePaths)
+	active, err := executor.setupSparseCheckout(t.Context(), sc)
 	if err != nil {
-		t.Fatalf("executor.setupSparseCheckout(ctx, sparsePaths) error = %v, want nil", err)
+		t.Fatalf("executor.setupSparseCheckout(ctx, sc) error = %v, want nil", err)
 	}
 	if active {
-		t.Fatalf("executor.setupSparseCheckout(ctx, sparsePaths) active = true, want false")
+		t.Fatalf("executor.setupSparseCheckout(ctx, sc) active = true, want false")
 	}
 	if got, want := out.String(), "Sparse checkout requires git >= 2.27, got 2.25; falling back to full checkout"; !strings.Contains(got, want) {
 		t.Fatalf("shell output = %q, want to contain %q", got, want)
 	}
 	if got, want := out.String(), "Disabling sparse checkout from previous build"; !strings.Contains(got, want) {
 		t.Fatalf("shell output = %q, want to contain %q", got, want)
+	}
+
+	git.Check(t)
+}
+
+func TestMaterializedLFSPaths(t *testing.T) {
+	executor, git, _ := newSparseCheckoutTestExecutor(t)
+	defer git.Close() //nolint:errcheck // Best-effort cleanup.
+
+	git.Expect("ls-files", "-t", "-z").
+		AndWriteToStdout("H src/keep.bin\x00S docs/skip.bin\x00H README.md\x00").
+		AndExitWith(0)
+	git.Expect("lfs", "ls-files", "-n").
+		AndWriteToStdout("src/keep.bin\ndocs/skip.bin\nlib/also.bin\n").
+		AndExitWith(0)
+
+	got, err := executor.materializedLFSPaths(t.Context())
+	if err != nil {
+		t.Fatalf("executor.materializedLFSPaths(ctx) error = %v, want nil", err)
+	}
+	want := []string{"src/keep.bin", "lib/also.bin"}
+	if diff := cmp.Diff(got, want); diff != "" {
+		t.Errorf("materializedLFSPaths() diff (-got +want):\n%s", diff)
+	}
+
+	git.Check(t)
+}
+
+func TestMaterializedLFSPaths_NoneInSparseTree(t *testing.T) {
+	executor, git, _ := newSparseCheckoutTestExecutor(t)
+	defer git.Close() //nolint:errcheck // Best-effort cleanup.
+
+	git.Expect("ls-files", "-t", "-z").
+		AndWriteToStdout("S docs/skip.bin\x00").
+		AndExitWith(0)
+	git.Expect("lfs", "ls-files", "-n").
+		AndWriteToStdout("docs/skip.bin\n").
+		AndExitWith(0)
+
+	got, err := executor.materializedLFSPaths(t.Context())
+	if err != nil {
+		t.Fatalf("executor.materializedLFSPaths(ctx) error = %v, want nil", err)
+	}
+	if len(got) != 0 {
+		t.Errorf("materializedLFSPaths() = %v, want empty", got)
 	}
 
 	git.Check(t)

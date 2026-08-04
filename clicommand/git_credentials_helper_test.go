@@ -1,9 +1,16 @@
 package clicommand
 
 import (
+	"bytes"
 	"errors"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
+
+	"github.com/urfave/cli"
 )
 
 func TestParseGitCredentialInput(t *testing.T) {
@@ -74,4 +81,142 @@ func TestParseGitCredentialInput(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestGitCredentialsHelperCommand(t *testing.T) {
+	tests := []struct {
+		name       string
+		action     string
+		input      string
+		status     int
+		token      string
+		wantRepo   string
+		wantOutput string
+		wantError  bool
+	}{
+		{
+			name:       "GitHub URL",
+			action:     "get",
+			input:      "protocol=https\nhost=github.com\npath=acme/widgets.git\n",
+			status:     http.StatusOK,
+			token:      "github-token",
+			wantRepo:   "https://github.com/acme/widgets.git",
+			wantOutput: "username=token\npassword=github-token\n\n",
+		},
+		{
+			name:       "provider URL",
+			action:     "get",
+			input:      "protocol=https\nhost=git.example.com\npath=acme/widgets.git\n",
+			status:     http.StatusOK,
+			token:      "provider-token",
+			wantRepo:   "https://git.example.com/acme/widgets.git",
+			wantOutput: "username=token\npassword=provider-token\n\n",
+		},
+		{
+			name:       "malformed input",
+			action:     "get",
+			input:      "protocol=https\nhost=git.example.com\n",
+			wantOutput: "username=fail\npassword=fail\n\n",
+			wantError:  true,
+		},
+		{
+			name:       "HTTP failure",
+			action:     "get",
+			input:      "protocol=https\nhost=git.example.com\npath=acme/widgets.git\n",
+			status:     http.StatusBadRequest,
+			wantRepo:   "https://git.example.com/acme/widgets.git",
+			wantOutput: "username=fail\npassword=fail\n\n",
+			wantError:  true,
+		},
+		{
+			name:       "empty token",
+			action:     "get",
+			input:      "protocol=https\nhost=git.example.com\npath=acme/widgets.git\n",
+			status:     http.StatusOK,
+			wantRepo:   "https://git.example.com/acme/widgets.git",
+			wantOutput: "username=fail\npassword=fail\n\n",
+			wantError:  true,
+		},
+		{
+			name:   "non-get action is a no-op",
+			action: "store",
+			input:  "protocol=https\nhost=git.example.com\npath=acme/widgets.git\n",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			requests := 0
+			server := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
+				requests++
+				if got, want := req.URL.Path, "/jobs/job-id/repository_access_token"; got != want {
+					t.Errorf("path = %q, want %q", got, want)
+				}
+				var requestBody string
+				_, _ = fmt.Fscan(req.Body, &requestBody)
+				if test.wantRepo != "" && !strings.Contains(requestBody, test.wantRepo) {
+					t.Errorf("request body = %q, want repo %q", requestBody, test.wantRepo)
+				}
+				if test.status != 0 {
+					rw.WriteHeader(test.status)
+				}
+				if test.status == http.StatusOK {
+					_, _ = fmt.Fprintf(rw, `{"token":%q}`, test.token)
+				}
+			}))
+			t.Cleanup(server.Close)
+
+			output, err := runGitCredentialsHelperCommand(t, server.URL, test.action, test.input)
+			if (err != nil) != test.wantError {
+				t.Fatalf("error = %v, wantError %t", err, test.wantError)
+			}
+			if output != test.wantOutput {
+				t.Errorf("output = %q, want %q", output, test.wantOutput)
+			}
+			wantRequests := 1
+			if test.action != "get" || test.wantRepo == "" {
+				wantRequests = 0
+			}
+			if requests != wantRequests {
+				t.Errorf("requests = %d, want %d", requests, wantRequests)
+			}
+		})
+	}
+}
+
+func runGitCredentialsHelperCommand(t *testing.T, endpoint, action, input string) (string, error) {
+	t.Helper()
+
+	readStdin, writeStdin, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := writeStdin.WriteString(input); err != nil {
+		t.Fatal(err)
+	}
+	if err := writeStdin.Close(); err != nil {
+		t.Fatal(err)
+	}
+	originalStdin := os.Stdin
+	os.Stdin = readStdin
+	t.Cleanup(func() {
+		os.Stdin = originalStdin
+		_ = readStdin.Close()
+	})
+
+	app := cli.NewApp()
+	app.Commands = []cli.Command{GitCredentialsHelperCommand}
+	app.ExitErrHandler = func(_ *cli.Context, _ error) {}
+	var output bytes.Buffer
+	app.Writer = &output
+
+	err = app.Run([]string{
+		"buildkite-agent",
+		"git-credentials-helper",
+		"--job-id", "job-id",
+		"--endpoint", endpoint,
+		"--agent-access-token", "agent-token",
+		action,
+	})
+	return output.String(), err
 }

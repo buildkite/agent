@@ -19,6 +19,7 @@ import (
 	"github.com/buildkite/agent/v3/internal/job"
 	"github.com/buildkite/agent/v3/internal/job/hook"
 	"github.com/buildkite/agent/v3/internal/process"
+	"github.com/buildkite/agent/v3/internal/redact"
 	"github.com/buildkite/agent/v3/kubernetes"
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/agent/v3/metrics"
@@ -183,11 +184,18 @@ func (r *JobRunner) Run(ctx context.Context, ignoreAgentInDispatches *bool) (err
 	// Validate the repository if the list of allowed repositories is set.
 	if err := r.validateConfigAllowlists(job); err != nil {
 		_, _ = fmt.Fprintln(r.jobLogs, err.Error())
-		r.agentLogger.Errorf(err.Error())
+		r.agentLogger.Errorf("%v", err)
 
 		exit.Status = -1
 		exit.SignalReason = SignalReasonAgentRefused
 		return nil
+	}
+	if r.droppedRemoteMirrorURL != "" {
+		_, _ = fmt.Fprintf(
+			r.jobLogs,
+			"Remote Git mirror is not permitted by --allowed-repositories; using canonical repository: %s\n",
+			redact.URLCredentials(r.droppedRemoteMirrorURL),
+		)
 	}
 
 	// Before executing the bootstrap process with the received Job env, execute the pre-bootstrap hook (if present) for

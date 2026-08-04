@@ -97,7 +97,7 @@ func EnableWithWarnings(ctx context.Context, l logger.Logger, key string) (conte
 	case StateUnknown:
 		l.Warnf("Unknown experiment %q", key)
 	case StatePromoted:
-		l.Warnf(Promoted[key])
+		l.Warnf("%s", Promoted[key])
 	}
 	return newctx, state
 }

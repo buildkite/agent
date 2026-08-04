@@ -54,13 +54,13 @@ func TestParseSecrets(t *testing.T) {
 			}
 			secrets, err := clicommand.ParseSecrets(logger.Discard, cfg, input)
 			if err != nil {
-				t.Errorf("clicommand.ParseSecrets(logger, %v, %q) error = %v", cfg, input, err)
+				t.Errorf("clicommand.ParseSecrets(logger, %v, %q) error = %v", cfg, tc.inputData, err)
 			}
 
 			slices.Sort(secrets)
 			slices.Sort(tc.wantSecrets)
 			if diff := cmp.Diff(secrets, tc.wantSecrets); diff != "" {
-				t.Errorf("clicommand.ParseSecrets(logger, %v, %q) secrets diff (-got +want):\n%s", cfg, input, diff)
+				t.Errorf("clicommand.ParseSecrets(logger, %v, %q) secrets diff (-got +want):\n%s", cfg, tc.inputData, diff)
 			}
 		})
 	}
@@ -98,7 +98,7 @@ func TestParseSecrets_JSONErrors(t *testing.T) {
 				input,
 			)
 			if !errors.As(err, tc.wantError) {
-				t.Errorf("clicommand.ParseSecrets(logger, cfg, %q) error = %v, want error wrapping %T", input, err, tc.wantError)
+				t.Errorf("clicommand.ParseSecrets(logger, cfg, %q) error = %v, want error wrapping %T", tc.inputData, err, tc.wantError)
 			}
 		})
 	}

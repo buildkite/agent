@@ -12,7 +12,8 @@ type protection struct {
 }
 
 // protectedEnv contains environment variables that can only be set by agent
-// configuration, or in some cases, from within the job.
+// configuration, by the Buildkite backend as immutable job inputs, or in some
+// cases from within the job.
 //
 // These variables cannot be overwritten by job-level environment variables or
 // secrets, but some may still be set in hooks or plugins.
@@ -37,6 +38,10 @@ type protection struct {
 // across jobs on the host and the backend has no concept of it. CLONE_MIRROR_FLAGS
 // in particular is applied to the shared `git clone --mirror`, so letting a job
 // set it would be a cross-job injection vector.
+//
+// BUILDKITE_GIT_REMOTE_MIRROR_URL is a third category: it is supplied by the
+// backend but immutable within the job. The executor intentionally snapshots it
+// at bootstrap and never refreshes it after hooks.
 //
 // The actual enforcement of protected env within the agent level (overriding
 // job-level env vars based on agent configuration) happens implicitly rather
@@ -73,9 +78,11 @@ var protectedEnv = map[string]protection{
 	"BUILDKITE_GIT_MIRRORS_PATH":            {},
 	"BUILDKITE_GIT_MIRRORS_SKIP_UPDATE":     {},
 	"BUILDKITE_GIT_MIRROR_CHECKOUT_MODE":    {},
+	"BUILDKITE_GIT_REMOTE_MIRROR_URL":       {},
 	"BUILDKITE_GIT_SUBMODULE_CLONE_CONFIG":  {},
 	"BUILDKITE_HOOKS_PATH":                  {},
 	"BUILDKITE_HOOKS_SHELL":                 {},
+	"BUILDKITE_JOB_CONTEXT_DIR":             {},
 	"BUILDKITE_KUBERNETES_EXEC":             {},
 	"BUILDKITE_LOCAL_HOOKS_ENABLED":         {},
 	"BUILDKITE_PLUGINS_ALWAYS_CLONE_FRESH":  {mutableFromWithinJob: true},
@@ -110,6 +117,7 @@ var checkoutOverrideScope = map[string]struct{}{
 	"BUILDKITE_GIT_COMMIT_VERIFICATION":         {},
 	"BUILDKITE_GIT_FETCH_FLAGS":                 {},
 	"BUILDKITE_GIT_SKIP_FETCH_EXISTING_COMMITS": {},
+	"BUILDKITE_GIT_SPARSE_CHECKOUT_MODE":        {},
 	"BUILDKITE_GIT_SPARSE_CHECKOUT_PATHS":       {},
 	"BUILDKITE_GIT_SUBMODULES":                  {},
 	"BUILDKITE_SKIP_CHECKOUT":                   {},
@@ -117,13 +125,16 @@ var checkoutOverrideScope = map[string]struct{}{
 
 // checkoutJobEnvFromJobFloor lists the checkout-scoped vars whose backend job env
 // (pipeline/step checkout config) floor is from-job rather than none: the backend
-// may set them under the default mode, and only strict locks them. Sparse-checkout
-// paths qualify because they are handed to `git sparse-checkout set --cone` as argv,
-// not word-split into a git command line, so a step's checkout.sparse config can't
-// bypass no-command-eval or otherwise escalate the way the flag vars can. The flag
-// vars and commit_verification stay at the none floor (see IsCheckoutLockedForJobEnv).
+// may set them under the default mode, and only strict locks them. The
+// sparse-checkout paths and mode qualify because they are handed to
+// `git sparse-checkout set` as argv after a `--` separator, not word-split into a
+// git command line, and the mode is validated against a fixed set of values, so a
+// step's checkout.sparse config can't bypass no-command-eval or otherwise escalate
+// the way the flag vars can. The flag vars and commit_verification stay at the
+// none floor (see IsCheckoutLockedForJobEnv).
 // Entries must also appear in checkoutOverrideScope.
 var checkoutJobEnvFromJobFloor = map[string]struct{}{
+	"BUILDKITE_GIT_SPARSE_CHECKOUT_MODE":  {},
 	"BUILDKITE_GIT_SPARSE_CHECKOUT_PATHS": {},
 }
 
@@ -249,10 +260,10 @@ func IsCheckoutLocked(name string, mode CheckoutOverrideMode) bool {
 // checkout config. The backend job env is mostly the same (enforced in
 // createEnvironment, agent/job_runner.go), except that under from-job it still
 // lets pipeline/step env set the submodules/skip-checkout/skip-fetch/timeout
-// toggles on their default side to match historical behaviour, and set sparse-
-// checkout paths outright (see IsCheckoutLockedForJobEnv); secrets have no such
-// history, so they stay blocked. Vars that aren't checkout-scoped are governed by
-// IsProtected instead.
+// toggles on their default side to match historical behaviour, and set the
+// sparse-checkout paths and mode outright (see IsCheckoutLockedForJobEnv);
+// secrets have no such history, so they stay blocked. Vars that aren't
+// checkout-scoped are governed by IsProtected instead.
 func IsCheckoutLockedForSecrets(name string, mode CheckoutOverrideMode) bool {
 	if !IsCheckoutOverrideScoped(name) {
 		return false

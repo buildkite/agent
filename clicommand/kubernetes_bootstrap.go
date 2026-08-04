@@ -29,6 +29,7 @@ intended to be used directly.`
 type KubernetesBootstrapConfig struct {
 	KubernetesContainerID                int           `cli:"kubernetes-container-id"`
 	KubernetesBootstrapConnectionTimeout time.Duration `cli:"kubernetes-bootstrap-connection-timeout"`
+	JobContextDir                        string        `cli:"job-context-dir" normalize:"filepath"`
 
 	// Global flags for debugging, etc
 	LogLevel    string   `cli:"log-level"`
@@ -44,6 +45,7 @@ var KubernetesBootstrapCommand = cli.Command{
 	Description: kubernetesBootstrapHelpDescription,
 	Flags: []cli.Flag{
 		KubernetesContainerIDFlag,
+		JobContextDirFlag,
 		cli.DurationFlag{
 			Name: "kubernetes-bootstrap-connection-timeout",
 			Usage: "This is intended to be used only by the Buildkite k8s stack " +
@@ -70,7 +72,10 @@ var KubernetesBootstrapCommand = cli.Command{
 		defer cancel()
 
 		// Connect the socket.
-		socket := &kubernetes.Client{ID: cfg.KubernetesContainerID}
+		socket := &kubernetes.Client{
+			ID:         cfg.KubernetesContainerID,
+			SocketPath: kubernetes.SocketPath(cfg.JobContextDir),
+		}
 
 		// Registration passes down the env vars the agent normally sets on the
 		// subprocess, but in this case the bootstrap is in a separate
@@ -117,6 +122,16 @@ var KubernetesBootstrapCommand = cli.Command{
 			}
 			environ.Set(name, val)
 		}
+
+		// The registration env contains file paths that the agent computed in
+		// its own mount namespace. The shared volume may be mounted at a
+		// different path in this container, so rebase them onto the local job
+		// context directory.
+		contextDir := cfg.JobContextDir
+		if contextDir == "" {
+			contextDir = kubernetes.DefaultContextDir
+		}
+		rebaseJobContextPaths(environ, contextDir)
 
 		// Capture parameters from the agent that affect how the subprocess
 		// should be run: build path, PTY, cancel signal, and signal grace period.
@@ -274,6 +289,38 @@ var KubernetesBootstrapCommand = cli.Command{
 	},
 }
 
+// jobContextFileVars are env vars holding paths of files that live directly
+// in the job context directory (see the --job-context-dir flag).
+var jobContextFileVars = []string{
+	"BUILDKITE_ENV_FILE",
+	"BUILDKITE_ENV_JSON_FILE",
+	"BUILDKITE_AGENT_JOB_TIMEOUT_FILE",
+}
+
+// rebaseJobContextPaths rewrites the jobContextFileVars in environ to point
+// into contextDir, keeping their base names.
+//
+// The agent sends these vars as absolute paths computed in its own mount
+// namespace, and an absolute path is only meaningful in the namespace that
+// created it. Since the agent creates all of these files directly in its job
+// context directory, joining the base name onto this container's context
+// directory yields the local path of the same file on the shared volume.
+//
+// When every container mounts the shared volume at the same path (the
+// supported configuration, and the only one agent-stack-k8s produces), this
+// is a no-op. It matters only when the volume is mounted at different paths
+// per container: the socket is still found via the local
+// BUILDKITE_JOB_CONTEXT_DIR (see existingEnvPriority), so without this
+// rebasing the job would connect fine and then fail on unreachable env file
+// paths.
+func rebaseJobContextPaths(environ *env.Environment, contextDir string) {
+	for _, name := range jobContextFileVars {
+		if val, has := environ.Get(name); has && val != "" {
+			environ.Set(name, filepath.Join(contextDir, filepath.Base(val)))
+		}
+	}
+}
+
 // existingEnvPriority lists existing env vars (the ones this process started
 // with) that should take priority over the registration response env. This is
 // vaguely similar to the "protectedEnv" map, but is distinct and inverted.
@@ -294,6 +341,12 @@ var existingEnvPriority = map[string]struct{}{
 	"BUILDKITE_COMMAND": {},
 	// BUILDKITE_CONTAINER_ID is preserved in case of Hyrum's Law.
 	"BUILDKITE_CONTAINER_ID": {},
+	// BUILDKITE_JOB_CONTEXT_DIR is set per container by whatever builds the
+	// pod (self-managed --kubernetes-exec setups; agent-stack-k8s does not
+	// set it and relies on the /workspace default). Each container's value
+	// describes where the shared volume is mounted locally, so it must win
+	// over the agent container's value.
+	"BUILDKITE_JOB_CONTEXT_DIR": {},
 	// BUILDKITE_SOCKETS_PATH is set by agent-stack-k8s and varies by container
 	// name.
 	"BUILDKITE_SOCKETS_PATH": {},

@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/buildkite/agent/v3/env"
+	"github.com/buildkite/agent/v3/internal/job"
 )
 
 // AgentConfiguration is the run-time configuration for an agent that
@@ -29,6 +30,7 @@ type AgentConfiguration struct {
 	GitCommitVerification           string
 	GitFetchFlags                   string
 	GitSparseCheckoutPaths          []string
+	GitSparseCheckoutMode           job.SparseCheckoutMode
 	GitSubmodules                   bool
 	GitSubmoduleCloneConfig         []string
 	SkipCheckout                    bool
@@ -48,6 +50,7 @@ type AgentConfiguration struct {
 	RunInPty                        bool
 	KubernetesExec                  bool
 	KubernetesContainerStartTimeout time.Duration
+	JobContextDir                   string
 
 	SigningJWKSFile  string // Where to find the key to sign pipeline uploads with (passed through to jobs, they might be uploading pipelines)
 	SigningJWKSKeyID string // The key ID to sign pipeline uploads with

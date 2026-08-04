@@ -13,8 +13,8 @@ import (
 	"github.com/buildkite/shellwords"
 )
 
-// configureGitCredentialHelper sets up the agent to use a git credential helper that calls the Buildkite Agent API
-// asking for a Github App token to use when cloning. This feature is turned on serverside
+// configureGitCredentialHelper sets up the agent to use a git credential helper
+// that asks the Buildkite Agent API for repository credentials.
 func (e *Executor) configureGitCredentialHelper(ctx context.Context) error {
 	// credential.useHttpPath is a git config setting that tells git to tell the credential helper the full URL of the repo
 	// this means that we can pass the repo being cloned up to the BK API, which can then choose (or not, if it's not permitted)
@@ -28,7 +28,7 @@ func (e *Executor) configureGitCredentialHelper(ctx context.Context) error {
 		return fmt.Errorf("enabling git credential.useHttpPath: %w", err)
 	}
 
-	helper := fmt.Sprintf(`%s git-credentials-helper`, self.Path(ctx))
+	helper := gitCredentialHelperCommand(ctx)
 	err = e.shell.Command("git", "config", "--global", "credential.helper", helper).Run(ctx, shell.ShowPrompt(false))
 	if err != nil {
 		return fmt.Errorf("configuring git credential.helper: %w", err)
@@ -37,8 +37,15 @@ func (e *Executor) configureGitCredentialHelper(ctx context.Context) error {
 	return nil
 }
 
-// Disables SSH keyscan and configures git to use HTTPS instead of SSH for github.
-// We may later expand this for other SCMs.
+func gitCredentialHelperCommand(ctx context.Context) string {
+	// Git executes a leading-! helper through a shell. Use POSIX single-quote
+	// escaping here: shellwords.Quote can leave backslash escapes inside double
+	// quotes, changing executable paths that contain shell metacharacters.
+	path := "'" + strings.ReplaceAll(self.Path(ctx), "'", `'\''`) + "'"
+	return fmt.Sprintf(`!%s git-credentials-helper`, path)
+}
+
+// configureHTTPSInsteadOfSSH configures GitHub SSH URLs to use HTTPS.
 func (e *Executor) configureHTTPSInsteadOfSSH(ctx context.Context) error {
 	return e.shell.Command(
 		"git", "config", "--global", "url.https://github.com/.insteadOf", "git@github.com:",

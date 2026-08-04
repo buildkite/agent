@@ -8,6 +8,7 @@ import (
 	"path"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -31,6 +32,18 @@ const gitShowFormatArg = "--format=commit %H%nabbrev-commit %h%nAuthor: %an <%ae
 
 func skipIfGitSparseCheckoutUnsupported(t *testing.T) {
 	t.Helper()
+	skipIfGitOlderThan(t, 27, "git sparse-checkout set")
+}
+
+// skipIfGitSparseCheckoutNoConeUnsupported skips tests that need non-cone mode:
+// `sparse-checkout set` only learned --no-cone in git 2.35.
+func skipIfGitSparseCheckoutNoConeUnsupported(t *testing.T) {
+	t.Helper()
+	skipIfGitOlderThan(t, 35, "git sparse-checkout set --no-cone")
+}
+
+func skipIfGitOlderThan(t *testing.T, minMinor int, what string) {
+	t.Helper()
 
 	out, err := exec.Command("git", "--version").Output()
 	if err != nil {
@@ -40,10 +53,34 @@ func skipIfGitSparseCheckoutUnsupported(t *testing.T) {
 	if _, err := fmt.Sscanf(string(out), "git version %d.%d", &major, &minor); err != nil {
 		t.Skipf("couldn't parse git version from %q: %v", strings.TrimSpace(string(out)), err)
 	}
-	if major < 2 || (major == 2 && minor < 27) {
-		t.Skipf("git sparse-checkout set --cone requires git >= 2.27, got %s", strings.TrimSpace(string(out)))
+	if major < 2 || (major == 2 && minor < minMinor) {
+		t.Skipf("%s requires git >= 2.%d, got %s", what, minMinor, strings.TrimSpace(string(out)))
 	}
 }
+
+// envVars is an ordered set of "NAME=value" job env entries, for tests that run
+// several builds and change one variable at a time. Setting by name keeps those
+// tests from depending on the position of an entry in the slice.
+type envVars struct {
+	entries []string
+}
+
+func newEnvVars(entries ...string) *envVars {
+	return &envVars{entries: entries}
+}
+
+func (e *envVars) set(name, value string) {
+	entry := name + "=" + value
+	for i, existing := range e.entries {
+		if strings.HasPrefix(existing, name+"=") {
+			e.entries[i] = entry
+			return
+		}
+	}
+	e.entries = append(e.entries, entry)
+}
+
+func (e *envVars) slice() []string { return slices.Clone(e.entries) }
 
 func addSparseCheckoutFixture(t *testing.T, repo *gitRepository) {
 	t.Helper()
@@ -245,6 +282,82 @@ func TestCheckingOutLocalGitProjectWithSparseCheckoutFallsBackOnOldGit(t *testin
 	requireCheckoutPath(t, tester.CheckoutDir(), "docs/readme.md", true)
 }
 
+// TestCheckingOutLocalGitProjectWithSparseCheckoutPinsConeOnOldGit covers git
+// 2.27–2.34, where `sparse-checkout set` takes no mode option. It fakes the
+// version the same way as the fallback test above, so real git still does the
+// work: `sparse-checkout init --cone` is a real command in every supported
+// version, and the resulting tree is real cone-mode output.
+//
+// The observable difference is core.sparseCheckoutCone and the top-level file:
+// cone mode includes files alongside the requested directory's ancestors, so
+// test.txt lands in the working tree, whereas the non-cone interpretation that
+// `git clone --sparse` leaves behind on these versions would omit it.
+func TestCheckingOutLocalGitProjectWithSparseCheckoutPinsConeOnOldGit(t *testing.T) {
+	t.Parallel()
+	skipIfGitSparseCheckoutUnsupported(t)
+
+	tester, err := NewExecutorTester(mainCtx)
+	if err != nil {
+		t.Fatalf("NewExecutorTester() error = %v", err)
+	}
+	defer tester.Close()
+	addSparseCheckoutFixture(t, tester.Repo)
+
+	env := []string{
+		"BUILDKITE_GIT_CLONE_FLAGS=-v --filter=blob:none --sparse",
+		"BUILDKITE_GIT_CLEAN_FLAGS=-fdq",
+		"BUILDKITE_GIT_FETCH_FLAGS=-v --filter=blob:none",
+		"BUILDKITE_GIT_SPARSE_CHECKOUT_PATHS=src/",
+	}
+
+	realGit, err := exec.LookPath("git")
+	if err != nil {
+		t.Fatalf("exec.LookPath(git) error = %v", err)
+	}
+
+	git := tester.MustMock(t, "git")
+
+	git.Expect("--version").AndCallFunc(func(c *bintest.Call) {
+		_, _ = fmt.Fprintln(c.Stdout, "git version 2.30.2")
+		c.Exit(0)
+	})
+
+	expect := func(args ...any) *bintest.Expectation {
+		return git.Expect(args...).AndPassthroughToLocalCommand(realGit)
+	}
+
+	expect("clone", "-v", "--filter=blob:none", "--sparse", "--", tester.Repo.Path, ".")
+	expect("clean", "-fdq")
+	expect("fetch", "-v", "--filter=blob:none", "--", "origin", "main")
+	// The mode is pinned through config, and `set` is called without the option
+	// this git would misread as a pattern.
+	expect("sparse-checkout", "init", "--cone")
+	expect("sparse-checkout", "set", "--", "src/")
+	expect("-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD")
+	expect("clean", "-fdq")
+	expect("--no-pager", "log", "-1", "HEAD", "-s", "--no-color", gitShowFormatArg)
+
+	agent := tester.MockAgent(t)
+	agent.Expect("meta-data", "exists", job.CommitMetadataKey).AndExitWith(1)
+	agent.Expect("meta-data", "set", job.CommitMetadataKey).WithStdin(commitPattern)
+
+	tester.RunAndCheck(t, env...)
+
+	checkoutRepo := &gitRepository{Path: tester.CheckoutDir()}
+	cone, err := checkoutRepo.Execute("config", "--get", "core.sparseCheckoutCone")
+	if err != nil {
+		t.Fatalf("git config --get core.sparseCheckoutCone error = %v", err)
+	}
+	if got := strings.TrimSpace(cone); got != "true" {
+		t.Errorf("core.sparseCheckoutCone = %q, want %q", got, "true")
+	}
+
+	requireCheckoutPath(t, tester.CheckoutDir(), "src/main.txt", true)
+	requireCheckoutPath(t, tester.CheckoutDir(), "test.txt", true)
+	requireCheckoutPath(t, tester.CheckoutDir(), "docs/readme.md", false)
+	requireCheckoutPath(t, tester.CheckoutDir(), ".buildkite/pipeline.yml", false)
+}
+
 // TestCheckingOutLocalGitProjectWithSparseCheckoutAutoAddsBlobNoneFilter
 // covers the agent's auto-injection of --filter=blob:none onto the clone when
 // sparse checkout paths are configured but the user did NOT supply any
@@ -279,7 +392,7 @@ func TestCheckingOutLocalGitProjectWithSparseCheckoutAutoAddsBlobNoneFilter(t *t
 		{"clone", "-v", "--sparse", "--filter=blob:none", "--", tester.Repo.Path, "."},
 		{"clean", "-fdq"},
 		{"fetch", "--filter=blob:none", "-v", "--", "origin", "main"},
-		{"sparse-checkout", "set", "--cone", ".buildkite/", "src/"},
+		{"sparse-checkout", "set", "--cone", "--", ".buildkite/", "src/"},
 		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
 		{"clean", "-fdq"},
 		{"--no-pager", "log", "-1", "HEAD", "-s", "--no-color", gitShowFormatArg},
@@ -332,7 +445,7 @@ func TestCheckingOutLocalGitProjectWithSparseCheckoutPreservesUserFilter(t *test
 		// Fetch does NOT get --filter=blob:none prepended — the user's
 		// tree:0 filter is already stored in repo config and inherited here.
 		{"fetch", "-v", "--", "origin", "main"},
-		{"sparse-checkout", "set", "--cone", ".buildkite/", "src/"},
+		{"sparse-checkout", "set", "--cone", "--", ".buildkite/", "src/"},
 		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
 		{"clean", "-fdq"},
 		{"--no-pager", "log", "-1", "HEAD", "-s", "--no-color", gitShowFormatArg},
@@ -376,7 +489,7 @@ func TestCheckingOutLocalGitProjectWithSparseCheckout(t *testing.T) {
 		{"clone", "-v", "--filter=blob:none", "--sparse", "--", tester.Repo.Path, "."},
 		{"clean", "-fdq"},
 		{"fetch", "-v", "--filter=blob:none", "--", "origin", "main"},
-		{"sparse-checkout", "set", "--cone", ".buildkite/", "src/"},
+		{"sparse-checkout", "set", "--cone", "--", ".buildkite/", "src/"},
 		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
 		{"clean", "-fdq"},
 		{"--no-pager", "log", "-1", "HEAD", "-s", "--no-color", gitShowFormatArg},
@@ -391,6 +504,211 @@ func TestCheckingOutLocalGitProjectWithSparseCheckout(t *testing.T) {
 	requireCheckoutPath(t, tester.CheckoutDir(), ".buildkite/pipeline.yml", true)
 	requireCheckoutPath(t, tester.CheckoutDir(), "src/main.txt", true)
 	requireCheckoutPath(t, tester.CheckoutDir(), "docs/readme.md", false)
+}
+
+func TestCheckingOutLocalGitProjectWithSparseCheckoutNoCone(t *testing.T) {
+	t.Parallel()
+	skipIfGitSparseCheckoutNoConeUnsupported(t)
+
+	tester, err := NewExecutorTester(mainCtx)
+	if err != nil {
+		t.Fatalf("NewExecutorTester() error = %v", err)
+	}
+	defer tester.Close()
+	addSparseCheckoutFixture(t, tester.Repo)
+
+	// Non-cone mode treats paths as gitignore-style patterns: include everything
+	// at the top level and under .buildkite/ and src/, but exclude docs/.
+	env := []string{
+		"BUILDKITE_GIT_CLONE_FLAGS=-v --filter=blob:none --sparse",
+		"BUILDKITE_GIT_CLEAN_FLAGS=-fdq",
+		"BUILDKITE_GIT_FETCH_FLAGS=-v --filter=blob:none",
+		"BUILDKITE_GIT_SPARSE_CHECKOUT_PATHS=/*,!/docs/",
+		"BUILDKITE_GIT_SPARSE_CHECKOUT_MODE=no-cone",
+	}
+
+	git := tester.
+		MustMock(t, "git").
+		PassthroughToLocalCommand()
+
+	git.ExpectAll([][]any{
+		{"--version"},
+		{"clone", "-v", "--filter=blob:none", "--sparse", "--", tester.Repo.Path, "."},
+		{"clean", "-fdq"},
+		{"fetch", "-v", "--filter=blob:none", "--", "origin", "main"},
+		{"sparse-checkout", "set", "--no-cone", "--", "/*", "!/docs/"},
+		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
+		{"clean", "-fdq"},
+		{"--no-pager", "log", "-1", "HEAD", "-s", "--no-color", gitShowFormatArg},
+	})
+
+	agent := tester.MockAgent(t)
+	agent.Expect("meta-data", "exists", job.CommitMetadataKey).AndExitWith(1)
+	agent.Expect("meta-data", "set", job.CommitMetadataKey).WithStdin(commitPattern)
+
+	tester.RunAndCheck(t, env...)
+
+	requireCheckoutPath(t, tester.CheckoutDir(), ".buildkite/pipeline.yml", true)
+	requireCheckoutPath(t, tester.CheckoutDir(), "src/main.txt", true)
+	requireCheckoutPath(t, tester.CheckoutDir(), "docs/readme.md", false)
+}
+
+// TestCheckingOutLocalGitProjectSwitchingSparseCheckoutModes reuses one checkout
+// dir across three builds that switch between cone and non-cone mode. Sparse
+// state (core.sparseCheckout, core.sparseCheckoutCone, the sparse-checkout file)
+// persists in the checkout dir between builds on a real agent, so each build has
+// to end up with exactly the paths it asked for regardless of what the previous
+// one left behind.
+func TestCheckingOutLocalGitProjectSwitchingSparseCheckoutModes(t *testing.T) {
+	t.Parallel()
+	skipIfGitSparseCheckoutNoConeUnsupported(t)
+
+	tester, err := NewExecutorTester(mainCtx)
+	if err != nil {
+		t.Fatalf("NewExecutorTester() error = %v", err)
+	}
+	defer tester.Close()
+	addSparseCheckoutFixture(t, tester.Repo)
+
+	env := newEnvVars(
+		"BUILDKITE_GIT_CLONE_FLAGS=-v --filter=blob:none --sparse",
+		"BUILDKITE_GIT_CLEAN_FLAGS=-fdq",
+		"BUILDKITE_GIT_FETCH_FLAGS=-v --filter=blob:none",
+		"BUILDKITE_GIT_SPARSE_CHECKOUT_PATHS=src/",
+		"BUILDKITE_GIT_SPARSE_CHECKOUT_MODE=cone",
+	)
+
+	git := tester.
+		MustMock(t, "git").
+		PassthroughToLocalCommand()
+	agent := tester.MockAgent(t)
+
+	// First build: cone mode with a single directory.
+	agent.Expect("meta-data", "exists", job.CommitMetadataKey).AndExitWith(1)
+	agent.Expect("meta-data", "set", job.CommitMetadataKey).WithStdin(commitPattern)
+	git.ExpectAll([][]any{
+		{"--version"},
+		{"clone", "-v", "--filter=blob:none", "--sparse", "--", tester.Repo.Path, "."},
+		{"clean", "-fdq"},
+		{"fetch", "-v", "--filter=blob:none", "--", "origin", "main"},
+		{"sparse-checkout", "set", "--cone", "--", "src/"},
+		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
+		{"clean", "-fdq"},
+		{"--no-pager", "log", "-1", "HEAD", "-s", "--no-color", gitShowFormatArg},
+	})
+
+	tester.RunAndCheck(t, env.slice()...)
+	requireCheckoutPath(t, tester.CheckoutDir(), "src/main.txt", true)
+	requireCheckoutPath(t, tester.CheckoutDir(), ".buildkite/pipeline.yml", false)
+	requireCheckoutPath(t, tester.CheckoutDir(), "docs/readme.md", false)
+
+	// Second build: same checkout dir, switched to non-cone patterns that exclude
+	// only docs/. --no-cone has to actually take effect over the cone config the
+	// first build left behind, otherwise git would reject the leading-slash
+	// patterns or silently treat them as directory names.
+	env.set("BUILDKITE_GIT_SPARSE_CHECKOUT_PATHS", "/*,!/docs/")
+	env.set("BUILDKITE_GIT_SPARSE_CHECKOUT_MODE", "no-cone")
+	agent.Expect("meta-data", "exists", job.CommitMetadataKey).AndExitWith(0)
+	git.ExpectAll([][]any{
+		{"--version"},
+		{"config", "--get-all", "remote.origin.url"},
+		{"clean", "-fdq"},
+		{"fetch", "-v", "--filter=blob:none", "--", "origin", "main"},
+		{"sparse-checkout", "set", "--no-cone", "--", "/*", "!/docs/"},
+		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
+		{"clean", "-fdq"},
+	})
+
+	tester.RunAndCheck(t, env.slice()...)
+	requireCheckoutPath(t, tester.CheckoutDir(), "src/main.txt", true)
+	requireCheckoutPath(t, tester.CheckoutDir(), ".buildkite/pipeline.yml", true)
+	requireCheckoutPath(t, tester.CheckoutDir(), "docs/readme.md", false)
+
+	// Third build: back to cone mode, which must not inherit the non-cone patterns.
+	env.set("BUILDKITE_GIT_SPARSE_CHECKOUT_PATHS", "docs/")
+	env.set("BUILDKITE_GIT_SPARSE_CHECKOUT_MODE", "cone")
+	agent.Expect("meta-data", "exists", job.CommitMetadataKey).AndExitWith(0)
+	git.ExpectAll([][]any{
+		{"--version"},
+		{"config", "--get-all", "remote.origin.url"},
+		{"clean", "-fdq"},
+		{"fetch", "-v", "--filter=blob:none", "--", "origin", "main"},
+		{"sparse-checkout", "set", "--cone", "--", "docs/"},
+		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
+		{"clean", "-fdq"},
+	})
+
+	tester.RunAndCheck(t, env.slice()...)
+	requireCheckoutPath(t, tester.CheckoutDir(), "docs/readme.md", true)
+	requireCheckoutPath(t, tester.CheckoutDir(), "src/main.txt", false)
+	requireCheckoutPath(t, tester.CheckoutDir(), ".buildkite/pipeline.yml", false)
+}
+
+// TestCheckingOutLocalGitProjectWithFlagShapedSparseCheckoutPath pins the `--`
+// separator in front of the sparse paths. Sparse paths can come from the
+// pipeline, and `git sparse-checkout set` quietly accepts an option in their
+// place: without the separator, a path named "--stdin" is consumed as the
+// --stdin option, git reads its patterns from an empty stdin, and the directory
+// silently disappears from the checkout instead of being the only thing in it.
+func TestCheckingOutLocalGitProjectWithFlagShapedSparseCheckoutPath(t *testing.T) {
+	t.Parallel()
+	// The expectations below include the mode flag, which the agent only sends
+	// when git accepts it.
+	skipIfGitOlderThan(t, 35, "pinning the sparse checkout mode")
+
+	tester, err := NewExecutorTester(mainCtx)
+	if err != nil {
+		t.Fatalf("NewExecutorTester() error = %v", err)
+	}
+	defer tester.Close()
+	addSparseCheckoutFixture(t, tester.Repo)
+
+	// A directory whose name looks like a git option.
+	const flagShapedDir = "--stdin"
+	path := filepath.Join(tester.Repo.Path, flagShapedDir, "file.txt")
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatalf("os.MkdirAll(%q) error = %v, want nil", filepath.Dir(path), err)
+	}
+	if err := os.WriteFile(path, []byte("hello from a flag-shaped directory\n"), 0o600); err != nil {
+		t.Fatalf("os.WriteFile(%q) error = %v, want nil", path, err)
+	}
+	if err := tester.Repo.Add(flagShapedDir + "/file.txt"); err != nil {
+		t.Fatalf("tester.Repo.Add(%q) error = %v, want nil", flagShapedDir, err)
+	}
+	if err := tester.Repo.Commit("Add flag-shaped directory"); err != nil {
+		t.Fatalf("tester.Repo.Commit() error = %v, want nil", err)
+	}
+
+	env := []string{
+		"BUILDKITE_GIT_CLONE_FLAGS=-v --filter=blob:none --sparse",
+		"BUILDKITE_GIT_CLEAN_FLAGS=-fdq",
+		"BUILDKITE_GIT_FETCH_FLAGS=-v --filter=blob:none",
+		"BUILDKITE_GIT_SPARSE_CHECKOUT_PATHS=" + flagShapedDir,
+	}
+
+	git := tester.
+		MustMock(t, "git").
+		PassthroughToLocalCommand()
+
+	git.ExpectAll([][]any{
+		{"--version"},
+		{"clone", "-v", "--filter=blob:none", "--sparse", "--", tester.Repo.Path, "."},
+		{"clean", "-fdq"},
+		{"fetch", "-v", "--filter=blob:none", "--", "origin", "main"},
+		{"sparse-checkout", "set", "--cone", "--", flagShapedDir},
+		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
+		{"clean", "-fdq"},
+		{"--no-pager", "log", "-1", "HEAD", "-s", "--no-color", gitShowFormatArg},
+	})
+
+	agent := tester.MockAgent(t)
+	agent.Expect("meta-data", "exists", job.CommitMetadataKey).AndExitWith(1)
+	agent.Expect("meta-data", "set", job.CommitMetadataKey).WithStdin(commitPattern)
+
+	tester.RunAndCheck(t, env...)
+
+	requireCheckoutPath(t, tester.CheckoutDir(), flagShapedDir+"/file.txt", true)
+	requireCheckoutPath(t, tester.CheckoutDir(), "src/main.txt", false)
 }
 
 func TestCheckingOutLocalGitProjectWithGitSSHKey(t *testing.T) {
@@ -503,7 +821,7 @@ func TestCheckingOutLocalGitProjectWithSparseCheckoutReconfiguresExistingGitDir(
 		{"clone", "-v", "--filter=blob:none", "--sparse", "--", tester.Repo.Path, "."},
 		{"clean", "-fdq"},
 		{"fetch", "-v", "--filter=blob:none", "--", "origin", "main"},
-		{"sparse-checkout", "set", "--cone", "src/"},
+		{"sparse-checkout", "set", "--cone", "--", "src/"},
 		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
 		{"clean", "-fdq"},
 		{"--no-pager", "log", "-1", "HEAD", "-s", "--no-color", gitShowFormatArg},
@@ -522,7 +840,7 @@ func TestCheckingOutLocalGitProjectWithSparseCheckoutReconfiguresExistingGitDir(
 		{"config", "--get-all", "remote.origin.url"},
 		{"clean", "-fdq"},
 		{"fetch", "-v", "--filter=blob:none", "--", "origin", "main"},
-		{"sparse-checkout", "set", "--cone", ".buildkite/"},
+		{"sparse-checkout", "set", "--cone", "--", ".buildkite/"},
 		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
 		{"clean", "-fdq"},
 	})
@@ -671,7 +989,7 @@ func TestCheckingOutLocalGitProjectWithSparseCheckoutSkipsSubmodules(t *testing.
 		{"clean", "-fdq"},
 		{"submodule", "foreach", "--recursive", "git clean -fdq"},
 		{"fetch", "--filter=blob:none", "-v", "--", "origin", "main"},
-		{"sparse-checkout", "set", "--cone", "src/"},
+		{"sparse-checkout", "set", "--cone", "--", "src/"},
 		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
 		{"clean", "-fdq"},
 		{"--no-pager", "log", "-1", "HEAD", "-s", "--no-color", gitShowFormatArg},
@@ -1771,14 +2089,23 @@ func TestCommitVerificationWithValidCommit(t *testing.T) {
 		MustMock(t, "git").
 		PassthroughToLocalCommand()
 
-	// Expect the normal checkout flow with merge-base --is-ancestor inserted
-	// between fetch and checkout. Since this is a full clone (not shallow),
-	// merge-base succeeds immediately — no rev-parse --is-shallow-repository needed.
+	// Expect the normal checkout flow with commit verification inserted between
+	// fetch and checkout: fetch the branch tip into a dedicated ref (source
+	// refs/heads/main, so a same-named tag can't win the ref lookup) rather than
+	// reading FETCH_HEAD, resolve that ref, then merge-base --is-ancestor against
+	// the SHA. Here the branch (main) tip is the build commit itself, so both
+	// merge-base args are commitHash. Since this is a full clone (not shallow) and
+	// the commit verifies, merge-base succeeds immediately, so no rev-parse
+	// --is-shallow-repository is needed. The dedicated ref is deleted on return.
+	const branchTipRef = "refs/buildkite-agent/commit-verification-branch-tip"
 	git.ExpectAll([][]any{
 		{"clone", "-v", "--", tester.Repo.Path, "."},
 		{"clean", "-fdq"},
 		{"fetch", "-v", "--", "origin", commitHash},
-		{"merge-base", "--is-ancestor", commitHash, "main"},
+		{"fetch", "-v", "--", "origin", "+refs/heads/main:" + branchTipRef},
+		{"rev-parse", branchTipRef},
+		{"merge-base", "--is-ancestor", commitHash, commitHash},
+		{"update-ref", "-d", branchTipRef},
 		{"-c", "advice.detachedHead=false", "checkout", "-f", commitHash},
 		{"clean", "-fdq"},
 		{"--no-pager", "log", "-1", commitHash, "-s", "--no-color", gitShowFormatArg},
@@ -1789,6 +2116,66 @@ func TestCommitVerificationWithValidCommit(t *testing.T) {
 	agent.Expect("meta-data", "set", job.CommitMetadataKey).WithStdin(commitPattern)
 
 	tester.RunAndCheck(t, env...)
+}
+
+// TestCommitVerificationRetriesTransientBranchFetch proves the branch-tip fetch
+// survives a transient failure. Without a retry a single fetch blip degrades the
+// check to "unavailable" (warn, never blocking) with no second chance, since the
+// outer checkout retry loop does not re-run a verification that returned nil.
+func TestCommitVerificationRetriesTransientBranchFetch(t *testing.T) {
+	t.Parallel()
+
+	tester, err := NewExecutorTester(mainCtx)
+	if err != nil {
+		t.Fatalf("NewExecutorTester() error = %v", err)
+	}
+	defer tester.Close()
+
+	commitHash, err := tester.Repo.RevParse("main")
+	if err != nil {
+		t.Fatalf("RevParse(main) error = %v", err)
+	}
+	commitHash = strings.TrimSpace(commitHash)
+
+	env := []string{
+		"BUILDKITE_GIT_CLONE_FLAGS=-v",
+		"BUILDKITE_GIT_CLEAN_FLAGS=-fdq",
+		"BUILDKITE_GIT_FETCH_FLAGS=-v",
+		"BUILDKITE_GIT_COMMIT_VERIFICATION=strict",
+		fmt.Sprintf("BUILDKITE_COMMIT=%s", commitHash),
+	}
+
+	// Fail the first branch-tip fetch (its refspec sources refs/heads/main) to
+	// simulate a transient blip, then let the retry pass through to real git. A
+	// Before error exits the mocked git non-zero, which is what the retrier sees.
+	var branchFetchAttempts atomic.Int32
+	git := tester.MustMock(t, "git").PassthroughToLocalCommand().Before(func(i bintest.Invocation) error {
+		isBranchTipFetch := i.Args[0] == "fetch" && slices.ContainsFunc(i.Args, func(a string) bool {
+			return strings.Contains(a, "refs/heads/main")
+		})
+		if isBranchTipFetch {
+			if branchFetchAttempts.Add(1) == 1 {
+				return fmt.Errorf("simulated transient fetch failure")
+			}
+		}
+		return nil
+	})
+	git.Expect().AtLeastOnce().WithAnyArguments()
+
+	agent := tester.MockAgent(t)
+	agent.Expect("meta-data", "exists", job.CommitMetadataKey).AndExitWith(1)
+	agent.Expect("meta-data", "set", job.CommitMetadataKey).WithStdin(commitPattern)
+
+	if err := tester.Run(t, env...); err != nil {
+		t.Fatalf("tester.Run() error = %v, want nil (build should pass after the fetch retries). Output:\n%s", err, tester.Output)
+	}
+	if got := branchFetchAttempts.Load(); got < 2 {
+		t.Errorf("branch-tip fetch attempts = %d, want >= 2 (fetch should retry after a transient failure)", got)
+	}
+	// The retry must let verification actually run, not degrade to "unavailable".
+	if strings.Contains(tester.Output, "verification unavailable") {
+		t.Errorf("verification degraded to unavailable despite the retry; output:\n%s", tester.Output)
+	}
 }
 
 func TestCommitVerificationFailsWithInvalidCommit(t *testing.T) {
@@ -1812,29 +2199,141 @@ func TestCommitVerificationFailsWithInvalidCommit(t *testing.T) {
 		"BUILDKITE_GIT_CLEAN_FLAGS=-fdq",
 		"BUILDKITE_GIT_FETCH_FLAGS=-v",
 		"BUILDKITE_GIT_COMMIT_VERIFICATION=strict",
+		// The non-PR sentinel. The agent sets this on every ordinary build, so
+		// verification must still run (a naive PullRequest != "" skip would disable
+		// it for almost every build).
+		"BUILDKITE_PULL_REQUEST=false",
 		fmt.Sprintf("BUILDKITE_COMMIT=%s", commitHash),
 	}
 
-	git := tester.
-		MustMock(t, "git").
-		PassthroughToLocalCommand()
-
-	// Expect fetch, then merge-base which should return exit 1 (not ancestor).
-	// No checkout should happen after verification fails.
-	git.ExpectAll([][]any{
-		{"clone", "-v", "--", tester.Repo.Path, "."},
-		{"clean", "-fdq"},
-		{"fetch", "-v", "--", "origin", commitHash},
-		{"merge-base", "--is-ancestor", commitHash, "main"},
-	})
-
+	// Use real git (no mock) and assert on the outcome rather than the exact
+	// command sequence: the build must fail because the commit is not on the branch.
 	agent := tester.MockAgent(t)
-	agent.Expect("meta-data", "exists", job.CommitMetadataKey).AndExitWith(1)
+	agent.Expect("meta-data", "exists", job.CommitMetadataKey).Min(0).Max(bintest.InfiniteTimes).AndExitWith(1)
+	agent.IgnoreUnexpectedInvocations()
 
-	// This should fail — the commit is not on main
+	// This should fail: the commit is not on main.
 	err = tester.Run(t, env...)
 	if err == nil {
 		t.Fatalf("expected build to fail with commit verification error, but it passed")
+	}
+	if !strings.Contains(tester.Output, "is not on branch") {
+		t.Errorf("expected a commit-verification failure in the output, got:\n%s", tester.Output)
+	}
+	// The retry loop fast-breaks on a provably-off-branch commit, so verification
+	// runs once rather than re-cloning through the full backoff (default 6
+	// attempts). checkCommitOnBranch logs "Verifying commit" once per attempt.
+	if got := strings.Count(tester.Output, "Verifying commit"); got != 1 {
+		t.Errorf("commit verification ran %d times, want 1 (fast-break should prevent retries)", got)
+	}
+}
+
+// TestCommitVerificationFailsForCommitNotOnNonDefaultBranch is the regression
+// test for the case the old bare-branch-name check missed: a build on a branch
+// other than the repository default. The clone only materialises the default
+// branch as a local ref, so checking a commit against the bare build-branch name
+// used to resolve to nothing and silently degrade to "unavailable" (warn, never
+// block), even for a commit that is genuinely not on that branch.
+func TestCommitVerificationFailsForCommitNotOnNonDefaultBranch(t *testing.T) {
+	t.Parallel()
+
+	tester, err := NewExecutorTester(mainCtx)
+	if err != nil {
+		t.Fatalf("NewExecutorTester() error = %v", err)
+	}
+	defer tester.Close()
+
+	// Add a commit on main (the default branch) that diverges from update-test-txt,
+	// so it is genuinely not reachable from that non-default branch.
+	if err := tester.Repo.CheckoutBranch("main"); err != nil {
+		t.Fatalf("CheckoutBranch(main) error = %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(tester.Repo.Path, "main-only.txt"), []byte("main only"), 0o600); err != nil {
+		t.Fatalf("WriteFile error = %v", err)
+	}
+	if err := tester.Repo.Add("main-only.txt"); err != nil {
+		t.Fatalf("Add error = %v", err)
+	}
+	if err := tester.Repo.Commit("Commit only on main"); err != nil {
+		t.Fatalf("Commit error = %v", err)
+	}
+	offBranchCommit, err := tester.Repo.RevParse("main")
+	if err != nil {
+		t.Fatalf("RevParse(main) error = %v", err)
+	}
+	offBranchCommit = strings.TrimSpace(offBranchCommit)
+
+	env := []string{
+		"BUILDKITE_GIT_CLONE_FLAGS=-v",
+		"BUILDKITE_GIT_CLEAN_FLAGS=-fdq",
+		"BUILDKITE_GIT_FETCH_FLAGS=-v",
+		"BUILDKITE_GIT_COMMIT_VERIFICATION=strict",
+		"BUILDKITE_BRANCH=update-test-txt",
+		fmt.Sprintf("BUILDKITE_COMMIT=%s", offBranchCommit),
+	}
+
+	// Use real git (no mock) and assert on the outcome rather than the exact
+	// command sequence: the build must fail because the commit is not on the branch.
+	agent := tester.MockAgent(t)
+	agent.Expect("meta-data", "exists", job.CommitMetadataKey).Min(0).Max(bintest.InfiniteTimes).AndExitWith(1)
+	agent.IgnoreUnexpectedInvocations()
+
+	err = tester.Run(t, env...)
+	if err == nil {
+		t.Fatalf("expected build to fail: commit %s is not on branch update-test-txt, but it passed. Output:\n%s", offBranchCommit, tester.Output)
+	}
+	if !strings.Contains(tester.Output, "is not on branch") {
+		t.Errorf("expected a commit-verification failure in the output, got:\n%s", tester.Output)
+	}
+}
+
+// TestCommitVerificationPassesForCommitOnNonDefaultBranch is the happy-path
+// companion to the failure regression above: a valid commit that IS on a
+// non-default branch must verify and let the build proceed. The clone only
+// materialises the default branch as a local ref, so this exercises the
+// branch-tip fetch end-to-end, proving non-default verification passes rather
+// than silently degrading to "unavailable".
+func TestCommitVerificationPassesForCommitOnNonDefaultBranch(t *testing.T) {
+	t.Parallel()
+
+	tester, err := NewExecutorTester(mainCtx)
+	if err != nil {
+		t.Fatalf("NewExecutorTester() error = %v", err)
+	}
+	defer tester.Close()
+
+	// The tip of update-test-txt is genuinely on that non-default branch.
+	onBranchCommit, err := tester.Repo.RevParse("update-test-txt")
+	if err != nil {
+		t.Fatalf("RevParse(update-test-txt) error = %v", err)
+	}
+	onBranchCommit = strings.TrimSpace(onBranchCommit)
+
+	env := []string{
+		"BUILDKITE_GIT_CLONE_FLAGS=-v",
+		"BUILDKITE_GIT_CLEAN_FLAGS=-fdq",
+		"BUILDKITE_GIT_FETCH_FLAGS=-v",
+		"BUILDKITE_GIT_COMMIT_VERIFICATION=strict",
+		"BUILDKITE_BRANCH=update-test-txt",
+		fmt.Sprintf("BUILDKITE_COMMIT=%s", onBranchCommit),
+	}
+
+	agent := tester.MockAgent(t)
+	agent.Expect("meta-data", "exists", job.CommitMetadataKey).AndExitWith(1)
+	agent.Expect("meta-data", "set", job.CommitMetadataKey).WithStdin(commitPattern)
+
+	if err := tester.Run(t, env...); err != nil {
+		t.Fatalf("tester.Run() error = %v, want nil (commit is on update-test-txt). Output:\n%s", err, tester.Output)
+	}
+	// Verification must actually run and pass, not skip or degrade.
+	if !strings.Contains(tester.Output, "Verifying commit") {
+		t.Errorf("expected verification to run (%q not in output):\n%s", "Verifying commit", tester.Output)
+	}
+	if strings.Contains(tester.Output, "is not on branch") {
+		t.Errorf("verification wrongly reported the commit off-branch; output:\n%s", tester.Output)
+	}
+	if strings.Contains(tester.Output, "verification unavailable") {
+		t.Errorf("verification degraded to unavailable; output:\n%s", tester.Output)
 	}
 }
 

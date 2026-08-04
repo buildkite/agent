@@ -23,6 +23,7 @@ func TestProtectedEnv(t *testing.T) {
 		"BUILDKITE_GIT_MIRRORS_PATH",
 		"BUILDKITE_GIT_MIRRORS_SKIP_UPDATE",
 		"BUILDKITE_GIT_MIRROR_CHECKOUT_MODE",
+		"BUILDKITE_GIT_REMOTE_MIRROR_URL",
 		"BUILDKITE_GIT_SUBMODULE_CLONE_CONFIG",
 		"BUILDKITE_HOOKS_PATH",
 		"BUILDKITE_KUBERNETES_EXEC",
@@ -84,6 +85,7 @@ func TestCheckoutOverrideScope(t *testing.T) {
 		"BUILDKITE_GIT_FETCH_FLAGS",
 		"BUILDKITE_GIT_SUBMODULES",
 		"BUILDKITE_GIT_SKIP_FETCH_EXISTING_COMMITS",
+		"BUILDKITE_GIT_SPARSE_CHECKOUT_MODE",
 		"BUILDKITE_GIT_SPARSE_CHECKOUT_PATHS",
 		"BUILDKITE_SKIP_CHECKOUT",
 	}
@@ -106,6 +108,7 @@ func TestCheckoutOverrideScope(t *testing.T) {
 		"BUILDKITE_GIT_MIRRORS_LOCK_TIMEOUT",
 		"BUILDKITE_GIT_MIRRORS_SKIP_UPDATE",
 		"BUILDKITE_GIT_MIRROR_CHECKOUT_MODE",
+		"BUILDKITE_GIT_REMOTE_MIRROR_URL",
 		"BUILDKITE_GIT_CLONE_MIRROR_FLAGS",
 		"BUILDKITE_GIT_SUBMODULE_CLONE_CONFIG",
 		"BUILDKITE_SSH_KEYSCAN",
@@ -221,13 +224,15 @@ func TestIsCheckoutLockedForJobEnv(t *testing.T) {
 	const (
 		flagVar   = "BUILDKITE_GIT_CLONE_FLAGS"           // injection vector: none floor
 		sparseVar = "BUILDKITE_GIT_SPARSE_CHECKOUT_PATHS" // structured argv: from-job floor
+		modeVar   = "BUILDKITE_GIT_SPARSE_CHECKOUT_MODE"  // validated enum: from-job floor
 		protected = "BUILDKITE_COMMAND_EVAL"              // protected, not scoped
 		unscoped  = "MY_CUSTOM_VAR"                       // in neither map
 	)
 
-	// The flag vars share the secrets rule (locked unless none), but sparse-checkout
-	// paths have a lower floor: the backend job env may set them under from-job, and
-	// only strict locks them. That floor must not leak into the secrets rule.
+	// The flag vars share the secrets rule (locked unless none), but the
+	// sparse-checkout paths and mode have a lower floor: the backend job env may set
+	// them under from-job, and only strict locks them. That floor must not leak into
+	// the secrets rule.
 	cases := []struct {
 		mode       CheckoutOverrideMode
 		wantFlag   bool
@@ -242,14 +247,16 @@ func TestIsCheckoutLockedForJobEnv(t *testing.T) {
 		if got := IsCheckoutLockedForJobEnv(flagVar, tc.mode); got != tc.wantFlag {
 			t.Errorf("IsCheckoutLockedForJobEnv(%q, %v) = %t, want %t", flagVar, tc.mode, got, tc.wantFlag)
 		}
-		if got := IsCheckoutLockedForJobEnv(sparseVar, tc.mode); got != tc.wantSparse {
-			t.Errorf("IsCheckoutLockedForJobEnv(%q, %v) = %t, want %t", sparseVar, tc.mode, got, tc.wantSparse)
-		}
+		for _, sparseScoped := range []string{sparseVar, modeVar} {
+			if got := IsCheckoutLockedForJobEnv(sparseScoped, tc.mode); got != tc.wantSparse {
+				t.Errorf("IsCheckoutLockedForJobEnv(%q, %v) = %t, want %t", sparseScoped, tc.mode, got, tc.wantSparse)
+			}
 
-		// Secrets stay locked unless none even for sparse: the from-job floor is
-		// scoped to the backend job env, not secret-to-env mappings.
-		if wantSecrets := tc.mode != CheckoutOverrideNone; IsCheckoutLockedForSecrets(sparseVar, tc.mode) != wantSecrets {
-			t.Errorf("IsCheckoutLockedForSecrets(%q, %v) = %t, want %t", sparseVar, tc.mode, !wantSecrets, wantSecrets)
+			// Secrets stay locked unless none even for sparse: the from-job floor is
+			// scoped to the backend job env, not secret-to-env mappings.
+			if wantSecrets := tc.mode != CheckoutOverrideNone; IsCheckoutLockedForSecrets(sparseScoped, tc.mode) != wantSecrets {
+				t.Errorf("IsCheckoutLockedForSecrets(%q, %v) = %t, want %t", sparseScoped, tc.mode, !wantSecrets, wantSecrets)
+			}
 		}
 
 		// Vars outside the checkout scope are never governed by this predicate.

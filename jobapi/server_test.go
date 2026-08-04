@@ -557,6 +557,46 @@ func TestPatchEnvRejectsSparseCheckoutPathsUnderStrict(t *testing.T) {
 	})
 }
 
+func TestPatchEnvRejectsSparseCheckoutModeUnderStrict(t *testing.T) {
+	t.Parallel()
+
+	environ := testEnvironWith("BUILDKITE_GIT_SPARSE_CHECKOUT_MODE", "cone")
+	srv, token, err := testServer(t, environ, replacer.NewMux(), jobapi.WithCheckoutOverrideMode(env.CheckoutOverrideStrict))
+	if err != nil {
+		t.Fatalf("creating server: %v", err)
+	}
+
+	if err := srv.Start(); err != nil {
+		t.Fatalf("starting server: %v", err)
+	}
+	defer func() {
+		if err := srv.Stop(); err != nil {
+			t.Fatalf("stopping server: %v", err)
+		}
+	}()
+
+	buf := bytes.NewBuffer(nil)
+	if err := json.NewEncoder(buf).Encode(&jobapi.EnvUpdateRequestPayload{
+		Env: map[string]*string{"BUILDKITE_GIT_SPARSE_CHECKOUT_MODE": pt("no-cone")},
+	}); err != nil {
+		t.Fatalf("encoding request body: %v", err)
+	}
+
+	req, err := http.NewRequest(http.MethodPatch, "http://job/api/current-job/v0/env", buf)
+	if err != nil {
+		t.Fatalf("creating request: %v", err)
+	}
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", token))
+
+	testAPI(t, environ, req, testSocketClient(srv.SocketPath), apiTestCase[jobapi.EnvUpdateRequestPayload, jobapi.EnvUpdateResponse]{
+		expectedStatus: http.StatusUnprocessableEntity,
+		expectedError: &jobapi.ErrorResponse{
+			Error: "the following environment variables are protected, and cannot be modified: [BUILDKITE_GIT_SPARSE_CHECKOUT_MODE]. Checkout-related variables are locked because BUILDKITE_CHECKOUT_OVERRIDE_MODE=strict",
+		},
+		expectedEnv: testEnvironWith("BUILDKITE_GIT_SPARSE_CHECKOUT_MODE", "cone").Dump(),
+	})
+}
+
 func TestPatchEnvAllowsUnscopedVarsUnderStrict(t *testing.T) {
 	t.Parallel()
 
