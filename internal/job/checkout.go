@@ -412,7 +412,14 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context, previousAttempts in
 			return fmt.Errorf("setting origin: %w", err)
 		}
 
-		if mirrorDir != "" {
+		if mirrorDir == "" && e.GitMirrorsPath != "" {
+			// A bypassed mirror must not remain reachable through a stale alternate.
+			if err := e.traceOp(ctx, "git.dissociate", func(ctx context.Context) error {
+				return e.dissociateIfNeeded(ctx, existingGitDir)
+			}); err != nil {
+				return fmt.Errorf("dissociating bypassed mirror: %w", err)
+			}
+		} else if mirrorDir != "" {
 			switch e.GitMirrorCheckoutMode {
 			case "dissociate":
 				// If the existing repo is still relying on the reference, then

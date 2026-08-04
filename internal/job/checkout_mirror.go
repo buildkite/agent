@@ -2,6 +2,7 @@ package job
 
 import (
 	"context"
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"os"
@@ -11,8 +12,25 @@ import (
 	"time"
 
 	"github.com/buildkite/agent/v3/internal/osutil"
+	"github.com/buildkite/agent/v3/internal/shell"
 	"github.com/buildkite/shellwords"
 )
+
+func remoteMirrorOnHostRefspec(commit, branch string) string {
+	branchComponent := badCharsRE.ReplaceAllString(branch, "-")
+	return "+" + commit + ":refs/buildkite-agent/remote-mirror/" + branchComponent
+}
+
+func isOnHostRemoteMirrorAttempt(attempt *remoteMirrorAttempt) bool {
+	return attempt != nil &&
+		attempt.site == remoteMirrorSiteOnHostMirror &&
+		attempt.outcome == remoteMirrorOutcomeNotReached
+}
+
+func remoteMirrorStagingDir(mirrorDir string) string {
+	sum := sha256.Sum256([]byte(mirrorDir))
+	return filepath.Join(filepath.Dir(mirrorDir), fmt.Sprintf(".remote-mirror-%x", sum[:8]))
+}
 
 func (e *Executor) getOrUpdateMirrorDir(ctx context.Context, repository string, attempt *remoteMirrorAttempt) (string, error) {
 	var mirrorDir string
@@ -33,7 +51,17 @@ func (e *Executor) getOrUpdateMirrorDir(ctx context.Context, repository string, 
 		return mirrorDir, nil
 	}
 
-	return e.updateGitMirror(ctx, repository, attempt)
+	mirrorDir, err := e.updateGitMirror(ctx, repository, attempt)
+	var lockErr ErrTimedOutAcquiringLock
+	if isOnHostRemoteMirrorAttempt(attempt) && errors.As(err, &lockErr) {
+		// The remote mirror is optional. A speculative clone/update holding the
+		// shared lock must not make another job fail when canonical checkout can
+		// proceed without an on-host reference.
+		attempt.outcome = remoteMirrorOutcomeTimeout
+		e.shell.Commentf("Timed out waiting for on-host Git mirror; using canonical repository without it")
+		return "", nil
+	}
+	return mirrorDir, err
 }
 
 // updateGitMirror clones a new git mirror (git clone --mirror ...), or updates
@@ -88,6 +116,16 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string, attem
 	}
 	defer mirrorCloneLock.Unlock() //nolint:errcheck // Best-effort cleanup - primary unlock checked below.
 
+	stagingDir := remoteMirrorStagingDir(mirrorDir)
+	var stagingCleanupErr error
+	if osutil.FileExists(stagingDir) {
+		e.shell.Commentf("Removing interrupted remote mirror staging dir %q", stagingDir)
+		if err := os.RemoveAll(stagingDir); err != nil {
+			stagingCleanupErr = fmt.Errorf("removing interrupted remote mirror staging dir %q: %w", stagingDir, err)
+			e.shell.Warningf("%v", stagingCleanupErr)
+		}
+	}
+
 	// If we don't have a mirror, we need to clone it
 	if !osutil.FileExists(mirrorDir) {
 		e.shell.Commentf("Cloning a mirror of the repository to %q", mirrorDir)
@@ -98,16 +136,106 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string, attem
 			return "", err
 		}
 		flags = append(flags, mirrorFlags...)
-		if err := e.traceOp(ctx, "git.mirror.clone", func(ctx context.Context) error {
-			return gitClone(ctx, e.shell, nil, flags, repository, mirrorDir)
-		}); err != nil {
-			e.shell.Commentf("Removing mirror dir %q due to failed clone", mirrorDir)
-			if err := os.RemoveAll(mirrorDir); err != nil {
-				e.shell.Errorf("Failed to remove %q (%s)", mirrorDir, err)
+
+		cloneMirror := func(
+			ctx context.Context,
+			gitFlags []string,
+			source, destination string,
+			runOpts ...shell.RunCommandOpt,
+		) error {
+			return e.traceOp(ctx, "git.mirror.clone", func(ctx context.Context) error {
+				return gitClone(ctx, e.shell, gitFlags, flags, source, destination, runOpts...)
+			})
+		}
+		removeFailedMirror := func(path string) error {
+			if !osutil.FileExists(path) {
+				return nil
+			}
+			e.shell.Commentf("Removing mirror dir %q due to failed clone", path)
+			if err := os.RemoveAll(path); err != nil {
+				return fmt.Errorf("removing failed mirror %q: %w", path, err)
+			}
+			return nil
+		}
+
+		if isOnHostRemoteMirrorAttempt(attempt) {
+			started := time.Now()
+			tempMirrorDir := stagingDir
+			// A prior process may have been killed while cloning. The clone
+			// lock makes this deterministic staging directory exclusive.
+			err := stagingCleanupErr
+			if err == nil {
+				// Match direct git-clone directory creation: apply the process
+				// umask and inherit parent setgid/default ACLs.
+				err = os.Mkdir(tempMirrorDir, 0o777)
+			}
+			if err == nil {
+				err = cloneMirror(
+					ctx,
+					remoteMirrorBulkGitFlags(ctx),
+					attempt.url,
+					tempMirrorDir,
+					shell.AlwaysHidePrompt(),
+				)
+			}
+			if err == nil {
+				// C16: agents predating remote mirrors may share this mirror.
+				// Canonicalize the temporary repository before atomically
+				// publishing it to the shared mixed-version cache.
+				err = e.shell.Command(
+					"git", "--git-dir", tempMirrorDir,
+					"remote", "set-url", "origin", repository,
+				).Run(ctx)
+			}
+			hasCommit := false
+			if err == nil {
+				hasCommit = hasGitCommit(ctx, e.shell, tempMirrorDir, e.Commit)
+				if ctxErr := ctx.Err(); ctxErr != nil {
+					if cleanupErr := removeFailedMirror(tempMirrorDir); cleanupErr != nil {
+						return "", errors.Join(ctxErr, cleanupErr)
+					}
+					return "", ctxErr
+				}
+				err = os.Rename(tempMirrorDir, mirrorDir)
+			}
+			attempt.duration = time.Since(started)
+			if err == nil {
+				if hasCommit {
+					attempt.outcome = remoteMirrorOutcomeHit
+				} else {
+					// A lagging clone is still useful: the checkout's canonical
+					// --reference clone transfers only the missing delta.
+					attempt.outcome = remoteMirrorOutcomeMiss
+				}
+				return e.snapshotMirror(ctx, repository, mirrorDir)
+			}
+
+			if stagingCleanupErr == nil && tempMirrorDir != "" {
+				if cleanupErr := removeFailedMirror(tempMirrorDir); cleanupErr != nil {
+					// Staging is independent of the canonical destination.
+					// Preserve the cleanup failure in the log, but still let
+					// the optional mirror optimization fail open.
+					e.shell.Warningf("Failed to clean remote mirror staging before canonical fallback: %v", cleanupErr)
+				}
+			}
+			if ctxErr := ctx.Err(); ctxErr != nil {
+				return "", ctxErr
+			}
+			var cloneErr *gitError
+			if errors.As(err, &cloneErr) && cloneErr.Type == gitErrorCloneTimeout {
+				attempt.outcome = remoteMirrorOutcomeTimeout
+			} else {
+				attempt.outcome = remoteMirrorOutcomeError
+			}
+			e.shell.Commentf("Remote Git mirror clone failed; falling back to canonical repository")
+		}
+
+		if err := cloneMirror(ctx, nil, repository, mirrorDir); err != nil {
+			if cleanupErr := removeFailedMirror(mirrorDir); cleanupErr != nil {
+				return "", errors.Join(err, cleanupErr)
 			}
 			return "", err
 		}
-
 		return e.snapshotMirror(ctx, repository, mirrorDir)
 	}
 
@@ -143,24 +271,50 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string, attem
 		}
 	}()
 
+	commitAlreadyPresent := false
 	if isMainRepository {
 		// Check again after we get a lock, in case the other process has already updated
-		if hasGitCommit(ctx, e.shell, mirrorDir, e.Commit) {
+		if hasGitCommit(ctx, e.shell, mirrorDir, e.Commit) &&
+			hasGitCommitReachableFromRef(ctx, e.shell, mirrorDir, e.Commit) {
 			e.shell.Commentf("Commit %q exists in mirror", e.Commit)
-			return e.snapshotMirror(ctx, repository, mirrorDir)
+			commitAlreadyPresent = true
 		}
 	}
 
 	e.shell.Commentf("Updating existing repository mirror to find commit %s", e.Commit)
 
 	// Update the origin of the repository so we can gracefully handle
-	// repository renames.
+	// repository renames. This must happen before a remote-mirror hit can skip
+	// the canonical fetch: dirForRepository is lossy, so distinct canonical
+	// URLs can share one durable mirror directory.
 	urlChanged, err := e.updateRemoteURL(ctx, mirrorDir, repository)
 	if err != nil {
 		return "", fmt.Errorf("setting remote URL: %w", err)
 	}
 
-	if isMainRepository {
+	remoteMirrorHit := false
+	if isMainRepository && !commitAlreadyPresent {
+		if isOnHostRemoteMirrorAttempt(attempt) {
+			hit, err := e.fetchCommitFromRemoteMirror(
+				ctx,
+				attempt,
+				mirrorDir,
+				"--no-tags",
+				remoteMirrorOnHostRefspec(e.Commit, e.Branch),
+			)
+			if err != nil {
+				return "", err
+			}
+			if hit {
+				// C2: the helper requires both a successful ref write and
+				// local object presence. Keep going through rename
+				// maintenance instead of returning early.
+				remoteMirrorHit = true
+			}
+		}
+	}
+
+	if isMainRepository && !commitAlreadyPresent && !remoteMirrorHit {
 		var refspecs []string
 		var retry bool
 
@@ -196,8 +350,8 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string, attem
 		}); err != nil {
 			return "", err
 		}
-	} else { // not the main repo.
-
+	}
+	if !isMainRepository {
 		// This is a mirror of a submodule.
 		// Update without specifying particular ref, since we don't know which
 		// ref is needed for the main build.
@@ -223,6 +377,14 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string, attem
 		if err := e.shell.Command("git", "--git-dir", mirrorDir, "gc").Run(ctx); err != nil {
 			e.shell.Warningf("Couldn't run git gc: %v", err)
 		}
+	}
+
+	// Unpinned objects are unsafe through --reference; fail open rather than manage recovery refs.
+	if isMainRepository &&
+		hasGitCommit(ctx, e.shell, mirrorDir, e.Commit) &&
+		!hasGitCommitReachableFromRef(ctx, e.shell, mirrorDir, e.Commit) {
+		e.shell.Warningf("Commit %q exists in mirror without a durable ref; using canonical repository without it", e.Commit)
+		return "", nil
 	}
 
 	return e.snapshotMirror(ctx, repository, mirrorDir)

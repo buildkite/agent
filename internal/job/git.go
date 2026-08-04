@@ -103,6 +103,20 @@ func hasGitCommit(ctx context.Context, sh *shell.Shell, gitDir, commit string) b
 	return true
 }
 
+func hasGitCommitReachableFromRef(ctx context.Context, sh *shell.Shell, gitDir, commit string) bool {
+	extraEnv := env.New()
+	extraEnv.Set("GIT_NO_LAZY_FETCH", "1")
+	output, err := sh.Command(
+		"git", "--git-dir", gitDir, "for-each-ref",
+		"--format=%(refname)", "--contains", commit,
+	).RunAndCaptureStdout(
+		ctx,
+		shell.ShowStderr(false),
+		shell.WithExtraEnv(extraEnv),
+	)
+	return err == nil && strings.TrimSpace(output) != ""
+}
+
 func gitCheckout(ctx context.Context, sh *shell.Shell, gitCheckoutFlags, reference string) error {
 	individualCheckoutFlags, err := shellwords.Split(gitCheckoutFlags)
 	if err != nil {
