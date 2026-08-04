@@ -1159,10 +1159,10 @@ retains the mirror tip as an extra shallow root and can make more history
 reachable than a canonical clone with the same depth. Ask Git whether the
 resulting repository is shallow rather than reimplementing its accepted option
 spellings and abbreviations. If a shallow clone misses the commit, re-clone
-canonically. Also re-clone a shallow apparent hit when an alternates file or
-`GIT_ALTERNATE_OBJECT_DIRECTORIES` is present: `hasGitCommit` follows both, so
-the target may come from a newer reference repository rather than the lagging
-mirror. This is the smallest reliable way to preserve R3.
+canonically. Also re-clone a shallow apparent hit when an alternates file is
+present: `hasGitCommit` follows alternates, so the target may come from a newer
+reference repository rather than the lagging mirror. This is the smallest
+reliable way to preserve R3.
 
 Clone flags may also initialize submodules before `origin` is repointed.
 `--recurse-submodules` and its `--recursive` alias resolve relative
@@ -1237,7 +1237,7 @@ code that caused it no longer exists.
   vacuously. Include a lagging depth case using a Git-accepted abbreviated flag
   that compares shallow boundaries and reachable commits after canonical
   fallback, plus a shallow-reference case where the target exists only through
-  an alternates file and through `GIT_ALTERNATE_OBJECT_DIRECTORIES`.
+  alternates.
 - **Assert the avoided operation directly.** For existing/fresh mirror hits,
   assert that no canonical commit-fetch request occurs while allowing separately
   expected verification requests. A zero-byte assertion is insufficient because
