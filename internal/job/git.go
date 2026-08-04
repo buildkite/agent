@@ -103,6 +103,20 @@ func hasGitCommit(ctx context.Context, sh *shell.Shell, gitDir, commit string) b
 	return true
 }
 
+func hasGitCommitReachableFromRef(ctx context.Context, sh *shell.Shell, gitDir, commit string) bool {
+	extraEnv := env.New()
+	extraEnv.Set("GIT_NO_LAZY_FETCH", "1")
+	output, err := sh.Command(
+		"git", "--git-dir", gitDir, "for-each-ref",
+		"--format=%(refname)", "--contains", commit,
+	).RunAndCaptureStdout(
+		ctx,
+		shell.ShowStderr(false),
+		shell.WithExtraEnv(extraEnv),
+	)
+	return err == nil && strings.TrimSpace(output) != ""
+}
+
 func gitCheckout(ctx context.Context, sh *shell.Shell, gitCheckoutFlags, reference string) error {
 	individualCheckoutFlags, err := shellwords.Split(gitCheckoutFlags)
 	if err != nil {
@@ -136,16 +150,14 @@ func gitCheckout(ctx context.Context, sh *shell.Shell, gitCheckoutFlags, referen
 	return nil
 }
 
-// hasPartialFilterFlags returns true if flags contains a
-// --filter=<spec> or --filter <spec> option.
+// hasPartialFilterFlags returns true if flags contains a filter option,
+// including Git's accepted --fi* long-option abbreviations.
 func hasPartialFilterFlags(flags []string) bool {
 	for i, f := range flags {
-		// Check for --filter=<spec>
-		if strings.HasPrefix(f, "--filter=") {
+		if strings.HasPrefix(f, "--fi") && strings.Contains(f, "=") {
 			return true
 		}
-		// The --filter <spec> form only counts when a value actually follows it
-		if f == "--filter" && i+1 < len(flags) {
+		if strings.HasPrefix(f, "--fi") && i+1 < len(flags) {
 			return true
 		}
 	}

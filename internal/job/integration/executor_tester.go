@@ -18,6 +18,7 @@ import (
 	"sync"
 	"syscall"
 	"testing"
+	"time"
 
 	"github.com/buildkite/agent/v3/clicommand"
 	"github.com/buildkite/agent/v3/env"
@@ -282,7 +283,12 @@ func (e *ExecutorTester) ExpectGlobalHook(name string) *bintest.Expectation {
 func (e *ExecutorTester) Run(t *testing.T, env ...string) error {
 	t.Helper()
 
+	// Hold cmdLock across setup and Start so Cancel can't observe a nil
+	// Process (and so it blocks until the command is actually running).
+	e.cmdLock.Lock()
+
 	if err := e.flushPendingLocalHooks(); err != nil {
+		e.cmdLock.Unlock()
 		return err
 	}
 
@@ -297,10 +303,10 @@ func (e *ExecutorTester) Run(t *testing.T, env ...string) error {
 
 	path, err := exec.LookPath(e.Name)
 	if err != nil {
+		e.cmdLock.Unlock()
 		return err
 	}
 
-	e.cmdLock.Lock()
 	e.cmd = exec.Command(path, e.Args...)
 
 	buf := &buffer{}
@@ -330,10 +336,24 @@ func (e *ExecutorTester) Run(t *testing.T, env ...string) error {
 }
 
 func (e *ExecutorTester) Cancel() error {
-	e.cmdLock.Lock()
-	defer e.cmdLock.Unlock()
-	log.Printf("Killing pid %d", e.cmd.Process.Pid)
-	return e.cmd.Process.Signal(syscall.SIGINT)
+	// Run may not have reached Start yet (caller races a sleep against setup).
+	// Wait for a live Process rather than nil-dereferencing.
+	deadline := time.Now().Add(30 * time.Second)
+	for {
+		e.cmdLock.Lock()
+		if e.cmd != nil && e.cmd.Process != nil {
+			log.Printf("Killing pid %d", e.cmd.Process.Pid)
+			err := e.cmd.Process.Signal(syscall.SIGINT)
+			e.cmdLock.Unlock()
+			return err
+		}
+		e.cmdLock.Unlock()
+
+		if time.Now().After(deadline) {
+			return fmt.Errorf("timed out waiting for command to start before cancel")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
 }
 
 func (e *ExecutorTester) CheckMocks(t *testing.T) {

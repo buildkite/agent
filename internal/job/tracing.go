@@ -128,15 +128,27 @@ func (e *Executor) otRootSpanName() string {
 	return base + "job"
 }
 
+// otlpTracesProtocol returns the OTLP protocol to use for the trace
+// exporter. Per the OTel spec, the signal-specific variable takes precedence
+// over the generic one. The SDK exporter constructors read the endpoint and
+// header variables themselves, but choosing the exporter package (gRPC vs
+// HTTP) is up to us.
+func otlpTracesProtocol() string {
+	if p := os.Getenv("OTEL_EXPORTER_OTLP_TRACES_PROTOCOL"); p != "" {
+		return p
+	}
+	if p := os.Getenv("OTEL_EXPORTER_OTLP_PROTOCOL"); p != "" {
+		return p
+	}
+	// Default to grpc to avoid a breaking change.
+	return "grpc"
+}
+
 // InitOTelTracerProvider creates and globally registers an OpenTelemetry TracerProvider
 // and text map propagator. Caller must call ForceFlush and Shutdown
 // on the returned provider before the process exits.
 func InitOTelTracerProvider(ctx context.Context, serviceName string, extraAttrs []attribute.KeyValue) (*sdktrace.TracerProvider, error) {
-	protocol := os.Getenv("OTEL_EXPORTER_OTLP_PROTOCOL")
-	// default to grpc to avoid breaking change
-	if protocol == "" {
-		protocol = "grpc"
-	}
+	protocol := otlpTracesProtocol()
 
 	var exporter sdktrace.SpanExporter
 	var err error

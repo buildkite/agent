@@ -275,6 +275,11 @@ func (asc AgentStartConfig) Features(ctx context.Context) []string {
 		features = append(features, "propagate-traceparent")
 	}
 
+	// This agent can consume control-plane OTLP exporter configuration from
+	// the registration response (design:
+	// https://linear.app/buildkite/issue/A-1641).
+	features = append(features, "control-plane-otlp-tracing")
+
 	if asc.DisconnectAfterJob {
 		features = append(features, "disconnect-after-job")
 	}
@@ -880,6 +885,20 @@ var AgentStartCommand = cli.Command{
 		ctx, cancel := context.WithCancel(ctx)
 		defer cancel()
 
+		// Capture whether the operator explicitly configured
+		// tracing-propagate-traceparent before UnsetConfigFromEnvironment
+		// removes the env var below: an explicit local false must win over
+		// control-plane tracing policy (see agent.ApplyControlPlaneTracing).
+		localPropagateTraceparentSet := c.IsSet("tracing-propagate-traceparent")
+		if _, ok := os.LookupEnv("BUILDKITE_TRACING_PROPAGATE_TRACEPARENT"); ok {
+			localPropagateTraceparentSet = true
+		}
+		if configFile != nil {
+			if _, exists := configFile.Config["tracing-propagate-traceparent"]; exists {
+				localPropagateTraceparentSet = true
+			}
+		}
+
 		// Remove any config env from the environment to prevent them propagating to bootstrap
 		if err := UnsetConfigFromEnvironment(c); err != nil {
 			return fmt.Errorf("failed to unset config from environment: %w", err)
@@ -1394,6 +1413,13 @@ var AgentStartCommand = cli.Command{
 			regReqs = append(regReqs, registerReq)
 		}
 
+		// The operator's explicit local tracing choices always win over any
+		// control-plane tracing policy in the registration responses below.
+		localTracing := agent.LocalTracingConfig{
+			PropagateTraceparentSet: localPropagateTraceparentSet,
+			OTLPDestinationSet:      agent.HasLocalOTLPDestination(),
+		}
+
 		// Send register requests.
 		workers, err := concurrently.Map(ctx, regReqs, func(ctx context.Context, i int, regReq api.AgentRegisterRequest) (*agent.AgentWorker, error) {
 			// Register the agent with the buildkite API
@@ -1402,14 +1428,22 @@ var AgentStartCommand = cli.Command{
 				return nil, err
 			}
 
+			wl := l.WithFields(logger.StringField("agent", reg.Name))
+
+			// Each worker registers independently and gets its own copy of
+			// the agent configuration with any control-plane tracing policy
+			// merged in; the shared agentConf is never mutated.
+			workerConf := agentConf
+			agent.ApplyControlPlaneTracing(wl, &workerConf, reg.Tracing, localTracing)
+
 			// Create an agent worker to run the agent
 			return agent.NewAgentWorker(
-				l.WithFields(logger.StringField("agent", reg.Name)),
+				wl,
 				reg,
 				mc,
 				apiClient,
 				agent.AgentWorkerConfig{
-					AgentConfiguration: agentConf,
+					AgentConfiguration: workerConf,
 					CancelSignal:       cancelSig,
 					SignalGracePeriod:  signalGracePeriod,
 					Debug:              cfg.Debug,

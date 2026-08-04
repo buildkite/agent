@@ -27,6 +27,7 @@ import (
 	"github.com/buildkite/agent/v3/logger"
 	"github.com/buildkite/agent/v3/metrics"
 	"github.com/buildkite/agent/v3/status"
+	"github.com/buildkite/agent/v3/tracetools"
 	"github.com/buildkite/roko"
 	"github.com/buildkite/shellwords"
 )
@@ -487,11 +488,28 @@ func (r *JobRunner) createEnvironment(ctx context.Context) ([]string, error) {
 	// sent by Buildkite. The variables below should always take precedence,
 	// except the checkout-scoped vars set via setCheckoutEnv, which defer to
 	// the Buildkite-sent value unless the checkout-override mode locks them.
-	env := make(map[string]string)
+	env := make(map[string]string, len(r.conf.Job.Env))
 	maps.Copy(env, r.conf.Job.Env)
 
 	// The agent registration token should never make it into the job environment
 	delete(env, "BUILDKITE_AGENT_TOKEN")
+
+	// Whether the backend job env (pipeline/step) already chose an OTLP
+	// destination, checked against the pristine job env before agent
+	// overrides are applied. If it did, the control-plane exporter is not
+	// injected for this job (see below): mixing the server credential with a
+	// pipeline-chosen endpoint — or a pipeline credential with the server's
+	// endpoint — must never happen. The check goes through env.Environment,
+	// which normalizes key case on Windows (a no-op on Unix), so a
+	// case-variant pipeline OTEL_* var cannot dodge it.
+	jobEnvHasOTLPDestination := false
+	normalizedJobEnv := envutil.FromMap(r.conf.Job.Env)
+	for _, name := range envutil.OTLPDestinationVars {
+		if normalizedJobEnv.Exists(name) {
+			jobEnvHasOTLPDestination = true
+			break
+		}
+	}
 
 	// Always override an ambient agent-process value. Without the explicit
 	// empty entry, bootstrap's inherited os.Environ could enable a mirror that
@@ -846,6 +864,28 @@ BUILDKITE_AGENT_JWKS_KEY_ID`
 				setEnv("BUILDKITE_TRACING_TRACESTATE", r.conf.Job.TraceState)
 			}
 			setEnv("BUILDKITE_TRACING_PROPAGATE_TRACEPARENT", "true")
+		}
+	}
+
+	// Deliver control-plane OTLP exporter configuration (endpoint, protocol,
+	// and possibly credentialed headers, from agent registration) to the
+	// bootstrap process through the standard traces-specific OTel variables.
+	// Hooks, plugins, and the job command inherit them, so job-level OTel
+	// tooling can join the trace via the propagated traceparent and export
+	// spans to the same collector. This runs after the env files were written
+	// above, so the credential still stays out of BUILDKITE_ENV_FILE — note
+	// this means plugins that use the env file as a propagation allowlist
+	// (e.g. docker's propagate-environment) won't forward these names into
+	// containers they create.
+	//
+	// Skipped entirely when the pipeline chose its own OTLP destination: its
+	// values are left untouched (endpoint and headers must travel together,
+	// so there is no partial merge).
+	if exp := r.conf.AgentConfiguration.ControlPlaneTracingExporter; exp != nil && r.conf.AgentConfiguration.TracingBackend == tracetools.BackendOpenTelemetry {
+		if jobEnvHasOTLPDestination {
+			r.agentLogger.Infof("Not delivering control-plane OTLP exporter to job %s: the job env already sets an OTEL_EXPORTER_OTLP_* destination, which takes precedence", r.conf.Job.ID)
+		} else {
+			maps.Copy(env, controlPlaneOTLPEnv(exp))
 		}
 	}
 
