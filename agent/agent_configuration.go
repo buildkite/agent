@@ -4,6 +4,7 @@ import (
 	"regexp"
 	"time"
 
+	"github.com/buildkite/agent/v3/api"
 	"github.com/buildkite/agent/v3/env"
 	"github.com/buildkite/agent/v3/internal/job"
 )
@@ -61,27 +62,36 @@ type AgentConfiguration struct {
 	VerificationJWKS             any    // The set of keys to verify jobs with
 	VerificationFailureBehaviour string // What to do if job verification fails (one of `block` or `warn`)
 
-	ANSITimestamps               bool
-	TimestampLines               bool
-	HealthCheckAddr              string
-	DisconnectAfterJob           bool
-	DisconnectAfterIdleTimeout   time.Duration
-	DisconnectAfterUptime        time.Duration
-	CancelGracePeriod            int
-	SignalGracePeriod            time.Duration
-	EnableJobLogTmpfile          bool
-	JobLogPath                   string
-	WriteJobLogsToStdout         bool
-	JobLogsOTLP                  bool
-	LogFormat                    string
-	Shell                        string
-	HooksShell                   string
-	Profile                      string
-	RedactedVars                 []string
-	AcquireJob                   string
-	TracingBackend               string
-	TracingServiceName           string
-	TracingPropagateTraceparent  bool
+	ANSITimestamps              bool
+	TimestampLines              bool
+	HealthCheckAddr             string
+	DisconnectAfterJob          bool
+	DisconnectAfterIdleTimeout  time.Duration
+	DisconnectAfterUptime       time.Duration
+	CancelGracePeriod           int
+	SignalGracePeriod           time.Duration
+	EnableJobLogTmpfile         bool
+	JobLogPath                  string
+	WriteJobLogsToStdout        bool
+	JobLogsOTLP                 bool
+	LogFormat                   string
+	Shell                       string
+	HooksShell                  string
+	Profile                     string
+	RedactedVars                []string
+	AcquireJob                  string
+	TracingBackend              string
+	TracingServiceName          string
+	TracingPropagateTraceparent bool
+	// ControlPlaneTracingExporter is an OTLP trace exporter destination
+	// supplied by the control plane at registration (see
+	// ApplyControlPlaneTracing). It is delivered to the bootstrap process
+	// environment via the standard OTEL_EXPORTER_OTLP_TRACES_* variables and
+	// inherited by hooks and the job command, so job-level OTel tooling can
+	// export spans to the same collector. Its headers may hold credentials,
+	// which is why it is injected after the job env files are written (kept
+	// off disk) and skipped when the job env chose its own OTLP destination.
+	ControlPlaneTracingExporter  *api.TracingExporter
 	TraceContextEncoding         string
 	DisableWarningsFor           []string
 	AllowMultipartArtifactUpload bool

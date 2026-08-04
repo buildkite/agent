@@ -30,6 +30,7 @@ type AgentRegisterResponse struct {
 	JobStatusInterval int               `json:"job_status_interval"`
 	HeartbeatInterval int               `json:"heartbeat_interval"`
 	Tags              []string          `json:"meta_data"`
+	Tracing           *AgentTracing     `json:"tracing,omitempty"`
 }
 
 // Registers the agent against the Buildkite Agent API. The client for this
