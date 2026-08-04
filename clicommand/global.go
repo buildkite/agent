@@ -199,8 +199,13 @@ var (
 )
 
 func validateGitCommitVerification(value string) error {
-	if value != "strict" && value != "warn" {
-		return fmt.Errorf("invalid value for --git-commit-verification: %q (must be \"strict\" or \"warn\")", value)
+	if value != job.GitCommitVerificationStrict && value != job.GitCommitVerificationOff {
+		return fmt.Errorf(
+			"invalid value for --git-commit-verification: %q (must be %q or %q)",
+			value,
+			job.GitCommitVerificationStrict,
+			job.GitCommitVerificationOff,
+		)
 	}
 	return nil
 }
@@ -254,8 +259,8 @@ var (
 
 	GitCommitVerificationFlag = &cli.StringFlag{
 		Name:             "git-commit-verification",
-		Value:            "strict",
-		Usage:            "Verify that the commit being built exists on the specified branch; one of strict or warn",
+		Value:            job.GitCommitVerificationStrict,
+		Usage:            "Verify that the commit being built exists on the specified branch; one of strict or off",
 		Sources:          cli.EnvVars("BUILDKITE_GIT_COMMIT_VERIFICATION"),
 		ValidateDefaults: true,
 		Validator:        validateGitCommitVerification,

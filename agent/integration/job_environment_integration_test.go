@@ -760,18 +760,18 @@ func TestCheckoutScopedJobEnvOverrideHonorsCheckoutOverrideMode(t *testing.T) {
 		},
 		// Commit verification is an enum (not a flag) but is checkout-override
 		// scoped, so it follows the same mode rules. With v4's strict default, none
-		// lets the backend job env select warn instead.
+		// lets the backend job env turn verification off instead.
 		{
 			name:    "none_allows_job_env_to_override_default_commit_verification",
 			varName: "BUILDKITE_GIT_COMMIT_VERIFICATION",
 			jobEnv: map[string]string{
-				"BUILDKITE_GIT_COMMIT_VERIFICATION": "warn",
+				"BUILDKITE_GIT_COMMIT_VERIFICATION": "off",
 			},
 			agentCfg: agent.AgentConfiguration{
 				GitCommitVerification: "strict",
 				CheckoutOverrideMode:  env.CheckoutOverrideNone,
 			},
-			wantEnvValue: "warn",
+			wantEnvValue: "off",
 		},
 		{
 			name:    "none_allows_job_env_to_override_commit_verification",
@@ -780,7 +780,7 @@ func TestCheckoutScopedJobEnvOverrideHonorsCheckoutOverrideMode(t *testing.T) {
 				"BUILDKITE_GIT_COMMIT_VERIFICATION": "strict",
 			},
 			agentCfg: agent.AgentConfiguration{
-				GitCommitVerification: "warn",
+				GitCommitVerification: "off",
 				CheckoutOverrideMode:  env.CheckoutOverrideNone,
 			},
 			wantEnvValue: "strict",
@@ -792,10 +792,10 @@ func TestCheckoutScopedJobEnvOverrideHonorsCheckoutOverrideMode(t *testing.T) {
 				"BUILDKITE_GIT_COMMIT_VERIFICATION": "strict",
 			},
 			agentCfg: agent.AgentConfiguration{
-				GitCommitVerification: "warn",
+				GitCommitVerification: "off",
 				CheckoutOverrideMode:  env.CheckoutOverrideStrict,
 			},
-			wantEnvValue:       "warn",
+			wantEnvValue:       "off",
 			wantIgnoredEnvVars: []string{"BUILDKITE_GIT_COMMIT_VERIFICATION"},
 		},
 		{
@@ -807,10 +807,10 @@ func TestCheckoutScopedJobEnvOverrideHonorsCheckoutOverrideMode(t *testing.T) {
 				"BUILDKITE_GIT_COMMIT_VERIFICATION": "strict",
 			},
 			agentCfg: agent.AgentConfiguration{
-				GitCommitVerification: "warn",
+				GitCommitVerification: "off",
 				CheckoutOverrideMode:  env.CheckoutOverrideFromJob,
 			},
-			wantEnvValue:       "warn",
+			wantEnvValue:       "off",
 			wantIgnoredEnvVars: []string{"BUILDKITE_GIT_COMMIT_VERIFICATION"},
 		},
 	}
