@@ -276,7 +276,7 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string, attem
 		attempt.outcome == remoteMirrorOutcomeSkipped &&
 		attempt.skipReason == remoteMirrorSkipNoURL &&
 		hasGitCommit(ctx, e.shell, mirrorDir, e.Commit) {
-		// Preserve the legacy presence-only fast path when remote mirroring is not configured.
+		// Avoid the global reachability scan when remote mirroring is not configured.
 		e.shell.Commentf("Commit %q exists in mirror", e.Commit)
 		return e.snapshotMirror(ctx, repository, mirrorDir)
 	}

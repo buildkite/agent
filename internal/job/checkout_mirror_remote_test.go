@@ -12,6 +12,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -348,6 +349,12 @@ func TestUpdateGitMirrorNoRemoteURLUsesUnpinnedWarmCommit(t *testing.T) {
 		t.Fatal("test commit unexpectedly reachable from a ref")
 	}
 
+	var commandLog [][]string
+	e.shell = shell.NewTestShell(
+		t,
+		shell.WithSignalGracePeriod(10*time.Millisecond),
+		shell.WithCommandLog(&commandLog),
+	)
 	e.Commit = commit
 	attempt := e.resolveRemoteMirrorAttempt(0)
 	if attempt.outcome != remoteMirrorOutcomeSkipped ||
@@ -362,6 +369,11 @@ func TestUpdateGitMirrorNoRemoteURLUsesUnpinnedWarmCommit(t *testing.T) {
 	}
 	if gotDir != mirrorDir {
 		t.Errorf("mirror dir = %q, want %q", gotDir, mirrorDir)
+	}
+	for _, command := range commandLog {
+		if slices.Contains(command, "for-each-ref") {
+			t.Errorf("warm mirror fast path ran global reachability scan: %q", command)
+		}
 	}
 }
 
