@@ -78,11 +78,11 @@ func (ap *AgentPool) runWatchdog(ctx context.Context, l logger.Logger, watchdogI
 func (ap *AgentPool) runWatchdogLoop(ctx context.Context, l logger.Logger, ticks <-chan time.Time) {
 	for {
 		select {
-		case now, ok := <-ticks:
+		case _, ok := <-ticks:
 			if !ok {
 				return
 			}
-			ap.notifyWatchdog(l, now)
+			ap.notifyWatchdog(l, time.Now())
 		case <-ctx.Done():
 			return
 		}
