@@ -2,23 +2,13 @@ package job
 
 import (
 	"context"
-	"crypto/sha256"
 	"errors"
 	"fmt"
-	"net/url"
-	"os"
-	"os/exec"
-	"path/filepath"
-	"slices"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/buildkite/agent/v3/internal/shell"
-	"github.com/buildkite/shellwords"
 )
-
-const remoteMirrorPromisorMarkerKey = "buildkite.remote-mirror-promisor"
 
 // refspecKind is the category of git refspec a fetch targets.
 type refspecKind string
@@ -70,13 +60,6 @@ func (e *Executor) fetchSource(ctx context.Context, addBloblessFilter bool, atte
 		"git.pull_request": strconv.FormatBool(e.PullRequest != "false"),
 		"git.refspec_kind": string(kind),
 	})
-
-	if err := e.repairInterruptedRemoteMirrorPromisors(ctx); err != nil {
-		return &gitError{
-			error: fmt.Errorf("repairing interrupted remote mirror promisor state: %w", err),
-			Type:  gitErrorFetchRetryClean,
-		}
-	}
 
 	// If configured, skip the fetch when the commit already exists locally.
 	// This is useful when a pre-populated git mirror is used with --reference,
@@ -175,22 +158,6 @@ func (e *Executor) fetchSource(ctx context.Context, addBloblessFilter bool, atte
 		}
 
 	default: // refspecCommit
-		if isExistingCheckoutRemoteMirrorAttempt(attempt) {
-			mirrorFetchFlags, err := e.prepareRemoteMirrorFetch(ctx, gitFetchFlags)
-			if err != nil {
-				return fmt.Errorf("preparing remote mirror fetch: %w", err)
-			}
-			hit, err := e.fetchExistingCheckoutFromRemoteMirror(ctx, attempt, mirrorFetchFlags)
-			if err != nil {
-				return err
-			}
-			if hit {
-				// C4: FETCH_HEAD records the non-secret mirror URL. No
-				// mirror-eligible flow reads it, so retain Git's normal write.
-				return nil
-			}
-		}
-
 		// Otherwise fetch and checkout the commit directly.
 		e.shell.Commentf("Fetch and checkout commit")
 		if err := gitFetchWithFallback(ctx, e.shell, gitFetchFlags, e.Commit); err != nil {
@@ -199,282 +166,6 @@ func (e *Executor) fetchSource(ctx context.Context, addBloblessFilter bool, atte
 	}
 
 	return nil
-}
-
-func isExistingCheckoutRemoteMirrorAttempt(attempt *remoteMirrorAttempt) bool {
-	return attempt != nil &&
-		attempt.site == remoteMirrorSiteExistingCheckout &&
-		attempt.outcome == remoteMirrorOutcomeNotReached
-}
-
-func (e *Executor) fetchExistingCheckoutFromRemoteMirror(
-	ctx context.Context,
-	attempt *remoteMirrorAttempt,
-	gitFetchFlags string,
-) (bool, error) {
-	hasURLConfig, err := e.hasRemoteMirrorURLConfig(ctx, attempt.url)
-	if err != nil {
-		if ctx.Err() != nil {
-			return false, ctx.Err()
-		}
-		attempt.outcome = remoteMirrorOutcomeError
-		e.shell.Warningf("Could not inspect remote Git mirror state; falling back to canonical")
-		return false, nil
-	}
-	if hasURLConfig {
-		attempt.outcome = remoteMirrorOutcomeSkipped
-		attempt.skipReason = remoteMirrorSkipURLConfigConflict
-		e.shell.Commentf("Remote Git mirror URL already has user-owned config; falling back to canonical")
-		return false, nil
-	}
-
-	if err := e.markRemoteMirrorPromisor(ctx, attempt.url); err != nil {
-		if ctx.Err() != nil {
-			return false, ctx.Err()
-		}
-		attempt.outcome = remoteMirrorOutcomeError
-		e.shell.Warningf("Could not mark remote Git mirror state; falling back to canonical")
-		return false, nil
-	}
-
-	e.shell.Commentf("Fetch commit from remote Git mirror")
-	// C21: preserve the caller's effective fetch flags. Explicit ref-mutating
-	// flags such as --tags may reflect the mirror's lagging view, while the
-	// build commit remains the backend-provided immutable object ID.
-	hit, fetchErr := e.fetchCommitFromRemoteMirror(
-		ctx,
-		attempt,
-		".git",
-		gitFetchFlags,
-		e.Commit,
-	)
-	// Cleanup is bounded but deliberately detached: cancellation can race with
-	// any individual config command, and leaving the one-shot mirror as a
-	// promisor is not a safe cancellation state.
-	cleanupCtx, cancelCleanup := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
-	cleanupErr := e.finishRemoteMirrorPromisor(cleanupCtx, attempt.url)
-	cancelCleanup()
-	if cleanupErr != nil {
-		return false, &gitError{
-			error: fmt.Errorf(
-				"cleaning up unsafe remote mirror promisor state: %w",
-				errors.Join(fetchErr, cleanupErr),
-			),
-			Type: gitErrorFetchRetryClean,
-		}
-	}
-	return hit, fetchErr
-}
-
-func remoteMirrorPromisorKey(mirrorURL, name string) string {
-	return "remote." + mirrorURL + "." + name
-}
-
-func remoteMirrorPromisorMarker(mirrorURL string) string {
-	return fmt.Sprintf("%x", sha256.Sum256([]byte(mirrorURL)))
-}
-
-func (e *Executor) hasRemoteMirrorURLConfig(ctx context.Context, mirrorURL string) (bool, error) {
-	output, err := e.runSilentLocalGitConfigOutput(ctx, "--get-regexp", `^remote\..*\..*$`)
-	if err != nil {
-		if shell.IsExitError(err) && shell.ExitCode(err) == 1 {
-			return false, nil
-		}
-		return false, err
-	}
-	for line := range strings.SplitSeq(output, "\n") {
-		fields := strings.Fields(line)
-		if len(fields) == 0 {
-			continue
-		}
-		key := strings.TrimPrefix(fields[0], "remote.")
-		if variable := strings.LastIndexByte(key, '.'); variable > 0 && key[:variable] == mirrorURL {
-			return true, nil
-		}
-	}
-	return false, nil
-}
-
-func (e *Executor) markRemoteMirrorPromisor(ctx context.Context, mirrorURL string) error {
-	return e.runSilentLocalGitConfig(
-		ctx,
-		remoteMirrorPromisorMarkerKey,
-		remoteMirrorPromisorMarker(mirrorURL),
-	)
-}
-
-func (e *Executor) clearRemoteMirrorPromisorMarker(ctx context.Context) error {
-	_, marked, err := e.localGitConfigValue(ctx, remoteMirrorPromisorMarkerKey)
-	if err != nil || !marked {
-		return err
-	}
-	return e.runSilentLocalGitConfig(ctx, "--unset-all", remoteMirrorPromisorMarkerKey)
-}
-
-func (e *Executor) prepareRemoteMirrorFetch(
-	ctx context.Context,
-	gitFetchFlags string,
-) (string, error) {
-	parts, err := shellwords.Split(gitFetchFlags)
-	if err != nil {
-		return "", err
-	}
-	if hasPartialFilterFlags(parts) || hasNoPartialFilterFlag(parts) {
-		return gitFetchFlags, nil
-	}
-	filter, hasFilter, err := e.localGitConfigValue(ctx, "remote.origin.partialclonefilter")
-	if err != nil {
-		return "", err
-	}
-	if !hasFilter || filter == "" {
-		return gitFetchFlags, nil
-	}
-	return strings.TrimSpace(gitFetchFlags + " " + shellwords.Quote("--filter="+filter)), nil
-}
-
-func hasNoPartialFilterFlag(flags []string) bool {
-	return slices.ContainsFunc(flags, func(flag string) bool {
-		return strings.HasPrefix(flag, "--no-fi")
-	})
-}
-
-func (e *Executor) finishRemoteMirrorPromisor(
-	ctx context.Context,
-	mirrorURL string,
-) error {
-	marker, marked, err := e.localGitConfigValue(ctx, remoteMirrorPromisorMarkerKey)
-	if err != nil {
-		return fmt.Errorf("reading remote mirror promisor marker: %w", err)
-	}
-	if !marked || marker != remoteMirrorPromisorMarker(mirrorURL) {
-		return nil
-	}
-
-	promisorKey := remoteMirrorPromisorKey(mirrorURL, "promisor")
-	promisor, hasPromisor, err := e.localGitConfigValue(ctx, promisorKey)
-	if err != nil {
-		return fmt.Errorf("reading remote mirror promisor config: %w", err)
-	}
-	if !hasPromisor || promisor == "" {
-		return e.clearRemoteMirrorPromisorMarker(ctx)
-	}
-
-	filterKey := remoteMirrorPromisorKey(mirrorURL, "partialclonefilter")
-	filter, hasFilter, err := e.localGitConfigValue(ctx, filterKey)
-	if err != nil {
-		return fmt.Errorf("reading remote mirror partial-clone config: %w", err)
-	}
-
-	// A filtered fetch can write missing objects before it reports failure or
-	// cancellation. Configure canonical ownership before removing mirror
-	// ownership on every outcome so an interruption cannot strand those objects.
-	if err := e.shell.Command(
-		"git", "config", "--local", "remote.origin.promisor", "true",
-	).Run(ctx, shell.AlwaysHidePrompt(), shell.ShowStderr(false)); err != nil {
-		return fmt.Errorf("configuring origin promisor: %w", err)
-	}
-	if hasFilter {
-		if err := e.shell.Command(
-			"git", "config", "--local", "remote.origin.partialclonefilter", filter,
-		).Run(ctx, shell.AlwaysHidePrompt(), shell.ShowStderr(false)); err != nil {
-			return fmt.Errorf("configuring origin partial clone filter: %w", err)
-		}
-	}
-
-	if err := e.runSilentLocalGitConfig(ctx, "--remove-section", "remote."+mirrorURL); err != nil {
-		return fmt.Errorf("removing remote mirror promisor config: %w", err)
-	}
-
-	return e.clearRemoteMirrorPromisorMarker(ctx)
-}
-
-func (e *Executor) repairInterruptedRemoteMirrorPromisors(ctx context.Context) error {
-	gitPath := filepath.Join(e.shell.Getwd(), ".git")
-	gitInfo, err := os.Stat(gitPath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil
-		}
-		return err
-	}
-	if gitInfo.IsDir() {
-		config, err := os.ReadFile(filepath.Join(gitPath, "config"))
-		if err != nil {
-			return err
-		}
-		// Avoid adding a Git invocation to checkouts the agent did not mark.
-		if !strings.Contains(string(config), "remote-mirror-promisor") {
-			return nil
-		}
-	}
-
-	marker, marked, err := e.localGitConfigValue(ctx, remoteMirrorPromisorMarkerKey)
-	if err != nil {
-		return err
-	}
-	if !marked {
-		return nil
-	}
-
-	output, err := e.runSilentLocalGitConfigOutput(ctx, "--get-regexp", `^remote\..*\.promisor$`)
-	if err != nil {
-		if shell.IsExitError(err) && shell.ExitCode(err) == 1 {
-			return e.clearRemoteMirrorPromisorMarker(ctx)
-		}
-		return err
-	}
-	for line := range strings.SplitSeq(output, "\n") {
-		key, _, ok := strings.Cut(strings.TrimSpace(line), " ")
-		if !ok {
-			continue
-		}
-		remoteName := strings.TrimSuffix(strings.TrimPrefix(key, "remote."), ".promisor")
-		remoteURL, err := url.Parse(remoteName)
-		if err != nil || (remoteURL.Scheme != "https" && remoteURL.Scheme != "http") || remoteURL.Host == "" {
-			continue
-		}
-		if remoteMirrorPromisorMarker(remoteName) != marker {
-			continue
-		}
-		if err := e.finishRemoteMirrorPromisor(ctx, remoteName); err != nil {
-			return err
-		}
-		return nil
-	}
-	return e.clearRemoteMirrorPromisorMarker(ctx)
-}
-
-func (e *Executor) localGitConfigValue(ctx context.Context, key string) (string, bool, error) {
-	value, err := e.runSilentLocalGitConfigOutput(ctx, "--get", key)
-	if err != nil {
-		if shell.IsExitError(err) && shell.ExitCode(err) == 1 {
-			return "", false, nil
-		}
-		return "", false, err
-	}
-	return strings.TrimSpace(value), true, nil
-}
-
-func (e *Executor) runSilentLocalGitConfig(ctx context.Context, args ...string) error {
-	_, err := e.runSilentLocalGitConfigOutput(ctx, args...)
-	return err
-}
-
-func (e *Executor) runSilentLocalGitConfigOutput(ctx context.Context, args ...string) (string, error) {
-	commandArgs := append([]string{"config", "--local"}, args...)
-	gitPath, err := e.shell.AbsolutePath("git")
-	if err != nil {
-		return "", errors.New("resolving git for silent config command")
-	}
-	cmd := exec.CommandContext(ctx, gitPath, commandArgs...)
-	cmd.Dir = e.shell.Getwd()
-	cmd.Env = e.shell.Env.ToSlice()
-	output, err := cmd.Output()
-	if err != nil {
-		// Do not return argv or stderr: mirror-keyed config includes the URL.
-		return "", fmt.Errorf("silent git config failed: %w", err)
-	}
-	return string(output), nil
 }
 
 // gitFetchWithFallback runs git fetch for refspecs; when it fails for a recoverable reason, it retries by fetching

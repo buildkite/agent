@@ -29,14 +29,6 @@ as an optional upstream for the on-host mirror:
 - a lagging, unavailable, or unauthorised remote mirror fails open to the
   canonical repository while the checkout is still active.
 
-When no on-host mirror update is configured and a checkout already exists, the
-agent fetches the exact build commit into that checkout from the remote mirror.
-A confirmed hit skips the redundant canonical commit fetch. A miss, timeout, or
-transport failure leaves the checkout in place and falls back to canonical;
-cancellation does not start new fallback work. Filtered fetches retarget their
-promisor configuration to canonical `origin`, so later lazy object reads never
-depend on the one-shot mirror URL.
-
 The shared mirror directory remains keyed by the canonical repository URL and
 its persisted `origin` is always canonical. This keeps the cache compatible with
 older agents sharing the same volume, avoids cache fragmentation when mirror
@@ -44,14 +36,9 @@ URLs rotate, and prevents lagging mirror data from overwriting canonical
 `refs/heads/*`.
 
 The remote mirror URL and credentials are supplied by Buildkite. The URL is not
-written into the on-host mirror configuration or retained in checkout
-configuration after a completed fetch. An interrupted filtered fetch can leave
-promisor keys. Before fetching, the agent records a credential-free digest
-marker so the next fetch repairs only the matching agent-created section and
-leaves unmarked user promisor configuration unchanged. If config for the exact
-mirror URL already exists without that marker, the agent preserves it and uses
-the canonical repository. For full requirements, caveats, and rollout
-decisions, see [`remote-git-mirrors.md`](remote-git-mirrors.md).
+written into the on-host mirror or checkout configuration. For full
+requirements, caveats, and rollout decisions, see
+[`remote-git-mirrors.md`](remote-git-mirrors.md).
 
 ## Mirrors? `--mirror`? 🪞
 

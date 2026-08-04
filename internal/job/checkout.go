@@ -211,21 +211,6 @@ func (e *Executor) checkout(ctx context.Context) error {
 				// 94 chosen by fair die roll
 				return &shell.ExitError{Code: 94, Err: err}
 
-			case errors.As(err, &errGit) && errGit.Type == gitErrorFetchRetryClean:
-				// Cleanup failures can wrap cancellation; remove unsafe state first.
-				if errGit.WasRetried {
-					e.shell.Warningf("Checkout failed! %s", err)
-					r.Break()
-				} else {
-					e.shell.Warningf("Checkout failed! %s (%s)", err, r)
-				}
-				if err := e.removeCheckoutDir(); err != nil {
-					e.shell.Warningf("Failed to remove checkout dir while cleaning up after a checkout error: %v", err)
-				}
-				if err := e.createCheckoutDir(); err != nil {
-					return err
-				}
-
 			case errors.Is(err, context.Canceled):
 				e.shell.Warningf("Checkout was cancelled")
 				r.Break()
@@ -247,7 +232,7 @@ func (e *Executor) checkout(ctx context.Context) error {
 
 				switch errGit.Type {
 				case gitErrorClean, gitErrorCleanSubmodules, gitErrorClone, gitErrorCloneTimeout,
-					gitErrorCheckoutRetryClean,
+					gitErrorCheckoutRetryClean, gitErrorFetchRetryClean,
 					gitErrorFetchBadObject, gitErrorFetchRefNotOnRemote:
 					// Checkout can fail because of corrupted files in the checkout which can leave the agent in a state where it
 					// keeps failing. This removes the checkout dir, which means the next checkout will be a lot slower (clone vs
