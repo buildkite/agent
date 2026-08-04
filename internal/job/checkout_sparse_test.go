@@ -68,7 +68,7 @@ func TestSetupSparseCheckout_Enable(t *testing.T) {
 	executor, git, out := newSparseCheckoutTestExecutor(t)
 	defer git.Close() //nolint:errcheck // Best-effort cleanup.
 
-	sc := sparseCheckout{paths: []string{".buildkite/", "src/"}, mode: SparseCheckoutModeCone, modeEnforced: true}
+	sc := sparseCheckout{paths: []string{".buildkite/", "src/"}, mode: SparseCheckoutModeCone, modeFlagSupported: true}
 	git.Expect("sparse-checkout", "set", "--cone", "--", ".buildkite/", "src/").AndExitWith(0)
 
 	active, err := executor.setupSparseCheckout(t.Context(), sc)
@@ -89,7 +89,7 @@ func TestSetupSparseCheckout_NoCone(t *testing.T) {
 	executor, git, out := newSparseCheckoutTestExecutor(t)
 	defer git.Close() //nolint:errcheck // Best-effort cleanup.
 
-	sc := sparseCheckout{paths: []string{"/*", "!/docs/"}, mode: SparseCheckoutModeNoCone, modeEnforced: true}
+	sc := sparseCheckout{paths: []string{"/*", "!/docs/"}, mode: SparseCheckoutModeNoCone, modeFlagSupported: true}
 	git.Expect("sparse-checkout", "set", "--no-cone", "--", "/*", "!/docs/").AndExitWith(0)
 
 	active, err := executor.setupSparseCheckout(t.Context(), sc)
@@ -106,24 +106,45 @@ func TestSetupSparseCheckout_NoCone(t *testing.T) {
 	git.Check(t)
 }
 
-// TestSetupSparseCheckout_UnenforcedMode covers git 2.27–2.34, where
+// TestSetupSparseCheckout_PinsModeWithoutModeFlag covers git 2.27–2.34, where
 // `sparse-checkout set` has no --cone option and silently treats an unrecognised
 // one as a pattern. The flag must be omitted so it can't land in the
-// sparse-checkout file, while `--` still guards the paths. Since git will apply
-// whatever mode the repository config says, the build log has to say so rather
-// than claiming the requested mode is in force.
-func TestSetupSparseCheckout_UnenforcedMode(t *testing.T) {
+// sparse-checkout file; cone mode is pinned through config instead, so the paths
+// are interpreted the way the job asked rather than however the repository was
+// last configured.
+func TestSetupSparseCheckout_PinsModeWithoutModeFlag(t *testing.T) {
 	executor, git, out := newSparseCheckoutTestExecutor(t)
 	defer git.Close() //nolint:errcheck // Best-effort cleanup.
 
 	sc := sparseCheckout{paths: []string{"src/"}, mode: SparseCheckoutModeCone}
+	git.Expect("sparse-checkout", "init", "--cone").AndExitWith(0)
 	git.Expect("sparse-checkout", "set", "--", "src/").AndExitWith(0)
 
 	if _, err := executor.setupSparseCheckout(t.Context(), sc); err != nil {
 		t.Fatalf("executor.setupSparseCheckout(ctx, sc) error = %v, want nil", err)
 	}
-	if got, want := out.String(), "older than 2.35 and can't be told which sparse checkout mode to use"; !strings.Contains(got, want) {
+	if got, want := out.String(), "Enabling cone mode via config: this git is older than 2.35 and takes no mode option"; !strings.Contains(got, want) {
 		t.Errorf("shell output = %q, want to contain %q", got, want)
+	}
+
+	git.Check(t)
+}
+
+func TestSetupSparseCheckout_PinModeFailureIsFatal(t *testing.T) {
+	executor, git, _ := newSparseCheckoutTestExecutor(t)
+	defer git.Close() //nolint:errcheck // Best-effort cleanup.
+
+	sc := sparseCheckout{paths: []string{"src/"}, mode: SparseCheckoutModeCone}
+	git.Expect("sparse-checkout", "init", "--cone").AndExitWith(1)
+	// Continuing would apply the paths under an unknown interpretation.
+	git.Expect("sparse-checkout", "set").WithAnyArguments().NotCalled()
+
+	active, err := executor.setupSparseCheckout(t.Context(), sc)
+	if err == nil {
+		t.Fatalf("executor.setupSparseCheckout(ctx, sc) error = nil, want non-nil")
+	}
+	if active {
+		t.Errorf("executor.setupSparseCheckout(ctx, sc) active = true, want false")
 	}
 
 	git.Check(t)
@@ -131,21 +152,21 @@ func TestSetupSparseCheckout_UnenforcedMode(t *testing.T) {
 
 func TestResolveSparseCheckout_Modes(t *testing.T) {
 	tests := []struct {
-		name             string
-		mode             string
-		gitVersion       string
-		gitVersionExit   int
-		wantActive       bool
-		wantMode         SparseCheckoutMode
-		wantModeEnforced bool
-		wantWarning      string
+		name                  string
+		mode                  string
+		gitVersion            string
+		gitVersionExit        int
+		wantActive            bool
+		wantMode              SparseCheckoutMode
+		wantModeFlagSupported bool
+		wantWarning           string
 	}{
 		{
-			name:             "cone_on_modern_git",
-			gitVersion:       "git version 2.43.0",
-			wantActive:       true,
-			wantMode:         SparseCheckoutModeCone,
-			wantModeEnforced: true,
+			name:                  "cone_on_modern_git",
+			gitVersion:            "git version 2.43.0",
+			wantActive:            true,
+			wantMode:              SparseCheckoutModeCone,
+			wantModeFlagSupported: true,
 		},
 		{
 			// Cone mode is available as soon as `sparse-checkout set` is; below
@@ -157,12 +178,12 @@ func TestResolveSparseCheckout_Modes(t *testing.T) {
 			wantMode:   SparseCheckoutModeCone,
 		},
 		{
-			name:             "no_cone_on_modern_git",
-			mode:             "no-cone",
-			gitVersion:       "git version 2.35.0",
-			wantActive:       true,
-			wantMode:         SparseCheckoutModeNoCone,
-			wantModeEnforced: true,
+			name:                  "no_cone_on_modern_git",
+			mode:                  "no-cone",
+			gitVersion:            "git version 2.35.0",
+			wantActive:            true,
+			wantMode:              SparseCheckoutModeNoCone,
+			wantModeFlagSupported: true,
 		},
 		{
 			// `set` gained --no-cone in 2.35; older git would write the flag into
@@ -212,8 +233,8 @@ func TestResolveSparseCheckout_Modes(t *testing.T) {
 			if got := sc.mode; got != tt.wantMode {
 				t.Errorf("sparseCheckout.mode = %q, want %q", got, tt.wantMode)
 			}
-			if got := sc.modeEnforced; got != tt.wantModeEnforced {
-				t.Errorf("sparseCheckout.modeEnforced = %t, want %t", got, tt.wantModeEnforced)
+			if got := sc.modeFlagSupported; got != tt.wantModeFlagSupported {
+				t.Errorf("sparseCheckout.modeFlagSupported = %t, want %t", got, tt.wantModeFlagSupported)
 			}
 			switch {
 			case tt.wantWarning != "":
@@ -243,14 +264,14 @@ func TestSparseCheckoutLFSInclude(t *testing.T) {
 	}{
 		{
 			name: "cone_paths_scope_lfs",
-			sc:   sparseCheckout{paths: []string{"src/"}, mode: SparseCheckoutModeCone, modeEnforced: true},
+			sc:   sparseCheckout{paths: []string{"src/"}, mode: SparseCheckoutModeCone, modeFlagSupported: true},
 			want: []string{"src/"},
 		},
 		{
 			// `git lfs fetch --include` has no negation and `git lfs checkout` takes
 			// pathspecs, so non-cone patterns must not be reused for LFS.
 			name: "no_cone_patterns_do_not_scope_lfs",
-			sc:   sparseCheckout{paths: []string{"/*", "!/docs/"}, mode: SparseCheckoutModeNoCone, modeEnforced: true},
+			sc:   sparseCheckout{paths: []string{"/*", "!/docs/"}, mode: SparseCheckoutModeNoCone, modeFlagSupported: true},
 		},
 		{
 			name: "inactive_does_not_scope_lfs",
