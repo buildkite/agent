@@ -150,16 +150,14 @@ func gitCheckout(ctx context.Context, sh *shell.Shell, gitCheckoutFlags, referen
 	return nil
 }
 
-// hasPartialFilterFlags returns true if flags contains a
-// --filter=<spec> or --filter <spec> option.
+// hasPartialFilterFlags returns true if flags contains a filter option,
+// including Git's accepted --fi* long-option abbreviations.
 func hasPartialFilterFlags(flags []string) bool {
 	for i, f := range flags {
-		// Check for --filter=<spec>
-		if strings.HasPrefix(f, "--filter=") {
+		if strings.HasPrefix(f, "--fi") && strings.Contains(f, "=") {
 			return true
 		}
-		// The --filter <spec> form only counts when a value actually follows it
-		if f == "--filter" && i+1 < len(flags) {
+		if strings.HasPrefix(f, "--fi") && i+1 < len(flags) {
 			return true
 		}
 	}
