@@ -153,11 +153,6 @@ type JobRunner struct {
 	// cancelled because of a Buildkite job-level timeout. The path is passed
 	// to the bootstrap subprocess via BUILDKITE_AGENT_JOB_TIMEOUT_FILE.
 	jobTimeoutFilePath string
-
-	// droppedRemoteMirrorURL records a backend-provided mirror removed from the
-	// bootstrap environment because it did not match --allowed-repositories.
-	// createEnvironment runs before jobLogs exists, so Run emits the warning.
-	droppedRemoteMirrorURL string
 }
 
 // jobProcess is either a *process.Process, or a *kubernetes.Runner.
@@ -457,19 +452,6 @@ func (r *JobRunner) createEnvironment(ctx context.Context) ([]string, error) {
 		if normalizedJobEnv.Exists(name) {
 			jobEnvHasOTLPDestination = true
 			break
-		}
-	}
-
-	// Always override an ambient agent-process value. Without the explicit
-	// empty entry, bootstrap's inherited os.Environ could enable a mirror that
-	// the backend did not provide or that the repository allowlist rejected.
-	mirrorURL := env["BUILDKITE_GIT_REMOTE_MIRROR_URL"]
-	env["BUILDKITE_GIT_REMOTE_MIRROR_URL"] = ""
-	if mirrorURL != "" {
-		if err := validateJobValue(r.conf.AgentConfiguration.AllowedRepositories, mirrorURL); err != nil {
-			r.droppedRemoteMirrorURL = mirrorURL
-		} else {
-			env["BUILDKITE_GIT_REMOTE_MIRROR_URL"] = mirrorURL
 		}
 	}
 

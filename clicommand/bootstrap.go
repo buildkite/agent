@@ -83,7 +83,6 @@ type BootstrapConfig struct {
 	GitCleanFlags                string   `cli:"git-clean-flags"`
 	GitSSHKey                    string   `cli:"git-ssh-key"`
 	GitCommitVerification        string   `cli:"git-commit-verification"`
-	GitRemoteMirrorURL           string   `cli:"git-remote-mirror-url"`
 	GitMirrorsPath               string   `cli:"git-mirrors-path" normalize:"filepath"`
 	GitMirrorCheckoutMode        string   `cli:"git-mirror-checkout-mode"`
 	GitMirrorsLockTimeout        int      `cli:"git-mirrors-lock-timeout"`
@@ -266,11 +265,6 @@ var BootstrapCommand = cli.Command{
 			Name:   "git-ssh-key",
 			Usage:  "SSH private key to use for git checkout",
 			EnvVar: "BUILDKITE_GIT_SSH_KEY",
-		},
-		cli.StringFlag{
-			Name:   "git-remote-mirror-url",
-			Usage:  "Backend-provided remote Git mirror used as an optional checkout source",
-			EnvVar: "BUILDKITE_GIT_REMOTE_MIRROR_URL",
 		},
 		GitMirrorsPathFlag,
 		GitMirrorCheckoutModeFlag,
@@ -508,7 +502,6 @@ var BootstrapCommand = cli.Command{
 			GitMirrorsPath:               cfg.GitMirrorsPath,
 			GitMirrorCheckoutMode:        cfg.GitMirrorCheckoutMode,
 			GitMirrorsSkipUpdate:         cfg.GitMirrorsSkipUpdate,
-			GitRemoteMirrorURL:           cfg.GitRemoteMirrorURL,
 			GitSubmodules:                cfg.GitSubmodules,
 			GitSubmoduleCloneConfig:      cfg.GitSubmoduleCloneConfig,
 			HooksPath:                    cfg.HooksPath,
