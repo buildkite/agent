@@ -167,6 +167,56 @@ func TestPrepareCheckoutWorkdirReclonesShallowReferenceFalseHit(t *testing.T) {
 	}
 }
 
+func TestPrepareCheckoutWorkdirReclonesShallowAmbientAlternateFalseHit(t *testing.T) {
+	canonical := newOnHostMirrorHTTPRepo(t, "canonical")
+	if err := canonical.SetDefaultBranch("canonical", "main"); err != nil {
+		t.Fatal(err)
+	}
+	mirror := copyOnHostMirrorHTTPRepo(t, canonical.RepoURL("canonical"), "mirror")
+	if err := mirror.SetDefaultBranch("mirror", "main"); err != nil {
+		t.Fatal(err)
+	}
+
+	source := filepath.Join(t.TempDir(), "source")
+	runGitForMirrorTest(t, "", "clone", canonical.RepoURL("canonical"), source)
+	if err := os.WriteFile(filepath.Join(source, "second.txt"), []byte("second\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	runGitForMirrorTest(t, source, "add", "second.txt")
+	runGitForMirrorTest(t, source, "commit", "-m", "Advance main")
+	runGitForMirrorTest(t, source, "push", "origin", "main")
+	commit := gitOutputForRemoteCheckoutTest(t, source, "rev-parse", "HEAD")
+
+	reference := filepath.Join(t.TempDir(), "reference.git")
+	cloneOnHostMirrorToPath(t, canonical.RepoURL("canonical"), reference)
+	e, attempt := newFreshCloneRemoteMirrorExecutor(t, canonical.RepoURL("canonical"), mirror.RepoURL("mirror"), commit)
+	e.shell.Env.Set("GIT_ALTERNATE_OBJECT_DIRECTORIES", filepath.Join(reference, "objects"))
+	if err := e.prepareCheckoutWorkdir(
+		t.Context(),
+		&attempt,
+		sparseCheckout{},
+		"",
+		[]string{"--depth=1"},
+		false,
+	); err != nil {
+		t.Fatalf("prepareCheckoutWorkdir() error = %v", err)
+	}
+	if attempt.outcome != remoteMirrorOutcomeMiss {
+		t.Fatalf("outcome = %q, want ambient alternate shallow hit treated as miss", attempt.outcome)
+	}
+	if err := e.fetchSource(t.Context(), false, &attempt); err != nil {
+		t.Fatalf("fetchSource() error = %v", err)
+	}
+
+	control := filepath.Join(t.TempDir(), "canonical-control")
+	runGitForMirrorTest(t, "", "clone", "--depth=1", canonical.RepoURL("canonical"), control)
+	gotShallow := readRemoteMirrorTestFile(t, filepath.Join(e.shell.Getwd(), ".git", "shallow"))
+	wantShallow := readRemoteMirrorTestFile(t, filepath.Join(control, ".git", "shallow"))
+	if gotShallow != wantShallow {
+		t.Errorf("shallow boundary = %q, want canonical boundary %q", gotShallow, wantShallow)
+	}
+}
+
 func TestPrepareCheckoutWorkdirRecursiveSubmodulesUseCanonical(t *testing.T) {
 	canonical := newOnHostMirrorHTTPRepo(t, "canonical")
 	commit, _, err := canonical.PushBranch("canonical", "feature-branch")

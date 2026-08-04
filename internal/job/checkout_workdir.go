@@ -149,7 +149,9 @@ func (e *Executor) prepareCheckoutWorkdir(
 			return ctxErr
 		}
 		if cloneErr == nil {
-			alternateObjects := osutil.FileExists(filepath.Join(e.shell.Getwd(), ".git", "objects", "info", "alternates"))
+			ambientAlternates, _ := e.shell.Env.Get("GIT_ALTERNATE_OBJECT_DIRECTORIES")
+			alternateObjects := ambientAlternates != "" ||
+				osutil.FileExists(filepath.Join(e.shell.Getwd(), ".git", "objects", "info", "alternates"))
 			if hasCommit && (!shallowClone || !alternateObjects) {
 				// C1: a shallow hit keeps the mirror snapshot's boundary even
 				// if canonical has advanced. Re-cloning every hit would discard
