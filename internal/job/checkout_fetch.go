@@ -212,6 +212,22 @@ func (e *Executor) fetchExistingCheckoutFromRemoteMirror(
 	attempt *remoteMirrorAttempt,
 	gitFetchFlags string,
 ) (bool, error) {
+	hasURLConfig, err := e.hasRemoteMirrorURLConfig(ctx, attempt.url)
+	if err != nil {
+		if ctx.Err() != nil {
+			return false, ctx.Err()
+		}
+		attempt.outcome = remoteMirrorOutcomeError
+		e.shell.Warningf("Could not inspect remote Git mirror state; falling back to canonical")
+		return false, nil
+	}
+	if hasURLConfig {
+		attempt.outcome = remoteMirrorOutcomeSkipped
+		attempt.skipReason = remoteMirrorSkipURLConfigConflict
+		e.shell.Commentf("Remote Git mirror URL already has user-owned config; falling back to canonical")
+		return false, nil
+	}
+
 	if err := e.markRemoteMirrorPromisor(ctx, attempt.url); err != nil {
 		if ctx.Err() != nil {
 			return false, ctx.Err()
@@ -256,6 +272,27 @@ func remoteMirrorPromisorKey(mirrorURL, name string) string {
 
 func remoteMirrorPromisorMarker(mirrorURL string) string {
 	return fmt.Sprintf("%x", sha256.Sum256([]byte(mirrorURL)))
+}
+
+func (e *Executor) hasRemoteMirrorURLConfig(ctx context.Context, mirrorURL string) (bool, error) {
+	output, err := e.runSilentLocalGitConfigOutput(ctx, "--get-regexp", `^remote\..*\..*$`)
+	if err != nil {
+		if shell.IsExitError(err) && shell.ExitCode(err) == 1 {
+			return false, nil
+		}
+		return false, err
+	}
+	for line := range strings.SplitSeq(output, "\n") {
+		fields := strings.Fields(line)
+		if len(fields) == 0 {
+			continue
+		}
+		key := strings.TrimPrefix(fields[0], "remote.")
+		if variable := strings.LastIndexByte(key, '.'); variable > 0 && key[:variable] == mirrorURL {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 func (e *Executor) markRemoteMirrorPromisor(ctx context.Context, mirrorURL string) error {

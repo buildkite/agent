@@ -97,6 +97,7 @@ const (
 	remoteMirrorSkipNotFirstAttempt     remoteMirrorSkipReason = "not-first-attempt"
 	remoteMirrorSkipRecursiveSubmodules remoteMirrorSkipReason = "recursive-submodules"
 	remoteMirrorSkipSeparateGitDir      remoteMirrorSkipReason = "separate-git-dir"
+	remoteMirrorSkipURLConfigConflict   remoteMirrorSkipReason = "url-config-conflict"
 )
 
 type remoteMirrorAttempt struct {

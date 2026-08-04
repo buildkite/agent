@@ -1042,14 +1042,16 @@ cancel. A checkout already partial under a *different* filter has its
 given the fetch it just took was filtered the new way.
 
 Normal cancellation cleanup is not enough for process death or host reboot.
-Before the mirror fetch, write a local config marker containing a
-credential-free digest of the exact mirror URL. Remove it only after promisor
-cleanup completes. Before every later fetch, use that marker to find the
-matching URL-named promisor section left by an interrupted attempt, establish
-canonical `origin` ownership, and remove it—even when the backend mirror URL has
-since been removed or rotated. A marker with no matching section is the safe
-crash window before Git wrote promisor state and is simply cleared. Unmarked
-URL-named promisors are user-owned and remain untouched.
+Before the mirror fetch, confirm no unmarked config section already exists for
+the exact mirror URL; if one does, treat it as user-owned and use canonical.
+Otherwise write a local config marker containing a credential-free digest of
+that URL. Remove it only after promisor cleanup completes. Before every later
+fetch, use that marker to find the matching URL-named promisor section left by
+an interrupted attempt, establish canonical `origin` ownership, and remove
+it—even when the backend mirror URL has since been removed or rotated. A marker
+with no matching section is the safe crash window before Git wrote promisor
+state and is simply cleared. Other unmarked URL-named promisors are user-owned
+and remain untouched.
 
 If that bounded config repair fails, the checkout is no longer safe to preserve:
 the mirror may remain registered as an unbounded promisor. Classify the failure
@@ -1071,7 +1073,8 @@ leave canonical promisor ownership; a sparse pipeline's mirror fetch carries
 cleans and retries canonically; no `remote.<mirrorURL>.*` survives any successful
 cleanup; marker write failure falls back canonically; marker-only interruption
 is cleared; marked repair leaves unrelated and unmarked user promisor sections
-untouched; and —
+untouched; a same-URL unmarked user section bypasses the mirror without losing
+any of its keys; and —
 the one that matters — after a
 hit on a checkout that was **not** previously a partial clone, with the mirror
 then deleted, the worktree materialises. A config-shape assertion passes on the

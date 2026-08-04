@@ -252,6 +252,38 @@ func TestFetchSourceLeavesUnmarkedUserPromisorUntouched(t *testing.T) {
 	}
 }
 
+func TestFetchSourceLeavesSameURLUnmarkedUserPromisorUntouched(t *testing.T) {
+	canonical := newOnHostMirrorHTTPRepo(t, "canonical")
+	checkout := cloneExistingCheckoutForRemoteMirrorTest(t, canonical.RepoURL("canonical"))
+	commit := gitOutputForRemoteCheckoutTest(t, checkout, "rev-parse", "refs/remotes/origin/main")
+	mirrorURL := "https://127.0.0.1:1/mirror.git"
+	runGitForMirrorTest(t, checkout, "config", "core.repositoryformatversion", "1")
+	runGitForMirrorTest(t, checkout, "config", "remote."+mirrorURL+".promisor", "true")
+	runGitForMirrorTest(t, checkout, "config", "remote."+mirrorURL+".partialclonefilter", "blob:none")
+	runGitForMirrorTest(t, checkout, "config", "remote."+mirrorURL+".user-owned", "keep")
+	e, attempt := newExistingCheckoutRemoteMirrorExecutor(
+		t,
+		checkout,
+		canonical.RepoURL("canonical"),
+		mirrorURL,
+		commit,
+	)
+
+	if err := e.fetchSource(t.Context(), false, &attempt); err != nil {
+		t.Fatalf("fetchSource() error = %v", err)
+	}
+	assertGitConfigForRemoteMirrorTest(t, checkout, "remote."+mirrorURL+".promisor", "true")
+	assertGitConfigForRemoteMirrorTest(t, checkout, "remote."+mirrorURL+".partialclonefilter", "blob:none")
+	assertGitConfigForRemoteMirrorTest(t, checkout, "remote."+mirrorURL+".user-owned", "keep")
+	if got := gitConfigForRemoteMirrorTest(t, checkout, "remote.origin.promisor"); got != "" {
+		t.Errorf("remote.origin.promisor = %q, want user promisor ownership unchanged", got)
+	}
+	if attempt.outcome != remoteMirrorOutcomeSkipped ||
+		attempt.skipReason != remoteMirrorSkipURLConfigConflict {
+		t.Errorf("remote mirror attempt = %+v, want URL config conflict skip", attempt)
+	}
+}
+
 func TestRepairInterruptedRemoteMirrorPromisorAfterURLRemoval(t *testing.T) {
 	canonical := newOnHostMirrorHTTPRepo(t, "canonical")
 	checkout := cloneExistingCheckoutForRemoteMirrorTest(t, canonical.RepoURL("canonical"))
