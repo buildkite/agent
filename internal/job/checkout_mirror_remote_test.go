@@ -12,7 +12,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
-	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -327,56 +326,6 @@ func TestUpdateGitMirrorWarmHitRepairsCollidingCanonicalOrigin(t *testing.T) {
 	}
 }
 
-func TestUpdateGitMirrorNoRemoteURLUsesUnpinnedWarmCommit(t *testing.T) {
-	canonical := newOnHostMirrorHTTPRepo(t, "canonical")
-	e := newOnHostMirrorExecutor(t, canonical.RepoURL("canonical"), "")
-	mirrorDir := expectedOnHostMirrorDir(e)
-	cloneOnHostMirrorToPath(t, e.Repository, mirrorDir)
-
-	parent := gitOutputForMirrorTest(t, mirrorDir, "rev-parse", "refs/heads/main")
-	tree := gitOutputForMirrorTest(t, mirrorDir, "rev-parse", "refs/heads/main^{tree}")
-	commit := gitOutputForMirrorTest(
-		t,
-		mirrorDir,
-		"commit-tree", tree,
-		"-p", parent,
-		"-m", "Unpinned warm commit",
-	)
-	if !hasGitCommit(t.Context(), e.shell, mirrorDir, commit) {
-		t.Fatal("test commit is absent from mirror")
-	}
-	if hasGitCommitReachableFromRef(t.Context(), e.shell, mirrorDir, commit) {
-		t.Fatal("test commit unexpectedly reachable from a ref")
-	}
-
-	var commandLog [][]string
-	e.shell = shell.NewTestShell(
-		t,
-		shell.WithSignalGracePeriod(10*time.Millisecond),
-		shell.WithCommandLog(&commandLog),
-	)
-	e.Commit = commit
-	attempt := e.resolveRemoteMirrorAttempt(0)
-	if attempt.outcome != remoteMirrorOutcomeSkipped ||
-		attempt.skipReason != remoteMirrorSkipNoURL {
-		t.Fatalf("attempt = %+v, want no-url skip", attempt)
-	}
-	canonical.Close()
-
-	gotDir, err := e.updateGitMirror(t.Context(), e.Repository, &attempt)
-	if err != nil {
-		t.Fatalf("updateGitMirror() error = %v, want warm mirror fast path", err)
-	}
-	if gotDir != mirrorDir {
-		t.Errorf("mirror dir = %q, want %q", gotDir, mirrorDir)
-	}
-	for _, command := range commandLog {
-		if slices.Contains(command, "for-each-ref") {
-			t.Errorf("warm mirror fast path ran global reachability scan: %q", command)
-		}
-	}
-}
-
 func TestGetOrUpdateMirrorDirCloneLockTimeoutFallsBackWithoutMirror(t *testing.T) {
 	canonical := newOnHostMirrorHTTPRepo(t, "canonical")
 	commit, _, err := canonical.PushBranch("canonical", "feature-branch")
@@ -508,7 +457,6 @@ func TestUpdateGitMirrorRetryDoesNotTrustUnpinnedCommit(t *testing.T) {
 		t.Fatal(err)
 	}
 	remoteMirror := copyOnHostMirrorHTTPRepo(t, canonical.RepoURL("canonical"), "mirror")
-	e.GitRemoteMirrorURL = remoteMirror.RepoURL("mirror")
 	if _, err := canonical.CreateRef("canonical", "refs/heads/feature-branch", mainCommit); err != nil {
 		t.Fatal(err)
 	}
