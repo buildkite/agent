@@ -36,6 +36,10 @@ type ExecutorConfig struct {
 	// The repository that needs to be cloned
 	Repository string `env:"BUILDKITE_REPO"`
 
+	// Backend-provided remote mirror used as an optional checkout source.
+	// Intentionally has no env tag so hooks cannot replace it at runtime.
+	GitRemoteMirrorURL string
+
 	// The commit being built
 	Commit string
 

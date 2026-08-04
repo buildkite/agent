@@ -282,6 +282,82 @@ func TestCheckingOutLocalGitProjectWithSparseCheckoutFallsBackOnOldGit(t *testin
 	requireCheckoutPath(t, tester.CheckoutDir(), "docs/readme.md", true)
 }
 
+// TestCheckingOutLocalGitProjectWithSparseCheckoutPinsConeOnOldGit covers git
+// 2.27–2.34, where `sparse-checkout set` takes no mode option. It fakes the
+// version the same way as the fallback test above, so real git still does the
+// work: `sparse-checkout init --cone` is a real command in every supported
+// version, and the resulting tree is real cone-mode output.
+//
+// The observable difference is core.sparseCheckoutCone and the top-level file:
+// cone mode includes files alongside the requested directory's ancestors, so
+// test.txt lands in the working tree, whereas the non-cone interpretation that
+// `git clone --sparse` leaves behind on these versions would omit it.
+func TestCheckingOutLocalGitProjectWithSparseCheckoutPinsConeOnOldGit(t *testing.T) {
+	t.Parallel()
+	skipIfGitSparseCheckoutUnsupported(t)
+
+	tester, err := NewExecutorTester(mainCtx)
+	if err != nil {
+		t.Fatalf("NewExecutorTester() error = %v", err)
+	}
+	defer tester.Close()
+	addSparseCheckoutFixture(t, tester.Repo)
+
+	env := []string{
+		"BUILDKITE_GIT_CLONE_FLAGS=-v --filter=blob:none --sparse",
+		"BUILDKITE_GIT_CLEAN_FLAGS=-fdq",
+		"BUILDKITE_GIT_FETCH_FLAGS=-v --filter=blob:none",
+		"BUILDKITE_GIT_SPARSE_CHECKOUT_PATHS=src/",
+	}
+
+	realGit, err := exec.LookPath("git")
+	if err != nil {
+		t.Fatalf("exec.LookPath(git) error = %v", err)
+	}
+
+	git := tester.MustMock(t, "git")
+
+	git.Expect("--version").AndCallFunc(func(c *bintest.Call) {
+		_, _ = fmt.Fprintln(c.Stdout, "git version 2.30.2")
+		c.Exit(0)
+	})
+
+	expect := func(args ...any) *bintest.Expectation {
+		return git.Expect(args...).AndPassthroughToLocalCommand(realGit)
+	}
+
+	expect("clone", "-v", "--filter=blob:none", "--sparse", "--", tester.Repo.Path, ".")
+	expect("clean", "-fdq")
+	expect("fetch", "-v", "--filter=blob:none", "--", "origin", "main")
+	// The mode is pinned through config, and `set` is called without the option
+	// this git would misread as a pattern.
+	expect("sparse-checkout", "init", "--cone")
+	expect("sparse-checkout", "set", "--", "src/")
+	expect("-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD")
+	expect("clean", "-fdq")
+	expect("--no-pager", "log", "-1", "HEAD", "-s", "--no-color", gitShowFormatArg)
+
+	agent := tester.MockAgent(t)
+	agent.Expect("meta-data", "exists", job.CommitMetadataKey).AndExitWith(1)
+	agent.Expect("meta-data", "set", job.CommitMetadataKey).WithStdin(commitPattern)
+
+	tester.RunAndCheck(t, env...)
+
+	checkoutRepo := &gitRepository{Path: tester.CheckoutDir()}
+	cone, err := checkoutRepo.Execute("config", "--get", "core.sparseCheckoutCone")
+	if err != nil {
+		t.Fatalf("git config --get core.sparseCheckoutCone error = %v", err)
+	}
+	if got := strings.TrimSpace(cone); got != "true" {
+		t.Errorf("core.sparseCheckoutCone = %q, want %q", got, "true")
+	}
+
+	requireCheckoutPath(t, tester.CheckoutDir(), "src/main.txt", true)
+	requireCheckoutPath(t, tester.CheckoutDir(), "test.txt", true)
+	requireCheckoutPath(t, tester.CheckoutDir(), "docs/readme.md", false)
+	requireCheckoutPath(t, tester.CheckoutDir(), ".buildkite/pipeline.yml", false)
+}
+
 // TestCheckingOutLocalGitProjectWithSparseCheckoutAutoAddsBlobNoneFilter
 // covers the agent's auto-injection of --filter=blob:none onto the clone when
 // sparse checkout paths are configured but the user did NOT supply any

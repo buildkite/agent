@@ -990,7 +990,7 @@ An existing partial clone has a second source of effective fetch behavior:
 but a direct-URL mirror fetch does not. When no explicit fetch filter or
 `--no-filter` override is present, append the stored origin filter to the mirror
 attempt so the transfer shape still matches canonical. Detect Git's accepted
-`--fil*` and `--no-fil*` long-option abbreviations too; otherwise an inherited
+`--fi*` and `--no-fi*` long-option abbreviations too; otherwise an inherited
 filter can silently override the operator's effective flag.
 
 **Then retarget the promisor the fetch wrote on every outcome — do not just
@@ -1042,9 +1042,16 @@ cancel. A checkout already partial under a *different* filter has its
 given the fetch it just took was filtered the new way.
 
 Normal cancellation cleanup is not enough for process death or host reboot.
-Before every later fetch, scan URL-named promisor sections left by interrupted
-attempts, establish canonical `origin` ownership, and remove them—even when the
-backend mirror URL has since been removed or rotated.
+Before the mirror fetch, confirm no unmarked config section already exists for
+the exact mirror URL; if one does, treat it as user-owned and use canonical.
+Otherwise write a local config marker containing a credential-free digest of
+that URL. Remove it only after promisor cleanup completes. Before every later
+fetch, use that marker to find the matching URL-named promisor section left by
+an interrupted attempt, establish canonical `origin` ownership, and remove
+it—even when the backend mirror URL has since been removed or rotated. A marker
+with no matching section is the safe crash window before Git wrote promisor
+state and is simply cleared. Other unmarked URL-named promisors are user-owned
+and remain untouched.
 
 If that bounded config repair fails, the checkout is no longer safe to preserve:
 the mirror may remain registered as an unbounded promisor. Classify the failure
@@ -1064,7 +1071,10 @@ leave canonical promisor ownership; a sparse pipeline's mirror fetch carries
 `--filter=blob:none`; an existing origin filter is inherited unless
 `--no-filter` (including accepted abbreviations) is explicit; cleanup failure
 cleans and retries canonically; no `remote.<mirrorURL>.*` survives any successful
-cleanup; and —
+cleanup; marker write failure falls back canonically; marker-only interruption
+is cleared; marked repair leaves unrelated and unmarked user promisor sections
+untouched; a same-URL unmarked user section bypasses the mirror without losing
+any of its keys; and —
 the one that matters — after a
 hit on a checkout that was **not** previously a partial clone, with the mirror
 then deleted, the worktree materialises. A config-shape assertion passes on the
@@ -1149,10 +1159,10 @@ retains the mirror tip as an extra shallow root and can make more history
 reachable than a canonical clone with the same depth. Ask Git whether the
 resulting repository is shallow rather than reimplementing its accepted option
 spellings and abbreviations. If a shallow clone misses the commit, re-clone
-canonically. Also re-clone a shallow apparent hit when an alternates file is
-present: `hasGitCommit` follows alternates, so the target may come from a newer
-reference repository rather than the lagging mirror. This is the smallest
-reliable way to preserve R3.
+canonically. Also re-clone a shallow apparent hit when an alternates file or
+`GIT_ALTERNATE_OBJECT_DIRECTORIES` is present: `hasGitCommit` follows both, so
+the target may come from a newer reference repository rather than the lagging
+mirror. This is the smallest reliable way to preserve R3.
 
 Clone flags may also initialize submodules before `origin` is repointed.
 `--recurse-submodules` and its `--recursive` alias resolve relative
@@ -1227,7 +1237,7 @@ code that caused it no longer exists.
   vacuously. Include a lagging depth case using a Git-accepted abbreviated flag
   that compares shallow boundaries and reachable commits after canonical
   fallback, plus a shallow-reference case where the target exists only through
-  alternates.
+  an alternates file and through `GIT_ALTERNATE_OBJECT_DIRECTORIES`.
 - **Assert the avoided operation directly.** For existing/fresh mirror hits,
   assert that no canonical commit-fetch request occurs while allowing separately
   expected verification requests. A zero-byte assertion is insufficient because
