@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"net/url"
-	"os"
 	"path/filepath"
 	"regexp"
 	"slices"
@@ -97,7 +96,6 @@ const (
 	remoteMirrorSkipNotFirstAttempt     remoteMirrorSkipReason = "not-first-attempt"
 	remoteMirrorSkipRecursiveSubmodules remoteMirrorSkipReason = "recursive-submodules"
 	remoteMirrorSkipSeparateGitDir      remoteMirrorSkipReason = "separate-git-dir"
-	remoteMirrorSkipURLConfigConflict   remoteMirrorSkipReason = "url-config-conflict"
 )
 
 type remoteMirrorAttempt struct {
@@ -163,10 +161,6 @@ func (e *Executor) resolveRemoteMirrorAttempt(previousAttempts int) remoteMirror
 	default:
 		attempt.site = remoteMirrorSiteFreshClone
 	}
-	if attempt.site == remoteMirrorSiteExistingCheckout && e.checkoutUsesGitFile() {
-		// External Git dirs survive worktree cleanup, so failures cannot be quarantined.
-		return skip(remoteMirrorSkipSeparateGitDir)
-	}
 	if attempt.site == remoteMirrorSiteFreshClone {
 		cloneFlags, err := shellwords.Split(e.GitCloneFlags)
 		if err == nil && hasRecursiveSubmoduleCloneFlags(cloneFlags) {
@@ -207,15 +201,6 @@ func hasSeparateGitDirCloneFlag(flags []string) bool {
 func (e *Executor) checkoutAlreadyExists() bool {
 	checkoutPath, ok := e.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH")
 	return ok && osutil.FileExists(filepath.Join(checkoutPath, ".git"))
-}
-
-func (e *Executor) checkoutUsesGitFile() bool {
-	checkoutPath, ok := e.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH")
-	if !ok {
-		return false
-	}
-	info, err := os.Stat(filepath.Join(checkoutPath, ".git"))
-	return err == nil && !info.IsDir()
 }
 
 func remoteMirrorGitFlags(ctx context.Context) []string {

@@ -58,19 +58,6 @@ func (s *Server) CreateRepository(repoName string) error {
 	return nil
 }
 
-func (s *Server) ConfigureRepository(repoName, key, value string) error {
-	repoPath := filepath.Join(s.repositories, repoName)
-	if _, err := os.Stat(repoPath); err != nil {
-		return fmt.Errorf("repository %q: %w", repoName, err)
-	}
-	cmd := exec.Command("git", "config", key, value)
-	cmd.Dir = repoPath
-	if out, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("configuring repository %q: %w\n%s", repoName, err, out)
-	}
-	return nil
-}
-
 func (s *Server) InitRepository(repoName string) ([]byte, error) {
 	tempDir, err := os.MkdirTemp("", "git-init-")
 	if err != nil {
