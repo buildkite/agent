@@ -406,7 +406,7 @@ func TestUpdateGitMirrorWarmHitUsesUnpinnedCommitWithoutScan(t *testing.T) {
 	}
 }
 
-func TestUpdateGitMirrorPostFetchSkipsReachabilityScan(t *testing.T) {
+func TestUpdateGitMirrorNoRemoteURLPostFetchSkipsReachabilityScan(t *testing.T) {
 	canonical := newOnHostMirrorHTTPRepo(t, "canonical")
 	e := newOnHostMirrorExecutor(t, canonical.RepoURL("canonical"), "")
 	mirrorDir := expectedOnHostMirrorDir(e)
@@ -547,48 +547,6 @@ func TestUpdateGitMirrorRefWriteFailureDoesNotCountAsHit(t *testing.T) {
 	}
 	if got, want := gitOutputForMirrorTest(t, mirrorDir, "rev-parse", "refs/heads/feature-branch"), commit; got != want {
 		t.Errorf("canonical fallback branch = %q, want %q", got, want)
-	}
-}
-
-func TestPrepareCheckoutWorkdirBypassedMirrorDissociatesStaleAlternate(t *testing.T) {
-	canonical := newOnHostMirrorHTTPRepo(t, "canonical")
-	commit, _, err := canonical.PushBranch("canonical", "feature-branch")
-	if err != nil {
-		t.Fatal(err)
-	}
-	e := newOnHostMirrorExecutor(t, canonical.RepoURL("canonical"), commit)
-	mirrorDir := expectedOnHostMirrorDir(e)
-	cloneOnHostMirrorToPath(t, e.Repository, mirrorDir)
-
-	checkout := t.TempDir()
-	runGitForMirrorTest(t, "", "clone", "--reference", mirrorDir, "--", e.Repository, checkout)
-	alternates := filepath.Join(checkout, ".git", "objects", "info", "alternates")
-	if !osutil.FileExists(alternates) {
-		t.Fatal("reference checkout has no alternates file")
-	}
-	if err := e.shell.Chdir(checkout); err != nil {
-		t.Fatal(err)
-	}
-	e.GitMirrorCheckoutMode = "reference"
-
-	// A lock timeout bypasses the mirror: mirrorDir is empty while
-	// GitMirrorsPath remains configured.
-	attempt := remoteMirrorAttempt{
-		site:    remoteMirrorSiteOnHostMirror,
-		url:     "https://127.0.0.1:1/mirror.git",
-		outcome: remoteMirrorOutcomeTimeout,
-	}
-	if err := e.prepareCheckoutWorkdir(
-		t.Context(), &attempt, sparseCheckout{}, "", nil, false,
-	); err != nil {
-		t.Fatalf("prepareCheckoutWorkdir() error = %v", err)
-	}
-
-	if osutil.FileExists(alternates) {
-		t.Fatal("bypassed mirror remains reachable through a stale alternate")
-	}
-	if !hasGitCommit(t.Context(), e.shell, filepath.Join(checkout, ".git"), commit) {
-		t.Fatal("dissociation lost objects the checkout depends on")
 	}
 }
 

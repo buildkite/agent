@@ -922,8 +922,9 @@ no mirror ref reaches; mirror `gc` may later prune it out from under a
 `--reference` checkout. Proving reachability requires
 `for-each-ref --contains`, a global scan that cost minutes per job on
 production mirrors with hundreds of thousands of refs. Accept the narrow risk
-instead of paying that scan on every warm hit; the namespaced destination ref
-written on every mirror hit still shrinks the unpinned population.
+instead of paying that scan on every warm hit. The namespaced destination ref
+pins every commit the mirror fetch downloads; a commit that is already present
+but unpinned stays unpinned, which is the accepted exposure.
 
 Do not return directly on the remote hit. Record it in the local boolean and let
 the common maintenance and snapshot tail run.

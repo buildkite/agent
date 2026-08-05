@@ -274,7 +274,7 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string, attem
 
 	commitAlreadyPresent := false
 	if isMainRepository {
-		// Check again after we get a lock, in case the other process has already updated.
+		// Another process may have fetched the commit while we waited for the lock.
 		//
 		// Presence-only by design (C22): proving the object is also reachable from a
 		// mirror ref requires a global `for-each-ref --contains` scan, which costs
