@@ -147,6 +147,57 @@ func TestCacheValidate(t *testing.T) {
 			wantErr: true,
 			errMsg:  "is duplicated",
 		},
+		{
+			name: "valid save scopes",
+			cache: Cache{
+				Name:        "valid_id",
+				CacheKey:    literalKey,
+				TargetPaths: []string{"node_modules"},
+				SaveScopes: map[string]bool{
+					ScopePipeline: true,
+					ScopeBranch:   true,
+					ScopeBuildID:  true,
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "unknown save scopes",
+			cache: Cache{
+				Name:        "valid_id",
+				CacheKey:    literalKey,
+				TargetPaths: []string{"node_modules"},
+				SaveScopes: map[string]bool{
+					ScopePipeline: true,
+					ScopeBranch:   true,
+					"foo":         true,
+				},
+			},
+			wantErr: true,
+			errMsg:  "unsupported scope(s) 'foo'",
+		},
+		{
+			name: "disabled but valid save scopes",
+			cache: Cache{
+				Name:        "valid_id",
+				CacheKey:    literalKey,
+				TargetPaths: []string{"node_modules"},
+				SaveScopes: map[string]bool{
+					ScopeBranch: false,
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "empty save scopes",
+			cache: Cache{
+				Name:        "valid_id",
+				CacheKey:    literalKey,
+				TargetPaths: []string{"node_modules"},
+				SaveScopes:  map[string]bool{},
+			},
+			wantErr: false,
+		},
 	}
 
 	for _, tt := range tests {

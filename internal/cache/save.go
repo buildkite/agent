@@ -86,11 +86,14 @@ func (c *client) Save(ctx context.Context, cacheID string) (SaveResult, error) {
 		return result, fmt.Errorf("failed to resolve cache key: %w", err)
 	}
 
+	scopes := c.resolveSaveScopes(cacheConfig)
+
 	span.SetAttributes(
 		attribute.String("cache.id", cacheID),
 		attribute.String("cache.registry", c.registry),
 		attribute.Int("cache.target_paths_count", len(cacheConfig.TargetPaths)),
 		attribute.Int("cache.key_parts_count", len(cacheKey)),
+		attribute.Int("cache.save_scopes_count", len(scopes)),
 	)
 
 	c.callProgress(cacheID, "validating", "Validating cache configuration", 0, 0)
@@ -247,6 +250,7 @@ func (c *client) Save(ctx context.Context, cacheID string) (SaveResult, error) {
 				Compression: c.format,
 			}},
 			Platform: c.platform,
+			Scopes:   scopes,
 		})
 		if api.BreakOnNonRetryable(r, createApiResp, err) {
 			return err

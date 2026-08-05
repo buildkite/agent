@@ -13,6 +13,8 @@ type Cache struct {
 	CacheKey []KeyPart `yaml:"cache_key"`
 	// Target Paths to remove.
 	TargetPaths []string `yaml:"target_paths"`
+	// SaveScopes are the scopes to save the entry under
+	SaveScopes map[string]bool `yaml:"save_scopes"`
 }
 
 // Validate validates the cache configuration and returns an error if invalid.
@@ -60,6 +62,8 @@ func (c Cache) Validate() error {
 			seen[targetPath] = struct{}{}
 		}
 	}
+
+	errors = c.validateSaveScopes(errors)
 
 	if len(errors) > 0 {
 		return fmt.Errorf("cache validation failed for name '%s': %s", c.Name, strings.Join(errors, "; "))

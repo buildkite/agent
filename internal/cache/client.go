@@ -171,6 +171,10 @@ func (c *client) resolveCacheKey(cacheConfig *configuration.Cache) ([]api.CacheK
 	return configuration.ResolveCacheKey(cacheConfig.CacheKey, nil)
 }
 
+func (c *client) resolveSaveScopes(cacheConfig *configuration.Cache) map[string]bool {
+	return configuration.ResolveSaveScopes(cacheConfig.SaveScopes)
+}
+
 // ProgressCallback is invoked during Save and Restore to report progress.
 //
 // Implementations must be thread-safe; the callback may be called from
