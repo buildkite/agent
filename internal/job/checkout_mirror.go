@@ -272,28 +272,23 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string, attem
 		}
 	}()
 
-	noURLAttempt := attempt != nil &&
-		attempt.outcome == remoteMirrorOutcomeSkipped &&
-		attempt.skipReason == remoteMirrorSkipNoURL
-	if isMainRepository &&
-		noURLAttempt &&
-		hasGitCommit(ctx, e.shell, mirrorDir, e.Commit) {
-		// Avoid the global reachability scan when remote mirroring is not configured.
-		e.shell.Commentf("Commit %q exists in mirror", e.Commit)
-		return e.snapshotMirror(ctx, repository, mirrorDir)
-	}
-
 	commitAlreadyPresent := false
 	if isMainRepository {
-		// Check again after we get a lock, in case the other process has already updated
-		if hasGitCommit(ctx, e.shell, mirrorDir, e.Commit) &&
-			hasGitCommitReachableFromRef(ctx, e.shell, mirrorDir, e.Commit) {
+		// Check again after we get a lock, in case the other process has already updated.
+		//
+		// Presence-only by design (C22): proving the object is also reachable from a
+		// mirror ref requires a global `for-each-ref --contains` scan, which costs
+		// minutes on large mirrors. An unpinned object pruned by mirror gc fails one
+		// job with a retryable git error that the retry-clean path heals.
+		if hasGitCommit(ctx, e.shell, mirrorDir, e.Commit) {
 			e.shell.Commentf("Commit %q exists in mirror", e.Commit)
 			commitAlreadyPresent = true
 		}
 	}
 
-	e.shell.Commentf("Updating existing repository mirror to find commit %s", e.Commit)
+	if !commitAlreadyPresent {
+		e.shell.Commentf("Updating existing repository mirror to find commit %s", e.Commit)
+	}
 
 	// Update the origin of the repository so we can gracefully handle
 	// repository renames. This must happen before a remote-mirror hit can skip
@@ -389,15 +384,6 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string, attem
 		if err := e.shell.Command("git", "--git-dir", mirrorDir, "gc").Run(ctx); err != nil {
 			e.shell.Warningf("Couldn't run git gc: %v", err)
 		}
-	}
-
-	// Unpinned objects are unsafe through --reference; fail open rather than manage recovery refs.
-	if isMainRepository &&
-		!noURLAttempt &&
-		hasGitCommit(ctx, e.shell, mirrorDir, e.Commit) &&
-		!hasGitCommitReachableFromRef(ctx, e.shell, mirrorDir, e.Commit) {
-		e.shell.Warningf("Commit %q exists in mirror without a durable ref; using canonical repository without it", e.Commit)
-		return "", nil
 	}
 
 	return e.snapshotMirror(ctx, repository, mirrorDir)
