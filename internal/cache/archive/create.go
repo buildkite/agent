@@ -62,11 +62,6 @@ func BuildArchive(ctx context.Context, paths []string, key string) (*ArchiveInfo
 			return nil, fmt.Errorf("failed to stat file: %w", err)
 		}
 
-		_, err = isUnderHome(mapping.ResolvedPath)
-		if err != nil {
-			return nil, fmt.Errorf("failed directory (%s) outside home directory: %w", mapping.ResolvedPath, err)
-		}
-
 		files := make(map[string]os.FileInfo)
 		err = filepath.Walk(mapping.ResolvedPath, func(filename string, fi os.FileInfo, err error) error {
 			files[filename] = fi

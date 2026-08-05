@@ -61,6 +61,44 @@ func TestCleanPath(t *testing.T) {
 		}
 	})
 
+	t.Run("rejects top-level absolute paths", func(t *testing.T) {
+		paths := []string{"/etc", "/usr", "/opt"}
+		if runtime.GOOS == "windows" {
+			paths = []string{`C:\Windows`, `D:\data`}
+		}
+		for _, path := range paths {
+			err := cleanPath(t.Context(), path)
+			if err == nil {
+				t.Fatalf("cleanPath(%q): expected error, got nil", path)
+			}
+			if !strings.Contains(err.Error(), "refusing to remove top-level path") {
+				t.Errorf("error %q should contain %q", err.Error(), "refusing to remove top-level path")
+			}
+		}
+	})
+
+	t.Run("rejects working directory and its ancestors", func(t *testing.T) {
+		cwd, err := os.Getwd()
+		if err != nil {
+			t.Fatalf("Getwd: %v", err)
+		}
+		for _, path := range []string{"..", filepath.Join("..", ".."), cwd, filepath.Dir(cwd)} {
+			_, err := validateCleanPath(path)
+			if err == nil {
+				t.Fatalf("validateCleanPath(%q): expected error, got nil", path)
+			}
+			if !strings.Contains(err.Error(), "refusing to remove") {
+				t.Errorf("error %q should contain %q", err.Error(), "refusing to remove")
+			}
+		}
+	})
+
+	t.Run("accepts sibling paths (only ancestors are refused)", func(t *testing.T) {
+		if _, err := validateCleanPath(filepath.Join("..", "sibling-cache")); err != nil {
+			t.Fatalf("validateCleanPath: %v", err)
+		}
+	})
+
 	t.Run("succeeds on non-existent path", func(t *testing.T) {
 		if err := cleanPath(t.Context(), "/nonexistent/path/that/does/not/exist"); err != nil {
 			t.Fatalf("cleanPath: %v", err)
@@ -128,6 +166,56 @@ func TestCleanPath(t *testing.T) {
 		}
 		if !errors.Is(err, context.Canceled) {
 			t.Errorf("expected context.Canceled, got %v", err)
+		}
+	})
+}
+
+func TestValidateTargetPaths(t *testing.T) {
+	t.Run("fails when any target path is unsafe to clean", func(t *testing.T) {
+		err := validateTargetPaths([]string{filepath.Join("some", "dir"), "."})
+		if err == nil {
+			t.Fatal("expected error, got nil")
+		}
+		if !strings.Contains(err.Error(), "refusing to remove") {
+			t.Errorf("error %q should contain %q", err.Error(), "refusing to remove")
+		}
+	})
+
+	t.Run("fails for top-level absolute paths", func(t *testing.T) {
+		path := "/etc"
+		if runtime.GOOS == "windows" {
+			path = `C:\Windows`
+		}
+		err := validateTargetPaths([]string{path})
+		if err == nil {
+			t.Fatal("expected error, got nil")
+		}
+	})
+
+	t.Run("fails for absolute paths outside the home directory", func(t *testing.T) {
+		err := validateTargetPaths([]string{filepath.Join(t.TempDir(), "opt", "cache")})
+		if err == nil {
+			t.Fatal("expected error, got nil")
+		}
+		if !strings.Contains(err.Error(), "not supported") {
+			t.Errorf("error %q should contain %q", err.Error(), "not supported")
+		}
+	})
+
+	t.Run("fails for parent-relative paths", func(t *testing.T) {
+		err := validateTargetPaths([]string{filepath.Join("..", "outside")})
+		if err == nil {
+			t.Fatal("expected error, got nil")
+		}
+		if !strings.Contains(err.Error(), "escapes the working directory") {
+			t.Errorf("error %q should contain %q", err.Error(), "escapes the working directory")
+		}
+	})
+
+	t.Run("accepts safe paths", func(t *testing.T) {
+		paths := []string{filepath.Join("some", "dir"), "~/cache"}
+		if err := validateTargetPaths(paths); err != nil {
+			t.Fatalf("validateTargetPaths(%v): %v", paths, err)
 		}
 	})
 }

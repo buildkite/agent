@@ -3,6 +3,8 @@ package archive
 import (
 	"os"
 	"path/filepath"
+	"runtime"
+	"strings"
 	"testing"
 )
 
@@ -41,6 +43,84 @@ func TestPathsToMappings_AbsolutePathUnderHome(t *testing.T) {
 	}
 	if mappings[1].Relative {
 		t.Errorf("mappings[1].Relative = true, want false")
+	}
+}
+
+func TestPathsToMappings_AbsolutePathOutsideHomeRejected(t *testing.T) {
+	home := t.TempDir()
+	setHomeDir(t, home)
+
+	outside := filepath.Join(t.TempDir(), "opt", "cache")
+
+	_, err := PathsToMappings([]string{outside})
+	if err == nil {
+		t.Fatal("PathsToMappings: expected error for absolute path outside home, got nil")
+	}
+	if !strings.Contains(err.Error(), "not supported") {
+		t.Errorf("error %q should contain %q", err.Error(), "not supported")
+	}
+}
+
+func TestPathsToMappings_ParentRelativeRejected(t *testing.T) {
+	home := t.TempDir()
+	setHomeDir(t, home)
+
+	for _, path := range []string{"..", filepath.Join("..", "cache")} {
+		_, err := PathsToMappings([]string{path})
+		if err == nil {
+			t.Errorf("PathsToMappings(%q): expected error for parent-relative path, got nil", path)
+			continue
+		}
+		if !strings.Contains(err.Error(), "escapes the working directory") {
+			t.Errorf("error %q should contain %q", err.Error(), "escapes the working directory")
+		}
+	}
+}
+
+func TestPathsToMappings_HomeEscapeRejected(t *testing.T) {
+	home := t.TempDir()
+	setHomeDir(t, home)
+
+	_, err := PathsToMappings([]string{"~/../shared/cache"})
+	if err == nil {
+		t.Fatal("PathsToMappings: expected error for path escaping home, got nil")
+	}
+	if !strings.Contains(err.Error(), "escapes the home directory") {
+		t.Errorf("error %q should contain %q", err.Error(), "escapes the home directory")
+	}
+}
+
+func TestPathsToMappings_RootedPathsOnWindows(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("only relevant on Windows")
+	}
+
+	home := t.TempDir()
+	setHomeDir(t, home)
+
+	for _, path := range []string{`\etc`, "/etc", "C:cache"} {
+		_, err := PathsToMappings([]string{path})
+		if err == nil {
+			t.Errorf("PathsToMappings(%q): expected error for rooted path on Windows, got nil", path)
+		}
+	}
+}
+
+func TestPathsToMappings_SiblingOfHomeIsNotHomeRelative(t *testing.T) {
+	base := t.TempDir()
+	home := filepath.Join(base, "user")
+	setHomeDir(t, home)
+
+	// A sibling directory sharing the home path as a string prefix must not
+	// be treated as home-relative: it is outside home and must be rejected.
+	sibling := filepath.Join(base, "user2", "cache")
+
+	_, err := PathsToMappings([]string{sibling})
+	if err == nil {
+		t.Fatal("PathsToMappings: expected error for sibling of home, got nil")
+	}
+	if !strings.Contains(err.Error(), "not supported") {
+		t.Errorf("error %q should contain %q", err.Error(), "not supported")
 	}
 }
 

@@ -102,6 +102,17 @@ func (c *client) Save(ctx context.Context, cacheID string) (SaveResult, error) {
 		return result, fmt.Errorf("invalid cache paths: %w", err)
 	}
 
+	// Validate that all target paths are supported by the archive mapping
+	// rules and restorable (restore refuses to clean paths like "." or the
+	// home directory), so unsupported paths fail here rather than surfacing
+	// as an archive error, being masked by an already-existing cache entry,
+	// or producing entries that can never be restored.
+	if err := validateTargetPaths(cacheConfig.TargetPaths); err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "invalid cache paths")
+		return result, fmt.Errorf("invalid cache paths: %w", err)
+	}
+
 	c.callProgress(cacheID, "checking_exists", "Checking if cache already exists", 0, 0)
 
 	// Check if cache already exists
@@ -354,31 +365,6 @@ func (c *client) Save(ctx context.Context, cacheID string) (SaveResult, error) {
 	c.callProgress(cacheID, "complete", "Cache saved successfully", 0, 0)
 
 	return result, nil
-}
-
-// checkPathsExist validates that all paths exist on the filesystem
-func checkPathsExist(paths []string) error {
-	if len(paths) == 0 {
-		return fmt.Errorf("no paths provided")
-	}
-
-	for _, path := range paths {
-		// Handle ~ expansion
-		if len(path) > 0 && path[0] == '~' {
-			homeDir, err := os.UserHomeDir()
-			if err != nil {
-				return fmt.Errorf("failed to get home directory: %w", err)
-			}
-			path = homeDir + path[1:]
-		}
-
-		// Check if the path exists
-		if _, err := os.Stat(path); os.IsNotExist(err) {
-			return fmt.Errorf("path does not exist: %s", path)
-		}
-	}
-
-	return nil
 }
 
 // validateCacheStore validates the cache store configuration
