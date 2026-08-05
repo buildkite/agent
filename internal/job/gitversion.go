@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/buildkite/agent/v3/internal/shell"
+	"github.com/buildkite/agent/v4/internal/shell"
 )
 
 // gitVer is the major.minor version of a git binary. Patch levels are dropped:

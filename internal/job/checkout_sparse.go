@@ -9,8 +9,8 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/buildkite/agent/v3/internal/osutil"
-	"github.com/buildkite/agent/v3/internal/shell"
+	"github.com/buildkite/agent/v4/internal/osutil"
+	"github.com/buildkite/agent/v4/internal/shell"
 )
 
 // SparseCheckoutMode selects how git interprets the configured sparse-checkout

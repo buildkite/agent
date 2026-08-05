@@ -7,7 +7,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/buildkite/agent/v3/jobapi"
+	"github.com/buildkite/agent/v4/jobapi"
 )
 
 // This file gets built and used as part of the hooks integration test to ensure

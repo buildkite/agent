@@ -11,8 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/buildkite/agent/v3/internal/cache/internal/trace"
-	"github.com/klauspost/compress/zip"
+	"github.com/buildkite/agent/v4/internal/cache/internal/trace"
 	"github.com/klauspost/compress/zstd"
 	"github.com/wolfeidau/quickzip"
 	"go.opentelemetry.io/otel/attribute"

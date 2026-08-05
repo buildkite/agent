@@ -8,9 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/buildkite/agent/v3/env"
-	"github.com/buildkite/agent/v3/internal/process"
-	"github.com/buildkite/agent/v3/tracetools"
+	"github.com/buildkite/agent/v4/env"
+	"github.com/buildkite/agent/v4/internal/process"
 )
 
 // Config provides the configuration for the job executor. Some of the keys are
@@ -129,7 +128,7 @@ type ExecutorConfig struct {
 	// SSH private key to use for git checkout operations
 	GitSSHKey string `env:"BUILDKITE_GIT_SSH_KEY"`
 
-	// Enable git commit verification
+	// Controls git commit verification behavior
 	GitCommitVerification string `env:"BUILDKITE_GIT_COMMIT_VERIFICATION"`
 
 	// Config key=value pairs to pass to "git" when submodule init commands are invoked
@@ -215,7 +214,7 @@ type ExecutorConfig struct {
 	TracingBackend string
 
 	// Service name to use when reporting traces.
-	TracingServiceName string
+	TelemetryServiceName string
 
 	// Traceing context information
 	TracingTraceParent string
@@ -225,12 +224,6 @@ type ExecutorConfig struct {
 	// TracingPropagateTraceparent is enabled (same opt-in gate as
 	// TracingTraceParent).
 	TracingTraceState string
-
-	// Accept traceparent context from Buildkite control plane
-	TracingPropagateTraceparent bool
-
-	// Encoding (within base64) for the trace context environment variable.
-	TraceContextCodec tracetools.Codec
 
 	// Whether to start the JobAPI
 	JobAPI bool

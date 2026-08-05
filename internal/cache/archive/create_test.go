@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/buildkite/agent/v3/internal/cache/internal/trace"
+	"github.com/buildkite/agent/v4/internal/cache/internal/trace"
 )
 
 func TestArchiveLayoutRootAnchor(t *testing.T) {

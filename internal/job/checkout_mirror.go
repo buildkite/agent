@@ -11,8 +11,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/buildkite/agent/v3/internal/osutil"
-	"github.com/buildkite/agent/v3/internal/shell"
+	"github.com/buildkite/agent/v4/internal/osutil"
+	"github.com/buildkite/agent/v4/internal/shell"
+	"github.com/buildkite/agent/v4/tracetools"
 	"github.com/buildkite/shellwords"
 )
 
@@ -105,8 +106,8 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string, attem
 
 	mirrorCloneLock, err := e.shell.LockFile(cloneCtx, mirrorDir+".clonelock")
 
-	cloneLockSpan.AddAttributes(map[string]string{"git.timed_out": strconv.FormatBool(errors.Is(err, context.DeadlineExceeded))})
-	cloneLockSpan.FinishWithError(err)
+	tracetools.AddAttributes(cloneLockSpan, map[string]string{"git.timed_out": strconv.FormatBool(errors.Is(err, context.DeadlineExceeded))})
+	tracetools.FinishWithError(cloneLockSpan, err)
 
 	if err != nil {
 		if errors.Is(err, context.DeadlineExceeded) {
@@ -256,8 +257,8 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string, attem
 
 	mirrorUpdateLock, err := e.shell.LockFile(updateCtx, mirrorDir+".updatelock")
 
-	updateLockSpan.AddAttributes(map[string]string{"git.timed_out": strconv.FormatBool(errors.Is(err, context.DeadlineExceeded))})
-	updateLockSpan.FinishWithError(err)
+	tracetools.AddAttributes(updateLockSpan, map[string]string{"git.timed_out": strconv.FormatBool(errors.Is(err, context.DeadlineExceeded))})
+	tracetools.FinishWithError(updateLockSpan, err)
 
 	if err != nil {
 		if errors.Is(err, context.DeadlineExceeded) {
@@ -270,6 +271,17 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string, attem
 			finalErr = errors.Join(finalErr, fmt.Errorf("unable to release update lock: %w", err))
 		}
 	}()
+
+	noURLAttempt := attempt != nil &&
+		attempt.outcome == remoteMirrorOutcomeSkipped &&
+		attempt.skipReason == remoteMirrorSkipNoURL
+	if isMainRepository &&
+		noURLAttempt &&
+		hasGitCommit(ctx, e.shell, mirrorDir, e.Commit) {
+		// Avoid the global reachability scan when remote mirroring is not configured.
+		e.shell.Commentf("Commit %q exists in mirror", e.Commit)
+		return e.snapshotMirror(ctx, repository, mirrorDir)
+	}
 
 	commitAlreadyPresent := false
 	if isMainRepository {
@@ -381,6 +393,7 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string, attem
 
 	// Unpinned objects are unsafe through --reference; fail open rather than manage recovery refs.
 	if isMainRepository &&
+		!noURLAttempt &&
 		hasGitCommit(ctx, e.shell, mirrorDir, e.Commit) &&
 		!hasGitCommitReachableFromRef(ctx, e.shell, mirrorDir, e.Commit) {
 		e.shell.Warningf("Commit %q exists in mirror without a durable ref; using canonical repository without it", e.Commit)

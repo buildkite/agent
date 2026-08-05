@@ -10,11 +10,11 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/buildkite/agent/v3/internal/experiments"
-	"github.com/buildkite/agent/v3/internal/osutil"
-	"github.com/buildkite/agent/v3/internal/redact"
-	"github.com/buildkite/agent/v3/internal/shell"
-	"github.com/buildkite/agent/v3/tracetools"
+	"github.com/buildkite/agent/v4/internal/experiments"
+	"github.com/buildkite/agent/v4/internal/osutil"
+	"github.com/buildkite/agent/v4/internal/redact"
+	"github.com/buildkite/agent/v4/internal/shell"
+	"github.com/buildkite/agent/v4/tracetools"
 	"github.com/buildkite/roko"
 	"github.com/buildkite/shellwords"
 )
@@ -23,7 +23,7 @@ import (
 // build at the right commit.
 func (e *Executor) CheckoutPhase(ctx context.Context) (retErr error) {
 	span, ctx := tracetools.StartSpanFromContext(ctx, "checkout", e.TracingBackend)
-	defer func() { span.FinishWithError(retErr) }()
+	defer func() { tracetools.FinishWithError(span, retErr) }()
 	defer e.otlpLogSpan(ctx)()
 
 	if err := e.executeGlobalHook(ctx, "pre-checkout"); err != nil {
@@ -86,16 +86,16 @@ func (e *Executor) CheckoutPhase(ctx context.Context) (retErr error) {
 	}
 
 	// Run post-checkout hooks
-	if err := e.executeGlobalHook(ctx, "post-checkout"); err != nil {
-		return err
-	}
-
-	if err := e.executeLocalHook(ctx, "post-checkout"); err != nil {
-		return err
-	}
-
-	if err := e.executePluginHook(ctx, "post-checkout", e.pluginCheckouts); err != nil {
-		return err
+	if experiments.IsEnabled(ctx, experiments.LegacyPostHookOrder) {
+		// Legacy order = same order as pre-checkout
+		if err := e.executeHooksForward(ctx, "post-checkout"); err != nil {
+			return err
+		}
+	} else {
+		// Modern order = reverse, to make composition easier
+		if err := e.executeHooksReverse(ctx, "post-checkout"); err != nil {
+			return err
+		}
 	}
 
 	// Capture the new checkout path so we can see if it's changed.
@@ -327,23 +327,19 @@ func (e *Executor) runDefaultCheckoutAttempt(ctx context.Context, previousAttemp
 // previousAttempts is the count of prior checkout attempts.
 func (e *Executor) defaultCheckoutPhase(ctx context.Context, previousAttempts int) (retErr error) {
 	span, spanCtx := tracetools.StartSpanFromContext(ctx, "repo-checkout", e.TracingBackend)
-	span.AddAttributes(map[string]string{
+	tracetools.AddAttributes(span, map[string]string{
 		"checkout.repo_name": redact.URLCredentials(e.Repository),
 		"checkout.refspec":   e.RefSpec,
 		"checkout.commit":    e.Commit,
 		"checkout.attempt":   strconv.Itoa(previousAttempts + 1),
 	})
-	defer func() { span.FinishWithError(retErr) }()
+	defer func() { tracetools.FinishWithError(span, retErr) }()
 
 	attempt := e.resolveRemoteMirrorAttempt(previousAttempts)
 	defer func() { e.emitRemoteMirrorTelemetry(span, attempt) }()
 
 	// Adopt the repo-checkout child ctx so git.* spans nest under it.
 	ctx = spanCtx
-
-	if e.SSHKeyscan && !e.skipRepositorySSHKeyscan {
-		addRepositoryHostToSSHKnownHosts(ctx, e.shell, e.Repository)
-	}
 
 	sshKeyPath, cleanupSSHKey, err := e.prepareGitSSHKey()
 	if err != nil {
@@ -362,16 +358,16 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context, previousAttempts in
 
 	// If we can, get a mirror of the git repository to use for reference later
 	if e.GitMirrorsPath != "" && e.Repository != "" {
-		span.AddAttributes(map[string]string{"checkout.is_using_git_mirrors": "true"})
+		tracetools.AddAttributes(span, map[string]string{"checkout.is_using_git_mirrors": "true"})
 
 		var err error
 
 		mirrorSpan, mirrorCtx := e.traceOpSpan(ctx, "git.mirror.update")
-		mirrorSpan.AddAttributes(map[string]string{"git.repo": redact.URLCredentials(e.Repository)})
+		tracetools.AddAttributes(mirrorSpan, map[string]string{"git.repo": redact.URLCredentials(e.Repository)})
 
 		mirrorDir, err = e.getOrUpdateMirrorDir(mirrorCtx, e.Repository, &attempt)
 
-		mirrorSpan.FinishWithError(err)
+		tracetools.FinishWithError(mirrorSpan, err)
 
 		if err != nil {
 			return fmt.Errorf("getting/updating git mirror: %w", err)
@@ -458,14 +454,14 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context, previousAttempts in
 	if sparse.active() {
 		sparseMode = sparse.mode.String()
 	}
-	sparseSpan.AddAttributes(map[string]string{
+	tracetools.AddAttributes(sparseSpan, map[string]string{
 		"git.path_count":  strconv.Itoa(len(sparse.paths)),
 		"git.sparse_mode": sparseMode,
 	})
 
 	sparseCheckoutActive, err := e.setupSparseCheckout(sparseCtx, sparse)
 
-	sparseSpan.FinishWithError(err)
+	tracetools.FinishWithError(sparseSpan, err)
 
 	if err != nil {
 		return err
@@ -575,10 +571,7 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context, previousAttempts in
 	}
 
 	// resolve BUILDKITE_COMMIT based on the local git repo
-	if experiments.IsEnabled(ctx, experiments.ResolveCommitAfterCheckout) {
-		e.shell.Commentf("Using resolve-commit-after-checkout experiment 🧪")
-		e.resolveCommit(ctx)
-	}
+	e.resolveCommit(ctx)
 
 	return nil
 }
@@ -589,8 +582,8 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context, previousAttempts in
 // with a plain clean update.
 func (e *Executor) updateGitSubmodules(ctx context.Context) (retErr error) {
 	submodulesSpan, ctx := e.traceOpSpan(ctx, "git.submodules")
-	submodulesSpan.AddAttributes(map[string]string{"git.mirrored": strconv.FormatBool(e.GitMirrorsPath != "")})
-	defer func() { submodulesSpan.FinishWithError(retErr) }()
+	tracetools.AddAttributes(submodulesSpan, map[string]string{"git.mirrored": strconv.FormatBool(e.GitMirrorsPath != "")})
+	defer func() { tracetools.FinishWithError(submodulesSpan, retErr) }()
 
 	// `submodule sync` will ensure the .git/config
 	// matches the .gitmodules file.  The command
@@ -620,58 +613,48 @@ func (e *Executor) updateGitSubmodules(ctx context.Context) (retErr error) {
 		return nil
 	}
 
-	submodulesSpan.AddAttributes(map[string]string{"git.count": strconv.Itoa(len(submoduleRepos))})
+	tracetools.AddAttributes(submodulesSpan, map[string]string{"git.count": strconv.Itoa(len(submoduleRepos))})
 
 	mirrorSubmodules := e.GitMirrorsPath != ""
-	for _, repository := range submoduleRepos {
-		// submodules might need their fingerprints verified too
-		if e.SSHKeyscan {
-			addRepositoryHostToSSHKnownHosts(ctx, e.shell, repository)
-		}
+	if mirrorSubmodules {
+		for _, repository := range submoduleRepos {
+			// getOrUpdateMirrorDir is shared with the main repo's mirror update, so
+			// this produces the same sub-tree of spans; git.repo distinguishes
+			// submodules since the span names repeat.
+			subMirrorSpan, subMirrorCtx := e.traceOpSpan(ctx, "git.mirror.update")
+			tracetools.AddAttributes(subMirrorSpan, map[string]string{"git.repo": redact.URLCredentials(repository)})
 
-		if !mirrorSubmodules {
-			continue
-		}
-		// It's all mirrored submodules for the rest of the loop.
+			mirrorDir, err := e.getOrUpdateMirrorDir(subMirrorCtx, repository, nil)
 
-		// getOrUpdateMirrorDir is shared with the main repo's mirror update, so
-		// this produces the same sub-tree of spans; git.repo distinguishes
-		// submodules since the span names repeat.
-		subMirrorSpan, subMirrorCtx := e.traceOpSpan(ctx, "git.mirror.update")
-		subMirrorSpan.AddAttributes(map[string]string{"git.repo": redact.URLCredentials(repository)})
+			tracetools.FinishWithError(subMirrorSpan, err)
 
-		mirrorDir, err := e.getOrUpdateMirrorDir(subMirrorCtx, repository, nil)
-
-		subMirrorSpan.FinishWithError(err)
-
-		if err != nil {
-			return fmt.Errorf("getting/updating mirror dir for submodules: %w", err)
-		}
-
-		// Switch back to the checkout dir, doing other operations from GitMirrorsPath will fail.
-		if err := e.createCheckoutDir(); err != nil {
-			return fmt.Errorf("creating checkout dir: %w", err)
-		}
-
-		submoduleArgs := slices.Clone(args)
-		if mirrorDir != "" {
-			submoduleArgs = append(submoduleArgs, "submodule", "update", "--init", "--recursive", "--force", "--reference", mirrorDir)
-			if e.GitMirrorCheckoutMode == "dissociate" {
-				submoduleArgs = append(submoduleArgs, "--dissociate")
+			if err != nil {
+				return fmt.Errorf("getting/updating mirror dir for submodules: %w", err)
 			}
-		} else {
-			// Fall back to a clean update, rather than failing the checkout and therefore the build
-			submoduleArgs = append(submoduleArgs, "submodule", "update", "--init", "--recursive", "--force")
-		}
 
-		if err := e.traceOp(ctx, "git.submodule.update", func(ctx context.Context) error {
-			return e.shell.Command("git", submoduleArgs...).Run(ctx)
-		}); err != nil {
-			return fmt.Errorf("updating submodules: %w", err)
-		}
-	}
+			// Switch back to the checkout dir, doing other operations from GitMirrorsPath will fail.
+			if err := e.createCheckoutDir(); err != nil {
+				return fmt.Errorf("creating checkout dir: %w", err)
+			}
 
-	if !mirrorSubmodules {
+			submoduleArgs := slices.Clone(args)
+			if mirrorDir != "" {
+				submoduleArgs = append(submoduleArgs, "submodule", "update", "--init", "--recursive", "--force", "--reference", mirrorDir)
+				if e.GitMirrorCheckoutMode == "dissociate" {
+					submoduleArgs = append(submoduleArgs, "--dissociate")
+				}
+			} else {
+				// Fall back to a clean update, rather than failing the checkout and therefore the build
+				submoduleArgs = append(submoduleArgs, "submodule", "update", "--init", "--recursive", "--force")
+			}
+
+			if err := e.traceOp(ctx, "git.submodule.update", func(ctx context.Context) error {
+				return e.shell.Command("git", submoduleArgs...).Run(ctx)
+			}); err != nil {
+				return fmt.Errorf("updating submodules: %w", err)
+			}
+		}
+	} else { // no submodule mirrors
 		args = append(args, "submodule", "update", "--init", "--recursive", "--force")
 		if err := e.traceOp(ctx, "git.submodule.update", func(ctx context.Context) error {
 			return e.shell.Command("git", args...).Run(ctx)
