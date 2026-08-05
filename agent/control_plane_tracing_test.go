@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/buildkite/agent/v3/api"
-	"github.com/buildkite/agent/v3/logger"
+	"github.com/buildkite/agent/v4/api"
+	"github.com/buildkite/agent/v4/logger"
 	"github.com/google/go-cmp/cmp"
 )
 
@@ -27,54 +27,36 @@ func TestApplyControlPlaneTracing(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name          string
-		conf          AgentConfiguration
-		tracing       *api.AgentTracing
-		local         LocalTracingConfig
-		wantBackend   string
-		wantPropagate bool
-		wantExporter  bool
+		name            string
+		conf            AgentConfiguration
+		tracing         *api.AgentTracing
+		local           LocalTracingConfig
+		wantOTelTracing bool
+		wantExporter    bool
 	}{
 		{
 			name:    "nil tracing is a no-op",
 			tracing: nil,
 		},
 		{
-			name:          "no local config applies backend, propagation and exporter",
-			tracing:       serverTracing(),
-			wantBackend:   "opentelemetry",
-			wantPropagate: true,
-			wantExporter:  true,
+			name:            "no local config applies backend, propagation and exporter",
+			tracing:         serverTracing(),
+			wantOTelTracing: true,
+			wantExporter:    true,
 		},
 		{
-			name:        "local datadog backend ignores server policy entirely",
-			conf:        AgentConfiguration{TracingBackend: "datadog"},
-			tracing:     serverTracing(),
-			wantBackend: "datadog",
+			name:            "local otel backend without destination consumes the exporter",
+			conf:            AgentConfiguration{OpenTelemetryTracing: true},
+			tracing:         serverTracing(),
+			wantOTelTracing: true,
+			wantExporter:    true,
 		},
 		{
-			name:          "local otel backend without destination consumes the exporter",
-			conf:          AgentConfiguration{TracingBackend: "opentelemetry"},
-			tracing:       serverTracing(),
-			wantBackend:   "opentelemetry",
-			wantPropagate: true,
-			wantExporter:  true,
-		},
-		{
-			name:          "local OTLP destination blocks the exporter but not the policy",
-			tracing:       serverTracing(),
-			local:         LocalTracingConfig{OTLPDestinationSet: true},
-			wantBackend:   "opentelemetry",
-			wantPropagate: true,
-			wantExporter:  false,
-		},
-		{
-			name:          "explicit local propagate_traceparent=false wins",
-			tracing:       serverTracing(),
-			local:         LocalTracingConfig{PropagateTraceparentSet: true},
-			wantBackend:   "opentelemetry",
-			wantPropagate: false,
-			wantExporter:  true,
+			name:            "local OTLP destination blocks the exporter but not the policy",
+			tracing:         serverTracing(),
+			local:           LocalTracingConfig{OTLPDestinationSet: true},
+			wantOTelTracing: true,
+			wantExporter:    false,
 		},
 		{
 			name: "unsupported server backend is ignored entirely",
@@ -85,22 +67,12 @@ func TestApplyControlPlaneTracing(t *testing.T) {
 			},
 		},
 		{
-			name: "server datadog backend is ignored even with local otel backend",
-			conf: AgentConfiguration{TracingBackend: "opentelemetry"},
-			tracing: &api.AgentTracing{
-				Backend:              "datadog",
-				PropagateTraceparent: true,
-				Exporter:             serverTracing().Exporter,
-			},
-			wantBackend: "opentelemetry",
-		},
-		{
 			name: "exporter without endpoint is not applied",
 			tracing: &api.AgentTracing{
 				Backend:  "opentelemetry",
 				Exporter: &api.TracingExporter{Protocol: "http/protobuf"},
 			},
-			wantBackend: "opentelemetry",
+			wantOTelTracing: true,
 		},
 	}
 
@@ -112,11 +84,8 @@ func TestApplyControlPlaneTracing(t *testing.T) {
 			buf := logger.NewBuffer()
 			ApplyControlPlaneTracing(buf, &conf, tc.tracing, tc.local)
 
-			if got, want := conf.TracingBackend, tc.wantBackend; got != want {
-				t.Errorf("conf.TracingBackend = %q, want %q", got, want)
-			}
-			if got, want := conf.TracingPropagateTraceparent, tc.wantPropagate; got != want {
-				t.Errorf("conf.TracingPropagateTraceparent = %t, want %t", got, want)
+			if got, want := conf.OpenTelemetryTracing, tc.wantOTelTracing; got != want {
+				t.Errorf("conf.OpenTelemetryTracing = %t, want %t", got, want)
 			}
 			if got, want := conf.ControlPlaneTracingExporter != nil, tc.wantExporter; got != want {
 				t.Errorf("conf.ControlPlaneTracingExporter set = %t, want %t", got, want)

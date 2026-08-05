@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/Khan/genqlient/graphql"
-	"github.com/buildkite/agent/v3/internal/agenthttp"
+	"github.com/buildkite/agent/v4/internal/agenthttp"
 )
 
 const (

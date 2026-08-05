@@ -5,10 +5,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/buildkite/agent/v3/agent"
-	"github.com/buildkite/agent/v3/api"
-	"github.com/buildkite/agent/v3/env"
-	"github.com/buildkite/agent/v3/logger"
+	"github.com/buildkite/agent/v4/agent"
+	"github.com/buildkite/agent/v4/api"
+	"github.com/buildkite/agent/v4/env"
+	"github.com/buildkite/agent/v4/logger"
 	"github.com/buildkite/bintest/v3"
 	"github.com/buildkite/go-pipeline"
 )
@@ -759,19 +759,19 @@ func TestCheckoutScopedJobEnvOverrideHonorsCheckoutOverrideMode(t *testing.T) {
 			wantIgnoredEnvVars: []string{"BUILDKITE_GIT_CHECKOUT_TIMEOUT"},
 		},
 		// Commit verification is an enum (not a flag) but is checkout-override
-		// scoped, so it follows the same mode rules. The first case is the reported
-		// scenario: agent leaves it unset, the pipeline requests strict, and none
-		// lets the job env win so verification actually runs.
+		// scoped, so it follows the same mode rules. With v4's strict default, none
+		// lets the backend job env turn verification off instead.
 		{
-			name:    "none_allows_job_env_to_enable_commit_verification_when_agent_unset",
+			name:    "none_allows_job_env_to_override_default_commit_verification",
 			varName: "BUILDKITE_GIT_COMMIT_VERIFICATION",
 			jobEnv: map[string]string{
-				"BUILDKITE_GIT_COMMIT_VERIFICATION": "strict",
+				"BUILDKITE_GIT_COMMIT_VERIFICATION": "off",
 			},
 			agentCfg: agent.AgentConfiguration{
-				CheckoutOverrideMode: env.CheckoutOverrideNone,
+				GitCommitVerification: "strict",
+				CheckoutOverrideMode:  env.CheckoutOverrideNone,
 			},
-			wantEnvValue: "strict",
+			wantEnvValue: "off",
 		},
 		{
 			name:    "none_allows_job_env_to_override_commit_verification",
@@ -780,7 +780,7 @@ func TestCheckoutScopedJobEnvOverrideHonorsCheckoutOverrideMode(t *testing.T) {
 				"BUILDKITE_GIT_COMMIT_VERIFICATION": "strict",
 			},
 			agentCfg: agent.AgentConfiguration{
-				GitCommitVerification: "warn",
+				GitCommitVerification: "off",
 				CheckoutOverrideMode:  env.CheckoutOverrideNone,
 			},
 			wantEnvValue: "strict",
@@ -792,10 +792,10 @@ func TestCheckoutScopedJobEnvOverrideHonorsCheckoutOverrideMode(t *testing.T) {
 				"BUILDKITE_GIT_COMMIT_VERIFICATION": "strict",
 			},
 			agentCfg: agent.AgentConfiguration{
-				GitCommitVerification: "warn",
+				GitCommitVerification: "off",
 				CheckoutOverrideMode:  env.CheckoutOverrideStrict,
 			},
-			wantEnvValue:       "warn",
+			wantEnvValue:       "off",
 			wantIgnoredEnvVars: []string{"BUILDKITE_GIT_COMMIT_VERIFICATION"},
 		},
 		{
@@ -807,10 +807,10 @@ func TestCheckoutScopedJobEnvOverrideHonorsCheckoutOverrideMode(t *testing.T) {
 				"BUILDKITE_GIT_COMMIT_VERIFICATION": "strict",
 			},
 			agentCfg: agent.AgentConfiguration{
-				GitCommitVerification: "warn",
+				GitCommitVerification: "off",
 				CheckoutOverrideMode:  env.CheckoutOverrideFromJob,
 			},
-			wantEnvValue:       "warn",
+			wantEnvValue:       "off",
 			wantIgnoredEnvVars: []string{"BUILDKITE_GIT_COMMIT_VERIFICATION"},
 		},
 	}

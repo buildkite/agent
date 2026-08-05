@@ -14,7 +14,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/buildkite/agent/v3/internal/shell"
+	"github.com/buildkite/agent/v4/internal/shell"
+	"github.com/buildkite/agent/v4/tracetools"
 	"github.com/buildkite/shellwords"
 )
 
@@ -49,7 +50,7 @@ func (e *Executor) fetchSource(ctx context.Context, addBloblessFilter bool, atte
 	// Start span here so attributes can be set on the in-scope span; covers the
 	// whole fetch including retries (up to 10 attempts, ~2m), not per-attempt.
 	span, ctx := e.traceOpSpan(ctx, "git.fetch")
-	defer func() { span.FinishWithError(retErr) }()
+	defer func() { tracetools.FinishWithError(span, retErr) }()
 
 	// Classify the refspec kind once and dispatch on it in the switch below.
 	kind := refspecCommit
@@ -66,7 +67,7 @@ func (e *Executor) fetchSource(ctx context.Context, addBloblessFilter bool, atte
 		kind = refspecBranch
 	}
 
-	span.AddAttributes(map[string]string{
+	tracetools.AddAttributes(span, map[string]string{
 		"git.pull_request": strconv.FormatBool(e.PullRequest != "false"),
 		"git.refspec_kind": string(kind),
 	})
@@ -85,7 +86,7 @@ func (e *Executor) fetchSource(ctx context.Context, addBloblessFilter bool, atte
 	skipFetch := (e.GitSkipFetchExistingCommits || mirrorHit) && e.Commit != "HEAD" &&
 		hasGitCommit(ctx, e.shell, ".git", e.Commit)
 
-	span.AddAttributes(map[string]string{"git.skipped": strconv.FormatBool(skipFetch)})
+	tracetools.AddAttributes(span, map[string]string{"git.skipped": strconv.FormatBool(skipFetch)})
 
 	if skipFetch {
 		e.shell.Commentf("Commit %q already exists locally, skipping fetch", e.Commit)

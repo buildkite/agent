@@ -6,9 +6,9 @@ import (
 	"slices"
 	"time"
 
-	"github.com/buildkite/agent/v3/api"
+	"github.com/buildkite/agent/v4/api"
 	"github.com/buildkite/roko"
-	"github.com/urfave/cli"
+	"github.com/urfave/cli/v3"
 	"go.opentelemetry.io/otel"
 )
 
@@ -34,26 +34,25 @@ type MetaDataExistsConfig struct {
 	Build string `cli:"build"`
 }
 
-var MetaDataExistsCommand = cli.Command{
+var MetaDataExistsCommand = &cli.Command{
 	Name:        "exists",
 	Usage:       "Check to see if the meta data key exists for a build",
 	Description: metaDataExistsHelpDescription,
 	Flags: slices.Concat(globalFlags(), apiFlags(), []cli.Flag{
-		cli.StringFlag{
-			Name:   "job",
-			Value:  "",
-			Usage:  "Which job's build should the meta-data be checked for",
-			EnvVar: "BUILDKITE_JOB_ID",
+		&cli.StringFlag{
+			Name:    "job",
+			Value:   "",
+			Usage:   "Which job's build should the meta-data be checked for",
+			Sources: cli.EnvVars("BUILDKITE_JOB_ID"),
 		},
-		cli.StringFlag{
-			Name:   "build",
-			Value:  "",
-			Usage:  "Which build should the meta-data be retrieved from. --build will take precedence over --job",
-			EnvVar: "BUILDKITE_METADATA_BUILD_ID",
+		&cli.StringFlag{
+			Name:    "build",
+			Value:   "",
+			Usage:   "Which build should the meta-data be retrieved from. --build will take precedence over --job",
+			Sources: cli.EnvVars("BUILDKITE_METADATA_BUILD_ID"),
 		},
 	}),
-	Action: func(c *cli.Context) error {
-		ctx := context.Background()
+	Action: func(ctx context.Context, c *cli.Command) error {
 		ctx, cfg, l, _, done := setupLoggerAndConfig[MetaDataExistsConfig](ctx, c)
 		defer done()
 		ctx, span := otel.Tracer("buildkite-agent").Start(ctx, "meta-data-exists")

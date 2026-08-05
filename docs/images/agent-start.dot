@@ -10,7 +10,7 @@ digraph {
 
     subgraph cluster_clicommand {
         label="clicommand"
-        URL="https://pkg.go.dev/github.com/buildkite/agent/v3/clicommand"
+        URL="https://pkg.go.dev/github.com/buildkite/agent/v4/clicommand"
 
         "AgentStartCommand.Action"
         "handlePoolSignals"
@@ -21,7 +21,7 @@ digraph {
 
     subgraph cluster_agent {
         label="agent"
-        URL="https://pkg.go.dev/github.com/buildkite/agent/v3/agent"
+        URL="https://pkg.go.dev/github.com/buildkite/agent/v4/agent"
 
         "AgentPool.Start"
         "AgentPool.Start.<wait>"
@@ -36,39 +36,33 @@ digraph {
         "AgentWorker.AcceptAndRunJob"
         "AgentWorker.RunJob"
         "NewJobRunner"
-        "NewJobRunner.<headerStreamer>"
         "NewJobRunner.<cleanup>"
         "JobRunner.Cancel"
         "JobRunner.Run"
         "JobRunner.jobLogStreamer"
         "JobRunner.jobCancellationChecker"
         "JobRunner.onUploadChunk"
-        "JobRunner.onUploadHeaderTime"
         "JobRunner.startJob"
         "LogStreamer.Start"
         "LogStreamer.Process"
         "LogStreamer.worker"
-        "headerTimesStreamer.Start"
-        "headerTimesStreamer.Start.<uploadLoop>"
-        "headerTimesStreamer.Upload"
     }
 
     subgraph cluster_api {
         label="api"
-        URL="https://pkg.go.dev/github.com/buildkite/agent/v3/api"
+        URL="https://pkg.go.dev/github.com/buildkite/agent/v4/api"
 
         "Client.AcceptJob"
         "Client.GetJobStatus"
         "Client.Heartbeat"
         "Client.Ping"
-        "Client.SaveHeaderTimes"
         "Client.StartJob"
         "Client.UploadChunk"
     }
 
     subgraph cluster_process {
         label="process"
-        URL="https://pkg.go.dev/github.com/buildkite/agent/v3/internal/process"
+        URL="https://pkg.go.dev/github.com/buildkite/agent/v4/internal/process"
 
         "Scanner.ScanLines"
         "Process.Run"
@@ -116,15 +110,12 @@ digraph {
     "AgentWorker.RunJob" -> "NewJobRunner"
     "AgentWorker.RunJob" -> "JobRunner.Run"
 
-    "NewJobRunner" -> "NewJobRunner.<headerStreamer>" [label="go" style=dotted]
     "NewJobRunner" -> "NewJobRunner.<cleanup>" [label="go" style=dotted]
-    "NewJobRunner.<headerStreamer>" -> "Scanner.ScanLines"
 
     "JobRunner.Run" -> "JobRunner.startJob"
     "JobRunner.Run" -> "JobRunner.jobLogStreamer" [label="go" style=dotted]
     "JobRunner.Run" -> "JobRunner.jobCancellationChecker" [label="go" style=dotted]
     "JobRunner.Run" -> "Process.Run"
-    "JobRunner.Run" -> "headerTimesStreamer.Start"
     "JobRunner.Run" -> "LogStreamer.Start"
 
     "JobRunner.startJob" -> "Client.StartJob"
@@ -134,11 +125,6 @@ digraph {
     "LogStreamer.worker" -> "JobRunner.onUploadChunk"
 
     "JobRunner.onUploadChunk" -> "Client.UploadChunk"
-
-    "headerTimesStreamer.Start" -> "headerTimesStreamer.Start.<uploadLoop>" [label="go" style=dotted]
-    "headerTimesStreamer.Start.<uploadLoop>" -> "headerTimesStreamer.Upload"
-    "headerTimesStreamer.Upload" -> "JobRunner.onUploadHeaderTime"
-    "JobRunner.onUploadHeaderTime" -> "Client.SaveHeaderTimes"
 
     "JobRunner.jobLogStreamer" -> "LogStreamer.Process" [label="∞"]
 
