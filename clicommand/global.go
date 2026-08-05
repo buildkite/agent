@@ -198,6 +198,18 @@ var (
 	}
 )
 
+func validateGitCommitVerification(value string) error {
+	if value != job.GitCommitVerificationStrict && value != job.GitCommitVerificationOff {
+		return fmt.Errorf(
+			"invalid value for --git-commit-verification: %q (must be %q or %q)",
+			value,
+			job.GitCommitVerificationStrict,
+			job.GitCommitVerificationOff,
+		)
+	}
+	return nil
+}
+
 // Git related flags shared between agent start and bootstrap
 var (
 	SkipCheckoutFlag = &cli.BoolFlag{
@@ -246,9 +258,12 @@ var (
 	}
 
 	GitCommitVerificationFlag = &cli.StringFlag{
-		Name:    "git-commit-verification",
-		Usage:   "Enable git commit verification",
-		Sources: cli.EnvVars("BUILDKITE_GIT_COMMIT_VERIFICATION"),
+		Name:             "git-commit-verification",
+		Value:            job.GitCommitVerificationStrict,
+		Usage:            "Verify that the commit being built exists on the specified branch; one of strict or off",
+		Sources:          cli.EnvVars("BUILDKITE_GIT_COMMIT_VERIFICATION"),
+		ValidateDefaults: true,
+		Validator:        validateGitCommitVerification,
 	}
 
 	GitFetchFlagsFlag = &cli.StringFlag{
