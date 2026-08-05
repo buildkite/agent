@@ -341,6 +341,7 @@ func (tc *testCase) startAgent(extraArgs ...string) *exec.Cmd {
 	args := append([]string{
 		"start",
 		"--debug",
+		"--write-job-logs-to-stdout",
 		"--token", agentToken,
 		"--name", tc.fullName,
 		"--queue", tc.queue.Key,
