@@ -11,9 +11,9 @@ import (
 	"sync"
 
 	"github.com/aws/aws-sdk-go-v2/service/s3"
-	"github.com/buildkite/agent/v3/api"
-	"github.com/buildkite/agent/v3/internal/agenthttp"
-	"github.com/buildkite/agent/v3/logger"
+	"github.com/buildkite/agent/v4/api"
+	"github.com/buildkite/agent/v4/internal/agenthttp"
+	"github.com/buildkite/agent/v4/logger"
 )
 
 type DownloaderConfig struct {

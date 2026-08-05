@@ -6,9 +6,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/buildkite/agent/v3/api"
-	envutil "github.com/buildkite/agent/v3/env"
-	"github.com/buildkite/agent/v3/logger"
+	"github.com/buildkite/agent/v4/api"
+	envutil "github.com/buildkite/agent/v4/env"
+	"github.com/buildkite/agent/v4/logger"
 )
 
 // controlPlaneTestRunner builds the minimal JobRunner that createEnvironment
@@ -47,7 +47,7 @@ func controlPlaneTestRunner(t *testing.T, jobEnv map[string]string, agentConf Ag
 
 func controlPlaneTestAgentConf() AgentConfiguration {
 	return AgentConfiguration{
-		TracingBackend: "opentelemetry",
+		OpenTelemetryTracing: true,
 		ControlPlaneTracingExporter: &api.TracingExporter{
 			Endpoint: "https://collector.example/v1/traces",
 			Protocol: "http/protobuf",

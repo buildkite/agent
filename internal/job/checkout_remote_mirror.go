@@ -12,10 +12,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/buildkite/agent/v3/internal/osutil"
-	"github.com/buildkite/agent/v3/internal/redact"
-	"github.com/buildkite/agent/v3/tracetools"
+	"github.com/buildkite/agent/v4/internal/osutil"
+	"github.com/buildkite/agent/v4/internal/redact"
+	"github.com/buildkite/agent/v4/tracetools"
 	"github.com/buildkite/shellwords"
+	"go.opentelemetry.io/otel/trace"
 )
 
 const (
@@ -306,7 +307,7 @@ func (e *Executor) fetchCommitFromRemoteMirror(
 	return true, nil
 }
 
-func (e *Executor) emitRemoteMirrorTelemetry(span tracetools.Span, attempt remoteMirrorAttempt) {
+func (e *Executor) emitRemoteMirrorTelemetry(span trace.Span, attempt remoteMirrorAttempt) {
 	attributes := map[string]string{
 		"git.remote_mirror.outcome": attempt.outcome.String(),
 		"git.remote_mirror.site":    attempt.site.String(),
@@ -317,7 +318,7 @@ func (e *Executor) emitRemoteMirrorTelemetry(span tracetools.Span, attempt remot
 	if attempt.duration > 0 {
 		attributes["git.remote_mirror.duration_ms"] = strconv.FormatInt(attempt.duration.Milliseconds(), 10)
 	}
-	span.AddAttributes(attributes)
+	tracetools.AddAttributes(span, attributes)
 
 	message := "Remote Git mirror: outcome=" + attempt.outcome.String() + " site=" + attempt.site.String()
 	if attempt.skipReason != remoteMirrorSkipNone {

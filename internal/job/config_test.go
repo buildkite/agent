@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/buildkite/agent/v3/env"
+	"github.com/buildkite/agent/v4/env"
 	"github.com/google/go-cmp/cmp"
 )
 
@@ -219,8 +219,8 @@ func TestReadFromEnvironmentRefreshesCommitVerification(t *testing.T) {
 
 	// Commit verification is checkout-scoped, so an allowed within-job source
 	// (from-job or none) must refresh the executor field: verifyCommit reads
-	// GitCommitVerification, not the env, so a stale field would silently skip the
-	// requested verification. strict must keep the agent-config value.
+	// GitCommitVerification, not the env, so a stale field would use the wrong
+	// verification policy. strict must keep the agent-config value.
 	t.Run("from-job refreshes the field", func(t *testing.T) {
 		t.Parallel()
 
@@ -241,7 +241,7 @@ func TestReadFromEnvironmentRefreshesCommitVerification(t *testing.T) {
 
 		config := &ExecutorConfig{
 			CheckoutOverrideMode:  env.CheckoutOverrideStrict,
-			GitCommitVerification: "warn",
+			GitCommitVerification: "off",
 		}
 		environ := env.FromSlice([]string{"BUILDKITE_GIT_COMMIT_VERIFICATION=strict"})
 
@@ -249,7 +249,7 @@ func TestReadFromEnvironmentRefreshesCommitVerification(t *testing.T) {
 		if len(changes) != 0 {
 			t.Errorf("changes = %v, want none", changes)
 		}
-		if got, want := config.GitCommitVerification, "warn"; got != want {
+		if got, want := config.GitCommitVerification, "off"; got != want {
 			t.Errorf("config.GitCommitVerification = %q, want %q", got, want)
 		}
 	})

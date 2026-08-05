@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"slices"
 
-	"github.com/buildkite/agent/v3/api"
-	"github.com/buildkite/agent/v3/internal/artifact"
-	"github.com/urfave/cli"
+	"github.com/buildkite/agent/v4/api"
+	"github.com/buildkite/agent/v4/internal/artifact"
+	"github.com/urfave/cli/v3"
 	"go.opentelemetry.io/otel"
 )
 
@@ -60,35 +60,34 @@ type ArtifactDownloadConfig struct {
 	NoS3MultipartDownload bool   `cli:"no-s3-multipart-download"`
 }
 
-var ArtifactDownloadCommand = cli.Command{
+var ArtifactDownloadCommand = &cli.Command{
 	Name:        "download",
 	Usage:       "Downloads artifacts from Buildkite to the local machine",
 	Description: downloadHelpDescription,
 	Flags: slices.Concat(globalFlags(), apiFlags(), []cli.Flag{
-		cli.StringFlag{
+		&cli.StringFlag{
 			Name:  "step",
 			Value: "",
 			Usage: "Scope the search to a particular step. Can be the step's key or label, or a Job ID",
 		},
-		cli.StringFlag{
-			Name:   "build",
-			Value:  "",
-			EnvVar: "BUILDKITE_BUILD_ID",
-			Usage:  "The build that the artifacts were uploaded to",
+		&cli.StringFlag{
+			Name:    "build",
+			Value:   "",
+			Sources: cli.EnvVars("BUILDKITE_BUILD_ID"),
+			Usage:   "The build that the artifacts were uploaded to",
 		},
-		cli.BoolFlag{
-			Name:   "include-retried-jobs",
-			EnvVar: "BUILDKITE_AGENT_INCLUDE_RETRIED_JOBS",
-			Usage:  "Include artifacts from every attempt of retried jobs in the search, not just the latest attempt (default: false)",
+		&cli.BoolFlag{
+			Name:    "include-retried-jobs",
+			Sources: cli.EnvVars("BUILDKITE_AGENT_INCLUDE_RETRIED_JOBS"),
+			Usage:   "Include artifacts from every attempt of retried jobs in the search, not just the latest attempt (default: false)",
 		},
-		cli.BoolFlag{
-			Name:   "no-s3-multipart-download",
-			EnvVar: "BUILDKITE_NO_S3_MULTIPART_DOWNLOAD",
-			Usage:  "Disable multipart download for custom s3 bucket",
+		&cli.BoolFlag{
+			Name:    "no-s3-multipart-download",
+			Sources: cli.EnvVars("BUILDKITE_NO_S3_MULTIPART_DOWNLOAD"),
+			Usage:   "Disable multipart download for custom s3 bucket",
 		},
 	}),
-	Action: func(c *cli.Context) error {
-		ctx := context.Background()
+	Action: func(ctx context.Context, c *cli.Command) error {
 		ctx, cfg, l, _, done := setupLoggerAndConfig[ArtifactDownloadConfig](ctx, c)
 		defer done()
 		ctx, span := otel.Tracer("buildkite-agent").Start(ctx, "artifact-download")

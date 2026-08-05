@@ -10,9 +10,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/buildkite/agent/v3/internal/systemdnotify"
-	"github.com/buildkite/agent/v3/logger"
-	"github.com/buildkite/agent/v3/status"
+	"github.com/buildkite/agent/v4/internal/systemdnotify"
+	"github.com/buildkite/agent/v4/logger"
+	"github.com/buildkite/agent/v4/status"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )

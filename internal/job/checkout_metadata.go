@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/buildkite/agent/v3/internal/self"
+	"github.com/buildkite/agent/v4/internal/self"
 )
 
 const CommitMetadataKey = "buildkite:git:commit"

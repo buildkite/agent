@@ -7,10 +7,10 @@ import (
 	"os"
 	"slices"
 
-	"github.com/buildkite/agent/v3/api"
-	"github.com/buildkite/agent/v3/internal/artifact"
-	"github.com/buildkite/agent/v3/logger"
-	"github.com/urfave/cli"
+	"github.com/buildkite/agent/v4/api"
+	"github.com/buildkite/agent/v4/internal/artifact"
+	"github.com/buildkite/agent/v4/logger"
+	"github.com/urfave/cli/v3"
 	"go.opentelemetry.io/otel"
 )
 
@@ -62,34 +62,34 @@ type ArtifactShasumConfig struct {
 	IncludeRetriedJobs bool   `cli:"include-retried-jobs"`
 }
 
-var ArtifactShasumCommand = cli.Command{
+var ArtifactShasumCommand = &cli.Command{
 	Name:        "shasum",
 	Usage:       "Prints the SHA-1 hash for a single artifact specified by a search query",
 	Description: shasumHelpDescription,
 	Flags: slices.Concat(globalFlags(), apiFlags(), []cli.Flag{
-		cli.BoolFlag{
+		&cli.BoolFlag{
 			Name:  "sha256",
 			Usage: "Request SHA-256 instead of SHA-1, errors if SHA-256 not available (default: false)",
 		},
-		cli.StringFlag{
+		&cli.StringFlag{
 			Name:  "step",
 			Value: "",
 			Usage: "Scope the search to a particular step by its name or job ID",
 		},
-		cli.StringFlag{
-			Name:   "build",
-			Value:  "",
-			EnvVar: "BUILDKITE_BUILD_ID",
-			Usage:  "The build that the artifact was uploaded to",
+		&cli.StringFlag{
+			Name:    "build",
+			Value:   "",
+			Sources: cli.EnvVars("BUILDKITE_BUILD_ID"),
+			Usage:   "The build that the artifact was uploaded to",
 		},
-		cli.BoolFlag{
-			Name:   "include-retried-jobs",
-			EnvVar: "BUILDKITE_AGENT_INCLUDE_RETRIED_JOBS",
-			Usage:  "Include artifacts from every attempt of retried jobs in the search, not just the latest attempt (default: false)",
+
+		&cli.BoolFlag{
+			Name:    "include-retried-jobs",
+			Sources: cli.EnvVars("BUILDKITE_AGENT_INCLUDE_RETRIED_JOBS"),
+			Usage:   "Include artifacts from every attempt of retried jobs in the search, not just the latest attempt (default: false)",
 		},
 	}),
-	Action: func(c *cli.Context) error {
-		ctx := context.Background()
+	Action: func(ctx context.Context, c *cli.Command) error {
 		ctx, cfg, l, _, done := setupLoggerAndConfig[ArtifactShasumConfig](ctx, c)
 		defer done()
 		ctx, span := otel.Tracer("buildkite-agent").Start(ctx, "artifact-shasum")

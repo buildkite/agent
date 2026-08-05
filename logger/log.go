@@ -16,7 +16,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/buildkite/agent/v3/version"
+	"github.com/buildkite/agent/v4/version"
 	"golang.org/x/term"
 )
 

@@ -6,10 +6,10 @@ import (
 	"slices"
 	"time"
 
-	"github.com/buildkite/agent/v3/api"
-	"github.com/buildkite/agent/v3/logger"
+	"github.com/buildkite/agent/v4/api"
+	"github.com/buildkite/agent/v4/logger"
 	"github.com/buildkite/roko"
-	"github.com/urfave/cli"
+	"github.com/urfave/cli/v3"
 )
 
 const pauseDescription = `Usage:
@@ -36,25 +36,24 @@ type AgentPauseConfig struct {
 	TimeoutInMinutes int    `cli:"timeout-in-minutes"`
 }
 
-var AgentPauseCommand = cli.Command{
+var AgentPauseCommand = &cli.Command{
 	Name:        "pause",
 	Category:    categoryJobCommands,
 	Usage:       "Pause the agent",
 	Description: pauseDescription,
 	Flags: slices.Concat(globalFlags(), apiFlags(), []cli.Flag{
-		cli.StringFlag{
-			Name:   "note",
-			Usage:  "A descriptive note to record why the agent is paused",
-			EnvVar: "BUILDKITE_AGENT_PAUSE_NOTE",
+		&cli.StringFlag{
+			Name:    "note",
+			Usage:   "A descriptive note to record why the agent is paused",
+			Sources: cli.EnvVars("BUILDKITE_AGENT_PAUSE_NOTE"),
 		},
-		cli.IntFlag{
-			Name:   "timeout-in-minutes",
-			Usage:  "Timeout after which the agent is automatically resumed, in minutes",
-			EnvVar: "BUILDKITE_AGENT_PAUSE_TIMEOUT_MINUTES",
+		&cli.IntFlag{
+			Name:    "timeout-in-minutes",
+			Usage:   "Timeout after which the agent is automatically resumed, in minutes",
+			Sources: cli.EnvVars("BUILDKITE_AGENT_PAUSE_TIMEOUT_MINUTES"),
 		},
 	}),
-	Action: func(c *cli.Context) error {
-		ctx := context.Background()
+	Action: func(ctx context.Context, c *cli.Command) error {
 		ctx, cfg, l, _, done := setupLoggerAndConfig[AgentPauseConfig](ctx, c)
 		defer done()
 

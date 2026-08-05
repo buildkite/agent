@@ -6,9 +6,9 @@ import (
 	"slices"
 	"time"
 
-	"github.com/buildkite/agent/v3/api"
+	"github.com/buildkite/agent/v4/api"
 	"github.com/buildkite/roko"
-	"github.com/urfave/cli"
+	"github.com/urfave/cli/v3"
 	"go.opentelemetry.io/otel"
 )
 
@@ -37,32 +37,31 @@ type AnnotationRemoveConfig struct {
 	Job     string `cli:"job" validate:"required"`
 }
 
-var AnnotationRemoveCommand = cli.Command{
+var AnnotationRemoveCommand = &cli.Command{
 	Name:        "remove",
 	Usage:       "Remove an existing annotation from a Buildkite build",
 	Description: annotationRemoveHelpDescription,
 	Flags: slices.Concat(globalFlags(), apiFlags(), []cli.Flag{
-		cli.StringFlag{
-			Name:   "context",
-			Value:  "default",
-			Usage:  "The context of the annotation used to differentiate this annotation from others",
-			EnvVar: "BUILDKITE_ANNOTATION_CONTEXT",
+		&cli.StringFlag{
+			Name:    "context",
+			Value:   "default",
+			Usage:   "The context of the annotation used to differentiate this annotation from others",
+			Sources: cli.EnvVars("BUILDKITE_ANNOTATION_CONTEXT"),
 		},
-		cli.StringFlag{
-			Name:   "scope",
-			Value:  "build",
-			Usage:  "The scope of the annotation to remove. One of either 'build' or 'job'",
-			EnvVar: "BUILDKITE_ANNOTATION_SCOPE",
+		&cli.StringFlag{
+			Name:    "scope",
+			Value:   "build",
+			Usage:   "The scope of the annotation to remove. One of either 'build' or 'job'",
+			Sources: cli.EnvVars("BUILDKITE_ANNOTATION_SCOPE"),
 		},
-		cli.StringFlag{
-			Name:   "job",
-			Value:  "",
-			Usage:  "Which job is removing the annotation",
-			EnvVar: "BUILDKITE_JOB_ID",
+		&cli.StringFlag{
+			Name:    "job",
+			Value:   "",
+			Usage:   "Which job is removing the annotation",
+			Sources: cli.EnvVars("BUILDKITE_JOB_ID"),
 		},
 	}),
-	Action: func(c *cli.Context) error {
-		ctx := context.Background()
+	Action: func(ctx context.Context, c *cli.Command) error {
 		ctx, cfg, l, _, done := setupLoggerAndConfig[AnnotationRemoveConfig](ctx, c)
 		defer done()
 		ctx, span := otel.Tracer("buildkite-agent").Start(ctx, "annotation-remove")

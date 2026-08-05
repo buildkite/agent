@@ -8,9 +8,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/buildkite/agent/v3/internal/job/githttptest"
-	"github.com/buildkite/agent/v3/internal/shell"
-	"github.com/buildkite/agent/v3/tracetools"
+	"github.com/buildkite/agent/v4/internal/job/githttptest"
+	"github.com/buildkite/agent/v4/internal/shell"
+	"github.com/buildkite/agent/v4/tracetools"
 	"go.opentelemetry.io/otel"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"

@@ -4,7 +4,7 @@ import (
 	"bufio"
 	"io"
 
-	"github.com/buildkite/agent/v3/logger"
+	"github.com/buildkite/agent/v4/logger"
 )
 
 type Scanner struct {

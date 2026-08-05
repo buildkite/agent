@@ -21,7 +21,7 @@ import (
 	"text/template"
 	"time"
 
-	"github.com/buildkite/agent/v3/version"
+	"github.com/buildkite/agent/v4/version"
 
 	"github.com/buildkite/go-buildkite/v4"
 	"github.com/buildkite/roko"
@@ -341,6 +341,7 @@ func (tc *testCase) startAgent(extraArgs ...string) *exec.Cmd {
 	args := append([]string{
 		"start",
 		"--debug",
+		"--write-job-logs-to-stdout",
 		"--token", agentToken,
 		"--name", tc.fullName,
 		"--queue", tc.queue.Key,

@@ -47,9 +47,9 @@ if ([string]::IsNullOrEmpty($url)) {
           $releaseInfoUrl = $releaseInfoUrl + "&prerelease=true"
       }
       Write-Host "Finding latest release"
-  
+
       $resp = Invoke-WebRequest -Uri "$releaseInfoUrl" -UseBasicParsing -Method GET
-  
+
       $releaseInfo = @{}
       foreach ($line in $resp.Content.Split("`n")) {
           $info = $line -split "="
