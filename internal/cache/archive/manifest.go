@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
 
 	"github.com/klauspost/compress/zip"
 )
@@ -77,7 +76,7 @@ func readManifest(reader *zip.Reader) (Manifest, error) {
 
 		for namespace, anchor := range manifest.Mappings {
 			// The pinned-absolute anchor is a volume/filesystem root ("/" or a
-			// Windows drive root), so accept any root, not just AnchorRoot.
+			// Windows drive root), so accept any root.
 			if anchor != AnchorHome && anchor != AnchorCWD && !isRootAnchor(anchor) {
 				return Manifest{}, fmt.Errorf("%w: unrecognized anchor %q for namespace %q", ErrUnrecognizedFormat, anchor, namespace)
 			}
@@ -85,15 +84,4 @@ func readManifest(reader *zip.Reader) (Manifest, error) {
 		return manifest, nil
 	}
 	return Manifest{}, fmt.Errorf("%w: no manifest entry", ErrUnrecognizedFormat)
-}
-
-// DetectFormat reports whether an archive is a readable archive. It returns
-// ErrUnrecognizedFormat for unknown-version archives.
-func DetectFormat(zipFile *os.File, zipFileLen int64) error {
-	reader, err := zip.NewReader(zipFile, zipFileLen)
-	if err != nil {
-		return fmt.Errorf("failed to open zip reader: %w", err)
-	}
-	_, err = readManifest(reader)
-	return err
 }

@@ -423,8 +423,8 @@ github.com/vmihailenco/msgpack/v4 v4.3.13 h1:A2wsiTbvp63ilDaWmsk2wjx6xZdxQOvpiNl
 github.com/vmihailenco/msgpack/v4 v4.3.13/go.mod h1:gborTTJjAo/GWTqqRjrLCn9pgNN+NXzzngzBKDPIqw4=
 github.com/vmihailenco/tagparser v0.1.2 h1:gnjoVuB/kljJ5wICEEOpx98oXMWPLj22G67Vbd1qPqc=
 github.com/vmihailenco/tagparser v0.1.2/go.mod h1:OeAg3pn3UbLjkWt+rN9oFYB6u/cQgqMEUPoW2WPyhdI=
-github.com/wolfeidau/quickzip v1.0.2 h1:QPc4CVE8ECYng87o63C4t6+6ihZk1howyrZWwklKjq8=
-github.com/wolfeidau/quickzip v1.0.2/go.mod h1:ZDvxJMzI2iVp6CavOqxFq1tORhRyuxCDFw4HO25RbuA=
+github.com/wolfeidau/quickzip v1.0.3 h1:ThEzyN1RccCCeZqDvF7mM8gZxveOFaUTIinAA/HvsgU=
+github.com/wolfeidau/quickzip v1.0.3/go.mod h1:ZDvxJMzI2iVp6CavOqxFq1tORhRyuxCDFw4HO25RbuA=
 github.com/yuin/goldmark v1.3.5/go.mod h1:mwnBkeHKe2W/ZEtQ+71ViKU8L12m81fl3OWwC1Zlc8k=
 github.com/yusufpapurcu/wmi v1.2.4 h1:zFUKzehAFReQwLys1b/iSMl+JQGSCSjtVqQn9bBrPo0=
 github.com/yusufpapurcu/wmi v1.2.4/go.mod h1:SBZ9tNy3G9/m5Oi98Zks0QjeHVDvuK0qfxQmPyzfmi0=

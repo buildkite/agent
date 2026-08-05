@@ -47,15 +47,6 @@ func BuildArchive(ctx context.Context, paths []string, key string) (*ArchiveInfo
 		return nil, fmt.Errorf("failed to get mappings: %w", err)
 	}
 
-	home, err := homeDir()
-	if err != nil {
-		return nil, err
-	}
-	cwd, err := workingDir()
-	if err != nil {
-		return nil, err
-	}
-
 	// Resolve each mapping's on-disk layout, skipping paths that don't exist.
 	// The manifest records only the namespaces actually written.
 	type plan struct {
@@ -67,15 +58,15 @@ func BuildArchive(ctx context.Context, paths []string, key string) (*ArchiveInfo
 	manifest := Manifest{Version: ManifestVersion, Mappings: make(map[string]string, len(mappings))}
 
 	for _, mapping := range mappings {
-		if _, err := os.Stat(mapping.ResolvedPath); err != nil {
+		if _, err := os.Stat(mapping.ResolvedPath()); err != nil {
 			if os.IsNotExist(err) {
-				slog.Warn("cache path does not exist, skipping", "path", mapping.Path, "resolved", mapping.ResolvedPath)
+				slog.Warn("cache path does not exist, skipping", "path", mapping.Path, "resolved", mapping.ResolvedPath())
 				continue
 			}
 			return nil, fmt.Errorf("failed to stat file: %w", err)
 		}
 
-		chroot, prefix, err := saveLayout(mapping, home, cwd)
+		chroot, prefix, err := mapping.archiveLayout()
 		if err != nil {
 			return nil, err
 		}
@@ -88,7 +79,7 @@ func BuildArchive(ctx context.Context, paths []string, key string) (*ArchiveInfo
 	// one restore destination. Restore re-checks the re-resolved paths.
 	resolved := make([]string, len(plans))
 	for i, p := range plans {
-		resolved[i] = p.mapping.ResolvedPath
+		resolved[i] = p.mapping.ResolvedPath()
 	}
 	if i, j, ok := OverlappingPaths(resolved); ok {
 		return nil, fmt.Errorf("cache target_paths overlap: %q and %q resolve to nested or aliased locations; remove the redundant one", plans[i].mapping.Path, plans[j].mapping.Path)
@@ -100,7 +91,7 @@ func BuildArchive(ctx context.Context, paths []string, key string) (*ArchiveInfo
 
 	var writtenBytes, writtenEntries int64
 	for _, p := range plans {
-		b, e, err := archiveMapping(ctx, zw, p.mapping.ResolvedPath, p.chroot, p.prefix, modified)
+		b, e, err := archiveMapping(ctx, zw, p.mapping.ResolvedPath(), p.chroot, p.prefix, modified)
 		if err != nil {
 			return nil, fmt.Errorf("failed to archive path %q: %w", p.mapping.Path, err)
 		}
@@ -226,32 +217,6 @@ func canonicalizeForOverlap(p string) string {
 	return filepath.Join(realDir, base)
 }
 
-// saveLayout computes the quickzip chroot and the archive entry prefix for a
-// mapping. The prefix is prepended to each quickzip entry name so that the
-// final entry is "_N/<path-relative-to-anchor>/...".
-func saveLayout(m Mapping, home, cwd string) (chroot, prefix string, err error) {
-	switch {
-	case m.Anchor == AnchorHome:
-		return home, m.Namespace + "/", nil
-	case m.Anchor == AnchorCWD:
-		return cwd, m.Namespace + "/", nil
-	case isRootAnchor(m.Anchor):
-		// Pinned absolute path, entries relative to the volume root (m.Anchor).
-		// quickzip can't chroot at a bare root, so chroot at the target itself;
-		// archiveMapping renames the "." entry onto the namespace.
-		if m.ResolvedPath == m.Anchor {
-			return "", "", fmt.Errorf("cannot archive the volume/filesystem root %q", m.ResolvedPath)
-		}
-		rel, err := filepath.Rel(m.Anchor, m.ResolvedPath)
-		if err != nil {
-			return "", "", fmt.Errorf("failed to compute root-relative path for %q: %w", m.ResolvedPath, err)
-		}
-		return m.ResolvedPath, m.Namespace + "/" + filepath.ToSlash(rel) + "/", nil
-	default:
-		return "", "", fmt.Errorf("unknown anchor %q", m.Anchor)
-	}
-}
-
 // archiveMapping archives a single target path into a temporary zip via
 // quickzip, then copies each entry into the final archive with its namespace prefix.
 // Entries are copied raw (already compressed), so there is no second compression pass.
@@ -309,10 +274,12 @@ func archiveMapping(ctx context.Context, zw *zip.Writer, resolvedPath, chroot, p
 	for _, f := range reader.File {
 		hdr := f.FileHeader
 
-		// The chroot root entry (named "." by quickzip) is the target itself.
-		// Map it onto the namespace so an empty dir, a symlink, or the target's
-		// own mode survive. prefix ends in "/" (a dir entry to klauspost), so
-		// trim it for a non-directory root, which carries content.
+		// A "." entry is quickzip's name for the chroot root, which only appears
+		// when the target IS its anchor base (a bare "~" or "."). Name it after
+		// the namespace; splitNamespace drops a namespace-only entry on extract,
+		// so the base dir's own mode isn't restored — harmless, since home and
+		// cwd always already exist. prefix ends in "/" (a dir entry to klauspost),
+		// so trim it for a non-directory root.
 		switch {
 		case path.Clean(f.Name) != ".":
 			hdr.Name = prefix + f.Name

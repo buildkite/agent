@@ -13,12 +13,12 @@ const (
 	// AnchorHome marks paths configured with a leading "~" (or "~/"). Restore
 	// re-expands them against the restoring environment's home directory.
 	AnchorHome = "~"
-	// AnchorRoot marks absolute paths. Restore pins them to their exact
-	// location, unchanged across machines.
-	AnchorRoot = "/"
 	// AnchorCWD marks relative paths. Restore resolves them against the job's
 	// working directory.
 	AnchorCWD = "."
+	// Absolute paths are pinned to a volume/filesystem root ("/" on POSIX, a
+	// drive root like "C:\" on Windows); those anchors are produced by
+	// volumeRoot and recognised by isRootAnchor rather than a named constant.
 )
 
 // Mapping describes how one configured target path maps into an archive: a
@@ -26,13 +26,29 @@ const (
 type Mapping struct {
 	// Path is the target path exactly as configured.
 	Path string
-	// Namespace is the archive prefix that isolates this mapping's entries,
+	// Namespace is the archive prefix that isolates this mapping's entries ("_0").
 	Namespace string
-	// Anchor is one of AnchorHome, AnchorRoot or AnchorCWD.
+	// Anchor is the portable symbol stored in the manifest (see consts above).
 	Anchor string
-	// ResolvedPath is the absolute path on the machine that the target path
-	// resolves to.
-	ResolvedPath string
+	// base is the absolute directory Anchor resolves to on a machine.
+	base string
+	// resolved is the absolute path the target resolves to on this machine.
+	resolved string
+}
+
+// ResolvedPath is the absolute path on this machine the target resolves to.
+func (m Mapping) ResolvedPath() string { return m.resolved }
+
+// archiveLayout returns the directory quickzip archives from (chroot) and the
+// entry-name prefix prepended so each stored entry is "<namespace>/..". Every
+// anchor chroots at its base (home, cwd, or the volume root), so quickzip names
+// entries relative to that base and the prefix only adds the namespace.
+func (m Mapping) archiveLayout() (chroot, prefix string, err error) {
+	// Refuse to archive a base directory itself
+	if isRootAnchor(m.Anchor) && m.resolved == m.base {
+		return "", "", fmt.Errorf("cannot archive the volume/filesystem root %q", m.resolved)
+	}
+	return m.base, m.Namespace + "/", nil
 }
 
 // homeDir returns the cleaned home directory (os.UserHomeDir returns $HOME
@@ -68,34 +84,37 @@ func PathsToMappings(paths []string) ([]Mapping, error) {
 
 	mappings := make([]Mapping, 0, len(paths))
 	for i, path := range paths {
-		anchor, resolved := classifyPath(path, home, cwd)
+		anchor, base, resolved := classifyAndResolvePath(path, home, cwd)
 		mappings = append(mappings, Mapping{
-			Path:         path,
-			Namespace:    fmt.Sprintf("_%d", i),
-			Anchor:       anchor,
-			ResolvedPath: resolved,
+			Path:      path,
+			Namespace: fmt.Sprintf("_%d", i),
+			Anchor:    anchor,
+			base:      base,
+			resolved:  resolved,
 		})
 	}
 
 	return mappings, nil
 }
 
-// classifyPath determines a configured path's anchor and the absolute path it
+// classifyAndResolvePath determines a configured path's anchor, the absolute
+// base directory that anchor resolves to, and the absolute path the target
 // resolves to in the current environment.
-func classifyPath(path, home, cwd string) (anchor, resolved string) {
+func classifyAndResolvePath(path, home, cwd string) (anchor, base, resolved string) {
 	switch {
 	case path == "~" || strings.HasPrefix(path, "~/"):
 		rest := strings.TrimPrefix(strings.TrimPrefix(path, "~"), "/")
-		return AnchorHome, filepath.Join(home, rest)
+		return AnchorHome, home, filepath.Join(home, rest)
 
 	case filepath.IsAbs(path):
 		resolved := filepath.Clean(path)
 		// Absolute paths are pinned — never follow $HOME, even under it. The
 		// anchor is the volume root, so a Windows drive is retained.
-		return volumeRoot(resolved), resolved
+		root := volumeRoot(resolved)
+		return root, root, resolved
 
 	default:
-		return AnchorCWD, filepath.Join(cwd, path)
+		return AnchorCWD, cwd, filepath.Join(cwd, path)
 	}
 }
 
@@ -132,12 +151,8 @@ func resolveAnchor(anchor string) (string, error) {
 // cleaned path it refers to on this machine, using the same classification as
 // PathsToMappings.
 func ResolveConfigPath(path string) (string, error) {
-	// Only resolve the piece of environment the path actually needs: an
-	// absolute path depends on neither, and shouldn't fail a restore because
-	// (say) the cwd was since deleted.
 	var home, cwd string
 	var err error
-
 	switch {
 	case path == "~" || strings.HasPrefix(path, "~/"):
 		home, err = homeDir()
@@ -148,6 +163,6 @@ func ResolveConfigPath(path string) (string, error) {
 		return "", fmt.Errorf("failed to resolve config path %q: %w", path, err)
 	}
 
-	_, resolved := classifyPath(path, home, cwd)
+	_, _, resolved := classifyAndResolvePath(path, home, cwd)
 	return resolved, nil
 }

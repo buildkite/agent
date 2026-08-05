@@ -11,37 +11,38 @@ import (
 	"github.com/buildkite/agent/v3/internal/cache/internal/trace"
 )
 
-func TestSaveLayoutRootAnchor(t *testing.T) {
+func TestArchiveLayoutRootAnchor(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("uses POSIX \"/\" path literals; Windows root anchors are drive roots")
 	}
 
 	// The filesystem root itself is rejected...
-	if _, _, err := saveLayout(Mapping{Namespace: "_0", Anchor: AnchorRoot, ResolvedPath: "/"}, "/home/x", "/wd"); err == nil {
+	if _, _, err := (Mapping{Namespace: "_0", Anchor: "/", base: "/", resolved: "/"}).archiveLayout(); err == nil {
 		t.Error("expected error archiving the filesystem root")
 	}
 
-	// ...but a child of "/" is representable (this is the case v1 could not do).
+	// ...but a child of "/" chroots at the volume root like any other anchor
+	// (quickzip >= v1.0.3 can chroot at a bare root, so entries come out as
+	// "<namespace>/<path under root>/..." with no special-casing here).
 	tests := []struct {
 		resolved   string
-		wantChroot string
-		wantPrefix string
 		namespace  string
+		wantPrefix string
 	}{
-		{"/cache-file", "/cache-file", "_0/cache-file/", "_0"},
-		{"/opt/cache", "/opt/cache", "_1/opt/cache/", "_1"},
+		{"/cache-file", "_0", "_0/"},
+		{"/opt/cache", "_1", "_1/"},
 	}
 	for _, tt := range tests {
-		chroot, prefix, err := saveLayout(Mapping{Namespace: tt.namespace, Anchor: AnchorRoot, ResolvedPath: tt.resolved}, "/home/x", "/wd")
+		chroot, prefix, err := (Mapping{Namespace: tt.namespace, Anchor: "/", base: "/", resolved: tt.resolved}).archiveLayout()
 		if err != nil {
-			t.Errorf("saveLayout(%q): unexpected error %v", tt.resolved, err)
+			t.Errorf("archiveLayout(%q): unexpected error %v", tt.resolved, err)
 			continue
 		}
-		if chroot != tt.wantChroot {
-			t.Errorf("saveLayout(%q) chroot = %q, want %q", tt.resolved, chroot, tt.wantChroot)
+		if chroot != "/" {
+			t.Errorf("archiveLayout(%q) chroot = %q, want %q", tt.resolved, chroot, "/")
 		}
 		if prefix != tt.wantPrefix {
-			t.Errorf("saveLayout(%q) prefix = %q, want %q", tt.resolved, prefix, tt.wantPrefix)
+			t.Errorf("archiveLayout(%q) prefix = %q, want %q", tt.resolved, prefix, tt.wantPrefix)
 		}
 	}
 }

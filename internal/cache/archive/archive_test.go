@@ -558,8 +558,8 @@ func TestV2_UnrecognizedFormatSoftFails(t *testing.T) {
 		t.Fatalf("Stat: %v", err)
 	}
 
-	if err := DetectFormat(tmp, stat.Size()); !errors.Is(err, ErrUnrecognizedFormat) {
-		t.Errorf("DetectFormat err = %v, want ErrUnrecognizedFormat", err)
+	if err := Validate(tmp.Name(), stat.Size()); !errors.Is(err, ErrUnrecognizedFormat) {
+		t.Errorf("Validate err = %v, want ErrUnrecognizedFormat", err)
 	}
 
 	if _, err := ExtractFiles(t.Context(), tmp, stat.Size(), []string{"cache"}); !errors.Is(err, ErrUnrecognizedFormat) {
@@ -596,8 +596,8 @@ func TestV2_UnrecognizedAnchorSoftFails(t *testing.T) {
 		t.Fatalf("Stat: %v", err)
 	}
 
-	if err := DetectFormat(tmp, stat.Size()); !errors.Is(err, ErrUnrecognizedFormat) {
-		t.Errorf("DetectFormat err = %v, want ErrUnrecognizedFormat", err)
+	if err := Validate(tmp.Name(), stat.Size()); !errors.Is(err, ErrUnrecognizedFormat) {
+		t.Errorf("Validate err = %v, want ErrUnrecognizedFormat", err)
 	}
 
 	if _, err := ExtractFiles(t.Context(), tmp, stat.Size(), []string{"cache"}); !errors.Is(err, ErrUnrecognizedFormat) {
@@ -623,8 +623,8 @@ func TestV2_AbsoluteFileRoundTrip(t *testing.T) {
 	}
 	defer func() { _ = os.Remove(info.ArchivePath) }()
 
-	if got := readArchiveManifest(t, info).Mappings["_0"]; got != AnchorRoot {
-		t.Errorf("manifest _0 anchor = %q, want %q", got, AnchorRoot)
+	if got := readArchiveManifest(t, info).Mappings["_0"]; got != "/" {
+		t.Errorf("manifest _0 anchor = %q, want %q", got, "/")
 	}
 
 	if err := os.Remove(file); err != nil {

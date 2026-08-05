@@ -59,8 +59,8 @@ func TestPathsToMappings(t *testing.T) {
 		if got.Anchor != want.anchor {
 			t.Errorf("mappings[%d].Anchor = %q, want %q", i, got.Anchor, want.anchor)
 		}
-		if got.ResolvedPath != want.resolvedPath {
-			t.Errorf("mappings[%d].ResolvedPath = %q, want %q", i, got.ResolvedPath, want.resolvedPath)
+		if got.ResolvedPath() != want.resolvedPath {
+			t.Errorf("mappings[%d].ResolvedPath() = %q, want %q", i, got.ResolvedPath(), want.resolvedPath)
 		}
 	}
 }
