@@ -26,7 +26,6 @@ func (a *AgentWorker) watchdogMarkStopped() {
 	defer a.stats.Unlock()
 
 	a.stats.watchdogRunningSince = time.Time{}
-	a.stats.watchdogErr = nil
 }
 
 func (a *AgentWorker) watchdogMarkFailed(err error) {

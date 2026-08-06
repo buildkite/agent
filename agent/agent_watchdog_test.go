@@ -129,6 +129,27 @@ func TestAgentWorkerSuccessfulHeartbeatDoesNotReviveFailedWorker(t *testing.T) {
 	}
 }
 
+func TestAgentWorkerStoppedPreservesWatchdogFailure(t *testing.T) {
+	t.Parallel()
+
+	want := errors.New("failed")
+	worker := &AgentWorker{
+		agent: &api.AgentRegisterResponse{HeartbeatInterval: 60},
+	}
+	worker.watchdogMarkRunning()
+	worker.watchdogMarkFailed(want)
+	worker.watchdogMarkStopped()
+
+	if err := worker.watchdogHealth(time.Now()); !errors.Is(err, want) {
+		t.Errorf("watchdogHealth() error = %v, want error wrapping %v", err, want)
+	}
+
+	worker.watchdogMarkRunning()
+	if err := worker.watchdogHealth(time.Now()); err != nil {
+		t.Errorf("watchdogHealth() after restart error = %v, want nil", err)
+	}
+}
+
 func TestAgentWorkerHeartbeatRecordsOnlySuccessfulBuildkiteContact(t *testing.T) {
 	t.Parallel()
 
