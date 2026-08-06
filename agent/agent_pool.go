@@ -22,18 +22,20 @@ type AgentPool struct {
 	workers     []*AgentWorker
 	idleTimeout time.Duration
 	watchdog    watchdogNotifier
-	watchdogErr error
 }
 
 // NewAgentPool returns a new AgentPool.
-func NewAgentPool(workers []*AgentWorker, config *AgentConfiguration) *AgentPool {
-	watchdog, watchdogErr := systemdnotify.New()
+func NewAgentPool(workers []*AgentWorker, config *AgentConfiguration) (*AgentPool, error) {
+	watchdog, err := systemdnotify.New()
+	if err != nil {
+		return nil, fmt.Errorf("configure systemd watchdog: %w", err)
+	}
+
 	return &AgentPool{
 		workers:     workers,
 		idleTimeout: config.DisconnectAfterIdleTimeout,
 		watchdog:    watchdog,
-		watchdogErr: watchdogErr,
-	}
+	}, nil
 }
 
 func (ap *AgentPool) StartStatusServer(ctx context.Context, l logger.Logger, addr string) {
@@ -63,10 +65,6 @@ func (ap *AgentPool) StartStatusServer(ctx context.Context, l logger.Logger, add
 
 // Start kicks off the parallel AgentWorkers and waits for them to finish.
 func (r *AgentPool) Start(ctx context.Context) error {
-	if r.watchdogErr != nil {
-		return fmt.Errorf("configure systemd watchdog: %w", r.watchdogErr)
-	}
-
 	if r.watchdog != nil {
 		if watchdogInterval := r.watchdog.WatchdogInterval(); watchdogInterval > 0 {
 			var l logger.Logger = logger.Discard

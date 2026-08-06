@@ -289,14 +289,3 @@ func TestAgentPoolWatchdogLoopStops(t *testing.T) {
 		t.Fatal("watchdog loop did not stop after context cancellation")
 	}
 }
-
-func TestAgentPoolRejectsInvalidSystemdWatchdogConfiguration(t *testing.T) {
-	t.Parallel()
-
-	want := errors.New("invalid watchdog configuration")
-	pool := &AgentPool{watchdogErr: want}
-	err := pool.Start(t.Context())
-	if !errors.Is(err, want) {
-		t.Fatalf("Start() error = %v, want error wrapping %v", err, want)
-	}
-}
