@@ -87,6 +87,27 @@ func TestSearchForSecrets(t *testing.T) {
 			wantLog: `pipeline "cat-o-matic.yaml" contains values interpolated from the following secret environment variables: [SEKRET], and cannot be uploaded to Buildkite`,
 		},
 		{
+			desc:    "one step env secret within a trigger",
+			environ: nil,
+			pipeline: &pipeline.Pipeline{
+				Steps: pipeline.Steps{
+					&pipeline.TriggerStep{
+						Contents: map[string]any{
+							"build": ordered.MapFromItems(
+								ordered.TupleSA{
+									Key: "env", Value: ordered.MapFromItems(
+										ordered.TupleSA{Key: "SEKRET", Value: "squirrels"},
+										ordered.TupleSA{Key: "UNRELATED", Value: "horses"},
+									),
+								},
+							),
+						},
+					},
+				},
+			},
+			wantLog: `pipeline "cat-o-matic.yaml" contains values interpolated from the following secret environment variables: [SEKRET], and cannot be uploaded to Buildkite`,
+		},
+		{
 			desc:    "one pipeline env secret",
 			environ: nil,
 			pipeline: &pipeline.Pipeline{

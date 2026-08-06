@@ -1,4 +1,7 @@
 version: 2
+
+# Note that each rule is repeated, once for the default branch, once for v3.
+# GitHub's Dependabot does not support YAML aliases!
 updates:
   - package-ecosystem: docker
     directories:
@@ -14,6 +17,21 @@ updates:
       container-images:
         patterns:
           - "*"
+  - package-ecosystem: docker
+    directories:
+      - /packaging/docker/alpine
+      - /packaging/docker/alpine-k8s
+      - /packaging/docker/sidecar
+      - /packaging/docker/ubuntu-20.04
+      - /packaging/docker/ubuntu-22.04
+      - /packaging/docker/ubuntu-24.04
+    schedule:
+      interval: weekly
+    groups:
+      container-images:
+        patterns:
+          - "*"
+    target-branch: v3
 
   - package-ecosystem: docker
     directories:
@@ -24,6 +42,16 @@ updates:
       container-images:
         patterns:
           - "*"
+  - package-ecosystem: docker
+    directories:
+      - /.buildkite
+    schedule:
+      interval: weekly
+    groups:
+      container-images:
+        patterns:
+          - "*"
+    target-branch: v3
 
   - package-ecosystem: gomod
     directory: /
@@ -44,3 +72,23 @@ updates:
           - github.com/Azure/*
           - github.com/aws/*
           - google.golang.org/*
+  - package-ecosystem: gomod
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 10
+    ignore:
+      - dependency-name: "github.com/creack/pty"
+    groups:
+      otel:
+        patterns:
+          - go.opentelemetry.io/*
+      golang-x:
+        patterns:
+          - golang.org/x/*
+      cloud-providers:
+        patterns:
+          - github.com/Azure/*
+          - github.com/aws/*
+          - google.golang.org/*
+    target-branch: v3
