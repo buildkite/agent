@@ -116,9 +116,7 @@ func runWorker(ctx context.Context, worker *AgentWorker, idleMon *idleMonitor) e
 
 	// Connect the worker to the API
 	if err := worker.Connect(ctx); err != nil {
-		if ctx.Err() != nil {
-			worker.watchdogMarkStopped()
-		} else {
+		if !errors.Is(err, context.Canceled) {
 			worker.watchdogMarkFailed(err)
 		}
 		return err
@@ -128,10 +126,9 @@ func runWorker(ctx context.Context, worker *AgentWorker, idleMon *idleMonitor) e
 
 	// Starts the agent worker and wait for it to finish.
 	worker.watchdogMarkRunning()
+	defer worker.watchdogMarkStopped()
 	err := worker.Start(ctx, idleMon)
-	if err == nil || ctx.Err() != nil {
-		worker.watchdogMarkStopped()
-	} else {
+	if err != nil && !errors.Is(err, context.Canceled) {
 		worker.watchdogMarkFailed(err)
 	}
 	return err
