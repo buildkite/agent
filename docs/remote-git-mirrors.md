@@ -916,12 +916,15 @@ booleans, skip only the applicable network fetch, and share the existing
 maintenance and snapshot tail. Keep the remote attempt inside the
 `isMainRepository` guard so submodule mirrors remain untouched.
 
-The warm-cache check requires both object presence and reachability from a
-durable ref. A previous fetch can download an object and then fail its
-destination-ref write; if canonical fallback also fails, a presence-only retry
-would skip both sources and hand reference checkouts an object that `gc` may
-remove. Reachability forces the retry to publish the namespaced ref or complete
-the canonical fetch.
+The warm-cache check is presence-only by design (C22). A previous fetch can
+download an object and then fail its destination-ref write, leaving an object
+no mirror ref reaches; mirror `gc` may later prune it out from under a
+`--reference` checkout. Proving reachability requires
+`for-each-ref --contains`, a global scan that cost minutes per job on
+production mirrors with hundreds of thousands of refs. Accept the narrow risk
+instead of paying that scan on every warm hit. The namespaced destination ref
+pins every commit the mirror fetch downloads; a commit that is already present
+but unpinned stays unpinned, which is the accepted exposure.
 
 Do not return directly on the remote hit. Record it in the local boolean and let
 the common maintenance and snapshot tail run.
@@ -958,8 +961,10 @@ mirror; timeout; mirror refuses auth; `--git-mirrors-skip-update` selects a
 checkout-side site instead; submodule mirrors untouched; `refs/heads/*` never
 written by the mirror path; a colliding repository rename is reconciled on a
 remote or warm-cache hit and still runs rename maintenance; clone-lock timeout
-continues canonically without an on-host reference; and cancellation after
-starting mirror work causes no canonical fallback.
+continues canonically without an on-host reference; a warm hit — with or
+without a mirror URL — uses an unpinned commit without any global reachability
+scan (C22); and cancellation after starting mirror work causes no canonical
+fallback.
 
 This first behaviour-changing PR also ships the agent documentation and the
 corresponding `buildkite/docs` update. Later site PRs update those docs rather
@@ -1460,6 +1465,21 @@ immutable commit fetch misses. Origin tracking branch refs are not targeted, and
 R8 still chooses the build by full object ID. Avoiding this would require
 silently changing user fetch semantics for one source. *Comment: at the direct
 mirror fetch in `checkout_fetch.go`.*
+
+**C22 — On-host warm hits trust object presence without proving ref
+reachability.** An unpinned object (interrupted fetch, or a rebuild of a commit
+whose ref was force-pushed away) is lent to `--reference` checkouts and can be
+pruned by mirror `gc`, failing that job with a retryable `bad object` error that
+the checkout retry-clean path heals with a fresh canonical clone. This is a
+deliberate decision, not a gap: the alternative proof is a global
+`for-each-ref --contains` scan that cost minutes per job on production mirrors
+(hundreds of thousands of refs, no commit-graph), and the failure needs an
+unpinned object, a prune past `gc.pruneExpire` (default two weeks), and a
+borrowing checkout to coincide — the same exposure the presence-only check
+shipped with for years before this stack. Do not reintroduce a global
+reachability scan on the checkout path; if stronger pinning is ever needed,
+verify only the expected refs (the namespaced destination ref or the branch
+ref). *Comment: at the warm-cache check in `checkout_mirror.go`.*
 
 ## 11. Gated follow-ups and open questions
 
