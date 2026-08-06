@@ -43,12 +43,8 @@ func (m Mapping) ResolvedPath() string { return m.resolved }
 // entry-name prefix prepended so each stored entry is "<namespace>/..". Every
 // anchor chroots at its base (home, cwd, or the volume root), so quickzip names
 // entries relative to that base and the prefix only adds the namespace.
-func (m Mapping) archiveLayout() (chroot, prefix string, err error) {
-	// Refuse to archive a base directory itself
-	if isRootAnchor(m.Anchor) && m.resolved == m.base {
-		return "", "", fmt.Errorf("cannot archive the volume/filesystem root %q", m.resolved)
-	}
-	return m.base, m.Namespace + "/", nil
+func (m Mapping) archiveLayout() (chroot, prefix string) {
+	return m.base, m.Namespace + "/"
 }
 
 // homeDir returns the cleaned home directory (os.UserHomeDir returns $HOME
@@ -85,6 +81,10 @@ func PathsToMappings(paths []string) ([]Mapping, error) {
 	mappings := make([]Mapping, 0, len(paths))
 	for i, path := range paths {
 		anchor, base, resolved := classifyAndResolvePath(path, home, cwd)
+		// A target can't be a bare volume/filesystem root ("/" or "C:\")
+		if isRootAnchor(anchor) && resolved == base {
+			return nil, fmt.Errorf("cannot cache the volume/filesystem root %q", resolved)
+		}
 		mappings = append(mappings, Mapping{
 			Path:      path,
 			Namespace: fmt.Sprintf("_%d", i),

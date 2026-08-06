@@ -116,22 +116,20 @@ func ExtractFiles(ctx context.Context, zipFile *os.File, zipFileLen int64, paths
 			return "", fmt.Errorf("entry %q escapes its anchor %q", file.Name, base)
 		}
 
-		// Only restore entries that belong to a locally configured path. When
-		// configured paths overlap (e.g. "~/.cache" and "~/.cache/sub"), credit
-		// the most specific (longest) match.
-		best := -1
+		// Restore an entry only if it falls under a configured target; otherwise discard
+		// it (as it is a namespace this job didn't ask for). Targets can't overlap here, so an
+		// entry matches at most one.
+		matched := -1
 		for i, cfg := range configPaths {
-			if !isUnder(dest, cfg) {
-				continue
-			}
-			if best == -1 || len(cfg) > len(configPaths[best]) {
-				best = i
+			if isUnder(dest, cfg) {
+				matched = i
+				break
 			}
 		}
-		if best == -1 {
+		if matched == -1 {
 			return discard(file.Name), nil
 		}
-		foundPaths[paths[best]] = true
+		foundPaths[paths[matched]] = true
 
 		return dest, nil
 	})

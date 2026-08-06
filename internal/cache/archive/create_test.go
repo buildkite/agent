@@ -16,13 +16,8 @@ func TestArchiveLayoutRootAnchor(t *testing.T) {
 		t.Skip("uses POSIX \"/\" path literals; Windows root anchors are drive roots")
 	}
 
-	// The filesystem root itself is rejected...
-	if _, _, err := (Mapping{Namespace: "_0", Anchor: "/", base: "/", resolved: "/"}).archiveLayout(); err == nil {
-		t.Error("expected error archiving the filesystem root")
-	}
-
-	// ...but a child of "/" chroots at the volume root like any other anchor
-	// (quickzip >= v1.0.3 can chroot at a bare root, so entries come out as
+	// A child of "/" chroots at the volume root like any other anchor (quickzip
+	// >= v1.0.3 can chroot at a bare root, so entries come out as
 	// "<namespace>/<path under root>/..." with no special-casing here).
 	tests := []struct {
 		resolved   string
@@ -33,17 +28,24 @@ func TestArchiveLayoutRootAnchor(t *testing.T) {
 		{"/opt/cache", "_1", "_1/"},
 	}
 	for _, tt := range tests {
-		chroot, prefix, err := (Mapping{Namespace: tt.namespace, Anchor: "/", base: "/", resolved: tt.resolved}).archiveLayout()
-		if err != nil {
-			t.Errorf("archiveLayout(%q): unexpected error %v", tt.resolved, err)
-			continue
-		}
+		chroot, prefix := (Mapping{Namespace: tt.namespace, Anchor: "/", base: "/", resolved: tt.resolved}).archiveLayout()
 		if chroot != "/" {
 			t.Errorf("archiveLayout(%q) chroot = %q, want %q", tt.resolved, chroot, "/")
 		}
 		if prefix != tt.wantPrefix {
 			t.Errorf("archiveLayout(%q) prefix = %q, want %q", tt.resolved, prefix, tt.wantPrefix)
 		}
+	}
+}
+
+// TestPathsToMappingsRejectsVolumeRoot covers the validation moved out of
+// archiveLayout: a bare volume/filesystem root target is rejected at resolution time
+func TestPathsToMappingsRejectsVolumeRoot(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("uses the POSIX \"/\" root literal; Windows roots are drive roots")
+	}
+	if _, err := PathsToMappings([]string{"/"}); err == nil {
+		t.Error("expected an error caching the volume/filesystem root")
 	}
 }
 
