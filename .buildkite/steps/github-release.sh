@@ -69,7 +69,6 @@ release_args=(
   --repo buildkite/agent
   --target "$(git rev-parse HEAD)"
   --generate-notes
-  --fail-on-no-commits
 )
 
 if [[ "${IS_PRERELEASE}" == "1" ]]; then
