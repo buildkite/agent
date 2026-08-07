@@ -397,6 +397,16 @@ two clauses key on the merge-refspec flag and the fetch flags, not on
 path classifies as a PR build — is mirror-eligible, and a hit simply serves the
 pinned object ID.)
 
+One accepted per-site trade-off: at the fresh-clone site, the mirror
+interaction is an ordinary `git clone`, whose default refspec does not request
+`refs/pull/*`. A fork PR head reachable only through the PR ref therefore
+always misses there — even when the mirror has replicated it — and canonical
+supplies the small delta over the mirror-served bulk clone. Same-repo PR heads
+(a branch tip) hit normally, and the on-host and existing-checkout sites reach
+fork heads via the exact-SHA fetch. Closing this with a post-clone SHA probe
+is F3 remaining scope, deferred because the probe must handle filtered clones
+and therefore the promisor ownership machinery.
+
 `https` rather than `http(s)`: the credential helper rejects any other protocol
 (`errNotHTTPS` in `clicommand/git_credentials_helper.go`), so an `http` mirror
 could only ever work unauthenticated. One scheme, no half-supported case.
@@ -1568,9 +1578,12 @@ Gate: Q3 confirms provider replication of the required PR refs and tags.
 object ID, so PR eligibility now excludes only merge-ref builds, `--refmap`
 fetch flags, and checkouts whose persisted `remote.origin.fetch` mappings
 could name `refs/pull/*` (see §5's eligibility discussion). Remaining scope:
-tag builds (gated on need and on tag replication), and merge-ref builds (needs
+tag builds (gated on need and on tag replication); merge-ref builds (needs
 the merge-conflict fail-fast and the merge-commit/object-ID relationship
-resolved first).
+resolved first); and a post-clone exact-SHA probe at the fresh-clone site, so
+fork PR heads — which an ordinary clone's refspec never transfers — can hit a
+replicated mirror instead of always fetching the delta from canonical (needs
+the filtered-clone promisor handling extended to that site).
 
 **F4 — Agent-side kill switch.** An agent flag such as
 `--no-git-remote-mirrors` would provide a fleet-local incident control.
