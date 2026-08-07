@@ -2,6 +2,7 @@ package configuration
 
 import (
 	"fmt"
+	"path/filepath"
 	"regexp"
 	"strings"
 )
@@ -53,6 +54,8 @@ func (c Cache) Validate() error {
 				errors = append(errors, fmt.Sprintf("target_paths[%d] cannot be empty", i))
 			case !isValidPath(targetPath):
 				errors = append(errors, fmt.Sprintf("target_paths[%d] is not valid: '%s'", i, targetPath))
+			case isWholeAnchorTarget(targetPath):
+				errors = append(errors, fmt.Sprintf("target_paths[%d] '%s' refers to an entire home, working, or root directory; cache a subdirectory instead", i, targetPath))
 			}
 			if _, dup := seen[targetPath]; dup {
 				errors = append(errors, fmt.Sprintf("target_paths[%d] '%s' is duplicated (target_paths is a set)", i, targetPath))
@@ -66,6 +69,25 @@ func (c Cache) Validate() error {
 	}
 
 	return nil
+}
+
+// isWholeAnchorTarget reports whether p names an entire anchor root — the home
+// directory ("~"), the working directory ("."), or a filesystem/volume root —
+// rather than a path within one. Caching a whole home/cwd/root breaks restore,
+// which refuses to clean those directories (see cleanPath's protectedDirs), so
+// it is rejected up front.
+func isWholeAnchorTarget(p string) bool {
+	switch filepath.Clean(p) {
+	case "~", ".", string(filepath.Separator):
+		return true
+	}
+	if filepath.IsAbs(p) {
+		c := filepath.Clean(p)
+		if c == filepath.VolumeName(c)+string(filepath.Separator) {
+			return true // a bare volume root such as "C:\" on Windows
+		}
+	}
+	return false
 }
 
 // isValidPath checks if a path is valid (doesn't contain null bytes or other invalid characters).

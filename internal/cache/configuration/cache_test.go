@@ -147,6 +147,26 @@ func TestCacheValidate(t *testing.T) {
 			wantErr: true,
 			errMsg:  "is duplicated",
 		},
+		{
+			name: "bare home target path",
+			cache: Cache{
+				Name:        "valid_id",
+				CacheKey:    literalKey,
+				TargetPaths: []string{"~"},
+			},
+			wantErr: true,
+			errMsg:  "refers to an entire home, working, or root directory",
+		},
+		{
+			name: "bare cwd target path",
+			cache: Cache{
+				Name:        "valid_id",
+				CacheKey:    literalKey,
+				TargetPaths: []string{"."},
+			},
+			wantErr: true,
+			errMsg:  "refers to an entire home, working, or root directory",
+		},
 	}
 
 	for _, tt := range tests {
