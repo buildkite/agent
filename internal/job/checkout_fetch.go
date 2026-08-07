@@ -250,13 +250,18 @@ func isExistingCheckoutRemoteMirrorAttempt(attempt *remoteMirrorAttempt) bool {
 // tryExistingCheckoutRemoteMirror probes the remote mirror for the build
 // commit when the attempt targets this existing checkout. On a hit the caller
 // can skip its canonical fetch: the checkout proceeds by exact object ID.
-// (C4: FETCH_HEAD then records the non-secret mirror URL. No mirror-eligible
-// flow reads it, so retain Git's normal write.)
+// FETCH_HEAD then records the non-secret mirror URL rather than canonical;
+// that is deliberate — no mirror-eligible flow reads FETCH_HEAD, so Git's
+// normal write is retained (see docs/remote-git-mirrors.md).
 func (e *Executor) tryExistingCheckoutRemoteMirror(
 	ctx context.Context,
 	attempt *remoteMirrorAttempt,
 	gitFetchFlags string,
 ) (bool, error) {
+	// A state guard, not lag conservatism: eligibility resolves one attempt
+	// per checkout, and the probe belongs to exactly one site. This is a
+	// no-op unless that decision chose this existing checkout and nothing
+	// has run or skipped the attempt since.
 	if !isExistingCheckoutRemoteMirrorAttempt(attempt) {
 		return false, nil
 	}
