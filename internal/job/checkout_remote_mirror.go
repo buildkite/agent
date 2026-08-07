@@ -157,11 +157,18 @@ func (e *Executor) resolveRemoteMirrorAttempt(previousAttempts int) remoteMirror
 		return skip(remoteMirrorSkipPullRequestMergeRef)
 	}
 	if e.PullRequest != "false" {
+		// PR head builds are otherwise mirror-eligible (F3): the build is
+		// pinned to the immutable object ID and, with default config, the
+		// canonical refs/pull/* fetch exists only to obtain those objects —
+		// so a mirror hit skips it entirely and canonical is never contacted.
+		//
+		// --refmap is the flag-shaped exception: it gives that fetch durable
+		// local names, which a skipped fetch would leave silently stale
+		// rather than merely lagging. Its config-shaped sibling, a persisted
+		// refs/pull/* fetch mapping, is only detectable at fetch time and is
+		// guarded in fetchSource (pull-request-fetch-mapping).
 		fetchFlags, err := shellwords.Split(e.GitFetchFlags)
 		if err == nil && hasRefmapFetchFlag(fetchFlags) {
-			// --refmap gives the canonical refs/pull/* fetch durable local
-			// names. A mirror hit skips that fetch, which would leave those
-			// refs silently stale rather than merely lagging.
 			return skip(remoteMirrorSkipPullRequestRefmap)
 		}
 	}

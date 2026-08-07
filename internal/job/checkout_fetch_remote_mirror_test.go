@@ -110,6 +110,46 @@ func TestFetchSourceExistingCheckoutPullRequestHeadFetchMappingUsesCanonical(t *
 	}
 }
 
+func TestFetchSourceExistingCheckoutPullRequestHeadGlobalFetchMappingUsesCanonical(t *testing.T) {
+	canonical := newOnHostMirrorHTTPRepo(t, "canonical")
+	checkout := cloneExistingCheckoutForRemoteMirrorTest(t, canonical.RepoURL("canonical"))
+	commit, _, err := canonical.PushBranch("canonical", "feature-branch")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := canonical.CreateRef("canonical", "refs/pull/123/head", commit); err != nil {
+		t.Fatal(err)
+	}
+	mirror := copyOnHostMirrorHTTPRepo(t, canonical.RepoURL("canonical"), "mirror")
+
+	e, attempt := newExistingCheckoutRemoteMirrorExecutor(t, checkout, canonical.RepoURL("canonical"), mirror.RepoURL("mirror"), commit)
+	e.PullRequest = "123"
+	e.PipelineProvider = "github"
+	// git fetch applies remote.origin.fetch from every effective config
+	// scope, not just the checkout-local file.
+	globalConfig := filepath.Join(t.TempDir(), "gitconfig")
+	if err := os.WriteFile(
+		globalConfig,
+		[]byte("[remote \"origin\"]\n\tfetch = +refs/pull/*:refs/pull/origin/*\n"),
+		0o600,
+	); err != nil {
+		t.Fatal(err)
+	}
+	e.shell.Env.Set("GIT_CONFIG_GLOBAL", globalConfig)
+
+	if err := e.fetchSource(t.Context(), false, &attempt); err != nil {
+		t.Fatalf("fetchSource() error = %v", err)
+	}
+	if attempt.outcome != remoteMirrorOutcomeSkipped ||
+		attempt.skipReason != remoteMirrorSkipPullRequestFetchMapping {
+		t.Errorf("attempt = %+v, want pull-request-fetch-mapping skip", attempt)
+	}
+	fetchEnv := []string{"GIT_CONFIG_GLOBAL=" + globalConfig}
+	if got := gitOutputForRemoteCheckoutTestEnv(t, checkout, fetchEnv, "rev-parse", "refs/pull/origin/123/head"); got != commit {
+		t.Errorf("refs/pull/origin/123/head = %q, want canonical fetch to update it to %q", got, commit)
+	}
+}
+
 func TestFetchSourcePullRequestHeadMirrorHitWithFetchMappingStillFetchesCanonical(t *testing.T) {
 	canonical := newOnHostMirrorHTTPRepo(t, "canonical")
 	commit, _, err := canonical.PushBranch("canonical", "feature-branch")
@@ -877,8 +917,14 @@ func cloneExistingCheckoutForRemoteMirrorTest(t *testing.T, repository string) s
 
 func gitOutputForRemoteCheckoutTest(t *testing.T, dir string, args ...string) string {
 	t.Helper()
+	return gitOutputForRemoteCheckoutTestEnv(t, dir, nil, args...)
+}
+
+func gitOutputForRemoteCheckoutTestEnv(t *testing.T, dir string, extraEnv []string, args ...string) string {
+	t.Helper()
 	cmd := exec.Command("git", args...)
 	cmd.Dir = dir
+	cmd.Env = append(os.Environ(), extraEnv...)
 	out, err := cmd.Output()
 	if err != nil {
 		if len(out) == 0 {

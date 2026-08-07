@@ -381,7 +381,8 @@ canonical. Persisted `remote.origin.fetch` mappings are the config-shaped
 equivalent (Git opportunistically updates refs matched by them on explicit
 refspec fetches, and clone flags like
 `--config remote.origin.fetch=+refs/pull/*:refs/pull/origin/*` persist them),
-but are only detectable from the checkout, so that guard lives at the fetch
+but are only detectable at fetch time from the effective Git config (any
+scope, not just the checkout-local file), so that guard lives at the fetch
 site: before the mirror shortcut is taken, a mapping whose source is not under
 `refs/heads/` or `refs/tags/` conservatively skips the mirror
 (`pull-request-fetch-mapping`) or runs the canonical PR-ref fetch after an
