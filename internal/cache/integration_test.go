@@ -857,6 +857,62 @@ func writeManifestlessArchive(t *testing.T, path string) {
 	}
 }
 
+// TestCacheIntegration_RestoreDigestMismatchIsMiss proves a blob whose bytes no
+// longer match its content-addressed name is treated as a clean miss: the
+// download is verified before any target folder is touched, so existing files
+// are left intact, nothing is unpacked, and the build continues.
+func TestCacheIntegration_RestoreDigestMismatchIsMiss(t *testing.T) {
+	ctx := t.Context()
+
+	cacheClient, cacheDir, storageDir := setupTestCache(t, "local_file")
+	mockClient := cacheClient.api.(*mockAPIClient)
+
+	// Save so the entry is committed and the blob exists.
+	saveResult, err := cacheClient.Save(ctx, "test-cache")
+	if err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	if !saveResult.CacheEntryCreated {
+		t.Fatal("expected initial save to create an entry")
+	}
+
+	// Corrupt the stored blob in place: keep its content-addressed name but
+	// replace the bytes, so the fingerprint no longer matches the name.
+	blobPath := filepath.Join(storageDir, saveResult.Archive.Sha256Sum)
+	if err := os.WriteFile(blobPath, []byte("corrupted-not-a-real-archive"), 0o644); err != nil {
+		t.Fatalf("corrupt blob: %v", err)
+	}
+
+	// A sentinel in the target folder must survive: verification happens before
+	// cleaning, so a mismatch never wipes good existing state.
+	sentinel := filepath.Join(cacheDir, "pre-existing.txt")
+	if err := os.WriteFile(sentinel, []byte("keep me"), 0o644); err != nil {
+		t.Fatalf("write sentinel: %v", err)
+	}
+
+	// Restore must not error and must report a clean miss.
+	restoreResult, err := cacheClient.Restore(ctx, "test-cache")
+	if err != nil {
+		t.Fatalf("Restore with a corrupt blob should not error, got: %v", err)
+	}
+	if restoreResult.CacheRestored {
+		t.Error("digest mismatch should degrade to CacheRestored=false")
+	}
+	if restoreResult.CacheHit {
+		t.Error("digest mismatch should not be a cache hit")
+	}
+
+	// Existing target files are untouched.
+	if _, err := os.Stat(sentinel); err != nil {
+		t.Errorf("pre-existing target file should be untouched, stat: %v", err)
+	}
+
+	// The entry is not invalidated on a mismatch — only skipped for this restore.
+	if len(mockClient.expireCalls) != 0 {
+		t.Errorf("digest mismatch should not invalidate the entry; expire calls = %d, want 0", len(mockClient.expireCalls))
+	}
+}
+
 // TODO: restore fallback-matching coverage (was TestCacheIntegration_RestoreWithFallback,
 // removed in the v2 migration) once agent-side fallback_limit parsing lands and the agent
 // sends mandatory:false parts. Until then the agent only addresses exact matches.
