@@ -6,13 +6,13 @@ import (
 	"fmt"
 	"path/filepath"
 	"slices"
-	"strconv"
 	"strings"
 	"time"
 
 	"github.com/buildkite/agent/v4/internal/osutil"
 	"github.com/buildkite/agent/v4/internal/shell"
 	"github.com/buildkite/agent/v4/tracetools"
+	"go.opentelemetry.io/otel/attribute"
 )
 
 // prepareCheckoutWorkdir reconciles an existing checkout or clones a fresh one.
@@ -96,11 +96,11 @@ func (e *Executor) prepareCheckoutWorkdir(
 	if mirrorDir != "" {
 		mirrorMode = e.GitMirrorCheckoutMode
 	}
-	tracetools.AddAttributes(cloneSpan, map[string]string{
-		"git.mirror_mode":     mirrorMode,
-		"git.sparse":          strconv.FormatBool(sparse.active()),
-		"git.blobless_filter": strconv.FormatBool(hasPartialFilterFlags(gitCloneFlags)),
-	})
+	cloneSpan.SetAttributes(
+		attribute.String("git.mirror_mode", mirrorMode),
+		attribute.Bool("git.sparse", sparse.active()),
+		attribute.Bool("git.blobless_filter", hasPartialFilterFlags(gitCloneFlags)),
+	)
 	defer func() { tracetools.FinishWithError(cloneSpan, retErr) }()
 
 	cloneCheckout := func(

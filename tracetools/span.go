@@ -44,13 +44,6 @@ func StartSpanFromContext(ctx context.Context, operation, tracingBackend string)
 	}
 }
 
-// AddAttributes adds the given map of string attributes to the span.
-func AddAttributes(span trace.Span, attributes map[string]string) {
-	for k, v := range attributes {
-		span.SetAttributes(attribute.String(k, v))
-	}
-}
-
 // FinishWithError records error information on the span (if err isn't nil) and
 // ends the span.
 func FinishWithError(span trace.Span, err error) {

@@ -270,12 +270,12 @@ func assertSpanAttr(t *testing.T, s sdktrace.ReadOnlySpan, key, want string) {
 	}
 }
 
-// spanAttr returns the string value of the named attribute, and whether it
-// was present.
+// spanAttr returns the rendered value of the named attribute (regardless of
+// its type), and whether it was present.
 func spanAttr(s sdktrace.ReadOnlySpan, key string) (string, bool) {
 	for _, kv := range s.Attributes() {
 		if string(kv.Key) == key {
-			return kv.Value.AsString(), true
+			return kv.Value.String(), true
 		}
 	}
 	return "", false
