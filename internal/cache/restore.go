@@ -195,6 +195,28 @@ func (c *client) Restore(ctx context.Context, cacheID string) (RestoreResult, er
 			c.callProgress(cacheID, "complete", "Cache miss (missing blob, invalidated stale entry)", 0, 0)
 			return result, nil
 		}
+		if errors.Is(err, ErrDigestMismatch) {
+			// The blob doesn't match its fingerprint. downloadCache verified this
+			// before any target folder was touched, so existing files are intact.
+			// The blob will never verify, so expire the entry to let a subsequent
+			// save re-upload it, and let the build continue with a clean miss.
+			slog.Warn("cache blob digest mismatch, treating as miss and invalidating entry",
+				"cache_id", cacheID, "err", err)
+			invalidated := c.invalidateStaleEntry(ctx, retrieveResp)
+			result.CacheHit = false
+			result.FallbackUsed = false
+			result.CacheRestored = false
+			result.TotalDuration = time.Since(startTime)
+			span.SetAttributes(
+				attribute.Bool("cache.hit", false),
+				attribute.Bool("cache.restored", false),
+				attribute.Bool("cache.digest_mismatch", true),
+				attribute.Bool("cache.invalidated", invalidated),
+			)
+			span.SetStatus(codes.Ok, "cache miss (digest mismatch)")
+			c.callProgress(cacheID, "complete", "Cache miss (blob digest mismatch, invalidated entry)", 0, 0)
+			return result, nil
+		}
 		span.RecordError(err)
 		span.SetStatus(codes.Error, "failed to download cache")
 		return result, fmt.Errorf("failed to download cache: %w", err)
@@ -275,7 +297,7 @@ func (c *client) Restore(ctx context.Context, cacheID string) (RestoreResult, er
 }
 
 // invalidateStaleEntry uses the retrieve response to expire a cache entry whose
-// blob is missing, so a subsequent save re-uploads it.
+// blob is missing or fails digest verification, so a subsequent save re-uploads it.
 func (c *client) invalidateStaleEntry(ctx context.Context, retrieveResp api.CacheEntryRetrieveResp) bool {
 	if len(retrieveResp.TargetPaths) == 0 || len(retrieveResp.CacheKey) == 0 {
 		slog.Warn("cannot invalidate stale cache entry: retrieve response missing resolved address")
@@ -362,6 +384,19 @@ func (c *client) downloadCache(ctx context.Context, retrieveResp api.CacheEntryR
 		attribute.Float64("cache.transfer_speed_mbps", transferInfo.TransferSpeed),
 		attribute.String("cache.request_id", transferInfo.RequestID),
 	)
+
+	// Verify the download matches its content-addressed name before returning it
+	// to the caller, so a bad blob never reaches the target folders.
+	if err := verifyBlobDigest(ctx, archiveFile, retrieveResp.Blobs[0].Digest); err != nil {
+		_ = os.RemoveAll(tmpDir)
+		span.RecordError(err)
+		if errors.Is(err, ErrDigestMismatch) {
+			span.SetAttributes(attribute.Bool("cache.digest_mismatch", true))
+		}
+		span.SetStatus(codes.Error, "cache blob digest verification failed")
+		return "", "", nil, err
+	}
+
 	span.SetStatus(codes.Ok, "download completed")
 
 	return tmpDir, archiveFile, transferInfo, nil
