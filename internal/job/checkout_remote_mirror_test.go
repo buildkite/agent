@@ -168,12 +168,31 @@ func TestResolveRemoteMirrorAttempt(t *testing.T) {
 			wantSkipReason: remoteMirrorSkipTagBuild,
 		},
 		{
-			name: "pull request",
+			name: "pull request head build",
 			mutate: func(e *Executor) {
 				e.PullRequest = "42"
 			},
+			wantSite:       remoteMirrorSiteFreshClone,
+			wantOutcome:    remoteMirrorOutcomeNotReached,
+			wantSkipReason: remoteMirrorSkipNone,
+		},
+		{
+			name: "pull request merge ref build",
+			mutate: func(e *Executor) {
+				e.PullRequest = "42"
+				e.PullRequestUsingMergeRefspec = true
+			},
 			wantOutcome:    remoteMirrorOutcomeSkipped,
-			wantSkipReason: remoteMirrorSkipPullRequest,
+			wantSkipReason: remoteMirrorSkipPullRequestMergeRef,
+		},
+		{
+			name: "pull request without a known commit",
+			mutate: func(e *Executor) {
+				e.PullRequest = "42"
+				e.Commit = "HEAD"
+			},
+			wantOutcome:    remoteMirrorOutcomeSkipped,
+			wantSkipReason: remoteMirrorSkipNotFullObjectID,
 		},
 		{
 			name:             "later checkout attempt",

@@ -149,6 +149,26 @@ func (e *Executor) fetchSource(ctx context.Context, addBloblessFilter bool, atte
 				return fmt.Errorf("fetching PR refspec %q: %w", refspecs, err)
 			}
 		} else {
+			// With a known immutable commit, the mirror can serve the objects;
+			// the PR ref exists only to obtain them, never as a local ref, and
+			// PR builds skip branch verification. Merge-ref builds are never
+			// mirror-eligible, so only head builds reach this.
+			if isExistingCheckoutRemoteMirrorAttempt(attempt) {
+				mirrorFetchFlags, err := e.prepareRemoteMirrorFetch(ctx, gitFetchFlags)
+				if err != nil {
+					return fmt.Errorf("preparing remote mirror fetch: %w", err)
+				}
+				hit, err := e.fetchExistingCheckoutFromRemoteMirror(ctx, attempt, mirrorFetchFlags)
+				if err != nil {
+					return err
+				}
+				if hit {
+					// C4: FETCH_HEAD records the non-secret mirror URL. No
+					// mirror-eligible flow reads it, so retain Git's normal write.
+					return nil
+				}
+			}
+
 			// If we know the commit, also fetch it directly. The commit might not be in the history of `refspec` if there
 			// have been force pushes to the pull request, so this ensures we have it.
 			// Note: this is the typical case e.Commit != HEAD.

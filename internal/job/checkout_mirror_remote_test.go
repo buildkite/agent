@@ -452,6 +452,88 @@ func TestUpdateGitMirrorNoRemoteURLPostFetchSkipsReachabilityScan(t *testing.T) 
 	}
 }
 
+func TestUpdateGitMirrorPullRequestHeadFetchesFromRemoteMirror(t *testing.T) {
+	canonical := newOnHostMirrorHTTPRepo(t, "canonical")
+	e := newOnHostMirrorExecutor(t, canonical.RepoURL("canonical"), "")
+	mirrorDir := expectedOnHostMirrorDir(e)
+	// Clone the on-host mirror before the pull request exists.
+	cloneOnHostMirrorToPath(t, e.Repository, mirrorDir)
+
+	commit, _, err := canonical.PushBranch("canonical", "feature-branch")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := canonical.CreateRef("canonical", "refs/pull/123/head", commit); err != nil {
+		t.Fatal(err)
+	}
+	remoteMirror := copyOnHostMirrorHTTPRepo(t, canonical.RepoURL("canonical"), "mirror")
+	canonical.Close()
+
+	e.Commit = commit
+	e.PullRequest = "123"
+	e.PipelineProvider = "github"
+	attempt := remoteMirrorAttempt{
+		site: remoteMirrorSiteOnHostMirror,
+		url:  remoteMirror.RepoURL("mirror"),
+	}
+
+	gotDir, err := e.updateGitMirror(t.Context(), e.Repository, &attempt)
+	if err != nil {
+		t.Fatalf("updateGitMirror() error = %v, want remote mirror hit with canonical closed", err)
+	}
+	if gotDir != mirrorDir {
+		t.Errorf("mirror dir = %q, want %q", gotDir, mirrorDir)
+	}
+	if attempt.outcome != remoteMirrorOutcomeHit {
+		t.Errorf("outcome = %q, want hit", attempt.outcome)
+	}
+	if !gitRefExistsForMirrorTest(mirrorDir, "refs/buildkite-agent/remote-mirror/feature-branch") {
+		t.Error("remote mirror hit did not write the namespaced destination ref")
+	}
+	if gitRefExistsForMirrorTest(mirrorDir, "refs/pull/123/head") {
+		t.Error("remote mirror hit fetched the pull request ref into the on-host mirror")
+	}
+}
+
+func TestUpdateGitMirrorPullRequestHeadMissFallsBackToCanonical(t *testing.T) {
+	canonical := newOnHostMirrorHTTPRepo(t, "canonical")
+	e := newOnHostMirrorExecutor(t, canonical.RepoURL("canonical"), "")
+	mirrorDir := expectedOnHostMirrorDir(e)
+	cloneOnHostMirrorToPath(t, e.Repository, mirrorDir)
+	// Copy the remote mirror before the pull request exists, so it lags.
+	remoteMirror := copyOnHostMirrorHTTPRepo(t, canonical.RepoURL("canonical"), "mirror")
+
+	commit, _, err := canonical.PushBranch("canonical", "feature-branch")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := canonical.CreateRef("canonical", "refs/pull/123/head", commit); err != nil {
+		t.Fatal(err)
+	}
+
+	e.Commit = commit
+	e.PullRequest = "123"
+	e.PipelineProvider = "github"
+	attempt := remoteMirrorAttempt{
+		site: remoteMirrorSiteOnHostMirror,
+		url:  remoteMirror.RepoURL("mirror"),
+	}
+
+	gotDir, err := e.updateGitMirror(t.Context(), e.Repository, &attempt)
+	if err != nil {
+		t.Fatalf("updateGitMirror() error = %v", err)
+	}
+	if gotDir != mirrorDir {
+		t.Errorf("mirror dir = %q, want %q", gotDir, mirrorDir)
+	}
+	if attempt.outcome != remoteMirrorOutcomeMiss {
+		t.Errorf("outcome = %q, want miss", attempt.outcome)
+	}
+	if !hasGitCommit(t.Context(), e.shell, mirrorDir, commit) {
+		t.Error("canonical pull request fallback did not fetch the commit into the mirror")
+	}
+}
+
 func TestGetOrUpdateMirrorDirCloneLockTimeoutFallsBackWithoutMirror(t *testing.T) {
 	canonical := newOnHostMirrorHTTPRepo(t, "canonical")
 	commit, _, err := canonical.PushBranch("canonical", "feature-branch")
