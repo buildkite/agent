@@ -83,8 +83,9 @@ func isWholeAnchorTarget(p string) bool {
 	}
 	if filepath.IsAbs(p) {
 		c := filepath.Clean(p)
-		if c == filepath.VolumeName(c)+string(filepath.Separator) {
-			return true // a bare volume root such as "C:\" on Windows
+		vol := filepath.VolumeName(c) // a bare volume root such as "C:\" on Windows
+		if c == vol+string(filepath.Separator) || c == vol {
+			return true
 		}
 	}
 	return false

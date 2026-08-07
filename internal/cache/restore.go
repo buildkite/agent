@@ -474,8 +474,16 @@ func cleanPath(ctx context.Context, dir string) error {
 	if clean == "." || clean == string(os.PathSeparator) {
 		return fmt.Errorf("cleanPath: refusing to remove %q", clean)
 	}
-	if runtime.GOOS == "windows" && len(clean) == 3 && clean[1] == ':' && clean[2] == '\\' {
-		return fmt.Errorf("cleanPath: refusing to remove drive root %q", clean)
+	if runtime.GOOS == "windows" {
+		if len(clean) == 3 && clean[1] == ':' && clean[2] == '\\' {
+			return fmt.Errorf("cleanPath: refusing to remove drive root %q", clean)
+		}
+		// UNC share root (\\server\share): filepath.Clean leaves it equal to the
+		// volume name with no trailing separator, so the drive-root check above
+		// misses it — reject it so cleanup never recurses the whole share.
+		if vol := filepath.VolumeName(clean); vol != "" && clean == vol {
+			return fmt.Errorf("cleanPath: refusing to remove volume root %q", clean)
+		}
 	}
 	// A final symlink is only unlinked by RemoveAll, so the guards below run only
 	// for a real (non-symlink) target; os.Lstat doesn't dereference it.

@@ -257,3 +257,19 @@ func TestCleanPathWindowsDriveRoot(t *testing.T) {
 		t.Errorf("error %q should contain %q", err.Error(), "refusing to remove drive root")
 	}
 }
+
+func TestCleanPathWindowsUNCShareRoot(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("UNC share roots are Windows-only")
+	}
+
+	// A UNC share root cleans to the volume name with no trailing separator, so
+	// the drive-root guard misses it — cleanup must still refuse it.
+	err := cleanPath(t.Context(), `\\server\share`)
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), "refusing to remove") {
+		t.Errorf("error %q should contain %q", err.Error(), "refusing to remove")
+	}
+}

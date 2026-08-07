@@ -1,6 +1,7 @@
 package configuration
 
 import (
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -233,5 +234,23 @@ func TestIsValidPath(t *testing.T) {
 				t.Errorf("isValidPath() = %v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+// TestCacheValidateRejectsUNCShareRoot covers the Windows-only case: a UNC share
+// root such as `\\server\share` is a bare volume root (filepath.Clean leaves it
+// equal to the volume name, without a trailing separator) and must be rejected.
+func TestCacheValidateRejectsUNCShareRoot(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("UNC share roots are Windows-only")
+	}
+	c := Cache{
+		Name:        "valid_id",
+		CacheKey:    []KeyPart{{Source: SourceLiteral, Arg: "v1"}},
+		TargetPaths: []string{`\\server\share`},
+	}
+	err := c.Validate()
+	if err == nil || !strings.Contains(err.Error(), "refers to an entire home, working, or root directory") {
+		t.Errorf("Validate() = %v, want whole-anchor rejection for a UNC share root", err)
 	}
 }

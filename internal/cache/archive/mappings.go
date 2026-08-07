@@ -81,8 +81,10 @@ func PathsToMappings(paths []string) ([]Mapping, error) {
 	mappings := make([]Mapping, 0, len(paths))
 	for i, path := range paths {
 		anchor, base, resolved := classifyAndResolvePath(path, home, cwd)
-		// A target can't be a bare volume/filesystem root ("/" or "C:\")
-		if isRootAnchor(anchor) && resolved == base {
+		// A target can't be a bare volume/filesystem root ("/", "C:\", or a UNC
+		// share "\\server\share"). resolved may drop the trailing separator that
+		// base (the volume root) keeps — notably for UNC — so compare cleaned.
+		if isRootAnchor(anchor) && filepath.Clean(resolved) == filepath.Clean(base) {
 			return nil, fmt.Errorf("cannot cache the volume/filesystem root %q", resolved)
 		}
 		mappings = append(mappings, Mapping{
