@@ -197,6 +197,49 @@ aggressive about removing older commits when you force-push.
 By deleting the whole checkout directory, and then re-cloning it. It's blunt but
 it works, and if you have git mirrors enabled, it's relatively painless.
 
+## Per-job mirror snapshots
+
+For jobs with clean checkout enabled (and a command phase), the agent does not
+reference the mutable mirror directly. Instead, while still holding the
+mirror's update lock, it creates a per-job _snapshot_: a local `--mirror` clone
+of the mirror in a sibling directory. On filesystems with hardlink support the
+snapshot's object files are hardlinks into the mirror, so it is quick to create
+and takes negligible extra space.
+
+The snapshot is immutable for the life of the job and is removed at job
+teardown. Because a hardlinked file survives the original being unlinked, the
+mirror can repack or prune objects while the job runs without corrupting
+anything that references the snapshot. This is what makes the `--reference`
+corruption class above impossible for snapshot-using jobs.
+
+`BUILDKITE_REPO_MIRROR` points at the snapshot for these jobs.
+
+### Cloning the checkout _from_ the snapshot
+
+The snapshot is a complete local copy of the mirror, so a fresh checkout is
+cloned directly from it — `git clone --no-checkout --no-local --reference
+<snapshot> -- <snapshot> .` — and `origin` is immediately rewritten to the
+canonical repository URL. On a warm mirror this removes the checkout's clone
+round-trip to the git host, and the subsequent fetch is skipped when the
+build's commit is already present locally (custom-refspec builds always keep
+their fetch, since fetching a `src:dst` refspec creates local refs that job
+code may read).
+
+`--no-local` is mandatory and appended after user clone flags: without it, a
+local clone bypasses `--reference` and hardlink-ties the checkout's object
+store to the snapshot, which is deleted at job end. `--no-checkout` avoids
+materializing the snapshot's HEAD; the working tree is written exactly once by
+the later checkout of the build's target commit.
+
+Clone flags that need the canonical remote's shape (`--depth`, `--branch`,
+`--single-branch`, `--bundle-uri`, and similar) make the checkout fall back to
+today's canonical clone with the snapshot as `--reference`. Any failure to
+derive from the snapshot falls back to a plain canonical clone: the mirror
+layer is an optimization, never a correctness dependency.
+
+Non-clean checkouts still `--reference` the durable mirror directly, exactly as
+before (see "Why no snapshots if clean checkout is disabled" in the code).
+
 ## Aren't we supposed to update mirrors with `git remote update`?
 
 That's the usual way. `git remote update` updates mirrors, and it updates
@@ -209,16 +252,23 @@ objects needed for a particular job. Eagerly updating everything with
 `git remote update` also almost certainly runs auto maintenance, clearing out
 dangling objects.
 
-## What if we disable auto maintenance when updating the mirror?
+## What about auto maintenance in the mirror?
 
-We could do that (`git fetch --no-auto-maintenance`). Do we want to? This will
-probably need investigating further.
+Implicit maintenance is now disabled in mirrors (`maintenance.auto=false` and
+`gc.auto=0`, set on creation and retrofitted onto existing mirrors on their
+next update). Git's auto-gc normally detaches from the invoking `git fetch`,
+so it could outlive the mirror's update lock and mutate the object store while
+a snapshot was being created or while an unsnapshotted checkout still
+referenced the mirror — the corruption class tracked in
+[#2208](https://github.com/buildkite/agent/issues/2208).
 
-If the mirror only ever grows, then the mirror will become slower and slower as
-Git must process ever more objects, and potentially it could fill the disk.
-
-But it might be preferable to repeatedly deleting and recreating checkout
-directories.
+The mirror still gets maintained: the agent runs `git gc --auto` synchronously
+(with `gc.autoDetach=false`) while holding the update lock, after the fetch and
+before taking the job's snapshot. Git's usual auto-gc thresholds decide whether
+any repacking actually happens, so this is cheap when there is nothing to do.
+When a consolidating repack does run on a large mirror, it extends the time the
+update lock is held — size `--git-mirrors-lock-timeout` accordingly (its
+default is 300 seconds).
 
 ## Did I see something about `--dissociate`?
 

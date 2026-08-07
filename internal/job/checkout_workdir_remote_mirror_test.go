@@ -52,8 +52,8 @@ func TestPrepareCheckoutWorkdirBypassedMirrorDissociatesStaleAlternate(t *testin
 		url:     "https://127.0.0.1:1/mirror.git",
 		outcome: remoteMirrorOutcomeTimeout,
 	}
-	if err := e.prepareCheckoutWorkdir(
-		t.Context(), &attempt, sparseCheckout{}, "", nil, false,
+	if _, err := e.prepareCheckoutWorkdir(
+		t.Context(), &attempt, sparseCheckout{}, mirrorReference{}, nil, false,
 	); err != nil {
 		t.Fatalf("prepareCheckoutWorkdir() error = %v", err)
 	}
@@ -76,14 +76,14 @@ func TestPrepareCheckoutWorkdirRemoteMirrorHitSkipsCanonicalFetch(t *testing.T) 
 	e, attempt := newFreshCloneRemoteMirrorExecutor(t, canonical.RepoURL("canonical"), mirror.RepoURL("mirror"), commit)
 	canonical.Close()
 
-	if err := e.prepareCheckoutWorkdir(t.Context(), &attempt, sparseCheckout{}, "", []string{"-v"}, false); err != nil {
+	if _, err := e.prepareCheckoutWorkdir(t.Context(), &attempt, sparseCheckout{}, mirrorReference{}, []string{"-v"}, false); err != nil {
 		t.Fatalf("prepareCheckoutWorkdir() error = %v", err)
 	}
 	if attempt.outcome != remoteMirrorOutcomeHit {
 		t.Errorf("outcome = %q, want hit", attempt.outcome)
 	}
 	assertGitConfigForRemoteMirrorTest(t, e.shell.Getwd(), "remote.origin.url", e.Repository)
-	if err := e.fetchSource(t.Context(), false, &attempt); err != nil {
+	if err := e.fetchSource(t.Context(), false, false, &attempt); err != nil {
 		t.Fatalf("fetchSource() after hit error = %v", err)
 	}
 }
@@ -97,7 +97,7 @@ func TestPrepareCheckoutWorkdirKeepsLaggingMirrorClone(t *testing.T) {
 	}
 	e, attempt := newFreshCloneRemoteMirrorExecutor(t, canonical.RepoURL("canonical"), mirror.RepoURL("mirror"), commit)
 
-	if err := e.prepareCheckoutWorkdir(t.Context(), &attempt, sparseCheckout{}, "", []string{"-v"}, false); err != nil {
+	if _, err := e.prepareCheckoutWorkdir(t.Context(), &attempt, sparseCheckout{}, mirrorReference{}, []string{"-v"}, false); err != nil {
 		t.Fatalf("prepareCheckoutWorkdir() error = %v", err)
 	}
 	if attempt.outcome != remoteMirrorOutcomeMiss {
@@ -106,7 +106,7 @@ func TestPrepareCheckoutWorkdirKeepsLaggingMirrorClone(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(e.shell.Getwd(), ".git")); err != nil {
 		t.Errorf("useful lagging mirror clone was discarded: %v", err)
 	}
-	if err := e.fetchSource(t.Context(), false, &attempt); err != nil {
+	if err := e.fetchSource(t.Context(), false, false, &attempt); err != nil {
 		t.Fatalf("canonical delta fetch error = %v", err)
 	}
 	if !hasGitCommit(t.Context(), e.shell, ".git", commit) {
@@ -135,11 +135,11 @@ func TestPrepareCheckoutWorkdirReclonesLaggingShallowMirror(t *testing.T) {
 	commit := gitOutputForRemoteCheckoutTest(t, source, "rev-parse", "HEAD")
 
 	e, attempt := newFreshCloneRemoteMirrorExecutor(t, canonical.RepoURL("canonical"), mirror.RepoURL("mirror"), commit)
-	if err := e.prepareCheckoutWorkdir(
+	if _, err := e.prepareCheckoutWorkdir(
 		t.Context(),
 		&attempt,
 		sparseCheckout{},
-		"",
+		mirrorReference{},
 		[]string{"--dept=1"},
 		false,
 	); err != nil {
@@ -148,7 +148,7 @@ func TestPrepareCheckoutWorkdirReclonesLaggingShallowMirror(t *testing.T) {
 	if attempt.outcome != remoteMirrorOutcomeMiss {
 		t.Fatalf("outcome = %q, want lag miss", attempt.outcome)
 	}
-	if err := e.fetchSource(t.Context(), false, &attempt); err != nil {
+	if err := e.fetchSource(t.Context(), false, false, &attempt); err != nil {
 		t.Fatalf("fetchSource() error = %v", err)
 	}
 
@@ -190,13 +190,13 @@ func TestPrepareCheckoutWorkdirReclonesShallowReferenceFalseHit(t *testing.T) {
 	cloneOnHostMirrorToPath(t, canonical.RepoURL("canonical"), reference)
 	flags := []string{"--depth=1", "--reference", reference}
 	e, attempt := newFreshCloneRemoteMirrorExecutor(t, canonical.RepoURL("canonical"), mirror.RepoURL("mirror"), commit)
-	if err := e.prepareCheckoutWorkdir(t.Context(), &attempt, sparseCheckout{}, "", flags, false); err != nil {
+	if _, err := e.prepareCheckoutWorkdir(t.Context(), &attempt, sparseCheckout{}, mirrorReference{}, flags, false); err != nil {
 		t.Fatalf("prepareCheckoutWorkdir() error = %v", err)
 	}
 	if attempt.outcome != remoteMirrorOutcomeMiss {
 		t.Fatalf("outcome = %q, want ambiguous shallow reference treated as miss", attempt.outcome)
 	}
-	if err := e.fetchSource(t.Context(), false, &attempt); err != nil {
+	if err := e.fetchSource(t.Context(), false, false, &attempt); err != nil {
 		t.Fatalf("fetchSource() error = %v", err)
 	}
 
@@ -233,11 +233,11 @@ func TestPrepareCheckoutWorkdirReclonesShallowAmbientAlternateFalseHit(t *testin
 	cloneOnHostMirrorToPath(t, canonical.RepoURL("canonical"), reference)
 	e, attempt := newFreshCloneRemoteMirrorExecutor(t, canonical.RepoURL("canonical"), mirror.RepoURL("mirror"), commit)
 	e.shell.Env.Set("GIT_ALTERNATE_OBJECT_DIRECTORIES", filepath.Join(reference, "objects"))
-	if err := e.prepareCheckoutWorkdir(
+	if _, err := e.prepareCheckoutWorkdir(
 		t.Context(),
 		&attempt,
 		sparseCheckout{},
-		"",
+		mirrorReference{},
 		[]string{"--depth=1"},
 		false,
 	); err != nil {
@@ -246,7 +246,7 @@ func TestPrepareCheckoutWorkdirReclonesShallowAmbientAlternateFalseHit(t *testin
 	if attempt.outcome != remoteMirrorOutcomeMiss {
 		t.Fatalf("outcome = %q, want ambient alternate shallow hit treated as miss", attempt.outcome)
 	}
-	if err := e.fetchSource(t.Context(), false, &attempt); err != nil {
+	if err := e.fetchSource(t.Context(), false, false, &attempt); err != nil {
 		t.Fatalf("fetchSource() error = %v", err)
 	}
 
@@ -274,11 +274,11 @@ func TestPrepareCheckoutWorkdirRecursiveSubmodulesUseCanonical(t *testing.T) {
 	e.GitCloneFlags = "--recurse-submodules"
 	attempt := e.resolveRemoteMirrorAttempt(0)
 
-	if err := e.prepareCheckoutWorkdir(
+	if _, err := e.prepareCheckoutWorkdir(
 		t.Context(),
 		&attempt,
 		sparseCheckout{},
-		"",
+		mirrorReference{},
 		[]string{"--recurse-submodules"},
 		false,
 	); err != nil {
@@ -312,7 +312,7 @@ func TestPrepareCheckoutWorkdirHidesRemoteURLPromptInDebug(t *testing.T) {
 	}
 	e.shell = debugShell
 
-	if err := e.prepareCheckoutWorkdir(t.Context(), &attempt, sparseCheckout{}, "", nil, false); err != nil {
+	if _, err := e.prepareCheckoutWorkdir(t.Context(), &attempt, sparseCheckout{}, mirrorReference{}, nil, false); err != nil {
 		t.Fatalf("prepareCheckoutWorkdir() error = %v", err)
 	}
 	if strings.Contains(logs.String(), attempt.url) {
@@ -328,7 +328,7 @@ func TestPrepareCheckoutWorkdirRemoteMirrorFailureFallsBack(t *testing.T) {
 	}
 	e, attempt := newFreshCloneRemoteMirrorExecutor(t, canonical.RepoURL("canonical"), "http://127.0.0.1:1/mirror.git", commit)
 
-	if err := e.prepareCheckoutWorkdir(t.Context(), &attempt, sparseCheckout{}, "", []string{"-v"}, false); err != nil {
+	if _, err := e.prepareCheckoutWorkdir(t.Context(), &attempt, sparseCheckout{}, mirrorReference{}, []string{"-v"}, false); err != nil {
 		t.Fatalf("prepareCheckoutWorkdir() error = %v", err)
 	}
 	if attempt.outcome != remoteMirrorOutcomeError {
@@ -356,7 +356,7 @@ func TestPrepareCheckoutWorkdirRemoteMirrorTimeoutFallsBack(t *testing.T) {
 	t.Cleanup(stalled.Close)
 	e, attempt := newFreshCloneRemoteMirrorExecutor(t, canonical.RepoURL("canonical"), stalled.URL+"/mirror.git", commit)
 
-	if err := e.prepareCheckoutWorkdir(t.Context(), &attempt, sparseCheckout{}, "", []string{"-v"}, false); err != nil {
+	if _, err := e.prepareCheckoutWorkdir(t.Context(), &attempt, sparseCheckout{}, mirrorReference{}, []string{"-v"}, false); err != nil {
 		t.Fatalf("prepareCheckoutWorkdir() error = %v", err)
 	}
 	if attempt.outcome != remoteMirrorOutcomeTimeout {
@@ -388,7 +388,7 @@ func TestPrepareCheckoutWorkdirAllowsDelayedFirstByteBelowStallGuard(t *testing.
 	t.Cleanup(delayed.Close)
 	e, attempt := newFreshCloneRemoteMirrorExecutor(t, canonical.RepoURL("canonical"), delayed.URL+"/mirror.git", commit)
 
-	if err := e.prepareCheckoutWorkdir(t.Context(), &attempt, sparseCheckout{}, "", []string{"-v"}, false); err != nil {
+	if _, err := e.prepareCheckoutWorkdir(t.Context(), &attempt, sparseCheckout{}, mirrorReference{}, []string{"-v"}, false); err != nil {
 		t.Fatalf("prepareCheckoutWorkdir() error = %v", err)
 	}
 	if attempt.outcome != remoteMirrorOutcomeHit {
@@ -420,7 +420,7 @@ func TestPrepareCheckoutWorkdirRemoteMirrorCancellationDoesNotFallback(t *testin
 		case <-ctx.Done():
 		}
 	}()
-	err = e.prepareCheckoutWorkdir(ctx, &attempt, sparseCheckout{}, "", []string{"-v"}, false)
+	_, err = e.prepareCheckoutWorkdir(ctx, &attempt, sparseCheckout{}, mirrorReference{}, []string{"-v"}, false)
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("prepareCheckoutWorkdir() error = %v, want context.Canceled", err)
 	}
@@ -450,11 +450,11 @@ func TestPrepareCheckoutWorkdirPartialCloneUsesCanonicalAfterMirrorRemoval(t *te
 	}
 	e, attempt := newFreshCloneRemoteMirrorExecutor(t, canonical.RepoURL("canonical"), mirror.RepoURL("mirror"), commit)
 
-	if err := e.prepareCheckoutWorkdir(
+	if _, err := e.prepareCheckoutWorkdir(
 		t.Context(),
 		&attempt,
 		sparseCheckout{},
-		"",
+		mirrorReference{},
 		[]string{"-v", "--filter=blob:none"},
 		true,
 	); err != nil {
@@ -480,7 +480,7 @@ func TestPrepareCheckoutWorkdirSparseCloneKeepsBloblessShape(t *testing.T) {
 	e, attempt := newFreshCloneRemoteMirrorExecutor(t, canonical.RepoURL("canonical"), mirror.RepoURL("mirror"), commit)
 	sparse := sparseCheckout{paths: []string{"src/"}, mode: SparseCheckoutModeCone}
 
-	if err := e.prepareCheckoutWorkdir(t.Context(), &attempt, sparse, "", []string{"-v"}, false); err != nil {
+	if _, err := e.prepareCheckoutWorkdir(t.Context(), &attempt, sparse, mirrorReference{}, []string{"-v"}, false); err != nil {
 		t.Fatalf("prepareCheckoutWorkdir() error = %v", err)
 	}
 	if attempt.outcome != remoteMirrorOutcomeHit {
@@ -511,11 +511,11 @@ func TestPrepareCheckoutWorkdirUnsupportedFilterSilentlyTransfersAllObjects(t *t
 	mirror := copyOnHostMirrorHTTPRepo(t, canonical.RepoURL("canonical"), "mirror")
 	e, attempt := newFreshCloneRemoteMirrorExecutor(t, canonical.RepoURL("canonical"), mirror.RepoURL("mirror"), commit)
 
-	if err := e.prepareCheckoutWorkdir(
+	if _, err := e.prepareCheckoutWorkdir(
 		t.Context(),
 		&attempt,
 		sparseCheckout{},
-		"",
+		mirrorReference{},
 		[]string{"--filter=blob:none"},
 		true,
 	); err != nil {
@@ -593,7 +593,7 @@ func TestPrepareCheckoutWorkdirPreservesCloneConfig(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			e, attempt := newFreshCloneRemoteMirrorExecutor(t, canonical.RepoURL("canonical"), mirror.RepoURL("mirror"), commit)
 			e.GitMirrorCheckoutMode = tc.mirrorMode
-			if err := e.prepareCheckoutWorkdir(t.Context(), &attempt, sparseCheckout{}, tc.referenceDir, tc.flags, hasPartialFilterFlags(tc.flags)); err != nil {
+			if _, err := e.prepareCheckoutWorkdir(t.Context(), &attempt, sparseCheckout{}, mirrorReference{dir: tc.referenceDir}, tc.flags, hasPartialFilterFlags(tc.flags)); err != nil {
 				t.Fatalf("prepareCheckoutWorkdir() error = %v", err)
 			}
 			if attempt.outcome != remoteMirrorOutcomeHit && attempt.outcome != remoteMirrorOutcomeMiss {
@@ -673,7 +673,7 @@ func TestPrepareCheckoutWorkdirRequiredSmudgeFailureFallsBackToCanonical(t *test
 		"--config", "filter.testfilter.required=true",
 	}
 
-	if err := e.prepareCheckoutWorkdir(t.Context(), &attempt, sparseCheckout{}, "", flags, false); err != nil {
+	if _, err := e.prepareCheckoutWorkdir(t.Context(), &attempt, sparseCheckout{}, mirrorReference{}, flags, false); err != nil {
 		t.Fatalf("prepareCheckoutWorkdir() error = %v", err)
 	}
 	if attempt.outcome != remoteMirrorOutcomeError {
@@ -749,7 +749,7 @@ func TestPrepareCheckoutWorkdirGitLFSBehavior(t *testing.T) {
 				e.shell.Env.Set("GIT_LFS_SKIP_SMUDGE", "1")
 			}
 
-			if err := e.prepareCheckoutWorkdir(t.Context(), &attempt, sparseCheckout{}, "", nil, false); err != nil {
+			if _, err := e.prepareCheckoutWorkdir(t.Context(), &attempt, sparseCheckout{}, mirrorReference{}, nil, false); err != nil {
 				t.Fatalf("prepareCheckoutWorkdir() error = %v", err)
 			}
 			if enabled {
