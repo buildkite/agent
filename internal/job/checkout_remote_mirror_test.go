@@ -18,6 +18,7 @@ import (
 	"github.com/buildkite/agent/v4/internal/shell"
 	"github.com/buildkite/shellwords"
 	"github.com/google/go-cmp/cmp"
+	"go.opentelemetry.io/otel/attribute"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 )
@@ -329,6 +330,11 @@ func TestRemoteMirrorTelemetrySchema(t *testing.T) {
 			gotAttrs := make(map[string]string)
 			for _, kv := range gotSpan.Attributes() {
 				gotAttrs[string(kv.Key)] = kv.Value.String()
+				if string(kv.Key) == "git.remote_mirror.duration_ms" {
+					if got, want := kv.Value.Type(), attribute.INT64; got != want {
+						t.Errorf("attribute %q type = %v, want %v (numeric so tracing backends can use it as a measure)", kv.Key, got, want)
+					}
+				}
 			}
 			if diff := cmp.Diff(gotAttrs, tc.wantAttrs); diff != "" {
 				t.Errorf("attributes diff (-got +want):\n%s", diff)
