@@ -564,30 +564,52 @@ func TestCacheIntegration_RestoreMissingBlobInvalidates(t *testing.T) {
 	}
 }
 
-// TestCacheIntegration_RestoreDigestMismatchIsMiss proves a blob whose bytes no
-// longer match its content-addressed name is treated as a clean miss: the
-// download is verified before any target folder is touched, so existing files
-// are left intact, nothing is unpacked, and the build continues.
-func TestCacheIntegration_RestoreDigestMismatchIsMiss(t *testing.T) {
+// TestCacheIntegration_RestorePoisonedBlobIsMiss is the flagship cache
+// poisoning case: a perfectly valid archive planted under another entry's
+// content-addressed name. Extraction would succeed silently if attempted, so
+// the digest check is the only defence. A poisoned blob must be a clean miss:
+// verified before any target folder is touched, never unpacked, existing files
+// left intact, and the build continues. The entry is expired so a subsequent
+// save replaces the bad blob instead of missing until TTL.
+func TestCacheIntegration_RestorePoisonedBlobIsMiss(t *testing.T) {
 	ctx := t.Context()
 
 	cacheClient, cacheDir, storageDir := setupTestCache(t, "local_file")
 	mockClient := cacheClient.api.(*mockAPIClient)
 
-	// Save so the entry is committed and the blob exists.
+	// Build the poisoned blob: a valid archive of the same target path that
+	// carries a file an attacker wants planted.
+	backdoor := filepath.Join(cacheDir, "backdoor.sh")
+	if err := os.WriteFile(backdoor, []byte("#!/bin/sh\necho pwned\n"), 0o755); err != nil {
+		t.Fatalf("write backdoor: %v", err)
+	}
+	poisonedSave, err := cacheClient.Save(ctx, "test-cache")
+	if err != nil {
+		t.Fatalf("Save poisoned variant: %v", err)
+	}
+	poisonedBlob, err := os.ReadFile(filepath.Join(storageDir, poisonedSave.Archive.Sha256Sum))
+	if err != nil {
+		t.Fatalf("read poisoned blob: %v", err)
+	}
+
+	// Reset to a clean registry and save the legitimate cache.
+	if err := os.Remove(backdoor); err != nil {
+		t.Fatalf("remove backdoor: %v", err)
+	}
+	mockClient.registries["~"].cache = make(map[string]*mockCacheEntry)
 	saveResult, err := cacheClient.Save(ctx, "test-cache")
 	if err != nil {
 		t.Fatalf("Save: %v", err)
 	}
 	if !saveResult.CacheEntryCreated {
-		t.Fatal("expected initial save to create an entry")
+		t.Fatal("expected save to create an entry")
 	}
 
-	// Corrupt the stored blob in place: keep its content-addressed name but
-	// replace the bytes, so the fingerprint no longer matches the name.
+	// Poison the store: keep the legitimate blob's content-addressed name but
+	// swap in the poisoned bytes, so the fingerprint no longer matches the name.
 	blobPath := filepath.Join(storageDir, saveResult.Archive.Sha256Sum)
-	if err := os.WriteFile(blobPath, []byte("corrupted-not-a-real-archive"), 0o644); err != nil {
-		t.Fatalf("corrupt blob: %v", err)
+	if err := os.WriteFile(blobPath, poisonedBlob, 0o644); err != nil {
+		t.Fatalf("poison blob: %v", err)
 	}
 
 	// A sentinel in the target folder must survive: verification happens before
@@ -600,7 +622,7 @@ func TestCacheIntegration_RestoreDigestMismatchIsMiss(t *testing.T) {
 	// Restore must not error and must report a clean miss.
 	restoreResult, err := cacheClient.Restore(ctx, "test-cache")
 	if err != nil {
-		t.Fatalf("Restore with a corrupt blob should not error, got: %v", err)
+		t.Fatalf("Restore with a poisoned blob should not error, got: %v", err)
 	}
 	if restoreResult.CacheRestored {
 		t.Error("digest mismatch should degrade to CacheRestored=false")
@@ -609,14 +631,32 @@ func TestCacheIntegration_RestoreDigestMismatchIsMiss(t *testing.T) {
 		t.Error("digest mismatch should not be a cache hit")
 	}
 
+	// The poisoned archive was never unpacked.
+	if _, err := os.Stat(backdoor); !os.IsNotExist(err) {
+		t.Errorf("poisoned archive must never be extracted; stat backdoor: %v", err)
+	}
+
 	// Existing target files are untouched.
 	if _, err := os.Stat(sentinel); err != nil {
 		t.Errorf("pre-existing target file should be untouched, stat: %v", err)
 	}
 
-	// The entry is not invalidated on a mismatch — only skipped for this restore.
-	if len(mockClient.expireCalls) != 0 {
-		t.Errorf("digest mismatch should not invalidate the entry; expire calls = %d, want 0", len(mockClient.expireCalls))
+	// The unverifiable entry is expired, targeting the resolved entry address.
+	if len(mockClient.expireCalls) != 1 {
+		t.Fatalf("expire calls = %d, want 1", len(mockClient.expireCalls))
+	}
+	expired := mockClient.expireCalls[0]
+	if len(expired.CacheKey) != 1 || expired.CacheKey[0].Value != "v1-test-key" {
+		t.Errorf("expire targeted cache_key %+v, want single part v1-test-key", expired.CacheKey)
+	}
+
+	// A subsequent save must re-upload, proving the entry was invalidated.
+	resaveResult, err := cacheClient.Save(ctx, "test-cache")
+	if err != nil {
+		t.Fatalf("re-Save: %v", err)
+	}
+	if !resaveResult.CacheEntryCreated {
+		t.Error("expected re-save to re-create the invalidated entry")
 	}
 }
 
