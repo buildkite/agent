@@ -85,21 +85,22 @@ func (o remoteMirrorOutcome) String() string {
 type remoteMirrorSkipReason string
 
 const (
-	remoteMirrorSkipNone                remoteMirrorSkipReason = ""
-	remoteMirrorSkipNoURL               remoteMirrorSkipReason = "no-url"
-	remoteMirrorSkipNotHTTPS            remoteMirrorSkipReason = "not-https"
-	remoteMirrorSkipCanonicalChanged    remoteMirrorSkipReason = "canonical-changed"
-	remoteMirrorSkipNotFullObjectID     remoteMirrorSkipReason = "not-full-object-id"
-	remoteMirrorSkipEmptyBranch         remoteMirrorSkipReason = "empty-branch"
-	remoteMirrorSkipBranchTooLong       remoteMirrorSkipReason = "branch-too-long"
-	remoteMirrorSkipCustomRefspec       remoteMirrorSkipReason = "custom-refspec"
-	remoteMirrorSkipTagBuild            remoteMirrorSkipReason = "tag-build"
-	remoteMirrorSkipPullRequestMergeRef remoteMirrorSkipReason = "pull-request-merge-ref"
-	remoteMirrorSkipPullRequestRefmap   remoteMirrorSkipReason = "pull-request-refmap"
-	remoteMirrorSkipNotFirstAttempt     remoteMirrorSkipReason = "not-first-attempt"
-	remoteMirrorSkipRecursiveSubmodules remoteMirrorSkipReason = "recursive-submodules"
-	remoteMirrorSkipSeparateGitDir      remoteMirrorSkipReason = "separate-git-dir"
-	remoteMirrorSkipURLConfigConflict   remoteMirrorSkipReason = "url-config-conflict"
+	remoteMirrorSkipNone                    remoteMirrorSkipReason = ""
+	remoteMirrorSkipNoURL                   remoteMirrorSkipReason = "no-url"
+	remoteMirrorSkipNotHTTPS                remoteMirrorSkipReason = "not-https"
+	remoteMirrorSkipCanonicalChanged        remoteMirrorSkipReason = "canonical-changed"
+	remoteMirrorSkipNotFullObjectID         remoteMirrorSkipReason = "not-full-object-id"
+	remoteMirrorSkipEmptyBranch             remoteMirrorSkipReason = "empty-branch"
+	remoteMirrorSkipBranchTooLong           remoteMirrorSkipReason = "branch-too-long"
+	remoteMirrorSkipCustomRefspec           remoteMirrorSkipReason = "custom-refspec"
+	remoteMirrorSkipTagBuild                remoteMirrorSkipReason = "tag-build"
+	remoteMirrorSkipPullRequestMergeRef     remoteMirrorSkipReason = "pull-request-merge-ref"
+	remoteMirrorSkipPullRequestRefmap       remoteMirrorSkipReason = "pull-request-refmap"
+	remoteMirrorSkipPullRequestFetchMapping remoteMirrorSkipReason = "pull-request-fetch-mapping"
+	remoteMirrorSkipNotFirstAttempt         remoteMirrorSkipReason = "not-first-attempt"
+	remoteMirrorSkipRecursiveSubmodules     remoteMirrorSkipReason = "recursive-submodules"
+	remoteMirrorSkipSeparateGitDir          remoteMirrorSkipReason = "separate-git-dir"
+	remoteMirrorSkipURLConfigConflict       remoteMirrorSkipReason = "url-config-conflict"
 )
 
 type remoteMirrorAttempt struct {

@@ -83,6 +83,15 @@ func (e *Executor) fetchSource(ctx context.Context, addBloblessFilter bool, atte
 	// This is useful when a pre-populated git mirror is used with --reference,
 	// as the commit objects are already reachable and fetching is redundant.
 	mirrorHit := attempt != nil && attempt.hit()
+	if mirrorHit && kind == refspecGithubPRHead {
+		// A persisted refs/pull/* fetch mapping gives the canonical PR-ref
+		// fetch durable side effects (opportunistic ref updates) the mirror
+		// cannot reproduce; run it even though the mirror served the objects.
+		covered, err := e.originFetchMappingCoversPullRefs(ctx)
+		if err != nil || covered {
+			mirrorHit = false
+		}
+	}
 	skipFetch := (e.GitSkipFetchExistingCommits || mirrorHit) && e.Commit != "HEAD" &&
 		hasGitCommit(ctx, e.shell, ".git", e.Commit)
 
@@ -153,6 +162,15 @@ func (e *Executor) fetchSource(ctx context.Context, addBloblessFilter bool, atte
 			// only a way to obtain those objects. Eligibility excludes the
 			// builds where that ref is more than that: merge-ref builds and
 			// --refmap fetch flags, which give refs/pull/* durable local names.
+			if isExistingCheckoutRemoteMirrorAttempt(attempt) {
+				// Persisted refs/pull/* fetch mappings are the config-shaped
+				// equivalent of --refmap; detectable only from the checkout.
+				covered, err := e.originFetchMappingCoversPullRefs(ctx)
+				if err != nil || covered {
+					attempt.outcome = remoteMirrorOutcomeSkipped
+					attempt.skipReason = remoteMirrorSkipPullRequestFetchMapping
+				}
+			}
 			hit, err := e.tryExistingCheckoutRemoteMirror(ctx, attempt, gitFetchFlags)
 			if err != nil {
 				return err
@@ -297,6 +315,32 @@ func remoteMirrorPromisorKey(mirrorURL, name string) string {
 
 func remoteMirrorPromisorMarker(mirrorURL string) string {
 	return fmt.Sprintf("%x", sha256.Sum256([]byte(mirrorURL)))
+}
+
+// originFetchMappingCoversPullRefs reports whether any persisted
+// remote.origin.fetch refspec could opportunistically map a refs/pull/* fetch
+// into a durable local ref. Sources under refs/heads/ or refs/tags/ cannot
+// match refs/pull/*; anything else (refs/pull/*, refs/*, exotic patterns) is
+// conservatively treated as covering.
+func (e *Executor) originFetchMappingCoversPullRefs(ctx context.Context) (bool, error) {
+	output, err := e.runSilentLocalGitConfigOutput(ctx, "--get-all", "remote.origin.fetch")
+	if err != nil {
+		if shell.IsExitError(err) && shell.ExitCode(err) == 1 {
+			return false, nil
+		}
+		return false, err
+	}
+	for line := range strings.SplitSeq(output, "\n") {
+		source := strings.TrimPrefix(strings.TrimSpace(line), "+")
+		source, _, _ = strings.Cut(source, ":")
+		if source == "" {
+			continue
+		}
+		if !strings.HasPrefix(source, "refs/heads/") && !strings.HasPrefix(source, "refs/tags/") {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 func (e *Executor) hasRemoteMirrorURLConfig(ctx context.Context, mirrorURL string) (bool, error) {

@@ -79,6 +79,68 @@ func TestFetchSourceExistingCheckoutPullRequestHeadHitSkipsCanonical(t *testing.
 	}
 }
 
+func TestFetchSourceExistingCheckoutPullRequestHeadFetchMappingUsesCanonical(t *testing.T) {
+	canonical := newOnHostMirrorHTTPRepo(t, "canonical")
+	checkout := cloneExistingCheckoutForRemoteMirrorTest(t, canonical.RepoURL("canonical"))
+	commit, _, err := canonical.PushBranch("canonical", "feature-branch")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := canonical.CreateRef("canonical", "refs/pull/123/head", commit); err != nil {
+		t.Fatal(err)
+	}
+	mirror := copyOnHostMirrorHTTPRepo(t, canonical.RepoURL("canonical"), "mirror")
+
+	e, attempt := newExistingCheckoutRemoteMirrorExecutor(t, checkout, canonical.RepoURL("canonical"), mirror.RepoURL("mirror"), commit)
+	e.PullRequest = "123"
+	e.PipelineProvider = "github"
+	// A persisted mapping makes the canonical PR-ref fetch opportunistically
+	// update a durable local ref, which a mirror hit would leave stale.
+	runGitForMirrorTest(t, checkout, "config", "--add", "remote.origin.fetch", "+refs/pull/*:refs/pull/origin/*")
+
+	if err := e.fetchSource(t.Context(), false, &attempt); err != nil {
+		t.Fatalf("fetchSource() error = %v", err)
+	}
+	if attempt.outcome != remoteMirrorOutcomeSkipped ||
+		attempt.skipReason != remoteMirrorSkipPullRequestFetchMapping {
+		t.Errorf("attempt = %+v, want pull-request-fetch-mapping skip", attempt)
+	}
+	if got := gitOutputForRemoteCheckoutTest(t, checkout, "rev-parse", "refs/pull/origin/123/head"); got != commit {
+		t.Errorf("refs/pull/origin/123/head = %q, want canonical fetch to update it to %q", got, commit)
+	}
+}
+
+func TestFetchSourcePullRequestHeadMirrorHitWithFetchMappingStillFetchesCanonical(t *testing.T) {
+	canonical := newOnHostMirrorHTTPRepo(t, "canonical")
+	commit, _, err := canonical.PushBranch("canonical", "feature-branch")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := canonical.CreateRef("canonical", "refs/pull/123/head", commit); err != nil {
+		t.Fatal(err)
+	}
+	// Clone after the push: the commit is already local, as after an on-host
+	// mirror hit plus a --reference clone.
+	checkout := cloneExistingCheckoutForRemoteMirrorTest(t, canonical.RepoURL("canonical"))
+
+	e, _ := newExistingCheckoutRemoteMirrorExecutor(t, checkout, canonical.RepoURL("canonical"), "https://127.0.0.1:1/mirror.git", commit)
+	e.PullRequest = "123"
+	e.PipelineProvider = "github"
+	runGitForMirrorTest(t, checkout, "config", "--add", "remote.origin.fetch", "+refs/pull/*:refs/pull/origin/*")
+	attempt := remoteMirrorAttempt{
+		site:    remoteMirrorSiteOnHostMirror,
+		url:     "https://127.0.0.1:1/mirror.git",
+		outcome: remoteMirrorOutcomeHit,
+	}
+
+	if err := e.fetchSource(t.Context(), false, &attempt); err != nil {
+		t.Fatalf("fetchSource() error = %v", err)
+	}
+	if got := gitOutputForRemoteCheckoutTest(t, checkout, "rev-parse", "refs/pull/origin/123/head"); got != commit {
+		t.Errorf("refs/pull/origin/123/head = %q, want canonical fetch to update it to %q", got, commit)
+	}
+}
+
 func TestFetchSourceExistingCheckoutPullRequestHeadMissFallsBackToCanonical(t *testing.T) {
 	canonical := newOnHostMirrorHTTPRepo(t, "canonical")
 	checkout := cloneExistingCheckoutForRemoteMirrorTest(t, canonical.RepoURL("canonical"))
