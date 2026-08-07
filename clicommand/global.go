@@ -234,7 +234,7 @@ var (
 
 	GitCloneFlagsFlag = &cli.StringFlag{
 		Name:    "git-clone-flags",
-		Value:   "-v",
+		Value:   "-v -c checkout.workers=0",
 		Usage:   "Flags to pass to \"git clone\" command",
 		Sources: cli.EnvVars("BUILDKITE_GIT_CLONE_FLAGS"),
 	}

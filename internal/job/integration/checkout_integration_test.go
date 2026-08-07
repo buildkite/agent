@@ -1621,7 +1621,7 @@ func TestCheckingOutWithSSHKeyscan(t *testing.T) {
 	git := tester.MustMock(t, "git")
 	git.IgnoreUnexpectedInvocations()
 
-	git.Expect("clone", "-v", "--", "git@github.com:buildkite/agent.git", ".").
+	git.Expect("clone", "-v", "-c", "checkout.workers=0", "--", "git@github.com:buildkite/agent.git", ".").
 		AndExitWith(0)
 
 	env := []string{
@@ -1661,7 +1661,7 @@ func TestCheckingOutWithSSHKeyscanAndUnscannableRepo(t *testing.T) {
 	git := tester.MustMock(t, "git")
 	git.IgnoreUnexpectedInvocations()
 
-	git.Expect("clone", "-v", "--", "https://github.com/buildkite/bash-example.git", ".").
+	git.Expect("clone", "-v", "-c", "checkout.workers=0", "--", "https://github.com/buildkite/bash-example.git", ".").
 		AndExitWith(0)
 
 	env := []string{
@@ -1915,7 +1915,7 @@ func TestGitCheckoutWithCommitResolved(t *testing.T) {
 	git := tester.MustMock(t, "git").PassthroughToLocalCommand()
 
 	git.ExpectAll([][]any{
-		{"clone", "-v", "--", tester.Repo.Path, "."},
+		{"clone", "-v", "-c", "checkout.workers=0", "--", tester.Repo.Path, "."},
 		{"clean", "-ffxdq"},
 		{"fetch", "-v", "--prune", "--", "origin", "main"},
 		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
@@ -1943,7 +1943,7 @@ func TestGitCheckoutWithoutCommitResolved(t *testing.T) {
 	git := tester.MustMock(t, "git").PassthroughToLocalCommand()
 
 	git.ExpectAll([][]any{
-		{"clone", "-v", "--", tester.Repo.Path, "."},
+		{"clone", "-v", "-c", "checkout.workers=0", "--", tester.Repo.Path, "."},
 		{"clean", "-ffxdq"},
 		{"fetch", "-v", "--prune", "--", "origin", "main"},
 		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
@@ -1971,7 +1971,7 @@ func TestGitCheckoutWithoutCommitResolvedAndNoMetaData(t *testing.T) {
 	git := tester.MustMock(t, "git").PassthroughToLocalCommand()
 
 	git.ExpectAll([][]any{
-		{"clone", "-v", "--", tester.Repo.Path, "."},
+		{"clone", "-v", "-c", "checkout.workers=0", "--", tester.Repo.Path, "."},
 		{"clean", "-ffxdq"},
 		{"fetch", "-v", "--prune", "--", "origin", "main"},
 		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
