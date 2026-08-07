@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"io/fs"
 	"log/slog"
 	"os"
@@ -20,11 +19,6 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 )
-
-// ErrDigestMismatch means a downloaded blob's bytes don't hash to the
-// content-addressed name it was fetched under (e.g. a corrupt or half-written
-// upload). Restore treats it as a clean miss and never unpacks the file.
-var ErrDigestMismatch = errors.New("cache blob digest mismatch")
 
 // Restore restores a cache from storage by ID.
 //
@@ -204,10 +198,11 @@ func (c *client) Restore(ctx context.Context, cacheID string) (RestoreResult, er
 		if errors.Is(err, ErrDigestMismatch) {
 			// The blob doesn't match its fingerprint. downloadCache verified this
 			// before any target folder was touched, so existing files are intact.
-			// Treat it as a clean miss and let the build continue; leave the entry
-			// in place (it isn't the entry that's wrong, it's the stored bytes).
-			slog.Warn("cache blob digest mismatch, treating as miss",
+			// The blob will never verify, so expire the entry to let a subsequent
+			// save re-upload it, and let the build continue with a clean miss.
+			slog.Warn("cache blob digest mismatch, treating as miss and invalidating entry",
 				"cache_id", cacheID, "err", err)
+			invalidated := c.invalidateStaleEntry(ctx, retrieveResp)
 			result.CacheHit = false
 			result.FallbackUsed = false
 			result.CacheRestored = false
@@ -216,9 +211,10 @@ func (c *client) Restore(ctx context.Context, cacheID string) (RestoreResult, er
 				attribute.Bool("cache.hit", false),
 				attribute.Bool("cache.restored", false),
 				attribute.Bool("cache.digest_mismatch", true),
+				attribute.Bool("cache.invalidated", invalidated),
 			)
 			span.SetStatus(codes.Ok, "cache miss (digest mismatch)")
-			c.callProgress(cacheID, "complete", "Cache miss (blob digest mismatch)", 0, 0)
+			c.callProgress(cacheID, "complete", "Cache miss (blob digest mismatch, invalidated entry)", 0, 0)
 			return result, nil
 		}
 		span.RecordError(err)
@@ -356,7 +352,7 @@ func (c *client) Restore(ctx context.Context, cacheID string) (RestoreResult, er
 }
 
 // invalidateStaleEntry uses the retrieve response to expire a cache entry whose
-// blob is missing, so a subsequent save re-uploads it.
+// blob is missing or fails digest verification, so a subsequent save re-uploads it.
 func (c *client) invalidateStaleEntry(ctx context.Context, retrieveResp api.CacheEntryRetrieveResp) bool {
 	if len(retrieveResp.TargetPaths) == 0 || len(retrieveResp.CacheKey) == 0 {
 		slog.Warn("cannot invalidate stale cache entry: retrieve response missing resolved address")
@@ -459,45 +455,6 @@ func (c *client) downloadCache(ctx context.Context, retrieveResp api.CacheEntryR
 	span.SetStatus(codes.Ok, "download completed")
 
 	return tmpDir, archiveFile, transferInfo, nil
-}
-
-// verifyBlobDigest re-hashes the downloaded archive and confirms it matches the
-// content-addressed name it was fetched under, reusing the streaming SHA-256
-// calculator save uses.
-func verifyBlobDigest(ctx context.Context, archiveFile string, digest api.CacheDigest) error {
-	if digest.Algorithm != "sha256" {
-		return nil
-	}
-	f, err := os.Open(archiveFile)
-	if err != nil {
-		return fmt.Errorf("failed to open archive for digest check: %w", err)
-	}
-	defer func() { _ = f.Close() }()
-
-	// Hash in chunks, checking ctx between reads, so a cancelled restore aborts
-	// promptly instead of reading the whole archive.
-	sum := archive.NewChecksumSHA256(io.Discard)
-	buf := make([]byte, 1024*1024)
-	for {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		n, err := f.Read(buf)
-		if n > 0 {
-			_, _ = sum.Write(buf[:n])
-		}
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			return fmt.Errorf("failed to hash archive for digest check: %w", err)
-		}
-	}
-
-	if got := sum.Sum(); got != digest.Value {
-		return fmt.Errorf("%w: computed %s, expected %s", ErrDigestMismatch, got, digest.Value)
-	}
-	return nil
 }
 
 // extractCache extracts files from a cache archive
