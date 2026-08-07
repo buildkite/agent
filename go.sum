@@ -285,8 +285,8 @@ github.com/valyala/fastjson v1.6.10 h1:/yjJg8jaVQdYR3arGxPE2X5z89xrlhS0eGXdv+ADT
 github.com/valyala/fastjson v1.6.10/go.mod h1:e6FubmQouUNP73jtMLmcbxS6ydWIpOfhz34TSfO3JaE=
 github.com/vektah/gqlparser/v2 v2.5.32 h1:k9QPJd4sEDTL+qB4ncPLflqTJ3MmjB9SrVzJrawpFSc=
 github.com/vektah/gqlparser/v2 v2.5.32/go.mod h1:c1I28gSOVNzlfc4WuDlqU7voQnsqI6OG2amkBAFmgts=
-github.com/wolfeidau/quickzip v1.0.2 h1:QPc4CVE8ECYng87o63C4t6+6ihZk1howyrZWwklKjq8=
-github.com/wolfeidau/quickzip v1.0.2/go.mod h1:ZDvxJMzI2iVp6CavOqxFq1tORhRyuxCDFw4HO25RbuA=
+github.com/wolfeidau/quickzip v1.0.3 h1:ThEzyN1RccCCeZqDvF7mM8gZxveOFaUTIinAA/HvsgU=
+github.com/wolfeidau/quickzip v1.0.3/go.mod h1:ZDvxJMzI2iVp6CavOqxFq1tORhRyuxCDFw4HO25RbuA=
 go.opentelemetry.io/auto/sdk v1.2.1 h1:jXsnJ4Lmnqd11kwkBV2LgLoFMZKizbCi5fNZ/ipaZ64=
 go.opentelemetry.io/auto/sdk v1.2.1/go.mod h1:KRTj+aOaElaLi+wW1kO/DZRXwkF4C5xPbEe3ZiIhN7Y=
 go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.68.0 h1:0Qx7VGBacMm9ZENQ7TnNObTYI4ShC+lHI16seduaxZo=

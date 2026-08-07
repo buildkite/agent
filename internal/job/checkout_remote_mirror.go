@@ -16,6 +16,7 @@ import (
 	"github.com/buildkite/agent/v4/internal/redact"
 	"github.com/buildkite/agent/v4/tracetools"
 	"github.com/buildkite/shellwords"
+	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 )
 
@@ -315,10 +316,12 @@ func (e *Executor) emitRemoteMirrorTelemetry(span trace.Span, attempt remoteMirr
 	if attempt.skipReason != remoteMirrorSkipNone {
 		attributes["git.remote_mirror.skip_reason"] = string(attempt.skipReason)
 	}
-	if attempt.duration > 0 {
-		attributes["git.remote_mirror.duration_ms"] = strconv.FormatInt(attempt.duration.Milliseconds(), 10)
-	}
 	tracetools.AddAttributes(span, attributes)
+	if attempt.duration > 0 {
+		// Set as a numeric attribute (not a string) so tracing backends can
+		// treat it as a measure rather than a tag.
+		span.SetAttributes(attribute.Int64("git.remote_mirror.duration_ms", attempt.duration.Milliseconds()))
+	}
 
 	message := "Remote Git mirror: outcome=" + attempt.outcome.String() + " site=" + attempt.site.String()
 	if attempt.skipReason != remoteMirrorSkipNone {
