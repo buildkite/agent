@@ -2,7 +2,6 @@ package tracetools
 
 import (
 	"errors"
-	"slices"
 	"testing"
 
 	"go.opentelemetry.io/otel/attribute"
@@ -50,24 +49,6 @@ func (t *TestOtelSpan) AddEvent(name string, _ ...trace.EventOption) {
 
 func newTestOtelSpan() *TestOtelSpan {
 	return &TestOtelSpan{events: []string{}, attributes: []attribute.KeyValue{}}
-}
-
-func TestAddAttributes(t *testing.T) {
-	t.Parallel()
-
-	span := newTestOtelSpan()
-
-	if got := len(span.attributes); got != 0 {
-		t.Errorf("span.attributes = %v, want 0", got)
-	}
-
-	AddAttributes(span, map[string]string{"colour": "blue", "flavour": "bittersweet"})
-	if got, want := span.attributes, attribute.String("colour", "blue"); !slices.Contains(got, want) {
-		t.Errorf("span.attributes = %v, want containing %v", got, want)
-	}
-	if got, want := span.attributes, attribute.String("flavour", "bittersweet"); !slices.Contains(got, want) {
-		t.Errorf("span.attributes = %v, want containing %v", got, want)
-	}
 }
 
 func TestFinishWithError(t *testing.T) {

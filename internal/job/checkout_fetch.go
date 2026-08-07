@@ -10,13 +10,13 @@ import (
 	"os/exec"
 	"path/filepath"
 	"slices"
-	"strconv"
 	"strings"
 	"time"
 
 	"github.com/buildkite/agent/v4/internal/shell"
 	"github.com/buildkite/agent/v4/tracetools"
 	"github.com/buildkite/shellwords"
+	"go.opentelemetry.io/otel/attribute"
 )
 
 const remoteMirrorPromisorMarkerKey = "buildkite.remote-mirror-promisor"
@@ -67,10 +67,10 @@ func (e *Executor) fetchSource(ctx context.Context, addBloblessFilter bool, atte
 		kind = refspecBranch
 	}
 
-	tracetools.AddAttributes(span, map[string]string{
-		"git.pull_request": strconv.FormatBool(e.PullRequest != "false"),
-		"git.refspec_kind": string(kind),
-	})
+	span.SetAttributes(
+		attribute.Bool("git.pull_request", e.PullRequest != "false"),
+		attribute.String("git.refspec_kind", string(kind)),
+	)
 
 	if err := e.repairInterruptedRemoteMirrorPromisors(ctx); err != nil {
 		return &gitError{
@@ -86,7 +86,7 @@ func (e *Executor) fetchSource(ctx context.Context, addBloblessFilter bool, atte
 	skipFetch := (e.GitSkipFetchExistingCommits || mirrorHit) && e.Commit != "HEAD" &&
 		hasGitCommit(ctx, e.shell, ".git", e.Commit)
 
-	tracetools.AddAttributes(span, map[string]string{"git.skipped": strconv.FormatBool(skipFetch)})
+	span.SetAttributes(attribute.Bool("git.skipped", skipFetch))
 
 	if skipFetch {
 		e.shell.Commentf("Commit %q already exists locally, skipping fetch", e.Commit)

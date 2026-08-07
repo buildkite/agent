@@ -12,6 +12,7 @@ import (
 	"github.com/buildkite/agent/v4/internal/shell"
 	"github.com/buildkite/agent/v4/tracetools"
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 )
@@ -23,6 +24,7 @@ func TestTraceGitCheckout_EmitsSpans(t *testing.T) {
 
 	repoCheckout := findOnlySpan(t, spans, "repo-checkout")
 	assertSpanAttr(t, repoCheckout, "checkout.attempt", "1")
+	assertSpanAttrType(t, repoCheckout, "checkout.attempt", attribute.INT64)
 
 	// A fresh clone into an empty checkout dir exercises these spans, all
 	// nested directly under repo-checkout.
@@ -270,12 +272,28 @@ func assertSpanAttr(t *testing.T, s sdktrace.ReadOnlySpan, key, want string) {
 	}
 }
 
-// spanAttr returns the string value of the named attribute, and whether it
-// was present.
+// assertSpanAttrType asserts the named span attribute is present and has the
+// given OTel value type, so wire-type changes are caught even though
+// assertSpanAttr compares rendered values.
+func assertSpanAttrType(t *testing.T, s sdktrace.ReadOnlySpan, key string, want attribute.Type) {
+	t.Helper()
+	for _, kv := range s.Attributes() {
+		if string(kv.Key) == key {
+			if got := kv.Value.Type(); got != want {
+				t.Fatalf("span %q attribute %q type = %v, want %v", s.Name(), key, got, want)
+			}
+			return
+		}
+	}
+	t.Fatalf("span %q attribute %q not present", s.Name(), key)
+}
+
+// spanAttr returns the rendered value of the named attribute (regardless of
+// its type), and whether it was present.
 func spanAttr(s sdktrace.ReadOnlySpan, key string) (string, bool) {
 	for _, kv := range s.Attributes() {
 		if string(kv.Key) == key {
-			return kv.Value.AsString(), true
+			return kv.Value.String(), true
 		}
 	}
 	return "", false

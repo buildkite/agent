@@ -40,6 +40,7 @@ import (
 	"github.com/buildkite/agent/v4/tracetools"
 	"github.com/buildkite/go-pipeline"
 	"github.com/buildkite/shellwords"
+	"go.opentelemetry.io/otel/attribute"
 )
 
 // Executor represents the phases of execution in a Buildkite Job. It's run as
@@ -448,12 +449,14 @@ func (e *Executor) executeHook(ctx context.Context, hookCfg HookConfig) (retErr 
 	spanName := fmt.Sprintf("%s %s hook", hookCfg.Scope, hookCfg.Name)
 	span, ctx := tracetools.StartSpanFromContext(ctx, spanName, e.TracingBackend)
 	defer func() { tracetools.FinishWithError(span, retErr) }()
-	tracetools.AddAttributes(span, map[string]string{
-		"hook.type":    hookCfg.Scope,
-		"hook.name":    hookCfg.Name,
-		"hook.command": hookCfg.Path,
-	})
-	tracetools.AddAttributes(span, hookCfg.SpanAttributes)
+	span.SetAttributes(
+		attribute.String("hook.type", hookCfg.Scope),
+		attribute.String("hook.name", hookCfg.Name),
+		attribute.String("hook.command", hookCfg.Path),
+	)
+	for k, v := range hookCfg.SpanAttributes {
+		span.SetAttributes(attribute.String(k, v))
+	}
 	defer e.otlpLogSpan(ctx)()
 
 	hookName := hookCfg.Scope
@@ -1249,10 +1252,10 @@ func (e *Executor) CommandPhase(ctx context.Context) (hookErr, commandErr error)
 func (e *Executor) defaultCommandPhase(ctx context.Context) (retErr error) {
 	span, ctx := tracetools.StartSpanFromContext(ctx, "default command hook", e.TracingBackend)
 	defer func() { tracetools.FinishWithError(span, retErr) }()
-	tracetools.AddAttributes(span, map[string]string{
-		"hook.name": "command",
-		"hook.type": "default",
-	})
+	span.SetAttributes(
+		attribute.String("hook.name", "command"),
+		attribute.String("hook.type", "default"),
+	)
 	defer e.otlpLogSpan(ctx)()
 
 	// Flush the redactors before the OTLP span restore above runs, so any
@@ -1271,7 +1274,7 @@ func (e *Executor) defaultCommandPhase(ctx context.Context) (retErr error) {
 	scriptFileName := strings.ReplaceAll(e.Command, "\n", "")
 	pathToCommand, err := filepath.Abs(filepath.Join(e.shell.Getwd(), scriptFileName))
 	commandIsScript := err == nil && osutil.FileExists(pathToCommand)
-	tracetools.AddAttributes(span, map[string]string{"hook.command": pathToCommand})
+	span.SetAttributes(attribute.String("hook.command", pathToCommand))
 
 	// If the command isn't a script, then it's something we need
 	// to eval. But before we even try running it, we should double
