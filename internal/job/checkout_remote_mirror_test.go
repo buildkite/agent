@@ -195,6 +195,33 @@ func TestResolveRemoteMirrorAttempt(t *testing.T) {
 			wantSkipReason: remoteMirrorSkipNotFullObjectID,
 		},
 		{
+			name: "pull request with refmap fetch flags",
+			mutate: func(e *Executor) {
+				e.PullRequest = "42"
+				e.GitFetchFlags = "-v --refmap=+refs/pull/*:refs/pull/origin/*"
+			},
+			wantOutcome:    remoteMirrorOutcomeSkipped,
+			wantSkipReason: remoteMirrorSkipPullRequestRefmap,
+		},
+		{
+			name: "pull request with abbreviated refmap fetch flag",
+			mutate: func(e *Executor) {
+				e.PullRequest = "42"
+				e.GitFetchFlags = "--refm=+refs/pull/*:refs/pull/origin/*"
+			},
+			wantOutcome:    remoteMirrorOutcomeSkipped,
+			wantSkipReason: remoteMirrorSkipPullRequestRefmap,
+		},
+		{
+			name: "refmap fetch flags without a pull request",
+			mutate: func(e *Executor) {
+				e.GitFetchFlags = "--refmap=+refs/heads/*:refs/kept/*"
+			},
+			wantSite:       remoteMirrorSiteFreshClone,
+			wantOutcome:    remoteMirrorOutcomeNotReached,
+			wantSkipReason: remoteMirrorSkipNone,
+		},
+		{
 			name:             "later checkout attempt",
 			previousAttempts: 1,
 			wantOutcome:      remoteMirrorOutcomeSkipped,

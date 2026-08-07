@@ -43,7 +43,7 @@ func TestFetchSourceExistingCheckoutRemoteMirrorHitSkipsCanonical(t *testing.T) 
 	}
 }
 
-func TestFetchSourcePullRequestHeadRemoteMirrorHitSkipsCanonical(t *testing.T) {
+func TestFetchSourceExistingCheckoutPullRequestHeadHitSkipsCanonical(t *testing.T) {
 	canonical := newOnHostMirrorHTTPRepo(t, "canonical")
 	checkout := cloneExistingCheckoutForRemoteMirrorTest(t, canonical.RepoURL("canonical"))
 	commit, _, err := canonical.PushBranch("canonical", "feature-branch")
@@ -53,6 +53,9 @@ func TestFetchSourcePullRequestHeadRemoteMirrorHitSkipsCanonical(t *testing.T) {
 	if _, err := canonical.CreateRef("canonical", "refs/pull/123/head", commit); err != nil {
 		t.Fatal(err)
 	}
+	// Fork shape: the commit is reachable only through refs/pull/*. This also
+	// pins the probe's protocol.version=2, which permits unadvertised wants.
+	runGitForMirrorTest(t, checkout, "push", canonical.RepoURL("canonical"), "--delete", "feature-branch")
 	mirror := copyOnHostMirrorHTTPRepo(t, canonical.RepoURL("canonical"), "mirror")
 
 	e, attempt := newExistingCheckoutRemoteMirrorExecutor(t, checkout, canonical.RepoURL("canonical"), mirror.RepoURL("mirror"), commit)
@@ -74,7 +77,7 @@ func TestFetchSourcePullRequestHeadRemoteMirrorHitSkipsCanonical(t *testing.T) {
 	}
 }
 
-func TestFetchSourcePullRequestHeadRemoteMirrorMissFallsBackToCanonical(t *testing.T) {
+func TestFetchSourceExistingCheckoutPullRequestHeadMissFallsBackToCanonical(t *testing.T) {
 	canonical := newOnHostMirrorHTTPRepo(t, "canonical")
 	checkout := cloneExistingCheckoutForRemoteMirrorTest(t, canonical.RepoURL("canonical"))
 	// Copy the mirror before the pull request exists, so it lags canonical.

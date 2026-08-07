@@ -466,6 +466,9 @@ func TestUpdateGitMirrorPullRequestHeadFetchesFromRemoteMirror(t *testing.T) {
 	if _, err := canonical.CreateRef("canonical", "refs/pull/123/head", commit); err != nil {
 		t.Fatal(err)
 	}
+	// Fork shape: the commit is reachable only through refs/pull/*. This also
+	// pins the probe's protocol.version=2, which permits unadvertised wants.
+	runGitForMirrorTest(t, mirrorDir, "push", canonical.RepoURL("canonical"), "--delete", "feature-branch")
 	remoteMirror := copyOnHostMirrorHTTPRepo(t, canonical.RepoURL("canonical"), "mirror")
 	canonical.Close()
 

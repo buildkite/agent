@@ -149,24 +149,16 @@ func (e *Executor) fetchSource(ctx context.Context, addBloblessFilter bool, atte
 				return fmt.Errorf("fetching PR refspec %q: %w", refspecs, err)
 			}
 		} else {
-			// With a known immutable commit, the mirror can serve the objects;
-			// the PR ref exists only to obtain them, never as a local ref, and
-			// PR builds skip branch verification. Merge-ref builds are never
-			// mirror-eligible, so only head builds reach this.
-			if isExistingCheckoutRemoteMirrorAttempt(attempt) {
-				mirrorFetchFlags, err := e.prepareRemoteMirrorFetch(ctx, gitFetchFlags)
-				if err != nil {
-					return fmt.Errorf("preparing remote mirror fetch: %w", err)
-				}
-				hit, err := e.fetchExistingCheckoutFromRemoteMirror(ctx, attempt, mirrorFetchFlags)
-				if err != nil {
-					return err
-				}
-				if hit {
-					// C4: FETCH_HEAD records the non-secret mirror URL. No
-					// mirror-eligible flow reads it, so retain Git's normal write.
-					return nil
-				}
+			// The mirror serves the immutable commit; the canonical PR ref is
+			// only a way to obtain those objects. Eligibility excludes the
+			// builds where that ref is more than that: merge-ref builds and
+			// --refmap fetch flags, which give refs/pull/* durable local names.
+			hit, err := e.tryExistingCheckoutRemoteMirror(ctx, attempt, gitFetchFlags)
+			if err != nil {
+				return err
+			}
+			if hit {
+				return nil
 			}
 
 			// If we know the commit, also fetch it directly. The commit might not be in the history of `refspec` if there
@@ -196,20 +188,12 @@ func (e *Executor) fetchSource(ctx context.Context, addBloblessFilter bool, atte
 		}
 
 	default: // refspecCommit
-		if isExistingCheckoutRemoteMirrorAttempt(attempt) {
-			mirrorFetchFlags, err := e.prepareRemoteMirrorFetch(ctx, gitFetchFlags)
-			if err != nil {
-				return fmt.Errorf("preparing remote mirror fetch: %w", err)
-			}
-			hit, err := e.fetchExistingCheckoutFromRemoteMirror(ctx, attempt, mirrorFetchFlags)
-			if err != nil {
-				return err
-			}
-			if hit {
-				// C4: FETCH_HEAD records the non-secret mirror URL. No
-				// mirror-eligible flow reads it, so retain Git's normal write.
-				return nil
-			}
+		hit, err := e.tryExistingCheckoutRemoteMirror(ctx, attempt, gitFetchFlags)
+		if err != nil {
+			return err
+		}
+		if hit {
+			return nil
 		}
 
 		// Otherwise fetch and checkout the commit directly.
@@ -226,6 +210,26 @@ func isExistingCheckoutRemoteMirrorAttempt(attempt *remoteMirrorAttempt) bool {
 	return attempt != nil &&
 		attempt.site == remoteMirrorSiteExistingCheckout &&
 		attempt.outcome == remoteMirrorOutcomeNotReached
+}
+
+// tryExistingCheckoutRemoteMirror probes the remote mirror for the build
+// commit when the attempt targets this existing checkout. On a hit the caller
+// can skip its canonical fetch: the checkout proceeds by exact object ID.
+// (C4: FETCH_HEAD then records the non-secret mirror URL. No mirror-eligible
+// flow reads it, so retain Git's normal write.)
+func (e *Executor) tryExistingCheckoutRemoteMirror(
+	ctx context.Context,
+	attempt *remoteMirrorAttempt,
+	gitFetchFlags string,
+) (bool, error) {
+	if !isExistingCheckoutRemoteMirrorAttempt(attempt) {
+		return false, nil
+	}
+	mirrorFetchFlags, err := e.prepareRemoteMirrorFetch(ctx, gitFetchFlags)
+	if err != nil {
+		return false, fmt.Errorf("preparing remote mirror fetch: %w", err)
+	}
+	return e.fetchExistingCheckoutFromRemoteMirror(ctx, attempt, mirrorFetchFlags)
 }
 
 func (e *Executor) fetchExistingCheckoutFromRemoteMirror(
