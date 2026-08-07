@@ -7,7 +7,6 @@ import (
 	"os"
 	"runtime"
 	"slices"
-	"strconv"
 	"time"
 
 	"github.com/buildkite/agent/v4/internal/experiments"
@@ -17,6 +16,7 @@ import (
 	"github.com/buildkite/agent/v4/tracetools"
 	"github.com/buildkite/roko"
 	"github.com/buildkite/shellwords"
+	"go.opentelemetry.io/otel/attribute"
 )
 
 // CheckoutPhase creates the build directory and makes sure we're running the
@@ -327,12 +327,12 @@ func (e *Executor) runDefaultCheckoutAttempt(ctx context.Context, previousAttemp
 // previousAttempts is the count of prior checkout attempts.
 func (e *Executor) defaultCheckoutPhase(ctx context.Context, previousAttempts int) (retErr error) {
 	span, spanCtx := tracetools.StartSpanFromContext(ctx, "repo-checkout", e.TracingBackend)
-	tracetools.AddAttributes(span, map[string]string{
-		"checkout.repo_name": redact.URLCredentials(e.Repository),
-		"checkout.refspec":   e.RefSpec,
-		"checkout.commit":    e.Commit,
-		"checkout.attempt":   strconv.Itoa(previousAttempts + 1),
-	})
+	span.SetAttributes(
+		attribute.String("checkout.repo_name", redact.URLCredentials(e.Repository)),
+		attribute.String("checkout.refspec", e.RefSpec),
+		attribute.String("checkout.commit", e.Commit),
+		attribute.Int("checkout.attempt", previousAttempts+1),
+	)
 	defer func() { tracetools.FinishWithError(span, retErr) }()
 
 	attempt := e.resolveRemoteMirrorAttempt(previousAttempts)
@@ -358,12 +358,12 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context, previousAttempts in
 
 	// If we can, get a mirror of the git repository to use for reference later
 	if e.GitMirrorsPath != "" && e.Repository != "" {
-		tracetools.AddAttributes(span, map[string]string{"checkout.is_using_git_mirrors": "true"})
+		span.SetAttributes(attribute.Bool("checkout.is_using_git_mirrors", true))
 
 		var err error
 
 		mirrorSpan, mirrorCtx := e.traceOpSpan(ctx, "git.mirror.update")
-		tracetools.AddAttributes(mirrorSpan, map[string]string{"git.repo": redact.URLCredentials(e.Repository)})
+		mirrorSpan.SetAttributes(attribute.String("git.repo", redact.URLCredentials(e.Repository)))
 
 		mirrorDir, err = e.getOrUpdateMirrorDir(mirrorCtx, e.Repository, &attempt)
 
@@ -454,10 +454,10 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context, previousAttempts in
 	if sparse.active() {
 		sparseMode = sparse.mode.String()
 	}
-	tracetools.AddAttributes(sparseSpan, map[string]string{
-		"git.path_count":  strconv.Itoa(len(sparse.paths)),
-		"git.sparse_mode": sparseMode,
-	})
+	sparseSpan.SetAttributes(
+		attribute.Int("git.path_count", len(sparse.paths)),
+		attribute.String("git.sparse_mode", sparseMode),
+	)
 
 	sparseCheckoutActive, err := e.setupSparseCheckout(sparseCtx, sparse)
 
@@ -582,7 +582,7 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context, previousAttempts in
 // with a plain clean update.
 func (e *Executor) updateGitSubmodules(ctx context.Context) (retErr error) {
 	submodulesSpan, ctx := e.traceOpSpan(ctx, "git.submodules")
-	tracetools.AddAttributes(submodulesSpan, map[string]string{"git.mirrored": strconv.FormatBool(e.GitMirrorsPath != "")})
+	submodulesSpan.SetAttributes(attribute.Bool("git.mirrored", e.GitMirrorsPath != ""))
 	defer func() { tracetools.FinishWithError(submodulesSpan, retErr) }()
 
 	// `submodule sync` will ensure the .git/config
@@ -613,7 +613,7 @@ func (e *Executor) updateGitSubmodules(ctx context.Context) (retErr error) {
 		return nil
 	}
 
-	tracetools.AddAttributes(submodulesSpan, map[string]string{"git.count": strconv.Itoa(len(submoduleRepos))})
+	submodulesSpan.SetAttributes(attribute.Int("git.count", len(submoduleRepos)))
 
 	mirrorSubmodules := e.GitMirrorsPath != ""
 	if mirrorSubmodules {
@@ -622,7 +622,7 @@ func (e *Executor) updateGitSubmodules(ctx context.Context) (retErr error) {
 			// this produces the same sub-tree of spans; git.repo distinguishes
 			// submodules since the span names repeat.
 			subMirrorSpan, subMirrorCtx := e.traceOpSpan(ctx, "git.mirror.update")
-			tracetools.AddAttributes(subMirrorSpan, map[string]string{"git.repo": redact.URLCredentials(repository)})
+			subMirrorSpan.SetAttributes(attribute.String("git.repo", redact.URLCredentials(repository)))
 
 			mirrorDir, err := e.getOrUpdateMirrorDir(subMirrorCtx, repository, nil)
 
