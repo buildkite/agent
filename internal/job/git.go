@@ -421,32 +421,64 @@ func gitFetch(ctx context.Context, args gitFetchArgs) error {
 	})
 }
 
-func gitEnumerateSubmoduleURLs(ctx context.Context, sh *shell.Shell) ([]string, error) {
-	urls := []string{}
+// gitSubmodule is a submodule declared in the top-level .gitmodules: the
+// worktree path it is checked out at, and the URL it is cloned from.
+type gitSubmodule struct {
+	path string
+	url  string
+}
 
+// gitEnumerateSubmodules returns the submodules declared in the top-level
+// .gitmodules, in declaration order. Entries missing either a path or a URL
+// are omitted; they cannot be initialized individually, and the later
+// recursive submodule update surfaces any genuine problem with them.
+func gitEnumerateSubmodules(ctx context.Context, sh *shell.Shell) ([]gitSubmodule, error) {
 	// The output of this command looks like:
-	// submodule.bitbucket-git-docker-example.url\ngit@bitbucket.org:lox24/docker-example.git\0
-	// submodule.bitbucket-https-docker-example.url\nhttps://lox24@bitbucket.org/lox24/docker-example.git\0
-	// submodule.github-git-docker-example.url\ngit@github.com:buildkite/docker-example.git\0
-	// submodule.github-https-docker-example.url\nhttps://github.com/buildkite/docker-example.git\0
-	output, err := sh.Command("git", "config", "--file", ".gitmodules", "--null", "--get-regexp", `submodule\..+\.url`).RunAndCaptureStdout(ctx)
+	// submodule.vendor/docker-example.path\nvendor/docker-example\0
+	// submodule.vendor/docker-example.url\ngit@github.com:buildkite/docker-example.git\0
+	output, err := sh.Command("git", "config", "--file", ".gitmodules", "--null", "--get-regexp", `^submodule\..+\.(path|url)$`).RunAndCaptureStdout(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	// splits lines on null-bytes to gracefully handle line endings and repositories with newlines
-	lines := strings.SplitSeq(strings.TrimRight(output, "\x00"), "\x00")
-
-	// process each line
-	for line := range lines {
-		tokens := strings.SplitN(line, "\n", 2)
-		if len(tokens) != 2 {
-			return nil, fmt.Errorf("failed to parse .gitmodules line %q", line)
+	var names []string // submodule names in declaration order
+	submodules := make(map[string]*gitSubmodule)
+	byName := func(name string) *gitSubmodule {
+		if sm := submodules[name]; sm != nil {
+			return sm
 		}
-		urls = append(urls, tokens[1])
+		names = append(names, name)
+		submodules[name] = &gitSubmodule{}
+		return submodules[name]
 	}
 
-	return urls, nil
+	// splits lines on null-bytes to gracefully handle line endings and repositories with newlines
+	lines := strings.SplitSeq(strings.TrimRight(output, "\x00"), "\x00")
+	for line := range lines {
+		key, value, ok := strings.Cut(line, "\n")
+		if !ok {
+			return nil, fmt.Errorf("failed to parse .gitmodules line %q", line)
+		}
+		// Submodule names may themselves contain dots, so trim the fixed
+		// prefix and suffix rather than splitting on ".".
+		name := strings.TrimPrefix(key, "submodule.")
+		switch {
+		case strings.HasSuffix(name, ".path"):
+			byName(strings.TrimSuffix(name, ".path")).path = value
+		case strings.HasSuffix(name, ".url"):
+			byName(strings.TrimSuffix(name, ".url")).url = value
+		}
+	}
+
+	result := make([]gitSubmodule, 0, len(names))
+	for _, name := range names {
+		sm := submodules[name]
+		if sm.path == "" || sm.url == "" {
+			continue
+		}
+		result = append(result, *sm)
+	}
+	return result, nil
 }
 
 func gitRevParseInWorkingDirectory(ctx context.Context, sh *shell.Shell, workingDirectory string, extraRevParseArgs ...string) (string, error) {
