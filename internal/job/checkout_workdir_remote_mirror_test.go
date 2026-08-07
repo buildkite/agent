@@ -66,6 +66,107 @@ func TestPrepareCheckoutWorkdirBypassedMirrorDissociatesStaleAlternate(t *testin
 	}
 }
 
+// newExistingReferenceCloneExecutor builds an executor whose working directory
+// is an existing checkout cloned with --reference mirrorDir, as an older agent
+// in reference mode would have left it. It returns the executor, the mirror
+// directory, and the checkout's alternates path.
+func newExistingReferenceCloneExecutor(t *testing.T, repoURL, commit string) (e *Executor, mirrorDir, alternates string) {
+	t.Helper()
+	e = newOnHostMirrorExecutor(t, repoURL, commit)
+	mirrorDir = expectedOnHostMirrorDir(e)
+	cloneOnHostMirrorToPath(t, e.Repository, mirrorDir)
+
+	checkout := t.TempDir()
+	runGitForMirrorTest(t, "", "clone", "--reference", mirrorDir, "--", e.Repository, checkout)
+	alternates = filepath.Join(checkout, ".git", "objects", "info", "alternates")
+	if !osutil.FileExists(alternates) {
+		t.Fatal("reference checkout has no alternates file")
+	}
+	if err := e.shell.Chdir(checkout); err != nil {
+		t.Fatal(err)
+	}
+	return e, mirrorDir, alternates
+}
+
+func TestPrepareCheckoutWorkdirDissociateModeDissociatesExistingClone(t *testing.T) {
+	canonical := newOnHostMirrorHTTPRepo(t, "canonical")
+	commit, _, err := canonical.PushBranch("canonical", "feature-branch")
+	if err != nil {
+		t.Fatal(err)
+	}
+	e, mirrorDir, alternates := newExistingReferenceCloneExecutor(t, canonical.RepoURL("canonical"), commit)
+	e.GitMirrorCheckoutMode = "dissociate"
+
+	if _, err := e.prepareCheckoutWorkdir(
+		t.Context(), nil, sparseCheckout{}, mirrorReference{dir: mirrorDir}, nil, false,
+	); err != nil {
+		t.Fatalf("prepareCheckoutWorkdir() error = %v", err)
+	}
+
+	if osutil.FileExists(alternates) {
+		t.Fatal("existing reference clone was not dissociated in dissociate mode")
+	}
+	if !hasGitCommit(t.Context(), e.shell, filepath.Join(e.shell.Getwd(), ".git"), commit) {
+		t.Fatal("dissociation lost objects the checkout depends on")
+	}
+}
+
+func TestPrepareCheckoutWorkdirReferenceModeReassociatesExistingClone(t *testing.T) {
+	canonical := newOnHostMirrorHTTPRepo(t, "canonical")
+	commit, _, err := canonical.PushBranch("canonical", "feature-branch")
+	if err != nil {
+		t.Fatal(err)
+	}
+	e, mirrorDir, alternates := newExistingReferenceCloneExecutor(t, canonical.RepoURL("canonical"), commit)
+	e.GitMirrorCheckoutMode = "reference"
+
+	// Simulate a checkout that lost its alternates file (e.g. previously
+	// dissociated); reference mode repairs it.
+	if err := os.Remove(alternates); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := e.prepareCheckoutWorkdir(
+		t.Context(), nil, sparseCheckout{}, mirrorReference{dir: mirrorDir}, nil, false,
+	); err != nil {
+		t.Fatalf("prepareCheckoutWorkdir() error = %v", err)
+	}
+
+	content, err := os.ReadFile(alternates)
+	if err != nil {
+		t.Fatalf("reference mode did not reassociate the existing clone: %v", err)
+	}
+	if want := filepath.Join(mirrorDir, "objects"); !strings.Contains(string(content), want) {
+		t.Errorf("alternates = %q, want reference to mirror objects %q", content, want)
+	}
+}
+
+func TestPrepareCheckoutWorkdirExistingCloneNeverReassociatedToSnapshot(t *testing.T) {
+	canonical := newOnHostMirrorHTTPRepo(t, "canonical")
+	commit, _, err := canonical.PushBranch("canonical", "feature-branch")
+	if err != nil {
+		t.Fatal(err)
+	}
+	e, mirrorDir, alternates := newExistingReferenceCloneExecutor(t, canonical.RepoURL("canonical"), commit)
+	e.GitMirrorCheckoutMode = "reference"
+
+	if err := os.Remove(alternates); err != nil {
+		t.Fatal(err)
+	}
+
+	// A snapshot is deleted at the end of the job, so an existing checkout
+	// must never be pointed at one, even in reference mode.
+	if _, err := e.prepareCheckoutWorkdir(
+		t.Context(), nil, sparseCheckout{}, mirrorReference{dir: mirrorDir, isSnapshot: true}, nil, false,
+	); err != nil {
+		t.Fatalf("prepareCheckoutWorkdir() error = %v", err)
+	}
+
+	if osutil.FileExists(alternates) {
+		t.Fatal("existing checkout was reassociated to a per-job snapshot")
+	}
+}
+
 func TestPrepareCheckoutWorkdirRemoteMirrorHitSkipsCanonicalFetch(t *testing.T) {
 	canonical := newOnHostMirrorHTTPRepo(t, "canonical")
 	commit, _, err := canonical.PushBranch("canonical", "feature-branch")
