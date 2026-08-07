@@ -466,8 +466,10 @@ func TestUpdateGitMirrorPullRequestHeadFetchesFromRemoteMirror(t *testing.T) {
 	if _, err := canonical.CreateRef("canonical", "refs/pull/123/head", commit); err != nil {
 		t.Fatal(err)
 	}
-	// Fork shape: the commit is reachable only through refs/pull/*. This also
-	// pins the probe's protocol.version=2, which permits unadvertised wants.
+	// Fork shape: the commit is reachable only through refs/pull/* and is not
+	// an advertised tip, pinning the probe's protocol.version=2 unadvertised
+	// reachable wants.
+	advancePullRequestHeadForMirrorTest(t, canonical.RepoURL("canonical"), commit)
 	runGitForMirrorTest(t, mirrorDir, "push", canonical.RepoURL("canonical"), "--delete", "feature-branch")
 	remoteMirror := copyOnHostMirrorHTTPRepo(t, canonical.RepoURL("canonical"), "mirror")
 	canonical.Close()
@@ -789,6 +791,21 @@ func copyOnHostMirrorHTTPRepo(t *testing.T, sourceURL, name string) *githttptest
 func cloneOnHostMirrorToPath(t *testing.T, sourceURL, path string) {
 	t.Helper()
 	runGitForMirrorTest(t, "", "clone", "--mirror", sourceURL, path)
+}
+
+// advancePullRequestHeadForMirrorTest force-pushes a child of commit to
+// refs/pull/123/head, so commit is reachable from the PR ref but is not an
+// advertised tip. A mirror probe for it then needs protocol v2's unadvertised
+// reachable wants.
+func advancePullRequestHeadForMirrorTest(t *testing.T, canonicalURL, commit string) {
+	t.Helper()
+	tmp := filepath.Join(t.TempDir(), "pr-head")
+	runGitForMirrorTest(t, "", "clone", canonicalURL, tmp)
+	runGitForMirrorTest(t, tmp, "fetch", "origin", "refs/pull/123/head")
+	child := gitOutputForRemoteCheckoutTest(
+		t, tmp, "commit-tree", commit+"^{tree}", "-p", commit, "-m", "Advance PR head",
+	)
+	runGitForMirrorTest(t, tmp, "push", "origin", child+":refs/pull/123/head")
 }
 
 func expectedOnHostMirrorDir(e *Executor) string {

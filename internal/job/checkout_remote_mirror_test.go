@@ -206,8 +206,9 @@ func TestResolveRemoteMirrorAttempt(t *testing.T) {
 		{
 			name: "pull request with abbreviated refmap fetch flag",
 			mutate: func(e *Executor) {
+				// Pre-2.36 git accepts --ref as an abbreviation of --refmap.
 				e.PullRequest = "42"
-				e.GitFetchFlags = "--refm=+refs/pull/*:refs/pull/origin/*"
+				e.GitFetchFlags = "--ref=+refs/pull/*:refs/pull/origin/*"
 			},
 			wantOutcome:    remoteMirrorOutcomeSkipped,
 			wantSkipReason: remoteMirrorSkipPullRequestRefmap,

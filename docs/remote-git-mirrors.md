@@ -1552,10 +1552,11 @@ Gate: Q3 confirms provider replication of the required PR refs and tags.
 
 *Status: landed for pull request head builds* — Cursor Origin confirmed
 `refs/pull/*` replication (Q3, 2026-08), and head builds carry the immutable
-object ID, so eligibility now excludes only merge-ref builds (see §5's
-eligibility discussion). Remaining scope: tag builds (gated on need and on tag
-replication), and merge-ref builds (needs the merge-conflict fail-fast and the
-merge-commit/object-ID relationship resolved first).
+object ID, so PR eligibility now excludes only merge-ref builds and `--refmap`
+fetch flags (see §5's eligibility discussion). Remaining scope: tag builds
+(gated on need and on tag replication), and merge-ref builds (needs the
+merge-conflict fail-fast and the merge-commit/object-ID relationship resolved
+first).
 
 **F4 — Agent-side kill switch.** An agent flag such as
 `--no-git-remote-mirrors` would provide a fleet-local incident control.

@@ -53,8 +53,10 @@ func TestFetchSourceExistingCheckoutPullRequestHeadHitSkipsCanonical(t *testing.
 	if _, err := canonical.CreateRef("canonical", "refs/pull/123/head", commit); err != nil {
 		t.Fatal(err)
 	}
-	// Fork shape: the commit is reachable only through refs/pull/*. This also
-	// pins the probe's protocol.version=2, which permits unadvertised wants.
+	// Fork shape: the commit is reachable only through refs/pull/* and is not
+	// an advertised tip, pinning the probe's protocol.version=2 unadvertised
+	// reachable wants.
+	advancePullRequestHeadForMirrorTest(t, canonical.RepoURL("canonical"), commit)
 	runGitForMirrorTest(t, checkout, "push", canonical.RepoURL("canonical"), "--delete", "feature-branch")
 	mirror := copyOnHostMirrorHTTPRepo(t, canonical.RepoURL("canonical"), "mirror")
 

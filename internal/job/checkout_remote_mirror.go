@@ -200,11 +200,12 @@ func (e *Executor) resolveRemoteMirrorAttempt(previousAttempts int) remoteMirror
 
 func hasRefmapFetchFlag(flags []string) bool {
 	for _, flag := range flags {
-		// Git accepts unambiguous long-option abbreviations; --refm is the
-		// shortest that is unambiguously --refmap (--refetch also exists). An
-		// unrelated invalid --refm* flag fails on the canonical fetch exactly
-		// as it would without remote mirrors.
-		if strings.HasPrefix(flag, "--refm") {
+		// Git accepts unambiguous long-option abbreviations. On git older
+		// than 2.36 (no --refetch), --ref already abbreviates --refmap, so
+		// match --ref*: the only over-match is --refetch, where skipping the
+		// mirror is harmless, and an unrelated invalid --ref* flag fails on
+		// the canonical fetch exactly as it would without remote mirrors.
+		if strings.HasPrefix(flag, "--ref") {
 			return true
 		}
 	}
