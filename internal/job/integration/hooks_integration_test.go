@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
-	"sync"
 	"testing"
+	"time"
 
 	"github.com/buildkite/agent/v4/internal/job"
 	"github.com/buildkite/agent/v4/internal/shell"
@@ -899,21 +899,35 @@ func TestPreExitHooksFireAfterCancel(t *testing.T) {
 		<-commandFinished
 	})
 
-	var wg sync.WaitGroup
-	wg.Go(func() {
-		if err := tester.Run(t, "BUILDKITE_COMMAND=blocking-command"); err == nil {
-			t.Errorf(`tester.Run(t, "BUILDKITE_COMMAND=blocking-command") = %v, want non-nil error`, err)
-		}
-		t.Logf("Command finished")
-	})
+	runDone := make(chan error, 1)
+	go func() {
+		runDone <- tester.Run(t, "BUILDKITE_COMMAND=blocking-command")
+	}()
 
-	<-commandStarted
+	select {
+	case <-commandStarted:
+	case err := <-runDone:
+		close(commandFinished)
+		t.Fatalf("tester.Run() finished before command started: %v", err)
+	case <-time.After(30 * time.Second):
+		close(commandFinished)
+		_ = tester.Cancel()
+		t.Fatal("timed out waiting for command to start")
+	}
+
 	if err := tester.Cancel(); err != nil {
 		t.Errorf("tester.Cancel() = %v", err)
 	}
 
-	t.Logf("Waiting for command to finish")
-	wg.Wait()
+	select {
+	case err := <-runDone:
+		if err == nil {
+			t.Error("tester.Run() = nil, want non-nil error")
+		}
+	case <-time.After(30 * time.Second):
+		close(commandFinished)
+		t.Fatal("timed out waiting for command to finish after cancel")
+	}
 	close(commandFinished)
 
 	tester.CheckMocks(t)
