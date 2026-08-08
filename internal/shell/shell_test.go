@@ -165,6 +165,27 @@ func TestRunWindowsBatchScriptWithPipedOutput(t *testing.T) {
 	}
 }
 
+func TestRunWindowsBatchScriptPreservesExitCode(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("batch scripts require Windows")
+	}
+	t.Parallel()
+
+	path := filepath.Join(t.TempDir(), "nonzero.cmd")
+	if err := os.WriteFile(path, []byte("@exit /b 23\r\n"), 0o755); err != nil {
+		t.Fatalf("os.WriteFile(%q) = %v", path, err)
+	}
+
+	sh := newShellForTest(t, shell.WithPTY(false))
+	script, err := sh.Script(path, "")
+	if err != nil {
+		t.Fatalf("sh.Script(%q, %q) = %v", path, "", err)
+	}
+	if err := script.Run(t.Context(), shell.ShowPrompt(false)); shell.ExitCode(err) != 23 {
+		t.Fatalf("shell.ExitCode(script.Run()) = %d, want 23 (error: %v)", shell.ExitCode(err), err)
+	}
+}
+
 func TestWindowsBatchScriptRejectsPercentInPath(t *testing.T) {
 	if runtime.GOOS != "windows" {
 		t.Skip("batch scripts require Windows")
