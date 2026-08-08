@@ -240,6 +240,62 @@ steps:
 
   - group: ":hammer_and_wrench: Binary builds"
     steps:
+      # These are consumed directly by E2E, Docker, and CLI checks. Keep them
+      # separate so those jobs don't wait for every release target to build.
+      - name: ":linux: Build linux {{matrix.arch}} binary"
+        command: ".buildkite/steps/build-binary.sh {{matrix.os}} {{matrix.arch}}"
+        key: build-core-linux-binary
+        depends_on:
+          # don't wait for slower windows tests
+          - test-linux-amd64
+          - test-linux-arm64
+        artifact_paths: "pkg/*"
+        plugins:
+          - docker-compose#v4.14.0:
+              config: .buildkite/docker-compose.yml
+              cli-version: 2
+              run: agent
+          - generate-provenance-attestation#v1.1.0:
+              artifacts: "pkg/*"
+              attestation_name: "buildkite-agent-{{matrix.os}}-{{matrix.arch}}.build-attestation.json"
+        matrix:
+          setup:
+            os:
+              - linux
+            arch:
+              - amd64
+              - arm64
+
+      # Linux targets consumed by the Debian and RPM package builders.
+      - name: ":linux: Build linux {{matrix.arch}} binary"
+        command: ".buildkite/steps/build-binary.sh {{matrix.os}} {{matrix.arch}}"
+        key: build-package-linux-binary
+        depends_on:
+          # don't wait for slower windows tests
+          - test-linux-amd64
+          - test-linux-arm64
+        artifact_paths: "pkg/*"
+        plugins:
+          - docker-compose#v4.14.0:
+              config: .buildkite/docker-compose.yml
+              cli-version: 2
+              run: agent
+          - generate-provenance-attestation#v1.1.0:
+              artifacts: "pkg/*"
+              attestation_name: "buildkite-agent-{{matrix.os}}-{{matrix.arch}}.build-attestation.json"
+        matrix:
+          setup:
+            os:
+              - linux
+            arch:
+              - "386"
+              - arm
+              - armhf
+              - ppc64
+              - ppc64le
+              - riscv64
+
+      # Remaining targets are consumed only when assembling a GitHub release.
       - name: ":{{matrix.os}}: Build {{matrix.os}} {{matrix.arch}} binary"
         command: ".buildkite/steps/build-binary.sh {{matrix.os}} {{matrix.arch}}"
         key: build-binary
@@ -261,7 +317,6 @@ steps:
             os:
               - darwin
               - freebsd
-              - linux
               - openbsd
               - windows
             arch:
@@ -274,13 +329,8 @@ steps:
 
             - with: { os: dragonflybsd, arch: amd64 }
 
-            - with: { os: linux, arch: arm }
-            - with: { os: linux, arch: armhf }
-            - with: { os: linux, arch: ppc64 }
-            - with: { os: linux, arch: ppc64le }
             - with: { os: linux, arch: mips64le }
             - with: { os: linux, arch: s390x }
-            - with: { os: linux, arch: riscv64 }
 
             - with: { os: netbsd, arch: amd64 }
 
@@ -291,7 +341,7 @@ steps:
 
   - label: ":end::two::end: E2E Testing"
     key: e2e-tests
-    depends_on: build-binary
+    depends_on: build-core-linux-binary
     trigger: agent-e2e-tests
     async: false
     build:
@@ -305,12 +355,12 @@ steps:
 
   - label: ":bathtub: Check version string is clean"
     key: check-version-string
-    depends_on: build-binary
+    depends_on: build-core-linux-binary
     command: .buildkite/steps/check-version-string.sh
 
   - name: ":technologist: Test bk cli + Agent cli"
     key: test-bk-cli
-    depends_on: build-binary
+    depends_on: build-core-linux-binary
     command: ".buildkite/steps/test-bk.sh"
     plugins:
       - docker-compose#v4.14.0:
@@ -346,7 +396,7 @@ steps:
         agents:
           queue: $AGENT_BUILDERS_QUEUE
         depends_on:
-          - build-binary
+          - build-core-linux-binary
           - set-metadata
         command: ".buildkite/steps/build-docker-image.sh {{matrix}}"
         matrix:
@@ -421,7 +471,8 @@ steps:
   - name: ":debian: Debian package build"
     key: build-debian-packages
     depends_on:
-      - build-binary
+      - build-core-linux-binary
+      - build-package-linux-binary
       - set-metadata
     command: ".buildkite/steps/build-debian-packages.sh"
     artifact_paths: "deb/**/*"
@@ -433,7 +484,8 @@ steps:
   - name: ":redhat: RPM Package build"
     key: build-rpm-packages
     depends_on:
-      - build-binary
+      - build-core-linux-binary
+      - build-package-linux-binary
       - set-metadata
     command: ".buildkite/steps/build-rpm-packages.sh"
     artifact_paths: "rpm/**/*"
@@ -446,6 +498,8 @@ steps:
     key: build-github-release
     depends_on:
       - build-binary
+      - build-core-linux-binary
+      - build-package-linux-binary
       - set-metadata
     command: ".buildkite/steps/build-github-release.sh"
     artifact_paths: "releases/**/*"
