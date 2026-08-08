@@ -36,6 +36,8 @@ services:
       dockerfile: Dockerfile-e2e
     volumes:
       - ../:/work:cached
+      - ~/gocache:/gocache
+      - ~/gomodcache:/gomodcache
     working_dir: /work
     environment:
       - BUILDKITE_BUILD_NUMBER
@@ -45,6 +47,8 @@ services:
       - BUILDKITE_TRIGGERED_FROM_BUILD_ID
       - CI_E2E_TESTS_BUILDKITE_API_TOKEN
       - CI_E2E_TESTS_AGENT_TOKEN
+      - GOCACHE=/gocache
+      - GOMODCACHE=/gomodcache
 
   ruby:
     build:
