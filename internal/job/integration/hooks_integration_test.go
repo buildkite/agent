@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
@@ -893,21 +892,43 @@ func TestPreExitHooksFireAfterCancel(t *testing.T) {
 	tester.ExpectGlobalHook("pre-exit").Once()
 	tester.ExpectLocalHook("pre-exit").Once()
 
-	var wg sync.WaitGroup
-	wg.Go(func() {
-		if err := tester.Run(t, "BUILDKITE_COMMAND=sleep 5"); err == nil {
-			t.Errorf(`tester.Run(t, "BUILDKITE_COMMAND=sleep 5") = %v, want non-nil error`, err)
-		}
-		t.Logf("Command finished")
+	commandStarted := make(chan struct{})
+	commandFinished := make(chan struct{})
+	tester.MustMock(t, "blocking-command").Expect().Once().AndCallFunc(func(*bintest.Call) {
+		close(commandStarted)
+		<-commandFinished
 	})
 
-	time.Sleep(time.Millisecond * 500)
+	runDone := make(chan error, 1)
+	go func() {
+		runDone <- tester.Run(t, "BUILDKITE_COMMAND=blocking-command")
+	}()
+
+	select {
+	case <-commandStarted:
+	case err := <-runDone:
+		close(commandFinished)
+		t.Fatalf("tester.Run() finished before command started: %v", err)
+	case <-time.After(30 * time.Second):
+		close(commandFinished)
+		_ = tester.Cancel()
+		t.Fatal("timed out waiting for command to start")
+	}
+
 	if err := tester.Cancel(); err != nil {
 		t.Errorf("tester.Cancel() = %v", err)
 	}
 
-	t.Logf("Waiting for command to finish")
-	wg.Wait()
+	select {
+	case err := <-runDone:
+		if err == nil {
+			t.Error("tester.Run() = nil, want non-nil error")
+		}
+	case <-time.After(30 * time.Second):
+		close(commandFinished)
+		t.Fatal("timed out waiting for command to finish after cancel")
+	}
+	close(commandFinished)
 
 	tester.CheckMocks(t)
 }
