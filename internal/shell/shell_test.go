@@ -192,42 +192,51 @@ func TestContextCancelInterrupts(t *testing.T) {
 				opts = append(opts, shell.WithInterruptSignal(test.interruptSignal))
 			}
 
+			cmd := test.cmdWindows
+			ready := make(chan struct{})
+			runOpts := []shell.RunCommandOpt{shell.WithStarted(ready)}
+			if runtime.GOOS != "windows" {
+				// Starting a shell script does not mean it has started its sleep
+				// child yet. Have the process itself report when it is ready for
+				// signals so cancellation cannot race script startup.
+				cmd = os.Args[0]
+				runOpts = []shell.RunCommandOpt{
+					shell.WithExtraEnv(env.FromMap(map[string]string{"TEST_MAIN_CONTEXT_CANCEL_READY": "1"})),
+				}
+				opts = append(opts,
+					shell.WithStdout(replacer.New(io.Discard, []string{"ready"}, func([]byte) []byte {
+						close(ready)
+						return nil
+					})),
+				)
+			}
+
 			sh, err := shell.New(opts...)
 			if err != nil {
 				t.Fatalf("shell.New(%v) error = %v", opts, err)
 			}
-
 			sh.Logger = shell.DiscardLogger
 
 			ctx, cancel := context.WithCancel(t.Context())
 			defer cancel()
 
-			// Wait for the process to start before cancelling the context.
-			// This is more reliable than time.Sleep, but still not perfect.
-			started := make(chan struct{})
-
 			go func() {
 				select {
 				case <-time.After(1 * time.Minute):
-					t.Errorf("timeout waiting for process to start")
-				case <-started:
-					// TODO: figure out why this still needs a sleep to be
-					// reliable.
-					time.Sleep(100 * time.Millisecond)
+					t.Errorf("timeout waiting for process to become ready")
+				case <-ready:
+					if runtime.GOOS == "windows" {
+						time.Sleep(100 * time.Millisecond)
+					}
 					// Now cancel the context, which should cause the interrupt.
 					cancel()
 				}
 			}()
 
-			cmd := "fixtures/sleep60.sh"
-			if runtime.GOOS == "windows" {
-				cmd = test.cmdWindows
-			}
-
 			// The process returns an exit error, except on Windows. 🙄
 			wantSignaled := runtime.GOOS != "windows"
 
-			err = sh.Command(cmd).Run(ctx, shell.WithStarted(started))
+			err = sh.Command(cmd).Run(ctx, runOpts...)
 			if got, want := shell.IsExitSignaled(err), wantSignaled; got != want {
 				t.Errorf("sh.Command(%q).Run(ctx) = %v, want shell.IsExitSignaled(err) = %t", cmd, err, want)
 			}
