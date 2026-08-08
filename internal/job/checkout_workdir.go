@@ -164,6 +164,16 @@ func (e *Executor) prepareCheckoutWorkdir(
 			if !shallowClone {
 				// Keep the useful mirror clone. fetchSource will fetch only
 				// the missing immutable commit from canonical.
+				//
+				// Fork pull request heads land here systematically: clone's
+				// default refspec does not request refs/pull/*, so a commit
+				// reachable only through the PR ref misses even when the
+				// mirror has replicated it. Accepted trade-off: the clone
+				// already moved the bulk history, leaving canonical a small
+				// delta. Probing the mirror for the exact SHA post-clone
+				// would close it, but drags the filtered-fetch promisor
+				// machinery into this path, so it is a deliberate follow-up
+				// (see F3's remaining scope in docs/remote-git-mirrors.md).
 				return nil
 			}
 

@@ -83,6 +83,24 @@ func (e *Executor) fetchSource(ctx context.Context, addBloblessFilter bool, atte
 	// This is useful when a pre-populated git mirror is used with --reference,
 	// as the commit objects are already reachable and fetching is redundant.
 	mirrorHit := attempt != nil && attempt.hit()
+	if mirrorHit && kind == refspecGithubPRHead {
+		// A mirror hit deliberately skips the canonical PR-ref fetch: the
+		// build is pinned to the immutable object ID, so with default config
+		// that fetch only re-obtains objects the mirror already served, and
+		// skipping it keeps hits at zero canonical contact (a canonical
+		// outage is invisible when the mirror has the commit).
+		//
+		// The exception is a persisted refs/pull/* fetch mapping, which gives
+		// the canonical fetch durable side effects (opportunistic ref
+		// updates) the mirror fetch cannot reproduce; skipping would leave
+		// those refs silently stale, not merely lagging. Fail toward
+		// canonical: an unreadable config costs one cheap fetch (the objects
+		// are already local), never freshness.
+		covered, err := e.originFetchMappingCoversPullRefs(ctx)
+		if err != nil || covered {
+			mirrorHit = false
+		}
+	}
 	skipFetch := (e.GitSkipFetchExistingCommits || mirrorHit) && e.Commit != "HEAD" &&
 		hasGitCommit(ctx, e.shell, ".git", e.Commit)
 
@@ -149,6 +167,35 @@ func (e *Executor) fetchSource(ctx context.Context, addBloblessFilter bool, atte
 				return fmt.Errorf("fetching PR refspec %q: %w", refspecs, err)
 			}
 		} else {
+			// The mirror serves the immutable commit; with default config the
+			// canonical PR ref is only a way to obtain those objects (it
+			// writes no local ref, nothing downstream resolves it, and
+			// verifyCommit skips PR builds), so a hit returns early and never
+			// contacts canonical. Eligibility already excludes the builds
+			// where the ref is more than that: merge-ref builds (the merge
+			// commit is provider-regenerated, and its fetch doubles as the
+			// merge-conflict fail-fast) and --refmap fetch flags (durable
+			// local names for refs/pull/*).
+			if isExistingCheckoutRemoteMirrorAttempt(attempt) {
+				// Persisted refs/pull/* fetch mappings are the config-shaped
+				// equivalent of --refmap, detectable only at fetch time from
+				// the effective config. Fail toward canonical: on an
+				// unreadable config or a covering mapping, the mirror is
+				// skipped and this build keeps full canonical semantics.
+				covered, err := e.originFetchMappingCoversPullRefs(ctx)
+				if err != nil || covered {
+					attempt.outcome = remoteMirrorOutcomeSkipped
+					attempt.skipReason = remoteMirrorSkipPullRequestFetchMapping
+				}
+			}
+			hit, err := e.tryExistingCheckoutRemoteMirror(ctx, attempt, gitFetchFlags)
+			if err != nil {
+				return err
+			}
+			if hit {
+				return nil
+			}
+
 			// If we know the commit, also fetch it directly. The commit might not be in the history of `refspec` if there
 			// have been force pushes to the pull request, so this ensures we have it.
 			// Note: this is the typical case e.Commit != HEAD.
@@ -176,20 +223,12 @@ func (e *Executor) fetchSource(ctx context.Context, addBloblessFilter bool, atte
 		}
 
 	default: // refspecCommit
-		if isExistingCheckoutRemoteMirrorAttempt(attempt) {
-			mirrorFetchFlags, err := e.prepareRemoteMirrorFetch(ctx, gitFetchFlags)
-			if err != nil {
-				return fmt.Errorf("preparing remote mirror fetch: %w", err)
-			}
-			hit, err := e.fetchExistingCheckoutFromRemoteMirror(ctx, attempt, mirrorFetchFlags)
-			if err != nil {
-				return err
-			}
-			if hit {
-				// C4: FETCH_HEAD records the non-secret mirror URL. No
-				// mirror-eligible flow reads it, so retain Git's normal write.
-				return nil
-			}
+		hit, err := e.tryExistingCheckoutRemoteMirror(ctx, attempt, gitFetchFlags)
+		if err != nil {
+			return err
+		}
+		if hit {
+			return nil
 		}
 
 		// Otherwise fetch and checkout the commit directly.
@@ -206,6 +245,31 @@ func isExistingCheckoutRemoteMirrorAttempt(attempt *remoteMirrorAttempt) bool {
 	return attempt != nil &&
 		attempt.site == remoteMirrorSiteExistingCheckout &&
 		attempt.outcome == remoteMirrorOutcomeNotReached
+}
+
+// tryExistingCheckoutRemoteMirror probes the remote mirror for the build
+// commit when the attempt targets this existing checkout. On a hit the caller
+// can skip its canonical fetch: the checkout proceeds by exact object ID.
+// FETCH_HEAD then records the non-secret mirror URL rather than canonical;
+// that is deliberate — no mirror-eligible flow reads FETCH_HEAD, so Git's
+// normal write is retained (see docs/remote-git-mirrors.md).
+func (e *Executor) tryExistingCheckoutRemoteMirror(
+	ctx context.Context,
+	attempt *remoteMirrorAttempt,
+	gitFetchFlags string,
+) (bool, error) {
+	// A state guard, not lag conservatism: eligibility resolves one attempt
+	// per checkout, and the probe belongs to exactly one site. This is a
+	// no-op unless that decision chose this existing checkout and nothing
+	// has run or skipped the attempt since.
+	if !isExistingCheckoutRemoteMirrorAttempt(attempt) {
+		return false, nil
+	}
+	mirrorFetchFlags, err := e.prepareRemoteMirrorFetch(ctx, gitFetchFlags)
+	if err != nil {
+		return false, fmt.Errorf("preparing remote mirror fetch: %w", err)
+	}
+	return e.fetchExistingCheckoutFromRemoteMirror(ctx, attempt, mirrorFetchFlags)
 }
 
 func (e *Executor) fetchExistingCheckoutFromRemoteMirror(
@@ -273,6 +337,41 @@ func remoteMirrorPromisorKey(mirrorURL, name string) string {
 
 func remoteMirrorPromisorMarker(mirrorURL string) string {
 	return fmt.Sprintf("%x", sha256.Sum256([]byte(mirrorURL)))
+}
+
+// originFetchMappingCoversPullRefs reports whether any persisted
+// remote.origin.fetch refspec could opportunistically map a refs/pull/* fetch
+// into a durable local ref. Skipping the canonical PR-ref fetch on a mirror
+// hit would leave such refs silently stale, so covered builds keep canonical
+// PR fetches (see the callers).
+//
+// Sources under refs/heads/ or refs/tags/ cannot match refs/pull/*; anything
+// else (refs/pull/*, refs/*, exotic patterns) is conservatively treated as
+// covering rather than parsed precisely: over-matching only costs an exotic
+// configuration the mirror shortcut, never correctness or freshness. A
+// default clone's mapping (+refs/heads/*:refs/remotes/origin/*) is not
+// covering, so ordinary pipelines keep zero-canonical-contact hits. git fetch
+// applies these mappings from every effective config scope, so this reads
+// merged config, not just the checkout-local file.
+func (e *Executor) originFetchMappingCoversPullRefs(ctx context.Context) (bool, error) {
+	output, err := e.runSilentGitConfigOutput(ctx, "--get-all", "remote.origin.fetch")
+	if err != nil {
+		if shell.IsExitError(err) && shell.ExitCode(err) == 1 {
+			return false, nil
+		}
+		return false, err
+	}
+	for line := range strings.SplitSeq(output, "\n") {
+		source := strings.TrimPrefix(strings.TrimSpace(line), "+")
+		source, _, _ = strings.Cut(source, ":")
+		if source == "" {
+			continue
+		}
+		if !strings.HasPrefix(source, "refs/heads/") && !strings.HasPrefix(source, "refs/tags/") {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 func (e *Executor) hasRemoteMirrorURLConfig(ctx context.Context, mirrorURL string) (bool, error) {
@@ -462,7 +561,11 @@ func (e *Executor) runSilentLocalGitConfig(ctx context.Context, args ...string) 
 }
 
 func (e *Executor) runSilentLocalGitConfigOutput(ctx context.Context, args ...string) (string, error) {
-	commandArgs := append([]string{"config", "--local"}, args...)
+	return e.runSilentGitConfigOutput(ctx, append([]string{"--local"}, args...)...)
+}
+
+func (e *Executor) runSilentGitConfigOutput(ctx context.Context, args ...string) (string, error) {
+	commandArgs := append([]string{"config"}, args...)
 	gitPath, err := e.shell.AbsolutePath("git")
 	if err != nil {
 		return "", errors.New("resolving git for silent config command")
