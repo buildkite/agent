@@ -13,6 +13,8 @@ import (
 
 // Test that an agent can upload and download an artifact across different steps in the same build
 func TestArtifactUploadDownload(t *testing.T) {
+	t.Parallel()
+
 	ctx := t.Context()
 
 	tc := newTestCase(t, "artifact_upload_download.yaml")
@@ -27,6 +29,8 @@ func TestArtifactUploadDownload(t *testing.T) {
 
 // Test that an agent can upload and download artifact to/from a customer-managed S3 bucket
 func TestArtifactUploadDownload_CustomBucket(t *testing.T) {
+	t.Parallel()
+
 	ctx := t.Context()
 	tc := newTestCase(t, "artifact_custom_s3_bucket.yaml")
 
@@ -42,6 +46,8 @@ func TestArtifactUploadDownload_CustomBucket(t *testing.T) {
 // Test that we can upload/download artifact using a custom GCS bucket.
 // Everything that gets uploaded here gets auto removed in 30 days.
 func TestArtifactUploadDownload_GCS(t *testing.T) {
+	t.Parallel()
+
 	ctx := t.Context()
 	tc := newTestCase(t, "artifact_custom_gcs_bucket.yaml")
 
@@ -57,6 +63,8 @@ func TestArtifactUploadDownload_GCS(t *testing.T) {
 // Test that an agent can upload and download many artifacts (100 files).
 // This exercises the batch creator iterator producing multiple batches (batch size = 30).
 func TestArtifactUploadMany(t *testing.T) {
+	t.Parallel()
+
 	ctx := t.Context()
 
 	tc := newTestCase(t, "artifact_upload_many.yaml")
@@ -72,6 +80,8 @@ func TestArtifactUploadMany(t *testing.T) {
 // Test that artifact upload with --glob-resolve-follow-symlinks follows symlinked directories.
 // Regression test for https://github.com/buildkite/agent/issues/3826
 func TestArtifactUploadFollowSymlinks(t *testing.T) {
+	t.Parallel()
+
 	ctx := t.Context()
 
 	tc := newTestCase(t, "artifact_upload_symlink_glob.yaml")
@@ -88,6 +98,8 @@ func TestArtifactUploadFollowSymlinks(t *testing.T) {
 // container.
 // Everything that gets uploaded here gets auto removed in 30 days.
 func TestArtifactUploadDownload_Azure(t *testing.T) {
+	t.Parallel()
+
 	ctx := t.Context()
 	tc := newTestCase(t, "artifact_custom_azure_storage.yaml")
 
@@ -114,6 +126,8 @@ func TestArtifactUploadDownload_Azure(t *testing.T) {
 // name must produce a slug starting with that prefix (Buildkite converts
 // underscores to hyphens during slug derivation).
 func TestArtifactUploadDownload_CustomBucket_Multipart(t *testing.T) {
+	t.Parallel()
+
 	ctx := t.Context()
 	tc := newTestCase(t, "artifact_multipart_s3_download.yaml")
 

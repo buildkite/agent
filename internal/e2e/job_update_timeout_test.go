@@ -10,6 +10,8 @@ import (
 // minutes to 1 minute via `job update timeout`, then sleeps for 5 minutes,
 // exceeds the new timeout and fails.
 func TestJobUpdateTimeout(t *testing.T) {
+	t.Parallel()
+
 	ctx := t.Context()
 	tc := newTestCase(t, "job_update_timeout.yaml")
 
