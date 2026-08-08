@@ -9,7 +9,6 @@ import (
 	"strings"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/buildkite/agent/v4/internal/job"
 	"github.com/buildkite/agent/v4/internal/shell"
@@ -893,21 +892,29 @@ func TestPreExitHooksFireAfterCancel(t *testing.T) {
 	tester.ExpectGlobalHook("pre-exit").Once()
 	tester.ExpectLocalHook("pre-exit").Once()
 
+	commandStarted := make(chan struct{})
+	commandFinished := make(chan struct{})
+	tester.MustMock(t, "blocking-command").Expect().Once().AndCallFunc(func(*bintest.Call) {
+		close(commandStarted)
+		<-commandFinished
+	})
+
 	var wg sync.WaitGroup
 	wg.Go(func() {
-		if err := tester.Run(t, "BUILDKITE_COMMAND=sleep 5"); err == nil {
-			t.Errorf(`tester.Run(t, "BUILDKITE_COMMAND=sleep 5") = %v, want non-nil error`, err)
+		if err := tester.Run(t, "BUILDKITE_COMMAND=blocking-command"); err == nil {
+			t.Errorf(`tester.Run(t, "BUILDKITE_COMMAND=blocking-command") = %v, want non-nil error`, err)
 		}
 		t.Logf("Command finished")
 	})
 
-	time.Sleep(time.Millisecond * 500)
+	<-commandStarted
 	if err := tester.Cancel(); err != nil {
 		t.Errorf("tester.Cancel() = %v", err)
 	}
 
 	t.Logf("Waiting for command to finish")
 	wg.Wait()
+	close(commandFinished)
 
 	tester.CheckMocks(t)
 }

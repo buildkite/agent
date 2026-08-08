@@ -58,12 +58,6 @@ Non-obvious environment/run caveats:
   `.buildkite/build/ssh.conf` to be present at `/etc/ssh/ssh_config.d/` (mirroring
   `.buildkite/Dockerfile-compile`). If this test fails with unresolved aliases, copy it:
   `sudo cp .buildkite/build/ssh.conf /etc/ssh/ssh_config.d/`
-- Cold-cache flakiness: `internal/job/integration` tests spawn many `bintest` mock
-  binaries that are compiled on first use. On a completely cold Go build cache, the
-  timing-sensitive `TestPreExitHooksFireAfterCancel` (500ms sleep before cancel) can
-  panic/fail. Warming the build cache first (e.g. `go build ./...` or simply running the
-  package once) makes the full suite pass reliably. This is a pre-existing test timing
-  assumption, not a product bug.
 
 Running the app end-to-end without a Buildkite token — build the binary, then use
 `bootstrap` to run a job locally (invoke the freshly built `./buildkite-agent`, since a
