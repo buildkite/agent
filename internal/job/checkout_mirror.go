@@ -58,9 +58,11 @@ func (e *Executor) getOrUpdateMirror(ctx context.Context, repository string, att
 			return mirrorReference{}, nil
 		}
 
-		// If git mirror updates are skipped, we assume there's no change
-		// to the mirror objects, so no need for snapshotting. (Snapshotting
-		// would also be unsafe: skipping the update means no lock is taken.)
+		// When mirror updates are skipped, no lock is taken, so snapshotting
+		// the mirror here would be unsafe: an external process may be
+		// updating it concurrently. Return the mirror as a plain clone
+		// reference; the checkout-mode setting (dissociate by default)
+		// decides whether the checkout keeps depending on it.
 		return mirrorReference{dir: mirrorDir}, nil
 	}
 
@@ -319,8 +321,7 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string, attem
 	// repository renames. This must happen before a remote-mirror hit can skip
 	// the canonical fetch: dirForRepository is lossy, so distinct canonical
 	// URLs can share one durable mirror directory.
-	urlChanged, err := e.updateRemoteURL(ctx, mirrorDir, repository)
-	if err != nil {
+	if err := e.updateRemoteURL(ctx, mirrorDir, repository); err != nil {
 		return mirrorReference{}, fmt.Errorf("setting remote URL: %w", err)
 	}
 
@@ -396,18 +397,6 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string, attem
 			return cmd.Run(ctx)
 		}); err != nil {
 			return mirrorReference{}, err
-		}
-	}
-
-	if urlChanged {
-		// Let's opportunistically fsck and gc.
-		// 1. In case of remote URL confusion (bug introduced in #1959), and
-		// 2. There's possibly some object churn when remotes are renamed.
-		if err := e.shell.Command("git", "--git-dir", mirrorDir, "fsck").Run(ctx); err != nil {
-			e.shell.Warningf("Couldn't run git fsck: %v", err)
-		}
-		if err := e.shell.Command("git", "--git-dir", mirrorDir, "gc").Run(ctx); err != nil {
-			e.shell.Warningf("Couldn't run git gc: %v", err)
 		}
 	}
 
@@ -554,11 +543,11 @@ func (e *Executor) runMirrorAutoMaintenance(ctx context.Context, mirrorDir strin
 	})
 }
 
-// updateRemoteURL updates the URL for 'origin' and reports whether the
-// URL changed from something else. If gitDir == "", it assumes the
-// local repo is in the current directory, otherwise it includes --git-dir.
+// updateRemoteURL updates the URL for 'origin' if it differs from repository.
+// If gitDir == "", it assumes the local repo is in the current directory,
+// otherwise it includes --git-dir.
 // If the remote has changed, it logs some extra information.
-func (e *Executor) updateRemoteURL(ctx context.Context, gitDir, repository string) (bool, error) {
+func (e *Executor) updateRemoteURL(ctx context.Context, gitDir, repository string) error {
 	// Update the origin of the repository so we can gracefully handle
 	// repository renames.
 
@@ -572,7 +561,7 @@ func (e *Executor) updateRemoteURL(ctx context.Context, gitDir, repository strin
 	}
 	allURLs, err := e.shell.Command("git", args...).RunAndCaptureStdout(ctx)
 	if err != nil {
-		return false, err
+		return err
 	}
 
 	var gotURL string
@@ -586,7 +575,7 @@ func (e *Executor) updateRemoteURL(ctx context.Context, gitDir, repository strin
 		}
 		gotURL, err = e.shell.Command("git", args...).RunAndCaptureStdout(ctx)
 		if err != nil {
-			return false, err
+			return err
 		}
 	} else {
 		// Single URL - use config output directly to avoid insteadOf transformation.
@@ -595,7 +584,7 @@ func (e *Executor) updateRemoteURL(ctx context.Context, gitDir, repository strin
 
 	if gotURL == repository {
 		// No need to update anything
-		return false, nil
+		return nil
 	}
 
 	gd := gitDir
@@ -611,7 +600,7 @@ func (e *Executor) updateRemoteURL(ctx context.Context, gitDir, repository strin
 	if gitDir != "" {
 		args = append([]string{"--git-dir", gitDir}, args...)
 	}
-	return true, e.shell.Command("git", args...).Run(ctx)
+	return e.shell.Command("git", args...).Run(ctx)
 }
 
 // This is the same thing that git does at the end of clone when it is
