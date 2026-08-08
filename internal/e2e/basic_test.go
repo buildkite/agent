@@ -10,6 +10,8 @@ import (
 )
 
 func TestBasicE2E(t *testing.T) {
+	t.Parallel()
+
 	ctx := t.Context()
 	tc := newTestCase(t, "basic_e2e.yaml")
 
@@ -32,6 +34,8 @@ func TestBasicE2E(t *testing.T) {
 }
 
 func TestBasicE2E_PollOnly(t *testing.T) {
+	t.Parallel()
+
 	ctx := t.Context()
 	tc := newTestCase(t, "basic_e2e.yaml")
 
@@ -54,6 +58,8 @@ func TestBasicE2E_PollOnly(t *testing.T) {
 }
 
 func TestBasicE2E_StreamOnly(t *testing.T) {
+	t.Parallel()
+
 	ctx := t.Context()
 	tc := newTestCase(t, "basic_e2e.yaml")
 
