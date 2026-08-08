@@ -42,11 +42,13 @@ const (
 )
 
 // fetchSource fetches the git source for the job. If GitSkipFetchExistingCommits is
-// enabled and the commit already exists locally, the fetch is skipped entirely.
+// enabled, the checkout was derived from a mirror snapshot (and no custom
+// refspec is configured), or a remote mirror reported a hit — and the commit
+// already exists locally — the fetch is skipped entirely.
 // When addBloblessFilter is true, --filter=blob:none is prepended to the fetch
 // flags — the caller decides based on sparse-checkout state and user-supplied
 // filters.
-func (e *Executor) fetchSource(ctx context.Context, addBloblessFilter bool, attempt *remoteMirrorAttempt) (retErr error) {
+func (e *Executor) fetchSource(ctx context.Context, addBloblessFilter, derivedFromSnapshot bool, attempt *remoteMirrorAttempt) (retErr error) {
 	// Start span here so attributes can be set on the in-scope span; covers the
 	// whole fetch including retries (up to 10 attempts, ~2m), not per-attempt.
 	span, ctx := e.traceOpSpan(ctx, "git.fetch")
@@ -79,12 +81,23 @@ func (e *Executor) fetchSource(ctx context.Context, addBloblessFilter bool, atte
 		}
 	}
 
-	// If configured, skip the fetch when the commit already exists locally.
-	// This is useful when a pre-populated git mirror is used with --reference,
-	// as the commit objects are already reachable and fetching is redundant.
+	// Skip the fetch when the commit already exists locally and we have a
+	// reason to expect it to (GitSkipFetchExistingCommits is opt-in trust in a
+	// pre-populated mirror; a snapshot-derived checkout or a remote mirror hit
+	// established local presence earlier in this same checkout). Local
+	// presence is verified here either way — it is the routing decision, while
+	// the later git checkout of the target commit remains the validation that
+	// the objects are actually usable.
+	//
+	// A custom refspec keeps its fetch even for a snapshot-derived checkout:
+	// fetching an explicitly configured refspec can have side effects beyond
+	// object transfer (a src:dst refspec creates local refs that job code may
+	// read), and only the user knows whether those matter. This default-on
+	// optimization must not silently drop them; the opt-in and server-driven
+	// skips above retain their existing behavior.
 	mirrorHit := attempt != nil && attempt.hit()
-	skipFetch := (e.GitSkipFetchExistingCommits || mirrorHit) && e.Commit != "HEAD" &&
-		hasGitCommit(ctx, e.shell, ".git", e.Commit)
+	skipFetch := (e.GitSkipFetchExistingCommits || mirrorHit || (derivedFromSnapshot && kind != refspecCustom)) &&
+		e.Commit != "HEAD" && hasGitCommit(ctx, e.shell, ".git", e.Commit)
 
 	span.SetAttributes(attribute.Bool("git.skipped", skipFetch))
 

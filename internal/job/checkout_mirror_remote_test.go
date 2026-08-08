@@ -51,10 +51,11 @@ func TestUpdateGitMirrorCreatesFromRemoteMirrorAndKeepsCanonicalOrigin(t *testin
 	}
 	canonical.Close() // Creation must source all objects from the remote mirror.
 
-	mirrorDir, err := e.updateGitMirror(t.Context(), e.Repository, &attempt)
+	mirrorDirRef, err := e.updateGitMirror(t.Context(), e.Repository, &attempt)
 	if err != nil {
 		t.Fatalf("updateGitMirror() error = %v", err)
 	}
+	mirrorDir := mirrorDirRef.dir
 	if mirrorDir == expectedOnHostMirrorDir(e) {
 		t.Error("clean checkout did not receive a mirror snapshot")
 	}
@@ -131,10 +132,11 @@ func TestUpdateGitMirrorCreationFallsBackToCanonical(t *testing.T) {
 		url:  "http://127.0.0.1:1/mirror.git",
 	}
 
-	mirrorDir, err := e.updateGitMirror(t.Context(), e.Repository, &attempt)
+	mirrorDirRef, err := e.updateGitMirror(t.Context(), e.Repository, &attempt)
 	if err != nil {
 		t.Fatalf("updateGitMirror() error = %v", err)
 	}
+	mirrorDir := mirrorDirRef.dir
 	if got, want := gitOutputForMirrorTest(t, mirrorDir, "config", "--get", "remote.origin.url"), e.Repository; got != want {
 		t.Errorf("remote.origin.url = %q, want canonical %q", got, want)
 	}
@@ -186,10 +188,11 @@ func TestUpdateGitMirrorKeepsUsefulLaggingCreationClone(t *testing.T) {
 		url:  remoteMirror.RepoURL("mirror"),
 	}
 
-	mirrorDir, err := e.updateGitMirror(t.Context(), e.Repository, &attempt)
+	mirrorDirRef, err := e.updateGitMirror(t.Context(), e.Repository, &attempt)
 	if err != nil {
 		t.Fatalf("updateGitMirror() error = %v", err)
 	}
+	mirrorDir := mirrorDirRef.dir
 	if attempt.outcome != remoteMirrorOutcomeMiss {
 		t.Errorf("outcome = %q, want miss", attempt.outcome)
 	}
@@ -224,10 +227,11 @@ func TestUpdateGitMirrorUpdateHitUsesNamespacedRefWithoutMovingHeadsOrTags(t *te
 		site: remoteMirrorSiteOnHostMirror,
 		url:  remoteMirror.RepoURL("mirror"),
 	}
-	gotDir, err := e.updateGitMirror(t.Context(), e.Repository, &attempt)
+	gotDirRef, err := e.updateGitMirror(t.Context(), e.Repository, &attempt)
 	if err != nil {
 		t.Fatalf("updateGitMirror() error = %v", err)
 	}
+	gotDir := gotDirRef.dir
 	if gotDir != mirrorDir {
 		t.Errorf("mirror dir = %q, want %q", gotDir, mirrorDir)
 	}
@@ -387,10 +391,11 @@ func TestUpdateGitMirrorWarmHitUsesUnpinnedCommitWithoutScan(t *testing.T) {
 			attempt := tc.attempt(e)
 			canonical.Close()
 
-			gotDir, err := e.updateGitMirror(t.Context(), e.Repository, &attempt)
+			gotDirRef, err := e.updateGitMirror(t.Context(), e.Repository, &attempt)
 			if err != nil {
 				t.Fatalf("updateGitMirror() error = %v, want warm mirror fast path", err)
 			}
+			gotDir := gotDirRef.dir
 			if gotDir != mirrorDir {
 				t.Errorf("mirror dir = %q, want %q", gotDir, mirrorDir)
 			}
@@ -435,10 +440,11 @@ func TestUpdateGitMirrorNoRemoteURLPostFetchSkipsReachabilityScan(t *testing.T) 
 		t.Fatalf("attempt = %+v, want no-url skip", attempt)
 	}
 
-	gotDir, err := e.updateGitMirror(t.Context(), e.Repository, &attempt)
+	gotDirRef, err := e.updateGitMirror(t.Context(), e.Repository, &attempt)
 	if err != nil {
 		t.Fatalf("updateGitMirror() error = %v", err)
 	}
+	gotDir := gotDirRef.dir
 	if gotDir != mirrorDir {
 		t.Errorf("mirror dir = %q, want %q", gotDir, mirrorDir)
 	}
@@ -452,7 +458,7 @@ func TestUpdateGitMirrorNoRemoteURLPostFetchSkipsReachabilityScan(t *testing.T) 
 	}
 }
 
-func TestGetOrUpdateMirrorDirCloneLockTimeoutFallsBackWithoutMirror(t *testing.T) {
+func TestGetOrUpdateMirrorCloneLockTimeoutFallsBackWithoutMirror(t *testing.T) {
 	canonical := newOnHostMirrorHTTPRepo(t, "canonical")
 	commit, _, err := canonical.PushBranch("canonical", "feature-branch")
 	if err != nil {
@@ -470,10 +476,11 @@ func TestGetOrUpdateMirrorDirCloneLockTimeoutFallsBackWithoutMirror(t *testing.T
 		url:  "https://mirror.example/repo.git",
 	}
 
-	mirrorDir, err := e.getOrUpdateMirrorDir(t.Context(), e.Repository, &attempt)
+	mirror, err := e.getOrUpdateMirror(t.Context(), e.Repository, &attempt)
 	if err != nil {
-		t.Fatalf("getOrUpdateMirrorDir() error = %v, want canonical checkout fallback", err)
+		t.Fatalf("getOrUpdateMirror() error = %v, want canonical checkout fallback", err)
 	}
+	mirrorDir := mirror.dir
 	if mirrorDir != "" {
 		t.Errorf("mirrorDir = %q, want no on-host reference after lock timeout", mirrorDir)
 	}

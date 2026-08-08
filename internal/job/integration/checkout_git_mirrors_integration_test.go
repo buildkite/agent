@@ -41,6 +41,8 @@ func TestCheckingOutGitHubPullRequests_WithGitMirrors(t *testing.T) {
 	// But assert which ones are called
 	git.ExpectAll([][]any{
 		{"clone", "--mirror", "--bare", "--", tester.Repo.Path, matchSubDir(tester.GitMirrorsDir)},
+		{"--git-dir", matchSubDir(tester.GitMirrorsDir), "config", "maintenance.auto", "false"},
+		{"--git-dir", matchSubDir(tester.GitMirrorsDir), "config", "gc.auto", "0"},
 		{"clone", "-v", "--reference", matchSubDir(tester.GitMirrorsDir), "--", tester.Repo.Path, "."},
 		{"clean", "-ffxdq"},
 		{"fetch", "-v", "--prune", "--", "origin", "refs/pull/123/head"},
@@ -87,6 +89,8 @@ func TestCheckingOutLocalGitProject_WithGitMirrors(t *testing.T) {
 	// But assert which ones are called
 	git.ExpectAll([][]any{
 		{"clone", "--mirror", "--config", "pack.threads=35", "--", tester.Repo.Path, matchSubDir(tester.GitMirrorsDir)},
+		{"--git-dir", matchSubDir(tester.GitMirrorsDir), "config", "maintenance.auto", "false"},
+		{"--git-dir", matchSubDir(tester.GitMirrorsDir), "config", "gc.auto", "0"},
 		{"clone", "-v", "--reference", matchSubDir(tester.GitMirrorsDir), "--", tester.Repo.Path, "."},
 		{"clean", "-fdq"},
 		{"fetch", "-v", "--", "origin", "main"},
@@ -133,6 +137,8 @@ func TestCheckingOutLocalGitProjectWithSparseCheckout_WithGitMirrors(t *testing.
 
 	git.ExpectAll([][]any{
 		{"clone", "--mirror", "--bare", "--", tester.Repo.Path, matchSubDir(tester.GitMirrorsDir)},
+		{"--git-dir", matchSubDir(tester.GitMirrorsDir), "config", "maintenance.auto", "false"},
+		{"--git-dir", matchSubDir(tester.GitMirrorsDir), "config", "gc.auto", "0"},
 		{"--version"},
 		{"clone", "-v", "--filter=blob:none", "--sparse", "--reference", matchSubDir(tester.GitMirrorsDir), "--", tester.Repo.Path, "."},
 		{"clean", "-fdq"},
@@ -184,6 +190,8 @@ func TestCheckingOutLocalGitProjectWithSparseCheckoutNoCone_WithGitMirrors(t *te
 
 	git.ExpectAll([][]any{
 		{"clone", "--mirror", "--bare", "--", tester.Repo.Path, matchSubDir(tester.GitMirrorsDir)},
+		{"--git-dir", matchSubDir(tester.GitMirrorsDir), "config", "maintenance.auto", "false"},
+		{"--git-dir", matchSubDir(tester.GitMirrorsDir), "config", "gc.auto", "0"},
 		{"--version"},
 		{"clone", "-v", "--filter=blob:none", "--sparse", "--reference", matchSubDir(tester.GitMirrorsDir), "--", tester.Repo.Path, "."},
 		{"clean", "-fdq"},
@@ -258,7 +266,11 @@ func TestCheckingOutLocalGitProjectWithSubmodules_WithGitMirrors(t *testing.T) {
 	// But assert which ones are called
 	git.ExpectAll([][]any{
 		{"clone", "--mirror", "-v", "--", tester.Repo.Path, matchSubDir(tester.GitMirrorsDir)},
+		{"--git-dir", matchSubDir(tester.GitMirrorsDir), "config", "maintenance.auto", "false"},
+		{"--git-dir", matchSubDir(tester.GitMirrorsDir), "config", "gc.auto", "0"},
 		{"clone", "--mirror", "-v", "--", submoduleRepo.Path, matchSubDir(tester.GitMirrorsDir)},
+		{"--git-dir", matchSubDir(tester.GitMirrorsDir), "config", "maintenance.auto", "false"},
+		{"--git-dir", matchSubDir(tester.GitMirrorsDir), "config", "gc.auto", "0"},
 		{"clone", "-v", "--reference", matchSubDir(tester.GitMirrorsDir), "--", tester.Repo.Path, "."},
 		{"clean", "-fdq"},
 		{"submodule", "foreach", "--recursive", "git clean -fdq"},
@@ -335,6 +347,8 @@ func TestCheckingOutLocalGitProjectWithSubmodulesDisabled_WithGitMirrors(t *test
 	// But assert which ones are called
 	git.ExpectAll([][]any{
 		{"clone", "--mirror", "-v", "--", tester.Repo.Path, matchSubDir(tester.GitMirrorsDir)},
+		{"--git-dir", matchSubDir(tester.GitMirrorsDir), "config", "maintenance.auto", "false"},
+		{"--git-dir", matchSubDir(tester.GitMirrorsDir), "config", "gc.auto", "0"},
 		{"clone", "-v", "--reference", matchSubDir(tester.GitMirrorsDir), "--", tester.Repo.Path, "."},
 		{"clean", "-fdq"},
 		{"submodule", "foreach", "--recursive", "git clean -fdq"},
@@ -381,6 +395,8 @@ func TestCheckingOutShallowCloneOfLocalGitProject_WithGitMirrors(t *testing.T) {
 	// But assert which ones are called
 	git.ExpectAll([][]any{
 		{"clone", "--mirror", "--bare", "--", tester.Repo.Path, matchSubDir(tester.GitMirrorsDir)},
+		{"--git-dir", matchSubDir(tester.GitMirrorsDir), "config", "maintenance.auto", "false"},
+		{"--git-dir", matchSubDir(tester.GitMirrorsDir), "config", "gc.auto", "0"},
 		{"clone", "--depth=1", "--reference", matchSubDir(tester.GitMirrorsDir), "--", tester.Repo.Path, "."},
 		{"clean", "-fdq"},
 		{"fetch", "--depth=1", "--", "origin", "main"},
@@ -759,6 +775,8 @@ func TestGitMirrorEnv(t *testing.T) {
 	// But assert which ones are called
 	git.ExpectAll([][]any{
 		{"clone", "--mirror", "--bare", "--", tester.Repo.Path, matchSubDir(tester.GitMirrorsDir)},
+		{"--git-dir", matchSubDir(tester.GitMirrorsDir), "config", "maintenance.auto", "false"},
+		{"--git-dir", matchSubDir(tester.GitMirrorsDir), "config", "gc.auto", "0"},
 		{"clone", "-v", "--reference", matchSubDir(tester.GitMirrorsDir), "--", tester.Repo.Path, "."},
 		{"clean", "-fdq"},
 		{"fetch", "-v", "--", "origin", "main"},
@@ -840,6 +858,8 @@ func TestCheckingOutWithCustomRefspec_WithGitMirrors(t *testing.T) {
 	// With the fix: the mirror should fetch the custom refspec instead of the branch
 	git.ExpectAll([][]any{
 		{"clone", "--mirror", "--bare", "--", tester.Repo.Path, matchSubDir(tester.GitMirrorsDir)},
+		{"--git-dir", matchSubDir(tester.GitMirrorsDir), "config", "maintenance.auto", "false"},
+		{"--git-dir", matchSubDir(tester.GitMirrorsDir), "config", "gc.auto", "0"},
 		{"clone", "-v", "--reference", matchSubDir(tester.GitMirrorsDir), "--", tester.Repo.Path, "."},
 		{"clean", "-ffxdq"},
 		{"fetch", "-v", "--prune", "--", "origin", customRef}, // Mirror fetches custom refspec (correct!)

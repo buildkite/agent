@@ -354,7 +354,7 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context, previousAttempts in
 		}()
 	}
 
-	var mirrorDir string
+	var mirror mirrorReference
 
 	// If we can, get a mirror of the git repository to use for reference later
 	if e.GitMirrorsPath != "" && e.Repository != "" {
@@ -365,14 +365,14 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context, previousAttempts in
 		mirrorSpan, mirrorCtx := e.traceOpSpan(ctx, "git.mirror.update")
 		mirrorSpan.SetAttributes(attribute.String("git.repo", redact.URLCredentials(e.Repository)))
 
-		mirrorDir, err = e.getOrUpdateMirrorDir(mirrorCtx, e.Repository, &attempt)
+		mirror, err = e.getOrUpdateMirror(mirrorCtx, e.Repository, &attempt)
 
 		tracetools.FinishWithError(mirrorSpan, err)
 
 		if err != nil {
 			return fmt.Errorf("getting/updating git mirror: %w", err)
 		}
-		e.shell.Env.Set("BUILDKITE_REPO_MIRROR", mirrorDir)
+		e.shell.Env.Set("BUILDKITE_REPO_MIRROR", mirror.dir)
 	}
 
 	// Make sure the build directory exists and that we change directory into it
@@ -398,7 +398,8 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context, previousAttempts in
 	// original user-supplied state, not on flags we auto-add here.
 	userSuppliedCloneFilter := hasPartialFilterFlags(gitCloneFlags)
 
-	if err := e.prepareCheckoutWorkdir(ctx, &attempt, sparse, mirrorDir, gitCloneFlags, userSuppliedCloneFilter); err != nil {
+	derivedFromSnapshot, err := e.prepareCheckoutWorkdir(ctx, &attempt, sparse, mirror, gitCloneFlags, userSuppliedCloneFilter)
+	if err != nil {
 		return err
 	}
 
@@ -439,7 +440,7 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context, previousAttempts in
 	addBloblessFilter := sparse.active() &&
 		!userSuppliedCloneFilter &&
 		!hasPartialFilterFlags(gitFetchFlags)
-	if err := e.fetchSource(ctx, addBloblessFilter, &attempt); err != nil {
+	if err := e.fetchSource(ctx, addBloblessFilter, derivedFromSnapshot, &attempt); err != nil {
 		return err
 	}
 
@@ -618,19 +619,20 @@ func (e *Executor) updateGitSubmodules(ctx context.Context) (retErr error) {
 	mirrorSubmodules := e.GitMirrorsPath != ""
 	if mirrorSubmodules {
 		for _, repository := range submoduleRepos {
-			// getOrUpdateMirrorDir is shared with the main repo's mirror update, so
+			// getOrUpdateMirror is shared with the main repo's mirror update, so
 			// this produces the same sub-tree of spans; git.repo distinguishes
 			// submodules since the span names repeat.
 			subMirrorSpan, subMirrorCtx := e.traceOpSpan(ctx, "git.mirror.update")
 			subMirrorSpan.SetAttributes(attribute.String("git.repo", redact.URLCredentials(repository)))
 
-			mirrorDir, err := e.getOrUpdateMirrorDir(subMirrorCtx, repository, nil)
+			subMirror, err := e.getOrUpdateMirror(subMirrorCtx, repository, nil)
 
 			tracetools.FinishWithError(subMirrorSpan, err)
 
 			if err != nil {
 				return fmt.Errorf("getting/updating mirror dir for submodules: %w", err)
 			}
+			mirrorDir := subMirror.dir
 
 			// Switch back to the checkout dir, doing other operations from GitMirrorsPath will fail.
 			if err := e.createCheckoutDir(); err != nil {

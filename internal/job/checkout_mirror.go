@@ -33,26 +33,38 @@ func remoteMirrorStagingDir(mirrorDir string) string {
 	return filepath.Join(filepath.Dir(mirrorDir), fmt.Sprintf(".remote-mirror-%x", sum[:8]))
 }
 
-func (e *Executor) getOrUpdateMirrorDir(ctx context.Context, repository string, attempt *remoteMirrorAttempt) (string, error) {
-	var mirrorDir string
+// mirrorReference is the on-host mirror directory a checkout may use with
+// --reference. When isSnapshot is true, dir is an immutable per-job snapshot
+// of the durable mirror: it was created while holding the mirror's exclusive
+// lock, is removed at job teardown, and is therefore also safe to clone the
+// checkout from directly without contacting the canonical repository. When
+// isSnapshot is false, dir is the durable, mutable mirror itself (or "" when
+// no mirror is available) and may only be used as a clone reference.
+type mirrorReference struct {
+	dir        string
+	isSnapshot bool
+}
+
+func (e *Executor) getOrUpdateMirror(ctx context.Context, repository string, attempt *remoteMirrorAttempt) (mirrorReference, error) {
 	// Skip updating the Git mirror before using it?
 	if e.GitMirrorsSkipUpdate {
-		mirrorDir = filepath.Join(e.GitMirrorsPath, dirForRepository(repository))
+		mirrorDir := filepath.Join(e.GitMirrorsPath, dirForRepository(repository))
 		e.shell.Commentf("Skipping update and using existing mirror for repository %s at %s.", repository, mirrorDir)
 
 		// Check if specified mirrorDir exists, otherwise the clone will fail.
 		if !osutil.FileExists(mirrorDir) {
 			// Fall back to a clean clone, rather than failing the clone and therefore the build
 			e.shell.Commentf("No existing mirror found for repository %s at %s.", repository, mirrorDir)
-			mirrorDir = ""
+			return mirrorReference{}, nil
 		}
 
 		// If git mirror updates are skipped, we assume there's no change
-		// to the mirror objects, so no need for snapshotting.
-		return mirrorDir, nil
+		// to the mirror objects, so no need for snapshotting. (Snapshotting
+		// would also be unsafe: skipping the update means no lock is taken.)
+		return mirrorReference{dir: mirrorDir}, nil
 	}
 
-	mirrorDir, err := e.updateGitMirror(ctx, repository, attempt)
+	mirror, err := e.updateGitMirror(ctx, repository, attempt)
 	var lockErr ErrTimedOutAcquiringLock
 	if isOnHostRemoteMirrorAttempt(attempt) && errors.As(err, &lockErr) {
 		// The remote mirror is optional. A speculative clone/update holding the
@@ -60,21 +72,21 @@ func (e *Executor) getOrUpdateMirrorDir(ctx context.Context, repository string, 
 		// proceed without an on-host reference.
 		attempt.outcome = remoteMirrorOutcomeTimeout
 		e.shell.Commentf("Timed out waiting for on-host Git mirror; using canonical repository without it")
-		return "", nil
+		return mirrorReference{}, nil
 	}
-	return mirrorDir, err
+	return mirror, err
 }
 
 // updateGitMirror clones a new git mirror (git clone --mirror ...), or updates
 // an existing git mirror to ensure relevant refs are available. It returns a
-// directory path that a checkout can use for the --reference flag. If clean
-// checkouts are enabled, dir will be a path to a snapshot of the mirror,
-// otherwise it will be the mirror.
+// mirrorReference that a checkout can use for the --reference flag. If clean
+// checkouts are enabled, the reference will be a per-job snapshot of the
+// mirror, otherwise it will be the mirror itself.
 //
 // For efficiency reasons, updating an existing mirror is done by fetching
 // specific refspecs rather than using `git remote update` to fetch everything
 // (see https://github.com/buildkite/agent/pull/1112).
-func (e *Executor) updateGitMirror(ctx context.Context, repository string, attempt *remoteMirrorAttempt) (dir string, finalErr error) {
+func (e *Executor) updateGitMirror(ctx context.Context, repository string, attempt *remoteMirrorAttempt) (mirror mirrorReference, finalErr error) {
 	// Create a unique directory for the repository mirror
 	mirrorDir := filepath.Join(e.GitMirrorsPath, dirForRepository(repository))
 	isMainRepository := repository == e.Repository
@@ -84,12 +96,12 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string, attem
 		e.shell.Commentf("Creating \"%s\"", baseDir)
 		// Actual file permissions will be reduced by umask, and won't be 0o777 unless the user has manually changed the umask to 000
 		if err := os.MkdirAll(baseDir, 0o777); err != nil {
-			return "", err
+			return mirrorReference{}, err
 		}
 	}
 
 	if err := e.shell.Chdir(e.GitMirrorsPath); err != nil {
-		return "", fmt.Errorf("failed to change directory to %q: %w", e.GitMirrorsPath, err)
+		return mirrorReference{}, fmt.Errorf("failed to change directory to %q: %w", e.GitMirrorsPath, err)
 	}
 
 	lockTimeout := time.Second * time.Duration(e.GitMirrorsLockTimeout)
@@ -111,9 +123,9 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string, attem
 
 	if err != nil {
 		if errors.Is(err, context.DeadlineExceeded) {
-			return "", ErrTimedOutAcquiringLock{Name: "clone", Err: err}
+			return mirrorReference{}, ErrTimedOutAcquiringLock{Name: "clone", Err: err}
 		}
-		return "", fmt.Errorf("unable to acquire clone lock: %w", err)
+		return mirrorReference{}, fmt.Errorf("unable to acquire clone lock: %w", err)
 	}
 	defer mirrorCloneLock.Unlock() //nolint:errcheck // Best-effort cleanup - primary unlock checked below.
 
@@ -134,7 +146,7 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string, attem
 		mirrorFlags, err := shellwords.Split(e.GitCloneMirrorFlags)
 		if err != nil {
 			e.shell.Errorf("Invalid --git-clone-mirror-flags %q (%s)", e.GitCloneMirrorFlags, err)
-			return "", err
+			return mirrorReference{}, err
 		}
 		flags = append(flags, mirrorFlags...)
 
@@ -188,14 +200,17 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string, attem
 					"remote", "set-url", "origin", repository,
 				).Run(ctx)
 			}
+			if err == nil {
+				err = e.disableMirrorAutoMaintenance(ctx, tempMirrorDir)
+			}
 			hasCommit := false
 			if err == nil {
 				hasCommit = hasGitCommit(ctx, e.shell, tempMirrorDir, e.Commit)
 				if ctxErr := ctx.Err(); ctxErr != nil {
 					if cleanupErr := removeFailedMirror(tempMirrorDir); cleanupErr != nil {
-						return "", errors.Join(ctxErr, cleanupErr)
+						return mirrorReference{}, errors.Join(ctxErr, cleanupErr)
 					}
-					return "", ctxErr
+					return mirrorReference{}, ctxErr
 				}
 				err = os.Rename(tempMirrorDir, mirrorDir)
 			}
@@ -220,7 +235,7 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string, attem
 				}
 			}
 			if ctxErr := ctx.Err(); ctxErr != nil {
-				return "", ctxErr
+				return mirrorReference{}, ctxErr
 			}
 			var cloneErr *gitError
 			if errors.As(err, &cloneErr) && cloneErr.Type == gitErrorCloneTimeout {
@@ -233,16 +248,19 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string, attem
 
 		if err := cloneMirror(ctx, nil, repository, mirrorDir); err != nil {
 			if cleanupErr := removeFailedMirror(mirrorDir); cleanupErr != nil {
-				return "", errors.Join(err, cleanupErr)
+				return mirrorReference{}, errors.Join(err, cleanupErr)
 			}
-			return "", err
+			return mirrorReference{}, err
+		}
+		if err := e.disableMirrorAutoMaintenance(ctx, mirrorDir); err != nil {
+			return mirrorReference{}, err
 		}
 		return e.snapshotMirror(ctx, repository, mirrorDir)
 	}
 
 	// If it exists, immediately release the clone lock.
 	if err := mirrorCloneLock.Unlock(); err != nil {
-		return "", fmt.Errorf("unable to release clone lock: %w", err)
+		return mirrorReference{}, fmt.Errorf("unable to release clone lock: %w", err)
 	}
 
 	if e.Debug {
@@ -262,15 +280,22 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string, attem
 
 	if err != nil {
 		if errors.Is(err, context.DeadlineExceeded) {
-			return "", ErrTimedOutAcquiringLock{Name: "update", Err: err}
+			return mirrorReference{}, ErrTimedOutAcquiringLock{Name: "update", Err: err}
 		}
-		return "", fmt.Errorf("unable to acquire update lock: %w", err)
+		return mirrorReference{}, fmt.Errorf("unable to acquire update lock: %w", err)
 	}
 	defer func() {
 		if err := mirrorUpdateLock.Unlock(); err != nil {
 			finalErr = errors.Join(finalErr, fmt.Errorf("unable to release update lock: %w", err))
 		}
 	}()
+
+	// Retrofit mirrors created by earlier agent versions. Idempotent, and must
+	// happen before this job's fetches so they cannot trigger a detached
+	// auto-gc that outlives the lock.
+	if err := e.disableMirrorAutoMaintenance(ctx, mirrorDir); err != nil {
+		return mirrorReference{}, err
+	}
 
 	commitAlreadyPresent := false
 	if isMainRepository {
@@ -296,7 +321,7 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string, attem
 	// URLs can share one durable mirror directory.
 	urlChanged, err := e.updateRemoteURL(ctx, mirrorDir, repository)
 	if err != nil {
-		return "", fmt.Errorf("setting remote URL: %w", err)
+		return mirrorReference{}, fmt.Errorf("setting remote URL: %w", err)
 	}
 
 	remoteMirrorHit := false
@@ -310,7 +335,7 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string, attem
 				remoteMirrorOnHostRefspec(e.Commit, e.Branch),
 			)
 			if err != nil {
-				return "", err
+				return mirrorReference{}, err
 			}
 			if hit {
 				// C2: the helper requires both a successful ref write and
@@ -355,7 +380,7 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string, attem
 				Retry:      retry,
 			})
 		}); err != nil {
-			return "", err
+			return mirrorReference{}, err
 		}
 	}
 	if !isMainRepository {
@@ -370,7 +395,7 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string, attem
 		if err := e.traceOp(ctx, "git.mirror.fetch", func(ctx context.Context) error {
 			return cmd.Run(ctx)
 		}); err != nil {
-			return "", err
+			return mirrorReference{}, err
 		}
 	}
 
@@ -386,13 +411,25 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string, attem
 		}
 	}
 
+	// With implicit maintenance disabled, this synchronous run (still under
+	// the update lock, and before the snapshot) is what keeps the mirror's
+	// object store consolidated over time. Failing maintenance is not worth
+	// failing the job over.
+	if err := e.runMirrorAutoMaintenance(ctx, mirrorDir); err != nil {
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return mirrorReference{}, ctxErr
+		}
+		e.shell.Warningf("Couldn't run mirror maintenance: %v", err)
+	}
+
 	return e.snapshotMirror(ctx, repository, mirrorDir)
 }
 
-// snapshotMirror creates a snapshot of the mirror. It returns the directory for
-// the rest of the checkout to use as --reference, which will be the path to a
-// snapshot, unless clean checkout is disabled, in which case it will simply
-// return mirrorDir.
+// snapshotMirror creates a snapshot of the mirror. It returns the reference
+// for the rest of the checkout to use, which will be the path to a snapshot,
+// unless clean checkout is disabled, in which case it will simply refer to
+// mirrorDir. It must be called while holding the mirror's lock, so that the
+// snapshot cannot capture a mirror mid-mutation.
 //
 // This "snapshot" is a clone of the *mirror* in a nearby directory, but on a
 // filesystem that supports hardlinks (most modern filesystems), the git objects
@@ -433,9 +470,9 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string, attem
 // checkout phase, which could break many git operations in the command phase.
 // Presently we have no way to pass cleanup instructions between containers,
 // which would enable this case.
-func (e *Executor) snapshotMirror(ctx context.Context, repository, mirrorDir string) (string, error) {
+func (e *Executor) snapshotMirror(ctx context.Context, repository, mirrorDir string) (mirrorReference, error) {
 	if !e.CleanCheckout || !e.includePhase("command") {
-		return mirrorDir, nil
+		return mirrorReference{dir: mirrorDir}, nil
 	}
 
 	snapshotBaseDir := filepath.Join(e.GitMirrorsPath, "snapshots")
@@ -445,7 +482,7 @@ func (e *Executor) snapshotMirror(ctx context.Context, repository, mirrorDir str
 		e.shell.Commentf("Creating %q", snapshotBaseDir)
 		// See comment above about umask
 		if err := os.MkdirAll(snapshotBaseDir, 0o777); err != nil {
-			return "", fmt.Errorf("creating base directory for snapshots: %w", err)
+			return mirrorReference{}, fmt.Errorf("creating base directory for snapshots: %w", err)
 		}
 	}
 
@@ -453,10 +490,10 @@ func (e *Executor) snapshotMirror(ctx context.Context, repository, mirrorDir str
 	// MkdirTemp ensures the new dir won't collide with other agents.
 	snapshotDir, err := os.MkdirTemp(snapshotBaseDir, dirForRepository(repository))
 	if err != nil {
-		return "", fmt.Errorf("creating snapshot directory: %w", err)
+		return mirrorReference{}, fmt.Errorf("creating snapshot directory: %w", err)
 	}
 	if err := os.Chmod(snapshotDir, 0o777&^osutil.Umask); err != nil {
-		return "", fmt.Errorf("changing permissions on snapshot directory: %w", err)
+		return mirrorReference{}, fmt.Errorf("changing permissions on snapshot directory: %w", err)
 	}
 
 	// Automatically remove it during teardown
@@ -467,10 +504,54 @@ func (e *Executor) snapshotMirror(ctx context.Context, repository, mirrorDir str
 	if err := e.traceOp(ctx, "git.mirror.snapshot", func(ctx context.Context) error {
 		return gitClone(ctx, e.shell, nil, []string{"--mirror"}, mirrorDir, snapshotDir)
 	}); err != nil {
-		return "", err
+		return mirrorReference{}, err
 	}
 
-	return snapshotDir, nil
+	return mirrorReference{dir: snapshotDir, isSnapshot: true}, nil
+}
+
+// disableMirrorAutoMaintenance persistently prevents git from starting
+// implicit maintenance in the mirror. Auto-maintenance (gc) detaches itself
+// from the invoking command, so it can outlive the mirror's lock and mutate
+// the object store while a snapshot is being created, or while an
+// unsnapshotted checkout still references the mirror — the corruption class
+// tracked in https://github.com/buildkite/agent/issues/2208. Maintenance
+// instead runs synchronously under the lock via runMirrorAutoMaintenance.
+//
+// Both keys are needed: maintenance.auto covers modern command-triggered
+// maintenance (git 2.29+), and gc.auto=0 stops the legacy post-fetch auto-gc
+// path on older gits.
+func (e *Executor) disableMirrorAutoMaintenance(ctx context.Context, mirrorDir string) error {
+	for _, kv := range [][2]string{{"maintenance.auto", "false"}, {"gc.auto", "0"}} {
+		if err := e.shell.Command("git", "--git-dir", mirrorDir, "config", kv[0], kv[1]).Run(ctx); err != nil {
+			return fmt.Errorf("setting %s=%s on mirror: %w", kv[0], kv[1], err)
+		}
+	}
+	return nil
+}
+
+// defaultGitGCAutoThreshold is git's default gc.auto threshold. The mirror
+// persistently sets gc.auto=0 (see disableMirrorAutoMaintenance), so the
+// controlled maintenance run below restores the default threshold for its own
+// invocation only.
+const defaultGitGCAutoThreshold = "6700"
+
+// runMirrorAutoMaintenance runs git's auto-maintenance synchronously. It must
+// be called while holding the mirror's lock: gc.autoDetach=false keeps the
+// work in the foreground so it cannot outlive the lock. Git's usual
+// auto-thresholds (loose object and pack counts) still decide whether any
+// repacking actually happens, so this is cheap when there is nothing to do.
+// Removing old objects is safe even while earlier snapshots are still leased
+// to running jobs, because those snapshots hold hardlinks to the object files.
+func (e *Executor) runMirrorAutoMaintenance(ctx context.Context, mirrorDir string) error {
+	return e.traceOp(ctx, "git.mirror.maintenance", func(ctx context.Context) error {
+		return e.shell.Command(
+			"git", "--git-dir", mirrorDir,
+			"-c", "gc.auto="+defaultGitGCAutoThreshold,
+			"-c", "gc.autoDetach=false",
+			"gc", "--auto",
+		).Run(ctx)
+	})
 }
 
 // updateRemoteURL updates the URL for 'origin' and reports whether the
