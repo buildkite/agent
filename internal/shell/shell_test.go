@@ -141,7 +141,7 @@ func TestRunWindowsBatchScriptWithPipedOutput(t *testing.T) {
 		t.Fatalf("os.Mkdir(%q) = %v", dir, err)
 	}
 	path := filepath.Join(dir, "agent-startup.bat")
-	if err := os.WriteFile(path, []byte("@echo off\r\necho stdout=%BATCH_TEST_VALUE%\r\necho stderr-line 1>&2\r\n"), 0o755); err != nil {
+	if err := os.WriteFile(path, []byte("@echo off\r\necho stdout=%BATCH_TEST_VALUE%\r\n>&2 echo stderr-line\r\n"), 0o755); err != nil {
 		t.Fatalf("os.WriteFile(%q) = %v", path, err)
 	}
 
