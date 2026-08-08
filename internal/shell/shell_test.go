@@ -138,7 +138,7 @@ func TestRunWindowsBatchScriptWithPipedOutput(t *testing.T) {
 
 	for _, ext := range []string{".bat", ".CMD"} {
 		t.Run(ext, func(t *testing.T) {
-			dir := filepath.Join(t.TempDir(), "hooks with spaces & parentheses (test)")
+			dir := filepath.Join(t.TempDir(), "hooks with spaces & parentheses (test) ! caret ^")
 			if err := os.Mkdir(dir, 0o755); err != nil {
 				t.Fatalf("os.Mkdir(%q) = %v", dir, err)
 			}
