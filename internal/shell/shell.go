@@ -31,7 +31,19 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
-const lockRetryDuration = time.Second
+// lockRetryDuration is how often a blocked LockFile call re-attempts the
+// lock. LockFile's callers are the git mirror clone/update locks, which are
+// typically held for well under a second (a no-op fetch check,
+// auto-maintenance thresholds, a hardlink snapshot), so a long interval
+// quantizes every waiting job to whole multiples of it: with N same-host jobs
+// racing for the same mirror, the last one waits ~N×interval regardless of
+// how briefly the lock is actually held.
+const lockRetryDuration = 100 * time.Millisecond
+
+// lockWaitLogInterval is how often a blocked LockFile call logs that it is
+// still waiting, so a long wait stays visible in the job log without a line
+// per retry.
+const lockWaitLogInterval = 30 * time.Second
 
 // ErrShellNotStarted is returned when the shell has not started a process.
 var ErrShellNotStarted = errors.New("shell not started")
@@ -233,6 +245,10 @@ func (s *Shell) LockFile(ctx context.Context, path string) (Unlocker, error) {
 
 	lock := flock.New(absolutePathToLock)
 
+	retryTimer := time.NewTimer(lockRetryDuration)
+	defer retryTimer.Stop()
+
+	var waitingSince, lastWaitLog time.Time
 retryLoop:
 	for {
 		// Keep trying the lock until we get it
@@ -243,19 +259,29 @@ retryLoop:
 			return nil, err
 
 		case !gotLock:
-			s.Commentf("Could not acquire lock on %q (locked by another process)", absolutePathToLock)
+			// Log once when we start waiting and periodically while blocked,
+			// not on every retry.
+			switch now := time.Now(); {
+			case waitingSince.IsZero():
+				waitingSince = now
+				lastWaitLog = now
+				s.Commentf("Could not acquire lock on %q (locked by another process); retrying every %v...", absolutePathToLock, lockRetryDuration)
+			case now.Sub(lastWaitLog) >= lockWaitLogInterval:
+				lastWaitLog = now
+				s.Commentf("Still waiting to acquire lock on %q (%v elapsed)", absolutePathToLock, now.Sub(waitingSince).Round(time.Second))
+			}
 
 		default:
+			if !waitingSince.IsZero() {
+				s.Commentf("Acquired lock on %q after %v", absolutePathToLock, time.Since(waitingSince).Round(time.Millisecond))
+			}
 			break retryLoop
 		}
 
-		s.Commentf("Trying again in %v...", lockRetryDuration)
-		timer := time.NewTimer(lockRetryDuration)
-		defer timer.Stop()
-
 		select {
-		case <-timer.C:
+		case <-retryTimer.C:
 			// Ready to retry!
+			retryTimer.Reset(lockRetryDuration)
 
 		case <-ctx.Done():
 			return nil, ctx.Err()

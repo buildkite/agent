@@ -322,7 +322,8 @@ type gitFetchArgs struct {
 	GitFetchFlags string       // Flags to pass to the fetch command
 	Repository    string       // The remote to fetch from
 	Retry         bool         // Whether to retry the fetch on certain errors
-	RefSpecs      []string     // Refspecs to fetch
+	RefSpecs      []string     // Refspecs to fetch; each is shellword-split
+	RawRefSpecs   []string     // Refspecs passed verbatim as single arguments
 	HidePrompt    bool         // Never log argv, including in shell debug mode
 }
 
@@ -352,6 +353,11 @@ func gitFetch(ctx context.Context, args gitFetchArgs) error {
 		}
 		commandArgs = append(commandArgs, individualRefSpecs...)
 	}
+
+	// Raw refspecs skip shellword splitting: quotes and backslashes are legal
+	// in git ref names, so a split would corrupt a refspec built from an
+	// externally supplied branch. Callers pass exactly one refspec per element.
+	commandArgs = append(commandArgs, args.RawRefSpecs...)
 
 	smelt := map[string]bool{
 		gitErrStrBadObject:             false,
