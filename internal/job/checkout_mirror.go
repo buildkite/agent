@@ -43,6 +43,17 @@ func remoteMirrorStagingDir(mirrorDir string) string {
 type mirrorReference struct {
 	dir        string
 	isSnapshot bool
+
+	// branchTipFresh records that refs/heads/<branch> in the snapshot was
+	// synced from the canonical repository during this job: either the mirror
+	// was freshly cloned from canonical, or this job's mirror update fetched
+	// the build branch from canonical. Commit verification may then check
+	// branch ancestry against the snapshot instead of fetching the branch tip
+	// from canonical again. It is never set when the branch fetch was skipped
+	// (commit already present in the mirror), when refs came from a remote
+	// mirror, or with --git-mirrors-skip-update — in those cases the tip may
+	// be stale and verification must ask the canonical repository.
+	branchTipFresh bool
 }
 
 func (e *Executor) getOrUpdateMirror(ctx context.Context, repository string, attempt *remoteMirrorAttempt) (mirrorReference, error) {
@@ -225,7 +236,9 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string, attem
 					// --reference clone transfers only the missing delta.
 					attempt.outcome = remoteMirrorOutcomeMiss
 				}
-				return e.snapshotMirror(ctx, repository, mirrorDir)
+				// Refs came from the remote mirror, not canonical, so the
+				// branch tip is not known to be current.
+				return e.snapshotMirror(ctx, repository, mirrorDir, false)
 			}
 
 			if stagingCleanupErr == nil && tempMirrorDir != "" {
@@ -257,7 +270,11 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string, attem
 		if err := e.disableMirrorAutoMaintenance(ctx, mirrorDir); err != nil {
 			return mirrorReference{}, err
 		}
-		return e.snapshotMirror(ctx, repository, mirrorDir)
+		// A fresh clone from canonical: every ref, including the build
+		// branch's tip, is current as of this job. Freshness only means
+		// anything for the main repository's branch, so don't claim it for
+		// submodule mirrors.
+		return e.snapshotMirror(ctx, repository, mirrorDir, isMainRepository)
 	}
 
 	// If it exists, immediately release the clone lock.
@@ -347,8 +364,12 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string, attem
 		}
 	}
 
+	// Set when this job fetches refs/heads/<branch> from canonical below, so
+	// the snapshot's branch tip is current and commit verification can use it.
+	branchTipFresh := false
+
 	if isMainRepository && !commitAlreadyPresent && !remoteMirrorHit {
-		var refspecs []string
+		var refspecs, rawRefspecs []string
 		var retry bool
 
 		switch {
@@ -368,17 +389,38 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string, attem
 			retry = true
 		default:
 			// Fetch the build branch from the upstream repository into the mirror.
-			refspecs = []string{e.Branch}
+			//
+			// For a branch build, fetch by explicit forced refspec rather than
+			// the bare name: a bare name resolves refs/tags/ before refs/heads/,
+			// so a tag sharing the branch's name would be fetched instead,
+			// leaving refs/heads/<branch> stale — while branchTipFresh claims
+			// otherwise. The explicit form updates exactly the ref that
+			// snapshot-based commit verification later reads, and it is passed
+			// raw (unsplit) because quotes are legal in ref names. This mirrors
+			// checkCommitOnBranch's own fetch construction.
+			//
+			// Tag builds may set BUILDKITE_BRANCH to the tag's name, and some
+			// setups supply an already-qualified ref, where refs/heads/<branch>
+			// may not exist. Those keep the historical bare-name fetch and
+			// never claim freshness (verification skips tag builds anyway).
+			branchRef := "refs/heads/" + e.Branch
+			if e.Tag == "" && e.Branch != "" && !strings.HasPrefix(e.Branch, "refs/") && gitCheckRefFormat(branchRef) {
+				rawRefspecs = []string{"+" + branchRef + ":" + branchRef}
+				branchTipFresh = true
+			} else {
+				refspecs = []string{e.Branch}
+			}
 		}
 
 		// Fetch the refspecs from the upstream repository into the mirror.
 		if err := e.traceOp(ctx, "git.mirror.fetch", func(ctx context.Context) error {
 			return gitFetch(ctx, gitFetchArgs{
-				Shell:      e.shell,
-				GitFlags:   []string{"--git-dir", mirrorDir},
-				Repository: "origin",
-				RefSpecs:   refspecs,
-				Retry:      retry,
+				Shell:       e.shell,
+				GitFlags:    []string{"--git-dir", mirrorDir},
+				Repository:  "origin",
+				RefSpecs:    refspecs,
+				RawRefSpecs: rawRefspecs,
+				Retry:       retry,
 			})
 		}); err != nil {
 			return mirrorReference{}, err
@@ -411,7 +453,7 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string, attem
 		e.shell.Warningf("Couldn't run mirror maintenance: %v", err)
 	}
 
-	return e.snapshotMirror(ctx, repository, mirrorDir)
+	return e.snapshotMirror(ctx, repository, mirrorDir, branchTipFresh)
 }
 
 // snapshotMirror creates a snapshot of the mirror. It returns the reference
@@ -459,7 +501,12 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string, attem
 // checkout phase, which could break many git operations in the command phase.
 // Presently we have no way to pass cleanup instructions between containers,
 // which would enable this case.
-func (e *Executor) snapshotMirror(ctx context.Context, repository, mirrorDir string) (mirrorReference, error) {
+// branchTipFresh reports whether refs/heads/<branch> in the mirror (and so in
+// the snapshot) was synced from the canonical repository during this job; see
+// mirrorReference.branchTipFresh. It only travels with a snapshot: the durable
+// mirror is mutable and unlocked once this returns, so nothing may be assumed
+// about its refs later.
+func (e *Executor) snapshotMirror(ctx context.Context, repository, mirrorDir string, branchTipFresh bool) (mirrorReference, error) {
 	if !e.CleanCheckout || !e.includePhase("command") {
 		return mirrorReference{dir: mirrorDir}, nil
 	}
@@ -496,7 +543,7 @@ func (e *Executor) snapshotMirror(ctx context.Context, repository, mirrorDir str
 		return mirrorReference{}, err
 	}
 
-	return mirrorReference{dir: snapshotDir, isSnapshot: true}, nil
+	return mirrorReference{dir: snapshotDir, isSnapshot: true, branchTipFresh: branchTipFresh}, nil
 }
 
 // disableMirrorAutoMaintenance persistently prevents git from starting

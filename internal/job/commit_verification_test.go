@@ -216,7 +216,7 @@ func TestVerifyCommit(t *testing.T) {
 				shell:          sh,
 				ExecutorConfig: tt.config,
 			}
-			err = e.verifyCommit(t.Context())
+			err = e.verifyCommit(t.Context(), mirrorReference{})
 			if err != nil {
 				t.Errorf("verifyCommit() error = %v, want nil", err)
 			}
@@ -395,7 +395,7 @@ func TestVerifyCommit(t *testing.T) {
 					},
 				}
 
-				if err := e.verifyCommit(ctx); !errors.Is(err, ErrCommitVerificationFailed) {
+				if err := e.verifyCommit(ctx, mirrorReference{}); !errors.Is(err, ErrCommitVerificationFailed) {
 					t.Errorf("verifyCommit() with mode %q error = %v, want ErrCommitVerificationFailed", mode.value, err)
 				}
 			})
@@ -889,7 +889,7 @@ func TestVerifyCommit(t *testing.T) {
 		}
 
 		// A skip would return nil; verifyCommit must surface the failure instead.
-		if err := e.verifyCommit(ctx); !errors.Is(err, ErrCommitVerificationFailed) {
+		if err := e.verifyCommit(ctx, mirrorReference{}); !errors.Is(err, ErrCommitVerificationFailed) {
 			t.Errorf("verifyCommit() error = %v, want ErrCommitVerificationFailed (a non-PR build must not be skipped)", err)
 		}
 	})
@@ -948,8 +948,144 @@ func TestVerifyCommit(t *testing.T) {
 		}
 
 		// Even in strict mode, an unavailable check must not fail the build.
-		if err := e.verifyCommit(ctx); err != nil {
+		if err := e.verifyCommit(ctx, mirrorReference{}); err != nil {
 			t.Errorf("verifyCommit() in strict mode with unavailable check error = %v, want nil", err)
+		}
+	})
+}
+
+// snapshotOfRepo creates a bare --mirror clone of repoURL, standing in for a
+// per-job mirror snapshot.
+func snapshotOfRepo(t *testing.T, ctx context.Context, sh *shell.Shell, repoURL string) string {
+	t.Helper()
+	snapshotDir, err := os.MkdirTemp("", "verify-snapshot-")
+	if err != nil {
+		t.Fatalf("MkdirTemp error = %v", err)
+	}
+	t.Cleanup(func() { os.RemoveAll(snapshotDir) }) //nolint:errcheck // Best-effort cleanup.
+	if err := sh.Command("git", "clone", "--mirror", repoURL, snapshotDir).Run(ctx); err != nil {
+		t.Fatalf("git clone --mirror error = %v", err)
+	}
+	return snapshotDir
+}
+
+func TestVerifyCommitAgainstSnapshot(t *testing.T) {
+	ctx := t.Context()
+	repoURL, deepAncestor, offBranchCommit := setupFileBackedRepo(t, ctx, "feature")
+
+	sh, err := shell.New()
+	if err != nil {
+		t.Fatalf("shell.New() error = %v", err)
+	}
+	snapshotDir := snapshotOfRepo(t, ctx, sh, repoURL)
+
+	tests := []struct {
+		name   string
+		commit string
+		branch string
+		want   bool
+	}{
+		{"commit on branch is a definitive positive", deepAncestor, "feature", true},
+		{"commit not on branch is not trusted locally", offBranchCommit, "feature", false},
+		{"missing branch ref falls back", deepAncestor, "no-such-branch", false},
+		{"invalid branch name falls back", deepAncestor, "bad..name", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			e := &Executor{
+				shell: sh,
+				ExecutorConfig: ExecutorConfig{
+					GitCommitVerification: GitCommitVerificationStrict,
+					Commit:                tt.commit,
+					Branch:                tt.branch,
+				},
+			}
+			if got := e.verifyCommitAgainstSnapshot(ctx, snapshotDir); got != tt.want {
+				t.Errorf("verifyCommitAgainstSnapshot() = %t, want %t", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestVerifyCommitSnapshotShortCircuitAndFallback(t *testing.T) {
+	ctx := t.Context()
+	repoURL, deepAncestor, offBranchCommit := setupFileBackedRepo(t, ctx, "feature")
+
+	// The checkout: a clone of canonical with both branches' objects present.
+	cloneDir, err := os.MkdirTemp("", "verify-commit-test-")
+	if err != nil {
+		t.Fatalf("MkdirTemp error = %v", err)
+	}
+	t.Cleanup(func() { os.RemoveAll(cloneDir) }) //nolint:errcheck // Best-effort cleanup.
+	sh, err := shell.New()
+	if err != nil {
+		t.Fatalf("shell.New() error = %v", err)
+	}
+	if err := sh.Command("git", "clone", repoURL, cloneDir).Run(ctx); err != nil {
+		t.Fatalf("git clone error = %v", err)
+	}
+	if err := sh.Chdir(cloneDir); err != nil {
+		t.Fatalf("Chdir error = %v", err)
+	}
+	if err := sh.Command("git", "fetch", "origin", "other").Run(ctx); err != nil {
+		t.Fatalf("git fetch error = %v", err)
+	}
+
+	// A snapshot whose refs/heads/feature includes the off-branch commit,
+	// disagreeing with canonical (where that commit is only on "other"). This
+	// simulates the fetch-then-force-push race a fresh snapshot may observe.
+	snapshotDir := snapshotOfRepo(t, ctx, sh, repoURL)
+	if err := sh.Command("git", "--git-dir", snapshotDir, "update-ref", "refs/heads/feature", offBranchCommit).Run(ctx); err != nil {
+		t.Fatalf("git update-ref error = %v", err)
+	}
+
+	exec := func(commit string, mirror mirrorReference) error {
+		e := &Executor{
+			shell: sh,
+			ExecutorConfig: ExecutorConfig{
+				GitCommitVerification: GitCommitVerificationStrict,
+				Commit:                commit,
+				Branch:                "feature",
+			},
+		}
+		return e.verifyCommit(ctx, mirror)
+	}
+
+	freshSnapshot := mirrorReference{dir: snapshotDir, isSnapshot: true, branchTipFresh: true}
+
+	t.Run("fresh snapshot positive short-circuits the canonical check", func(t *testing.T) {
+		// Canonical would definitively fail this commit, so a nil error proves
+		// the snapshot answered.
+		if err := exec(offBranchCommit, freshSnapshot); err != nil {
+			t.Errorf("verifyCommit() error = %v, want nil (snapshot short-circuit)", err)
+		}
+	})
+
+	t.Run("stale snapshot is ignored and canonical fails the commit", func(t *testing.T) {
+		stale := freshSnapshot
+		stale.branchTipFresh = false
+		if err := exec(offBranchCommit, stale); !errors.Is(err, ErrCommitVerificationFailed) {
+			t.Errorf("verifyCommit() error = %v, want ErrCommitVerificationFailed (canonical fallback)", err)
+		}
+	})
+
+	t.Run("non-snapshot mirror is ignored and canonical fails the commit", func(t *testing.T) {
+		durable := mirrorReference{dir: snapshotDir, branchTipFresh: true}
+		if err := exec(offBranchCommit, durable); !errors.Is(err, ErrCommitVerificationFailed) {
+			t.Errorf("verifyCommit() error = %v, want ErrCommitVerificationFailed (canonical fallback)", err)
+		}
+	})
+
+	t.Run("inconclusive snapshot falls back to a canonical positive", func(t *testing.T) {
+		// A snapshot without the branch ref cannot answer, so the canonical
+		// check must run and verify the commit.
+		bare := snapshotOfRepo(t, ctx, sh, repoURL)
+		if err := sh.Command("git", "--git-dir", bare, "update-ref", "-d", "refs/heads/feature").Run(ctx); err != nil {
+			t.Fatalf("git update-ref -d error = %v", err)
+		}
+		mirror := mirrorReference{dir: bare, isSnapshot: true, branchTipFresh: true}
+		if err := exec(deepAncestor, mirror); err != nil {
+			t.Errorf("verifyCommit() error = %v, want nil (canonical verifies)", err)
 		}
 	})
 }
