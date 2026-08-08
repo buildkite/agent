@@ -130,6 +130,37 @@ func TestRun(t *testing.T) {
 	}
 }
 
+func TestRunWindowsBatchScriptWithPipedOutput(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("batch scripts require Windows")
+	}
+	t.Parallel()
+
+	dir := filepath.Join(t.TempDir(), "hooks with spaces & parentheses (test)")
+	if err := os.Mkdir(dir, 0o755); err != nil {
+		t.Fatalf("os.Mkdir(%q) = %v", dir, err)
+	}
+	path := filepath.Join(dir, "agent-startup.bat")
+	if err := os.WriteFile(path, []byte("@echo off\r\necho stdout=%BATCH_TEST_VALUE%\r\necho stderr-line 1>&2\r\n"), 0o755); err != nil {
+		t.Fatalf("os.WriteFile(%q) = %v", path, err)
+	}
+
+	out := new(bytes.Buffer)
+	sh := newShellForTest(t, shell.WithStdout(out), shell.WithPTY(false))
+	sh.Env.Set("BATCH_TEST_VALUE", "expanded")
+	script, err := sh.Script(path, "")
+	if err != nil {
+		t.Fatalf("sh.Script(%q, %q) = %v", path, "", err)
+	}
+	if err := script.Run(t.Context(), shell.ShowPrompt(false)); err != nil {
+		t.Fatalf("script.Run() = %v", err)
+	}
+
+	if diff := cmp.Diff(out.String(), "stdout=expanded\r\nstderr-line\r\n"); diff != "" {
+		t.Errorf("batch output diff (-got +want):\n%s", diff)
+	}
+}
+
 func TestRunWithStdin(t *testing.T) {
 	t.Parallel()
 

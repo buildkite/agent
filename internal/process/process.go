@@ -86,19 +86,20 @@ func ParseSignal(sig string) (Signal, error) {
 
 // Configuration for a Process
 type Config struct {
-	PTY               bool
-	Path              string
-	Args              []string
-	Env               []string
-	Stdin             io.Reader
-	Stdout            io.Writer
-	Stderr            io.Writer
-	Dir               string
-	Nice              int // Unix nice value for the child process (0 = default)
-	InterruptSignal   Signal
-	SignalGracePeriod time.Duration
-	Started           chan struct{}
-	Done              chan struct{}
+	PTY                bool
+	Path               string
+	Args               []string
+	WindowsCommandLine string
+	Env                []string
+	Stdin              io.Reader
+	Stdout             io.Writer
+	Stderr             io.Writer
+	Dir                string
+	Nice               int // Unix nice value for the child process (0 = default)
+	InterruptSignal    Signal
+	SignalGracePeriod  time.Duration
+	Started            chan struct{}
+	Done               chan struct{}
 }
 
 // Process is an operating system level process

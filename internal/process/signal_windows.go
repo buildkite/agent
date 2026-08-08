@@ -50,6 +50,7 @@ func (p *Process) setupProcessGroup() {
 	}
 	p.command.SysProcAttr = &windows.SysProcAttr{
 		CreationFlags: windows.CREATE_UNICODE_ENVIRONMENT | windows.CREATE_NEW_PROCESS_GROUP,
+		CmdLine:       p.conf.WindowsCommandLine,
 	}
 	jobHandle, err := newJobObject()
 	if err != nil {
