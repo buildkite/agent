@@ -1,12 +1,30 @@
 package job
 
 import (
+	"os"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/buildkite/agent/v4/internal/shell"
 )
+
+// mirrorsTempDir makes a short temp dir for GitMirrorsPath with best-effort
+// cleanup. Not t.TempDir(): its path embeds this file's long test names, and
+// the deepest snapshot paths (mirrors path + "snapshots" +
+// dirForRepository(repo URL) + a pack file name) then exceed Windows'
+// 260-character MAX_PATH, failing git with a bare exit status 128. Removal is
+// best-effort because on Windows git child processes can hold handles past
+// exit, which t.TempDir()'s strict cleanup would fail on.
+func mirrorsTempDir(t *testing.T) string {
+	t.Helper()
+	dir, err := os.MkdirTemp("", "mirrors-")
+	if err != nil {
+		t.Fatalf("os.MkdirTemp error = %v", err)
+	}
+	t.Cleanup(func() { os.RemoveAll(dir) }) //nolint:errcheck // Best-effort cleanup.
+	return dir
+}
 
 // TestUpdateGitMirrorBranchTipFreshDespiteSameNamedTag exercises the
 // branchTipFresh invariant end to end through getOrUpdateMirror: when the
@@ -46,7 +64,7 @@ func TestUpdateGitMirrorBranchTipFreshDespiteSameNamedTag(t *testing.T) {
 		Commit:                firstTip,
 		Branch:                "release",
 		PullRequest:           "false",
-		GitMirrorsPath:        t.TempDir(),
+		GitMirrorsPath:        mirrorsTempDir(t),
 		GitMirrorsLockTimeout: 30,
 		CleanCheckout:         true,
 		Phases:                []string{"checkout", "command"},
@@ -125,7 +143,7 @@ func TestUpdateGitMirrorNoFreshnessForTagBuilds(t *testing.T) {
 		Branch:                "v1",
 		Tag:                   "v1",
 		PullRequest:           "false",
-		GitMirrorsPath:        t.TempDir(),
+		GitMirrorsPath:        mirrorsTempDir(t),
 		GitMirrorsLockTimeout: 30,
 		CleanCheckout:         true,
 		Phases:                []string{"checkout", "command"},
