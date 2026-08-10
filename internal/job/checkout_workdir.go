@@ -163,7 +163,10 @@ func (e *Executor) prepareCheckoutWorkdir(
 			attempt.outcome = remoteMirrorOutcomeMiss
 			if !shallowClone {
 				// Keep the useful mirror clone. fetchSource will fetch only
-				// the missing immutable commit from canonical.
+				// the missing immutable commit from canonical. Fork PR head
+				// commits always land here: clone's default refspec does not
+				// request refs/pull/*, so they miss even when the mirror has
+				// them.
 				return nil
 			}
 
