@@ -36,6 +36,7 @@ import (
 	"github.com/buildkite/agent/v4/internal/job/hook"
 	"github.com/buildkite/agent/v4/internal/osutil"
 	"github.com/buildkite/agent/v4/internal/process"
+	"github.com/buildkite/agent/v4/internal/redact"
 	"github.com/buildkite/agent/v4/internal/shell"
 	"github.com/buildkite/agent/v4/logger"
 	"github.com/buildkite/agent/v4/metrics"
@@ -1092,6 +1093,10 @@ var AgentStartCommand = &cli.Command{
 
 		if exps := experiments.KnownAndEnabled(ctx); len(exps) > 0 {
 			l.WithFields(logger.StringField("experiments", fmt.Sprintf("%v", exps))).Infof("Experiments are enabled")
+		}
+
+		if cfg.Endpoint != DefaultEndpoint {
+			l.Infof("Connecting to custom endpoint %s", redact.URLCredentials(cfg.Endpoint))
 		}
 
 		if !agentConf.SSHKeyscan {
