@@ -1,6 +1,8 @@
 # Remote Git mirrors
 
-Status: **plan**. Nothing described here is implemented on `main` yet.
+Status: **implemented on `main`**. This document remains the living design
+record; §4 ("ground truth") describes the pre-implementation checkout the
+design was reasoned against.
 
 A *remote Git mirror* is a second, faster URL for the same repository, supplied
 by the Buildkite backend as `BUILDKITE_GIT_REMOTE_MIRROR_URL`. The agent may
@@ -334,7 +336,9 @@ mirror URL is non-empty and https
 && canonical repository still matches the one the mirror was issued for
 && BUILDKITE_COMMIT is a full lowercase object ID for the repository hash format
 && BUILDKITE_BRANCH is non-empty and fits a path component once sanitised (§5.8)
-&& BUILDKITE_REFSPEC == "" && BUILDKITE_TAG == "" && BUILDKITE_PULL_REQUEST == "false"
+&& BUILDKITE_REFSPEC == "" && BUILDKITE_TAG == ""
+&& the build does not use the speculative pull request merge ref
+&& a PR build's BUILDKITE_GIT_FETCH_FLAGS carry no --refmap
 && this is the first checkout attempt
 ```
 
@@ -352,12 +356,32 @@ supports SHA-1 repositories, so the implementation recognises a lowercase
 widens to that repository hash format; the requirement does not change.
 Everything the mirror is asked for is that object ID, and every eligible build
 ends at `git checkout <commit>`, so R8 holds on that clause alone — a tag or PR
-build with a known immutable object ID would be just as safe. The tag, PR and
-refspec clauses are pragmatism: they are close to the conditions `verifyCommit`
-already skips on (not identical — `verifyCommit` also skips an empty branch, and
-treats an empty `BUILDKITE_PULL_REQUEST` as a non-PR build where this predicate
-wants the literal `"false"`), and they avoid depending on provider capabilities
-we do not have yet (§11.2). Relax them only through F3's gate (§11.1).
+build with a known immutable object ID is just as safe. The tag and refspec
+clauses are pragmatism: they are close to the conditions `verifyCommit`
+already skips on, and they avoid depending on provider capabilities we have
+not confirmed (§11.2). Relax them only through F3's gate (§11.1).
+
+Pull request **head** builds are eligible (F3, landed after the provider
+confirmed `refs/pull/*` replication for Q3). The build is pinned to the
+immutable object ID, and with default fetch flags the canonical
+`refs/pull/N/head` fetch exists only to obtain its objects — it writes no
+local ref and `verifyCommit` skips PR builds — so a mirror hit skips that
+fetch, and a miss falls back to it unchanged, retry semantics included. A PR
+build without a known commit (`BUILDKITE_COMMIT=HEAD`) stays ineligible via
+the full-object-ID clause. Two PR shapes stay canonical: merge-ref builds,
+because the merge commit is provider-regenerated and its canonical fetch
+doubles as the merge-conflict fail-fast (`pull-request-merge-ref`), and
+`--refmap` fetch flags, because that fetch then writes durable local refs a
+mirror hit would leave silently stale (`pull-request-refmap`).
+
+Two accepted trade-offs. At the fresh-clone site the mirror interaction is an
+ordinary `git clone`, which never requests `refs/pull/*`, so a fork PR head
+reachable only through the PR ref always misses there and canonical supplies
+the delta over the mirror-served bulk clone. And a persisted
+`remote.origin.fetch` mapping covering `refs/pull/*` (for example via clone
+`--config`) is the config-shaped equivalent of `--refmap`; the agent's own
+clones never produce one, and eligibility does not inspect Git config, so
+such refs can lag behind a mirror hit.
 
 `https` rather than `http(s)`: the credential helper rejects any other protocol
 (`errNotHTTPS` in `clicommand/git_credentials_helper.go`), so an `http` mirror
@@ -1514,6 +1538,11 @@ property remains sound, but a provider that does not replicate `refs/pull/*` or
 tags makes every such build pay a systematic miss.
 
 Gate: Q3 confirms provider replication of the required PR refs and tags.
+
+*Status: landed for pull request head builds* — Cursor Origin confirmed
+`refs/pull/*` replication (Q3, 2026-08). Remaining scope: tag builds (gated on
+tag replication), merge-ref builds, and a post-clone exact-SHA probe at the
+fresh-clone site so fork PR heads can hit a replicated mirror.
 
 **F4 — Agent-side kill switch.** An agent flag such as
 `--no-git-remote-mirrors` would provide a fleet-local incident control.
