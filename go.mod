@@ -1,6 +1,6 @@
 module github.com/buildkite/agent/v4
 
-go 1.26.5
+go 1.25.12
 
 require (
 	buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go v1.36.11-20260709200747-435963d16310.1
@@ -46,7 +46,7 @@ require (
 	github.com/puzpuzpuz/xsync/v2 v2.5.1
 	github.com/qri-io/jsonschema v0.2.1
 	github.com/urfave/cli/v3 v3.10.1
-	github.com/wolfeidau/quickzip v1.0.2
+	github.com/wolfeidau/quickzip v1.0.3
 	go.opentelemetry.io/contrib/propagators/aws v1.44.0
 	go.opentelemetry.io/contrib/propagators/b3 v1.44.0
 	go.opentelemetry.io/contrib/propagators/jaeger v1.44.0

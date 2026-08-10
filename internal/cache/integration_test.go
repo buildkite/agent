@@ -1,6 +1,7 @@
 package cache
 
 import (
+	"archive/zip"
 	"context"
 	"crypto/rand"
 	"fmt"
@@ -8,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 	"testing"
@@ -552,6 +554,393 @@ func TestCacheIntegration_RestoreMissingBlobInvalidates(t *testing.T) {
 	got := mockClient.expireCalls[0]
 	if len(got.CacheKey) != 1 || got.CacheKey[0].Value != "v1-test-key" {
 		t.Errorf("expire targeted cache_key %+v, want single part v1-test-key", got.CacheKey)
+	}
+
+	// A subsequent save must re-upload, proving the entry was invalidated.
+	resaveResult, err := cacheClient.Save(ctx, "test-cache")
+	if err != nil {
+		t.Fatalf("re-Save: %v", err)
+	}
+	if !resaveResult.CacheEntryCreated {
+		t.Error("expected re-save to re-create the invalidated entry")
+	}
+}
+
+// TestCacheIntegration_SaveAndRestoreRegularFile exercises the full client path
+// for a target that is a single regular file (not a directory).
+func TestCacheIntegration_SaveAndRestoreRegularFile(t *testing.T) {
+	ctx := t.Context()
+
+	cacheClient, cacheDir, _ := setupTestCache(t, "local_file")
+
+	// Reconfigure the cache to target a single regular file. cacheDir is a
+	// relative path, so the file is cwd-anchored and this runs cross-platform.
+	file := filepath.Join(cacheDir, "single.txt")
+	if err := os.WriteFile(file, []byte("file-cache-data"), 0o600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	cacheClient.caches[0].TargetPaths = []string{file}
+
+	if _, err := cacheClient.Save(ctx, "test-cache"); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+
+	// Corrupt the file so a successful restore must clean + replace it.
+	if err := os.WriteFile(file, []byte("stale"), 0o600); err != nil {
+		t.Fatalf("WriteFile (stale): %v", err)
+	}
+
+	result, err := cacheClient.Restore(ctx, "test-cache")
+	if err != nil {
+		t.Fatalf("Restore: %v", err)
+	}
+	if !result.CacheRestored {
+		t.Fatal("expected the regular-file cache to be restored")
+	}
+
+	got, err := os.ReadFile(file)
+	if err != nil {
+		t.Fatalf("ReadFile: %v", err)
+	}
+	if string(got) != "file-cache-data" {
+		t.Errorf("restored content = %q, want %q", string(got), "file-cache-data")
+	}
+}
+
+// TestCacheIntegration_SaveAndRestoreSymlinkTarget drives a symlink cache
+// target through the full client path. Restore's cleanup must unlink the
+// symlink (not follow it): it must not recurse into or chmod the referent, and
+// must recreate the symlink. Covers the client cleanup path the archive-only
+// symlink test bypasses.
+func TestCacheIntegration_SaveAndRestoreSymlinkTarget(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("creating a symlink needs privileges on Windows")
+	}
+	ctx := t.Context()
+
+	cacheClient, _, _ := setupTestCache(t, "local_file")
+
+	base := t.TempDir()
+	realDir := filepath.Join(base, "real")
+	if err := os.MkdirAll(realDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(realDir, "keep.txt"), []byte("referent"), 0o600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	link := filepath.Join(base, "link")
+	if err := os.Symlink(realDir, link); err != nil {
+		t.Fatalf("Symlink: %v", err)
+	}
+	cacheClient.caches[0].TargetPaths = []string{link}
+
+	if _, err := cacheClient.Save(ctx, "test-cache"); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+
+	// Repoint the symlink at a different, mode-0700 directory before restore. A
+	// correct restore unlinks the stale symlink and recreates it → realDir,
+	// without recursing into or chmod-ing the stale referent.
+	otherDir := filepath.Join(base, "other")
+	if err := os.MkdirAll(otherDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(otherDir, "untouched.txt"), []byte("stay"), 0o600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	if err := os.Chmod(otherDir, 0o700); err != nil {
+		t.Fatalf("Chmod: %v", err)
+	}
+	if err := os.Remove(link); err != nil {
+		t.Fatalf("Remove: %v", err)
+	}
+	if err := os.Symlink(otherDir, link); err != nil {
+		t.Fatalf("Symlink: %v", err)
+	}
+
+	result, err := cacheClient.Restore(ctx, "test-cache")
+	if err != nil {
+		t.Fatalf("Restore: %v", err)
+	}
+	if !result.CacheRestored {
+		t.Fatal("expected the symlink cache to be restored")
+	}
+
+	// The symlink is recreated pointing at the original referent.
+	if got, err := os.Readlink(link); err != nil {
+		t.Fatalf("symlink should be restored: %v", err)
+	} else if got != realDir {
+		t.Errorf("symlink target = %q, want %q", got, realDir)
+	}
+
+	// The stale referent is untouched — cleanup unlinked the symlink and neither
+	// recursed into it (content intact) nor chmod-ed it (mode still 0700).
+	if content, err := os.ReadFile(filepath.Join(otherDir, "untouched.txt")); err != nil || string(content) != "stay" {
+		t.Errorf("stale referent content = %q (err %v), want %q", content, err, "stay")
+	}
+	if fi, err := os.Stat(otherDir); err != nil {
+		t.Fatalf("Stat otherDir: %v", err)
+	} else if fi.Mode().Perm() != 0o700 {
+		t.Errorf("stale referent mode = %v, want 0700 (cleanup must not chmod a symlink's referent)", fi.Mode().Perm())
+	}
+}
+
+// TestCacheIntegration_RestoreOverlapAfterHomeChange covers a portable anchor
+// converging onto another target at restore: save ["~/cache", homeB/cache] with
+// HOME=homeA (no overlap), then restore with HOME=homeB, where "~/cache"
+// re-resolves to homeB/cache and collides with the pinned target. Restore must
+// detect the overlap on the re-resolved paths and soft-fail to a miss, without
+// cleaning or extracting.
+func TestCacheIntegration_RestoreOverlapAfterHomeChange(t *testing.T) {
+	ctx := t.Context()
+
+	cacheClient, _, _ := setupTestCache(t, "local_file")
+
+	homeA := t.TempDir()
+	homeB := t.TempDir()
+	setHome := func(h string) {
+		t.Setenv("HOME", h)
+		t.Setenv("USERPROFILE", h)
+	}
+
+	// Both targets exist at save time so neither is skipped.
+	if err := os.WriteFile(filepath.Join(mkdir(t, filepath.Join(homeA, "cache")), "x"), []byte("a"), 0o600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	sentinel := filepath.Join(mkdir(t, filepath.Join(homeB, "cache")), "y")
+	if err := os.WriteFile(sentinel, []byte("b"), 0o600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	cacheClient.caches[0].TargetPaths = []string{"~/cache", filepath.Join(homeB, "cache")}
+
+	setHome(homeA) // "~/cache" -> homeA/cache; no overlap with homeB/cache
+	if _, err := cacheClient.Save(ctx, "test-cache"); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+
+	setHome(homeB) // "~/cache" now re-resolves to homeB/cache -> overlaps the pinned target
+	result, err := cacheClient.Restore(ctx, "test-cache")
+	if err != nil {
+		t.Fatalf("Restore with overlapping re-resolved targets should not error: %v", err)
+	}
+	if result.CacheRestored {
+		t.Error("overlapping targets at restore should soft-fail to a miss")
+	}
+
+	// Soft-failed before cleanup, so the target's content is untouched.
+	if content, err := os.ReadFile(sentinel); err != nil || string(content) != "b" {
+		t.Errorf("target should be untouched, content=%q err=%v", content, err)
+	}
+}
+
+// mkdir creates dir (and parents) and returns it, failing the test on error.
+func mkdir(t *testing.T, dir string) string {
+	t.Helper()
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	return dir
+}
+
+// TestCacheIntegration_RestoreUnrecognizedFormatInvalidates covers the clean-break migration path:
+// the entry still exists but points at an archive this agent can't read.
+// Restore must degrade to a cache miss AND invalidate the stale entry,
+// so a subsequent save can re-upload a v2 archive instead of being blocked by CacheEntryPeekExists.
+func TestCacheIntegration_RestoreUnrecognizedFormatInvalidates(t *testing.T) {
+	ctx := t.Context()
+
+	cacheClient, _, storageDir := setupTestCache(t, "local_file")
+	mockClient := cacheClient.api.(*mockAPIClient)
+
+	// Save so the entry is committed and a blob exists.
+	saveResult, err := cacheClient.Save(ctx, "test-cache")
+	if err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+
+	// Overwrite the stored blob (named by its digest; a .attrs.json sidecar sits
+	// alongside it) with a v1-style archive that has no manifest.
+	writeManifestlessArchive(t, filepath.Join(storageDir, saveResult.Archive.Sha256Sum))
+
+	// Restore must not error, must report a miss, and must invalidate the entry.
+	restoreResult, err := cacheClient.Restore(ctx, "test-cache")
+	if err != nil {
+		t.Fatalf("Restore with unrecognized format should not error, got: %v", err)
+	}
+	if restoreResult.CacheRestored {
+		t.Error("unrecognized format should degrade to CacheRestored=false")
+	}
+	if restoreResult.CacheHit {
+		t.Error("unrecognized format should not be a cache hit")
+	}
+	if len(mockClient.expireCalls) != 1 {
+		t.Fatalf("expire calls = %d, want 1", len(mockClient.expireCalls))
+	}
+
+	// A subsequent save must re-upload, proving the entry was invalidated.
+	resaveResult, err := cacheClient.Save(ctx, "test-cache")
+	if err != nil {
+		t.Fatalf("re-Save: %v", err)
+	}
+	if !resaveResult.CacheEntryCreated {
+		t.Error("expected re-save to re-create the invalidated entry")
+	}
+}
+
+// TestCacheIntegration_RestoreCorruptArchiveInvalidates covers a blob that is
+// not a valid archive at all (corrupted/truncated in storage). Like the
+// unrecognized-format case, restore must degrade to a miss and invalidate the
+// entry rather than failing the job.
+func TestCacheIntegration_RestoreCorruptArchiveInvalidates(t *testing.T) {
+	ctx := t.Context()
+
+	cacheClient, _, storageDir := setupTestCache(t, "local_file")
+	mockClient := cacheClient.api.(*mockAPIClient)
+
+	saveResult, err := cacheClient.Save(ctx, "test-cache")
+	if err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+
+	// Corrupt the stored blob so it is no longer a valid zip.
+	if err := os.WriteFile(filepath.Join(storageDir, saveResult.Archive.Sha256Sum), []byte("not a zip file"), 0o600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	restoreResult, err := cacheClient.Restore(ctx, "test-cache")
+	if err != nil {
+		t.Fatalf("Restore with corrupt archive should not error, got: %v", err)
+	}
+	if restoreResult.CacheRestored {
+		t.Error("corrupt archive should degrade to CacheRestored=false")
+	}
+	if restoreResult.CacheHit {
+		t.Error("corrupt archive should not be a cache hit")
+	}
+	if len(mockClient.expireCalls) != 1 {
+		t.Fatalf("expire calls = %d, want 1", len(mockClient.expireCalls))
+	}
+
+	// A subsequent save must re-upload, proving the entry was invalidated.
+	resaveResult, err := cacheClient.Save(ctx, "test-cache")
+	if err != nil {
+		t.Fatalf("re-Save: %v", err)
+	}
+	if !resaveResult.CacheEntryCreated {
+		t.Error("expected re-save to re-create the invalidated entry")
+	}
+}
+
+// writeManifestlessArchive overwrites path with a plain zip that has no v2
+// manifest entry, simulating a v1/foreign archive.
+func writeManifestlessArchive(t *testing.T, path string) {
+	t.Helper()
+
+	f, err := os.Create(path)
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	defer func() { _ = f.Close() }()
+
+	zw := zip.NewWriter(f)
+	w, err := zw.Create("cache/file.txt")
+	if err != nil {
+		t.Fatalf("zip Create: %v", err)
+	}
+	if _, err := w.Write([]byte("legacy")); err != nil {
+		t.Fatalf("Write: %v", err)
+	}
+	if err := zw.Close(); err != nil {
+		t.Fatalf("zip Close: %v", err)
+	}
+}
+
+// TestCacheIntegration_RestorePoisonedBlobIsMiss is the flagship cache
+// poisoning case: a perfectly valid archive planted under another entry's
+// content-addressed name. Extraction would succeed silently if attempted, so
+// the digest check is the only defence. A poisoned blob must be a clean miss:
+// verified before any target folder is touched, never unpacked, existing files
+// left intact, and the build continues. The entry is expired so a subsequent
+// save replaces the bad blob instead of missing until TTL.
+func TestCacheIntegration_RestorePoisonedBlobIsMiss(t *testing.T) {
+	ctx := t.Context()
+
+	cacheClient, cacheDir, storageDir := setupTestCache(t, "local_file")
+	mockClient := cacheClient.api.(*mockAPIClient)
+
+	// Build the poisoned blob: a valid archive of the same target path that
+	// carries a file an attacker wants planted.
+	backdoor := filepath.Join(cacheDir, "backdoor.sh")
+	if err := os.WriteFile(backdoor, []byte("#!/bin/sh\necho pwned\n"), 0o755); err != nil {
+		t.Fatalf("write backdoor: %v", err)
+	}
+	poisonedSave, err := cacheClient.Save(ctx, "test-cache")
+	if err != nil {
+		t.Fatalf("Save poisoned variant: %v", err)
+	}
+	poisonedBlob, err := os.ReadFile(filepath.Join(storageDir, poisonedSave.Archive.Sha256Sum))
+	if err != nil {
+		t.Fatalf("read poisoned blob: %v", err)
+	}
+
+	// Reset to a clean registry and save the legitimate cache.
+	if err := os.Remove(backdoor); err != nil {
+		t.Fatalf("remove backdoor: %v", err)
+	}
+	mockClient.registries["~"].cache = make(map[string]*mockCacheEntry)
+	saveResult, err := cacheClient.Save(ctx, "test-cache")
+	if err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	if !saveResult.CacheEntryCreated {
+		t.Fatal("expected save to create an entry")
+	}
+
+	// Poison the store: keep the legitimate blob's content-addressed name but
+	// swap in the poisoned bytes, so the fingerprint no longer matches the name.
+	blobPath := filepath.Join(storageDir, saveResult.Archive.Sha256Sum)
+	if err := os.WriteFile(blobPath, poisonedBlob, 0o644); err != nil {
+		t.Fatalf("poison blob: %v", err)
+	}
+
+	// A sentinel in the target folder must survive: verification happens before
+	// cleaning, so a mismatch never wipes good existing state.
+	sentinel := filepath.Join(cacheDir, "pre-existing.txt")
+	if err := os.WriteFile(sentinel, []byte("keep me"), 0o644); err != nil {
+		t.Fatalf("write sentinel: %v", err)
+	}
+
+	// Restore must not error and must report a clean miss.
+	restoreResult, err := cacheClient.Restore(ctx, "test-cache")
+	if err != nil {
+		t.Fatalf("Restore with a poisoned blob should not error, got: %v", err)
+	}
+	if restoreResult.CacheRestored {
+		t.Error("digest mismatch should degrade to CacheRestored=false")
+	}
+	if restoreResult.CacheHit {
+		t.Error("digest mismatch should not be a cache hit")
+	}
+
+	// The poisoned archive was never unpacked.
+	if _, err := os.Stat(backdoor); !os.IsNotExist(err) {
+		t.Errorf("poisoned archive must never be extracted; stat backdoor: %v", err)
+	}
+
+	// Existing target files are untouched.
+	if _, err := os.Stat(sentinel); err != nil {
+		t.Errorf("pre-existing target file should be untouched, stat: %v", err)
+	}
+
+	// The unverifiable entry is expired, targeting the resolved entry address.
+	if len(mockClient.expireCalls) != 1 {
+		t.Fatalf("expire calls = %d, want 1", len(mockClient.expireCalls))
+	}
+	expired := mockClient.expireCalls[0]
+	if len(expired.CacheKey) != 1 || expired.CacheKey[0].Value != "v1-test-key" {
+		t.Errorf("expire targeted cache_key %+v, want single part v1-test-key", expired.CacheKey)
 	}
 
 	// A subsequent save must re-upload, proving the entry was invalidated.

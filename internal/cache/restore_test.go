@@ -97,6 +97,22 @@ func TestCleanPath(t *testing.T) {
 		}
 	})
 
+	t.Run("rejects resolved current directory", func(t *testing.T) {
+		// target_paths: ["."] resolves to the absolute cwd before cleanup; the
+		// guard must catch that too, not just the literal ".".
+		cwd, err := os.Getwd()
+		if err != nil {
+			t.Fatalf("os.Getwd: %v", err)
+		}
+		err = cleanPath(t.Context(), cwd)
+		if err == nil {
+			t.Fatal("expected error, got nil")
+		}
+		if !strings.Contains(err.Error(), "refusing to remove") {
+			t.Errorf("error %q should contain %q", err.Error(), "refusing to remove")
+		}
+	})
+
 	t.Run("rejects home directory", func(t *testing.T) {
 		home, err := os.UserHomeDir()
 		if err != nil {
@@ -107,8 +123,68 @@ func TestCleanPath(t *testing.T) {
 		if err == nil {
 			t.Fatal("expected error, got nil")
 		}
-		if !strings.Contains(err.Error(), "refusing to remove home directory") {
-			t.Errorf("error %q should contain %q", err.Error(), "refusing to remove home directory")
+		if !strings.Contains(err.Error(), "refusing to remove") {
+			t.Errorf("error %q should contain %q", err.Error(), "refusing to remove")
+		}
+	})
+
+	t.Run("removes a regular file", func(t *testing.T) {
+		// A file target must be removable; makeTreeWritable's os.OpenRoot only
+		// works on directories, so cleanPath must skip it for files.
+		file := filepath.Join(t.TempDir(), "cache-file")
+		if err := os.WriteFile(file, []byte("x"), 0o600); err != nil {
+			t.Fatalf("WriteFile: %v", err)
+		}
+		if err := cleanPath(t.Context(), file); err != nil {
+			t.Fatalf("cleanPath: %v", err)
+		}
+		if _, err := os.Stat(file); !os.IsNotExist(err) {
+			t.Errorf("file should be removed, stat err = %v", err)
+		}
+	})
+
+	t.Run("removes a final symlink without following it to a protected dir", func(t *testing.T) {
+		if runtime.GOOS == "windows" {
+			t.Skip("symlink creation needs privileges on Windows")
+		}
+		// A final symlink is only unlinked by RemoveAll, so removing it is safe
+		// even when it points at the cwd — the referent must be left intact and
+		// removal must not be refused (nor the referent's tree chmod-ed).
+		cwd, err := os.Getwd()
+		if err != nil {
+			t.Fatalf("os.Getwd: %v", err)
+		}
+		link := filepath.Join(t.TempDir(), "alias")
+		if err := os.Symlink(cwd, link); err != nil {
+			t.Fatalf("Symlink: %v", err)
+		}
+		if err := cleanPath(t.Context(), link); err != nil {
+			t.Fatalf("removing a symlink to cwd should be safe, got: %v", err)
+		}
+		if _, err := os.Lstat(link); !os.IsNotExist(err) {
+			t.Errorf("symlink should be removed, got err=%v", err)
+		}
+		if _, err := os.Stat(cwd); err != nil {
+			t.Errorf("cwd (the referent) must be left intact: %v", err)
+		}
+	})
+
+	t.Run("rejects an ancestor of the working directory", func(t *testing.T) {
+		// A target that contains the cwd (e.g. "/work" while cwd is "/work/job")
+		// must be refused — RemoveAll would recursively delete the cwd too.
+		base := t.TempDir()
+		job := filepath.Join(base, "job")
+		if err := os.MkdirAll(job, 0o755); err != nil {
+			t.Fatalf("MkdirAll: %v", err)
+		}
+		t.Chdir(job) // cwd is now base/job; restored automatically after the test
+
+		err := cleanPath(t.Context(), base)
+		if err == nil {
+			t.Fatal("expected error, got nil")
+		}
+		if !strings.Contains(err.Error(), "refusing to remove") {
+			t.Errorf("error %q should contain %q", err.Error(), "refusing to remove")
 		}
 	})
 
@@ -132,6 +208,42 @@ func TestCleanPath(t *testing.T) {
 	})
 }
 
+// TestPathContains covers the ancestor/equality logic behind cleanPath's
+// protected-directory guard.
+func TestPathContains(t *testing.T) {
+	base := t.TempDir()
+	parent := filepath.Join(base, "work")
+	child := filepath.Join(parent, "job")
+	sibling := filepath.Join(base, "other")
+	for _, d := range []string{child, sibling} {
+		if err := os.MkdirAll(d, 0o755); err != nil {
+			t.Fatalf("MkdirAll: %v", err)
+		}
+	}
+
+	parentInfo, err := os.Stat(parent)
+	if err != nil {
+		t.Fatalf("Stat: %v", err)
+	}
+	childInfo, err := os.Stat(child)
+	if err != nil {
+		t.Fatalf("Stat: %v", err)
+	}
+
+	if !pathContains(parentInfo, parent) {
+		t.Error("a directory should contain itself")
+	}
+	if !pathContains(parentInfo, child) {
+		t.Error("parent should contain its descendant")
+	}
+	if pathContains(parentInfo, sibling) {
+		t.Error("parent should not contain a sibling")
+	}
+	if pathContains(childInfo, parent) {
+		t.Error("child should not contain its parent")
+	}
+}
+
 func TestCleanPathWindowsDriveRoot(t *testing.T) {
 	if runtime.GOOS != "windows" {
 		t.Skip("Windows-specific test")
@@ -143,5 +255,21 @@ func TestCleanPathWindowsDriveRoot(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "refusing to remove drive root") {
 		t.Errorf("error %q should contain %q", err.Error(), "refusing to remove drive root")
+	}
+}
+
+func TestCleanPathWindowsUNCShareRoot(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("UNC share roots are Windows-only")
+	}
+
+	// A UNC share root cleans to the volume name with no trailing separator, so
+	// the drive-root guard misses it — cleanup must still refuse it.
+	err := cleanPath(t.Context(), `\\server\share`)
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), "refusing to remove") {
+		t.Errorf("error %q should contain %q", err.Error(), "refusing to remove")
 	}
 }

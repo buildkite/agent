@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 
@@ -15,6 +14,7 @@ import (
 	"github.com/buildkite/agent/v4/internal/shell"
 	"github.com/buildkite/agent/v4/tracetools"
 	"github.com/buildkite/shellwords"
+	"go.opentelemetry.io/otel/attribute"
 )
 
 func remoteMirrorOnHostRefspec(commit, branch string) string {
@@ -106,7 +106,7 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string, attem
 
 	mirrorCloneLock, err := e.shell.LockFile(cloneCtx, mirrorDir+".clonelock")
 
-	tracetools.AddAttributes(cloneLockSpan, map[string]string{"git.timed_out": strconv.FormatBool(errors.Is(err, context.DeadlineExceeded))})
+	cloneLockSpan.SetAttributes(attribute.Bool("git.timed_out", errors.Is(err, context.DeadlineExceeded)))
 	tracetools.FinishWithError(cloneLockSpan, err)
 
 	if err != nil {
@@ -257,7 +257,7 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string, attem
 
 	mirrorUpdateLock, err := e.shell.LockFile(updateCtx, mirrorDir+".updatelock")
 
-	tracetools.AddAttributes(updateLockSpan, map[string]string{"git.timed_out": strconv.FormatBool(errors.Is(err, context.DeadlineExceeded))})
+	updateLockSpan.SetAttributes(attribute.Bool("git.timed_out", errors.Is(err, context.DeadlineExceeded)))
 	tracetools.FinishWithError(updateLockSpan, err)
 
 	if err != nil {
