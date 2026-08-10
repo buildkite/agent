@@ -15,4 +15,6 @@ else
 	export CI_E2E_TESTS_AGENT_PATH="${PWD}/${ARTIFACT}"
 fi
 
-go tool gotestsum --junitfile junit.xml -- -tags e2e ./internal/e2e/...
+# Each test provisions its own queue, pipeline, and agent. Run isolated tests
+# concurrently, but cap parallelism to avoid overwhelming shared services.
+go tool gotestsum --junitfile junit.xml -- -tags e2e -parallel 4 ./internal/e2e/...

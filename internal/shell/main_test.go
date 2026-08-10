@@ -16,6 +16,13 @@ import (
 var errMissingFilename = errors.New("missing file name")
 
 func TestMain(m *testing.M) {
+	if os.Getenv("TEST_MAIN_CONTEXT_CANCEL_READY") == "1" {
+		fmt.Println("ready")
+		for {
+			time.Sleep(time.Hour)
+		}
+	}
+
 	// leakStdoutGrandchild must be checked before leakStdout: the grandchild
 	// inherits the parent's environment (which still carries the leak-stdout
 	// marker), so keying the grandchild branch first prevents infinite respawn.

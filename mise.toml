@@ -1,5 +1,5 @@
 [tools]
-go = "1.26.5"
+go = "1.25.12"
 golangci-lint = "2.9.0"
 ruby = "3.4.9"
 

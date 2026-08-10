@@ -9,6 +9,8 @@ import (
 )
 
 func TestPluginE2E(t *testing.T) {
+	t.Parallel()
+
 	ctx := t.Context()
 	tc := newTestCase(t, "repeated_plugin.yaml")
 

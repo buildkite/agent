@@ -21,6 +21,8 @@ import (
 // derivation, and the slug is lower(t.Name() + "-" + jobID)). The trust
 // policy allows "testcache*" to cover this and future cache test variants.
 func TestCacheBasicSaveRestore(t *testing.T) {
+	t.Parallel()
+
 	ctx := t.Context()
 
 	tc := newTestCase(t, "cache_save_restore.yaml")
@@ -38,6 +40,8 @@ func TestCacheBasicSaveRestore(t *testing.T) {
 // The restore step deletes the targets before restoring so the assertions
 // prove the cache, not leftover state from the save step.
 func TestCacheFilesystemIntegrity(t *testing.T) {
+	t.Parallel()
+
 	ctx := t.Context()
 
 	tc := newTestCase(t, "cache_filesystem_integrity.yaml")
@@ -57,6 +61,8 @@ func TestCacheFilesystemIntegrity(t *testing.T) {
 // restores, while the cache without fallback_limit treats the variant mismatch
 // as a hard miss.
 func TestCacheKeyFallback(t *testing.T) {
+	t.Parallel()
+
 	ctx := t.Context()
 
 	tc := newTestCase(t, "cache_fallback.yaml")
@@ -74,6 +80,8 @@ func TestCacheKeyFallback(t *testing.T) {
 // and invalidates the stale entry, so a subsequent save re-uploads and a final
 // restore hits. The fixture nukes the blob from S3 between save and restore.
 func TestCacheMissingBlobReupload(t *testing.T) {
+	t.Parallel()
+
 	ctx := t.Context()
 
 	tc := newTestCase(t, "cache_missing_blob_reupload.yaml")
