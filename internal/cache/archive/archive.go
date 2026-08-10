@@ -3,12 +3,8 @@ package archive
 import (
 	"crypto/sha256"
 	"encoding/hex"
-	"fmt"
 	"hash"
 	"io"
-	"os"
-	"path/filepath"
-	"strings"
 	"time"
 )
 
@@ -25,35 +21,6 @@ type ArchiveInfo struct {
 	WrittenBytes   int64
 	WrittenEntries int64
 	Duration       time.Duration
-}
-
-// isUnderHome checks if the given path is under the user's home directory.
-// It first gets the absolute path of the given path, then gets the user's
-// home directory, and finally checks if the absolute path starts with the
-// home directory path.
-func isUnderHome(path string) (bool, error) {
-	if path == "" {
-		return false, fmt.Errorf("path is empty")
-	}
-
-	// Get absolute path
-	absPath, err := filepath.Abs(path)
-	if err != nil {
-		return false, fmt.Errorf("failed to get absolute path: %w", err)
-	}
-
-	// Get user's home directory
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		return false, fmt.Errorf("failed to get home directory: %w", err)
-	}
-
-	// Clean both paths to normalize them
-	cleanPath := filepath.Clean(absPath)
-	cleanHome := filepath.Clean(homeDir)
-
-	// Check if the path starts with home directory
-	return strings.HasPrefix(cleanPath, cleanHome), nil
 }
 
 type ChecksumSHA256 struct {
