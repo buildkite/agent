@@ -32,7 +32,7 @@ func TestFetchSourceExistingCheckoutRemoteMirrorHitSkipsCanonical(t *testing.T) 
 	e, attempt := newExistingCheckoutRemoteMirrorExecutor(t, checkout, canonical.RepoURL("canonical"), mirror.RepoURL("mirror"), commit)
 	canonical.Close()
 
-	if err := e.fetchSource(t.Context(), false, &attempt); err != nil {
+	if err := e.fetchSource(t.Context(), false, false, &attempt); err != nil {
 		t.Fatalf("fetchSource() error = %v", err)
 	}
 	if attempt.outcome != remoteMirrorOutcomeHit {
@@ -57,7 +57,7 @@ func TestFetchSourceExistingCheckoutRemoteMirrorMissLeavesStateUntouchedBeforeCa
 	worktreeBefore := gitOutputForRemoteCheckoutTest(t, checkout, "status", "--porcelain=v1", "--untracked-files=all")
 	e, attempt := newExistingCheckoutRemoteMirrorExecutor(t, checkout, canonical.RepoURL("canonical"), mirror.RepoURL("mirror"), commit)
 
-	if err := e.fetchSource(t.Context(), false, &attempt); err != nil {
+	if err := e.fetchSource(t.Context(), false, false, &attempt); err != nil {
 		t.Fatalf("fetchSource() error = %v", err)
 	}
 	if attempt.outcome != remoteMirrorOutcomeMiss {
@@ -96,7 +96,7 @@ func TestFetchSourceExistingCheckoutFilteredLagMissRetargetsPromisor(t *testing.
 	}
 
 	e, attempt := newExistingCheckoutRemoteMirrorExecutor(t, checkout, canonical.RepoURL("canonical"), mirror.RepoURL("mirror"), commit)
-	if err := e.fetchSource(t.Context(), true, &attempt); err != nil {
+	if err := e.fetchSource(t.Context(), true, false, &attempt); err != nil {
 		t.Fatalf("fetchSource() error = %v", err)
 	}
 	if attempt.outcome != remoteMirrorOutcomeMiss {
@@ -181,7 +181,7 @@ func TestFetchSourceRepairsPreexistingMirrorPromisorOnMiss(t *testing.T) {
 	)
 	e, attempt := newExistingCheckoutRemoteMirrorExecutor(t, checkout, canonical.RepoURL("canonical"), mirrorURL, commit)
 
-	if err := e.fetchSource(t.Context(), true, &attempt); err != nil {
+	if err := e.fetchSource(t.Context(), true, false, &attempt); err != nil {
 		t.Fatalf("fetchSource() error = %v", err)
 	}
 	assertGitConfigForRemoteMirrorTest(t, checkout, "remote.origin.promisor", "true")
@@ -214,7 +214,7 @@ func TestFetchSourceMarkerFailureFallsBackToCanonical(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = os.Remove(configLock) })
 
-	if err := e.fetchSource(t.Context(), false, &attempt); err != nil {
+	if err := e.fetchSource(t.Context(), false, false, &attempt); err != nil {
 		t.Fatalf("fetchSource() error = %v", err)
 	}
 	if attempt.outcome != remoteMirrorOutcomeError {
@@ -242,7 +242,7 @@ func TestFetchSourceLeavesUnmarkedUserPromisorUntouched(t *testing.T) {
 	)
 	e.GitSkipFetchExistingCommits = true
 
-	if err := e.fetchSource(t.Context(), false, nil); err != nil {
+	if err := e.fetchSource(t.Context(), false, false, nil); err != nil {
 		t.Fatalf("fetchSource() error = %v", err)
 	}
 	assertGitConfigForRemoteMirrorTest(t, checkout, "remote."+userURL+".promisor", "true")
@@ -269,7 +269,7 @@ func TestFetchSourceLeavesSameURLUnmarkedUserPromisorUntouched(t *testing.T) {
 		commit,
 	)
 
-	if err := e.fetchSource(t.Context(), false, &attempt); err != nil {
+	if err := e.fetchSource(t.Context(), false, false, &attempt); err != nil {
 		t.Fatalf("fetchSource() error = %v", err)
 	}
 	assertGitConfigForRemoteMirrorTest(t, checkout, "remote."+mirrorURL+".promisor", "true")
@@ -486,7 +486,7 @@ func TestFetchSourceExistingCheckoutRetargetsPromisorAndMaterialisesFromCanonica
 	}
 
 	e, attempt := newExistingCheckoutRemoteMirrorExecutor(t, checkout, canonical.RepoURL("canonical"), mirror.RepoURL("mirror"), commit)
-	if err := e.fetchSource(t.Context(), true, &attempt); err != nil {
+	if err := e.fetchSource(t.Context(), true, false, &attempt); err != nil {
 		t.Fatalf("fetchSource() error = %v", err)
 	}
 	if attempt.outcome != remoteMirrorOutcomeHit {
@@ -529,7 +529,7 @@ func TestFetchSourceExistingPartialCheckoutInheritsOriginFilter(t *testing.T) {
 	}
 
 	e, attempt := newExistingCheckoutRemoteMirrorExecutor(t, checkout, canonical.RepoURL("canonical"), mirror.RepoURL("mirror"), commit)
-	if err := e.fetchSource(t.Context(), false, &attempt); err != nil {
+	if err := e.fetchSource(t.Context(), false, false, &attempt); err != nil {
 		t.Fatalf("fetchSource() error = %v", err)
 	}
 	if attempt.outcome != remoteMirrorOutcomeHit {
@@ -571,7 +571,7 @@ func TestFetchSourceExistingCheckoutCancellationDoesNotFallback(t *testing.T) {
 		}
 	}()
 
-	err = e.fetchSource(ctx, true, &attempt)
+	err = e.fetchSource(ctx, true, false, &attempt)
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("fetchSource() error = %v, want context.Canceled", err)
 	}
@@ -694,7 +694,7 @@ func TestFetchSourceExistingCheckoutMirrorFailureFallsBack(t *testing.T) {
 				commit,
 			)
 
-			if err := e.fetchSource(t.Context(), true, &attempt); err != nil {
+			if err := e.fetchSource(t.Context(), true, false, &attempt); err != nil {
 				t.Fatalf("fetchSource() error = %v", err)
 			}
 			if attempt.outcome != tc.wantOutcome {
