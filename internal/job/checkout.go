@@ -445,7 +445,7 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context, previousAttempts in
 	}
 
 	if err := e.traceOp(ctx, "git.verify_commit", func(ctx context.Context) error {
-		return e.verifyCommit(ctx)
+		return e.verifyCommit(ctx, mirror)
 	}); err != nil {
 		return err
 	}

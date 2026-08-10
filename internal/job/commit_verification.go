@@ -244,9 +244,72 @@ func stripRefSuppressingFetchFlags(flags []string) []string {
 	return out
 }
 
+// verifyCommitAgainstSnapshot attempts the branch-ancestry check against the
+// per-job mirror snapshot instead of fetching the branch tip from the
+// canonical repository again. It returns true only on a definitive positive:
+// the snapshot has refs/heads/<branch> and the build commit is reachable from
+// it. Every other outcome (missing ref, missing objects, command failure,
+// negative ancestry) returns false so the caller falls back to canonical
+// verification. A local negative is never treated as a verification failure,
+// because it is only trustworthy when the check is set up perfectly; the
+// canonical check remains the authority for failing a job.
+//
+// Callers must only use this when the snapshot's refs/heads/<branch> was
+// synced from the canonical repository during this job (mirrorReference.
+// branchTipFresh). A positive is then a canonical observation made earlier in
+// this same checkout — before mirror maintenance, snapshotting, and the source
+// fetch — rather than at the verification probe itself. A force-push landing
+// inside that window passes here where a fresh canonical fetch would fail;
+// that is the same class of check-then-use window the fetch-based check
+// already has between its fetch and the job actually using the commit, just
+// slightly wider. Without that freshness guarantee (mirror
+// update skipped because the commit was already present, refs populated from
+// a remote mirror, --git-mirrors-skip-update) a stale tip could vouch for a
+// commit that has since been force-pushed off the branch, so those paths fall
+// back to the canonical check.
+//
+// Both commands run against the snapshot itself (--git-dir) rather than the
+// checkout: the snapshot is immutable for the life of the job and holds both
+// the branch tip and the build commit, and the checkout's
+// refs/remotes/origin/<branch> may have been pinned to the build commit
+// itself (syncOriginBranchRef), which would make an ancestry check against it
+// vacuously true.
+func (e *Executor) verifyCommitAgainstSnapshot(ctx context.Context, snapshotDir string) bool {
+	ref := "refs/heads/" + e.Branch
+	if !gitCheckRefFormat(ref) {
+		return false
+	}
+	// ^{commit} both dereferences and type-checks: rev-parse fails unless the
+	// ref resolves to a commit.
+	tip, err := e.shell.Command(
+		"git", "--git-dir", snapshotDir,
+		"rev-parse", "--verify", "--quiet", ref+"^{commit}",
+	).RunAndCaptureStdout(ctx, shell.ShowStderr(false))
+	if err != nil {
+		return false
+	}
+	tip = strings.TrimSpace(tip)
+
+	// merge-base --is-ancestor exit 0 is definitive even on unusual
+	// topologies; anything else falls back to canonical verification. The --
+	// keeps an externally controlled e.Commit from being parsed as an option.
+	if err := e.shell.Command(
+		"git", "--git-dir", snapshotDir,
+		"merge-base", "--is-ancestor", "--", e.Commit, tip,
+	).Run(ctx, shell.ShowStderr(false)); err != nil {
+		return false
+	}
+	e.shell.Commentf("Verified commit %q is on branch %q against the mirror snapshot", e.Commit, e.Branch)
+	return true
+}
+
 // verifyCommit ensures that the commit we are asked to build exists and is
-// reachable on the branch we are given.
-func (e *Executor) verifyCommit(ctx context.Context) error {
+// reachable on the branch we are given. When this job's mirror update synced
+// the branch tip from the canonical repository into a per-job snapshot, the
+// ancestry check runs against the snapshot first (no network); any
+// inconclusive or negative local result falls back to the canonical
+// fetch-based check.
+func (e *Executor) verifyCommit(ctx context.Context, mirror mirrorReference) error {
 	switch e.GitCommitVerification {
 	case GitCommitVerificationOff:
 		e.shell.Commentf("Skipping commit verification: mode is off")
@@ -293,6 +356,13 @@ func (e *Executor) verifyCommit(ctx context.Context) error {
 	// making ancestry verification unreliable
 	if e.RefSpec != "" {
 		e.shell.Commentf("Skipping commit verification: custom refspec is set (%s)", e.RefSpec)
+		return nil
+	}
+
+	// A snapshot whose branch tip was synced from canonical during this job
+	// can answer the same question locally. Only a definitive positive counts;
+	// anything else falls through to the canonical fetch-based check.
+	if mirror.isSnapshot && mirror.branchTipFresh && e.verifyCommitAgainstSnapshot(ctx, mirror.dir) {
 		return nil
 	}
 
