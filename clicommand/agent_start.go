@@ -1257,8 +1257,11 @@ var AgentStartCommand = &cli.Command{
 			default:
 				return fmt.Errorf("unknown spawn-with-priority value %s", cfg.SpawnWithPriority)
 			}
-			l.Infof("Assigning priority %s for agent %d", priority, index)
-			registerReq.Priority = priority
+
+			if priority != "" {
+				l.Debugf("Assigning priority %s for agent %d", priority, index)
+				registerReq.Priority = priority
+			}
 
 			regReqs = append(regReqs, registerReq)
 		}
