@@ -296,8 +296,8 @@ var (
 
 	GitMirrorCheckoutModeFlag = &cli.StringFlag{
 		Name:    "git-mirror-checkout-mode",
-		Value:   "reference",
-		Usage:   fmt.Sprintf("Changes how clones of a mirror are made; available modes are %v. In ′dissociate′ mode, clones from a mirror uses the git clone ′--dissociate′ flag, which copies underlying objects from the mirror, making the clone robust to changes in the mirror such as garbage collection, at the expense of additional disk usage and setup time. ′reference′ mode does not pass ′--dissociate′, which causes the clone to directly use objects from the mirror, which is more fragile and can cause the clone to break under entirely normal operation of the mirror, but is slightly faster to clone and uses less disk space.", mirrorCheckoutModes),
+		Value:   "dissociate",
+		Usage:   fmt.Sprintf("Changes how clones of a mirror are made; available modes are %v. In ′dissociate′ mode (the default), clones from a mirror use the git clone ′--dissociate′ flag, which copies underlying objects from the mirror, making the clone robust to changes in the mirror such as garbage collection, at the expense of additional disk usage and setup time. ′reference′ mode does not pass ′--dissociate′, which causes the clone to depend on the mirror's object store for its whole lifetime; it is faster to clone and uses less disk space, but is only supported when you guarantee that the mirror's object store is immutable (never garbage collected or repacked) and outlives every checkout that references it. Under normal mirror operation, ′reference′ clones can be corrupted. Clean checkouts derive from an immutable per-job mirror snapshot instead, which is unaffected by this setting.", mirrorCheckoutModes),
 		Sources: cli.EnvVars("BUILDKITE_GIT_MIRROR_CHECKOUT_MODE"),
 	}
 

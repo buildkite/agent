@@ -244,6 +244,11 @@ func TestPrepareCheckoutWorkdirIncompatibleFlagsUseSnapshotAsReferenceOnly(t *te
 	if got, want := gitOutputForMirrorTest(t, filepath.Join(e.shell.Getwd(), ".git"), "config", "--get", "remote.origin.url"), e.Repository; got != want {
 		t.Errorf("remote.origin.url = %q, want canonical %q", got, want)
 	}
+	// The snapshot is deleted at the end of the job, so a reference to it must
+	// always be dissociated, regardless of the checkout mode.
+	if osutil.FileExists(filepath.Join(e.shell.Getwd(), ".git", "objects", "info", "alternates")) {
+		t.Error("fallback clone retains an alternate into the per-job snapshot")
+	}
 }
 
 func TestCloneFlagsAllowSnapshotDerive(t *testing.T) {

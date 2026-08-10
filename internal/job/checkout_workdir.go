@@ -49,29 +49,36 @@ func (e *Executor) prepareCheckoutWorkdir(
 
 	existingGitDir := filepath.Join(e.shell.Getwd(), ".git")
 	if osutil.FileExists(existingGitDir) {
-		if _, err := e.updateRemoteURL(ctx, "", e.Repository); err != nil {
+		if err := e.updateRemoteURL(ctx, "", e.Repository); err != nil {
 			return false, fmt.Errorf("setting origin: %w", err)
 		}
 
-		if mirror.dir == "" && e.GitMirrorsPath != "" {
+		switch {
+		case mirror.dir == "" && e.GitMirrorsPath != "":
 			// A bypassed mirror must not remain reachable through a stale alternate.
 			if err := e.traceOp(ctx, "git.dissociate", func(ctx context.Context) error {
 				return e.dissociateIfNeeded(ctx, existingGitDir)
 			}); err != nil {
 				return false, fmt.Errorf("dissociating bypassed mirror: %w", err)
 			}
-		} else if mirror.dir != "" {
-			switch e.GitMirrorCheckoutMode {
-			case "dissociate":
-				if err := e.traceOp(ctx, "git.dissociate", func(ctx context.Context) error {
-					return e.dissociateIfNeeded(ctx, existingGitDir)
-				}); err != nil {
-					return false, fmt.Errorf("dissociating existing reference clone: %w", err)
-				}
-			case "reference":
-				if err := e.reassociateIfNeeded(ctx, existingGitDir, mirror.dir); err != nil {
-					return false, fmt.Errorf("reassociating existing clone: %w", err)
-				}
+
+		case mirror.dir != "" && e.GitMirrorCheckoutMode == "dissociate":
+			// Convert a legacy reference clone into a self-owning checkout, so
+			// it no longer breaks when the mirror garbage-collects objects it
+			// depends on (#2208).
+			if err := e.traceOp(ctx, "git.dissociate", func(ctx context.Context) error {
+				return e.dissociateIfNeeded(ctx, existingGitDir)
+			}); err != nil {
+				return false, fmt.Errorf("dissociating existing reference clone: %w", err)
+			}
+
+		case mirror.dir != "" && e.GitMirrorCheckoutMode == "reference" && !mirror.isSnapshot:
+			// Explicit reference mode: repair a missing alternates file so the
+			// checkout keeps borrowing objects from the durable mirror. Never
+			// point an existing checkout at a snapshot: snapshots are deleted
+			// at the end of the job, but this checkout outlives it.
+			if err := e.reassociateIfNeeded(ctx, existingGitDir, mirror.dir); err != nil {
+				return false, fmt.Errorf("reassociating existing clone: %w", err)
 			}
 		}
 		return false, nil
@@ -81,7 +88,7 @@ func (e *Executor) prepareCheckoutWorkdir(
 
 	if mirror.dir != "" && !deriveFromSnapshot {
 		gitCloneFlags = append(gitCloneFlags, "--reference", mirror.dir)
-		if e.GitMirrorCheckoutMode == "dissociate" {
+		if e.mirrorReferenceNeedsDissociate(mirror) {
 			gitCloneFlags = append(gitCloneFlags, "--dissociate")
 		}
 	}
@@ -260,9 +267,6 @@ func (e *Executor) deriveCheckoutFromSnapshot(ctx context.Context, snapshotDir s
 	// git checkout of the build's target commit, instead of first
 	// materializing the snapshot's HEAD.
 	flags = append(flags, "--no-checkout", "--no-local", "--reference", snapshotDir)
-	if e.GitMirrorCheckoutMode == "dissociate" {
-		flags = append(flags, "--dissociate")
-	}
 
 	err := gitClone(ctx, e.shell, nil, flags, snapshotDir, ".")
 	if err == nil {
@@ -332,6 +336,20 @@ var snapshotDeriveIncompatibleCloneFlags = []string{
 	"--mi", // --mirror
 	"--ba", // --bare
 	"--bu", // --bundle-uri: bootstraps objects from elsewhere
+}
+
+// mirrorReferenceNeedsDissociate reports whether a fresh clone that passes
+// --reference mirror.dir must also pass --dissociate. Dissociating copies the
+// borrowed objects into the checkout, making it self-owning.
+//
+// In "dissociate" mode that is simply the configured behavior. Independent of
+// the mode, a reference to a per-job snapshot must always be dissociated:
+// the snapshot is deleted at the end of the job, and this path is only
+// reached when the clone flags were incompatible with deriving from the
+// snapshot — including flags like --separate-git-dir, which can make the git
+// dir outlive the checkout directory's clean-checkout removal.
+func (e *Executor) mirrorReferenceNeedsDissociate(mirror mirrorReference) bool {
+	return mirror.isSnapshot || e.GitMirrorCheckoutMode == "dissociate"
 }
 
 // cloneFlagsAllowSnapshotDerive reports whether the user-supplied clone flags
