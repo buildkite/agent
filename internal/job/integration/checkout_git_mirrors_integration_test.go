@@ -41,7 +41,7 @@ func TestCheckingOutGitHubPullRequests_WithGitMirrors(t *testing.T) {
 	// But assert which ones are called
 	git.ExpectAll([][]any{
 		{"clone", "--mirror", "--bare", "--", tester.Repo.Path, matchSubDir(tester.GitMirrorsDir)},
-		{"clone", "-v", "-c", "checkout.workers=0", "--reference", matchSubDir(tester.GitMirrorsDir), "--", tester.Repo.Path, "."},
+		{"clone", "-v", "-c", fmt.Sprintf("checkout.workers=%d", runtime.GOMAXPROCS(0)), "--reference", matchSubDir(tester.GitMirrorsDir), "--", tester.Repo.Path, "."},
 		{"clean", "-ffxdq"},
 		{"fetch", "-v", "--prune", "--", "origin", "refs/pull/123/head"},
 		{"rev-parse", "FETCH_HEAD"},
@@ -840,7 +840,7 @@ func TestCheckingOutWithCustomRefspec_WithGitMirrors(t *testing.T) {
 	// With the fix: the mirror should fetch the custom refspec instead of the branch
 	git.ExpectAll([][]any{
 		{"clone", "--mirror", "--bare", "--", tester.Repo.Path, matchSubDir(tester.GitMirrorsDir)},
-		{"clone", "-v", "-c", "checkout.workers=0", "--reference", matchSubDir(tester.GitMirrorsDir), "--", tester.Repo.Path, "."},
+		{"clone", "-v", "-c", fmt.Sprintf("checkout.workers=%d", runtime.GOMAXPROCS(0)), "--reference", matchSubDir(tester.GitMirrorsDir), "--", tester.Repo.Path, "."},
 		{"clean", "-ffxdq"},
 		{"fetch", "-v", "--prune", "--", "origin", customRef}, // Mirror fetches custom refspec (correct!)
 		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},

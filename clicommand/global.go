@@ -6,6 +6,7 @@ import (
 	"iter"
 	"os"
 	"reflect"
+	"runtime"
 	"strconv"
 	"time"
 
@@ -234,7 +235,7 @@ var (
 
 	GitCloneFlagsFlag = &cli.StringFlag{
 		Name:    "git-clone-flags",
-		Value:   "-v -c checkout.workers=0",
+		Value:   fmt.Sprintf("-v -c checkout.workers=%d", runtime.GOMAXPROCS(0)),
 		Usage:   "Flags to pass to \"git clone\" command",
 		Sources: cli.EnvVars("BUILDKITE_GIT_CLONE_FLAGS"),
 	}

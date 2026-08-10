@@ -94,6 +94,7 @@ func NewExecutorTester(ctx context.Context) (*ExecutorTester, error) {
 		Repo: repo,
 		Env: []string{
 			"HOME=" + homeDir,
+			fmt.Sprintf("GOMAXPROCS=%d", runtime.GOMAXPROCS(0)),
 			"BUILDKITE_BIN_PATH=" + pathDir,
 			"BUILDKITE_BUILD_PATH=" + buildDir,
 			"BUILDKITE_HOOKS_PATH=" + hooksDir,
