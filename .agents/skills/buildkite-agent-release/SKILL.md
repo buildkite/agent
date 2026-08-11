@@ -1,6 +1,6 @@
 ---
 name: buildkite-agent-release
-description: Prepare for a Buildkite Agent Release.
+description: Prepare for a Buildkite Agent Release (v4 from main, or v3 from the v3 branch).
 ---
 
 # Buildkite Agent Release
@@ -12,46 +12,77 @@ Use this skill when you need to:
 
 ## Instructions
 
-### 1. Double check the current commit is up to date with latest in main branch.
+### 1. Ask user which release line this is
 
-### 2. Ask user to decide if this is a minor version bump or patch version bump.
+The repo has two active release lines:
 
-Find the latest Buildkite Agent version using `gh`: `gh release view --repo buildkite/agent --json tagName,publishedAt`
+* **v4** — released from `main`. Currently pre-releases (e.g. `4.0.0-beta.15`).
+* **v3** — released from the `v3` branch (e.g. `3.136.4`).
 
-Ask user to decide whether it's a minor version bump or patch version bump.
+Ask the user to pick v4 or v3 before doing anything else. The chosen line
+determines the base branch for everything below: `main` for v4, `v3` for v3.
 
-### 3. Update the agent version file
+### 2. Double check the current commit is up to date with the release branch
 
-Edit the `version/VERSION` to update the value to the new version number. Use the bare semver (e.g. `3.75.0`), not a `v`-prefixed tag (e.g. not `v3.75.0`).
+The current commit should be up to date with the latest `origin/main` (v4) or
+`origin/v3` (v3).
 
-### 4. Preview the auto-generated release notes
+### 3. Determine the new version number
 
-Generate the same notes GitHub will publish at release time, so they can be reviewed in the PR description:
+Find the latest version for the chosen line. Don't use `gh release view` on its
+own — it returns the latest *stable* release, which hides v4 pre-releases:
+
+```bash
+gh release list --repo buildkite/agent --limit 20
+```
+
+Then ask the user to decide the new version:
+
+* **v4 (while in beta):** usually the next beta, e.g. `4.0.0-beta.14` → `4.0.0-beta.15`.
+* **v3:** ask whether it's a minor or patch bump.
+
+### 4. Update the agent version file
+
+Edit the `version/VERSION` to update the value to the new version number. Use the bare semver (e.g. `3.136.4` or `4.0.0-beta.15`), not a `v`-prefixed tag.
+
+### 5. Preview the auto-generated release notes
+
+Generate the same notes GitHub will publish at release time, so they can be reviewed in the PR description. Set `target_commitish` to the release branch (`main` for v4, `v3` for v3):
 
 ```bash
 mkdir -p tmp
 gh api -X POST repos/buildkite/agent/releases/generate-notes \
-  -f tag_name=v3.75.0 \
-  -f target_commitish=main \
+  -f tag_name=v3.136.4 \
+  -f target_commitish=v3 \
   --jq .body > tmp/release-notes.md
 ```
 
-This is a read-only API call — it does not create a release or tag. GitHub auto-detects the previous stable release and applies the categorisation from [.github/release.yml](../../../.github/release.yml). The `tmp/` directory is gitignored, so the file won't be committed.
+This is a read-only API call — it does not create a release or tag. GitHub auto-detects the previous release and applies the categorisation from [.github/release.yml](../../../.github/release.yml). The `tmp/` directory is gitignored, so the file won't be committed.
+
+GitHub's auto-detection compares against the previous *stable* release, which is wrong for v4 betas (it would diff against the latest v3.x). For v4, pass the previous tag explicitly:
+
+```bash
+gh api -X POST repos/buildkite/agent/releases/generate-notes \
+  -f tag_name=v4.0.0-beta.15 \
+  -f target_commitish=main \
+  -f previous_tag_name=v4.0.0-beta.14 \
+  --jq .body > tmp/release-notes.md
+```
 
 Inspect `tmp/release-notes.md`. If any PRs are mis-categorised (e.g. landed under 🏠 Internal because they had no labels), fix the labels on those PRs and re-run the command.
 
-### 5. Create the release PR
+### 6. Create the release PR
 
-* Create a new branch for the release (e.g. `release/v3.75.0`).
+* Create a new branch for the release (e.g. `release/v3.136.4` or `release/v4.0.0-beta.15`), based on the release branch.
 * Commit the `version/VERSION` change.
-* Push the branch and open a PR using `gh pr create` against `main`:
-    * Title: `release: v3.75.0` (matching the convention from previous release PRs).
+* Push the branch and open a PR using `gh pr create` against the release branch (`--base main` for v4, `--base v3` for v3):
+    * Title: `release: v3.136.4` (matching the convention from previous release PRs).
     * Body: contents of `tmp/release-notes.md` from the previous step.
     * Label: `release` — required so the PR-labels workflow passes, and so the release PR itself is excluded from its own auto-generated notes (configured in [.github/release.yml](../../../.github/release.yml)).
-    * Example: `gh pr create --title "release: v3.75.0" --body-file tmp/release-notes.md --label release`.
+    * Example: `gh pr create --base v3 --title "release: v3.136.4" --body-file tmp/release-notes.md --label release`.
 
 The PR body is for human review only; the actual release notes are regenerated by `gh release create --generate-notes` in [.buildkite/steps/github-release.sh](../../../.buildkite/steps/github-release.sh) when the release pipeline runs, so they will reflect any label fixes made between PR creation and release.
 
-### 6. Done
+### 7. Done
 
 * No manual GitHub release editing is required, but the user may want to review the auto-generated notes after the release publishes.
