@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/buildkite/agent/v4/version"
+	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploggrpc"
 	"go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploghttp"
 	otellog "go.opentelemetry.io/otel/log"
@@ -37,7 +38,7 @@ type otlpJobLogger struct {
 	log      otellog.Logger
 	provider *sdklog.LoggerProvider
 
-	baseAttrs []otellog.KeyValue
+	baseAttrs []attribute.KeyValue
 
 	// mu guards the current emit context.
 	mu sync.Mutex
@@ -106,7 +107,7 @@ func newOTLPJobLogger(ctx context.Context, e *Executor) (*otlpJobLogger, error) 
 // parts. The span context in ctx (the root job span, when tracing is enabled)
 // becomes the base emit context that records fall back to outside any
 // setSpanContext boundary.
-func newOTLPJobLoggerWithLogger(ctx context.Context, log otellog.Logger, provider *sdklog.LoggerProvider, baseAttrs []otellog.KeyValue) *otlpJobLogger {
+func newOTLPJobLoggerWithLogger(ctx context.Context, log otellog.Logger, provider *sdklog.LoggerProvider, baseAttrs []attribute.KeyValue) *otlpJobLogger {
 	l := &otlpJobLogger{
 		log:       log,
 		provider:  provider,
@@ -141,7 +142,7 @@ func (l *otlpJobLogger) setSpanContext(ctx context.Context) func() {
 }
 
 // emitContext returns the current emit context and attributes.
-func (l *otlpJobLogger) emitContext() (context.Context, []otellog.KeyValue) {
+func (l *otlpJobLogger) emitContext() (context.Context, []attribute.KeyValue) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	return l.ctx, l.baseAttrs
@@ -264,12 +265,12 @@ func (e *otlpLineEmitter) emit(line string) {
 	record.SetObservedTimestamp(now)
 	record.SetSeverity(otellog.SeverityInfo)
 	record.SetSeverityText("INFO")
-	record.SetBody(otellog.StringValue(line))
+	record.SetBody(attribute.StringValue(line))
 	record.AddAttributes(attrs...)
 	e.logger.log.Emit(ctx, record)
 }
 
-func otlpJobAttributes(e *Executor) []otellog.KeyValue {
+func otlpJobAttributes(e *Executor) []attribute.KeyValue {
 	buildID, _ := e.shell.Env.Get("BUILDKITE_BUILD_ID")
 	buildNumber, _ := e.shell.Env.Get("BUILDKITE_BUILD_NUMBER")
 	branch, _ := e.shell.Env.Get("BUILDKITE_BRANCH")
@@ -277,19 +278,19 @@ func otlpJobAttributes(e *Executor) []otellog.KeyValue {
 	stepKey, _ := e.shell.Env.Get("BUILDKITE_STEP_KEY")
 	agentID, _ := e.shell.Env.Get("BUILDKITE_AGENT_ID")
 
-	return []otellog.KeyValue{
-		otellog.String("source", "job"),
-		otellog.String("buildkite.organization.slug", e.OrganizationSlug),
-		otellog.String("buildkite.pipeline.slug", e.PipelineSlug),
-		otellog.String("buildkite.branch", branch),
-		otellog.String("buildkite.queue", e.Queue),
-		otellog.String("buildkite.agent", e.AgentName),
-		otellog.String("buildkite.agent.id", agentID),
-		otellog.String("buildkite.build.id", buildID),
-		otellog.String("buildkite.build.number", buildNumber),
-		otellog.String("buildkite.job.id", e.JobID),
-		otellog.String("buildkite.job.label", label),
-		otellog.String("buildkite.job.key", stepKey),
+	return []attribute.KeyValue{
+		attribute.String("source", "job"),
+		attribute.String("buildkite.organization.slug", e.OrganizationSlug),
+		attribute.String("buildkite.pipeline.slug", e.PipelineSlug),
+		attribute.String("buildkite.branch", branch),
+		attribute.String("buildkite.queue", e.Queue),
+		attribute.String("buildkite.agent", e.AgentName),
+		attribute.String("buildkite.agent.id", agentID),
+		attribute.String("buildkite.build.id", buildID),
+		attribute.String("buildkite.build.number", buildNumber),
+		attribute.String("buildkite.job.id", e.JobID),
+		attribute.String("buildkite.job.label", label),
+		attribute.String("buildkite.job.key", stepKey),
 	}
 }
 

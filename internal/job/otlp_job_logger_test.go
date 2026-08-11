@@ -10,6 +10,7 @@ import (
 
 	"github.com/buildkite/agent/v4/env"
 	"github.com/buildkite/agent/v4/internal/shell"
+	"go.opentelemetry.io/otel/attribute"
 	otellog "go.opentelemetry.io/otel/log"
 	"go.opentelemetry.io/otel/log/embedded"
 	"go.opentelemetry.io/otel/trace"
@@ -33,7 +34,7 @@ func (c *captureLogger) Emit(ctx context.Context, r otellog.Record) {
 	c.spanIDs = append(c.spanIDs, trace.SpanContextFromContext(ctx).SpanID())
 	c.timestamps = append(c.timestamps, r.Timestamp())
 	c.lastKVs = map[string]string{}
-	r.WalkAttributes(func(kv otellog.KeyValue) bool {
+	r.WalkAttributes(func(kv attribute.KeyValue) bool {
 		c.lastKVs[string(kv.Key)] = kv.Value.AsString()
 		return true
 	})
@@ -42,7 +43,7 @@ func (c *captureLogger) Emit(ctx context.Context, r otellog.Record) {
 func (c *captureLogger) Enabled(context.Context, otellog.EnabledParameters) bool { return true }
 
 func newTestOTLPJobLogger(log otellog.Logger) *otlpJobLogger {
-	return newOTLPJobLoggerWithLogger(context.Background(), log, nil, []otellog.KeyValue{otellog.String("source", "job")})
+	return newOTLPJobLoggerWithLogger(context.Background(), log, nil, []attribute.KeyValue{attribute.String("source", "job")})
 }
 
 func spanContextWithID(t *testing.T, id string) context.Context {
