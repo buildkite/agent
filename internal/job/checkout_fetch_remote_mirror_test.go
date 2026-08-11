@@ -43,6 +43,69 @@ func TestFetchSourceExistingCheckoutRemoteMirrorHitSkipsCanonical(t *testing.T) 
 	}
 }
 
+func TestFetchSourceExistingCheckoutPullRequestHeadHitSkipsCanonical(t *testing.T) {
+	canonical := newOnHostMirrorHTTPRepo(t, "canonical")
+	checkout := cloneExistingCheckoutForRemoteMirrorTest(t, canonical.RepoURL("canonical"))
+	commit, _, err := canonical.PushBranch("canonical", "feature-branch")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := canonical.CreateRef("canonical", "refs/pull/123/head", commit); err != nil {
+		t.Fatal(err)
+	}
+	// Fork shape: make the commit reachable only through refs/pull/*, so the
+	// mirror probe cannot rely on an advertised branch tip.
+	advancePullRequestHeadForMirrorTest(t, canonical.RepoURL("canonical"), commit)
+	runGitForMirrorTest(t, checkout, "push", canonical.RepoURL("canonical"), "--delete", "feature-branch")
+	mirror := copyOnHostMirrorHTTPRepo(t, canonical.RepoURL("canonical"), "mirror")
+
+	e, attempt := newExistingCheckoutRemoteMirrorExecutor(t, checkout, canonical.RepoURL("canonical"), mirror.RepoURL("mirror"), commit)
+	e.PullRequest = "123"
+	e.PipelineProvider = "github"
+	canonical.Close()
+
+	if err := e.fetchSource(t.Context(), false, &attempt); err != nil {
+		t.Fatalf("fetchSource() error = %v", err)
+	}
+	if attempt.outcome != remoteMirrorOutcomeHit {
+		t.Errorf("outcome = %q, want hit", attempt.outcome)
+	}
+	if !hasGitCommit(t.Context(), e.shell, ".git", commit) {
+		t.Errorf("existing checkout does not contain mirror commit %s", commit)
+	}
+	if got := gitConfigForRemoteMirrorTest(t, checkout, "remote.origin.promisor"); got != "" {
+		t.Errorf("remote.origin.promisor = %q, want empty after mirror hit", got)
+	}
+}
+
+func TestFetchSourceExistingCheckoutPullRequestHeadMissFallsBackToCanonical(t *testing.T) {
+	canonical := newOnHostMirrorHTTPRepo(t, "canonical")
+	checkout := cloneExistingCheckoutForRemoteMirrorTest(t, canonical.RepoURL("canonical"))
+	// Copy the mirror before the pull request exists, so it lags canonical.
+	mirror := copyOnHostMirrorHTTPRepo(t, canonical.RepoURL("canonical"), "mirror")
+	commit, _, err := canonical.PushBranch("canonical", "feature-branch")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := canonical.CreateRef("canonical", "refs/pull/123/head", commit); err != nil {
+		t.Fatal(err)
+	}
+
+	e, attempt := newExistingCheckoutRemoteMirrorExecutor(t, checkout, canonical.RepoURL("canonical"), mirror.RepoURL("mirror"), commit)
+	e.PullRequest = "123"
+	e.PipelineProvider = "github"
+
+	if err := e.fetchSource(t.Context(), false, &attempt); err != nil {
+		t.Fatalf("fetchSource() error = %v", err)
+	}
+	if attempt.outcome != remoteMirrorOutcomeMiss {
+		t.Errorf("outcome = %q, want miss", attempt.outcome)
+	}
+	if !hasGitCommit(t.Context(), e.shell, ".git", commit) {
+		t.Errorf("canonical pull request fallback did not fetch commit %s", commit)
+	}
+}
+
 func TestFetchSourceExistingCheckoutRemoteMirrorMissLeavesStateUntouchedBeforeCanonicalFetch(t *testing.T) {
 	canonical := newOnHostMirrorHTTPRepo(t, "canonical")
 	checkout := cloneExistingCheckoutForRemoteMirrorTest(t, canonical.RepoURL("canonical"))

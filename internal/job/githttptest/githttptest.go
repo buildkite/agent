@@ -254,11 +254,17 @@ func (s *Server) handleGitUploadPack(w http.ResponseWriter, r *http.Request) {
 	buf := bytes.NewBuffer(nil)
 
 	cmd := exec.Command("git", "upload-pack", "--stateless-rpc", repoPath)
+	// Forward protocol negotiation like git http-backend, so clients can use
+	// protocol v2 (e.g. for unadvertised reachable wants).
+	cmd.Env = append(os.Environ(), "GIT_PROTOCOL="+r.Header.Get("Git-Protocol"))
 	cmd.Stdin = r.Body
 	cmd.Stdout = buf
 	cmd.Stderr = os.Stderr
 
-	if err := cmd.Run(); err != nil {
+	if err := cmd.Run(); err != nil && buf.Len() == 0 {
+		// Like git http-backend, protocol-level failures (e.g. "not our
+		// ref") are delivered in-band as an ERR pkt-line in the buffered
+		// output; only fail the HTTP request when there is none.
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -326,6 +332,9 @@ func (s *Server) handleGitInfoRefs(w http.ResponseWriter, r *http.Request) {
 
 	// Execute the corresponding Git command
 	cmd := exec.Command("git", strings.TrimPrefix(service, "git-"), "--stateless-rpc", "--advertise-refs", repoPath)
+	// Forward protocol negotiation like git http-backend, so clients can use
+	// protocol v2 (e.g. for unadvertised reachable wants).
+	cmd.Env = append(os.Environ(), "GIT_PROTOCOL="+r.Header.Get("Git-Protocol"))
 	cmd.Stdout = buf
 	cmd.Stderr = os.Stderr
 
