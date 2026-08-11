@@ -23,7 +23,10 @@ translated back to v3 conventions.
    produces an empty commit, and `git cherry-pick` refuses it without
    `-m 1`. Select the PR's constituent commit(s) instead.
 3. Translate all v4-isms back to v3 (see checklist).
-4. Raise the backport PR against `v3`, referencing the original PR.
+4. Raise the backport PR against `v3`. Keep the description concise: state
+   that it is a backport of the original PR (with a link) and note any
+   translation deviations. Do not duplicate the original PR's full
+   description — reviewers can follow the link.
 5. Do not touch the `VERSION` file unless a release is explicitly requested.
 
 ## Translation checklist (v4 → v3)
