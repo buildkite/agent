@@ -356,6 +356,7 @@ steps:
             - "ubuntu-20.04"
             - "ubuntu-22.04"
             - "ubuntu-24.04"
+            - "ubuntu-26.04"
             - "sidecar"
 
   - group: ":docker: Docker Image Tests"
@@ -386,6 +387,7 @@ steps:
               - ubuntu-20.04
               - ubuntu-22.04
               - ubuntu-24.04
+              - ubuntu-26.04
               - sidecar
 
       - name: ":docker: {{matrix.variant}} arm64 image test"
@@ -414,6 +416,7 @@ steps:
               - ubuntu-20.04
               - ubuntu-22.04
               - ubuntu-24.04
+              - ubuntu-26.04
               - sidecar
 
   # --- end Docker Image tests ---

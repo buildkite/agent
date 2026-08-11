@@ -71,6 +71,7 @@ For example, agent version 3.45.6 is published as:
 - Ubuntu 20.04 LTS (x86_64), supported to end of standard support for 20.04
 - Ubuntu 22.04 LTS (x86_64), supported to end of standard support for 22.04
 - Ubuntu 24.04 LTS (x86_64), supported to end of standard support for 24.04
+- Ubuntu 26.04 LTS (x86_64), supported to end of standard support for 26.04
 
 ## Starting
 
