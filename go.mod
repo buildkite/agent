@@ -18,10 +18,10 @@ require (
 	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.18.35
 	github.com/aws/aws-sdk-go-v2/feature/s3/manager v1.22.41
 	github.com/aws/aws-sdk-go-v2/feature/s3/transfermanager v0.3.11
-	github.com/aws/aws-sdk-go-v2/service/ec2 v1.320.0
+	github.com/aws/aws-sdk-go-v2/service/ec2 v1.321.0
 	github.com/aws/aws-sdk-go-v2/service/kms v1.55.4
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.107.0
-	github.com/aws/smithy-go v1.27.6
+	github.com/aws/smithy-go v1.27.7
 	github.com/brunoscheufler/aws-ecs-metadata-go v0.0.0-20221221133751-67e37ae746cd
 	github.com/buildkite/bintest/v3 v3.3.0
 	github.com/buildkite/go-buildkite/v4 v4.23.0
