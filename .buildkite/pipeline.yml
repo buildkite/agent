@@ -94,6 +94,7 @@ steps:
           env:
             - BUILDKITE_AGENT_ACCESS_TOKEN
             - BUILDKITE_AGENT_CACHE_STORE_URL
+            - BUILDKITE_AGENT_CACHE_REGISTRY
             - BUILDKITE_BRANCH
             - AWS_ACCESS_KEY_ID
             - AWS_SECRET_ACCESS_KEY
@@ -114,6 +115,16 @@ steps:
     soft_fail: true
     env:
       BUILDKITE_AGENT_CACHE_STORE_URL: "s3://bk-agent-cache-v2-dogfood-445615400570-us-east-1?region=us-east-1"
+    plugins: *cache_v2_dogfood_plugins
+
+  # Targets a dedicated, isolated registry (test-registry-1)
+  - name: ":package: Cache v2 dogfood (policy)"
+    key: cache-v2-dogfood-policy
+    command: .buildkite/steps/cache-dogfood-policy.sh
+    soft_fail: true
+    env:
+      BUILDKITE_AGENT_CACHE_STORE_URL: "s3://bk-agent-cache-v2-dogfood-445615400570-us-east-1?region=us-east-1"
+      BUILDKITE_AGENT_CACHE_REGISTRY: "test-registry-1"
     plugins: *cache_v2_dogfood_plugins
 
   - group: ":go::scientist: Tests and Coverage"

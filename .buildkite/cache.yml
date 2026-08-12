@@ -30,3 +30,10 @@ caches:
       - { agent: branch }
     target_paths:
       - .cache-scenarios-test
+  - name: policy-test
+    cache_key:
+      - v1
+      - { agent: os }
+      - { agent: arch }
+    target_paths:
+      - .cache-policy-test
