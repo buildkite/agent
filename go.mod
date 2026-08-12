@@ -1,6 +1,6 @@
 module github.com/buildkite/agent/v4
 
-go 1.25.12
+go 1.26.5
 
 require (
 	buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go v1.36.12-20260709200747-435963d16310.1
