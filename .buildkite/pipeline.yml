@@ -68,6 +68,33 @@ steps:
           mount-buildkite-agent: true
           run: agent
 
+  # Cache v2 dogfood: caches the Go module cache (gomodcache) and
+  # build cache (gocache), replacing reliance on the host-mounted
+  # ~/gocache/~/gomodcache directories for these two paths.
+  - name: ":package: Cache v2 (gomodcache/gocache)"
+    key: cache-v2-dogfood
+    command: .buildkite/steps/cache-dogfood.sh
+    env:
+      BUILDKITE_AGENT_CACHE_STORE_URL: "s3://bk-agent-cache-v2-dogfood-445615400570-us-east-1?region=us-east-1"
+    plugins:
+      - aws-assume-role-with-web-identity#v1.4.0:
+          role_arn: "arn:aws:iam::445615400570:role/pipeline-buildkite-agent"
+          session-tags:
+            - organization_slug
+            - organization_id
+            - pipeline_slug
+      - docker-compose#v4.14.0:
+          config: .buildkite/docker-compose.yml
+          cli-version: 2
+          mount-buildkite-agent: true
+          run: agent
+          env:
+            - BUILDKITE_AGENT_ACCESS_TOKEN
+            - BUILDKITE_AGENT_CACHE_STORE_URL
+            - AWS_ACCESS_KEY_ID
+            - AWS_SECRET_ACCESS_KEY
+            - AWS_SESSION_TOKEN
+
   - group: ":go::scientist: Tests and Coverage"
     if_changed:
       - go.{mod,sum}

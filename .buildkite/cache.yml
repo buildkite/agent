@@ -1,0 +1,16 @@
+caches:
+  - name: gomodcache
+    cache_key:
+      - v2
+      - { agent: os }
+      - { agent: arch }
+      - { checksum: go.sum }
+    target_paths:
+      - /gomodcache
+  - name: gocache
+    cache_key:
+      - v2
+      - { agent: os }
+      - { agent: arch }
+    target_paths:
+      - /gocache
