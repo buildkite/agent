@@ -68,6 +68,45 @@ steps:
           mount-buildkite-agent: true
           run: agent
 
+  # Temporary dogfood steps for Cache™ v2 (A-1638).
+  #
+  # The smoke step exercises save/restore/hit/miss/fallback wiring against a
+  # trivial marker file, isolated from the host-mounted /gocache and
+  # /gomodcache paths -- run this first.
+  - name: ":package: Cache v2 dogfood (smoke test)"
+    key: cache-v2-dogfood-smoke
+    command: .buildkite/steps/cache-dogfood-smoke.sh
+    soft_fail: true
+    env:
+      BUILDKITE_AGENT_CACHE_STORE_URL: "s3://bk-agent-cache-v2-dogfood-445615400570-us-east-1?region=us-east-1"
+    plugins: &cache_v2_dogfood_plugins
+      - aws-assume-role-with-web-identity#v1.4.0:
+          role_arn: "arn:aws:iam::445615400570:role/pipeline-buildkite-agent"
+          session-tags:
+            - organization_slug
+            - organization_id
+            - pipeline_slug
+      - docker-compose#v4.14.0:
+          config: .buildkite/docker-compose.yml
+          cli-version: 2
+          mount-buildkite-agent: true
+          run: agent
+          env:
+            - BUILDKITE_AGENT_ACCESS_TOKEN
+            - BUILDKITE_AGENT_CACHE_STORE_URL
+            - BUILDKITE_BRANCH
+            - AWS_ACCESS_KEY_ID
+            - AWS_SECRET_ACCESS_KEY
+            - AWS_SESSION_TOKEN
+
+  - name: ":package: Cache v2 dogfood (gomodcache/gocache)"
+    key: cache-v2-dogfood
+    command: .buildkite/steps/cache-dogfood.sh
+    soft_fail: true
+    env:
+      BUILDKITE_AGENT_CACHE_STORE_URL: "s3://bk-agent-cache-v2-dogfood-445615400570-us-east-1?region=us-east-1"
+    plugins: *cache_v2_dogfood_plugins
+
   - group: ":go::scientist: Tests and Coverage"
     if_changed:
       - go.{mod,sum}

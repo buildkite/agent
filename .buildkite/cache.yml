@@ -1,0 +1,24 @@
+caches:
+  - name: gomodcache
+    cache_key:
+      - v1
+      - { agent: os }
+      - { agent: arch }
+      - { checksum: go.sum }
+    target_paths:
+      - /gomodcache
+  - name: gocache
+    cache_key:
+      - v2
+      - { agent: os }
+      - { agent: arch }
+      - { agent: branch, fallback_limit: true }
+    target_paths:
+      - /gocache
+  - name: smoke
+    cache_key:
+      - v2
+      - { agent: os }
+      - { agent: arch }
+    target_paths:
+      - .cache-smoke-test
