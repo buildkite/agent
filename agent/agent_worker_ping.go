@@ -223,7 +223,9 @@ func (a *AgentWorker) Ping(ctx context.Context) (jobID, action string, err error
 		// If the ping has a non-retryable status, we have to kill the agent, there's no way of recovering
 		// The reason we do this after the disconnect check is because the backend can (and does) send disconnect actions in
 		// responses with non-retryable statuses
-		if resp != nil && !api.IsRetryableStatus(resp) {
+		// A response we couldn't decode is not the API telling us to stop, whatever
+		// status it arrived with, so check the error as well
+		if resp != nil && !api.IsRetryableStatus(resp) && !api.IsRetryableError(pingErr) {
 			return "", action, &errUnrecoverable{action: "Ping", response: resp, err: pingErr}
 		}
 
