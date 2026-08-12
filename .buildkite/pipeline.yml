@@ -102,6 +102,15 @@ steps:
   - name: ":package: Cache v2 dogfood (gomodcache/gocache)"
     key: cache-v2-dogfood
     command: .buildkite/steps/cache-dogfood.sh
+    skip: "paused"
+    soft_fail: true
+    env:
+      BUILDKITE_AGENT_CACHE_STORE_URL: "s3://bk-agent-cache-v2-dogfood-445615400570-us-east-1?region=us-east-1"
+    plugins: *cache_v2_dogfood_plugins
+
+  - name: ":package: Cache v2 dogfood (scenarios: fallback, digest, delete)"
+    key: cache-v2-dogfood-scenarios
+    command: .buildkite/steps/cache-dogfood-scenarios.sh
     soft_fail: true
     env:
       BUILDKITE_AGENT_CACHE_STORE_URL: "s3://bk-agent-cache-v2-dogfood-445615400570-us-east-1?region=us-east-1"

@@ -22,3 +22,11 @@ caches:
       - { agent: arch }
     target_paths:
       - .cache-smoke-test
+  - name: scenarios
+    cache_key:
+      - v1
+      - { agent: os }
+      - { agent: arch, fallback_limit: true }
+      - { agent: branch }
+    target_paths:
+      - .cache-scenarios-test
