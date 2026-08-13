@@ -48,11 +48,18 @@ GITHUB_RELEASE_ACCESS_TOKEN="$(aws ssm get-parameter \
   --query Parameter.Value \
   --region us-east-1)"
 
-if [[ "${GITHUB_RELEASE_TYPE}" != "stable" ]]; then
-  BREW_RELEASE_TYPE="devel"
-else
+case "${GITHUB_RELEASE_TYPE}" in
+stable)
   BREW_RELEASE_TYPE="stable"
-fi
+  ;;
+prerelease)
+  # Beta release to a versioned Homebrew formula
+  BREW_RELEASE_TYPE="stable"
+  ;;
+*)
+  BREW_RELEASE_TYPE="devel"
+  ;;
+esac
 
 BINARY_NAME_AMD64="buildkite-agent-darwin-amd64-${AGENT_VERSION}.tar.gz"
 DOWNLOAD_URL_AMD64="https://github.com/buildkite/agent/releases/download/v${GITHUB_RELEASE_VERSION}/${BINARY_NAME_AMD64}"
