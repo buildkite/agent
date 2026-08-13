@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/urfave/cli/v3"
@@ -97,4 +98,41 @@ func TestOIDCRequestToken(t *testing.T) {
 			t.Fatalf("runOIDCRequestTokenCommand() output = %q, want %q", out, want)
 		}
 	})
+}
+
+// An intermediary in front of the API can answer with an HTML error page and a
+// 2xx status. That used to fail the job on the first attempt, because a success
+// status was read as "settled", so the retrier broke instead of retrying.
+func TestOIDCRequestTokenRetriesUndecodableResponse(t *testing.T) {
+	t.Setenv("BUILDKITE_AGENT_JOB_API_SOCKET", "")
+	t.Setenv("BUILDKITE_AGENT_JOB_API_TOKEN", "")
+
+	const oidcToken = "oidc-token"
+	var requests atomic.Int32
+
+	// The first attempt gets a gateway error page with a 200; the second gets the
+	// real thing. Note the retrier's first backoff is a real 1s sleep.
+	server := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
+		if requests.Add(1) == 1 {
+			rw.Header().Set("Content-Type", "text/html")
+			rw.WriteHeader(http.StatusOK)
+			_, _ = fmt.Fprint(rw, "<html><head><title>502 Bad Gateway</title></head></html>")
+			return
+		}
+		_, _ = fmt.Fprintf(rw, `{"token":%q}`, oidcToken)
+	}))
+	defer server.Close()
+
+	out, err := runOIDCRequestTokenCommand(t, server.URL, "--skip-redaction")
+	if err != nil {
+		t.Fatalf("runOIDCRequestTokenCommand() error = %v, want nil", err)
+	}
+
+	if want := oidcToken + "\n"; out != want {
+		t.Fatalf("runOIDCRequestTokenCommand() output = %q, want %q", out, want)
+	}
+
+	if got, want := requests.Load(), int32(2); got != want {
+		t.Errorf("server received %d requests, want %d", got, want)
+	}
 }
