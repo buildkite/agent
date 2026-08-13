@@ -68,18 +68,19 @@ steps:
           mount-buildkite-agent: true
           run: agent
 
-  # Temporary dogfood steps for Cache™ v2 (A-1638).
+  # Cache v2 dogfood: caches the Go module cache (gomodcache) and
+  # build cache (gocache), replacing reliance on the host-mounted
+  # ~/gocache/~/gomodcache directories for these two paths.
   #
-  # The smoke step exercises save/restore/hit/miss/fallback wiring against a
-  # trivial marker file, isolated from the host-mounted /gocache and
-  # /gomodcache paths -- run this first.
-  - name: ":package: Cache v2 dogfood (smoke test)"
-    key: cache-v2-dogfood-smoke
-    command: .buildkite/steps/cache-dogfood-smoke.sh
-    soft_fail: true
+  # gocache save currently fails server-side once the archive exceeds ~2GiB
+  # (file_size is a 4-byte column with no limit: override) -- not soft_fail,
+  # so this stays red until that's fixed upstream rather than passing silently.
+  - name: ":package: Cache v2 (gomodcache/gocache)"
+    key: cache-v2-dogfood
+    command: .buildkite/steps/cache-dogfood.sh
     env:
       BUILDKITE_AGENT_CACHE_STORE_URL: "s3://bk-agent-cache-v2-dogfood-445615400570-us-east-1?region=us-east-1"
-    plugins: &cache_v2_dogfood_plugins
+    plugins:
       - aws-assume-role-with-web-identity#v1.4.0:
           role_arn: "arn:aws:iam::445615400570:role/pipeline-buildkite-agent"
           session-tags:
@@ -94,38 +95,9 @@ steps:
           env:
             - BUILDKITE_AGENT_ACCESS_TOKEN
             - BUILDKITE_AGENT_CACHE_STORE_URL
-            - BUILDKITE_AGENT_CACHE_REGISTRY
-            - BUILDKITE_BRANCH
             - AWS_ACCESS_KEY_ID
             - AWS_SECRET_ACCESS_KEY
             - AWS_SESSION_TOKEN
-
-  - name: ":package: Cache v2 dogfood (gomodcache/gocache)"
-    key: cache-v2-dogfood
-    command: .buildkite/steps/cache-dogfood.sh
-    skip: "paused"
-    soft_fail: true
-    env:
-      BUILDKITE_AGENT_CACHE_STORE_URL: "s3://bk-agent-cache-v2-dogfood-445615400570-us-east-1?region=us-east-1"
-    plugins: *cache_v2_dogfood_plugins
-
-  - name: ":package: Cache v2 dogfood (scenarios: fallback, digest, delete)"
-    key: cache-v2-dogfood-scenarios
-    command: .buildkite/steps/cache-dogfood-scenarios.sh
-    soft_fail: true
-    env:
-      BUILDKITE_AGENT_CACHE_STORE_URL: "s3://bk-agent-cache-v2-dogfood-445615400570-us-east-1?region=us-east-1"
-    plugins: *cache_v2_dogfood_plugins
-
-  # Targets a dedicated, isolated registry (test-registry-1)
-  - name: ":package: Cache v2 dogfood (policy)"
-    key: cache-v2-dogfood-policy
-    command: .buildkite/steps/cache-dogfood-policy.sh
-    soft_fail: true
-    env:
-      BUILDKITE_AGENT_CACHE_STORE_URL: "s3://bk-agent-cache-v2-dogfood-445615400570-us-east-1?region=us-east-1"
-      BUILDKITE_AGENT_CACHE_REGISTRY: "test-cache-registry-2"
-    plugins: *cache_v2_dogfood_plugins
 
   - group: ":go::scientist: Tests and Coverage"
     if_changed:
