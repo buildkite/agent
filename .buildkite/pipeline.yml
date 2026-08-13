@@ -124,7 +124,7 @@ steps:
     soft_fail: true
     env:
       BUILDKITE_AGENT_CACHE_STORE_URL: "s3://bk-agent-cache-v2-dogfood-445615400570-us-east-1?region=us-east-1"
-      BUILDKITE_AGENT_CACHE_REGISTRY: "test-registry-1"
+      BUILDKITE_AGENT_CACHE_REGISTRY: "test-cache-registry-2"
     plugins: *cache_v2_dogfood_plugins
 
   - group: ":go::scientist: Tests and Coverage"
