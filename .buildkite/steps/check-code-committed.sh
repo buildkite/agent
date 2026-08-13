@@ -2,6 +2,9 @@
 
 set -euf
 
+echo --- :inbox_tray: cache restore
+buildkite-agent cache restore --name gomodcache --name gocache
+
 echo --- :go: Checking go mod tidyness
 go mod tidy
 if ! git diff --no-ext-diff --exit-code; then
@@ -65,3 +68,9 @@ EOF
 fi
 
 echo +++ Everything is clean and tidy! 🎉
+
+# Sole writer: every other step that restores these caches (protobuf check,
+# Tests and Coverage) only restores, never saves, so concurrent/parallel
+# shards can't race each other's saves. This step runs once, unparallelized.
+echo --- :outbox_tray: cache save
+buildkite-agent cache save --name gomodcache --name gocache

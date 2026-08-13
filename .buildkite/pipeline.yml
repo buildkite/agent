@@ -17,12 +17,27 @@ steps:
       - go.{mod,sum}
       - "**.go"
       - .buildkite/steps/check-code-committed.sh
+    env:
+      BUILDKITE_AGENT_CACHE_STORE_URL: "s3://bk-agent-cache-v2-dogfood-445615400570-us-east-1?region=us-east-1"
     plugins:
+      - &cache_v2_role
+        aws-assume-role-with-web-identity#v1.4.0:
+          role_arn: "arn:aws:iam::445615400570:role/pipeline-buildkite-agent"
+          session-tags:
+            - organization_slug
+            - organization_id
+            - pipeline_slug
       - docker-compose#v4.14.0:
           config: .buildkite/docker-compose.yml
           cli-version: 2
           mount-buildkite-agent: true
           run: lint
+          env:
+            - BUILDKITE_AGENT_ACCESS_TOKEN
+            - BUILDKITE_AGENT_CACHE_STORE_URL
+            - AWS_ACCESS_KEY_ID
+            - AWS_SECRET_ACCESS_KEY
+            - AWS_SESSION_TOKEN
 
   - name: ":go::robot_face: Check protobuf generation"
     key: check-protobuf-genreation
@@ -30,12 +45,21 @@ steps:
     if_changed:
       - api/proto/**
       - .buildkite/steps/check-protobuf-generation.sh
+    env:
+      BUILDKITE_AGENT_CACHE_STORE_URL: "s3://bk-agent-cache-v2-dogfood-445615400570-us-east-1?region=us-east-1"
     plugins:
+      - *cache_v2_role
       - docker-compose#v4.14.0:
           config: .buildkite/docker-compose.yml
           cli-version: 2
           mount-buildkite-agent: true
           run: lint
+          env:
+            - BUILDKITE_AGENT_ACCESS_TOKEN
+            - BUILDKITE_AGENT_CACHE_STORE_URL
+            - AWS_ACCESS_KEY_ID
+            - AWS_SECRET_ACCESS_KEY
+            - AWS_SESSION_TOKEN
 
   # Send git commit metadata to the Test Engine plan-metadata pipeline on
   # every build. Plan output is discarded -- the Tests and Coverage group
@@ -68,33 +92,6 @@ steps:
           mount-buildkite-agent: true
           run: agent
 
-  # Cache v2 dogfood: caches the Go module cache (gomodcache) and
-  # build cache (gocache), replacing reliance on the host-mounted
-  # ~/gocache/~/gomodcache directories for these two paths.
-  - name: ":package: Cache v2 (gomodcache/gocache)"
-    key: cache-v2-dogfood
-    command: .buildkite/steps/cache-dogfood.sh
-    env:
-      BUILDKITE_AGENT_CACHE_STORE_URL: "s3://bk-agent-cache-v2-dogfood-445615400570-us-east-1?region=us-east-1"
-    plugins:
-      - aws-assume-role-with-web-identity#v1.4.0:
-          role_arn: "arn:aws:iam::445615400570:role/pipeline-buildkite-agent"
-          session-tags:
-            - organization_slug
-            - organization_id
-            - pipeline_slug
-      - docker-compose#v4.14.0:
-          config: .buildkite/docker-compose.yml
-          cli-version: 2
-          mount-buildkite-agent: true
-          run: agent
-          env:
-            - BUILDKITE_AGENT_ACCESS_TOKEN
-            - BUILDKITE_AGENT_CACHE_STORE_URL
-            - AWS_ACCESS_KEY_ID
-            - AWS_SECRET_ACCESS_KEY
-            - AWS_SESSION_TOKEN
-
   - group: ":go::scientist: Tests and Coverage"
     if_changed:
       - go.{mod,sum}
@@ -109,7 +106,10 @@ steps:
         artifact_paths:
           - junit-*.xml
           - "coverage-*/**"
+        env:
+          BUILDKITE_AGENT_CACHE_STORE_URL: "s3://bk-agent-cache-v2-dogfood-445615400570-us-east-1?region=us-east-1"
         plugins:
+          - *cache_v2_role
           - tests#v1.0.0:
               suite-slug: buildkite-agent
               test-runner: gotest
@@ -125,7 +125,13 @@ steps:
               config: .buildkite/docker-compose.yml
               cli-version: 2
               propagate-environment: true
+              mount-buildkite-agent: true
               run: agent
+              env:
+                - BUILDKITE_AGENT_CACHE_STORE_URL
+                - AWS_ACCESS_KEY_ID
+                - AWS_SECRET_ACCESS_KEY
+                - AWS_SESSION_TOKEN
 
       - name: ":linux: Linux ARM64 Tests"
         key: test-linux-arm64
@@ -136,7 +142,10 @@ steps:
           - "coverage-*/**"
         agents:
           queue: $AGENT_RUNNERS_LINUX_ARM64_QUEUE
+        env:
+          BUILDKITE_AGENT_CACHE_STORE_URL: "s3://bk-agent-cache-v2-dogfood-445615400570-us-east-1?region=us-east-1"
         plugins:
+          - *cache_v2_role
           - tests#v1.0.0:
               suite-slug: buildkite-agent
               test-runner: gotest
@@ -152,8 +161,19 @@ steps:
               config: .buildkite/docker-compose.yml
               cli-version: 2
               propagate-environment: true
+              mount-buildkite-agent: true
               run: agent
+              env:
+                - BUILDKITE_AGENT_CACHE_STORE_URL
+                - AWS_ACCESS_KEY_ID
+                - AWS_SECRET_ACCESS_KEY
+                - AWS_SESSION_TOKEN
 
+      # No docker-compose here (bare Windows host) -- buildkite-agent is
+      # already on PATH natively, so no mount-buildkite-agent equivalent is
+      # needed. aws-assume-role-with-web-identity's hooks are bash scripts,
+      # same as the command itself; not yet verified end-to-end on this
+      # queue specifically.
       - name: ":windows: Windows AMD64 Tests"
         key: test-windows
         command: "bash .buildkite\\steps\\tests.sh"
@@ -163,7 +183,10 @@ steps:
           - "coverage-*/**"
         agents:
           queue: $AGENT_RUNNERS_WINDOWS_QUEUE
+        env:
+          BUILDKITE_AGENT_CACHE_STORE_URL: "s3://bk-agent-cache-v2-dogfood-445615400570-us-east-1?region=us-east-1"
         plugins:
+          - *cache_v2_role
           - tests#v1.0.0:
               suite-slug: buildkite-agent
               test-runner: gotest
@@ -186,7 +209,10 @@ steps:
           - "coverage-*/**"
         agents:
           queue: $AGENT_RUNNERS_LINUX_ARM64_QUEUE
+        env:
+          BUILDKITE_AGENT_CACHE_STORE_URL: "s3://bk-agent-cache-v2-dogfood-445615400570-us-east-1?region=us-east-1"
         plugins:
+          - *cache_v2_role
           - tests#v1.0.0:
               suite-slug: buildkite-agent
               test-runner: gotest
@@ -202,7 +228,13 @@ steps:
               config: .buildkite/docker-compose.yml
               cli-version: 2
               propagate-environment: true
+              mount-buildkite-agent: true
               run: agent
+              env:
+                - BUILDKITE_AGENT_CACHE_STORE_URL
+                - AWS_ACCESS_KEY_ID
+                - AWS_SECRET_ACCESS_KEY
+                - AWS_SESSION_TOKEN
 
       - name: ":coverage: Test coverage report Linux ARM64"
         key: test-coverage-linux-arm64

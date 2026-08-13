@@ -2,6 +2,9 @@
 
 set -euf
 
+echo --- :inbox_tray: cache restore
+buildkite-agent cache restore --name gomodcache --name gocache
+
 cd api/proto
 
 echo --- :buf: Installing buf...

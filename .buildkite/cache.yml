@@ -5,12 +5,15 @@ caches:
       - { agent: os }
       - { agent: arch }
       - { checksum: go.sum }
+    # One level above the checkout (not inside it -- see docker-compose.yml)
+    # and not a host bind mount. Resolves the same way whether cwd is /work
+    # in a container or a Windows build checkout directory.
     target_paths:
-      - /gomodcache
+      - ../.gomodcache
   - name: gocache
     cache_key:
       - v2
       - { agent: os }
       - { agent: arch }
     target_paths:
-      - /gocache
+      - ../.gocache

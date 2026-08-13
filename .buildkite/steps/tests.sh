@@ -4,6 +4,15 @@ set -euo pipefail
 go version
 echo arch is "$(uname -m)"
 
+# One level above the checkout (PWD), not inside it -- see docker-compose.yml
+# and cache.yml for why. Resolves the same way on every platform this script
+# runs on, containerized or bare Windows host.
+export GOCACHE="$(dirname "$PWD")/.gocache"
+export GOMODCACHE="$(dirname "$PWD")/.gomodcache"
+
+echo --- :inbox_tray: cache restore
+buildkite-agent cache restore --name gomodcache --name gocache
+
 RACE=''
 if [[ $* == *-race* ]] ; then
   RACE='-race'
