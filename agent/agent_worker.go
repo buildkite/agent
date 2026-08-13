@@ -458,7 +458,9 @@ func (a *AgentWorker) Heartbeat(ctx context.Context) error {
 	beat, err := roko.DoFunc(ctx, r, func(r *roko.Retrier) (*api.Heartbeat, error) {
 		b, resp, err := a.apiClient.Heartbeat(ctx)
 		if err != nil {
-			if resp != nil && !api.IsRetryableStatus(resp) {
+			// A response we couldn't decode is not the API telling us to stop,
+			// whatever status it arrived with, so check the error as well.
+			if resp != nil && !api.IsRetryableStatus(resp) && !api.IsRetryableError(err) {
 				r.Break()
 				return nil, &errUnrecoverable{action: "Heartbeat", response: resp, err: err}
 			}
