@@ -86,9 +86,11 @@ func ParseSignal(sig string) (Signal, error) {
 
 // Configuration for a Process
 type Config struct {
-	PTY               bool
-	Path              string
-	Args              []string
+	PTY  bool
+	Path string
+	Args []string
+	// WindowsCmdLine bypasses os/exec argument quoting when non-empty.
+	WindowsCmdLine    string
 	Env               []string
 	Stdin             io.Reader
 	Stdout            io.Writer
