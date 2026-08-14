@@ -4,11 +4,11 @@ set -euo pipefail
 go version
 echo arch is "$(uname -m)"
 
-# One level above the checkout (PWD), not inside it -- see docker-compose.yml
-# and cache.yml for why. Resolves the same way on every platform this script
-# runs on, containerized or bare Windows host.
-export GOCACHE="$(dirname "$PWD")/.gocache"
-export GOMODCACHE="$(dirname "$PWD")/.gomodcache"
+# $HOME-anchored, not cwd-relative -- matches cache.yml's ~-anchored
+# target_paths (see cache.yml for why a relative "../" path doesn't work:
+# the archiver chroots relative paths to cwd and rejects escaping it).
+export GOCACHE="$HOME/.gocache"
+export GOMODCACHE="$HOME/.gomodcache"
 
 echo --- :inbox_tray: cache restore
 buildkite-agent cache restore --name gomodcache --name gocache

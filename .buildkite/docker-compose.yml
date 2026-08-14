@@ -6,14 +6,11 @@ services:
     volumes:
       - ../:/work:cached
     working_dir: /work
-    environment:
-      # NOT inside /work (git's own checkout-wipe logic doesn't chmod
-      # read-only Go module cache files before removing them, unlike cache
-      # v2's own cleanPath) and NOT a host bind mount (that's finding #3 --
-      # the kernel refuses to unlink a mount point's own directory entry).
-      # A plain, non-mounted, non-checkout path avoids both.
-      - GOCACHE=/.gocache
-      - GOMODCACHE=/.gomodcache
+    # GOCACHE/GOMODCACHE are set to $HOME/.gocache and $HOME/.gomodcache by
+    # the scripts themselves (see check-code-committed.sh /
+    # check-protobuf-generation.sh), matching cache.yml's ~-anchored
+    # target_paths -- not set here, so there's exactly one place that can
+    # get the two out of sync.
 
   agent:
     build:
@@ -27,9 +24,6 @@ services:
       - BUILDKITE_JOB_ID
       - "BUILDKITE_AGENT_TAGS=queue=default"
       - "BUILDKITE_BUILD_PATH=/buildkite"
-      # See the lint service's GOCACHE/GOMODCACHE comment above.
-      - GOCACHE=/.gocache
-      - GOMODCACHE=/.gomodcache
       - BUILDKITE_TEST_ENGINE_API_ACCESS_TOKEN
 
   e2e:

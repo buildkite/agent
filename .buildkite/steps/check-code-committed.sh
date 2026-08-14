@@ -2,6 +2,9 @@
 
 set -euf
 
+export GOCACHE="$HOME/.gocache"
+export GOMODCACHE="$HOME/.gomodcache"
+
 echo --- :inbox_tray: cache restore
 buildkite-agent cache restore --name gomodcache --name gocache
 
