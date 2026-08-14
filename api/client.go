@@ -68,6 +68,10 @@ type Client struct {
 	// HTTP client used to communicate with the API.
 	client *http.Client
 
+	// HTTP client used for streaming responses. It shares the API client's
+	// transport but has no whole-response timeout.
+	streamingClient *http.Client
+
 	// The logger used
 	logger logger.Logger
 
@@ -87,9 +91,10 @@ func NewClient(l logger.Logger, conf Config) *Client {
 
 	if conf.HTTPClient != nil {
 		return &Client{
-			logger: l,
-			client: conf.HTTPClient,
-			conf:   conf,
+			logger:          l,
+			client:          conf.HTTPClient,
+			streamingClient: withoutTimeout(conf.HTTPClient),
+			conf:            conf,
 		}
 	}
 
@@ -103,12 +108,20 @@ func NewClient(l logger.Logger, conf Config) *Client {
 		clientOptions = append(clientOptions, agenthttp.WithTimeout(conf.Timeout))
 	}
 
+	client := agenthttp.NewClient(clientOptions...)
 	return &Client{
-		logger:         l,
-		client:         agenthttp.NewClient(clientOptions...),
-		conf:           conf,
-		requestHeaders: requestHeadersFromEnv(os.Environ()),
+		logger:          l,
+		client:          client,
+		streamingClient: withoutTimeout(client),
+		conf:            conf,
+		requestHeaders:  requestHeadersFromEnv(os.Environ()),
 	}
+}
+
+func withoutTimeout(client *http.Client) *http.Client {
+	streamingClient := *client
+	streamingClient.Timeout = 0
+	return &streamingClient
 }
 
 func requestHeadersFromEnv(environ []string) http.Header {
