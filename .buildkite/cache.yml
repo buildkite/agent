@@ -1,17 +1,20 @@
 caches:
   - name: gomodcache
+    # Module source (downloaded .go files, zips, go.mod) is
+    # platform-independent, so one key is shared across every os/arch.
     cache_key:
       - v2
-      - { agent: os }
-      - { agent: arch }
       - { checksum: go.sum }
     # ~-anchored: resolved against $HOME, independent of cwd
     target_paths:
       - ~/.gomodcache
   - name: gocache
+    # Build cache holds compiled objects, which are platform-specific, so
+    # it stays keyed by os+arch.
     cache_key:
       - v2
       - { agent: os }
       - { agent: arch }
+    # ~-anchored: resolved against $HOME, independent of cwd
     target_paths:
       - ~/.gocache

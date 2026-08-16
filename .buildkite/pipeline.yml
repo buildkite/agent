@@ -307,11 +307,20 @@ steps:
           - test-linux-amd64
           - test-linux-arm64
         artifact_paths: "pkg/*"
+        env:
+          BUILDKITE_AGENT_CACHE_STORE_URL: "s3://bk-agent-cache-v2-dogfood-445615400570-us-east-1?region=us-east-1"
         plugins:
+          - *cache_v2_role
           - docker-compose#v4.14.0:
               config: .buildkite/docker-compose.yml
               cli-version: 2
+              mount-buildkite-agent: true
               run: agent
+              env:
+                - BUILDKITE_AGENT_CACHE_STORE_URL
+                - AWS_ACCESS_KEY_ID
+                - AWS_SECRET_ACCESS_KEY
+                - AWS_SESSION_TOKEN
           - generate-provenance-attestation#v1.1.0:
               artifacts: "pkg/*"
               attestation_name: "buildkite-agent-{{matrix.os}}-{{matrix.arch}}.build-attestation.json"
@@ -371,7 +380,10 @@ steps:
     key: test-bk-cli
     depends_on: build-binary
     command: ".buildkite/steps/test-bk.sh"
+    env:
+      BUILDKITE_AGENT_CACHE_STORE_URL: "s3://bk-agent-cache-v2-dogfood-445615400570-us-east-1?region=us-east-1"
     plugins:
+      - *cache_v2_role
       - docker-compose#v4.14.0:
           config: .buildkite/docker-compose.yml
           cli-version: 2
@@ -380,7 +392,13 @@ steps:
             - BUILDKITE_AGENT_ACCESS_TOKEN
             - BUILDKITE_BUILD_ID
             - BUILDKITE_JOB_ID
+            - BUILDKITE_AGENT_CACHE_STORE_URL
+            - AWS_ACCESS_KEY_ID
+            - AWS_SECRET_ACCESS_KEY
+            - AWS_SESSION_TOKEN
           volumes:
+            # buildkite-agent comes in via this volume mount, so no
+            # mount-buildkite-agent is needed for the cache CLI calls.
             - "/usr/bin/buildkite-agent:/usr/bin/buildkite-agent"
 
   - name: ":mag: Extract Agent Version Metadata"

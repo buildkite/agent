@@ -72,8 +72,15 @@ fi
 
 echo +++ Everything is clean and tidy! 🎉
 
-# Sole writer: every other step that restores these caches (protobuf check,
-# Tests and Coverage) only restores, never saves, so concurrent/parallel
-# shards can't race each other's saves. This step runs once, unparallelized.
+# Ensure the module cache holds the full dependency graph before saving.
+
+# `go mod download` fetches every module's source (including deps imported
+# only under other-platform build tags) so the single, platform-independent
+# gomodcache key we save serves arm64 and windows restores too.
+echo --- :arrow_down: go mod download
+go mod download
+
+# Writer for two keys: the single platform-independent gomodcache, and the
+# linux/amd64 gocache. This step is unparallelized, so it never races itself.
 echo --- :outbox_tray: cache save
 buildkite-agent cache save --name gomodcache --name gocache

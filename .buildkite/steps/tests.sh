@@ -33,3 +33,10 @@ else
 fi
 
 go tool test-engine-client run
+
+goos="$(go env GOOS)"
+goarch="$(go env GOARCH)"
+if [[ "${BUILDKITE_PARALLEL_JOB:-0}" == "0" && -z "${RACE}" && "${goos}/${goarch}" != "linux/amd64" ]]; then
+  echo --- :outbox_tray: cache save
+  buildkite-agent cache save --name gocache
+fi
