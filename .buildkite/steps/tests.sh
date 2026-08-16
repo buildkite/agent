@@ -4,11 +4,14 @@ set -euo pipefail
 go version
 echo arch is "$(uname -m)"
 
-# $HOME-anchored, not cwd-relative -- matches cache.yml's ~-anchored
-# target_paths (see cache.yml for why a relative "../" path doesn't work:
-# the archiver chroots relative paths to cwd and rejects escaping it).
-export GOCACHE="$HOME/.gocache"
-export GOMODCACHE="$HOME/.gomodcache"
+# The cache dir must resolve to the SAME location the agent expands
+if [[ "$(go env GOOS)" == "windows" ]]; then
+  cache_home="${USERPROFILE}"
+else
+  cache_home="${HOME}"
+fi
+export GOCACHE="${cache_home}/.gocache"
+export GOMODCACHE="${cache_home}/.gomodcache"
 
 echo --- :inbox_tray: cache restore
 buildkite-agent cache restore --name gomodcache --name gocache
