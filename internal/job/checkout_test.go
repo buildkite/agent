@@ -125,11 +125,15 @@ func TestDefaultCheckoutPhase(t *testing.T) {
 			executor: &Executor{
 				shell: shell,
 				ExecutorConfig: ExecutorConfig{
-					Commit:        "HEAD",
-					Branch:        "main",
-					CleanCheckout: false,
-					GitCleanFlags: "-f -d -x",
-					RefSpec:       "refs/custom",
+					Commit:                       "HEAD",
+					Branch:                       "main",
+					CleanCheckout:                false,
+					GitCleanFlags:                "-f -d -x",
+					RefSpec:                      "refs/custom",
+					PullRequest:                  "124",
+					PipelineProvider:             "github",
+					PullRequestHeadCommit:        "not-the-head",
+					PullRequestUsingMergeRefspec: true,
 				},
 			},
 			projectName: "project-name-refspec",
@@ -140,12 +144,13 @@ func TestDefaultCheckoutPhase(t *testing.T) {
 			executor: &Executor{
 				shell: shell,
 				ExecutorConfig: ExecutorConfig{
-					PullRequest:      "124",
-					Commit:           "HEAD",
-					Branch:           "main",
-					CleanCheckout:    false,
-					GitCleanFlags:    "-f -d -x",
-					PipelineProvider: "github",
+					PullRequest:           "124",
+					PullRequestHeadCommit: "not-the-head",
+					Commit:                "HEAD",
+					Branch:                "main",
+					CleanCheckout:         false,
+					GitCleanFlags:         "-f -d -x",
+					PipelineProvider:      "github",
 				},
 			},
 			projectName: "project-name-pull-request",
@@ -194,6 +199,7 @@ func TestDefaultCheckoutPhase(t *testing.T) {
 					CleanCheckout:                false,
 					GitCleanFlags:                "-f -d -x",
 					PipelineProvider:             "github",
+					PullRequestHeadCommit:        "not-the-head",
 					PullRequestUsingMergeRefspec: true,
 				},
 			},
@@ -219,6 +225,35 @@ func TestDefaultCheckoutPhase(t *testing.T) {
 
 			if err := tt.executor.defaultCheckoutPhase(ctx, 1); err != nil {
 				t.Fatalf("tt.executor.defaultCheckoutPhase(ctx, 1) error = %v, want nil", err)
+			}
+		})
+	}
+}
+
+func TestCommitSecondParent(t *testing.T) {
+	t.Parallel()
+
+	for _, test := range []struct {
+		name   string
+		commit string
+		want   string
+		ok     bool
+	}{
+		{
+			name:   "merge commit",
+			commit: "tree tree-id\nparent base-id\nparent head-id\nauthor Example\n\nMessage\n",
+			want:   "head-id",
+			ok:     true,
+		},
+		{
+			name:   "non-merge commit",
+			commit: "tree tree-id\nparent base-id\nauthor Example\n\nparent fake-head-in-message\n",
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			got, ok := commitSecondParent(test.commit)
+			if got != test.want || ok != test.ok {
+				t.Errorf("commitSecondParent() = (%q, %t), want (%q, %t)", got, ok, test.want, test.ok)
 			}
 		})
 	}

@@ -63,6 +63,10 @@ type ExecutorConfig struct {
 	// If the commit was part of a pull request, this will container the PR number
 	PullRequest string
 
+	// The expected head commit for a pull request build. Intentionally has no
+	// env tag so hooks cannot change which merge commit the agent accepts.
+	PullRequestHeadCommit string
+
 	// Whether the agent should attempt to checkout the pull request commit using the merge refspec
 	PullRequestUsingMergeRefspec bool
 

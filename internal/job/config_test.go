@@ -24,6 +24,7 @@ func TestEnvVarsAreMappedToConfig(t *testing.T) {
 		GitCleanFlags:                "-v",
 		GitSSHKey:                    "original-key",
 		GitRemoteMirrorURL:           "https://mirror.example/original.git",
+		PullRequestHeadCommit:        "original-pull-request-head",
 		AgentName:                    "myAgent",
 		CleanCheckout:                false,
 		PluginsAlwaysCloneFresh:      false,
@@ -40,6 +41,7 @@ func TestEnvVarsAreMappedToConfig(t *testing.T) {
 		"BUILDKITE_CLEAN_CHECKOUT=true",
 		"BUILDKITE_GIT_SSH_KEY=new-key",
 		"BUILDKITE_GIT_REMOTE_MIRROR_URL=https://mirror.example/replaced.git",
+		"BUILDKITE_PULL_REQUEST_HEAD_COMMIT=replaced-pull-request-head",
 		"BUILDKITE_PLUGINS_ALWAYS_CLONE_FRESH=true",
 		"BUILDKITE_GIT_SUBMODULES=true",
 	})
@@ -74,6 +76,9 @@ func TestEnvVarsAreMappedToConfig(t *testing.T) {
 	}
 	if got, want := config.GitRemoteMirrorURL, "https://mirror.example/original.git"; got != want {
 		t.Errorf("config.GitRemoteMirrorURL = %q, want immutable %q", got, want)
+	}
+	if got, want := config.PullRequestHeadCommit, "original-pull-request-head"; got != want {
+		t.Errorf("config.PullRequestHeadCommit = %q, want immutable %q", got, want)
 	}
 
 	if got, want := config.CleanCheckout, true; got != want {
