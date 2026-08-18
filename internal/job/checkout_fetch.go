@@ -212,7 +212,7 @@ func (e *Executor) fetchSource(ctx context.Context, addBloblessFilter bool, atte
 }
 
 func (e *Executor) validateGithubPRMergeHead(ctx context.Context) error {
-	actualHead, err := e.shell.Command("git", "rev-parse", "FETCH_HEAD^2^{commit}").RunAndCaptureStdout(
+	commit, err := e.shell.Command("git", "cat-file", "commit", "FETCH_HEAD").RunAndCaptureStdout(
 		ctx,
 		shell.ShowStderr(false),
 	)
@@ -223,7 +223,23 @@ func (e *Executor) validateGithubPRMergeHead(ctx context.Context) error {
 		}
 	}
 
-	actualHead = strings.TrimSpace(actualHead)
+	var parents []string
+	for _, line := range strings.Split(commit, "\n") {
+		if line == "" {
+			break
+		}
+		if parent, ok := strings.CutPrefix(line, "parent "); ok {
+			parents = append(parents, parent)
+		}
+	}
+	if len(parents) < 2 {
+		return &gitError{
+			error: fmt.Errorf("verifying fetched GitHub pull request merge commit has expected head %q: fetched commit has fewer than two parents", e.PullRequestHeadCommit),
+			Type:  gitErrorFetch,
+		}
+	}
+
+	actualHead := parents[1]
 	if actualHead != e.PullRequestHeadCommit {
 		return &gitError{
 			error: fmt.Errorf("fetched GitHub pull request merge commit does not match the build's pull request head: expected %q, got %q", e.PullRequestHeadCommit, actualHead),

@@ -1406,7 +1406,8 @@ func TestCheckingOutGitHubPullRequestMergeRefspec(t *testing.T) {
 	}
 
 	env := []string{
-		"BUILDKITE_GIT_CLONE_FLAGS=--no-local", // Disable the fast local clone method, which automatically copies all refs
+		"BUILDKITE_GIT_CLONE_FLAGS=--no-local --depth=1", // Disable the fast local clone method, which automatically copies all refs
+		"BUILDKITE_GIT_FETCH_FLAGS=-v --prune --depth=1",
 		"BUILDKITE_BRANCH=update-test-txt",
 		"BUILDKITE_PULL_REQUEST=123",
 		"BUILDKITE_PIPELINE_PROVIDER=github",
@@ -1422,10 +1423,10 @@ func TestCheckingOutGitHubPullRequestMergeRefspec(t *testing.T) {
 		})
 
 	git.ExpectAll([][]any{
-		{"clone", "--no-local", "--", tester.Repo.Path, "."},
+		{"clone", "--no-local", "--depth=1", "--", tester.Repo.Path, "."},
 		{"clean", "-ffxdq"},
-		{"fetch", "-v", "--prune", "--", "origin", "refs/pull/123/merge"},
-		{"rev-parse", "FETCH_HEAD^2^{commit}"},
+		{"fetch", "-v", "--prune", "--depth=1", "--", "origin", "refs/pull/123/merge"},
+		{"cat-file", "commit", "FETCH_HEAD"},
 		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
 		{"clean", "-ffxdq"},
 		{"rev-parse", "FETCH_HEAD"},
@@ -1502,8 +1503,8 @@ func TestCheckingOutGitHubPullRequestMergeRefspecRetriesStaleHead(t *testing.T) 
 			if slices.Contains(i.Args, "refs/pull/123/merge") {
 				fetches.Add(1)
 			}
-		case "rev-parse":
-			if strings.HasPrefix(i.Args[1], "FETCH_HEAD") && updatedRemote.CompareAndSwap(false, true) {
+		case "cat-file":
+			if slices.Equal(i.Args[1:], []string{"commit", "FETCH_HEAD"}) && updatedRemote.CompareAndSwap(false, true) {
 				if _, err := tester.Repo.Execute("update-ref", "refs/pull/123/merge", currentMerge); err != nil {
 					return fmt.Errorf("updating simulated GitHub merge ref: %w", err)
 				}
