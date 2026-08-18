@@ -148,6 +148,11 @@ func (e *Executor) fetchSource(ctx context.Context, addBloblessFilter bool, atte
 			}); err != nil {
 				return fmt.Errorf("fetching PR refspec %q: %w", refspecs, err)
 			}
+			if kind == refspecGithubPRMerge && e.PullRequestHeadCommit != "" {
+				if err := e.validateGithubPRMergeHead(ctx); err != nil {
+					return err
+				}
+			}
 		} else {
 			// The build is pinned to an immutable commit, and the canonical
 			// refs/pull/* fetch exists only to obtain its objects, so a
@@ -200,6 +205,29 @@ func (e *Executor) fetchSource(ctx context.Context, addBloblessFilter bool, atte
 		e.shell.Commentf("Fetch and checkout commit")
 		if err := gitFetchWithFallback(ctx, e.shell, gitFetchFlags, e.Commit); err != nil {
 			return fmt.Errorf("fetching commit %q: %w", e.Commit, err)
+		}
+	}
+
+	return nil
+}
+
+func (e *Executor) validateGithubPRMergeHead(ctx context.Context) error {
+	actualHead, err := e.shell.Command("git", "rev-parse", "FETCH_HEAD^2^{commit}").RunAndCaptureStdout(
+		ctx,
+		shell.ShowStderr(false),
+	)
+	if err != nil {
+		return &gitError{
+			error: fmt.Errorf("verifying fetched GitHub pull request merge commit has expected head %q: %w", e.PullRequestHeadCommit, err),
+			Type:  gitErrorFetch,
+		}
+	}
+
+	actualHead = strings.TrimSpace(actualHead)
+	if actualHead != e.PullRequestHeadCommit {
+		return &gitError{
+			error: fmt.Errorf("fetched GitHub pull request merge commit does not match the build's pull request head: expected %q, got %q", e.PullRequestHeadCommit, actualHead),
+			Type:  gitErrorFetch,
 		}
 	}
 

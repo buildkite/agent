@@ -59,6 +59,7 @@ type BootstrapConfig struct {
 	Plugins                      string        `cli:"plugins"`
 	Secrets                      string        `cli:"secrets"`
 	PullRequest                  string        `cli:"pullrequest"`
+	PullRequestHeadCommit        string        `cli:"pull-request-head-commit"`
 	PullRequestUsingMergeRefspec bool          `cli:"pull-request-using-merge-refspec"`
 	GitSubmodules                bool          `cli:"git-submodules"`
 	GitLFSEnabled                bool          `cli:"git-lfs-enabled"`
@@ -195,6 +196,12 @@ var BootstrapCommand = &cli.Command{
 			Value:   "",
 			Usage:   "The number/id of the pull request this commit belonged to",
 			Sources: cli.EnvVars("BUILDKITE_PULL_REQUEST"),
+		},
+		&cli.StringFlag{
+			Name:    "pull-request-head-commit",
+			Value:   "",
+			Usage:   "The expected head commit for a pull request build",
+			Sources: cli.EnvVars("BUILDKITE_PULL_REQUEST_HEAD_COMMIT"),
 		},
 		&cli.BoolFlag{
 			Name:    "pull-request-using-merge-refspec",
@@ -516,6 +523,7 @@ var BootstrapCommand = &cli.Command{
 			PluginsAlwaysCloneFresh:      cfg.PluginsAlwaysCloneFresh,
 			PluginsPath:                  cfg.PluginsPath,
 			PullRequest:                  cfg.PullRequest,
+			PullRequestHeadCommit:        cfg.PullRequestHeadCommit,
 			PullRequestUsingMergeRefspec: cfg.PullRequestUsingMergeRefspec,
 			Queue:                        cfg.Queue,
 			RedactedVars:                 cfg.RedactedVars,
