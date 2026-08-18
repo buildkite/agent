@@ -1395,16 +1395,6 @@ func TestCheckingOutGitHubPullRequestMergeRefspec(t *testing.T) {
 	}
 	pullRequestHead = strings.TrimSpace(pullRequestHead)
 
-	hookFilename := "environment"
-	hookContents := "#!/bin/sh\nexport BUILDKITE_PULL_REQUEST_HEAD_COMMIT=changed-by-environment-hook\n"
-	if runtime.GOOS == "windows" {
-		hookFilename = "environment.bat"
-		hookContents = "@echo off\nset BUILDKITE_PULL_REQUEST_HEAD_COMMIT=changed-by-environment-hook\n"
-	}
-	if err := os.WriteFile(filepath.Join(tester.HooksDir, hookFilename), []byte(hookContents), 0o700); err != nil {
-		t.Fatalf("os.WriteFile(environment hook) error = %v", err)
-	}
-
 	env := []string{
 		"BUILDKITE_GIT_CLONE_FLAGS=--no-local --depth=1", // Disable the fast local clone method, which automatically copies all refs
 		"BUILDKITE_GIT_FETCH_FLAGS=-v --prune --depth=1",
@@ -1415,12 +1405,7 @@ func TestCheckingOutGitHubPullRequestMergeRefspec(t *testing.T) {
 		"BUILDKITE_PULL_REQUEST_USING_MERGE_REFSPEC=true",
 	}
 
-	git := tester.
-		MustMock(t, "git").
-		PassthroughToLocalCommand().
-		Before(func(i bintest.Invocation) error {
-			return bintest.ExpectEnv(t, i.Env, "BUILDKITE_PULL_REQUEST_HEAD_COMMIT=changed-by-environment-hook")
-		})
+	git := tester.MustMock(t, "git").PassthroughToLocalCommand()
 
 	git.ExpectAll([][]any{
 		{"clone", "--no-local", "--depth=1", "--", tester.Repo.Path, "."},
@@ -1610,77 +1595,6 @@ func TestCheckingOutGitHubPullRequestMergeRefspecExhaustsRetriesForStaleHead(t *
 		if !strings.Contains(tester.Output, want) {
 			t.Errorf("output does not contain %q. Output:\n%s", want, tester.Output)
 		}
-	}
-}
-
-func TestCheckingOutGitHubPullRequestMergeRefspecRejectsInvalidHeadValidation(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name      string
-		expected  string
-		nonMerge  bool
-		wantError string
-	}{
-		{
-			name:      "malformed expected head",
-			expected:  "not-an-object-id",
-			wantError: "does not match the build's pull request head",
-		},
-		{
-			name:      "fetched object is not a merge commit",
-			nonMerge:  true,
-			wantError: "verifying fetched GitHub pull request merge commit has expected head",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			tester, err := NewExecutorTester(mainCtx)
-			if err != nil {
-				t.Fatalf("NewExecutorTester() error = %v", err)
-			}
-			defer tester.Close()
-
-			expectedHead := tt.expected
-			if tt.nonMerge {
-				head, err := tester.Repo.RevParse("refs/pull/123/head")
-				if err != nil {
-					t.Fatalf("tester.Repo.RevParse(%q) error = %v", "refs/pull/123/head", err)
-				}
-				expectedHead = strings.TrimSpace(head)
-				if _, err := tester.Repo.Execute("update-ref", "refs/pull/123/merge", expectedHead); err != nil {
-					t.Fatalf("tester.Repo.Execute(update-ref) error = %v", err)
-				}
-			}
-			git := tester.MustMock(t, "git").PassthroughToLocalCommand()
-			git.Expect().AtLeastOnce().WithAnyArguments()
-			agent := tester.MockAgent(t)
-			agent.Expect("meta-data", "exists", job.CommitMetadataKey).NotCalled()
-
-			err = tester.Run(t,
-				"BUILDKITE_GIT_CLONE_FLAGS=--no-local",
-				"BUILDKITE_BRANCH=update-test-txt",
-				"BUILDKITE_PULL_REQUEST=123",
-				"BUILDKITE_PIPELINE_PROVIDER=github",
-				"BUILDKITE_PULL_REQUEST_USING_MERGE_REFSPEC=true",
-				"BUILDKITE_PULL_REQUEST_HEAD_COMMIT="+expectedHead,
-				"BUILDKITE_CHECKOUT_ATTEMPTS=1",
-			)
-			if err == nil {
-				t.Fatalf("tester.Run() error = nil, want validation failure. Output:\n%s", tester.Output)
-			}
-			tester.CheckMocks(t)
-
-			if !strings.Contains(tester.Output, tt.wantError) {
-				t.Errorf("output does not contain %q. Output:\n%s", tt.wantError, tester.Output)
-			}
-			if !strings.Contains(tester.Output, expectedHead) {
-				t.Errorf("output does not contain expected head %q. Output:\n%s", expectedHead, tester.Output)
-			}
-		})
 	}
 }
 

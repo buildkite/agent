@@ -230,6 +230,35 @@ func TestDefaultCheckoutPhase(t *testing.T) {
 	}
 }
 
+func TestCommitSecondParent(t *testing.T) {
+	t.Parallel()
+
+	for _, test := range []struct {
+		name   string
+		commit string
+		want   string
+		ok     bool
+	}{
+		{
+			name:   "merge commit",
+			commit: "tree tree-id\nparent base-id\nparent head-id\nauthor Example\n\nMessage\n",
+			want:   "head-id",
+			ok:     true,
+		},
+		{
+			name:   "non-merge commit",
+			commit: "tree tree-id\nparent base-id\nauthor Example\n\nparent fake-head-in-message\n",
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			got, ok := commitSecondParent(test.commit)
+			if got != test.want || ok != test.ok {
+				t.Errorf("commitSecondParent() = (%q, %t), want (%q, %t)", got, ok, test.want, test.ok)
+			}
+		})
+	}
+}
+
 func TestPrepareGitSSHKey(t *testing.T) {
 	t.Parallel()
 

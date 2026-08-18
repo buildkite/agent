@@ -223,23 +223,14 @@ func (e *Executor) validateGithubPRMergeHead(ctx context.Context) error {
 		}
 	}
 
-	var parents []string
-	for _, line := range strings.Split(commit, "\n") {
-		if line == "" {
-			break
-		}
-		if parent, ok := strings.CutPrefix(line, "parent "); ok {
-			parents = append(parents, parent)
-		}
-	}
-	if len(parents) < 2 {
+	actualHead, ok := commitSecondParent(commit)
+	if !ok {
 		return &gitError{
 			error: fmt.Errorf("verifying fetched GitHub pull request merge commit has expected head %q: fetched commit has fewer than two parents", e.PullRequestHeadCommit),
 			Type:  gitErrorFetch,
 		}
 	}
 
-	actualHead := parents[1]
 	if actualHead != e.PullRequestHeadCommit {
 		return &gitError{
 			error: fmt.Errorf("fetched GitHub pull request merge commit does not match the build's pull request head: expected %q, got %q", e.PullRequestHeadCommit, actualHead),
@@ -248,6 +239,22 @@ func (e *Executor) validateGithubPRMergeHead(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+func commitSecondParent(commit string) (string, bool) {
+	parents := 0
+	for _, line := range strings.Split(commit, "\n") {
+		if line == "" {
+			break
+		}
+		if parent, ok := strings.CutPrefix(line, "parent "); ok {
+			parents++
+			if parents == 2 {
+				return parent, true
+			}
+		}
+	}
+	return "", false
 }
 
 func isExistingCheckoutRemoteMirrorAttempt(attempt *remoteMirrorAttempt) bool {
