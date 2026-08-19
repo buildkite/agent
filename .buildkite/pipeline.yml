@@ -17,6 +17,7 @@ steps:
       - go.{mod,sum}
       - "**.go"
       - .buildkite/steps/check-code-committed.sh
+      - .buildkite/docker-compose.yml
     plugins:
       - docker-compose#v4.14.0:
           config: .buildkite/docker-compose.yml
@@ -30,6 +31,7 @@ steps:
     if_changed:
       - api/proto/**
       - .buildkite/steps/check-protobuf-generation.sh
+      - .buildkite/docker-compose.yml
     plugins:
       - docker-compose#v4.14.0:
           config: .buildkite/docker-compose.yml
@@ -74,6 +76,7 @@ steps:
       - "**.go"
       - "**/fixtures/**"
       - .buildkite/steps/{tests,test-coverage-report}.sh
+      - .buildkite/docker-compose.yml
     steps:
       - name: ":linux: Linux AMD64 Tests"
         key: test-linux-amd64
