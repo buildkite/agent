@@ -1399,23 +1399,29 @@ func TestCheckingOutGitHubPullRequestMergeRefspec(t *testing.T) {
 	if err != nil {
 		t.Fatalf("tester.Repo.RevParse(%q) error = %v, want nil", "refs/pull/123/merge", err)
 	}
+	pullRequestHead, err := tester.Repo.RevParse("refs/pull/123/head")
+	if err != nil {
+		t.Fatalf("tester.Repo.RevParse(%q) error = %v, want nil", "refs/pull/123/head", err)
+	}
+	pullRequestHead = strings.TrimSpace(pullRequestHead)
 
 	env := []string{
-		"BUILDKITE_GIT_CLONE_FLAGS=--no-local", // Disable the fast local clone method, which automatically copies all refs
+		"BUILDKITE_GIT_CLONE_FLAGS=--no-local --depth=1", // Disable the fast local clone method, which automatically copies all refs
+		"BUILDKITE_GIT_FETCH_FLAGS=-v --prune --depth=1",
 		"BUILDKITE_BRANCH=update-test-txt",
 		"BUILDKITE_PULL_REQUEST=123",
 		"BUILDKITE_PIPELINE_PROVIDER=github",
+		"BUILDKITE_PULL_REQUEST_HEAD_COMMIT=" + pullRequestHead,
 		"BUILDKITE_PULL_REQUEST_USING_MERGE_REFSPEC=true",
 	}
 
-	git := tester.
-		MustMock(t, "git").
-		PassthroughToLocalCommand()
+	git := tester.MustMock(t, "git").PassthroughToLocalCommand()
 
 	git.ExpectAll([][]any{
-		{"clone", "--no-local", "--", tester.Repo.Path, "."},
+		{"clone", "--no-local", "--depth=1", "--", tester.Repo.Path, "."},
 		{"clean", "-ffxdq"},
-		{"fetch", "-v", "--prune", "--", "origin", "refs/pull/123/merge"},
+		{"fetch", "-v", "--prune", "--depth=1", "--", "origin", "refs/pull/123/merge"},
+		{"cat-file", "commit", "FETCH_HEAD"},
 		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
 		{"clean", "-ffxdq"},
 		{"rev-parse", "FETCH_HEAD"},
@@ -1431,6 +1437,173 @@ func TestCheckingOutGitHubPullRequestMergeRefspec(t *testing.T) {
 	}
 	if got, want := commitHash, checkoutRepoCommit; got != want {
 		t.Fatalf("tester.Repo.RevParse(%q) = %q, want %q", "refs/pull/123/merge", got, want)
+	}
+}
+
+func TestCheckingOutGitHubPullRequestMergeRefspecRetriesStaleHead(t *testing.T) {
+	t.Parallel()
+
+	tester, err := NewExecutorTester(mainCtx)
+	if err != nil {
+		t.Fatalf("NewExecutorTester() error = %v", err)
+	}
+	defer tester.Close()
+
+	if err := tester.Repo.CheckoutBranch("update-test-txt"); err != nil {
+		t.Fatalf("tester.Repo.CheckoutBranch(%q) error = %v", "update-test-txt", err)
+	}
+	if _, err := tester.Repo.Execute("reset", "--hard", "main"); err != nil {
+		t.Fatalf("tester.Repo.Execute(reset --hard main) error = %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(tester.Repo.Path, "test.txt"), []byte("This is the force-pushed pull request"), 0o600); err != nil {
+		t.Fatalf("os.WriteFile(test.txt) error = %v", err)
+	}
+	if err := tester.Repo.Add("test.txt"); err != nil {
+		t.Fatalf("tester.Repo.Add(%q) error = %v", "test.txt", err)
+	}
+	if err := tester.Repo.Commit("Force-pushed PR commit"); err != nil {
+		t.Fatalf("tester.Repo.Commit() error = %v", err)
+	}
+	expectedHead, err := tester.Repo.RevParse("HEAD")
+	if err != nil {
+		t.Fatalf("tester.Repo.RevParse(%q) error = %v", "HEAD", err)
+	}
+	expectedHead = strings.TrimSpace(expectedHead)
+	if _, err := tester.Repo.Execute("update-ref", "refs/pull/123/head", expectedHead); err != nil {
+		t.Fatalf("tester.Repo.Execute(update-ref) error = %v", err)
+	}
+	if err := tester.Repo.CheckoutBranch("main"); err != nil {
+		t.Fatalf("tester.Repo.CheckoutBranch(%q) error = %v", "main", err)
+	}
+	if _, err := tester.Repo.Execute("merge", "--no-ff", "-m", "Current pull request merge", "update-test-txt"); err != nil {
+		t.Fatalf("tester.Repo.Execute(merge) error = %v", err)
+	}
+	currentMerge, err := tester.Repo.RevParse("HEAD")
+	if err != nil {
+		t.Fatalf("tester.Repo.RevParse(%q) error = %v", "HEAD", err)
+	}
+	currentMerge = strings.TrimSpace(currentMerge)
+	if _, err := tester.Repo.Execute("reset", "--hard", "HEAD~1"); err != nil {
+		t.Fatalf("tester.Repo.Execute(reset --hard HEAD~1) error = %v", err)
+	}
+
+	var fetches, clones atomic.Int32
+	var updatedRemote atomic.Bool
+	git := tester.MustMock(t, "git").PassthroughToLocalCommand().Before(func(i bintest.Invocation) error {
+		switch i.Args[0] {
+		case "clone":
+			clones.Add(1)
+		case "fetch":
+			if slices.Contains(i.Args, "refs/pull/123/merge") {
+				fetches.Add(1)
+			}
+		case "cat-file":
+			if slices.Equal(i.Args[1:], []string{"commit", "FETCH_HEAD"}) && updatedRemote.CompareAndSwap(false, true) {
+				if _, err := tester.Repo.Execute("update-ref", "refs/pull/123/merge", currentMerge); err != nil {
+					return fmt.Errorf("updating simulated GitHub merge ref: %w", err)
+				}
+			}
+		}
+		return nil
+	})
+	git.Expect().AtLeastOnce().WithAnyArguments()
+
+	env := []string{
+		"BUILDKITE_GIT_CLONE_FLAGS=--no-local",
+		"BUILDKITE_BRANCH=update-test-txt",
+		"BUILDKITE_PULL_REQUEST=123",
+		"BUILDKITE_PIPELINE_PROVIDER=github",
+		"BUILDKITE_PULL_REQUEST_USING_MERGE_REFSPEC=true",
+		"BUILDKITE_PULL_REQUEST_HEAD_COMMIT=" + expectedHead,
+		"BUILDKITE_CHECKOUT_ATTEMPTS=2",
+	}
+
+	if err := tester.Run(t, env...); err != nil {
+		t.Fatalf("tester.Run() error = %v, want nil after retry. Output:\n%s", err, tester.Output)
+	}
+	tester.CheckMocks(t)
+
+	checkoutRepo := &gitRepository{Path: tester.CheckoutDir()}
+	checkoutCommit, err := checkoutRepo.RevParse("HEAD")
+	if err != nil {
+		t.Fatalf("checkoutRepo.RevParse(%q) error = %v", "HEAD", err)
+	}
+	if got, want := strings.TrimSpace(checkoutCommit), currentMerge; got != want {
+		t.Errorf("checked out commit = %q, want current merge %q", got, want)
+	}
+	if got, want := fetches.Load(), int32(2); got != want {
+		t.Errorf("merge-ref fetches = %d, want %d", got, want)
+	}
+	if got, want := clones.Load(), int32(1); got != want {
+		t.Errorf("clones = %d, want %d (stale merge retries must reuse the checkout)", got, want)
+	}
+}
+
+func TestCheckingOutGitHubPullRequestMergeRefspecExhaustsRetriesForStaleHead(t *testing.T) {
+	t.Parallel()
+
+	tester, err := NewExecutorTester(mainCtx)
+	if err != nil {
+		t.Fatalf("NewExecutorTester() error = %v", err)
+	}
+	defer tester.Close()
+
+	expectedHead, err := tester.Repo.RevParse("main")
+	if err != nil {
+		t.Fatalf("tester.Repo.RevParse(%q) error = %v", "main", err)
+	}
+	expectedHead = strings.TrimSpace(expectedHead)
+	actualHead, err := tester.Repo.RevParse("refs/pull/123/head")
+	if err != nil {
+		t.Fatalf("tester.Repo.RevParse(%q) error = %v", "refs/pull/123/head", err)
+	}
+	actualHead = strings.TrimSpace(actualHead)
+
+	var fetches, clones atomic.Int32
+	git := tester.MustMock(t, "git").PassthroughToLocalCommand().Before(func(i bintest.Invocation) error {
+		switch i.Args[0] {
+		case "clone":
+			clones.Add(1)
+		case "fetch":
+			if slices.Contains(i.Args, "refs/pull/123/merge") {
+				fetches.Add(1)
+			}
+		}
+		return nil
+	})
+	git.Expect().AtLeastOnce().WithAnyArguments()
+
+	agent := tester.MockAgent(t)
+	agent.Expect("meta-data", "exists", job.CommitMetadataKey).NotCalled()
+
+	err = tester.Run(t,
+		"BUILDKITE_GIT_CLONE_FLAGS=--no-local",
+		"BUILDKITE_BRANCH=update-test-txt",
+		"BUILDKITE_PULL_REQUEST=123",
+		"BUILDKITE_PIPELINE_PROVIDER=github",
+		"BUILDKITE_PULL_REQUEST_USING_MERGE_REFSPEC=true",
+		"BUILDKITE_PULL_REQUEST_HEAD_COMMIT="+expectedHead,
+		"BUILDKITE_CHECKOUT_ATTEMPTS=2",
+	)
+	if err == nil {
+		t.Fatalf("tester.Run() error = nil, want stale merge head failure. Output:\n%s", tester.Output)
+	}
+	tester.CheckMocks(t)
+
+	if got, want := fetches.Load(), int32(2); got != want {
+		t.Errorf("merge-ref fetches = %d, want %d", got, want)
+	}
+	if got, want := clones.Load(), int32(1); got != want {
+		t.Errorf("clones = %d, want %d (stale merge retries must reuse the checkout)", got, want)
+	}
+	for _, want := range []string{
+		"does not match the build's pull request head",
+		"expected \"" + expectedHead + "\"",
+		"got \"" + actualHead + "\"",
+	} {
+		if !strings.Contains(tester.Output, want) {
+			t.Errorf("output does not contain %q. Output:\n%s", want, tester.Output)
+		}
 	}
 }
 

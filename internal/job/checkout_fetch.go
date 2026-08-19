@@ -147,6 +147,11 @@ func (e *Executor) fetchSource(ctx context.Context, addBloblessFilter bool, atte
 			}); err != nil {
 				return fmt.Errorf("fetching PR refspec %q: %w", refspecs, err)
 			}
+			if kind == refspecGithubPRMerge && e.PullRequestHeadCommit != "" {
+				if err := e.validateGithubPRMergeHead(ctx); err != nil {
+					return err
+				}
+			}
 		} else {
 			// The build is pinned to an immutable commit, and the canonical
 			// refs/pull/* fetch exists only to obtain its objects, so a
@@ -203,6 +208,52 @@ func (e *Executor) fetchSource(ctx context.Context, addBloblessFilter bool, atte
 	}
 
 	return nil
+}
+
+func (e *Executor) validateGithubPRMergeHead(ctx context.Context) error {
+	commit, err := e.shell.Command("git", "cat-file", "commit", "FETCH_HEAD").RunAndCaptureStdout(
+		ctx,
+		shell.ShowStderr(false),
+	)
+	if err != nil {
+		return &gitError{
+			error: fmt.Errorf("verifying fetched GitHub pull request merge commit has expected head %q: %w", e.PullRequestHeadCommit, err),
+			Type:  gitErrorFetch,
+		}
+	}
+
+	actualHead, ok := commitSecondParent(commit)
+	if !ok {
+		return &gitError{
+			error: fmt.Errorf("verifying fetched GitHub pull request merge commit has expected head %q: fetched commit has fewer than two parents", e.PullRequestHeadCommit),
+			Type:  gitErrorFetch,
+		}
+	}
+
+	if actualHead != e.PullRequestHeadCommit {
+		return &gitError{
+			error: fmt.Errorf("fetched GitHub pull request merge commit does not match the build's pull request head: expected %q, got %q", e.PullRequestHeadCommit, actualHead),
+			Type:  gitErrorFetch,
+		}
+	}
+
+	return nil
+}
+
+func commitSecondParent(commit string) (string, bool) {
+	parents := 0
+	for _, line := range strings.Split(commit, "\n") {
+		if line == "" {
+			break
+		}
+		if parent, ok := strings.CutPrefix(line, "parent "); ok {
+			parents++
+			if parents == 2 {
+				return parent, true
+			}
+		}
+	}
+	return "", false
 }
 
 func isExistingCheckoutRemoteMirrorAttempt(attempt *remoteMirrorAttempt) bool {
