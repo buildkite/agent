@@ -1,5 +1,4 @@
 # Shared Cache v2 definitions used to measure warm-cache CI performance.
-# This follow-up commit measures the target-specific caches on a warm build.
 caches:
   - name: gomodcache
     # Prefer an exact go.mod match, while allowing a compatible cache from the
@@ -56,6 +55,43 @@ caches:
       - { env: BUILDKITE_COMMIT }
     target_paths:
       - ~/.gocache-target
+
+  - name: e2e_gomodcache
+    # The triggered E2E pipeline has one job, so it can safely own both its
+    # module cache and its compiled test cache without competing writers.
+    cache_key:
+      - agent-e2e-go-modules-v1
+      - { agent: os }
+      - { agent: arch }
+      - { env: E2E_GO_VERSION, fallback_limit: true }
+      - { checksum: go.mod }
+    target_paths:
+      - ~/.e2e-gomodcache
+
+  - name: e2e_gocache
+    # Reuse compiled E2E test objects from the latest compatible commit on the
+    # same branch, while retaining an exact entry for the current commit.
+    cache_key:
+      - agent-e2e-go-build-v1
+      - { agent: os }
+      - { agent: arch }
+      - { env: E2E_GO_VERSION, fallback_limit: true }
+      - { checksum: go.mod }
+      - { agent: branch }
+      - { env: BUILDKITE_COMMIT }
+    target_paths:
+      - ~/.e2e-gocache
+
+  - name: bk_cli
+    # The pinned bk executable is immutable for a Go target. Cache only the
+    # installed binary instead of restoring the Agent repository's Go caches.
+    cache_key:
+      - bk-cli-v1
+      - { env: BK_CLI_COMMIT }
+      - { env: BK_CLI_GOOS }
+      - { env: BK_CLI_GOARCH }
+    target_paths:
+      - ~/.bk-cli/bin
 
   - name: protobuf_tools
     # Cache the installed protobuf tools as well as the Go caches used to build

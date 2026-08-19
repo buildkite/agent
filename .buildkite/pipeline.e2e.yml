@@ -1,3 +1,7 @@
+env:
+  BUILDKITE_AGENT_CACHE_REGISTRY: "agent-cache"
+  BUILDKITE_AGENT_CACHE_STORE_URL: "s3://bk-agent-cache-v2-dogfood-445615400570-us-east-1?region=us-east-1"
+
 agents:
   queue: agent-runners-linux-amd64
 
@@ -9,13 +13,27 @@ steps:
       - CI_E2E_TESTS_AGENT_TOKEN
       - CI_E2E_TESTS_ANALYTICS_TOKEN
     plugins:
+      - aws-assume-role-with-web-identity#v1.4.0:
+          role_arn: "arn:aws:iam::445615400570:role/pipeline-buildkite-agent"
+          session-tags:
+            - organization_slug
+            - organization_id
+            - pipeline_slug
       - docker-compose#v4.14.0:
           config: .buildkite/docker-compose.yml
           cli-version: 2
           mount-buildkite-agent: true
           run: e2e
+          env:
+            - BUILDKITE_AGENT_ACCESS_TOKEN
+            - BUILDKITE_AGENT_CACHE_REGISTRY
+            - BUILDKITE_AGENT_CACHE_STORE_URL
+            - AWS_ACCESS_KEY_ID
+            - AWS_SECRET_ACCESS_KEY
+            - AWS_SESSION_TOKEN
+            - BUILDKITE_BRANCH
+            - BUILDKITE_COMMIT
       - test-collector#v1.11.0:
           files: "junit.xml"
           format: "junit"
           api-token-env-name: CI_E2E_TESTS_ANALYTICS_TOKEN
-
