@@ -5,8 +5,6 @@ services:
       dockerfile: Dockerfile-lint
     volumes:
       - ../:/work:cached
-      - ~/gocache:/gocache
-      - ~/gomodcache:/gomodcache
     working_dir: /work
     environment:
       - GOCACHE=/gocache
@@ -18,8 +16,6 @@ services:
       dockerfile: Dockerfile-compile
     volumes:
       - ../:/work:cached
-      - ~/gocache:/gocache
-      - ~/gomodcache:/gomodcache
     working_dir: /work
     environment:
       - BUILDKITE_BUILD_NUMBER
