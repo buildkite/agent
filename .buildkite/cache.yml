@@ -40,6 +40,22 @@ caches:
     target_paths:
       - ~/.gocache_race
 
+  - name: target_gocache
+    # Cross-compiled objects are reusable only for the same target and build
+    # mode. Save an exact entry for each commit, with fallback to an earlier
+    # cache built for the same target and Go toolchain.
+    cache_key:
+      - agent-go-target-build-v1
+      - { env: TARGET_GOOS }
+      - { env: TARGET_GOARCH }
+      - { env: TARGET_GOARM }
+      - { env: TARGET_BUILD_MODE }
+      - { env: TARGET_GO_VERSION, fallback_limit: true }
+      - { checksum: go.mod }
+      - { env: BUILDKITE_COMMIT }
+    target_paths:
+      - ~/.gocache-target
+
   - name: protobuf_tools
     # Cache the installed protobuf tools as well as the Go caches used to build
     # them. Any toolchain or tool version change gets a fresh entry.

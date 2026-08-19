@@ -334,6 +334,7 @@ steps:
               env:
                 - BUILDKITE_AGENT_CACHE_REGISTRY
                 - BUILDKITE_AGENT_CACHE_STORE_URL
+                - BUILDKITE_COMMIT
                 - AWS_ACCESS_KEY_ID
                 - AWS_SECRET_ACCESS_KEY
                 - AWS_SESSION_TOKEN
