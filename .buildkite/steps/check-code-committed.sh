@@ -2,6 +2,13 @@
 
 set -euf
 
+export GOCACHE="$HOME/.gocache"
+export GOMODCACHE="$HOME/.gomodcache"
+export AGENT_GO_VERSION="$(go env GOVERSION | cut -d. -f1,2)"
+
+echo --- :inbox_tray: Restoring Go caches
+buildkite-agent cache restore --name gomodcache --name gocache
+
 echo --- :go: Checking go mod tidyness
 go mod tidy
 if ! git diff --no-ext-diff --exit-code; then
@@ -65,3 +72,13 @@ EOF
 fi
 
 echo +++ Everything is clean and tidy! 🎉
+
+# Populate the shared module cache with the complete dependency graph before
+# this step saves it for jobs on every platform.
+echo --- :arrow_down: Downloading Go modules
+go mod download
+
+# This unsharded step owns the shared module cache and Linux AMD64 build cache,
+# avoiding competing saves from the parallel test jobs.
+echo --- :outbox_tray: Saving Go caches
+buildkite-agent cache save --name gomodcache --name gocache

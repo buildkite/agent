@@ -6,9 +6,6 @@ services:
     volumes:
       - ../:/work:cached
     working_dir: /work
-    environment:
-      - GOCACHE=/gocache
-      - GOMODCACHE=/gomodcache
 
   agent:
     build:
@@ -22,8 +19,6 @@ services:
       - BUILDKITE_JOB_ID
       - "BUILDKITE_AGENT_TAGS=queue=default"
       - "BUILDKITE_BUILD_PATH=/buildkite"
-      - GOCACHE=/gocache
-      - GOMODCACHE=/gomodcache
       - BUILDKITE_TEST_ENGINE_API_ACCESS_TOKEN
 
   e2e:

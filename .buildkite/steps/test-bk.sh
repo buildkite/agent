@@ -1,6 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+export GOCACHE="$HOME/.gocache"
+export GOMODCACHE="$HOME/.gomodcache"
+export AGENT_GO_VERSION="$(go env GOVERSION | cut -d. -f1,2)"
+
+echo --- :inbox_tray: Restoring Go caches
+buildkite-agent cache restore --name gomodcache --name gocache
 
 echo "--- :package: Downloading bk binary"
 go install github.com/buildkite/cli/v2/cmd/bk@cdcc5fa4b6e209f5ffa79469dad04938d6eed0cd

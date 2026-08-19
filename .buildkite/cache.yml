@@ -1,0 +1,56 @@
+caches:
+  - name: gomodcache
+    # Prefer an exact go.mod match, while allowing a compatible cache from the
+    # same OS, architecture, and Go version as a fallback.
+    cache_key:
+      - agent-go-modules-v1
+      - { agent: os }
+      - { agent: arch }
+      - { env: AGENT_GO_VERSION, fallback_limit: true }
+      - { checksum: go.mod }
+    target_paths:
+      - ~/.gomodcache
+
+  - name: gocache
+    # Save an exact entry for each commit, with fallback to an earlier cache
+    # built by the same OS, architecture, and Go version.
+    cache_key:
+      - agent-go-build-v1
+      - { agent: os }
+      - { agent: arch }
+      - { env: AGENT_GO_VERSION, fallback_limit: true }
+      - { checksum: go.mod }
+      - { agent: branch }
+      - { env: BUILDKITE_COMMIT }
+    target_paths:
+      - ~/.gocache
+
+  - name: gocache_race
+    # Race builds use different compiled objects, so keep them separate from
+    # the normal Go build cache.
+    cache_key:
+      - agent-go-build-race-v1
+      - { agent: os }
+      - { agent: arch }
+      - { env: AGENT_GO_VERSION, fallback_limit: true }
+      - { checksum: go.mod }
+      - { agent: branch }
+      - { env: BUILDKITE_COMMIT }
+    target_paths:
+      - ~/.gocache_race
+
+  - name: protobuf_tools
+    # Cache the installed protobuf tools as well as the Go caches used to build
+    # them. Any toolchain or tool version change gets a fresh entry.
+    cache_key:
+      - protobuf-tools-v1
+      - { agent: os }
+      - { agent: arch }
+      - { env: PROTOBUF_GO_VERSION }
+      - { env: PROTOBUF_BUF_VERSION }
+      - { env: PROTOBUF_PROTOC_GEN_GO_VERSION }
+      - { env: PROTOBUF_PROTOC_GEN_CONNECT_GO_VERSION }
+    target_paths:
+      - ~/.protobuf-tools/bin
+      - ~/.protobuf-tools/gocache
+      - ~/.protobuf-tools/gomodcache
