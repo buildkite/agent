@@ -1,4 +1,5 @@
 # Shared Cache v2 definitions used to measure warm-cache CI performance.
+# This follow-up commit measures the target-specific caches on a warm build.
 caches:
   - name: gomodcache
     # Prefer an exact go.mod match, while allowing a compatible cache from the
