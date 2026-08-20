@@ -12,6 +12,14 @@
 # fallback_limit marks where matching may stop: parts after it are optional on
 # restore, so a dependency bump still lands on a compatible entry.
 #
+# One producer per key, and the producer must leave behind what the consumers
+# need. Exact keys make saves free but remove accumulation: once an entry
+# exists it is frozen until the checksum changes, so a key with two
+# differently-shaped producers keeps whichever one happened to win the first
+# build after a dependency bump, and no later build can add to it. Jobs that
+# compile this module but leave different artifacts behind therefore get
+# separate keys rather than sharing one.
+#
 # Checksums use go.mod, not go.sum, which would be redundant here.
 caches:
   - name: gomodcache
@@ -27,9 +35,10 @@ caches:
       - ~/.gomodcache
 
   - name: gocache
-    # Written by shard 0 of each platform's test job: a test run compiles the
-    # packages and their test binaries, so its cache is a superset of what the
-    # lint step alone produces. Lint restores this key and gets that for free.
+    # Owned by shard 0 of each platform's test job, which is also the only
+    # consumer: a test run leaves compiled test binaries behind, which nothing
+    # else here produces. Lint has its own key for the same reason -- see
+    # lint_gocache.
     cache_key:
       - agent-go-build-v2
       - { agent: os }
@@ -51,6 +60,21 @@ caches:
       - { checksum: go.mod }
     target_paths:
       - ~/.gocache_race
+
+  - name: lint_gocache
+    # Owned and consumed by the lint step alone. It runs custom analyzers whose
+    # results are cached under their own action IDs, and nothing else in the
+    # pipeline runs them, so a cache written by any other job sends lint back to
+    # analysing the module from scratch. Only ever built on one platform, but
+    # keyed by os/arch anyway so it cannot be shared across queues by accident.
+    cache_key:
+      - agent-go-build-lint-v1
+      - { agent: os }
+      - { agent: arch }
+      - { env: AGENT_GO_VERSION, fallback_limit: true }
+      - { checksum: go.mod }
+    target_paths:
+      - ~/.gocache-lint
 
   - name: target_gocache
     # Cross-compiled objects are reusable only for the same target and build
