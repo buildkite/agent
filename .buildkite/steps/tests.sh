@@ -47,16 +47,18 @@ fi
 
 go tool test-engine-client run
 
-# Save once per platform-specific cache key. Lint owns the Linux AMD64 module
-# and build caches. Shard 0 owns the other normal platform caches, while the
-# ARM64 race job saves only its separate build cache so it cannot race the
-# normal ARM64 writer for gomodcache.
+# Shard 0 is the single writer for its platform's build cache. A test run
+# compiles the packages and their test binaries, making its cache a superset of
+# what lint produces, so the test job owns this key on every platform.
 if [[ "${BUILDKITE_PARALLEL_JOB:-0}" == "0" ]]; then
-  if [[ -n "${RACE}" ]]; then
-    echo --- :outbox_tray: Saving Go race build cache
-    buildkite-agent cache save --name "${gocache_name}"
-  elif [[ "${goos}/${goarch}" != "linux/amd64" ]]; then
-    echo --- :outbox_tray: Saving Go caches
-    buildkite-agent cache save --name gomodcache --name "${gocache_name}"
+  save_names=(--name "${gocache_name}")
+
+  # Lint is the sole writer for the shared module cache, and the race job
+  # shares the non-race module cache key, so neither competes here.
+  if [[ -z "${RACE}" && "${goos}/${goarch}" != "linux/amd64" ]]; then
+    save_names+=(--name gomodcache)
   fi
+
+  echo --- :outbox_tray: Saving Go caches
+  buildkite-agent cache save "${save_names[@]}"
 fi

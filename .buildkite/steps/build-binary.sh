@@ -25,10 +25,21 @@ case "$2" in
     ;;
 esac
 
-# Each matrix job restores compiled objects from an earlier build of the same
-# target, while continuing to share the platform-independent module cache.
+# Restore the shared module cache, this target's compiled objects, and the
+# generated attributions file, which generate-acknowledgements.sh reuses rather
+# than regenerating.
+#
+# The module cache restored here is the complete build list, sized by the
+# attributions walk rather than by the build itself: `go build` for one target
+# needs only that target's imports. Sources have to be present for Go to hash
+# them, but they need not be the whole graph.
 echo --- :inbox_tray: Restoring Go caches
-buildkite-agent cache restore --name gomodcache --name target_gocache
+buildkite-agent cache restore \
+  --name gomodcache \
+  --name target_gocache \
+  --name acknowledgements
+
+export ACKNOWLEDGEMENTS_REUSE_EXISTING=true
 
 echo "--- :${1}: Building ${1}/${2}"
 
@@ -37,5 +48,5 @@ rm -rf pkg
 ./scripts/build-binary.sh "${1}" "${2}" "${BUILDKITE_BUILD_NUMBER}"
 
 # Each matrix target has exactly one job, so each cache key has one writer.
-echo --- :outbox_tray: Saving target Go build cache
-buildkite-agent cache save --name target_gocache
+echo --- :outbox_tray: Saving Go caches
+buildkite-agent cache save --name target_gocache --name acknowledgements
