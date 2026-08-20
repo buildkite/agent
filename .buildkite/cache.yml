@@ -101,6 +101,8 @@ caches:
       - ~/.e2e-gomodcache
 
   - name: e2e_gocache
+    # Compiled E2E test objects, under the same single-writer ownership as the
+    # module cache above.
     cache_key:
       - agent-e2e-go-build-v2
       - { agent: os }
