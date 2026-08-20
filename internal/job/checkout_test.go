@@ -467,6 +467,11 @@ func TestDefaultCheckoutPhase_MergeRefspecFailsFast(t *testing.T) {
 	if elapsed >= maxDuration {
 		t.Fatalf("executor.defaultCheckoutPhase(ctx, 1) took %s, want < %s — merge refspec should not be retried", elapsed, maxDuration)
 	}
+
+	const wantHint = "This is possibly due to a merge conflict, or GitHub being unable to create the merge ref automatically"
+	if !strings.Contains(err.Error(), wantHint) {
+		t.Fatalf("executor.defaultCheckoutPhase(ctx, 1) error = %q, want it to contain %q", err.Error(), wantHint)
+	}
 }
 
 func TestSkipCheckout(t *testing.T) {

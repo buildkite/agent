@@ -323,7 +323,7 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string, attem
 
 	if isMainRepository && !commitAlreadyPresent && !remoteMirrorHit {
 		var refspecs []string
-		var retry bool
+		var retry, isMergeRefspec bool
 
 		switch {
 		case e.RefSpec != "":
@@ -331,15 +331,19 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string, attem
 			e.shell.Commentf("Fetching and mirroring custom refspec %s", e.RefSpec)
 			refspecs = []string{e.RefSpec}
 		case e.PullRequest != "false" && strings.Contains(e.PipelineProvider, "github"):
-			e.shell.Commentf("Fetching and mirroring pull request head from GitHub. This will be retried if it fails, as the pull request head might not be available yet — GitHub creates them asynchronously")
 			var refspec string
 			if e.PullRequestUsingMergeRefspec {
+				// As in fetchSource: a missing merge ref usually means a real
+				// merge conflict, so fail fast rather than retrying for ~2m.
+				e.shell.Commentf("Fetching and mirroring pull request merge commit from GitHub")
 				refspec = fmt.Sprintf("refs/pull/%s/merge", e.PullRequest)
+				isMergeRefspec = true
 			} else {
+				e.shell.Commentf("Fetching and mirroring pull request head from GitHub. This will be retried if it fails, as the pull request head might not be available yet — GitHub creates them asynchronously")
 				refspec = fmt.Sprintf("refs/pull/%s/head", e.PullRequest)
+				retry = true
 			}
 			refspecs = []string{refspec}
-			retry = true
 		default:
 			// Fetch the build branch from the upstream repository into the mirror.
 			refspecs = []string{e.Branch}
@@ -355,7 +359,7 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string, attem
 				Retry:      retry,
 			})
 		}); err != nil {
-			return "", err
+			return "", fmt.Errorf("%w%s", err, prMergeRefspecHint(isMergeRefspec))
 		}
 	}
 	if !isMainRepository {
