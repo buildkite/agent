@@ -1492,14 +1492,3 @@ func (e *Executor) setupRedactors(log shell.Logger, environ *env.Environment, st
 	logger := shell.NewWriterLogger(loggerRedactor, true, e.DisabledWarnings)
 	return stdoutRedactor, logger
 }
-
-// CacheDriftProbe is TEMPORARY. It exists to change this package's export data
-// so a warm Cache v2 build can be measured against a commit that really edits
-// Go source, rather than the comment-only commits every warm build so far has
-// used. internal/job was chosen because it is one of the most frequently
-// changed packages in the repo, so the resulting recompilation is
-// representative of an ordinary commit. Nothing calls it, so it cannot affect
-// test output. Revert once the measurement is recorded.
-func CacheDriftProbe() {
-	fmt.Println("cache drift probe")
-}
