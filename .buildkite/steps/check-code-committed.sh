@@ -2,6 +2,12 @@
 
 set -euf
 
+export GOCACHE="$HOME/.gocache"
+export GOMODCACHE="$HOME/.gomodcache"
+
+echo --- :inbox_tray: cache restore
+buildkite-agent cache restore --name gomodcache --name gocache
+
 echo --- :go: Checking go mod tidyness
 go mod tidy
 if ! git diff --no-ext-diff --exit-code; then
@@ -65,3 +71,16 @@ EOF
 fi
 
 echo +++ Everything is clean and tidy! 🎉
+
+# Ensure the module cache holds the full dependency graph before saving.
+
+# `go mod download` fetches every module's source (including deps imported
+# only under other-platform build tags) so the single, platform-independent
+# gomodcache key we save serves arm64 and windows restores too.
+echo --- :arrow_down: go mod download
+go mod download
+
+# Writer for two keys: the single platform-independent gomodcache, and the
+# linux/amd64 gocache. This step is unparallelized, so it never races itself.
+echo --- :outbox_tray: cache save
+buildkite-agent cache save --name gomodcache --name gocache
