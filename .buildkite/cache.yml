@@ -100,12 +100,14 @@ caches:
     # every target. go-licenses output varies by GOOS/GOARCH (see
     # google/go-licenses#187), hence the target in the key -- as the matrix
     # labels rather than the normalised values, which over-partitions (arm and
-    # armhf get identical entries) but can never under-partition.
+    # armhf get identical entries) but can never under-partition. Every key part
+    # is mandatory because reusing an attribution file from a different go.mod
+    # could omit newly added dependencies.
     cache_key:
       - agent-acknowledgements-v1
       - { env: TARGET_GOOS }
       - { env: TARGET_GOARCH }
-      - { env: TARGET_GO_VERSION, fallback_limit: true }
+      - { env: TARGET_GO_VERSION }
       - { checksum: go.mod }
     target_paths:
       - clicommand/ACKNOWLEDGEMENTS.md.gz
