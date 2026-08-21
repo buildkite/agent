@@ -145,7 +145,7 @@ func (e *Executor) fetchSource(ctx context.Context, addBloblessFilter bool, atte
 				Retry:    kind == refspecGithubPRHead,
 				RefSpecs: refspecs,
 			}); err != nil {
-				return fmt.Errorf("fetching PR refspec %q: %w", refspecs, err)
+				return fmt.Errorf("fetching PR refspec %q: %w%s", refspecs, err, prMergeRefspecHint(kind == refspecGithubPRMerge))
 			}
 			if kind == refspecGithubPRMerge && e.PullRequestHeadCommit != "" {
 				if err := e.validateGithubPRMergeHead(ctx); err != nil {
@@ -171,7 +171,7 @@ func (e *Executor) fetchSource(ctx context.Context, addBloblessFilter bool, atte
 			refspecs = append(refspecs, e.Commit)
 			// We aim to eliminate network round-trip as much as possible so we use a single git fetch here.
 			if err := gitFetchWithFallback(ctx, e.shell, gitFetchFlags, refspecs...); err != nil {
-				return fmt.Errorf("fetching PR refspec %q: %w", refspecs, err)
+				return fmt.Errorf("fetching PR refspec %q: %w%s", refspecs, err, prMergeRefspecHint(kind == refspecGithubPRMerge))
 			}
 		}
 
@@ -254,6 +254,14 @@ func commitSecondParent(commit string) (string, bool) {
 		}
 	}
 	return "", false
+}
+
+// prMergeRefspecHint returns a clear suffix for refs/pull/N/merge fetch failures.
+func prMergeRefspecHint(isMergeRefspec bool) string {
+	if !isMergeRefspec {
+		return ""
+	}
+	return "\nThis is possibly due to a merge conflict, or GitHub being unable to create the merge ref automatically"
 }
 
 func isExistingCheckoutRemoteMirrorAttempt(attempt *remoteMirrorAttempt) bool {

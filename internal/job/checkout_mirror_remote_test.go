@@ -538,6 +538,36 @@ func TestUpdateGitMirrorPullRequestHeadMissFallsBackToCanonical(t *testing.T) {
 	}
 }
 
+// TestUpdateGitMirrorMergeRefspecMissingHintsMergeConflict checks that a
+// missing refs/pull/N/merge ref hits the same clarifying hint on the
+// --git-mirrors-path update fetch as it does on the canonical checkout fetch.
+func TestUpdateGitMirrorMergeRefspecMissingHintsMergeConflict(t *testing.T) {
+	canonical := newOnHostMirrorHTTPRepo(t, "canonical")
+	if _, _, err := canonical.PushBranch("canonical", "feature-branch"); err != nil {
+		t.Fatal(err)
+	}
+
+	// A commit that doesn't exist anywhere, standing in for the speculative
+	// merge commit GitHub never created because of a conflict.
+	const missingMergeCommit = "0000000000000000000000000000000000000f"
+	e := newOnHostMirrorExecutor(t, canonical.RepoURL("canonical"), missingMergeCommit)
+	cloneOnHostMirrorToPath(t, e.Repository, expectedOnHostMirrorDir(e))
+	e.PullRequest = "999"
+	e.PipelineProvider = "github"
+	e.PullRequestUsingMergeRefspec = true
+
+	// refs/pull/999/merge is never created, so the mirror update fetch fails.
+	_, err := e.updateGitMirror(t.Context(), e.Repository, nil)
+	if err == nil {
+		t.Fatal("updateGitMirror() error = nil, want non-nil (missing merge ref)")
+	}
+
+	const wantHint = "This is possibly due to a merge conflict, or GitHub being unable to create the merge ref automatically"
+	if !strings.Contains(err.Error(), wantHint) {
+		t.Fatalf("updateGitMirror() error = %q, want it to contain %q", err.Error(), wantHint)
+	}
+}
+
 func TestGetOrUpdateMirrorDirCloneLockTimeoutFallsBackWithoutMirror(t *testing.T) {
 	canonical := newOnHostMirrorHTTPRepo(t, "canonical")
 	commit, _, err := canonical.PushBranch("canonical", "feature-branch")
