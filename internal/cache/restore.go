@@ -127,7 +127,7 @@ func (c *client) Restore(ctx context.Context, cacheID string) (RestoreResult, er
 			return err
 		}
 		if err != nil {
-			c.log.Warn("cache retrieve failed, retrying", "err", err, "retrier", r.String())
+			c.log.WarnContext(ctx, "cache retrieve failed, retrying", "error", err, "retry", r.String())
 			return err
 		}
 		return nil
@@ -177,8 +177,8 @@ func (c *client) Restore(ctx context.Context, cacheID string) (RestoreResult, er
 	tmpDir, archiveFile, transferInfo, err := c.downloadCache(ctx, retrieveResp, c.bucketURL)
 	if err != nil {
 		if errors.Is(err, store.ErrBlobNotFound) {
-			c.log.Warn("cache blob missing, treating as miss and invalidating entry",
-				"cache_id", cacheID, "err", err)
+			c.log.WarnContext(ctx, "cache blob missing, treating as miss and invalidating entry",
+				"cache_id", cacheID, "error", err)
 			invalidated := c.invalidateStaleEntry(ctx, retrieveResp)
 			// The blob is gone, so nothing was restored: clear the hit/fallback
 			// state set earlier so callers and the span reflect a clean miss.
@@ -200,8 +200,8 @@ func (c *client) Restore(ctx context.Context, cacheID string) (RestoreResult, er
 			// before any target folder was touched, so existing files are intact.
 			// The blob will never verify, so expire the entry to let a subsequent
 			// save re-upload it, and let the build continue with a clean miss.
-			c.log.Warn("cache blob digest mismatch, treating as miss and invalidating entry",
-				"cache_id", cacheID, "err", err)
+			c.log.WarnContext(ctx, "cache blob digest mismatch, treating as miss and invalidating entry",
+				"cache_id", cacheID, "error", err)
 			invalidated := c.invalidateStaleEntry(ctx, retrieveResp)
 			result.CacheHit = false
 			result.FallbackUsed = false
@@ -241,8 +241,8 @@ func (c *client) Restore(ctx context.Context, cacheID string) (RestoreResult, er
 		// unreadable archive degrades to a miss and invalidates the entry
 		// (targets untouched — this runs before cleaning).
 		unrecognized := errors.Is(err, archive.ErrUnrecognizedFormat)
-		c.log.Warn("cache archive failed verification, treating as miss and invalidating entry",
-			"cache_id", cacheID, "unrecognized_format", unrecognized, "err", err)
+		c.log.WarnContext(ctx, "cache archive failed verification, treating as miss and invalidating entry",
+			"cache_id", cacheID, "unrecognized_format", unrecognized, "error", err)
 		invalidated := c.invalidateStaleEntry(ctx, retrieveResp)
 		result.CacheHit = false
 		result.FallbackUsed = false
@@ -273,7 +273,7 @@ func (c *client) Restore(ctx context.Context, cacheID string) (RestoreResult, er
 		resolvedTargets[i] = resolved
 	}
 	if a, b, ok := archive.OverlappingPaths(resolvedTargets); ok {
-		c.log.Warn("configured cache targets overlap after re-resolving anchors, treating as miss",
+		c.log.WarnContext(ctx, "configured cache targets overlap after re-resolving anchors, treating as miss",
 			"cache_id", cacheID, "target_a", cacheConfig.TargetPaths[a], "target_b", cacheConfig.TargetPaths[b])
 		result.CacheHit = false
 		result.FallbackUsed = false
@@ -300,7 +300,7 @@ func (c *client) Restore(ctx context.Context, cacheID string) (RestoreResult, er
 			return result, fmt.Errorf("failed to resolve target path %q: %w", path, err)
 		}
 
-		c.log.Debug("cleaning path", "path", path, "extractedPath", extractedPath)
+		c.log.DebugContext(ctx, "cleaning path", "path", path, "extracted_path", extractedPath)
 
 		if err := cleanPath(ctx, c.log, extractedPath); err != nil {
 			span.RecordError(err)
@@ -355,7 +355,7 @@ func (c *client) Restore(ctx context.Context, cacheID string) (RestoreResult, er
 // blob is missing or fails digest verification, so a subsequent save re-uploads it.
 func (c *client) invalidateStaleEntry(ctx context.Context, retrieveResp api.CacheEntryRetrieveResp) bool {
 	if len(retrieveResp.TargetPaths) == 0 || len(retrieveResp.CacheKey) == 0 {
-		c.log.Warn("cannot invalidate stale cache entry: retrieve response missing resolved address")
+		c.log.WarnContext(ctx, "cannot invalidate stale cache entry: retrieve response missing resolved address")
 		return false
 	}
 
@@ -373,13 +373,13 @@ func (c *client) invalidateStaleEntry(ctx context.Context, retrieveResp api.Cach
 			return err
 		}
 		if err != nil {
-			c.log.Warn("cache entry invalidation failed, retrying", "err", err, "retrier", r.String())
+			c.log.WarnContext(ctx, "cache entry invalidation failed, retrying", "error", err, "retry", r.String())
 			return err
 		}
 		return nil
 	})
 	if err != nil {
-		c.log.Warn("cache entry invalidation failed", "registry", c.registry, "err", err)
+		c.log.WarnContext(ctx, "cache entry invalidation failed", "registry", c.registry, "error", err)
 		return false
 	}
 	return true
@@ -603,7 +603,7 @@ func makeTreeWritable(ctx context.Context, log *slog.Logger, clean string) error
 		}
 
 		if walkErr != nil {
-			log.Debug("cleanPath: error walking path", "path", relPath, "err", walkErr)
+			log.DebugContext(ctx, "cleanPath: error walking path", "path", relPath, "error", walkErr)
 			return nil
 		}
 

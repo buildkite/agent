@@ -139,7 +139,7 @@ func ExtractFiles(ctx context.Context, log *slog.Logger, zipFile *os.File, zipFi
 
 	for _, path := range paths {
 		if !foundPaths[path] {
-			log.Warn("requested path not found in archive", "path", path)
+			log.WarnContext(ctx, "requested path not found in archive", "path", path)
 		}
 	}
 

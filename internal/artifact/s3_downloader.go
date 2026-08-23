@@ -18,7 +18,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/buildkite/agent/v4/internal/agenthttp"
 	"github.com/buildkite/agent/v4/internal/osutil"
-	"github.com/dustin/go-humanize"
 )
 
 const (
@@ -138,7 +137,7 @@ func (d S3Downloader) startMultipart(ctx context.Context) error {
 	defer os.Remove(temp.Name()) //nolint:errcheck // Best-effort cleanup.
 	defer temp.Close()           //nolint:errcheck // Primary Close checked below.
 
-	d.logger.Debug(fmt.Sprintf("Multipart downloading s3://%s/%s to %s", d.BucketName(), d.BucketFileLocation(), targetPath))
+	d.logger.DebugContext(ctx, "Multipart downloading artifact from S3", "bucket", d.BucketName(), "artifact", d.BucketFileLocation(), "path", targetPath)
 
 	tmClient := transfermanager.New(d.conf.S3Client, func(o *transfermanager.Options) {
 		o.PartSizeBytes = s3MultipartDownloadPartSize
@@ -187,7 +186,7 @@ func (d S3Downloader) startMultipart(ctx context.Context) error {
 		return fmt.Errorf("renaming temp file to target: %w", err)
 	}
 
-	d.logger.Info(fmt.Sprintf("Successfully downloaded %q %s with SHA256 %s", d.conf.Path, humanize.IBytes(uint64(bytes)), gotSHA256))
+	d.logger.InfoContext(ctx, "Successfully downloaded artifact", "artifact", d.conf.Path, "bytes", bytes, "checksum", gotSHA256)
 	return nil
 }
 

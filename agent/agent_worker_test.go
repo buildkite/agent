@@ -148,11 +148,22 @@ func TestDisconnectRetry(t *testing.T) {
 	if got, want := logHandler.Messages()[0], "Disconnecting..."; got != want {
 		t.Errorf("logHandler.Messages()[0] = %q, want %q", got, want)
 	}
-	if got, want := logHandler.Messages()[1], regexp.MustCompile(`POST http.*/disconnect: 500 Internal Server Error \(Attempt 1/4`); !want.MatchString(got) {
-		t.Errorf("logHandler.Messages()[1] = %q, want string matching %v", got, want)
-	}
-	if got, want := logHandler.Messages()[2], regexp.MustCompile(`POST http.*/disconnect: 500 Internal Server Error \(Attempt 2/4`); !want.MatchString(got) {
-		t.Errorf("logHandler.Messages()[2] = %q, want string matching %v", got, want)
+	for i := range 2 {
+		record := logHandler.Records()[i+1]
+		if got, want := record.Message, "Failed to disconnect from Buildkite; retrying"; got != want {
+			t.Errorf("record.Message = %q, want %q", got, want)
+		}
+		attrs := make(map[string]string)
+		record.Attrs(func(attr slog.Attr) bool {
+			attrs[attr.Key] = attr.Value.String()
+			return true
+		})
+		if got, want := attrs["error"], regexp.MustCompile(`POST http.*/disconnect: 500 Internal Server Error`); !want.MatchString(got) {
+			t.Errorf("error attr = %q, want string matching %v", got, want)
+		}
+		if got := attrs["retry"]; got == "" {
+			t.Error("retry attr is empty")
+		}
 	}
 	if got, want := logHandler.Messages()[3], "Disconnected"; got != want {
 		t.Errorf("logHandler.Messages()[3] = %q, want %q", got, want)

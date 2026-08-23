@@ -2,7 +2,6 @@ package artifact
 
 import (
 	"context"
-	"fmt"
 	"iter"
 	"log/slog"
 	"slices"
@@ -74,7 +73,12 @@ func (a *BatchCreator) Batches(ctx context.Context) iter.Seq2[[]*api.Artifact, e
 				MultipartSupported: a.conf.AllowMultipart,
 			}
 
-			a.logger.Info(fmt.Sprintf("Creating (%d-%d)/%d artifacts", offset, offset+len(theseArtifacts), total))
+			a.logger.InfoContext(ctx, "Creating artifact batch",
+				"batch_start", offset,
+				"batch_end", offset+len(theseArtifacts),
+				"batch_count", len(theseArtifacts),
+				"total_count", total,
+			)
 			offset += len(theseArtifacts)
 
 			timeout := a.conf.CreateArtifactsTimeout
@@ -97,11 +101,11 @@ func (a *BatchCreator) Batches(ctx context.Context) iter.Seq2[[]*api.Artifact, e
 				// The server returns a 403 code if the artifact has exceeded the service quota.
 				// Break the retry on any 4xx code except for 429 Too Many Requests.
 				if resp != nil && (resp.StatusCode != 429 && resp.StatusCode >= 400 && resp.StatusCode <= 499) {
-					a.logger.Warn(fmt.Sprintf("Artifact creation failed with status code %d, breaking the retry loop", resp.StatusCode))
+					a.logger.WarnContext(ctx, "Artifact creation failed; stopping retries", "status", resp.StatusCode)
 					r.Break()
 				}
 				if err != nil {
-					a.logger.Warn(fmt.Sprintf("%s (%s)", err, r))
+					a.logger.WarnContext(ctx, "Artifact creation failed; retrying", "error", err, "retry", r)
 				}
 
 				// after four attempts (0, 1, 2, 3)...
@@ -109,7 +113,7 @@ func (a *BatchCreator) Batches(ctx context.Context) iter.Seq2[[]*api.Artifact, e
 					// The short timeout has given us fast feedback on the first couple of attempts,
 					// but perhaps the server needs more time to complete the request, so fall back to
 					// the default HTTP client timeout.
-					a.logger.Debug(fmt.Sprintf("CreateArtifacts timeout (%s) removed for subsequent attempts", timeout))
+					a.logger.DebugContext(ctx, "Artifact creation timeout removed for subsequent attempts", "duration", timeout)
 					timeout = 0
 				}
 

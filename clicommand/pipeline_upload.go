@@ -213,7 +213,7 @@ var PipelineUploadCommand = &cli.Command{
 
 		switch {
 		case len(cfg.FilePaths) > 0:
-			l.Info(fmt.Sprintf("Reading pipeline configs from %q", cfg.FilePaths))
+			l.InfoContext(ctx, "Reading pipeline configs", "paths", cfg.FilePaths)
 
 			for _, fn := range cfg.FilePaths {
 				file, err := os.Open(fn)
@@ -225,13 +225,13 @@ var PipelineUploadCommand = &cli.Command{
 			}
 
 		case stdin.IsReadable():
-			l.Info("Reading pipeline config from STDIN")
+			l.InfoContext(ctx, "Reading pipeline config from STDIN")
 
 			// Actually read the file from STDIN
 			inputs = []input{{os.Stdin, "(stdin)"}}
 
 		default:
-			l.Info("Searching for pipeline config...")
+			l.InfoContext(ctx, "Searching for pipeline config")
 
 			paths := []string{
 				"buildkite.yml",
@@ -264,7 +264,7 @@ var PipelineUploadCommand = &cli.Command{
 
 			found := exists[0]
 
-			l.Info(fmt.Sprintf("Found config file %q", found))
+			l.InfoContext(ctx, "Found config file", "path", found)
 
 			// Read the default file
 			file, err := os.Open(found)
@@ -436,11 +436,11 @@ var PipelineUploadCommand = &cli.Command{
 					RetrySleepFunc: time.Sleep,
 				}
 				if err := uploader.Upload(ctx, l); err != nil {
-					l.Error(fmt.Sprintf("Couldn't upload: %v", err))
+					l.ErrorContext(ctx, "Couldn't upload pipeline", "error", err)
 					return NewSilentExitError(1)
 				}
 
-				l.Info(fmt.Sprintf("Successfully parsed and uploaded pipeline #%d from %q", count, input.name))
+				l.InfoContext(ctx, "Successfully parsed and uploaded pipeline", "pipeline_number", count, "source", input.name)
 				count++
 			}
 		}
@@ -457,11 +457,11 @@ func resolveCommit(l *slog.Logger, environ *env.Environment) {
 	}
 	cmdOut, err := exec.Command("git", "rev-parse", commitRef).Output()
 	if err != nil {
-		l.Warn(fmt.Sprintf("Error running git rev-parse %q: %v", commitRef, err))
+		l.Warn("Error running git rev-parse", "commit_ref", commitRef, "error", err)
 		return
 	}
 	trimmedCmdOut := strings.TrimSpace(string(cmdOut))
-	l.Info(fmt.Sprintf("Updating BUILDKITE_COMMIT to %q", trimmedCmdOut))
+	l.Info("Updating BUILDKITE_COMMIT", "commit", trimmedCmdOut)
 	environ.Set("BUILDKITE_COMMIT", trimmedCmdOut)
 }
 
@@ -562,7 +562,7 @@ func searchForSecrets(
 	// So we can declare the secrets to be found if they match the usual rules.
 	matched, short, err := redact.Vars(cfg.RedactedVars, allVars)
 	if err != nil {
-		l.Warn(fmt.Sprintf("Couldn't match environment variable names against redacted-vars: %v", err))
+		l.Warn("Couldn't match environment variable names against redacted-vars", "error", err)
 	}
 
 	for _, name := range short {
@@ -576,7 +576,7 @@ func searchForSecrets(
 	// Filter these down to the vars normally redacted.
 	matched, short, err = redact.Vars(cfg.RedactedVars, environ.DumpPairs())
 	if err != nil {
-		l.Warn(fmt.Sprintf("Couldn't match environment variable names against redacted-vars: %v", err))
+		l.Warn("Couldn't match environment variable names against redacted-vars", "error", err)
 	}
 	for _, name := range short {
 		shortValues[name] = struct{}{}
@@ -621,7 +621,7 @@ func searchForSecrets(
 	if len(shortValues) > 0 {
 		vars := slices.Collect(maps.Keys(shortValues))
 		slices.Sort(vars)
-		l.Warn(fmt.Sprintf("Some variables have values below minimum length (%d bytes) and will not be redacted: %s", redact.LengthMin, strings.Join(vars, ", ")))
+		l.Warn("Some variables have values below minimum length and will not be redacted", "minimum_length_bytes", redact.LengthMin, "variables", vars)
 	}
 
 	if len(secretsFound) > 0 {
@@ -717,11 +717,7 @@ func readChangedFilesFromPath(l *slog.Logger, path string) ([]string, error) {
 	changedPaths := slices.DeleteFunc(lines, func(s string) bool {
 		return strings.TrimSpace(s) == ""
 	})
-	plural := "files"
-	if len(changedPaths) == 1 {
-		plural = "file"
-	}
-	l.Info(fmt.Sprintf("if_changed read %d changed %s from %q", len(changedPaths), plural, path))
+	l.Info("if_changed read changed files", "changed_path_count", len(changedPaths), "path", path)
 	return changedPaths, nil
 }
 
@@ -747,7 +743,7 @@ func computeGitDiff(l *slog.Logger, diffBase string) (changedPaths []string, err
 		// and its parent (the first parent, if it is a merge commit).
 		// If _multiple_ commits were pushed at once, then this approach will
 		// miss changes from earlier commits. Thus, log a warning.
-		l.Warn(fmt.Sprintf("Applying if_changed conditions relative to the first parent of HEAD (because HEAD = %q)", diffBase))
+		l.Warn("Applying if_changed conditions relative to the first parent of HEAD", "head", diffBase)
 		l.Warn("If this build is intended to include more than one commit on this branch, if_changed may calculate an incomplete diff. You may need to adjust the --git-diff-base flag or BUILDKITE_GIT_DIFF_BASE env var to choose a different base commit for calculating diffs.")
 
 		// Flag Explainer:
@@ -769,7 +765,7 @@ func computeGitDiff(l *slog.Logger, diffBase string) (changedPaths []string, err
 			return nil, gitMergeBaseError{diffBase: diffBase, wrapped: err}
 		}
 		mergeBase := strings.TrimSpace(string(mergeBaseOut))
-		l.Info(fmt.Sprintf("Applying if_changed conditions relative to %q (the merge-base of %q and HEAD)", mergeBase, diffBase))
+		l.Info("Applying if_changed conditions relative to merge-base", "merge_base", mergeBase, "diff_base", diffBase)
 
 		gitDiff, err := exec.Command("git", "diff", "--name-only", mergeBase).Output()
 		if err != nil {
@@ -780,11 +776,7 @@ func computeGitDiff(l *slog.Logger, diffBase string) (changedPaths []string, err
 	changedPaths = slices.DeleteFunc(changedPaths, func(s string) bool {
 		return strings.TrimSpace(s) == ""
 	})
-	plural := "files"
-	if len(changedPaths) == 1 {
-		plural = "file"
-	}
-	l.Info(fmt.Sprintf("if_changed found %d changed %s", len(changedPaths), plural))
+	l.Info("if_changed found changed files", "changed_path_count", len(changedPaths))
 	return changedPaths, nil
 }
 
@@ -914,7 +906,7 @@ stepsLoop:
 			var err error
 			include, err = ifChangedPatterns(inclVal)
 			if err != nil {
-				l.Warn(fmt.Sprintf("Couldn't parse if_changed.include patterns: %v. The step will not be skipped.", err))
+				l.Warn("Couldn't parse if_changed.include patterns; the step will not be skipped", "error", err)
 				continue stepsLoop
 			}
 			exclVal, has := x.Get("exclude")
@@ -923,7 +915,7 @@ stepsLoop:
 			}
 			exclude, err = ifChangedPatterns(exclVal)
 			if err != nil {
-				l.Warn(fmt.Sprintf("Couldn't parse if_changed.exclude patterns: %v. The step will not be skipped.", err))
+				l.Warn("Couldn't parse if_changed.exclude patterns; the step will not be skipped", "error", err)
 				continue stepsLoop
 			}
 
@@ -931,7 +923,7 @@ stepsLoop:
 			// Should be either a simple string or a list of strings.
 			inc, err := ifChangedPatterns(x)
 			if err != nil {
-				l.Warn(fmt.Sprintf("Couldn't parse if_changed patterns: %v. The step will not be skipped.", err))
+				l.Warn("Couldn't parse if_changed patterns; the step will not be skipped", "error", err)
 				continue stepsLoop
 			}
 			include = inc
@@ -968,7 +960,7 @@ func (ica *ifChangedApplicator) gatherChangedPaths(l *slog.Logger) ([]string, er
 		// Read changed files from the provided file path.
 		cps, err := readChangedFilesFromPath(l, ica.changedFilesPath)
 		if err != nil {
-			l.Error(fmt.Sprintf("Couldn't read changed files from %q, not skipping any pipeline steps: %v", ica.changedFilesPath, err))
+			l.Error("Couldn't read changed files; not skipping any pipeline steps", "path", ica.changedFilesPath, "error", err)
 			return nil, err
 		}
 		return cps, nil
@@ -978,12 +970,12 @@ func (ica *ifChangedApplicator) gatherChangedPaths(l *slog.Logger) ([]string, er
 		// First, fetch the remote refspec specified by diffBase.
 		remote, refspec, slash := strings.Cut(ica.diffBase, "/")
 		if !slash {
-			l.Warn(fmt.Sprintf("The diff-base %q was not in 'remote/refspec' form - continuing with the remote 'origin'", ica.diffBase))
+			l.Warn("The diff-base was not in 'remote/refspec' form; continuing with the remote 'origin'", "diff_base", ica.diffBase)
 			remote = "origin"
 			refspec = ica.diffBase
 		}
 		if err := exec.Command("git", "fetch", "--", remote, refspec).Run(); err != nil {
-			l.Error(fmt.Sprintf("Couldn't fetch %q from origin: %v", refspec, err))
+			l.Error("Couldn't fetch refspec", "remote", remote, "refspec", refspec, "error", err)
 			var exitErr *exec.ExitError
 			if errors.As(err, &exitErr) && len(exitErr.Stderr) > 0 {
 				// stderr came from git, which is typically human readable
@@ -996,7 +988,7 @@ func (ica *ifChangedApplicator) gatherChangedPaths(l *slog.Logger) ([]string, er
 	// Determine changed files using git.
 	cps, err := computeGitDiff(l, ica.diffBase)
 	if err != nil {
-		l.Error(fmt.Sprintf("Couldn't determine git diff from upstream, not skipping any pipeline steps: %v", err))
+		l.Error("Couldn't determine git diff from upstream; not skipping any pipeline steps", "error", err)
 		var exitErr *exec.ExitError
 		if errors.As(err, &exitErr) && len(exitErr.Stderr) > 0 {
 			// stderr came from git, which is typically human readable

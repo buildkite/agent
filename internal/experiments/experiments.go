@@ -97,9 +97,9 @@ func EnableWithWarnings(ctx context.Context, l *slog.Logger, key string) (contex
 	case StateKnown:
 	// Noop
 	case StateUnknown:
-		l.Warn(fmt.Sprintf("Unknown experiment %q", key))
+		l.WarnContext(ctx, "Unknown experiment", "experiment", key)
 	case StatePromoted:
-		l.Warn(fmt.Sprintf("%s", Promoted[key]))
+		l.WarnContext(ctx, Promoted[key])
 	}
 	return newctx, state
 }

@@ -79,7 +79,7 @@ var MetaDataKeysCommand = &cli.Command{
 				return keys, err
 			}
 			if err != nil {
-				l.Warn(fmt.Sprintf("%s (%s)", err, r))
+				l.WarnContext(ctx, "Failed to get meta-data keys; retrying", "error", err, "retry", r)
 			}
 			return keys, err
 		})

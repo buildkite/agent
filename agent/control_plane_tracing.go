@@ -1,7 +1,6 @@
 package agent
 
 import (
-	"fmt"
 	"log/slog"
 	"maps"
 	"net/url"
@@ -59,7 +58,7 @@ func ApplyControlPlaneTracing(l *slog.Logger, conf *AgentConfiguration, tracing 
 	// already OpenTelemetry (its exporter and propagation settings were meant
 	// for that other backend, not ours).
 	if tracing.Backend != tracetools.BackendOpenTelemetry {
-		l.Warn(fmt.Sprintf("Ignoring control-plane tracing configuration: unsupported backend %q", tracing.Backend))
+		l.Warn("Ignoring control-plane tracing configuration: unsupported backend", "backend", tracing.Backend)
 		return
 	}
 	conf.OpenTelemetryTracing = true
@@ -79,7 +78,7 @@ func ApplyControlPlaneTracing(l *slog.Logger, conf *AgentConfiguration, tracing 
 		parts = append(parts, "exporter="+sanitizedEndpoint(tracing.Exporter.Endpoint))
 	}
 
-	l.Info(fmt.Sprintf("Control-plane tracing configuration applied: %s", strings.Join(parts, ", ")))
+	l.Info("Control-plane tracing configuration applied", "configuration", strings.Join(parts, ", "))
 }
 
 // sanitizedEndpoint reduces an exporter endpoint to scheme://host for

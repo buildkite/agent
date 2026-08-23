@@ -467,24 +467,35 @@ func TestArtifactUploadTimingsSummary(t *testing.T) {
 	}
 
 	l, handler := logtest.NewLogger()
-	timings.logSummary(l)
+	timings.logSummary(t.Context(), l)
 
-	got := strings.Join(handler.Messages(), "\n")
-	for _, want := range []string{
-		"Artifact upload timings:",
-		"collect=1.456s",
-		"create=82ms",
-		"upload=334ms",
-		"state_update=11ms",
-		"artifacts=1296",
-		"bytes=5.1 MiB",
-		"batches=44",
-		"work_units=1296",
-		"max_workers=30",
-		"state_updates=44",
+	records := handler.Records()
+	if got, want := len(records), 1; got != want {
+		t.Fatalf("len(records) = %d, want %d", got, want)
+	}
+	record := records[0]
+	if got, want := record.Message, "Artifact upload timings"; got != want {
+		t.Errorf("message = %q, want %q", got, want)
+	}
+	attrs := make(map[string]any)
+	record.Attrs(func(attr slog.Attr) bool {
+		attrs[attr.Key] = attr.Value.Any()
+		return true
+	})
+	for key, want := range map[string]any{
+		"collect_duration":      1456 * time.Millisecond,
+		"create_duration":       82 * time.Millisecond,
+		"upload_duration":       334 * time.Millisecond,
+		"state_update_duration": 11 * time.Millisecond,
+		"artifact_count":        int64(1296),
+		"artifact_bytes":        int64(1296 * 4096),
+		"batch_count":           int64(44),
+		"work_unit_count":       int64(1296),
+		"max_workers":           int64(30),
+		"state_update_count":    int64(44),
 	} {
-		if !strings.Contains(got, want) {
-			t.Errorf("timings summary = %q, want substring %q", got, want)
+		if got := attrs[key]; got != want {
+			t.Errorf("attr %q = %v, want %v", key, got, want)
 		}
 	}
 }

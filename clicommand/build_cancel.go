@@ -69,11 +69,11 @@ func cancelBuild(ctx context.Context, cfg BuildCancelConfig, l *slog.Logger) err
 			return err
 		}
 		if err != nil {
-			l.Warn(fmt.Sprintf("%s (%s)", err, r))
+			l.WarnContext(ctx, "Build cancellation retry", "error", err, "retry", r)
 			return err
 		}
 
-		l.Info(fmt.Sprintf("Successfully cancelled build %s", build.UUID))
+		l.InfoContext(ctx, "Successfully cancelled build", "build_id", build.UUID)
 		return nil
 	}); err != nil {
 		return fmt.Errorf("failed to cancel build: %w", err)

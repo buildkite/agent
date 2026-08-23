@@ -86,7 +86,7 @@ var MetaDataGetCommand = &cli.Command{
 				return nil, resp, err
 			}
 			if err != nil {
-				l.Warn(fmt.Sprintf("%s (%s)", err, r))
+				l.WarnContext(ctx, "Failed to get meta-data; retrying", "error", err, "retry", r)
 				return nil, resp, err
 			}
 			return metaData, resp, nil

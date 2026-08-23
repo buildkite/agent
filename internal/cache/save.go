@@ -123,7 +123,7 @@ func (c *client) Save(ctx context.Context, cacheID string) (SaveResult, error) {
 			return err
 		}
 		if err != nil {
-			c.log.Warn("cache peek failed, retrying", "err", err, "retrier", r.String())
+			c.log.WarnContext(ctx, "cache peek failed, retrying", "error", err, "retry", r.String())
 			return err
 		}
 		return nil
@@ -167,7 +167,7 @@ func (c *client) Save(ctx context.Context, cacheID string) (SaveResult, error) {
 			return err
 		}
 		if err != nil {
-			c.log.Warn("cache registry lookup failed, retrying", "err", err, "retrier", r.String())
+			c.log.WarnContext(ctx, "cache registry lookup failed, retrying", "error", err, "retry", r.String())
 			return err
 		}
 		return nil
@@ -251,7 +251,7 @@ func (c *client) Save(ctx context.Context, cacheID string) (SaveResult, error) {
 			return err
 		}
 		if err != nil {
-			c.log.Warn("cache entry create failed, retrying", "err", err, "retrier", r.String())
+			c.log.WarnContext(ctx, "cache entry create failed, retrying", "error", err, "retry", r.String())
 			return err
 		}
 		return nil
@@ -329,7 +329,7 @@ func (c *client) Save(ctx context.Context, cacheID string) (SaveResult, error) {
 			return err
 		}
 		if err != nil {
-			c.log.Warn("cache entry commit failed, retrying", "err", err, "retrier", r.String())
+			c.log.WarnContext(ctx, "cache entry commit failed, retrying", "error", err, "retry", r.String())
 			return err
 		}
 		return nil

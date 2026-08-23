@@ -53,7 +53,7 @@ type Client struct {
 // It doesn't interpret or run the job - the caller is responsible for that.
 // It contains a builtin timeout of 330 seconds and makes up to 7 attempts, backing off exponentially.
 func (c *Client) AcquireJob(ctx context.Context, jobID string) (*api.Job, error) {
-	c.Logger.Info(fmt.Sprintf("Attempting to acquire job %s...", jobID))
+	c.Logger.InfoContext(ctx, "Attempting to acquire job...", "job_id", jobID)
 
 	// Timeout the context to prevent the exponential backoff from growing too
 	// large if the job is in the waiting state.
@@ -86,33 +86,30 @@ func (c *Client) AcquireJob(ctx context.Context, jobID string) (*api.Job, error)
 		)
 		if err != nil {
 			if resp == nil {
-				c.Logger.Warn(fmt.Sprintf("%s (%s)", err, r))
+				c.Logger.WarnContext(timeoutCtx, "Job acquisition failed; retrying", "error", err, "retry", r)
 				return nil, err
 			}
 
 			switch {
 			case resp.StatusCode == http.StatusLocked:
 				// If the API returns with a 423, the job is in the waiting state. Let's try again later.
-				warning := fmt.Sprintf("The job is waiting for a dependency: (%s)", err)
-				handleRetriableJobAcquisitionError(warning, resp, r, c.Logger)
+				handleRetriableJobAcquisitionError(timeoutCtx, "The job is waiting for a dependency", err, resp, r, c.Logger)
 				return nil, fmt.Errorf("%w: %w", ErrJobLocked, err)
 
 			case resp.StatusCode == http.StatusTooManyRequests:
 				// We're being rate limited by the backend. Let's try again later.
-				warning := fmt.Sprintf("Rate limited by the backend: %s", err)
-				handleRetriableJobAcquisitionError(warning, resp, r, c.Logger)
+				handleRetriableJobAcquisitionError(timeoutCtx, "Rate limited by the backend", err, resp, r, c.Logger)
 				return nil, err
 
 			case resp.StatusCode >= 500:
 				// It's a 5xx. Probably worth retrying
-				warning := fmt.Sprintf("Server error: %s", err)
-				handleRetriableJobAcquisitionError(warning, resp, r, c.Logger)
+				handleRetriableJobAcquisitionError(timeoutCtx, "Server error while acquiring job", err, resp, r, c.Logger)
 				return nil, err
 
 			case resp.StatusCode == http.StatusUnprocessableEntity:
 				// If the API returns with a 422, it usually means that the job is in a state where it can't be acquired -
 				// e.g. it's already running on another agent, or has been cancelled, or has already run. Don't retry
-				c.Logger.Error(fmt.Sprintf("Buildkite rejected the call to acquire the job: %s", err))
+				c.Logger.ErrorContext(timeoutCtx, "Buildkite rejected the call to acquire the job", "error", err)
 				r.Break()
 
 				return nil, fmt.Errorf("%w: %w", ErrJobAcquisitionRejected, err)
@@ -120,13 +117,13 @@ func (c *Client) AcquireJob(ctx context.Context, jobID string) (*api.Job, error)
 			case resp.StatusCode >= 400 && resp.StatusCode < 500:
 				// It's some other client error - not 429 or 423, which we retry, or 422, which we don't, but gets a special log message
 				// Don't retry it, the odds of success are low
-				c.Logger.Error(fmt.Sprintf("%s", err))
+				c.Logger.ErrorContext(timeoutCtx, "Job acquisition failed with a client error", "error", err)
 				r.Break()
 
 				return nil, err
 
 			default:
-				c.Logger.Warn(fmt.Sprintf("%s (%s)", err, r))
+				c.Logger.WarnContext(timeoutCtx, "Job acquisition failed; retrying", "error", err, "retry", r)
 				return nil, err
 			}
 		}
@@ -135,10 +132,10 @@ func (c *Client) AcquireJob(ctx context.Context, jobID string) (*api.Job, error)
 	})
 }
 
-func handleRetriableJobAcquisitionError(warning string, resp *api.Response, r *roko.Retrier, logger *slog.Logger) {
+func handleRetriableJobAcquisitionError(ctx context.Context, warning string, err error, resp *api.Response, r *roko.Retrier, logger *slog.Logger) {
 	// log the warning and the retrier state at the end of this function. if we logged the error before the call to
 	// `r.SetNextInterval`, the `Retrying in ...` message wouldn't include the server-set Retry-After, if it was set
-	defer func(r *roko.Retrier) { logger.Warn(fmt.Sprintf("%s (%s)", warning, r)) }(r)
+	defer func(r *roko.Retrier) { logger.WarnContext(ctx, warning, "error", err, "retry", r) }(r)
 
 	if resp == nil {
 		return
@@ -162,7 +159,7 @@ func handleRetriableJobAcquisitionError(warning string, resp *api.Response, r *r
 // Connect connects the agent to the Buildkite Agent API, retrying up to 10 times with 5
 // seconds delay if it fails.
 func (c *Client) Connect(ctx context.Context) error {
-	c.Logger.Info("Connecting to Buildkite...")
+	c.Logger.InfoContext(ctx, "Connecting to Buildkite...")
 
 	return roko.NewRetrier(
 		roko.WithMaxAttempts(10),
@@ -171,7 +168,7 @@ func (c *Client) Connect(ctx context.Context) error {
 	).DoWithContext(ctx, func(r *roko.Retrier) error {
 		_, err := c.APIClient.Connect(ctx)
 		if err != nil {
-			c.Logger.Warn(fmt.Sprintf("%s (%s)", err, r))
+			c.Logger.WarnContext(ctx, "Failed to connect to Buildkite; retrying", "error", err, "retry", r)
 		}
 		return err
 	})
@@ -181,28 +178,28 @@ func (c *Client) Connect(ctx context.Context) error {
 // permanently disconnecting. Don't spend long retrying, because we want to
 // disconnect as fast as possible.
 func (c *Client) Disconnect(ctx context.Context) error {
-	c.Logger.Info("Disconnecting...")
+	c.Logger.InfoContext(ctx, "Disconnecting...")
 	err := roko.NewRetrier(
 		roko.WithMaxAttempts(4),
 		roko.WithStrategy(roko.Constant(1*time.Second)),
 		roko.WithSleepFunc(c.RetrySleepFunc),
 	).DoWithContext(ctx, func(r *roko.Retrier) error {
 		if _, err := c.APIClient.Disconnect(ctx); err != nil {
-			c.Logger.Warn(fmt.Sprintf("%s (%s)", err, r)) // e.g. POST https://...: 500 (Attempt 0/4 Retrying in ..)
+			c.Logger.WarnContext(ctx, "Failed to disconnect from Buildkite; retrying", "error", err, "retry", r)
 			return err
 		}
 		return nil
 	})
 	if err != nil {
 		// none of the retries worked
-		c.Logger.Warn(fmt.Sprintf(
+		c.Logger.WarnContext(ctx, fmt.Sprintf(
 			"There was an error sending the disconnect API call to Buildkite. "+
 				"If this agent still appears online, you may have to manually stop it (%s)",
 			err,
 		))
 		return err
 	}
-	c.Logger.Info("Disconnected")
+	c.Logger.InfoContext(ctx, "Disconnected")
 	return nil
 }
 
@@ -215,8 +212,7 @@ func (c *Client) FinishJob(ctx context.Context, job *api.Job, finishedAt time.Ti
 	job.SignalReason = exit.SignalReason
 	job.ChunksFailedCount = failedChunkCount
 
-	c.Logger.Debug(fmt.Sprintf("[JobRunner] Finishing job with exit_status=%s, signal=%s and signal_reason=%s",
-		job.ExitStatus, job.Signal, job.SignalReason))
+	c.Logger.DebugContext(ctx, "[JobRunner] Finishing job", "exit_status", job.ExitStatus, "signal", job.Signal, "signal_reason", job.SignalReason)
 
 	ctx, cancel := context.WithTimeout(ctx, 1*time.Hour)
 	defer cancel()
@@ -232,7 +228,7 @@ func (c *Client) FinishJob(ctx context.Context, job *api.Job, finishedAt time.Ti
 			// Non-retryable responses (e.g. 422, or 401 when job tokens are being used) mean the job has been cancelled or
 			// otherwise already finished. We should stop trying and go find more work to do.
 			if !api.BreakOnNonRetryable(retrier, response, err) {
-				c.Logger.Warn(fmt.Sprintf("%s (%s)", err, retrier))
+				c.Logger.WarnContext(ctx, "Failed to finish job; retrying", "error", err, "retry", retrier, "job_id", job.ID)
 			}
 		}
 
@@ -268,7 +264,7 @@ func (c *Client) Register(ctx context.Context, req api.AgentRegisterRequest) (*a
 		registered, resp, err := c.APIClient.Register(ctx, &req)
 		if err != nil {
 			if !api.BreakOnNonRetryable(r, resp, err) {
-				c.Logger.Warn(fmt.Sprintf("%s (%s)", err, r))
+				c.Logger.WarnContext(ctx, "Failed to register agent; retrying", "error", err, "retry", r)
 			}
 			return registered, err
 		}
@@ -279,15 +275,12 @@ func (c *Client) Register(ctx context.Context, req api.AgentRegisterRequest) (*a
 		return registered, err
 	}
 
-	c.Logger.Info(fmt.Sprintf("Successfully registered agent \"%s\" with tags [%s]", registered.Name,
-		strings.Join(registered.Tags, ", ")))
+	c.Logger.InfoContext(ctx, "Successfully registered agent", "agent_name", registered.Name, "tags", strings.Join(registered.Tags, ", "))
 
-	c.Logger.Debug(fmt.Sprintf("Ping interval: %ds", registered.PingInterval))
-	c.Logger.Debug(fmt.Sprintf("Job status interval: %ds", registered.JobStatusInterval))
-	c.Logger.Debug(fmt.Sprintf("Heartbeat interval: %ds", registered.HeartbeatInterval))
+	c.Logger.DebugContext(ctx, "Agent intervals configured", "ping_interval_seconds", registered.PingInterval, "job_status_interval_seconds", registered.JobStatusInterval, "heartbeat_interval_seconds", registered.HeartbeatInterval)
 
 	if registered.Endpoint != "" {
-		c.Logger.Debug(fmt.Sprintf("Endpoint: %s", registered.Endpoint))
+		c.Logger.DebugContext(ctx, "Agent endpoint configured", "endpoint", registered.Endpoint)
 	}
 
 	return registered, nil
@@ -308,15 +301,15 @@ func (c *Client) StartJob(ctx context.Context, job *api.Job, startedAt time.Time
 		response, err := c.APIClient.StartJob(ctx, job)
 		if err != nil {
 			if response != nil && api.IsRetryableStatus(response) {
-				c.Logger.Warn(fmt.Sprintf("%s (%s)", err, rtr))
+				c.Logger.WarnContext(ctx, "Failed to start job; retrying", "error", err, "retry", rtr, "job_id", job.ID)
 				return err
 			}
 			if api.IsRetryableError(err) {
-				c.Logger.Warn(fmt.Sprintf("%s (%s)", err, rtr))
+				c.Logger.WarnContext(ctx, "Failed to start job; retrying", "error", err, "retry", rtr, "job_id", job.ID)
 				return err
 			}
 
-			c.Logger.Warn(fmt.Sprintf("Buildkite rejected the call to start the job (%s)", err))
+			c.Logger.WarnContext(ctx, "Buildkite rejected the call to start the job", "error", err, "job_id", job.ID)
 			rtr.Break()
 		}
 
@@ -347,11 +340,11 @@ func (c *Client) UploadChunk(ctx context.Context, jobID string, chunk *api.Chunk
 		response, err := c.APIClient.UploadChunk(ctx, jobID, chunk)
 		if err != nil {
 			if response != nil && (response.StatusCode >= 400 && response.StatusCode <= 499) {
-				c.Logger.Warn(fmt.Sprintf("Buildkite rejected the chunk upload (%s)", err))
+				c.Logger.WarnContext(ctx, "Buildkite rejected the chunk upload", "error", err, "job_id", jobID)
 				retrier.Break()
 				return err
 			}
-			c.Logger.Warn(fmt.Sprintf("%s (%s)", err, retrier))
+			c.Logger.WarnContext(ctx, "Failed to upload chunk; retrying", "error", err, "retry", retrier, "job_id", jobID)
 		}
 
 		return err
@@ -363,16 +356,16 @@ func cacheRegisterSystemInfo(l *slog.Logger) {
 
 	machineID, err = machineid.ProtectedID("buildkite-agent")
 	if err != nil {
-		l.Warn(fmt.Sprintf("Failed to find unique machine-id: %v", err))
+		l.Warn("Failed to find unique machine-id", "error", err)
 	}
 
 	hostname, err = os.Hostname()
 	if err != nil {
-		l.Warn(fmt.Sprintf("Failed to find hostname: %s", err))
+		l.Warn("Failed to find hostname", "error", err)
 	}
 
 	osVersionDump, err = system.VersionDump(l)
 	if err != nil {
-		l.Warn(fmt.Sprintf("Failed to find OS information: %s", err))
+		l.Warn("Failed to find OS information", "error", err)
 	}
 }

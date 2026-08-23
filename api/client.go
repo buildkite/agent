@@ -206,7 +206,7 @@ func (c *Client) setRequestHeaders(headers map[string]string) bool {
 	if changed && c.logger.Enabled(context.Background(), slog.LevelDebug) {
 		for k, values := range next {
 			for _, v := range values {
-				c.logger.Debug(fmt.Sprintf("Server-specified request header: %s: %s", k, v))
+				c.logger.Debug("Server-specified request header", "header_name", k, "header_value", v)
 			}
 		}
 	}

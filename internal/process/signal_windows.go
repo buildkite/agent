@@ -53,7 +53,7 @@ func (p *Process) setupProcessGroup() {
 	}
 	jobHandle, err := newJobObject()
 	if err != nil {
-		p.logger.Error(fmt.Sprintf("Creating Job Object failed: %v", err))
+		p.logger.Error("Creating Job Object failed", "error", err)
 	}
 	p.winJobHandle = jobHandle
 }

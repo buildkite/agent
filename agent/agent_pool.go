@@ -55,10 +55,10 @@ func (ap *AgentPool) StartStatusServer(ctx context.Context, l *slog.Logger, addr
 		defer done()
 		setStatus("👂 Listening")
 
-		l.Info(fmt.Sprintf("Starting HTTP health check server on %v", addr))
+		l.InfoContext(ctx, "Starting HTTP health check server", "address", addr)
 		err := http.ListenAndServe(addr, mux)
 		if err != nil {
-			l.Error(fmt.Sprintf("Could not start health check server: %v", err))
+			l.ErrorContext(ctx, "Could not start health check server", "error", err)
 		}
 	}()
 }
@@ -67,7 +67,7 @@ func (ap *AgentPool) StartStatusServer(ctx context.Context, l *slog.Logger, addr
 func (r *AgentPool) Start(ctx context.Context) error {
 	if r.watchdog != nil {
 		if watchdogInterval := r.watchdog.WatchdogInterval(); watchdogInterval > 0 {
-			var l *slog.Logger = slog.New(slog.DiscardHandler)
+			l := slog.New(slog.DiscardHandler)
 			if len(r.workers) > 0 {
 				l = r.workers[0].logger
 			}
@@ -80,7 +80,7 @@ func (r *AgentPool) Start(ctx context.Context) error {
 				stopWatchdog()
 				watchdogWG.Wait()
 			}()
-			l.Info(fmt.Sprintf("Systemd watchdog enabled with a %s timeout", watchdogInterval))
+			l.InfoContext(ctx, "Systemd watchdog enabled", "timeout", watchdogInterval)
 		}
 	}
 
@@ -191,14 +191,14 @@ func (ap *AgentPool) statusJSONHandler(l *slog.Logger) http.HandlerFunc {
 			Workers:         statuses,
 		})
 		if err != nil {
-			l.Error(fmt.Sprintf("Could not encode status.json response: %v", err))
+			l.ErrorContext(r.Context(), "Could not encode status.json response", "error", err)
 		}
 	}
 }
 
 func healthHandler(l *slog.Logger) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		l.Debug(fmt.Sprintf("agent_pool.go/healthHandler: %s %s", r.Method, r.URL.Path))
+		l.DebugContext(r.Context(), "Health check request", "method", r.Method, "path", r.URL.Path)
 		if r.URL.Path != "/" {
 			http.NotFound(w, r)
 		} else {

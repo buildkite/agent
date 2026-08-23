@@ -73,7 +73,7 @@ func (c *Collector) Start() error {
 	}
 
 	protocol := otlpProtocol()
-	c.logger.Info(fmt.Sprintf("Starting OpenTelemetry metrics collection using OTLP/%s", protocol))
+	c.logger.Info("Starting OpenTelemetry metrics collection", "otlp_protocol", protocol)
 
 	provider, err := c.newMeterProvider(context.Background(), protocol)
 	if err != nil {
@@ -185,7 +185,7 @@ func (s *Scope) Timing(name string, value time.Duration, tags ...Tags) {
 	}
 
 	mergedTags := s.mergeTags(tags...)
-	s.c.logger.Debug(fmt.Sprintf("Metrics timing %s=%v %v", name, value, mergedTags.StringSlice()))
+	s.c.logger.Debug("Metrics timing recorded", "metric_name", name, "duration", value, "tags", mergedTags.StringSlice())
 	histogram.Record(context.Background(), float64(value.Milliseconds()), otelmetric.WithAttributes(mergedTags.Attributes()...))
 }
 
@@ -205,7 +205,7 @@ func (s *Scope) Count(name string, value int64, tags ...Tags) {
 	}
 
 	mergedTags := s.mergeTags(tags...)
-	s.c.logger.Debug(fmt.Sprintf("Metrics count %s=%v %v", name, value, mergedTags.StringSlice()))
+	s.c.logger.Debug("Metrics count recorded", "metric_name", name, "count", value, "tags", mergedTags.StringSlice())
 	counter.Add(context.Background(), value, otelmetric.WithAttributes(mergedTags.Attributes()...))
 }
 
@@ -224,7 +224,7 @@ func (c *Collector) counter(name string) (otelmetric.Int64Counter, bool) {
 
 	counter, err := c.meter.Int64Counter(metricName)
 	if err != nil {
-		c.logger.Error(fmt.Sprintf("Metrics counter creation failed: %v", err))
+		c.logger.Error("Metrics counter creation failed", "error", err, "metric_name", metricName)
 		return nil, false
 	}
 
@@ -247,7 +247,7 @@ func (c *Collector) histogram(name string) (otelmetric.Float64Histogram, bool) {
 
 	histogram, err := c.meter.Float64Histogram(metricName, otelmetric.WithUnit("ms"))
 	if err != nil {
-		c.logger.Error(fmt.Sprintf("Metrics histogram creation failed: %v", err))
+		c.logger.Error("Metrics histogram creation failed", "error", err, "metric_name", metricName)
 		return nil, false
 	}
 

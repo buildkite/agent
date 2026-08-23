@@ -157,7 +157,7 @@ func downloadWithRetry(ctx context.Context, log *slog.Logger, r *roko.Retrier, d
 		if err != nil {
 			if isPreconditionFailed(err) {
 				log.Warn("cache download hit 412 (concurrent ETag change), retrying",
-					"key", aws.ToString(in.Key), "retrier", r.String())
+					"key", aws.ToString(in.Key), "retry", r.String())
 				return err // retryable
 			}
 			r.Break()
@@ -195,7 +195,7 @@ func NewS3Blob(ctx context.Context, log *slog.Logger, s3url string) (*S3Blob, er
 		return nil, fmt.Errorf("failed to load AWS config: %w", err)
 	}
 
-	log.Debug("configured S3 bucket",
+	log.DebugContext(ctx, "configured S3 bucket",
 		"bucket", opts.Bucket,
 		"region", opts.Region,
 		"prefix", opts.Prefix,
@@ -238,7 +238,7 @@ func NewS3Blob(ctx context.Context, log *slog.Logger, s3url string) (*S3Blob, er
 		d.PartSize = settings.downloadPartSize
 	})
 
-	log.Debug("configured S3 transfer manager",
+	log.DebugContext(ctx, "configured S3 transfer manager",
 		"upload_concurrency", settings.uploadConcurrency,
 		"upload_part_size_bytes", settings.uploadPartSize,
 		"download_concurrency", settings.downloadConcurrency,
@@ -323,7 +323,7 @@ func (b *S3Blob) Upload(ctx context.Context, filePath, key string) (*TransferInf
 
 	bytesWritten := fileInfo.Size()
 
-	b.log.Debug("starting S3 upload",
+	b.log.DebugContext(ctx, "starting S3 upload",
 		"key", fullKey,
 		"file_size", bytesWritten,
 		"concurrency", b.uploadConcurrency,
@@ -352,13 +352,13 @@ func (b *S3Blob) Upload(ctx context.Context, filePath, key string) (*TransferInf
 	duration := time.Since(start)
 	averageSpeed := calculateTransferSpeedMBps(bytesWritten, duration)
 
-	b.log.Debug("completed S3 upload",
+	b.log.DebugContext(ctx, "completed S3 upload",
 		"key", fullKey,
 		"bytes_transferred", bytesWritten,
 		"parts_uploaded", partCount,
 		"concurrency", b.uploadConcurrency,
 		"duration", duration,
-		"transfer_speed_mbps", fmt.Sprintf("%.2f", averageSpeed),
+		"transfer_speed_mbps", averageSpeed,
 	)
 
 	span.SetAttributes(
@@ -398,7 +398,7 @@ func (b *S3Blob) Download(ctx context.Context, key, destPath string) (*TransferI
 	// Get the full key with prefix
 	fullKey := b.getFullKey(key)
 
-	b.log.Debug("starting S3 download",
+	b.log.DebugContext(ctx, "starting S3 download",
 		"key", fullKey,
 		"concurrency", b.downloadConcurrency,
 	)
@@ -444,13 +444,13 @@ func (b *S3Blob) Download(ctx context.Context, key, destPath string) (*TransferI
 	duration := time.Since(start)
 	averageSpeed := calculateTransferSpeedMBps(bytesWritten, duration)
 
-	b.log.Debug("completed S3 download",
+	b.log.DebugContext(ctx, "completed S3 download",
 		"key", fullKey,
 		"bytes_transferred", bytesWritten,
 		"parts_downloaded", actualPartCount,
 		"concurrency", b.downloadConcurrency,
 		"duration", duration,
-		"transfer_speed_mbps", fmt.Sprintf("%.2f", averageSpeed),
+		"transfer_speed_mbps", averageSpeed,
 	)
 
 	span.SetAttributes(
@@ -479,12 +479,12 @@ func (b *S3Blob) Download(ctx context.Context, key, destPath string) (*TransferI
 	})
 	switch {
 	case err == nil:
-		b.log.Debug("refreshed object expiration", "key", fullKey, "bucket", b.bucketName)
+		b.log.DebugContext(ctx, "refreshed object expiration", "key", fullKey, "bucket", b.bucketName)
 	case isPreconditionFailed(err):
-		b.log.Debug("skipping cache TTL refresh, blob modified recently",
+		b.log.DebugContext(ctx, "skipping cache TTL refresh, blob modified recently",
 			"key", fullKey, "bucket", b.bucketName)
 	default:
-		b.log.Warn("failed to refresh object expiration, continuing (non-fatal)",
+		b.log.WarnContext(ctx, "failed to refresh object expiration, continuing (non-fatal)",
 			"key", fullKey, "bucket", b.bucketName, "error", err)
 	}
 

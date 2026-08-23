@@ -136,7 +136,7 @@ func (r *Runner) Run(ctx context.Context) error {
 	r.listener = l
 	go func() {
 		if err := http.Serve(l, r.mux); err != nil && !errors.Is(err, net.ErrClosed) {
-			r.logger.Error(fmt.Sprintf("kubernetes runner HTTP server stopped: %v", err))
+			r.logger.ErrorContext(ctx, "Kubernetes runner HTTP server stopped", "error", err)
 		}
 	}()
 
@@ -207,10 +207,10 @@ func (r *Runner) livenessCheck(ctx context.Context) {
 				// we can just terminate.
 				lhf := time.Since(client.LastHeardFrom)
 				if client.State == StateConnected && lhf > r.conf.ClientLostTimeout {
-					r.logger.Error(fmt.Sprintf("Container (ID %d) was last heard from %v ago; marking lost and self-terminating...", id, lhf))
+					r.logger.ErrorContext(ctx, "Container was last heard from too long ago; marking lost and self-terminating...", "container_id", id, "duration", lhf)
 					client.State = StateLost
 					if err := r.Terminate(); err != nil {
-						r.logger.Error(fmt.Sprintf("terminating lost kubernetes runner: %v", err))
+						r.logger.ErrorContext(ctx, "Failed to terminate lost Kubernetes runner", "error", err)
 					}
 				}
 				client.mu.Unlock()
@@ -306,7 +306,7 @@ func (r *Runner) Exit(args ExitCode, reply *Empty) error {
 		return fmt.Errorf("unrecognized client id: %d", args.ID)
 	}
 	client := r.clients[args.ID]
-	r.logger.Info(fmt.Sprintf("client %d exited with code %d", args.ID, args.ExitStatus))
+	r.logger.Info("Client exited", "client_id", args.ID, "exit_status", args.ExitStatus)
 
 	client.mu.Lock()
 	client.ExitStatus = args.ExitStatus
@@ -369,7 +369,7 @@ func (r *Runner) Register(id int, reply *RegisterResponse) error {
 	if client.State != StateNotYetConnected {
 		return fmt.Errorf("client id %d already registered", id)
 	}
-	r.logger.Info(fmt.Sprintf("client %d connected", id))
+	r.logger.Info("Client connected", "client_id", id)
 	client.LastHeardFrom = time.Now()
 	client.State = StateConnected
 

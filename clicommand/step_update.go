@@ -89,7 +89,7 @@ var StepUpdateCommand = &cli.Command{
 
 		// Read the value from STDIN if argument omitted entirely
 		if c.Args().Len() < 2 {
-			l.Info("Reading value from STDIN")
+			l.InfoContext(ctx, "Reading value from STDIN")
 
 			input, err := io.ReadAll(os.Stdin)
 			if err != nil {
@@ -135,7 +135,7 @@ var StepUpdateCommand = &cli.Command{
 				return err
 			}
 			if err != nil {
-				l.Warn(fmt.Sprintf("%s (%s)", err, r))
+				l.WarnContext(ctx, "Failed to update step; retrying", "error", err, "retry", r)
 				return err
 			}
 			return nil

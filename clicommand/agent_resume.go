@@ -61,11 +61,11 @@ func resume(ctx context.Context, cfg AgentResumeConfig, l *slog.Logger) error {
 			return err
 		}
 		if err != nil {
-			l.Warn(fmt.Sprintf("%s (%s)", err, r))
+			l.WarnContext(ctx, "Agent resume retry", "error", err, "retry", r)
 			return err
 		}
 
-		l.Info("Successfully resumed agent")
+		l.InfoContext(ctx, "Successfully resumed agent")
 		return nil
 	}); err != nil {
 		return fmt.Errorf("failed to resume agent: %w", err)

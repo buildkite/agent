@@ -573,7 +573,7 @@ var BootstrapCommand = &cli.Command{
 
 			// Cancel the bootstrap
 			if err := bootstrap.Cancel(); err != nil {
-				l.Debug(fmt.Sprintf("Failed to cancel bootstrap: %v", err))
+				l.DebugContext(ctx, "Failed to cancel bootstrap", "error", err)
 			}
 
 			// Track the state and signal used
@@ -600,8 +600,8 @@ var BootstrapCommand = &cli.Command{
 			if received == syscall.SIGQUIT {
 				return &SilentExitError{code: 131} // 128 + 3 (SIGQUIT).
 			}
-			if err := signalSelf(l, received); err != nil {
-				l.Error(fmt.Sprintf("Failed to signal self: %v", err))
+			if err := signalSelf(ctx, l, received); err != nil {
+				l.ErrorContext(ctx, "Failed to signal self", "error", err)
 			}
 		}
 
@@ -609,13 +609,13 @@ var BootstrapCommand = &cli.Command{
 	},
 }
 
-func signalSelf(l *slog.Logger, sig os.Signal) error {
+func signalSelf(ctx context.Context, l *slog.Logger, sig os.Signal) error {
 	p, err := os.FindProcess(os.Getpid())
 	if err != nil {
 		return fmt.Errorf("failed to find current process: %w", err)
 	}
 
-	l.Debug(fmt.Sprintf("Terminating bootstrap after cancellation with %v", sig))
+	l.DebugContext(ctx, "Terminating bootstrap after cancellation", "signal", sig)
 	err = p.Signal(sig)
 	if err != nil {
 		return fmt.Errorf("failed to signal self: %v", err)

@@ -29,9 +29,9 @@ func Do(l *slog.Logger, client *http.Client, req *http.Request, opts ...DoOption
 		dumpBody := !strings.Contains(req.Header.Get("Content-Type"), "multipart/form-data")
 		requestDump, err := httputil.DumpRequestOut(req, dumpBody)
 		if err != nil {
-			l.Debug(fmt.Sprintf("ERR: %s\n%s", err, string(requestDump)))
+			l.DebugContext(req.Context(), fmt.Sprintf("ERR: %s\n%s", err, string(requestDump)))
 		} else {
-			l.Debug(fmt.Sprintf("%s", string(requestDump)))
+			l.DebugContext(req.Context(), string(requestDump))
 		}
 	}
 
@@ -44,7 +44,7 @@ func Do(l *slog.Logger, client *http.Client, req *http.Request, opts ...DoOption
 
 	ts := time.Now()
 
-	l.Debug(fmt.Sprintf("%s %s", req.Method, req.URL))
+	l.DebugContext(req.Context(), "HTTP request", "method", req.Method, "url", req.URL.String())
 
 	resp, err := client.Do(req)
 	if err != nil {
@@ -57,15 +57,17 @@ func Do(l *slog.Logger, client *http.Client, req *http.Request, opts ...DoOption
 	l.With(
 		slog.String("proto", resp.Proto),
 		slog.Int("status", resp.StatusCode),
-		slog.Duration("Δ", time.Since(ts)),
-	).Debug(fmt.Sprintf("↳ %s %s", req.Method, req.URL))
+		slog.Duration("duration", time.Since(ts)),
+		slog.String("method", req.Method),
+		slog.String("url", req.URL.String()),
+	).DebugContext(req.Context(), "HTTP response")
 
 	if cfg.debugHTTP {
 		responseDump, err := httputil.DumpResponse(resp, true)
 		if err != nil {
-			l.Debug(fmt.Sprintf("\nERR: %s\n%s", err, string(responseDump)))
+			l.DebugContext(req.Context(), fmt.Sprintf("\nERR: %s\n%s", err, string(responseDump)))
 		} else {
-			l.Debug(fmt.Sprintf("\n%s", string(responseDump)))
+			l.DebugContext(req.Context(), "\n"+string(responseDump))
 		}
 	}
 	if cfg.traceHTTP {
@@ -114,34 +116,34 @@ func (t *tracer) EmitTraceToLog(level slog.Level) {
 func traceHTTPRequest(req *http.Request, t *tracer) *http.Request {
 	trace := &httptrace.ClientTrace{
 		GetConn: func(hostPort string) {
-			t.LogField("hostPort", hostPort)
-			t.LogTiming("getConn")
+			t.LogField("host_port", hostPort)
+			t.LogTiming("get_conn")
 		},
 		GotConn: func(info httptrace.GotConnInfo) {
-			t.LogTiming("gotConn")
+			t.LogTiming("got_conn")
 			t.LogField("reused", strconv.FormatBool(info.Reused))
 			t.LogField("idle", strconv.FormatBool(info.WasIdle))
-			t.LogDuration("idleTime", info.IdleTime)
-			t.LogField("localAddr", info.Conn.LocalAddr().String())
+			t.LogDuration("idle_time", info.IdleTime)
+			t.LogField("local_addr", info.Conn.LocalAddr().String())
 		},
 		PutIdleConn: func(err error) {
-			t.LogTiming("putIdleConn")
+			t.LogTiming("put_idle_conn")
 			if err != nil {
-				t.LogField("putIdleConnectionError", err.Error())
+				t.LogField("put_idle_connection_error", err.Error())
 			}
 		},
 		GotFirstResponseByte: func() {
-			t.LogTiming("gotFirstResponseByte")
+			t.LogTiming("got_first_response_byte")
 		},
 		Got1xxResponse: func(code int, header textproto.MIMEHeader) error {
-			t.LogTiming("got1xxResponse")
+			t.LogTiming("got_1xx_response")
 			return nil
 		},
 		DNSStart: func(_ httptrace.DNSStartInfo) {
-			t.LogTiming("dnsStart")
+			t.LogTiming("dns_start")
 		},
 		DNSDone: func(_ httptrace.DNSDoneInfo) {
-			t.LogTiming("dnsDone")
+			t.LogTiming("dns_done")
 		},
 		ConnectStart: func(network, addr string) {
 			t.LogTiming(fmt.Sprintf("connectStart.%s.%s", network, addr))
@@ -150,16 +152,16 @@ func traceHTTPRequest(req *http.Request, t *tracer) *http.Request {
 			t.LogTiming(fmt.Sprintf("connectDone.%s.%s", network, addr))
 		},
 		TLSHandshakeStart: func() {
-			t.LogTiming("tlsHandshakeStart")
+			t.LogTiming("tls_handshake_start")
 		},
 		TLSHandshakeDone: func(_ tls.ConnectionState, _ error) {
-			t.LogTiming("tlsHandshakeDone")
+			t.LogTiming("tls_handshake_done")
 		},
 		WroteHeaders: func() {
-			t.LogTiming("wroteHeaders")
+			t.LogTiming("wrote_headers")
 		},
 		WroteRequest: func(_ httptrace.WroteRequestInfo) {
-			t.LogTiming("wroteRequest")
+			t.LogTiming("wrote_request")
 		},
 	}
 

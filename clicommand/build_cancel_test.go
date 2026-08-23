@@ -1,11 +1,9 @@
 package clicommand
 
 import (
-	"fmt"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
-	"slices"
 	"testing"
 
 	"github.com/buildkite/agent/v4/internal/logtest"
@@ -34,8 +32,8 @@ func TestBuildCancel(t *testing.T) {
 		if got := err; got != nil {
 			t.Errorf("cancelBuild(ctx, cfg, l) = %v, want nil", got)
 		}
-		if got, want := lh.Messages(), fmt.Sprintf("Successfully cancelled build %s", cfg.Build); !slices.Contains(got, want) {
-			t.Errorf("lh.Messages() = %v, want containing %q", got, want)
+		if got, ok := findLogAttr(lh.Records(), "Successfully cancelled build", "build_id"); !ok || got != cfg.Build {
+			t.Errorf("build_id attr = %v, %t, want %q, true", got, ok, cfg.Build)
 		}
 	})
 

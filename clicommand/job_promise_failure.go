@@ -108,7 +108,7 @@ var JobPromiseFailureCommand = &cli.Command{
 		// without Unix sockets) or can't be reached.
 		client, err := jobapi.NewDefaultClient(ctx)
 		if err != nil {
-			l.Debug(fmt.Sprintf("Job API unavailable, declaring promised failure directly: %v", err))
+			l.DebugContext(ctx, "Job API unavailable, declaring promised failure directly", "error", err)
 			return declarePromiseFailureDirectly(ctx, l, cfg, jobID, exitStatus, reason)
 		}
 
@@ -117,7 +117,7 @@ var JobPromiseFailureCommand = &cli.Command{
 			// We couldn't reach or use the Job API (or its response was lost).
 			// Declare directly so the promise still lands; the endpoint is idempotent
 			// for the same exit status, so a duplicate is safe.
-			l.Warn(fmt.Sprintf("Couldn't reach the Job API to declare the promised failure; declaring it directly: %v", err))
+			l.WarnContext(ctx, "Couldn't reach the Job API to declare the promised failure; declaring it directly", "error", err)
 			return declarePromiseFailureDirectly(ctx, l, cfg, jobID, exitStatus, reason)
 		}
 
@@ -127,9 +127,9 @@ var JobPromiseFailureCommand = &cli.Command{
 
 		if result.Outcome == jobapi.PromiseFailureDebounced {
 			// Log at debug to avoid spamming job logs on repeated calls.
-			l.Debug(fmt.Sprintf("Promised exit status %d already declared for job %s (debounced)", exitStatus, jobID))
+			l.DebugContext(ctx, "Promised exit status already declared (debounced)", "exit_status", exitStatus, "job_id", jobID)
 		} else {
-			l.Info(fmt.Sprintf("Declared promised exit status %d for job %s", exitStatus, jobID))
+			l.InfoContext(ctx, "Declared promised exit status", "exit_status", exitStatus, "job_id", jobID)
 		}
 		return nil
 	},
@@ -169,11 +169,13 @@ func declarePromiseFailureDirectly(ctx context.Context, l *slog.Logger, cfg JobP
 		Reason:     reason,
 	}
 
-	status, err := client.PromiseFailureWithRetry(ctx, jobID, req, func(format string, args ...any) { l.Warn(fmt.Sprintf(format, args...)) })
+	status, err := client.PromiseFailureWithRetry(ctx, jobID, req, func(format string, args ...any) {
+		l.WarnContext(ctx, fmt.Sprintf(format, args...))
+	})
 	if err != nil {
 		return promiseFailureError(status, err)
 	}
 
-	l.Info(fmt.Sprintf("Declared promised exit status %d for job %s", exitStatus, jobID))
+	l.InfoContext(ctx, "Declared promised exit status", "exit_status", exitStatus, "job_id", jobID)
 	return nil
 }

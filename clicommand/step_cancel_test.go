@@ -4,7 +4,6 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
-	"slices"
 	"strings"
 	"testing"
 
@@ -37,8 +36,8 @@ func TestStepCancel(t *testing.T) {
 		if got := err; got != nil {
 			t.Errorf("cancelStep(ctx, cfg, l) = %v, want nil", got)
 		}
-		if got, want := lh.Messages(), "Successfully cancelled step: b0db1550-e68c-428f-9b4d-edf5599b2cff"; !slices.Contains(got, want) {
-			t.Errorf("lh.Messages() = %v, want containing %q", got, want)
+		if got, ok := findLogAttr(lh.Records(), "Successfully cancelled step", "step_id"); !ok || got != "b0db1550-e68c-428f-9b4d-edf5599b2cff" {
+			t.Errorf("step_id attr = %v, %t, want %q, true", got, ok, "b0db1550-e68c-428f-9b4d-edf5599b2cff")
 		}
 	})
 

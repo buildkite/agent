@@ -89,11 +89,11 @@ func (ap *AgentPool) runWatchdogLoop(ctx context.Context, l *slog.Logger, ticks 
 
 func (ap *AgentPool) notifyWatchdog(l *slog.Logger, now time.Time) {
 	if err := ap.watchdogHealth(now); err != nil {
-		l.Warn(fmt.Sprintf("Buildkite heartbeat has not succeeded; not sending systemd watchdog notification: %v", err))
+		l.Warn("Buildkite heartbeat has not succeeded; not sending systemd watchdog notification", "error", err)
 		return
 	}
 	if err := ap.watchdog.Watchdog(); err != nil {
-		l.Warn(fmt.Sprintf("Failed to notify systemd watchdog: %v", err))
+		l.Warn("Failed to notify systemd watchdog", "error", err)
 		return
 	}
 	l.Debug("Notified systemd watchdog")

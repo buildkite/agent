@@ -410,8 +410,8 @@ func CreateLogger(cfg any) *slog.Logger {
 	level := slog.LevelInfo
 	var levelErr error
 	if value, err := reflections.GetField(cfg, "LogLevel"); err == nil {
-		if value, ok := value.(string); ok {
-			level, levelErr = parseLogLevel(value)
+		if levelString, ok := value.(string); ok {
+			level, levelErr = parseLogLevel(levelString)
 			if levelErr != nil {
 				level = slog.LevelInfo
 			}
@@ -427,7 +427,7 @@ func CreateLogger(cfg any) *slog.Logger {
 	switch logFormat {
 	case "text", "":
 		noColor, _ := reflections.GetField(cfg, "NoColor")
-		handler = tint.NewHandler(os.Stderr, &tint.Options{
+		handler = tint.NewTextHandler(os.Stderr, &tint.Options{
 			Level:      level,
 			TimeFormat: "2006-01-02 15:04:05",
 			NoColor:    noColor == true || !term.IsTerminal(int(os.Stderr.Fd())),
@@ -441,7 +441,7 @@ func CreateLogger(cfg any) *slog.Logger {
 
 	l := slog.New(handler)
 	if levelErr != nil {
-		l.Warn(fmt.Sprintf("Error when setting log level: %v. Defaulting log level to INFO", levelErr))
+		l.Warn("Error when setting log level; defaulting log level to INFO", "error", levelErr)
 	}
 	return l
 }
@@ -470,7 +470,7 @@ func HandleGlobalFlags(ctx context.Context, l *slog.Logger, cfg any) (context.Co
 	for _, name := range experimentNamesSlice {
 		nctx, state := experiments.EnableWithWarnings(ctx, l, name)
 		if state == experiments.StateKnown {
-			l.Debug(fmt.Sprintf("Enabled experiment %q", name))
+			l.DebugContext(ctx, "Enabled experiment", "experiment", name)
 		}
 		ctx = nctx
 	}
@@ -609,11 +609,11 @@ func setupLoggerAndConfig[T any](ctx context.Context, c *cli.Command, opts ...co
 		l = l.With("command", c.FullName())
 	}
 
-	l.Debug("Loaded config")
+	l.DebugContext(ctx, "Loaded config")
 
 	// Now that we have a logger, log out the warnings that loading config generated
 	for _, warning := range warnings {
-		l.Warn(fmt.Sprintf("%s", warning))
+		l.WarnContext(ctx, warning)
 	}
 
 	// Setup any global configuration options
@@ -645,7 +645,7 @@ func setupLoggerAndConfig[T any](ctx context.Context, c *cli.Command, opts ...co
 
 		traceProvider, err := job.InitOTelTracerProvider(ctx, serviceName, resourceAttrs)
 		if err != nil {
-			l.Warn(fmt.Sprintf("Failed to initialize tracing: %v", err))
+			l.WarnContext(ctx, "Failed to initialize tracing", "error", err)
 		} else {
 			// Extract any incoming trace context so spans created in this process
 			// are linked to the parent job's trace.

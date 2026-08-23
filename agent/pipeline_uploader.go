@@ -137,7 +137,7 @@ func (u *PipelineUploader) pipelineUploadAsyncWithRetry(
 			}
 
 			if !api.BreakOnNonRetryable(r, resp, err) {
-				l.Warn(fmt.Sprintf("%s (%s)", err, r))
+				l.WarnContext(ctx, "Uploading pipeline failed; retrying", "error", err, "retry", r.String())
 			}
 			return nil, err
 		}
@@ -159,7 +159,7 @@ func (u *PipelineUploader) pipelineUploadAsyncWithRetry(
 		}
 
 		if result.pipelineStatusURL, err = resp.Location(); err != nil {
-			l.Warn(fmt.Sprintf("%s (%s)", err, r))
+			l.WarnContext(ctx, "Uploading pipeline failed; retrying", "error", err, "retry", r.String())
 			return nil, err
 		}
 
@@ -183,11 +183,11 @@ func (u *PipelineUploader) pollForPiplineUploadStatus(ctx context.Context, l *sl
 			},
 		)
 		if err != nil {
-			l.Warn(fmt.Sprintf("%s (%s)", err, r))
+			l.WarnContext(ctx, "Uploading pipeline failed; retrying", "error", err, "retry", r.String())
 
 			// 422 responses will always fail no need to retry
 			if api.IsErrHavingStatus(err, http.StatusUnprocessableEntity) {
-				l.Error("Unrecoverable error, skipping retries")
+				l.ErrorContext(ctx, "Unrecoverable error, skipping retries")
 				r.Break()
 				return err
 			}
@@ -202,14 +202,14 @@ func (u *PipelineUploader) pollForPiplineUploadStatus(ctx context.Context, l *sl
 		case "pending", "processing":
 			setNextIntervalFromResponse(r, resp)
 			err := fmt.Errorf("pipeline upload not yet applied: %s", uploadStatus.State)
-			l.Info(fmt.Sprintf("%s (%s)", err, r))
+			l.InfoContext(ctx, "Uploading pipeline failed; retrying", "error", err, "retry", r.String())
 			return err
 		case "rejected", "failed":
-			l.Error("Unrecoverable error, skipping retries")
+			l.ErrorContext(ctx, "Unrecoverable error, skipping retries")
 			r.Break()
 			return fmt.Errorf("pipeline upload %s: %s", uploadStatus.State, uploadStatus.Message)
 		default:
-			l.Error("Unrecoverable error, skipping retries")
+			l.ErrorContext(ctx, "Unrecoverable error, skipping retries")
 			r.Break()
 			return fmt.Errorf("unexpected pipeline upload state from API: %s", uploadStatus.State)
 		}

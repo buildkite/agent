@@ -60,7 +60,7 @@ func BuildArchive(ctx context.Context, log *slog.Logger, paths []string, key str
 	for _, mapping := range mappings {
 		if _, err := os.Stat(mapping.ResolvedPath()); err != nil {
 			if os.IsNotExist(err) {
-				log.Warn("cache path does not exist, skipping", "path", mapping.Path, "resolved", mapping.ResolvedPath())
+				log.WarnContext(ctx, "cache path does not exist, skipping", "path", mapping.Path, "resolved", mapping.ResolvedPath())
 				continue
 			}
 			return nil, fmt.Errorf("failed to stat file: %w", err)

@@ -35,7 +35,7 @@ func pingHandler(log *slog.Logger) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		resp := &PingResponse{Now: time.Now()}
 		if err := json.NewEncoder(w).Encode(resp); err != nil {
-			log.Error(fmt.Sprintf("Agent API: couldn't encode response body: %v", err))
+			log.ErrorContext(r.Context(), "Agent API: couldn't encode response body", "error", err)
 		}
 	}
 }

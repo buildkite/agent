@@ -68,7 +68,7 @@ var MetaDataSetCommand = &cli.Command{
 
 		// Read the value from STDIN if argument omitted entirely
 		if c.Args().Len() < 2 {
-			l.Info("Reading meta-data value from STDIN")
+			l.InfoContext(ctx, "Reading meta-data value from STDIN")
 
 			input, err := io.ReadAll(os.Stdin)
 			if err != nil {
@@ -115,7 +115,7 @@ var MetaDataSetCommand = &cli.Command{
 				return err
 			}
 			if err != nil {
-				l.Warn(fmt.Sprintf("%s (%s)", err, r))
+				l.WarnContext(ctx, "Failed to set meta-data; retrying", "error", err, "retry", r)
 				return err
 			}
 			return nil

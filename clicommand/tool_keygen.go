@@ -66,35 +66,35 @@ for information about JWKS, see https://tools.ietf.org/html/rfc7517`,
 		},
 	),
 	Action: func(ctx context.Context, c *cli.Command) error {
-		_, cfg, l, _, done := setupLoggerAndConfig[ToolKeygenConfig](ctx, c)
+		ctx, cfg, l, _, done := setupLoggerAndConfig[ToolKeygenConfig](ctx, c)
 		defer done()
 
 		if cfg.Alg == "" {
 			cfg.Alg = "EdDSA"
-			l.Info(fmt.Sprintf("No algorithm provided, using %s", cfg.Alg))
+			l.InfoContext(ctx, "No algorithm provided, using default", "algorithm", cfg.Alg)
 		}
 
 		if cfg.KeyID == "" {
 			cfg.KeyID = petname.Generate(2, "-")
-			l.Info(fmt.Sprintf("No key ID provided, using a randomly generated one: %s", cfg.KeyID))
+			l.InfoContext(ctx, "No key ID provided, using a randomly generated one", "key_id", cfg.KeyID)
 		}
 
 		sigAlg, ok := jwa.LookupSignatureAlgorithm(cfg.Alg)
 		if !ok {
 			err := fmt.Errorf("invalid signing algorithm: %s. Valid signing algorithms are: %s", cfg.Alg, jwkutil.ValidSigningAlgorithms)
-			l.Error(fmt.Sprintf("Invalid signing algorithm: %s. Valid signing algorithms are: %s", cfg.Alg, jwkutil.ValidSigningAlgorithms))
+			l.ErrorContext(ctx, "Invalid signing algorithm", "algorithm", cfg.Alg, "valid_algorithms", jwkutil.ValidSigningAlgorithms)
 			return err
 		}
 
 		if !slices.Contains(jwkutil.ValidSigningAlgorithms, sigAlg) {
 			err := fmt.Errorf("invalid signing algorithm: %s. Valid signing algorithms are: %s", cfg.Alg, jwkutil.ValidSigningAlgorithms)
-			l.Error(fmt.Sprintf("Invalid signing algorithm: %s. Valid signing algorithms are: %s", cfg.Alg, jwkutil.ValidSigningAlgorithms))
+			l.ErrorContext(ctx, "Invalid signing algorithm", "algorithm", cfg.Alg, "valid_algorithms", jwkutil.ValidSigningAlgorithms)
 			return err
 		}
 
 		priv, pub, err := jwkutil.NewKeyPair(cfg.KeyID, sigAlg)
 		if err != nil {
-			l.Error(fmt.Sprintf("Failed to generate key pair: %v", err))
+			l.ErrorContext(ctx, "Failed to generate key pair", "error", err)
 			return err
 		}
 
@@ -106,33 +106,33 @@ for information about JWKS, see https://tools.ietf.org/html/rfc7517`,
 			cfg.PublicJWKSFile = fmt.Sprintf("./%s-%s-public.json", cfg.Alg, cfg.KeyID)
 		}
 
-		l.Info(fmt.Sprintf("Writing private key set to %s...", cfg.PrivateJWKSFile))
+		l.InfoContext(ctx, "Writing private key set", "path", cfg.PrivateJWKSFile)
 		pKey, err := json.Marshal(priv)
 		if err != nil {
-			l.Error(fmt.Sprintf("Failed to marshal private key: %v", err))
+			l.ErrorContext(ctx, "Failed to marshal private key", "error", err)
 			return err
 		}
 
 		err = writeIfNotExists(cfg.PrivateJWKSFile, pKey)
 		if err != nil {
-			l.Error(fmt.Sprintf("Failed to write private key file: %v", err))
+			l.ErrorContext(ctx, "Failed to write private key file", "error", err, "path", cfg.PrivateJWKSFile)
 			return err
 		}
 
-		l.Info(fmt.Sprintf("Writing public key set to %s...", cfg.PublicJWKSFile))
+		l.InfoContext(ctx, "Writing public key set", "path", cfg.PublicJWKSFile)
 		pubKey, err := json.Marshal(pub)
 		if err != nil {
-			l.Error(fmt.Sprintf("Failed to marshal private key: %v", err))
+			l.ErrorContext(ctx, "Failed to marshal public key", "error", err)
 			return err
 		}
 
 		err = writeIfNotExists(cfg.PublicJWKSFile, pubKey)
 		if err != nil {
-			l.Error(fmt.Sprintf("Failed to write private key file: %v", err))
+			l.ErrorContext(ctx, "Failed to write public key file", "error", err, "path", cfg.PublicJWKSFile)
 			return err
 		}
 
-		l.Info("Done! Enjoy your new keys ^_^")
+		l.InfoContext(ctx, "Done! Enjoy your new keys ^_^")
 		return nil
 	},
 }

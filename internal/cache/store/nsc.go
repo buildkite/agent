@@ -256,9 +256,9 @@ func (n *NscStore) refreshExpiry(ctx context.Context, key string) {
 	if !n.extendSupported(ctx) {
 		// `nsc artifact extend` is still being rolled out by Namespace. Update
 		// the nsc CLI as a contingency so the command becomes available.
-		n.log.Debug("nsc artifact extend unavailable, updating nsc CLI")
+		n.log.DebugContext(ctx, "nsc artifact extend unavailable, updating nsc CLI")
 		if _, err := n.run(ctx, "", "nsc", "version", "update"); err != nil {
-			n.log.Warn("failed to update nsc CLI, skipping cache TTL refresh (non-fatal)",
+			n.log.WarnContext(ctx, "failed to update nsc CLI, skipping cache TTL refresh (non-fatal)",
 				"key", key, "error", err)
 			return
 		}
@@ -267,12 +267,12 @@ func (n *NscStore) refreshExpiry(ctx context.Context, key string) {
 	result, err := n.run(ctx, "", n.artifactArgs("extend", key, "--ensure_minimum", nscDefaultExpiry)...)
 	switch {
 	case err != nil:
-		n.log.Warn("failed to refresh cache TTL, continuing (non-fatal)", "key", key, "error", err)
+		n.log.WarnContext(ctx, "failed to refresh cache TTL, continuing (non-fatal)", "key", key, "error", err)
 	case result.ExitCode != 0:
-		n.log.Warn("failed to refresh cache TTL, continuing (non-fatal)",
+		n.log.WarnContext(ctx, "failed to refresh cache TTL, continuing (non-fatal)",
 			"key", key, "exit_code", result.ExitCode, "stderr", result.Stderr)
 	default:
-		n.log.Debug("refreshed cache TTL", "key", key)
+		n.log.DebugContext(ctx, "refreshed cache TTL", "key", key)
 	}
 }
 

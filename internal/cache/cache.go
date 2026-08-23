@@ -42,7 +42,7 @@ func RunSave(ctx context.Context, l *slog.Logger, apiClient *api.Client, cfg Con
 		return err
 	}
 	if c == nil {
-		l.Info("No caches defined in the cache configuration file, nothing to save")
+		l.InfoContext(ctx, "No caches defined in the cache configuration file, nothing to save")
 		return nil
 	}
 	return saveWithClient(ctx, l, c, cacheIDs, cfg.Concurrency)
@@ -56,7 +56,7 @@ func RunRestore(ctx context.Context, l *slog.Logger, apiClient *api.Client, cfg 
 		return err
 	}
 	if c == nil {
-		l.Info("No caches defined in the cache configuration file, nothing to restore")
+		l.InfoContext(ctx, "No caches defined in the cache configuration file, nothing to restore")
 		return nil
 	}
 	return restoreWithClient(ctx, l, c, cacheIDs, cfg.Concurrency)
@@ -89,7 +89,7 @@ func restoreWithClient(ctx context.Context, l *slog.Logger, c cacheOps, cacheIDs
 						return
 					}
 
-					l.Info(fmt.Sprintf("Restoring cache: %s", cacheID))
+					l.InfoContext(wctx, "Restoring cache", "cache_id", cacheID)
 					result, err := c.Restore(wctx, cacheID)
 					if err != nil {
 						cancel(fmt.Errorf("failed to restore cache %q: %w", cacheID, err))
@@ -159,7 +159,7 @@ func saveWithClient(ctx context.Context, l *slog.Logger, c cacheOps, cacheIDs []
 						return
 					}
 
-					l.Info(fmt.Sprintf("Saving cache: %s", cacheID))
+					l.InfoContext(wctx, "Saving cache", "cache_id", cacheID)
 					result, err := c.Save(wctx, cacheID)
 					if err != nil {
 						cancel(fmt.Errorf("failed to save cache %q: %w", cacheID, err))

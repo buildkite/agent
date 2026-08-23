@@ -10,7 +10,6 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
 	"github.com/buildkite/agent/v4/internal/osutil"
-	"github.com/dustin/go-humanize"
 )
 
 // AzureBlobUploaderConfig configures AzureBlobDownloader.
@@ -44,7 +43,7 @@ func (d *AzureBlobDownloader) Start(ctx context.Context) error {
 		return err
 	}
 
-	d.logger.Debug(fmt.Sprintf("Azure Blob Storage path: %v", loc))
+	d.logger.DebugContext(ctx, "Resolved Azure Blob Storage path", "path", d.conf.Repository)
 
 	client, err := NewAzureBlobClient(d.logger, loc.StorageAccountName)
 	if err != nil {
@@ -71,7 +70,7 @@ func (d *AzureBlobDownloader) Start(ctx context.Context) error {
 	fullPath := path.Join(loc.BlobPath, d.conf.Path)
 
 	// Show a nice message that we're starting to download the file
-	d.logger.Debug(fmt.Sprintf("Downloading %s to %s", loc.URL(d.conf.Path), targetPath))
+	d.logger.DebugContext(ctx, "Downloading artifact from Azure Blob Storage", "url", loc.URL(d.conf.Path), "path", targetPath)
 
 	opts := &azblob.DownloadFileOptions{
 		RetryReaderOptionsPerBlock: azblob.RetryReaderOptions{
@@ -103,7 +102,7 @@ func (d *AzureBlobDownloader) Start(ctx context.Context) error {
 		return fmt.Errorf("renaming temp file to target (%T: %w)", err, err)
 	}
 
-	d.logger.Info(fmt.Sprintf("Successfully downloaded %q %s", d.conf.Path, humanize.IBytes(uint64(bytes))))
+	d.logger.InfoContext(ctx, "Successfully downloaded artifact", "artifact", d.conf.Path, "bytes", bytes)
 
 	return nil
 }
