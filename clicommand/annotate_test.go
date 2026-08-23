@@ -3,13 +3,14 @@ package clicommand
 import (
 	"errors"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"slices"
 	"strings"
 	"testing"
 
-	"github.com/buildkite/agent/v4/logger"
+	"github.com/buildkite/agent/v4/internal/logtest"
 )
 
 func newAnnotateTestServer(t *testing.T) *httptest.Server {
@@ -36,14 +37,14 @@ func TestAnnotate(t *testing.T) {
 		},
 		Priority: 1,
 	}
-	l := logger.NewBuffer()
+	l, lh := logtest.NewLogger()
 
 	err := annotate(t.Context(), cfg, l)
 	if err != nil {
 		t.Errorf("annotate(ctx, %v, l) error = %v", cfg, err)
 	}
-	if want := "[debug] Successfully annotated build"; !slices.Contains(l.Messages, want) {
-		t.Errorf("annotate(ctx, %v, l) logged messages = %q, missing %q", cfg, l.Messages, want)
+	if want := "Successfully annotated build"; !slices.Contains(lh.Messages(), want) {
+		t.Errorf("annotate(ctx, %v, l) logged messages = %q, missing %q", cfg, lh.Messages(), want)
 	}
 }
 
@@ -51,7 +52,7 @@ func TestAnnotateMaxBodySize(t *testing.T) {
 	cfg := AnnotateConfig{
 		Body: strings.Repeat("a", 1048577),
 	}
-	l := logger.NewBuffer()
+	l := slog.New(slog.DiscardHandler)
 
 	err := annotate(t.Context(), cfg, l)
 	wantErr := annotationTooBigError{bodySize: 1048577}

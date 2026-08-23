@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/buildkite/agent/v4/api"
-	"github.com/buildkite/agent/v4/logger"
+	"github.com/buildkite/agent/v4/internal/logtest"
 	"github.com/google/go-cmp/cmp"
 )
 
@@ -81,8 +81,8 @@ func TestApplyControlPlaneTracing(t *testing.T) {
 			t.Parallel()
 
 			conf := tc.conf
-			buf := logger.NewBuffer()
-			ApplyControlPlaneTracing(buf, &conf, tc.tracing, tc.local)
+			l, handler := logtest.NewLogger()
+			ApplyControlPlaneTracing(l, &conf, tc.tracing, tc.local)
 
 			if got, want := conf.OpenTelemetryTracing, tc.wantOTelTracing; got != want {
 				t.Errorf("conf.OpenTelemetryTracing = %t, want %t", got, want)
@@ -92,7 +92,7 @@ func TestApplyControlPlaneTracing(t *testing.T) {
 			}
 
 			// Header credentials and full endpoint paths must never be logged.
-			for _, msg := range buf.Messages {
+			for _, msg := range handler.Messages() {
 				if strings.Contains(msg, testBearerToken) {
 					t.Errorf("log message contains exporter header credential: %q", msg)
 				}

@@ -3,9 +3,8 @@ package agent
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"time"
-
-	"github.com/buildkite/agent/v4/logger"
 )
 
 type watchdogNotifier interface {
@@ -64,7 +63,7 @@ func (a *AgentWorker) watchdogHealth(now time.Time) error {
 	return nil
 }
 
-func (ap *AgentPool) runWatchdog(ctx context.Context, l logger.Logger, watchdogInterval time.Duration) {
+func (ap *AgentPool) runWatchdog(ctx context.Context, l *slog.Logger, watchdogInterval time.Duration) {
 	ap.notifyWatchdog(l, time.Now())
 
 	// systemd recommends notifying every half of the configured interval.
@@ -74,7 +73,7 @@ func (ap *AgentPool) runWatchdog(ctx context.Context, l logger.Logger, watchdogI
 	ap.runWatchdogLoop(ctx, l, ticker.C)
 }
 
-func (ap *AgentPool) runWatchdogLoop(ctx context.Context, l logger.Logger, ticks <-chan time.Time) {
+func (ap *AgentPool) runWatchdogLoop(ctx context.Context, l *slog.Logger, ticks <-chan time.Time) {
 	for {
 		select {
 		case _, ok := <-ticks:
@@ -88,16 +87,16 @@ func (ap *AgentPool) runWatchdogLoop(ctx context.Context, l logger.Logger, ticks
 	}
 }
 
-func (ap *AgentPool) notifyWatchdog(l logger.Logger, now time.Time) {
+func (ap *AgentPool) notifyWatchdog(l *slog.Logger, now time.Time) {
 	if err := ap.watchdogHealth(now); err != nil {
-		l.Warnf("Buildkite heartbeat has not succeeded; not sending systemd watchdog notification: %v", err)
+		l.Warn(fmt.Sprintf("Buildkite heartbeat has not succeeded; not sending systemd watchdog notification: %v", err))
 		return
 	}
 	if err := ap.watchdog.Watchdog(); err != nil {
-		l.Warnf("Failed to notify systemd watchdog: %v", err)
+		l.Warn(fmt.Sprintf("Failed to notify systemd watchdog: %v", err))
 		return
 	}
-	l.Debugf("Notified systemd watchdog")
+	l.Debug("Notified systemd watchdog")
 }
 
 func (ap *AgentPool) watchdogHealth(now time.Time) error {

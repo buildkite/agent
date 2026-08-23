@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"errors"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -13,6 +14,8 @@ import (
 	"github.com/buildkite/agent/v4/internal/cache/internal/trace"
 	"github.com/klauspost/compress/zip"
 )
+
+var discardLogger = slog.New(slog.DiscardHandler)
 
 func TestChecksumSHA256_Sum(t *testing.T) {
 	tests := []struct {
@@ -117,7 +120,7 @@ func TestV2_AbsolutePathRoundTrip(t *testing.T) {
 	writeTestFile(t, filepath.Join(absDir, "a.txt"), "hello")
 	writeTestFile(t, filepath.Join(absDir, "sub", "b.txt"), "world")
 
-	info, err := BuildArchive(t.Context(), []string{absDir}, "abs")
+	info, err := BuildArchive(t.Context(), discardLogger, []string{absDir}, "abs")
 	if err != nil {
 		t.Fatalf("BuildArchive: %v", err)
 	}
@@ -132,7 +135,7 @@ func TestV2_AbsolutePathRoundTrip(t *testing.T) {
 		t.Fatalf("RemoveAll: %v", err)
 	}
 
-	if _, err := ExtractFiles(t.Context(), openArchive(t, info), info.Size, []string{absDir}); err != nil {
+	if _, err := ExtractFiles(t.Context(), discardLogger, openArchive(t, info), info.Size, []string{absDir}); err != nil {
 		t.Fatalf("ExtractFiles: %v", err)
 	}
 
@@ -149,7 +152,7 @@ func TestV2_EmptyAbsoluteDirectoryRestored(t *testing.T) {
 
 	absDir := t.TempDir() // absolute, outside home, empty
 
-	info, err := BuildArchive(t.Context(), []string{absDir}, "empty")
+	info, err := BuildArchive(t.Context(), discardLogger, []string{absDir}, "empty")
 	if err != nil {
 		t.Fatalf("BuildArchive: %v", err)
 	}
@@ -159,7 +162,7 @@ func TestV2_EmptyAbsoluteDirectoryRestored(t *testing.T) {
 		t.Fatalf("RemoveAll: %v", err)
 	}
 
-	if _, err := ExtractFiles(t.Context(), openArchive(t, info), info.Size, []string{absDir}); err != nil {
+	if _, err := ExtractFiles(t.Context(), discardLogger, openArchive(t, info), info.Size, []string{absDir}); err != nil {
 		t.Fatalf("ExtractFiles: %v", err)
 	}
 
@@ -189,7 +192,7 @@ func TestV2_DirectorySymlinkRestored(t *testing.T) {
 		t.Fatalf("Symlink: %v", err)
 	}
 
-	info, err := BuildArchive(t.Context(), []string{link}, "symlink")
+	info, err := BuildArchive(t.Context(), discardLogger, []string{link}, "symlink")
 	if err != nil {
 		t.Fatalf("BuildArchive: %v", err)
 	}
@@ -199,7 +202,7 @@ func TestV2_DirectorySymlinkRestored(t *testing.T) {
 		t.Fatalf("Remove link: %v", err)
 	}
 
-	if _, err := ExtractFiles(t.Context(), openArchive(t, info), info.Size, []string{link}); err != nil {
+	if _, err := ExtractFiles(t.Context(), discardLogger, openArchive(t, info), info.Size, []string{link}); err != nil {
 		t.Fatalf("ExtractFiles: %v", err)
 	}
 
@@ -227,7 +230,7 @@ func TestV2_AbsolutePathUnderHomeIsPinned(t *testing.T) {
 	absUnderHome := filepath.Join(homeA, ".gradle")
 	writeTestFile(t, filepath.Join(absUnderHome, "caches", "x.bin"), "data")
 
-	info, err := BuildArchive(t.Context(), []string{absUnderHome}, "gradle")
+	info, err := BuildArchive(t.Context(), discardLogger, []string{absUnderHome}, "gradle")
 	if err != nil {
 		t.Fatalf("BuildArchive: %v", err)
 	}
@@ -249,7 +252,7 @@ func TestV2_AbsolutePathUnderHomeIsPinned(t *testing.T) {
 		t.Fatalf("RemoveAll: %v", err)
 	}
 
-	if _, err := ExtractFiles(t.Context(), openArchive(t, info), info.Size, []string{absUnderHome}); err != nil {
+	if _, err := ExtractFiles(t.Context(), discardLogger, openArchive(t, info), info.Size, []string{absUnderHome}); err != nil {
 		t.Fatalf("ExtractFiles: %v", err)
 	}
 
@@ -330,7 +333,7 @@ func TestV2_TargetOverlap(t *testing.T) {
 				t.Skip("creating a symlink needs privileges on Windows")
 			}
 			paths := tt.setup(t, t.TempDir())
-			_, err := BuildArchive(t.Context(), paths, "overlap")
+			_, err := BuildArchive(t.Context(), discardLogger, paths, "overlap")
 			switch {
 			case tt.wantErr && (err == nil || !strings.Contains(err.Error(), "overlap")):
 				t.Errorf("BuildArchive(%v) = %v, want overlap error", paths, err)
@@ -394,7 +397,7 @@ func TestV2_TargetOverlapCaseVariant(t *testing.T) {
 			upper := filepath.Join(base, tt.upper)
 			writeTestFile(t, filepath.Join(upper, "x.bin"), "data")
 
-			_, err := BuildArchive(t.Context(), []string{upper, filepath.Join(base, tt.lower)}, "case")
+			_, err := BuildArchive(t.Context(), discardLogger, []string{upper, filepath.Join(base, tt.lower)}, "case")
 			if caseInsensitiveFS(t, base) {
 				if err == nil || !strings.Contains(err.Error(), "overlap") {
 					t.Errorf("case-insensitive: BuildArchive = %v, want overlap error", err)
@@ -473,7 +476,7 @@ func TestV2_HomePortability(t *testing.T) {
 	setHomeDir(t, homeA)
 	writeTestFile(t, filepath.Join(homeA, ".cache", "x.txt"), "data")
 
-	info, err := BuildArchive(t.Context(), []string{"~/.cache"}, "home")
+	info, err := BuildArchive(t.Context(), discardLogger, []string{"~/.cache"}, "home")
 	if err != nil {
 		t.Fatalf("BuildArchive: %v", err)
 	}
@@ -487,7 +490,7 @@ func TestV2_HomePortability(t *testing.T) {
 	homeB := t.TempDir()
 	setHomeDir(t, homeB)
 
-	if _, err := ExtractFiles(t.Context(), openArchive(t, info), info.Size, []string{"~/.cache"}); err != nil {
+	if _, err := ExtractFiles(t.Context(), discardLogger, openArchive(t, info), info.Size, []string{"~/.cache"}); err != nil {
 		t.Fatalf("ExtractFiles: %v", err)
 	}
 
@@ -505,7 +508,7 @@ func TestV2_ExtractMatchesSpellingVariantsAndSkipsUnconfigured(t *testing.T) {
 	writeTestFile(t, filepath.Join(home, ".cache", "keep.txt"), "keep")
 	writeTestFile(t, filepath.Join(home, ".other", "drop.txt"), "drop")
 
-	info, err := BuildArchive(t.Context(), []string{"~/.cache", "~/.other"}, "multi")
+	info, err := BuildArchive(t.Context(), discardLogger, []string{"~/.cache", "~/.other"}, "multi")
 	if err != nil {
 		t.Fatalf("BuildArchive: %v", err)
 	}
@@ -519,7 +522,7 @@ func TestV2_ExtractMatchesSpellingVariantsAndSkipsUnconfigured(t *testing.T) {
 	}
 
 	// Configure only .cache, spelled as an absolute path rather than "~/.cache".
-	if _, err := ExtractFiles(t.Context(), openArchive(t, info), info.Size, []string{filepath.Join(home, ".cache")}); err != nil {
+	if _, err := ExtractFiles(t.Context(), discardLogger, openArchive(t, info), info.Size, []string{filepath.Join(home, ".cache")}); err != nil {
 		t.Fatalf("ExtractFiles: %v", err)
 	}
 
@@ -562,7 +565,7 @@ func TestV2_UnrecognizedFormatSoftFails(t *testing.T) {
 		t.Errorf("Validate err = %v, want ErrUnrecognizedFormat", err)
 	}
 
-	if _, err := ExtractFiles(t.Context(), tmp, stat.Size(), []string{"cache"}); !errors.Is(err, ErrUnrecognizedFormat) {
+	if _, err := ExtractFiles(t.Context(), discardLogger, tmp, stat.Size(), []string{"cache"}); !errors.Is(err, ErrUnrecognizedFormat) {
 		t.Errorf("ExtractFiles err = %v, want ErrUnrecognizedFormat", err)
 	}
 }
@@ -600,7 +603,7 @@ func TestV2_UnrecognizedAnchorSoftFails(t *testing.T) {
 		t.Errorf("Validate err = %v, want ErrUnrecognizedFormat", err)
 	}
 
-	if _, err := ExtractFiles(t.Context(), tmp, stat.Size(), []string{"cache"}); !errors.Is(err, ErrUnrecognizedFormat) {
+	if _, err := ExtractFiles(t.Context(), discardLogger, tmp, stat.Size(), []string{"cache"}); !errors.Is(err, ErrUnrecognizedFormat) {
 		t.Errorf("ExtractFiles err = %v, want ErrUnrecognizedFormat", err)
 	}
 }
@@ -617,7 +620,7 @@ func TestV2_AbsoluteFileRoundTrip(t *testing.T) {
 	file := filepath.Join(t.TempDir(), "cache-file") // absolute, outside home
 	writeTestFile(t, file, "payload")
 
-	info, err := BuildArchive(t.Context(), []string{file}, "absfile")
+	info, err := BuildArchive(t.Context(), discardLogger, []string{file}, "absfile")
 	if err != nil {
 		t.Fatalf("BuildArchive: %v", err)
 	}
@@ -631,7 +634,7 @@ func TestV2_AbsoluteFileRoundTrip(t *testing.T) {
 		t.Fatalf("Remove: %v", err)
 	}
 
-	if _, err := ExtractFiles(t.Context(), openArchive(t, info), info.Size, []string{file}); err != nil {
+	if _, err := ExtractFiles(t.Context(), discardLogger, openArchive(t, info), info.Size, []string{file}); err != nil {
 		t.Fatalf("ExtractFiles: %v", err)
 	}
 
@@ -648,7 +651,7 @@ func TestV2_TrailingSlashHomeRoundTrips(t *testing.T) {
 	setHomeDir(t, home+string(os.PathSeparator)) // trailing slash
 	writeTestFile(t, filepath.Join(home, ".cache", "x.txt"), "data")
 
-	info, err := BuildArchive(t.Context(), []string{"~/.cache"}, "trailing")
+	info, err := BuildArchive(t.Context(), discardLogger, []string{"~/.cache"}, "trailing")
 	if err != nil {
 		t.Fatalf("BuildArchive: %v", err)
 	}
@@ -658,7 +661,7 @@ func TestV2_TrailingSlashHomeRoundTrips(t *testing.T) {
 		t.Fatalf("RemoveAll: %v", err)
 	}
 
-	if _, err := ExtractFiles(t.Context(), openArchive(t, info), info.Size, []string{"~/.cache"}); err != nil {
+	if _, err := ExtractFiles(t.Context(), discardLogger, openArchive(t, info), info.Size, []string{"~/.cache"}); err != nil {
 		t.Fatalf("ExtractFiles: %v", err)
 	}
 

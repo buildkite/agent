@@ -79,7 +79,7 @@ var MetaDataKeysCommand = &cli.Command{
 				return keys, err
 			}
 			if err != nil {
-				l.Warnf("%s (%s)", err, r)
+				l.Warn(fmt.Sprintf("%s (%s)", err, r))
 			}
 			return keys, err
 		})

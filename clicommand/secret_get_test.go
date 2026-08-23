@@ -4,12 +4,12 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
-	"github.com/buildkite/agent/v4/logger"
 	"github.com/google/go-cmp/cmp"
 )
 
@@ -44,9 +44,9 @@ func TestSecretGet(t *testing.T) {
 		server := newSecretGetTestServer(t, map[string]string{})
 		defer server.Close()
 		var out bytes.Buffer
-		err := secretGet(t.Context(), baseSecretGetConfig(server.URL, []string{}, "default"), &out, logger.NewBuffer())
+		err := secretGet(t.Context(), baseSecretGetConfig(server.URL, []string{}, "default"), &out, slog.New(slog.DiscardHandler))
 		if want := "at least one secret key must be provided"; err == nil || err.Error() != want {
-			t.Fatalf("secretGet(t.Context(), baseSecretGetConfig(server.URL, []string{}, \"default\"), &out, logger.NewBuffer()) error = %v, want error with message %q", err, want)
+			t.Fatalf("secretGet(t.Context(), baseSecretGetConfig(server.URL, []string{}, \"default\"), &out, slog.New(slog.DiscardHandler)) error = %v, want error with message %q", err, want)
 		}
 	})
 
@@ -55,9 +55,9 @@ func TestSecretGet(t *testing.T) {
 		server := newSecretGetTestServer(t, map[string]string{"deploy_key": "shhsecret"})
 		defer server.Close()
 		var out bytes.Buffer
-		err := secretGet(t.Context(), baseSecretGetConfig(server.URL, []string{"deploy_key"}, "xml"), &out, logger.NewBuffer())
+		err := secretGet(t.Context(), baseSecretGetConfig(server.URL, []string{"deploy_key"}, "xml"), &out, slog.New(slog.DiscardHandler))
 		if want := `invalid format "xml": must be one of 'default', 'json', or 'env'`; err == nil || err.Error() != want {
-			t.Fatalf("secretGet(t.Context(), baseSecretGetConfig(server.URL, []string{\"deploy_key\"}, \"xml\"), &out, logger.NewBuffer()) error = %v, want error with message %q", err, want)
+			t.Fatalf("secretGet(t.Context(), baseSecretGetConfig(server.URL, []string{\"deploy_key\"}, \"xml\"), &out, slog.New(slog.DiscardHandler)) error = %v, want error with message %q", err, want)
 		}
 	})
 
@@ -66,9 +66,9 @@ func TestSecretGet(t *testing.T) {
 		server := newSecretGetTestServer(t, map[string]string{"deploy_key": "shhsecret"})
 		defer server.Close()
 		var out bytes.Buffer
-		err := secretGet(t.Context(), baseSecretGetConfig(server.URL, []string{"deploy_key"}, "default"), &out, logger.NewBuffer())
+		err := secretGet(t.Context(), baseSecretGetConfig(server.URL, []string{"deploy_key"}, "default"), &out, slog.New(slog.DiscardHandler))
 		if err != nil {
-			t.Fatalf("secretGet(t.Context(), baseSecretGetConfig(server.URL, []string{\"deploy_key\"}, \"default\"), &out, logger.NewBuffer()) error = %v, want nil", err)
+			t.Fatalf("secretGet(t.Context(), baseSecretGetConfig(server.URL, []string{\"deploy_key\"}, \"default\"), &out, slog.New(slog.DiscardHandler)) error = %v, want nil", err)
 		}
 		if got, want := out.String(), "shhsecret\n"; got != want {
 			t.Fatalf("out.String() = %q, want %q", got, want)
@@ -83,9 +83,9 @@ func TestSecretGet(t *testing.T) {
 		})
 		defer server.Close()
 		var out bytes.Buffer
-		err := secretGet(t.Context(), baseSecretGetConfig(server.URL, []string{"deploy_key", "github_api_key"}, "default"), &out, logger.NewBuffer())
+		err := secretGet(t.Context(), baseSecretGetConfig(server.URL, []string{"deploy_key", "github_api_key"}, "default"), &out, slog.New(slog.DiscardHandler))
 		if err != nil {
-			t.Fatalf("secretGet(t.Context(), baseSecretGetConfig(server.URL, []string{\"deploy_key\", \"github_api_key\"}, \"default\"), &out, logger.NewBuffer()) error = %v, want nil", err)
+			t.Fatalf("secretGet(t.Context(), baseSecretGetConfig(server.URL, []string{\"deploy_key\", \"github_api_key\"}, \"default\"), &out, slog.New(slog.DiscardHandler)) error = %v, want nil", err)
 		}
 
 		var result map[string]string
@@ -106,9 +106,9 @@ func TestSecretGet(t *testing.T) {
 		server := newSecretGetTestServer(t, map[string]string{"deploy_key": "supersecret"})
 		defer server.Close()
 		var out bytes.Buffer
-		err := secretGet(t.Context(), baseSecretGetConfig(server.URL, []string{"deploy_key"}, "json"), &out, logger.NewBuffer())
+		err := secretGet(t.Context(), baseSecretGetConfig(server.URL, []string{"deploy_key"}, "json"), &out, slog.New(slog.DiscardHandler))
 		if err != nil {
-			t.Fatalf("secretGet(t.Context(), baseSecretGetConfig(server.URL, []string{\"deploy_key\"}, \"json\"), &out, logger.NewBuffer()) error = %v, want nil", err)
+			t.Fatalf("secretGet(t.Context(), baseSecretGetConfig(server.URL, []string{\"deploy_key\"}, \"json\"), &out, slog.New(slog.DiscardHandler)) error = %v, want nil", err)
 		}
 
 		var result map[string]string
@@ -129,9 +129,9 @@ func TestSecretGet(t *testing.T) {
 		defer server.Close()
 
 		var out bytes.Buffer
-		err := secretGet(t.Context(), baseSecretGetConfig(server.URL, []string{"deploy_key", "github_api_key"}, "env"), &out, logger.NewBuffer())
+		err := secretGet(t.Context(), baseSecretGetConfig(server.URL, []string{"deploy_key", "github_api_key"}, "env"), &out, slog.New(slog.DiscardHandler))
 		if err != nil {
-			t.Fatalf("secretGet(t.Context(), baseSecretGetConfig(server.URL, []string{\"deploy_key\", \"github_api_key\"}, \"env\"), &out, logger.NewBuffer()) error = %v, want nil", err)
+			t.Fatalf("secretGet(t.Context(), baseSecretGetConfig(server.URL, []string{\"deploy_key\", \"github_api_key\"}, \"env\"), &out, slog.New(slog.DiscardHandler)) error = %v, want nil", err)
 		}
 		if got, want := out.String(), "DEPLOY_KEY='secret1'\nGITHUB_API_KEY='secret2'\n"; got != want {
 			t.Fatalf("out.String() = %q, want %q", got, want)
@@ -147,9 +147,9 @@ func TestSecretGet(t *testing.T) {
 		defer server.Close()
 
 		var out bytes.Buffer
-		err := secretGet(t.Context(), baseSecretGetConfig(server.URL, []string{"deploy_key", "github_api_key"}, "env"), &out, logger.NewBuffer())
+		err := secretGet(t.Context(), baseSecretGetConfig(server.URL, []string{"deploy_key", "github_api_key"}, "env"), &out, slog.New(slog.DiscardHandler))
 		if err != nil {
-			t.Fatalf("secretGet(t.Context(), baseSecretGetConfig(server.URL, []string{\"deploy_key\", \"github_api_key\"}, \"env\"), &out, logger.NewBuffer()) error = %v, want nil", err)
+			t.Fatalf("secretGet(t.Context(), baseSecretGetConfig(server.URL, []string{\"deploy_key\", \"github_api_key\"}, \"env\"), &out, slog.New(slog.DiscardHandler)) error = %v, want nil", err)
 		}
 		if got, want := out.String(), "DEPLOY_KEY=''\\''sec\\nret1'\\'''\nGITHUB_API_KEY='se'\\''c'\\''ret2'\n"; got != want {
 			t.Fatalf("out.String() = %q, want %q", got, want)
@@ -164,9 +164,9 @@ func TestSecretGet(t *testing.T) {
 		defer server.Close()
 
 		var out bytes.Buffer
-		err := secretGet(t.Context(), baseSecretGetConfig(server.URL, []string{"missing_key"}, "default"), &out, logger.NewBuffer())
+		err := secretGet(t.Context(), baseSecretGetConfig(server.URL, []string{"missing_key"}, "default"), &out, slog.New(slog.DiscardHandler))
 		if err == nil {
-			t.Fatalf("secretGet(t.Context(), baseSecretGetConfig(server.URL, []string{\"missing_key\"}, \"default\"), &out, logger.NewBuffer()) error = %v, want non-nil error", err)
+			t.Fatalf("secretGet(t.Context(), baseSecretGetConfig(server.URL, []string{\"missing_key\"}, \"default\"), &out, slog.New(slog.DiscardHandler)) error = %v, want non-nil error", err)
 		}
 		if got, want := err.Error(), "Failed to fetch some secrets:"; !strings.Contains(got, want) {
 			t.Fatalf("err.Error() = %q, want containing %q", got, want)
@@ -187,9 +187,9 @@ func TestSecretGet(t *testing.T) {
 		cfg.SkipRedaction = false
 
 		var out bytes.Buffer
-		err := secretGet(t.Context(), cfg, &out, logger.NewBuffer())
+		err := secretGet(t.Context(), cfg, &out, slog.New(slog.DiscardHandler))
 		if err == nil {
-			t.Fatal("secretGet(t.Context(), cfg, &out, logger.NewBuffer()) error = nil, want non-nil")
+			t.Fatal("secretGet(t.Context(), cfg, &out, slog.New(slog.DiscardHandler)) error = nil, want non-nil")
 		}
 
 		if out.String() != "" {

@@ -80,7 +80,7 @@ var MetaDataExistsCommand = &cli.Command{
 				return nil, err
 			}
 			if err != nil {
-				l.Warnf("%s (%s)", err, r)
+				l.Warn(fmt.Sprintf("%s (%s)", err, r))
 				return nil, err
 			}
 			return exists, nil

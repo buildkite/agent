@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net"
 	"net/http"
 	"net/rpc"
@@ -17,7 +18,6 @@ import (
 	"time"
 
 	"github.com/buildkite/agent/v4/internal/process"
-	"github.com/buildkite/agent/v4/logger"
 )
 
 func init() {
@@ -56,7 +56,7 @@ type RunnerConfig struct {
 }
 
 // NewRunner returns a runner, implementing the agent's jobRunner interface.
-func NewRunner(l logger.Logger, c RunnerConfig) *Runner {
+func NewRunner(l *slog.Logger, c RunnerConfig) *Runner {
 	if c.SocketPath == "" {
 		c.SocketPath = SocketPath("")
 	}
@@ -83,7 +83,7 @@ func NewRunner(l logger.Logger, c RunnerConfig) *Runner {
 // managing a subprocess, it runs a socket server that is connected to from
 // another container.
 type Runner struct {
-	logger   logger.Logger
+	logger   *slog.Logger
 	conf     RunnerConfig
 	listener net.Listener
 
@@ -136,7 +136,7 @@ func (r *Runner) Run(ctx context.Context) error {
 	r.listener = l
 	go func() {
 		if err := http.Serve(l, r.mux); err != nil && !errors.Is(err, net.ErrClosed) {
-			r.logger.Errorf("kubernetes runner HTTP server stopped: %v", err)
+			r.logger.Error(fmt.Sprintf("kubernetes runner HTTP server stopped: %v", err))
 		}
 	}()
 
@@ -207,10 +207,10 @@ func (r *Runner) livenessCheck(ctx context.Context) {
 				// we can just terminate.
 				lhf := time.Since(client.LastHeardFrom)
 				if client.State == StateConnected && lhf > r.conf.ClientLostTimeout {
-					r.logger.Errorf("Container (ID %d) was last heard from %v ago; marking lost and self-terminating...", id, lhf)
+					r.logger.Error(fmt.Sprintf("Container (ID %d) was last heard from %v ago; marking lost and self-terminating...", id, lhf))
 					client.State = StateLost
 					if err := r.Terminate(); err != nil {
-						r.logger.Errorf("terminating lost kubernetes runner: %v", err)
+						r.logger.Error(fmt.Sprintf("terminating lost kubernetes runner: %v", err))
 					}
 				}
 				client.mu.Unlock()
@@ -306,7 +306,7 @@ func (r *Runner) Exit(args ExitCode, reply *Empty) error {
 		return fmt.Errorf("unrecognized client id: %d", args.ID)
 	}
 	client := r.clients[args.ID]
-	r.logger.Infof("client %d exited with code %d", args.ID, args.ExitStatus)
+	r.logger.Info(fmt.Sprintf("client %d exited with code %d", args.ID, args.ExitStatus))
 
 	client.mu.Lock()
 	client.ExitStatus = args.ExitStatus
@@ -369,7 +369,7 @@ func (r *Runner) Register(id int, reply *RegisterResponse) error {
 	if client.State != StateNotYetConnected {
 		return fmt.Errorf("client id %d already registered", id)
 	}
-	r.logger.Infof("client %d connected", id)
+	r.logger.Info(fmt.Sprintf("client %d connected", id))
 	client.LastHeardFrom = time.Now()
 	client.State = StateConnected
 

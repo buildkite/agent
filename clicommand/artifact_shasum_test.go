@@ -8,7 +8,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/buildkite/agent/v4/logger"
+	"github.com/buildkite/agent/v4/internal/logtest"
 )
 
 func newArtifactTestServer(t *testing.T) *httptest.Server {
@@ -40,7 +40,7 @@ func TestSearchAndPrintSha1Sum(t *testing.T) {
 			Endpoint:         server.URL,
 		},
 	}
-	l := logger.NewBuffer()
+	l, lh := logtest.NewLogger()
 	stdout := new(bytes.Buffer)
 
 	if err := searchAndPrintShaSum(ctx, cfg, l, stdout); err != nil {
@@ -51,11 +51,11 @@ func TestSearchAndPrintSha1Sum(t *testing.T) {
 		t.Errorf("stdout.String() = %q, want %q", got, want)
 	}
 
-	if got, want := l.Messages, `[info] Searching for artifacts: "foo.*"`; !slices.Contains(got, want) {
-		t.Errorf("l.Messages = %v, want containing %q", got, want)
+	if got, want := lh.Messages(), `Searching for artifacts: "foo.*"`; !slices.Contains(got, want) {
+		t.Errorf("lh.Messages() = %v, want containing %q", got, want)
 	}
-	if got, want := l.Messages, `[debug] Artifact "foo.txt" found`; !slices.Contains(got, want) {
-		t.Errorf("l.Messages = %v, want containing %q", got, want)
+	if got, want := lh.Messages(), `Artifact "foo.txt" found`; !slices.Contains(got, want) {
+		t.Errorf("lh.Messages() = %v, want containing %q", got, want)
 	}
 }
 
@@ -76,7 +76,7 @@ func TestSearchAndPrintSha256Sum(t *testing.T) {
 			Endpoint:         server.URL,
 		},
 	}
-	l := logger.NewBuffer()
+	l, lh := logtest.NewLogger()
 	stdout := new(bytes.Buffer)
 
 	if err := searchAndPrintShaSum(ctx, cfg, l, stdout); err != nil {
@@ -87,10 +87,10 @@ func TestSearchAndPrintSha256Sum(t *testing.T) {
 		t.Errorf("stdout.String() = %q, want %q", got, want)
 	}
 
-	if got, want := l.Messages, `[info] Searching for artifacts: "foo.*"`; !slices.Contains(got, want) {
-		t.Errorf("l.Messages = %v, want containing %q", got, want)
+	if got, want := lh.Messages(), `Searching for artifacts: "foo.*"`; !slices.Contains(got, want) {
+		t.Errorf("lh.Messages() = %v, want containing %q", got, want)
 	}
-	if got, want := l.Messages, `[debug] Artifact "foo.txt" found`; !slices.Contains(got, want) {
-		t.Errorf("l.Messages = %v, want containing %q", got, want)
+	if got, want := lh.Messages(), `Artifact "foo.txt" found`; !slices.Contains(got, want) {
+		t.Errorf("lh.Messages() = %v, want containing %q", got, want)
 	}
 }

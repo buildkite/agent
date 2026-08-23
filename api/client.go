@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"maps"
 	"net/http"
 	"net/url"
@@ -20,7 +21,6 @@ import (
 	"time"
 
 	"github.com/buildkite/agent/v4/internal/agenthttp"
-	"github.com/buildkite/agent/v4/logger"
 	"github.com/google/go-querystring/query"
 )
 
@@ -72,7 +72,7 @@ type Client struct {
 	client *http.Client
 
 	// The logger used
-	logger logger.Logger
+	logger *slog.Logger
 
 	// server-specified HTTP request headers to include in all requests
 	requestHeadersMu sync.RWMutex
@@ -80,7 +80,7 @@ type Client struct {
 }
 
 // NewClient returns a new Buildkite Agent API Client.
-func NewClient(l logger.Logger, conf Config) *Client {
+func NewClient(l *slog.Logger, conf Config) *Client {
 	if conf.Endpoint == "" {
 		conf.Endpoint = defaultEndpoint
 	}
@@ -203,10 +203,10 @@ func (c *Client) setRequestHeaders(headers map[string]string) bool {
 	}
 	c.requestHeadersMu.Unlock()
 
-	if changed && c.logger.Level() <= logger.DEBUG {
+	if changed && c.logger.Enabled(context.Background(), slog.LevelDebug) {
 		for k, values := range next {
 			for _, v := range values {
-				c.logger.Debugf("Server-specified request header: %s: %s", k, v)
+				c.logger.Debug(fmt.Sprintf("Server-specified request header: %s: %s", k, v))
 			}
 		}
 	}

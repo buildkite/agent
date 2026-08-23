@@ -1,22 +1,21 @@
 package artifact
 
 import (
+	"log/slog"
 	"testing"
-
-	"github.com/buildkite/agent/v4/logger"
 )
 
 func TestArtifactoryDownloaderRepositoryPath(t *testing.T) {
 	t.Parallel()
 
-	rtUploader := NewArtifactoryDownloader(logger.Discard, ArtifactoryDownloaderConfig{
+	rtUploader := NewArtifactoryDownloader(slog.New(slog.DiscardHandler), ArtifactoryDownloaderConfig{
 		Repository: "rt://my-bucket-name/foo/bar",
 	})
 	if got, want := rtUploader.RepositoryPath(), "foo/bar"; got != want {
 		t.Errorf("rtUploader.RepositoryPath() = %q, want %q", got, want)
 	}
 
-	rtUploader = NewArtifactoryDownloader(logger.Discard, ArtifactoryDownloaderConfig{
+	rtUploader = NewArtifactoryDownloader(slog.New(slog.DiscardHandler), ArtifactoryDownloaderConfig{
 		Repository: "rt://starts-with-an-s/and-this-is-its/folder",
 	})
 	if got, want := rtUploader.RepositoryPath(), "and-this-is-its/folder"; got != want {
@@ -27,14 +26,14 @@ func TestArtifactoryDownloaderRepositoryPath(t *testing.T) {
 func TestArtifactoryDownloaderRepositoryName(t *testing.T) {
 	t.Parallel()
 
-	rtUploader := NewArtifactoryDownloader(logger.Discard, ArtifactoryDownloaderConfig{
+	rtUploader := NewArtifactoryDownloader(slog.New(slog.DiscardHandler), ArtifactoryDownloaderConfig{
 		Repository: "rt://my-bucket-name/foo/bar",
 	})
 	if got, want := rtUploader.RepositoryName(), "my-bucket-name"; got != want {
 		t.Errorf("rtUploader.RepositoryName() = %q, want %q", got, want)
 	}
 
-	rtUploader = NewArtifactoryDownloader(logger.Discard, ArtifactoryDownloaderConfig{
+	rtUploader = NewArtifactoryDownloader(slog.New(slog.DiscardHandler), ArtifactoryDownloaderConfig{
 		Repository: "rt://starts-with-an-s",
 	})
 	if got, want := rtUploader.RepositoryName(), "starts-with-an-s"; got != want {
@@ -45,7 +44,7 @@ func TestArtifactoryDownloaderRepositoryName(t *testing.T) {
 func TestArtifactoryDownloaderRepositoryFileLocation(t *testing.T) {
 	t.Parallel()
 
-	rtUploader := NewArtifactoryDownloader(logger.Discard, ArtifactoryDownloaderConfig{
+	rtUploader := NewArtifactoryDownloader(slog.New(slog.DiscardHandler), ArtifactoryDownloaderConfig{
 		Repository: "rt://my-bucket-name/rt/folder",
 		Path:       "here/please/right/now/",
 	})
@@ -53,7 +52,7 @@ func TestArtifactoryDownloaderRepositoryFileLocation(t *testing.T) {
 		t.Errorf("rtUploader.RepositoryFileLocation() = %q, want %q", got, want)
 	}
 
-	rtUploader = NewArtifactoryDownloader(logger.Discard, ArtifactoryDownloaderConfig{
+	rtUploader = NewArtifactoryDownloader(slog.New(slog.DiscardHandler), ArtifactoryDownloaderConfig{
 		Repository: "rt://my-bucket-name/rt/folder",
 		Path:       "",
 	})

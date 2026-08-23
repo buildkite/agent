@@ -504,7 +504,7 @@ func TestDownloadWithRetry(t *testing.T) {
 			{payload: payload},
 		}}
 
-		n, err := downloadWithRetry(t.Context(), testRetrier(), fake, destPath, &s3.GetObjectInput{})
+		n, err := downloadWithRetry(t.Context(), discardLogger, testRetrier(), fake, destPath, &s3.GetObjectInput{})
 		if err != nil {
 			t.Fatalf("downloadWithRetry: unexpected error: %v", err)
 		}
@@ -529,7 +529,7 @@ func TestDownloadWithRetry(t *testing.T) {
 			{err: responseErrorWithStatus(http.StatusPreconditionFailed)},
 		}}
 
-		_, err := downloadWithRetry(t.Context(), testRetrier(), fake, destPath, &s3.GetObjectInput{})
+		_, err := downloadWithRetry(t.Context(), discardLogger, testRetrier(), fake, destPath, &s3.GetObjectInput{})
 		if err == nil {
 			t.Fatal("downloadWithRetry: expected error, got nil")
 		}
@@ -547,7 +547,7 @@ func TestDownloadWithRetry(t *testing.T) {
 			{err: responseErrorWithStatus(http.StatusInternalServerError)},
 		}}
 
-		_, err := downloadWithRetry(t.Context(), testRetrier(), fake, destPath, &s3.GetObjectInput{})
+		_, err := downloadWithRetry(t.Context(), discardLogger, testRetrier(), fake, destPath, &s3.GetObjectInput{})
 		if err == nil {
 			t.Fatal("downloadWithRetry: expected error, got nil")
 		}

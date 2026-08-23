@@ -7,13 +7,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"regexp"
 	"sort"
 	"sync"
 	"time"
 
-	"github.com/buildkite/agent/v4/logger"
 	"github.com/buildkite/agent/v4/version"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc"
@@ -31,7 +31,7 @@ const (
 
 type Collector struct {
 	config CollectorConfig
-	logger logger.Logger
+	logger *slog.Logger
 
 	mu         sync.Mutex
 	started    int
@@ -46,7 +46,7 @@ type CollectorConfig struct {
 	ServiceName string
 }
 
-func NewCollector(l logger.Logger, c CollectorConfig) *Collector {
+func NewCollector(l *slog.Logger, c CollectorConfig) *Collector {
 	if c.ServiceName == "" {
 		c.ServiceName = defaultServiceName
 	}
@@ -73,7 +73,7 @@ func (c *Collector) Start() error {
 	}
 
 	protocol := otlpProtocol()
-	c.logger.Infof("Starting OpenTelemetry metrics collection using OTLP/%s", protocol)
+	c.logger.Info(fmt.Sprintf("Starting OpenTelemetry metrics collection using OTLP/%s", protocol))
 
 	provider, err := c.newMeterProvider(context.Background(), protocol)
 	if err != nil {
@@ -113,7 +113,7 @@ func (c *Collector) Stop() error {
 	c.mu.Unlock()
 
 	if provider != nil {
-		c.logger.Infof("Stopping metrics collection")
+		c.logger.Info("Stopping metrics collection")
 
 		ctx := context.Background()
 		flushErr := provider.ForceFlush(ctx)
@@ -185,7 +185,7 @@ func (s *Scope) Timing(name string, value time.Duration, tags ...Tags) {
 	}
 
 	mergedTags := s.mergeTags(tags...)
-	s.c.logger.Debugf("Metrics timing %s=%v %v", name, value, mergedTags.StringSlice())
+	s.c.logger.Debug(fmt.Sprintf("Metrics timing %s=%v %v", name, value, mergedTags.StringSlice()))
 	histogram.Record(context.Background(), float64(value.Milliseconds()), otelmetric.WithAttributes(mergedTags.Attributes()...))
 }
 
@@ -205,7 +205,7 @@ func (s *Scope) Count(name string, value int64, tags ...Tags) {
 	}
 
 	mergedTags := s.mergeTags(tags...)
-	s.c.logger.Debugf("Metrics count %s=%v %v", name, value, mergedTags.StringSlice())
+	s.c.logger.Debug(fmt.Sprintf("Metrics count %s=%v %v", name, value, mergedTags.StringSlice()))
 	counter.Add(context.Background(), value, otelmetric.WithAttributes(mergedTags.Attributes()...))
 }
 
@@ -224,7 +224,7 @@ func (c *Collector) counter(name string) (otelmetric.Int64Counter, bool) {
 
 	counter, err := c.meter.Int64Counter(metricName)
 	if err != nil {
-		c.logger.Errorf("Metrics counter creation failed: %v", err)
+		c.logger.Error(fmt.Sprintf("Metrics counter creation failed: %v", err))
 		return nil, false
 	}
 
@@ -247,7 +247,7 @@ func (c *Collector) histogram(name string) (otelmetric.Float64Histogram, bool) {
 
 	histogram, err := c.meter.Float64Histogram(metricName, otelmetric.WithUnit("ms"))
 	if err != nil {
-		c.logger.Errorf("Metrics histogram creation failed: %v", err)
+		c.logger.Error(fmt.Sprintf("Metrics histogram creation failed: %v", err))
 		return nil, false
 	}
 

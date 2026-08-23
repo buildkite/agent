@@ -6,13 +6,12 @@ import (
 	"context"
 	"encoding/gob"
 	"errors"
+	"log/slog"
 	"net/rpc"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
-
-	"github.com/buildkite/agent/v4/logger"
 )
 
 func TestOrderedClients(t *testing.T) {
@@ -320,7 +319,7 @@ func newRunner(t *testing.T, clientCount int) *Runner {
 	t.Cleanup(func() {
 		_ = os.RemoveAll(tempDir)
 	})
-	runner := NewRunner(logger.Discard, RunnerConfig{
+	runner := NewRunner(slog.New(slog.DiscardHandler), RunnerConfig{
 		SocketPath:         socketPath,
 		ClientCount:        clientCount,
 		ClientStartTimeout: 10 * time.Minute,

@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/buildkite/agent/v4/internal/osutil"
-	"github.com/buildkite/agent/v4/logger"
 	"github.com/oleiade/reflections"
 	"github.com/urfave/cli/v3"
 )
@@ -24,9 +23,6 @@ type Loader struct {
 
 	// The struct that the config values will be loaded into
 	Config any
-
-	// The logger used
-	Logger logger.Logger
 
 	// A slice of paths to files that should be used as config files
 	DefaultConfigFilePaths []string

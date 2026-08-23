@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -19,20 +20,19 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
-	"github.com/buildkite/agent/v4/logger"
 )
 
 func TestS3DowloaderBucketPath(t *testing.T) {
 	t.Parallel()
 
-	s3Downloader := NewS3Downloader(logger.Discard, S3DownloaderConfig{
+	s3Downloader := NewS3Downloader(slog.New(slog.DiscardHandler), S3DownloaderConfig{
 		S3Path: "s3://my-bucket-name/foo/bar",
 	})
 	if got, want := s3Downloader.BucketPath(), "foo/bar"; got != want {
 		t.Errorf("s3Downloader.BucketPath() = %q, want %q", got, want)
 	}
 
-	s3Downloader = NewS3Downloader(logger.Discard, S3DownloaderConfig{
+	s3Downloader = NewS3Downloader(slog.New(slog.DiscardHandler), S3DownloaderConfig{
 		S3Path: "s3://starts-with-an-s/and-this-is-its/folder",
 	})
 	if got, want := s3Downloader.BucketPath(), "and-this-is-its/folder"; got != want {
@@ -43,14 +43,14 @@ func TestS3DowloaderBucketPath(t *testing.T) {
 func TestS3DowloaderBucketName(t *testing.T) {
 	t.Parallel()
 
-	s3Downloader := NewS3Downloader(logger.Discard, S3DownloaderConfig{
+	s3Downloader := NewS3Downloader(slog.New(slog.DiscardHandler), S3DownloaderConfig{
 		S3Path: "s3://my-bucket-name/foo/bar",
 	})
 	if got, want := s3Downloader.BucketName(), "my-bucket-name"; got != want {
 		t.Errorf("s3Downloader.BucketName() = %q, want %q", got, want)
 	}
 
-	s3Downloader = NewS3Downloader(logger.Discard, S3DownloaderConfig{
+	s3Downloader = NewS3Downloader(slog.New(slog.DiscardHandler), S3DownloaderConfig{
 		S3Path: "s3://starts-with-an-s",
 	})
 	if got, want := s3Downloader.BucketName(), "starts-with-an-s"; got != want {
@@ -61,7 +61,7 @@ func TestS3DowloaderBucketName(t *testing.T) {
 func TestS3DowloaderBucketFileLocation(t *testing.T) {
 	t.Parallel()
 
-	s3Downloader := NewS3Downloader(logger.Discard, S3DownloaderConfig{
+	s3Downloader := NewS3Downloader(slog.New(slog.DiscardHandler), S3DownloaderConfig{
 		S3Path: "s3://my-bucket-name/s3/folder",
 		Path:   "here/please/right/now/",
 	})
@@ -69,7 +69,7 @@ func TestS3DowloaderBucketFileLocation(t *testing.T) {
 		t.Errorf("s3Downloader.BucketFileLocation() = %q, want %q", got, want)
 	}
 
-	s3Downloader = NewS3Downloader(logger.Discard, S3DownloaderConfig{
+	s3Downloader = NewS3Downloader(slog.New(slog.DiscardHandler), S3DownloaderConfig{
 		S3Path: "s3://my-bucket-name/s3/folder",
 		Path:   "",
 	})
@@ -143,7 +143,7 @@ func TestS3Downloader_MultipartDownload_HappyPath(t *testing.T) {
 	tempDir := t.TempDir()
 	targetPath := filepath.Join(tempDir, "obj.bin")
 
-	d := NewS3Downloader(logger.Discard, S3DownloaderConfig{
+	d := NewS3Downloader(slog.New(slog.DiscardHandler), S3DownloaderConfig{
 		S3Client:         newTestS3Client(t, server),
 		S3Path:           "s3://test-bucket",
 		Path:             "obj.bin",
@@ -183,7 +183,7 @@ func TestS3Downloader_MultipartDownload_VerifyChecksumMismatch(t *testing.T) {
 	tempDir := t.TempDir()
 	targetPath := filepath.Join(tempDir, "obj.bin")
 
-	d := NewS3Downloader(logger.Discard, S3DownloaderConfig{
+	d := NewS3Downloader(slog.New(slog.DiscardHandler), S3DownloaderConfig{
 		S3Client:         newTestS3Client(t, server),
 		S3Path:           "s3://test-bucket",
 		Path:             "obj.bin",
@@ -221,7 +221,7 @@ func TestS3Downloader_MultipartDownload_VerifyChecksumSkippedWhenAbsent(t *testi
 	tempDir := t.TempDir()
 	targetPath := filepath.Join(tempDir, "obj.bin")
 
-	d := NewS3Downloader(logger.Discard, S3DownloaderConfig{
+	d := NewS3Downloader(slog.New(slog.DiscardHandler), S3DownloaderConfig{
 		S3Client:         newTestS3Client(t, server),
 		S3Path:           "s3://test-bucket",
 		Path:             "obj.bin",
@@ -255,7 +255,7 @@ func TestS3Downloader_DisableMultipartDispatchesSingleStream(t *testing.T) {
 		server := httptest.NewServer(fake)
 		defer server.Close()
 
-		d := NewS3Downloader(logger.Discard, S3DownloaderConfig{
+		d := NewS3Downloader(slog.New(slog.DiscardHandler), S3DownloaderConfig{
 			S3Client:         newTestS3Client(t, server),
 			S3Path:           "s3://test-bucket",
 			Path:             "obj.bin",
@@ -283,7 +283,7 @@ func TestS3Downloader_DisableMultipartDispatchesSingleStream(t *testing.T) {
 		server := httptest.NewServer(fake)
 		defer server.Close()
 
-		d := NewS3Downloader(logger.Discard, S3DownloaderConfig{
+		d := NewS3Downloader(slog.New(slog.DiscardHandler), S3DownloaderConfig{
 			S3Client:         newTestS3Client(t, server),
 			S3Path:           "s3://test-bucket",
 			Path:             "obj.bin",
@@ -316,7 +316,7 @@ func TestS3Downloader_MultipartDownload_CleansUpOnDownloadError(t *testing.T) {
 	tempDir := t.TempDir()
 	targetPath := filepath.Join(tempDir, "obj.bin")
 
-	d := NewS3Downloader(logger.Discard, S3DownloaderConfig{
+	d := NewS3Downloader(slog.New(slog.DiscardHandler), S3DownloaderConfig{
 		S3Client:         newTestS3Client(t, server),
 		S3Path:           "s3://test-bucket",
 		Path:             "obj.bin",

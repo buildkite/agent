@@ -3,13 +3,13 @@ package api_test
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
 	"github.com/buildkite/agent/v4/api"
-	"github.com/buildkite/agent/v4/logger"
 	"github.com/buildkite/roko"
 )
 
@@ -32,7 +32,7 @@ func TestOIDCTokenErrorDescribesUndecodableResponse(t *testing.T) {
 	}))
 	defer server.Close()
 
-	c := api.NewClient(logger.Discard, api.Config{Endpoint: server.URL, Token: "llamas"})
+	c := api.NewClient(slog.New(slog.DiscardHandler), api.Config{Endpoint: server.URL, Token: "llamas"})
 	_, resp, err := c.OIDCToken(t.Context(), &api.OIDCTokenRequest{Job: "job-123"})
 	if err == nil {
 		t.Fatal("c.OIDCToken(...) error = nil, want non-nil")
@@ -78,7 +78,7 @@ func TestUndecodableJSONResponseErrorOmitsBody(t *testing.T) {
 	}))
 	defer server.Close()
 
-	c := api.NewClient(logger.Discard, api.Config{Endpoint: server.URL, Token: "llamas"})
+	c := api.NewClient(slog.New(slog.DiscardHandler), api.Config{Endpoint: server.URL, Token: "llamas"})
 	_, _, err := c.OIDCToken(t.Context(), &api.OIDCTokenRequest{Job: "job-123"})
 	if err == nil {
 		t.Fatal("c.OIDCToken(...) error = nil, want non-nil")
@@ -107,7 +107,7 @@ func TestErrorResponseIncludesNonJSONBody(t *testing.T) {
 	}))
 	defer server.Close()
 
-	c := api.NewClient(logger.Discard, api.Config{Endpoint: server.URL, Token: "llamas"})
+	c := api.NewClient(slog.New(slog.DiscardHandler), api.Config{Endpoint: server.URL, Token: "llamas"})
 	_, _, err := c.OIDCToken(t.Context(), &api.OIDCTokenRequest{Job: "job-123"})
 	if err == nil {
 		t.Fatal("c.OIDCToken(...) error = nil, want non-nil")
@@ -130,7 +130,7 @@ func TestErrorResponseNonJSONBodyIsCapped(t *testing.T) {
 	}))
 	defer server.Close()
 
-	c := api.NewClient(logger.Discard, api.Config{Endpoint: server.URL, Token: "llamas"})
+	c := api.NewClient(slog.New(slog.DiscardHandler), api.Config{Endpoint: server.URL, Token: "llamas"})
 	_, _, err := c.OIDCToken(t.Context(), &api.OIDCTokenRequest{Job: "job-123"})
 	if err == nil {
 		t.Fatal("c.OIDCToken(...) error = nil, want non-nil")
@@ -156,7 +156,7 @@ func TestErrorResponseKeepsAPIMessage(t *testing.T) {
 	}))
 	defer server.Close()
 
-	c := api.NewClient(logger.Discard, api.Config{Endpoint: server.URL, Token: "llamas"})
+	c := api.NewClient(slog.New(slog.DiscardHandler), api.Config{Endpoint: server.URL, Token: "llamas"})
 	_, _, err := c.OIDCToken(t.Context(), &api.OIDCTokenRequest{Job: "job-123"})
 	if err == nil {
 		t.Fatal("c.OIDCToken(...) error = nil, want non-nil")
@@ -181,7 +181,7 @@ func TestUndecodableResponseSnippetIsCapped(t *testing.T) {
 	}))
 	defer server.Close()
 
-	c := api.NewClient(logger.Discard, api.Config{Endpoint: server.URL, Token: "llamas"})
+	c := api.NewClient(slog.New(slog.DiscardHandler), api.Config{Endpoint: server.URL, Token: "llamas"})
 	_, _, err := c.OIDCToken(t.Context(), &api.OIDCTokenRequest{Job: "job-123"})
 
 	var undecodable *api.UndecodableResponseError

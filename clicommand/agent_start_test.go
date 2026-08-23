@@ -2,17 +2,19 @@ package clicommand
 
 import (
 	"errors"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"runtime"
 	"slices"
 	"testing"
 
+	"github.com/buildkite/agent/v4/internal/logtest"
+
 	"github.com/buildkite/agent/v4/agent"
 	"github.com/buildkite/agent/v4/api"
 	"github.com/buildkite/agent/v4/core"
 	"github.com/buildkite/agent/v4/env"
-	"github.com/buildkite/agent/v4/logger"
 	"github.com/google/go-cmp/cmp"
 	"github.com/urfave/cli/v3"
 )
@@ -66,10 +68,10 @@ func writeAgentHook(t *testing.T, dir, hookName, fixtureName string) string {
 
 func testAgentWorker(id, name string) *agent.AgentWorker {
 	return agent.NewAgentWorker(
-		logger.Discard,
+		slog.New(slog.DiscardHandler),
 		&api.AgentRegisterResponse{UUID: id, Name: name},
 		nil,
-		api.NewClient(logger.Discard, api.Config{}),
+		api.NewClient(slog.New(slog.DiscardHandler), api.Config{}),
 		agent.AgentWorkerConfig{},
 	)
 }
@@ -94,16 +96,16 @@ func TestAgentStartupHook(t *testing.T) {
 		hooksPath, closer := setupHooksPath(t)
 		defer closer()
 		filepath := writeAgentHook(t, hooksPath, "agent-startup", "hello-world")
-		log := logger.NewBuffer()
+		log, logh := logtest.NewLogger()
 		err := agentStartupHook(log, cfg(hooksPath), nil)
 		if err != nil {
-			t.Fatalf("%+v", log.Messages)
+			t.Fatalf("%+v", logh.Messages())
 		}
-		if diff := cmp.Diff(log.Messages, []string{
-			"[info] " + prompt + " " + filepath,
-			"[info] hello world",
+		if diff := cmp.Diff(logh.Messages(), []string{
+			"" + prompt + " " + filepath,
+			"hello world",
 		}); diff != "" {
-			t.Errorf("log.Messages diff (-got +want):\n%s", diff)
+			t.Errorf("logh.Messages() diff (-got +want):\n%s", diff)
 		}
 	})
 
@@ -113,26 +115,26 @@ func TestAgentStartupHook(t *testing.T) {
 		hooksPath, closer := setupHooksPath(t)
 		defer closer()
 
-		log := logger.NewBuffer()
+		log, logh := logtest.NewLogger()
 		err := agentStartupHook(log, cfg(hooksPath), nil)
 		if err != nil {
-			t.Fatalf("%+v", log.Messages)
+			t.Fatalf("%+v", logh.Messages())
 		}
-		if diff := cmp.Diff(log.Messages, []string{}); diff != "" {
-			t.Errorf("log.Messages diff (-got +want):\n%s", diff)
+		if diff := cmp.Diff(logh.Messages(), []string{}); diff != "" {
+			t.Errorf("logh.Messages() diff (-got +want):\n%s", diff)
 		}
 	})
 
 	t.Run("with bad hooks path", func(t *testing.T) {
 		t.Parallel()
 
-		log := logger.NewBuffer()
+		log, logh := logtest.NewLogger()
 		err := agentStartupHook(log, cfg("zxczxczxc"), nil)
 		if err != nil {
-			t.Fatalf("%+v", log.Messages)
+			t.Fatalf("%+v", logh.Messages())
 		}
-		if diff := cmp.Diff(log.Messages, []string{}); diff != "" {
-			t.Errorf("log.Messages diff (-got +want):\n%s", diff)
+		if diff := cmp.Diff(logh.Messages(), []string{}); diff != "" {
+			t.Errorf("logh.Messages() diff (-got +want):\n%s", diff)
 		}
 	})
 }
@@ -163,18 +165,18 @@ func TestAgentStartupHookWithAdditionalPaths(t *testing.T) {
 		addFilepath := writeAgentHook(t, additionalHooksPath, "agent-startup", "hello-additional-world")
 		defer additionalCloser()
 
-		log := logger.NewBuffer()
+		log, logh := logtest.NewLogger()
 		err := agentStartupHook(log, cfg(hooksPath, additionalHooksPath), nil)
 		if err != nil {
-			t.Fatalf("%+v", log.Messages)
+			t.Fatalf("%+v", logh.Messages())
 		}
-		if diff := cmp.Diff(log.Messages, []string{
-			"[info] " + prompt + " " + filepath,
-			"[info] hello new world",
-			"[info] " + prompt + " " + addFilepath,
-			"[info] hello additional world",
+		if diff := cmp.Diff(logh.Messages(), []string{
+			"" + prompt + " " + filepath,
+			"hello new world",
+			"" + prompt + " " + addFilepath,
+			"hello additional world",
 		}); diff != "" {
-			t.Errorf("log.Messages diff (-got +want):\n%s", diff)
+			t.Errorf("logh.Messages() diff (-got +want):\n%s", diff)
 		}
 	})
 }
@@ -248,20 +250,20 @@ func TestAgentStartupHookWithRegisteredAgentsEnv(t *testing.T) {
 
 	filepath := writeAgentHook(t, hooksPath, "agent-startup", "env-hook")
 
-	log := logger.NewBuffer()
+	log, logh := logtest.NewLogger()
 	err := agentStartupHook(log, cfg(hooksPath), []*agent.AgentWorker{
 		testAgentWorker("agent-123", "test-agent-1"),
 		testAgentWorker("agent-456", "test-agent-2"),
 	})
 	if err != nil {
-		t.Fatalf("%+v", log.Messages)
+		t.Fatalf("%+v", logh.Messages())
 	}
-	if diff := cmp.Diff(log.Messages, []string{
-		"[info] " + prompt + " " + filepath,
-		"[info] ids=agent-123,agent-456",
-		"[info] names=test-agent-1,test-agent-2",
+	if diff := cmp.Diff(logh.Messages(), []string{
+		"" + prompt + " " + filepath,
+		"ids=agent-123,agent-456",
+		"names=test-agent-1,test-agent-2",
 	}); diff != "" {
-		t.Errorf("log.Messages diff (-got +want):\n%s", diff)
+		t.Errorf("logh.Messages() diff (-got +want):\n%s", diff)
 	}
 }
 
@@ -285,14 +287,14 @@ func TestAgentShutdownHook(t *testing.T) {
 		hooksPath, closer := setupHooksPath(t)
 		defer closer()
 		filepath := writeAgentHook(t, hooksPath, "agent-shutdown", "hello-world")
-		log := logger.NewBuffer()
+		log, logh := logtest.NewLogger()
 		agentShutdownHook(log, cfg(hooksPath), nil)
 
-		if diff := cmp.Diff(log.Messages, []string{
-			"[info] " + prompt + " " + filepath,
-			"[info] hello world",
+		if diff := cmp.Diff(logh.Messages(), []string{
+			"" + prompt + " " + filepath,
+			"hello world",
 		}); diff != "" {
-			t.Errorf("log.Messages diff (-got +want):\n%s", diff)
+			t.Errorf("logh.Messages() diff (-got +want):\n%s", diff)
 		}
 	})
 
@@ -302,20 +304,20 @@ func TestAgentShutdownHook(t *testing.T) {
 		hooksPath, closer := setupHooksPath(t)
 		defer closer()
 
-		log := logger.NewBuffer()
+		log, logh := logtest.NewLogger()
 		agentShutdownHook(log, cfg(hooksPath), nil)
-		if diff := cmp.Diff(log.Messages, []string{}); diff != "" {
-			t.Errorf("log.Messages diff (-got +want):\n%s", diff)
+		if diff := cmp.Diff(logh.Messages(), []string{}); diff != "" {
+			t.Errorf("logh.Messages() diff (-got +want):\n%s", diff)
 		}
 	})
 
 	t.Run("with bad hooks path", func(t *testing.T) {
 		t.Parallel()
 
-		log := logger.NewBuffer()
+		log, logh := logtest.NewLogger()
 		agentShutdownHook(log, cfg("zxczxczxc"), nil)
-		if diff := cmp.Diff(log.Messages, []string{}); diff != "" {
-			t.Errorf("log.Messages diff (-got +want):\n%s", diff)
+		if diff := cmp.Diff(logh.Messages(), []string{}); diff != "" {
+			t.Errorf("logh.Messages() diff (-got +want):\n%s", diff)
 		}
 	})
 
@@ -327,18 +329,18 @@ func TestAgentShutdownHook(t *testing.T) {
 
 		filepath := writeAgentHook(t, hooksPath, "agent-shutdown", "env-hook")
 
-		log := logger.NewBuffer()
+		log, logh := logtest.NewLogger()
 		agentShutdownHook(log, cfg(hooksPath), []*agent.AgentWorker{
 			testAgentWorker("agent-123", "test-agent-1"),
 			testAgentWorker("agent-456", "test-agent-2"),
 		})
 
-		if diff := cmp.Diff(log.Messages, []string{
-			"[info] " + prompt + " " + filepath,
-			"[info] ids=agent-123,agent-456",
-			"[info] names=test-agent-1,test-agent-2",
+		if diff := cmp.Diff(logh.Messages(), []string{
+			"" + prompt + " " + filepath,
+			"ids=agent-123,agent-456",
+			"names=test-agent-1,test-agent-2",
 		}); diff != "" {
-			t.Errorf("log.Messages diff (-got +want):\n%s", diff)
+			t.Errorf("logh.Messages() diff (-got +want):\n%s", diff)
 		}
 	})
 }

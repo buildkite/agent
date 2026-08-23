@@ -2,12 +2,13 @@ package clicommand
 
 import (
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"slices"
 	"testing"
 
-	"github.com/buildkite/agent/v4/logger"
+	"github.com/buildkite/agent/v4/internal/logtest"
 )
 
 func TestBuildCancel(t *testing.T) {
@@ -28,13 +29,13 @@ func TestBuildCancel(t *testing.T) {
 			},
 		}
 
-		l := logger.NewBuffer()
+		l, lh := logtest.NewLogger()
 		err := cancelBuild(ctx, cfg, l)
 		if got := err; got != nil {
 			t.Errorf("cancelBuild(ctx, cfg, l) = %v, want nil", got)
 		}
-		if got, want := l.Messages, fmt.Sprintf("[info] Successfully cancelled build %s", cfg.Build); !slices.Contains(got, want) {
-			t.Errorf("l.Messages = %v, want containing %q", got, want)
+		if got, want := lh.Messages(), fmt.Sprintf("Successfully cancelled build %s", cfg.Build); !slices.Contains(got, want) {
+			t.Errorf("lh.Messages() = %v, want containing %q", got, want)
 		}
 	})
 
@@ -51,7 +52,7 @@ func TestBuildCancel(t *testing.T) {
 			},
 		}
 
-		l := logger.NewBuffer()
+		l := slog.New(slog.DiscardHandler)
 		err := cancelBuild(ctx, cfg, l)
 		if got := err; got == nil {
 			t.Errorf("cancelBuild(ctx, cfg, l) = %v, want non-nil value", got)

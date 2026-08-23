@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -14,7 +15,6 @@ import (
 	"testing"
 
 	"github.com/buildkite/agent/v4/api"
-	"github.com/buildkite/agent/v4/logger"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 )
@@ -94,7 +94,7 @@ func TestFormUploading(t *testing.T) {
 				os.Remove(abspath) //nolint:errcheck // Best-effort cleanup.
 			})
 
-			uploader := NewBKUploader(logger.Discard, BKUploaderConfig{})
+			uploader := NewBKUploader(slog.New(slog.DiscardHandler), BKUploaderConfig{})
 			artifact := &api.Artifact{
 				ID:           "xxxxx-xxxx-xxxx-xxxx-xxxxxxxxxx",
 				Path:         "llamas.txt",
@@ -185,7 +185,7 @@ func TestMultipartUploading(t *testing.T) {
 				os.Remove(abspath) //nolint:errcheck // Best-effort cleanup.
 			})
 
-			uploader := NewBKUploader(logger.Discard, BKUploaderConfig{})
+			uploader := NewBKUploader(slog.New(slog.DiscardHandler), BKUploaderConfig{})
 			actions := []api.ArtifactUploadAction{
 				{URL: server.URL + "/llamas3.txt?partNumber=1", Method: "PUT", PartNumber: 1},
 				{URL: server.URL + "/llamas3.txt?partNumber=2", Method: "PUT", PartNumber: 2},
@@ -259,7 +259,7 @@ func TestFormUploadFileMissing(t *testing.T) {
 
 	abspath := filepath.Join(temp, "llamas.txt")
 
-	uploader := NewBKUploader(logger.Discard, BKUploaderConfig{})
+	uploader := NewBKUploader(slog.New(slog.DiscardHandler), BKUploaderConfig{})
 	artifact := &api.Artifact{
 		ID:           "xxxxx-xxxx-xxxx-xxxx-xxxxxxxxxx",
 		Path:         "llamas.txt",
@@ -292,7 +292,7 @@ func TestFormUploadFileMissing(t *testing.T) {
 }
 
 func TestFormUploadTooBig(t *testing.T) {
-	uploader := NewBKUploader(logger.Discard, BKUploaderConfig{})
+	uploader := NewBKUploader(slog.New(slog.DiscardHandler), BKUploaderConfig{})
 	const size = int64(6442450944) // 6Gb
 	artifact := &api.Artifact{
 		ID:                 "xxxxx-xxxx-xxxx-xxxx-xxxxxxxxxx",

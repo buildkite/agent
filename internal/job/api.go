@@ -3,12 +3,12 @@ package job
 import (
 	"context"
 	"fmt"
+	"log/slog"
 
 	"github.com/buildkite/agent/v4/api"
 	"github.com/buildkite/agent/v4/internal/redact"
 	"github.com/buildkite/agent/v4/internal/socket"
 	"github.com/buildkite/agent/v4/jobapi"
-	"github.com/buildkite/agent/v4/logger"
 	"github.com/buildkite/agent/v4/version"
 )
 
@@ -83,9 +83,9 @@ We'll continue to run your job, but you won't be able to use the Job API`)
 // recent API response (0 if none was received, e.g. a network error) and an
 // error describing any failure.
 func (e *Executor) declarePromiseFailure(ctx context.Context, exitStatus int, reason string) (int, error) {
-	// logger.Discard keeps the access token (in HTTP debug dumps) out of the job
+	// slog.New(slog.DiscardHandler) keeps the access token (in HTTP debug dumps) out of the job
 	// log; retry warnings still go to the shell logger.
-	apiClient := api.NewClient(logger.Discard, api.Config{
+	apiClient := api.NewClient(slog.New(slog.DiscardHandler), api.Config{
 		Endpoint:     e.shell.Env.GetString("BUILDKITE_AGENT_ENDPOINT", ""),
 		Token:        e.shell.Env.GetString("BUILDKITE_AGENT_ACCESS_TOKEN", ""),
 		DisableHTTP2: e.shell.Env.GetBool("BUILDKITE_NO_HTTP2", false),

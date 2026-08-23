@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/rand"
 	"fmt"
+	"log/slog"
 	"math"
 	"net/http"
 	"os"
@@ -283,6 +284,7 @@ func setupTestCache(t *testing.T, storageType string) (cacheClient *client, cach
 
 	// Create cache client
 	c := &client{
+		log:       slog.New(slog.DiscardHandler),
 		api:       mockClient,
 		bucketURL: bucketURL,
 		format:    "zip",

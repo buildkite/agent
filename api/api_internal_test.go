@@ -2,15 +2,14 @@ package api
 
 import (
 	"context"
+	"log/slog"
 	"strconv"
 	"testing"
 	"time"
-
-	"github.com/buildkite/agent/v4/logger"
 )
 
 func TestNewRequestBuildkiteTimeoutMilliseconds(t *testing.T) {
-	c := NewClient(logger.NewBuffer(), Config{})
+	c := NewClient(slog.New(slog.DiscardHandler), Config{})
 
 	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	defer cancel()
@@ -33,7 +32,7 @@ func TestNewRequestBuildkiteTimeoutMilliseconds(t *testing.T) {
 }
 
 func TestNewRequestWithoutBuildkiteTimeoutMilliseconds(t *testing.T) {
-	c := NewClient(logger.NewBuffer(), Config{})
+	c := NewClient(slog.New(slog.DiscardHandler), Config{})
 
 	ctx := t.Context() // no timeout/deadline
 

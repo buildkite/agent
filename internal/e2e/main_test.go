@@ -4,15 +4,16 @@ package e2e
 
 import (
 	"context"
+	"fmt"
+	"log/slog"
 	"os"
 	"testing"
 
 	"github.com/buildkite/agent/v4/api"
-	"github.com/buildkite/agent/v4/logger"
 )
 
 func TestMain(m *testing.M) {
-	l := logger.NewConsoleLogger(logger.NewTextPrinter(os.Stderr), os.Exit)
+	l := slog.New(slog.NewTextHandler(os.Stderr, nil))
 	client := api.NewClient(l, api.Config{
 		Token: agentToken,
 	})
@@ -20,7 +21,8 @@ func TestMain(m *testing.M) {
 	ctx := context.Background()
 	ident, _, err := client.GetTokenIdentity(ctx)
 	if err != nil {
-		l.Fatalf("Could not read token identity: %v", err)
+		l.Error(fmt.Sprintf("Could not read token identity: %v", err))
+		os.Exit(1)
 	}
 	targetOrg = ident.OrganizationSlug
 	targetCluster = ident.ClusterUUID

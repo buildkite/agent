@@ -3,13 +3,13 @@ package process_test
 import (
 	"fmt"
 	"io"
+	"log/slog"
 	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/buildkite/agent/v4/internal/process"
-	"github.com/buildkite/agent/v4/logger"
 	"github.com/google/go-cmp/cmp"
 )
 
@@ -41,7 +41,7 @@ func TestScanLines(t *testing.T) {
 		}
 	}()
 
-	scanner := process.NewScanner(logger.Discard)
+	scanner := process.NewScanner(slog.New(slog.DiscardHandler))
 
 	scanFunc := func(l string) {
 		lineNumber := atomic.AddInt32(&lineCounter, 1)

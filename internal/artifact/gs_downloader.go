@@ -3,9 +3,9 @@ package artifact
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"strings"
 
-	"github.com/buildkite/agent/v4/logger"
 	storage "google.golang.org/api/storage/v1"
 )
 
@@ -33,10 +33,10 @@ type GSDownloader struct {
 	conf GSDownloaderConfig
 
 	// The logger instance to use
-	logger logger.Logger
+	logger *slog.Logger
 }
 
-func NewGSDownloader(l logger.Logger, c GSDownloaderConfig) *GSDownloader {
+func NewGSDownloader(l *slog.Logger, c GSDownloaderConfig) *GSDownloader {
 	return &GSDownloader{
 		logger: l,
 		conf:   c,

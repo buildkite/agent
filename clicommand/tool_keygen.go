@@ -71,26 +71,31 @@ for information about JWKS, see https://tools.ietf.org/html/rfc7517`,
 
 		if cfg.Alg == "" {
 			cfg.Alg = "EdDSA"
-			l.Infof("No algorithm provided, using %s", cfg.Alg)
+			l.Info(fmt.Sprintf("No algorithm provided, using %s", cfg.Alg))
 		}
 
 		if cfg.KeyID == "" {
 			cfg.KeyID = petname.Generate(2, "-")
-			l.Infof("No key ID provided, using a randomly generated one: %s", cfg.KeyID)
+			l.Info(fmt.Sprintf("No key ID provided, using a randomly generated one: %s", cfg.KeyID))
 		}
 
 		sigAlg, ok := jwa.LookupSignatureAlgorithm(cfg.Alg)
 		if !ok {
-			l.Fatalf("Invalid signing algorithm: %s. Valid signing algorithms are: %s", cfg.Alg, jwkutil.ValidSigningAlgorithms)
+			err := fmt.Errorf("invalid signing algorithm: %s. Valid signing algorithms are: %s", cfg.Alg, jwkutil.ValidSigningAlgorithms)
+			l.Error(fmt.Sprintf("Invalid signing algorithm: %s. Valid signing algorithms are: %s", cfg.Alg, jwkutil.ValidSigningAlgorithms))
+			return err
 		}
 
 		if !slices.Contains(jwkutil.ValidSigningAlgorithms, sigAlg) {
-			l.Fatalf("Invalid signing algorithm: %s. Valid signing algorithms are: %s", cfg.Alg, jwkutil.ValidSigningAlgorithms)
+			err := fmt.Errorf("invalid signing algorithm: %s. Valid signing algorithms are: %s", cfg.Alg, jwkutil.ValidSigningAlgorithms)
+			l.Error(fmt.Sprintf("Invalid signing algorithm: %s. Valid signing algorithms are: %s", cfg.Alg, jwkutil.ValidSigningAlgorithms))
+			return err
 		}
 
 		priv, pub, err := jwkutil.NewKeyPair(cfg.KeyID, sigAlg)
 		if err != nil {
-			l.Fatalf("Failed to generate key pair: %v", err)
+			l.Error(fmt.Sprintf("Failed to generate key pair: %v", err))
+			return err
 		}
 
 		if cfg.PrivateJWKSFile == "" {
@@ -101,29 +106,33 @@ for information about JWKS, see https://tools.ietf.org/html/rfc7517`,
 			cfg.PublicJWKSFile = fmt.Sprintf("./%s-%s-public.json", cfg.Alg, cfg.KeyID)
 		}
 
-		l.Infof("Writing private key set to %s...", cfg.PrivateJWKSFile)
+		l.Info(fmt.Sprintf("Writing private key set to %s...", cfg.PrivateJWKSFile))
 		pKey, err := json.Marshal(priv)
 		if err != nil {
-			l.Fatalf("Failed to marshal private key: %v", err)
+			l.Error(fmt.Sprintf("Failed to marshal private key: %v", err))
+			return err
 		}
 
 		err = writeIfNotExists(cfg.PrivateJWKSFile, pKey)
 		if err != nil {
-			l.Fatalf("Failed to write private key file: %v", err)
+			l.Error(fmt.Sprintf("Failed to write private key file: %v", err))
+			return err
 		}
 
-		l.Infof("Writing public key set to %s...", cfg.PublicJWKSFile)
+		l.Info(fmt.Sprintf("Writing public key set to %s...", cfg.PublicJWKSFile))
 		pubKey, err := json.Marshal(pub)
 		if err != nil {
-			l.Fatalf("Failed to marshal private key: %v", err)
+			l.Error(fmt.Sprintf("Failed to marshal private key: %v", err))
+			return err
 		}
 
 		err = writeIfNotExists(cfg.PublicJWKSFile, pubKey)
 		if err != nil {
-			l.Fatalf("Failed to write private key file: %v", err)
+			l.Error(fmt.Sprintf("Failed to write private key file: %v", err))
+			return err
 		}
 
-		l.Infof("Done! Enjoy your new keys ^_^")
+		l.Info("Done! Enjoy your new keys ^_^")
 		return nil
 	},
 }

@@ -2,13 +2,13 @@ package artifact
 
 import (
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"testing"
 
 	"github.com/buildkite/agent/v4/api"
-	"github.com/buildkite/agent/v4/logger"
 	"github.com/google/go-cmp/cmp"
 )
 
@@ -36,12 +36,12 @@ func TestArtifactSearcherConnectsToEndpoint(t *testing.T) {
 
 	ctx := t.Context()
 
-	ac := api.NewClient(logger.Discard, api.Config{
+	ac := api.NewClient(slog.New(slog.DiscardHandler), api.Config{
 		Endpoint: server.URL,
 		Token:    "llamasforever",
 	})
 
-	s := NewSearcher(logger.Discard, ac, "my-build")
+	s := NewSearcher(slog.New(slog.DiscardHandler), ac, "my-build")
 
 	artifacts, err := s.Search(ctx, "llamas.txt", "my-build", false, false)
 	if err != nil {

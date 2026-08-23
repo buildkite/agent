@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -21,7 +22,6 @@ import (
 	"github.com/buildkite/agent/v4/agent"
 	"github.com/buildkite/agent/v4/api"
 	"github.com/buildkite/agent/v4/internal/ptr"
-	"github.com/buildkite/agent/v4/logger"
 	"github.com/buildkite/agent/v4/metrics"
 	"github.com/buildkite/bintest/v3"
 	"github.com/lestrrat-go/jwx/v3/jwk"
@@ -53,7 +53,7 @@ type testRunJobConfig struct {
 func runJob(t *testing.T, ctx context.Context, cfg testRunJobConfig) error {
 	t.Helper()
 
-	l := logger.Discard
+	l := slog.New(slog.DiscardHandler)
 
 	// minimal metrics, this could be cleaner
 	m := metrics.NewCollector(l, metrics.CollectorConfig{})

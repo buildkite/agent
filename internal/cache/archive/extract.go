@@ -39,7 +39,7 @@ func ListArchive(ctx context.Context, zipFile *os.File, zipFileLen int64) ([]str
 }
 
 // ExtractFiles extracts a cache archive to the given target paths.
-func ExtractFiles(ctx context.Context, zipFile *os.File, zipFileLen int64, paths []string) (*ArchiveInfo, error) {
+func ExtractFiles(ctx context.Context, log *slog.Logger, zipFile *os.File, zipFileLen int64, paths []string) (*ArchiveInfo, error) {
 	_, span := trace.Start(ctx, "ExtractFiles")
 	defer span.End()
 
@@ -93,13 +93,13 @@ func ExtractFiles(ctx context.Context, zipFile *os.File, zipFileLen int64, paths
 
 		namespace, rest, ok := splitNamespace(file.Name)
 		if !ok {
-			slog.Warn("archive entry has no namespace, skipping", "entry", file.Name)
+			log.Warn("archive entry has no namespace, skipping", "entry", file.Name)
 			return discard(file.Name), nil
 		}
 
 		anchor, ok := manifest.Mappings[namespace]
 		if !ok {
-			slog.Warn("archive entry namespace not in manifest, skipping", "entry", file.Name)
+			log.Warn("archive entry namespace not in manifest, skipping", "entry", file.Name)
 			return discard(file.Name), nil
 		}
 
@@ -139,7 +139,7 @@ func ExtractFiles(ctx context.Context, zipFile *os.File, zipFileLen int64, paths
 
 	for _, path := range paths {
 		if !foundPaths[path] {
-			slog.Warn("requested path not found in archive", "path", path)
+			log.Warn("requested path not found in archive", "path", path)
 		}
 	}
 

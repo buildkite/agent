@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -17,7 +18,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/buildkite/agent/v4/internal/agenthttp"
 	"github.com/buildkite/agent/v4/internal/osutil"
-	"github.com/buildkite/agent/v4/logger"
 	"github.com/dustin/go-humanize"
 )
 
@@ -62,10 +62,10 @@ type S3Downloader struct {
 	conf S3DownloaderConfig
 
 	// The logger instance to use
-	logger logger.Logger
+	logger *slog.Logger
 }
 
-func NewS3Downloader(l logger.Logger, c S3DownloaderConfig) *S3Downloader {
+func NewS3Downloader(l *slog.Logger, c S3DownloaderConfig) *S3Downloader {
 	return &S3Downloader{
 		conf:   c,
 		logger: l,
@@ -138,7 +138,7 @@ func (d S3Downloader) startMultipart(ctx context.Context) error {
 	defer os.Remove(temp.Name()) //nolint:errcheck // Best-effort cleanup.
 	defer temp.Close()           //nolint:errcheck // Primary Close checked below.
 
-	d.logger.Debugf("Multipart downloading s3://%s/%s to %s", d.BucketName(), d.BucketFileLocation(), targetPath)
+	d.logger.Debug(fmt.Sprintf("Multipart downloading s3://%s/%s to %s", d.BucketName(), d.BucketFileLocation(), targetPath))
 
 	tmClient := transfermanager.New(d.conf.S3Client, func(o *transfermanager.Options) {
 		o.PartSizeBytes = s3MultipartDownloadPartSize
@@ -187,7 +187,7 @@ func (d S3Downloader) startMultipart(ctx context.Context) error {
 		return fmt.Errorf("renaming temp file to target: %w", err)
 	}
 
-	d.logger.Infof("Successfully downloaded %q %s with SHA256 %s", d.conf.Path, humanize.IBytes(uint64(bytes)), gotSHA256)
+	d.logger.Info(fmt.Sprintf("Successfully downloaded %q %s with SHA256 %s", d.conf.Path, humanize.IBytes(uint64(bytes)), gotSHA256))
 	return nil
 }
 

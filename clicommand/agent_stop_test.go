@@ -6,7 +6,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/buildkite/agent/v4/logger"
+	"github.com/buildkite/agent/v4/internal/logtest"
 )
 
 func newAgentStopTestServer(t *testing.T) *httptest.Server {
@@ -31,13 +31,13 @@ func TestAgentStop(t *testing.T) {
 			Endpoint:         server.URL,
 		},
 	}
-	l := logger.NewBuffer()
+	l, lh := logtest.NewLogger()
 
 	err := stop(ctx, cfg, l)
 	if err != nil {
 		t.Errorf("stop(ctx, cfg, l) error = %v, want nil", err)
 	}
-	if got, want := l.Messages, "[info] Successfully stopped agent"; !slices.Contains(got, want) {
-		t.Errorf("l.Messages = %v, want containing %q", got, want)
+	if got, want := lh.Messages(), "Successfully stopped agent"; !slices.Contains(got, want) {
+		t.Errorf("lh.Messages() = %v, want containing %q", got, want)
 	}
 }

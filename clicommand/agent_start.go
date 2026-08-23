@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/url"
 	"os"
 	"os/signal"
@@ -38,7 +39,6 @@ import (
 	"github.com/buildkite/agent/v4/internal/process"
 	"github.com/buildkite/agent/v4/internal/redact"
 	"github.com/buildkite/agent/v4/internal/shell"
-	"github.com/buildkite/agent/v4/logger"
 	"github.com/buildkite/agent/v4/metrics"
 	"github.com/buildkite/agent/v4/status"
 	"github.com/buildkite/agent/v4/version"
@@ -876,9 +876,9 @@ var AgentStartCommand = &cli.Command{
 
 			switch {
 			case cfg.NoCommandEval:
-				l.Warnf(msg, "no-command-eval")
+				l.Warn(fmt.Sprintf(msg, "no-command-eval"))
 			case cfg.NoLocalHooks:
-				l.Warnf(msg, "no-local-hooks")
+				l.Warn(fmt.Sprintf(msg, "no-local-hooks"))
 			}
 		}
 
@@ -951,7 +951,8 @@ var AgentStartCommand = &cli.Command{
 			var err error
 			verificationJWKS, err = parseAndValidateJWKS(ctx, "verification", cfg.VerificationJWKSFile)
 			if err != nil {
-				l.Fatalf("Verification JWKS failed validation: %v", err)
+				l.Error(fmt.Sprintf("Verification JWKS failed validation: %v", err))
+				return err
 			}
 		}
 
@@ -959,12 +960,14 @@ var AgentStartCommand = &cli.Command{
 			// The actual JWKS itself doesn't get used until `buildkite-agent pipeline upload` is called, but validate it here anyway
 			_, err := parseAndValidateJWKS(ctx, "signing", cfg.SigningJWKSFile)
 			if err != nil {
-				l.Fatalf("Signing JWKS failed validation: %v", err)
+				l.Error(fmt.Sprintf("Signing JWKS failed validation: %v", err))
+				return err
 			}
 		}
 
 		if len(cfg.AllowedEnvironmentVariables) > 0 && !cfg.EnableEnvironmentVariableAllowList {
-			l.Fatalf("allowed-environment-variables is set, but enable-environment-variable-allowlist is not set")
+			l.Error("allowed-environment-variables is set, but enable-environment-variable-allowlist is not set")
+			return fmt.Errorf("allowed-environment-variables is set, but enable-environment-variable-allowlist is not set")
 		}
 
 		var allowedEnvironmentVariables []*regexp.Regexp
@@ -974,7 +977,8 @@ var AgentStartCommand = &cli.Command{
 			for _, v := range cfg.AllowedEnvironmentVariables {
 				re, err := regexp.Compile(v)
 				if err != nil {
-					l.Fatalf("Regex %s in allowed-environment-variables failed to compile: %v", v, err)
+					l.Error(fmt.Sprintf("Regex %s in allowed-environment-variables failed to compile: %v", v, err))
+					return err
 				}
 
 				allowedEnvironmentVariables = append(allowedEnvironmentVariables, re)
@@ -1077,54 +1081,54 @@ var AgentStartCommand = &cli.Command{
 			return fmt.Errorf("invalid log format %q; only 'text' or 'json' are allowed", cfg.LogFormat)
 		}
 
-		l.Noticef("Starting buildkite-agent v%s with PID: %s", version.Version(), strconv.Itoa(os.Getpid()))
-		l.Noticef("The agent source code can be found here: https://github.com/buildkite/agent")
-		l.Noticef("For questions and support, email us at: hello@buildkite.com")
+		l.Info(fmt.Sprintf("Starting buildkite-agent v%s with PID: %s", version.Version(), strconv.Itoa(os.Getpid())))
+		l.Info("The agent source code can be found here: https://github.com/buildkite/agent")
+		l.Info("For questions and support, email us at: hello@buildkite.com")
 
 		if agentConf.ConfigPath != "" {
-			l.WithFields(logger.StringField(`path`, agentConf.ConfigPath)).Infof("Configuration loaded")
+			l.With(`path`, agentConf.ConfigPath).Info("Configuration loaded")
 		}
 
-		l.Debugf("Bootstrap command: %s", agentConf.BootstrapScript)
-		l.Debugf("Build path: %s", agentConf.BuildPath)
-		l.Debugf("Hooks directory: %s", agentConf.HooksPath)
-		l.Debugf("Additional hooks directories: %v", agentConf.AdditionalHooksPaths)
-		l.Debugf("Plugins directory: %s", agentConf.PluginsPath)
+		l.Debug(fmt.Sprintf("Bootstrap command: %s", agentConf.BootstrapScript))
+		l.Debug(fmt.Sprintf("Build path: %s", agentConf.BuildPath))
+		l.Debug(fmt.Sprintf("Hooks directory: %s", agentConf.HooksPath))
+		l.Debug(fmt.Sprintf("Additional hooks directories: %v", agentConf.AdditionalHooksPaths))
+		l.Debug(fmt.Sprintf("Plugins directory: %s", agentConf.PluginsPath))
 
 		if exps := experiments.KnownAndEnabled(ctx); len(exps) > 0 {
-			l.WithFields(logger.StringField("experiments", fmt.Sprintf("%v", exps))).Infof("Experiments are enabled")
+			l.With("experiments", fmt.Sprintf("%v", exps)).Info("Experiments are enabled")
 		}
 
 		if cfg.Endpoint != DefaultEndpoint {
-			l.Infof("Connecting to custom endpoint %s", redact.URLCredentials(cfg.Endpoint))
+			l.Info(fmt.Sprintf("Connecting to custom endpoint %s", redact.URLCredentials(cfg.Endpoint)))
 		}
 
 		if !agentConf.SSHKeyscan {
-			l.Infof("Automatic ssh-keyscan has been disabled")
+			l.Info("Automatic ssh-keyscan has been disabled")
 		}
 
 		if !agentConf.CommandEval {
-			l.Infof("Evaluating console commands has been disabled")
+			l.Info("Evaluating console commands has been disabled")
 		}
 
 		if !agentConf.PluginsEnabled {
-			l.Infof("Plugins have been disabled")
+			l.Info("Plugins have been disabled")
 		}
 
 		if !agentConf.RunInPty {
-			l.Infof("Running builds within a pseudoterminal (PTY) has been disabled")
+			l.Info("Running builds within a pseudoterminal (PTY) has been disabled")
 		}
 
 		if agentConf.DisconnectAfterJob {
-			l.Infof("Agents will disconnect after a job run has completed")
+			l.Info("Agents will disconnect after a job run has completed")
 		}
 
 		if agentConf.DisconnectAfterIdleTimeout > 0 {
-			l.Infof("Agents will disconnect after %v of inactivity", agentConf.DisconnectAfterIdleTimeout)
+			l.Info(fmt.Sprintf("Agents will disconnect after %v of inactivity", agentConf.DisconnectAfterIdleTimeout))
 		}
 
 		if agentConf.DisconnectAfterUptime > 0 {
-			l.Infof("Agents will disconnect after %v of uptime and shut down after any running jobs complete", agentConf.DisconnectAfterUptime)
+			l.Info(fmt.Sprintf("Agents will disconnect after %v of uptime and shut down after any running jobs complete", agentConf.DisconnectAfterUptime))
 		}
 
 		if len(cfg.AllowedRepositories) > 0 {
@@ -1132,11 +1136,12 @@ var AgentStartCommand = &cli.Command{
 			for _, v := range cfg.AllowedRepositories {
 				r, err := regexp.Compile(v)
 				if err != nil {
-					l.Fatalf("Regex %s is allowed-repositories failed to compile: %v", v, err)
+					l.Error(fmt.Sprintf("Regex %s is allowed-repositories failed to compile: %v", v, err))
+					return err
 				}
 				agentConf.AllowedRepositories = append(agentConf.AllowedRepositories, r)
 			}
-			l.Infof("Allowed repositories patterns: %q", agentConf.AllowedRepositories)
+			l.Info(fmt.Sprintf("Allowed repositories patterns: %q", agentConf.AllowedRepositories))
 		}
 
 		if len(cfg.AllowedPlugins) > 0 {
@@ -1144,11 +1149,12 @@ var AgentStartCommand = &cli.Command{
 			for _, v := range cfg.AllowedPlugins {
 				r, err := regexp.Compile(v)
 				if err != nil {
-					l.Fatalf("Regex %s in allowed-plugins failed to compile: %v", v, err)
+					l.Error(fmt.Sprintf("Regex %s in allowed-plugins failed to compile: %v", v, err))
+					return err
 				}
 				agentConf.AllowedPlugins = append(agentConf.AllowedPlugins, r)
 			}
-			l.Infof("Allowed plugins patterns: %q", agentConf.AllowedPlugins)
+			l.Info(fmt.Sprintf("Allowed plugins patterns: %q", agentConf.AllowedPlugins))
 		}
 
 		cancelSig, err := process.ParseSignal(cfg.CancelSignal)
@@ -1174,7 +1180,8 @@ var AgentStartCommand = &cli.Command{
 			WaitForGCPLabelsTimeout:   cfg.WaitForGCPLabelsTimeout,
 		})
 		if err != nil {
-			l.Fatalf("%v", err)
+			l.Error(fmt.Sprintf("%v", err))
+			return err
 		}
 
 		// Munge the value from --queue (if it exists) into the tags slice
@@ -1183,7 +1190,8 @@ var AgentStartCommand = &cli.Command{
 				return strings.HasPrefix(strings.TrimSpace(s), "queue=")
 			})
 			if i != -1 {
-				l.Fatalf("Queue must be present in only one of the --tags or the --queue flags")
+				l.Error("Queue must be present in only one of the --tags or the --queue flags")
+				return fmt.Errorf("Queue must be present in only one of the --tags or the --queue flags")
 			}
 			tags = append(tags, "queue="+cfg.Queue)
 		}
@@ -1191,7 +1199,7 @@ var AgentStartCommand = &cli.Command{
 		// confirm the BuildPath is exists. The bootstrap is going to write to it when a job executes,
 		// so we may as well check that'll work now and fail early if it's a problem
 		if !osutil.FileExists(agentConf.BuildPath) {
-			l.Infof("Build Path doesn't exist, creating it (%s)", agentConf.BuildPath)
+			l.Info(fmt.Sprintf("Build Path doesn't exist, creating it (%s)", agentConf.BuildPath))
 			// Actual file permissions will be reduced by umask, and won't be 0o777 unless the user has manually changed the umask to 000
 			if err := os.MkdirAll(agentConf.BuildPath, 0o777); err != nil {
 				return fmt.Errorf("failed to create builds path: %w", err)
@@ -1240,9 +1248,9 @@ var AgentStartCommand = &cli.Command{
 		for i := range cfg.Spawn {
 			index := i + 1
 			if cfg.Spawn == 1 {
-				l.Infof("Registering agent with Buildkite...")
+				l.Info("Registering agent with Buildkite...")
 			} else {
-				l.Infof("Registering agent %d of %d with Buildkite...", index, cfg.Spawn)
+				l.Info(fmt.Sprintf("Registering agent %d of %d with Buildkite...", index, cfg.Spawn))
 			}
 
 			// Handle per-spawn name interpolation, replacing %spawn with the spawn index
@@ -1264,7 +1272,7 @@ var AgentStartCommand = &cli.Command{
 			}
 
 			if priority != "" {
-				l.Debugf("Assigning priority %s for agent %d", priority, index)
+				l.Debug(fmt.Sprintf("Assigning priority %s for agent %d", priority, index))
 				registerReq.Priority = priority
 			}
 
@@ -1286,7 +1294,7 @@ var AgentStartCommand = &cli.Command{
 				return nil, err
 			}
 
-			wl := l.WithFields(logger.StringField("agent", reg.Name))
+			wl := l.With("agent", reg.Name)
 
 			// Each worker registers independently and gets its own copy of
 			// the agent configuration with any control-plane tracing policy
@@ -1341,8 +1349,8 @@ var AgentStartCommand = &cli.Command{
 		signals := poolSigs.handle(ctx)
 		defer close(signals)
 
-		l.Infof("Starting %d Agent(s)", cfg.Spawn)
-		l.Infof("You can press Ctrl-C to stop the agents")
+		l.Info(fmt.Sprintf("Starting %d Agent(s)", cfg.Spawn))
+		l.Info("You can press Ctrl-C to stop the agents")
 
 		// Determine the health check listening address and port for this agent
 		if cfg.HealthCheckAddr != "" {
@@ -1406,7 +1414,7 @@ func parseAndValidateJWKS(_ context.Context, keysetType, path string) (jwk.Set, 
 }
 
 type poolSignals struct {
-	log               logger.Logger
+	log               *slog.Logger
 	pool              *agent.AgentPool
 	cancelGracePeriod time.Duration
 	skipGraceful      bool
@@ -1447,13 +1455,13 @@ func (ps *poolSignals) handleLoop(ctx context.Context, signals chan os.Signal) {
 			// allow 1 second to send agent disconnects.
 			time.Sleep(ps.cancelGracePeriod + 1*time.Second)
 			// We get here if the main goroutine hasn't returned yet.
-			ps.log.Infof("Timed out waiting for agents to exit; exiting immediately with status 1")
+			ps.log.InfoContext(ctx, "Timed out waiting for agents to exit; exiting immediately with status 1")
 			os.Exit(1)
 		}()
 	}
 
 	for sig := range signals {
-		ps.log.Debugf("Received signal `%v`", sig)
+		ps.log.Debug(fmt.Sprintf("Received signal `%v`", sig))
 		setStatus(fmt.Sprintf("Received signal `%v`", sig))
 
 		switch sig {
@@ -1464,28 +1472,28 @@ func (ps *poolSignals) handleLoop(ctx context.Context, signals chan os.Signal) {
 			interruptCount++
 			switch interruptCount {
 			case 1:
-				ps.log.Infof("Received CTRL-C, send again to forcefully kill the agent(s)")
+				ps.log.Info("Received CTRL-C, send again to forcefully kill the agent(s)")
 				ps.pool.StopGracefully()
 
 			case 2:
-				ps.log.Infof("Forcefully stopping running jobs and stopping the agent(s) in %v", ps.cancelGracePeriod)
+				ps.log.Info(fmt.Sprintf("Forcefully stopping running jobs and stopping the agent(s) in %v", ps.cancelGracePeriod))
 				if !ps.skipGraceful {
-					ps.log.Infof("Press Ctrl-C one more time to exit immediately without disconnecting - note that agents will be considered lost!")
+					ps.log.Info("Press Ctrl-C one more time to exit immediately without disconnecting - note that agents will be considered lost!")
 				}
 				ungracefulStop()
 
 			case 3:
-				ps.log.Infof("Exiting immediately with status 1")
+				ps.log.Info("Exiting immediately with status 1")
 				os.Exit(1)
 			}
 
 		default:
-			ps.log.Debugf("Ignoring signal `%s`", sig.String())
+			ps.log.Debug(fmt.Sprintf("Ignoring signal `%s`", sig.String()))
 		}
 	}
 }
 
-func agentStartupHook(log logger.Logger, cfg AgentStartConfig, workers []*agent.AgentWorker) error {
+func agentStartupHook(log *slog.Logger, cfg AgentStartConfig, workers []*agent.AgentWorker) error {
 	return agentLifecycleHook("agent-startup", log, cfg, agentLifecycleHookEnv(workers))
 }
 
@@ -1504,20 +1512,20 @@ func agentLifecycleHookEnv(workers []*agent.AgentWorker) *env.Environment {
 	return environ
 }
 
-func agentShutdownHook(log logger.Logger, cfg AgentStartConfig, workers []*agent.AgentWorker) {
+func agentShutdownHook(log *slog.Logger, cfg AgentStartConfig, workers []*agent.AgentWorker) {
 	_ = agentLifecycleHook("agent-shutdown", log, cfg, agentLifecycleHookEnv(workers))
 }
 
 // agentLifecycleHook looks for a hook script in the hooks path
 // and executes it if found. Output (stdout + stderr) is streamed into the main
 // agent logger. Exit status failure is logged and returned for the caller to handle
-func agentLifecycleHook(hookName string, log logger.Logger, cfg AgentStartConfig, hookEnv *env.Environment) error {
+func agentLifecycleHook(hookName string, log *slog.Logger, cfg AgentStartConfig, hookEnv *env.Environment) error {
 	// search for hook (including .bat & .ps1 files on Windows)
 	hooks := []string{}
 	p, err := hook.Find(nil, cfg.HooksPath, hookName)
 	if err != nil {
 		if !os.IsNotExist(err) {
-			log.Errorf("Error finding %q hook: %v", hookName, err)
+			log.Error(fmt.Sprintf("Error finding %q hook: %v", hookName, err))
 			return err
 		}
 	} else {
@@ -1529,7 +1537,7 @@ func agentLifecycleHook(hookName string, log logger.Logger, cfg AgentStartConfig
 		p, err = hook.Find(nil, h, hookName)
 		if err != nil {
 			if !os.IsNotExist(err) {
-				log.Errorf("Error finding %q hook: %v", hookName, err)
+				log.Error(fmt.Sprintf("Error finding %q hook: %v", hookName, err))
 			}
 		} else {
 			hooks = append(hooks, p)
@@ -1547,7 +1555,7 @@ func agentLifecycleHook(hookName string, log logger.Logger, cfg AgentStartConfig
 		shell.WithLogger(shell.NewWriterLogger(w, !cfg.NoColor, nil)), // for Promptf
 	)
 	if err != nil {
-		log.Errorf("creating shell for %q hook: %v", hookName, err)
+		log.Error(fmt.Sprintf("creating shell for %q hook: %v", hookName, err))
 		return err
 	}
 	sh.Env.Merge(hookEnv)
@@ -1555,9 +1563,9 @@ func agentLifecycleHook(hookName string, log logger.Logger, cfg AgentStartConfig
 	var wg sync.WaitGroup
 	wg.Go(func() {
 		scan := bufio.NewScanner(r) // log each line separately
-		log = log.WithFields(logger.StringField("hook", hookName))
+		log = log.With("hook", hookName)
 		for scan.Scan() {
-			log.Infof("%s", scan.Text())
+			log.Info(fmt.Sprintf("%s", scan.Text()))
 		}
 	})
 	defer func() {
@@ -1569,13 +1577,13 @@ func agentLifecycleHook(hookName string, log logger.Logger, cfg AgentStartConfig
 	for _, p = range hooks {
 		script, err := sh.Script(p, cfg.HooksShell)
 		if err != nil {
-			log.Errorf("%q hook: %v", hookName, err)
+			log.Error(fmt.Sprintf("%q hook: %v", hookName, err))
 			return err
 		}
 		// For these hooks, hide the interpreter from the "prompt".
 		sh.Promptf("%s", p)
 		if err := script.Run(context.TODO(), shell.ShowPrompt(false)); err != nil {
-			log.Errorf("%q hook: %v", hookName, err)
+			log.Error(fmt.Sprintf("%q hook: %v", hookName, err))
 			return err
 		}
 	}
@@ -1593,7 +1601,7 @@ func defaultSocketsPath() string {
 
 // runAgentAPI runs an API socket that can be used to interact with this
 // (top-level) agent. It returns a shutdown function.
-func runAgentAPI(ctx context.Context, l logger.Logger, socketsPath string) (func(), error) {
+func runAgentAPI(ctx context.Context, l *slog.Logger, socketsPath string) (func(), error) {
 	path := agentapi.DefaultSocketPath(socketsPath)
 	// There should be only one Agent API socket per agent process.
 	// If a previous agent crashed and left behind a socket, we can
@@ -1612,7 +1620,7 @@ func runAgentAPI(ctx context.Context, l logger.Logger, socketsPath string) (func
 	// Try to be the leader - no worries if this fails.
 	leaderPath := agentapi.LeaderPath(socketsPath)
 	if err := os.Symlink(path, leaderPath); err == nil {
-		l.Infof("Agent API: This agent became leader")
+		l.Info("Agent API: This agent became leader")
 	}
 
 	// Whoever the leader is, ping them every so often as a health-check.
@@ -1620,7 +1628,7 @@ func runAgentAPI(ctx context.Context, l logger.Logger, socketsPath string) (func
 
 	return func() {
 		if err := svr.Shutdown(ctx); err != nil {
-			l.Warnf("Agent API: error shutting down server: %v", err)
+			l.Warn(fmt.Sprintf("Agent API: error shutting down server: %v", err))
 		}
 		if d, err := os.Readlink(leaderPath); err == nil && d == path {
 			_ = os.Remove(leaderPath)
@@ -1630,7 +1638,7 @@ func runAgentAPI(ctx context.Context, l logger.Logger, socketsPath string) (func
 
 // leaderPinger pings the leader socket for liveness, and takes over if it
 // fails.
-func leaderPinger(ctx context.Context, l logger.Logger, path, leaderPath string) {
+func leaderPinger(ctx context.Context, l *slog.Logger, path, leaderPath string) {
 	pingLeader := func() error {
 		d, err := os.Readlink(leaderPath)
 		if err != nil {
@@ -1654,11 +1662,11 @@ func leaderPinger(ctx context.Context, l logger.Logger, path, leaderPath string)
 
 	for range time.Tick(100 * time.Millisecond) {
 		if err := pingLeader(); err != nil {
-			l.Warnf("Agent API: Leader ping failed, staging coup: %v", err)
-			l.Warnf("Agent API: Leader state (locks) has been lost!")
+			l.Warn(fmt.Sprintf("Agent API: Leader ping failed, staging coup: %v", err))
+			l.Warn("Agent API: Leader state (locks) has been lost!")
 			_ = os.Remove(leaderPath)
 			if err := os.Symlink(path, leaderPath); err != nil {
-				l.Warnf("Agent API: Failed to become leader: %v", err)
+				l.Warn(fmt.Sprintf("Agent API: Failed to become leader: %v", err))
 			}
 		}
 	}

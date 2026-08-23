@@ -9,13 +9,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"runtime"
 	"strings"
 	"time"
 
 	"github.com/buildkite/agent/v4/api"
 	"github.com/buildkite/agent/v4/internal/cache/configuration"
-	"github.com/buildkite/agent/v4/logger"
 )
 
 // cacheAPI is the subset of *api.Client that the cache package depends on.
@@ -51,6 +51,7 @@ var (
 // bucket and the expanded, validated cache definitions used by every call.
 // Safe for concurrent use; honours context cancellation.
 type client struct {
+	log        *slog.Logger
 	api        cacheAPI
 	bucketURL  string
 	format     string
@@ -67,7 +68,7 @@ type client struct {
 //
 // Returns (nil, nil, nil) when the configuration file has no caches.
 // Returns ErrInvalidConfiguration (wrapped) on expansion or validation failure.
-func newClient(l logger.Logger, apiClient cacheAPI, cfg Config) (*client, []string, error) {
+func newClient(l *slog.Logger, apiClient cacheAPI, cfg Config) (*client, []string, error) {
 	caches, err := configuration.LoadFile(cfg.CacheConfigFile)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to load cache configuration: %w", err)
@@ -94,6 +95,7 @@ func newClient(l logger.Logger, apiClient cacheAPI, cfg Config) (*client, []stri
 	}
 
 	c := &client{
+		log:       l,
 		api:       apiClient,
 		bucketURL: cfg.BucketURL,
 		format:    "zip",
@@ -101,11 +103,7 @@ func newClient(l logger.Logger, apiClient cacheAPI, cfg Config) (*client, []stri
 		registry:  registry,
 		caches:    expanded,
 		onProgress: func(cacheID, stage, message string, _, _ int) {
-			l.WithFields(
-				logger.StringField("cache_id", cacheID),
-				logger.StringField("stage", stage),
-				logger.StringField("message", message),
-			).Infof("Cache progress")
+			l.Info("Cache progress", slog.String("cache_id", cacheID), slog.String("stage", stage), slog.String("message", message))
 		},
 	}
 

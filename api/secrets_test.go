@@ -4,13 +4,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"path"
 	"testing"
 
 	"github.com/buildkite/agent/v4/api"
-	"github.com/buildkite/agent/v4/logger"
 	"github.com/google/go-cmp/cmp"
 )
 
@@ -121,7 +121,7 @@ func TestGetSecret(t *testing.T) {
 			t.Cleanup(buildkiteAPI.Close)
 
 			// Initial client with a registration token
-			client := api.NewClient(logger.Discard, api.Config{
+			client := api.NewClient(slog.New(slog.DiscardHandler), api.Config{
 				UserAgent: "Test",
 				Endpoint:  buildkiteAPI.URL,
 				Token:     test.accessToken,

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"io"
+	"log/slog"
 	"os"
 	"runtime"
 	"strings"
@@ -14,8 +15,8 @@ import (
 	"time"
 
 	"github.com/buildkite/agent/v4/internal/experiments"
+	"github.com/buildkite/agent/v4/internal/logtest"
 	"github.com/buildkite/agent/v4/internal/process"
-	"github.com/buildkite/agent/v4/logger"
 )
 
 func TestProcessOutput(t *testing.T) {
@@ -24,7 +25,7 @@ func TestProcessOutput(t *testing.T) {
 	stdout := &bytes.Buffer{}
 	stderr := &bytes.Buffer{}
 
-	p := process.New(logger.Discard, process.Config{
+	p := process.New(slog.New(slog.DiscardHandler), process.Config{
 		Path:   os.Args[0],
 		Env:    []string{"TEST_MAIN=output"},
 		Stdout: stdout,
@@ -56,7 +57,7 @@ func TestProcessOutputPTY(t *testing.T) {
 
 	stdout := &bytes.Buffer{}
 
-	logger := logger.NewBuffer()
+	logger, handler := logtest.NewLogger()
 	p := process.New(logger, process.Config{
 		Path:   os.Args[0],
 		Env:    []string{"TEST_MAIN=output"},
@@ -74,7 +75,7 @@ func TestProcessOutputPTY(t *testing.T) {
 		t.Errorf("stdout.String() = %q, want %q", got, want)
 	}
 
-	for _, line := range logger.Messages {
+	for _, line := range handler.Messages() {
 		t.Logf("Process.logger: %q\n", line)
 	}
 
@@ -92,7 +93,7 @@ func TestProcessOutputPTY_PTYRawExperiment(t *testing.T) {
 
 	stdout := &bytes.Buffer{}
 
-	logger := logger.NewBuffer()
+	logger, handler := logtest.NewLogger()
 	p := process.New(logger, process.Config{
 		Path:   os.Args[0],
 		Env:    []string{"TEST_MAIN=output"},
@@ -109,7 +110,7 @@ func TestProcessOutputPTY_PTYRawExperiment(t *testing.T) {
 		t.Errorf("stdout.String() = %q, want %q", got, want)
 	}
 
-	for _, line := range logger.Messages {
+	for _, line := range handler.Messages() {
 		t.Logf("Process.logger: %q\n", line)
 	}
 
@@ -131,7 +132,7 @@ func TestProcessOutputPTY_PTYRawExperimentWritesBeforeRawMode(t *testing.T) {
 	})
 
 	stdout := &bytes.Buffer{}
-	logger := logger.NewBuffer()
+	logger := slog.New(slog.DiscardHandler)
 	p := process.New(logger, process.Config{
 		Path:   os.Args[0],
 		Env:    []string{"TEST_MAIN=output-slow-exit"},
@@ -161,7 +162,7 @@ func TestProcessInput(t *testing.T) {
 
 	stdout := &bytes.Buffer{}
 
-	p := process.New(logger.Discard, process.Config{
+	p := process.New(slog.New(slog.DiscardHandler), process.Config{
 		Path:   "tr",
 		Args:   []string{"hw", "HW"},
 		Stdin:  strings.NewReader("hello world"),
@@ -183,7 +184,7 @@ func TestProcessRunsAndSignalsStartedAndStopped(t *testing.T) {
 	var started int32
 	var done int32
 
-	p := process.New(logger.Discard, process.Config{
+	p := process.New(slog.New(slog.DiscardHandler), process.Config{
 		Path:              os.Args[0],
 		Env:               []string{"TEST_MAIN=tester"},
 		SignalGracePeriod: time.Millisecond,
@@ -223,7 +224,7 @@ func TestProcessTerminatesWhenContextDone(t *testing.T) {
 
 	stdoutr, stdoutw := io.Pipe()
 
-	p := process.New(logger.Discard, process.Config{
+	p := process.New(slog.New(slog.DiscardHandler), process.Config{
 		Path:              os.Args[0],
 		Env:               []string{"TEST_MAIN=tester-no-handler"},
 		Stdout:            stdoutw,
@@ -265,7 +266,7 @@ func TestProcessWithSlowHandlerKilledWhenContextDone(t *testing.T) {
 
 	stdoutr, stdoutw := io.Pipe()
 
-	p := process.New(logger.Discard, process.Config{
+	p := process.New(slog.New(slog.DiscardHandler), process.Config{
 		Path:              os.Args[0],
 		Env:               []string{"TEST_MAIN=tester-slow-handler"},
 		Stdout:            stdoutw,
@@ -310,7 +311,7 @@ func TestProcessInterrupts(t *testing.T) {
 
 	stdoutr, stdoutw := io.Pipe()
 
-	p := process.New(logger.Discard, process.Config{
+	p := process.New(slog.New(slog.DiscardHandler), process.Config{
 		Path:              os.Args[0],
 		Env:               []string{"TEST_MAIN=tester-signal"},
 		Stdout:            stdoutw,
@@ -350,7 +351,7 @@ func TestProcessInterruptsAfterDone(t *testing.T) {
 		return
 	}
 
-	p := process.New(logger.Discard, process.Config{
+	p := process.New(slog.New(slog.DiscardHandler), process.Config{
 		Path: os.Args[0],
 		Env:  []string{"TEST_MAIN=tester-pgid"},
 	})
@@ -377,7 +378,7 @@ func TestProcessInterruptsWithCustomSignal(t *testing.T) {
 
 	stdoutr, stdoutw := io.Pipe()
 
-	p := process.New(logger.Discard, process.Config{
+	p := process.New(slog.New(slog.DiscardHandler), process.Config{
 		Path:              os.Args[0],
 		Env:               []string{"TEST_MAIN=tester-signal"},
 		Stdout:            stdoutw,
@@ -418,7 +419,7 @@ func TestProcessSetsProcessGroupID(t *testing.T) {
 		return
 	}
 
-	p := process.New(logger.Discard, process.Config{
+	p := process.New(slog.New(slog.DiscardHandler), process.Config{
 		Path: os.Args[0],
 		Env:  []string{"TEST_MAIN=tester-pgid"},
 	})
@@ -455,7 +456,7 @@ func TestProcessRunDoesNotHangWhenChildLeaksStdout(t *testing.T) {
 	// Drain the reader so the copy goroutine is never blocked on the write side.
 	go io.Copy(io.Discard, r) //nolint:errcheck // best-effort drain
 
-	p := process.New(logger.Discard, process.Config{
+	p := process.New(slog.New(slog.DiscardHandler), process.Config{
 		Path:   os.Args[0],
 		Env:    []string{"TEST_MAIN=leak-stdout"},
 		Stdout: w,
@@ -501,7 +502,7 @@ func assertProcessDoesntExist(t *testing.T, p *process.Process) {
 
 func BenchmarkProcess(b *testing.B) {
 	for b.Loop() {
-		proc := process.New(logger.Discard, process.Config{
+		proc := process.New(slog.New(slog.DiscardHandler), process.Config{
 			Path: os.Args[0],
 			Env:  []string{"TEST_MAIN=output"},
 		})

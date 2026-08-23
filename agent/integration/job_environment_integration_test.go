@@ -1,6 +1,7 @@
 package integration
 
 import (
+	"log/slog"
 	"slices"
 	"strings"
 	"testing"
@@ -8,7 +9,6 @@ import (
 	"github.com/buildkite/agent/v4/agent"
 	"github.com/buildkite/agent/v4/api"
 	"github.com/buildkite/agent/v4/env"
-	"github.com/buildkite/agent/v4/logger"
 	"github.com/buildkite/bintest/v3"
 	"github.com/buildkite/go-pipeline"
 )
@@ -190,7 +190,7 @@ func TestBuildkiteRequestHeaders(t *testing.T) {
 
 	// create a client with server-specified headers
 	t.Setenv("BUILDKITE_REQUEST_HEADER_BUILDKITE_HELLO", "world")
-	l := logger.NewConsoleLogger(logger.NewTestPrinter(t), func(int) {})
+	l := slog.New(slog.DiscardHandler)
 	client := api.NewClient(l, api.Config{
 		Endpoint:  server.URL,
 		Token:     "llamasrock",

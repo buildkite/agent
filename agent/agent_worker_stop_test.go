@@ -2,6 +2,7 @@ package agent
 
 import (
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"slices"
@@ -11,7 +12,7 @@ import (
 	"time"
 
 	"github.com/buildkite/agent/v4/api"
-	"github.com/buildkite/agent/v4/logger"
+	"github.com/buildkite/agent/v4/internal/logtest"
 	"github.com/buildkite/agent/v4/metrics"
 )
 
@@ -103,10 +104,10 @@ func (s *gracefulStopTestServer) snapshot() (events []string, stopRequests []api
 	return slices.Clone(s.events), slices.Clone(s.stopRequests)
 }
 
-func newGracefulStopTestWorker(t *testing.T, server *gracefulStopTestServer) (*AgentWorker, *logger.Buffer) {
+func newGracefulStopTestWorker(t *testing.T, server *gracefulStopTestServer) (*AgentWorker, *logtest.Handler) {
 	t.Helper()
 
-	l := logger.NewBuffer()
+	l, logHandler := logtest.NewLogger()
 	return NewAgentWorker(
 		l,
 		&api.AgentRegisterResponse{
@@ -115,13 +116,13 @@ func newGracefulStopTestWorker(t *testing.T, server *gracefulStopTestServer) (*A
 			AccessToken: gracefulStopTestSessionToken,
 			Endpoint:    server.URL,
 		},
-		metrics.NewCollector(logger.Discard, metrics.CollectorConfig{}),
-		api.NewClient(logger.Discard, api.Config{
+		metrics.NewCollector(slog.New(slog.DiscardHandler), metrics.CollectorConfig{}),
+		api.NewClient(slog.New(slog.DiscardHandler), api.Config{
 			Endpoint: server.URL,
 			Token:    "registration-token",
 		}),
 		AgentWorkerConfig{},
-	), l
+	), logHandler
 }
 
 func TestAgentWorker_ReportsGracefulStopBeforeDisconnect(t *testing.T) {
@@ -177,7 +178,7 @@ func TestAgentWorker_GracefulStopReportFailureDoesNotPreventDisconnect(t *testin
 	t.Parallel()
 
 	server := newGracefulStopTestServer(t, http.StatusInternalServerError, nil)
-	worker, l := newGracefulStopTestWorker(t, server)
+	worker, logHandler := newGracefulStopTestWorker(t, server)
 
 	worker.StopGracefully()
 	if err := worker.Disconnect(t.Context()); err != nil {
@@ -188,10 +189,10 @@ func TestAgentWorker_GracefulStopReportFailureDoesNotPreventDisconnect(t *testin
 	if got, want := events, []string{"stop", "disconnect"}; !slices.Equal(got, want) {
 		t.Errorf("request events = %v, want %v", got, want)
 	}
-	if !slices.ContainsFunc(l.Messages, func(message string) bool {
+	if !slices.ContainsFunc(logHandler.Messages(), func(message string) bool {
 		return strings.Contains(message, "Failed to report graceful stop to Buildkite")
 	}) {
-		t.Errorf("log messages = %v, want graceful stop reporting warning", l.Messages)
+		t.Errorf("log messages = %v, want graceful stop reporting warning", logHandler.Messages())
 	}
 }
 

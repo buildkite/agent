@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -15,7 +16,7 @@ import (
 	"time"
 
 	"github.com/buildkite/agent/v4/api"
-	"github.com/buildkite/agent/v4/logger"
+	"github.com/buildkite/agent/v4/internal/logtest"
 	"github.com/google/go-cmp/cmp"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
@@ -87,7 +88,7 @@ func TestCollect(t *testing.T) {
 		},
 	}
 
-	uploader := NewUploader(logger.Discard, nil, UploaderConfig{
+	uploader := NewUploader(slog.New(slog.DiscardHandler), nil, UploaderConfig{
 		Paths: fmt.Sprintf("%s;%s",
 			filepath.Join("fixtures", "**/*.jpg"),
 			filepath.Join(root, "fixtures", "**/*.gif"),
@@ -139,7 +140,7 @@ func TestCollectThatDoesntMatchAnyFiles(t *testing.T) {
 	t.Parallel()
 	ctx := t.Context()
 
-	uploader := NewUploader(logger.Discard, nil, UploaderConfig{
+	uploader := NewUploader(slog.New(slog.DiscardHandler), nil, UploaderConfig{
 		Paths: strings.Join([]string{
 			filepath.Join("log", "*"),
 			filepath.Join("tmp", "capybara", "**", "*"),
@@ -163,7 +164,7 @@ func TestCollectWithSomeGlobsThatDontMatchAnything(t *testing.T) {
 	t.Parallel()
 	ctx := t.Context()
 
-	uploader := NewUploader(logger.Discard, nil, UploaderConfig{
+	uploader := NewUploader(slog.New(slog.DiscardHandler), nil, UploaderConfig{
 		Paths: strings.Join([]string{
 			filepath.Join("dontmatchanything", "*"),
 			filepath.Join("dontmatchanything.zip"),
@@ -186,7 +187,7 @@ func TestCollectWithSomeGlobsThatDontMatchAnythingFollowingSymlinks(t *testing.T
 	t.Parallel()
 	ctx := t.Context()
 
-	uploader := NewUploader(logger.Discard, nil, UploaderConfig{
+	uploader := NewUploader(slog.New(slog.DiscardHandler), nil, UploaderConfig{
 		Paths: strings.Join([]string{
 			filepath.Join("dontmatchanything", "*"),
 			filepath.Join("dontmatchanything.zip"),
@@ -223,7 +224,7 @@ func TestCollectWithDuplicateMatches(t *testing.T) {
 	t.Parallel()
 	ctx := t.Context()
 
-	uploader := NewUploader(logger.Discard, nil, UploaderConfig{
+	uploader := NewUploader(slog.New(slog.DiscardHandler), nil, UploaderConfig{
 		Paths: strings.Join([]string{
 			filepath.Join("fixtures", "**", "*.jpg"),
 			filepath.Join("fixtures", "folder", "Commando.jpg"), // dupe
@@ -256,7 +257,7 @@ func TestCollectWithDuplicateMatchesFollowingSymlinks(t *testing.T) {
 	t.Parallel()
 	ctx := t.Context()
 
-	uploader := NewUploader(logger.Discard, nil, UploaderConfig{
+	uploader := NewUploader(slog.New(slog.DiscardHandler), nil, UploaderConfig{
 		Paths: strings.Join([]string{
 			filepath.Join("fixtures", "**", "*.jpg"),
 			filepath.Join("fixtures", "folder", "Commando.jpg"), // dupe
@@ -291,7 +292,7 @@ func TestCollectMatchesUploadSymlinks(t *testing.T) {
 	t.Parallel()
 	ctx := t.Context()
 
-	uploader := NewUploader(logger.Discard, nil, UploaderConfig{
+	uploader := NewUploader(slog.New(slog.DiscardHandler), nil, UploaderConfig{
 		Paths: strings.Join([]string{
 			filepath.Join("fixtures", "**", "*.jpg"),
 		}, ";"),
@@ -323,7 +324,7 @@ func TestCollect_Literal(t *testing.T) {
 	t.Parallel()
 	ctx := t.Context()
 
-	uploader := NewUploader(logger.Discard, nil, UploaderConfig{
+	uploader := NewUploader(slog.New(slog.DiscardHandler), nil, UploaderConfig{
 		Paths: strings.Join([]string{
 			filepath.Join("fixtures", "links", "folder-link", "terminator2.jpg"),
 			filepath.Join("fixtures", "gifs", "Smile.gif"),
@@ -356,7 +357,7 @@ func TestCollect_LiteralPathNotFound(t *testing.T) {
 	t.Parallel()
 	ctx := t.Context()
 
-	uploader := NewUploader(logger.Discard, nil, UploaderConfig{
+	uploader := NewUploader(slog.New(slog.DiscardHandler), nil, UploaderConfig{
 		// When parsed as a glob, it finds multiple files.
 		// When used literally, it finds nothing.
 		Paths:   filepath.Join("fixtures", "**", "*.jpg"),
@@ -382,7 +383,7 @@ func TestUploadUsesConfiguredConcurrency(t *testing.T) {
 		ready:   make(chan struct{}),
 		release: make(chan struct{}),
 	}
-	uploader := NewUploader(logger.Discard, &uploadConcurrencyAPIClient{}, UploaderConfig{
+	uploader := NewUploader(slog.New(slog.DiscardHandler), &uploadConcurrencyAPIClient{}, UploaderConfig{
 		JobID:             "job-id",
 		UploadConcurrency: int(wantConcurrency),
 	})
@@ -465,10 +466,10 @@ func TestArtifactUploadTimingsSummary(t *testing.T) {
 		stateUpdateCount: 44,
 	}
 
-	l := logger.NewBuffer()
+	l, handler := logtest.NewLogger()
 	timings.logSummary(l)
 
-	got := strings.Join(l.Messages, "\n")
+	got := strings.Join(handler.Messages(), "\n")
 	for _, want := range []string{
 		"Artifact upload timings:",
 		"collect=1.456s",

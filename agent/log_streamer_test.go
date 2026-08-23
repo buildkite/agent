@@ -3,13 +3,13 @@ package agent
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"os"
 	"sort"
 	"sync"
 	"testing"
 
 	"github.com/buildkite/agent/v4/api"
-	"github.com/buildkite/agent/v4/logger"
 	"github.com/google/go-cmp/cmp"
 )
 
@@ -17,10 +17,7 @@ func TestLogStreamer(t *testing.T) {
 	t.Parallel()
 	ctx := t.Context()
 
-	logger := logger.NewConsoleLogger(
-		logger.NewTextPrinter(os.Stderr),
-		func(c int) { t.Errorf("exit(%d)", c) },
-	)
+	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
 
 	var mu sync.Mutex
 	var got []*api.Chunk

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
 	"slices"
@@ -12,7 +13,6 @@ import (
 	"github.com/buildkite/agent/v4/api"
 	"github.com/buildkite/agent/v4/internal/redact"
 	"github.com/buildkite/agent/v4/jobapi"
-	"github.com/buildkite/agent/v4/logger"
 	"github.com/urfave/cli/v3"
 )
 
@@ -97,7 +97,7 @@ var JobPromiseFailureCommand = &cli.Command{
 		}
 		reason := cfg.Reason
 		if redactedValue := redact.String(reason, needles); redactedValue != reason {
-			l.Warnf("The promise-failure reason for job %q contained one or more secrets from environment variables that have been redacted. If this is deliberate, pass --redacted-vars='' or a list of patterns that does not match the variable containing the secret", jobID)
+			l.WarnContext(ctx, fmt.Sprintf("The promise-failure reason for job %q contained one or more secrets from environment variables that have been redacted. If this is deliberate, pass --redacted-vars='' or a list of patterns that does not match the variable containing the secret", jobID))
 			reason = redactedValue
 		}
 
@@ -108,7 +108,7 @@ var JobPromiseFailureCommand = &cli.Command{
 		// without Unix sockets) or can't be reached.
 		client, err := jobapi.NewDefaultClient(ctx)
 		if err != nil {
-			l.Debugf("Job API unavailable, declaring promised failure directly: %v", err)
+			l.Debug(fmt.Sprintf("Job API unavailable, declaring promised failure directly: %v", err))
 			return declarePromiseFailureDirectly(ctx, l, cfg, jobID, exitStatus, reason)
 		}
 
@@ -117,7 +117,7 @@ var JobPromiseFailureCommand = &cli.Command{
 			// We couldn't reach or use the Job API (or its response was lost).
 			// Declare directly so the promise still lands; the endpoint is idempotent
 			// for the same exit status, so a duplicate is safe.
-			l.Warnf("Couldn't reach the Job API to declare the promised failure; declaring it directly: %v", err)
+			l.Warn(fmt.Sprintf("Couldn't reach the Job API to declare the promised failure; declaring it directly: %v", err))
 			return declarePromiseFailureDirectly(ctx, l, cfg, jobID, exitStatus, reason)
 		}
 
@@ -127,9 +127,9 @@ var JobPromiseFailureCommand = &cli.Command{
 
 		if result.Outcome == jobapi.PromiseFailureDebounced {
 			// Log at debug to avoid spamming job logs on repeated calls.
-			l.Debugf("Promised exit status %d already declared for job %s (debounced)", exitStatus, jobID)
+			l.Debug(fmt.Sprintf("Promised exit status %d already declared for job %s (debounced)", exitStatus, jobID))
 		} else {
-			l.Infof("Declared promised exit status %d for job %s", exitStatus, jobID)
+			l.Info(fmt.Sprintf("Declared promised exit status %d for job %s", exitStatus, jobID))
 		}
 		return nil
 	},
@@ -161,7 +161,7 @@ func promiseFailureError(status int, err error) error {
 // declarePromiseFailureDirectly declares a promised failure straight to the
 // Buildkite API, without debouncing via the Job API. It's used as a fallback
 // when the Job API can't be used or reached.
-func declarePromiseFailureDirectly(ctx context.Context, l logger.Logger, cfg JobPromiseFailureConfig, jobID string, exitStatus int, reason string) error {
+func declarePromiseFailureDirectly(ctx context.Context, l *slog.Logger, cfg JobPromiseFailureConfig, jobID string, exitStatus int, reason string) error {
 	client := api.NewClient(l, loadAPIClientConfig(cfg, "AgentAccessToken"))
 
 	req := &api.JobPromiseFailureRequest{
@@ -169,11 +169,11 @@ func declarePromiseFailureDirectly(ctx context.Context, l logger.Logger, cfg Job
 		Reason:     reason,
 	}
 
-	status, err := client.PromiseFailureWithRetry(ctx, jobID, req, l.Warnf)
+	status, err := client.PromiseFailureWithRetry(ctx, jobID, req, func(format string, args ...any) { l.Warn(fmt.Sprintf(format, args...)) })
 	if err != nil {
 		return promiseFailureError(status, err)
 	}
 
-	l.Infof("Declared promised exit status %d for job %s", exitStatus, jobID)
+	l.Info(fmt.Sprintf("Declared promised exit status %d for job %s", exitStatus, jobID))
 	return nil
 }

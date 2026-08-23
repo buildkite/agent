@@ -3,12 +3,15 @@ package cache
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
 )
+
+var discardLogger = slog.New(slog.DiscardHandler)
 
 func TestCleanPath(t *testing.T) {
 	t.Run("removes directory and contents", func(t *testing.T) {
@@ -24,7 +27,7 @@ func TestCleanPath(t *testing.T) {
 			t.Fatalf("WriteFile: %v", err)
 		}
 
-		if err := cleanPath(t.Context(), testDir); err != nil {
+		if err := cleanPath(t.Context(), discardLogger, testDir); err != nil {
 			t.Fatalf("cleanPath: %v", err)
 		}
 
@@ -51,7 +54,7 @@ func TestCleanPath(t *testing.T) {
 			t.Fatalf("Chmod: %v", err)
 		}
 
-		if err := cleanPath(t.Context(), testDir); err != nil {
+		if err := cleanPath(t.Context(), discardLogger, testDir); err != nil {
 			t.Fatalf("cleanPath: %v", err)
 		}
 
@@ -62,13 +65,13 @@ func TestCleanPath(t *testing.T) {
 	})
 
 	t.Run("succeeds on non-existent path", func(t *testing.T) {
-		if err := cleanPath(t.Context(), "/nonexistent/path/that/does/not/exist"); err != nil {
+		if err := cleanPath(t.Context(), discardLogger, "/nonexistent/path/that/does/not/exist"); err != nil {
 			t.Fatalf("cleanPath: %v", err)
 		}
 	})
 
 	t.Run("rejects empty path", func(t *testing.T) {
-		err := cleanPath(t.Context(), "")
+		err := cleanPath(t.Context(), discardLogger, "")
 		if err == nil {
 			t.Fatal("expected error, got nil")
 		}
@@ -78,7 +81,7 @@ func TestCleanPath(t *testing.T) {
 	})
 
 	t.Run("rejects root path", func(t *testing.T) {
-		err := cleanPath(t.Context(), "/")
+		err := cleanPath(t.Context(), discardLogger, "/")
 		if err == nil {
 			t.Fatal("expected error, got nil")
 		}
@@ -88,7 +91,7 @@ func TestCleanPath(t *testing.T) {
 	})
 
 	t.Run("rejects current directory", func(t *testing.T) {
-		err := cleanPath(t.Context(), ".")
+		err := cleanPath(t.Context(), discardLogger, ".")
 		if err == nil {
 			t.Fatal("expected error, got nil")
 		}
@@ -104,7 +107,7 @@ func TestCleanPath(t *testing.T) {
 		if err != nil {
 			t.Fatalf("os.Getwd: %v", err)
 		}
-		err = cleanPath(t.Context(), cwd)
+		err = cleanPath(t.Context(), discardLogger, cwd)
 		if err == nil {
 			t.Fatal("expected error, got nil")
 		}
@@ -119,7 +122,7 @@ func TestCleanPath(t *testing.T) {
 			t.Fatalf("UserHomeDir: %v", err)
 		}
 
-		err = cleanPath(t.Context(), home)
+		err = cleanPath(t.Context(), discardLogger, home)
 		if err == nil {
 			t.Fatal("expected error, got nil")
 		}
@@ -135,7 +138,7 @@ func TestCleanPath(t *testing.T) {
 		if err := os.WriteFile(file, []byte("x"), 0o600); err != nil {
 			t.Fatalf("WriteFile: %v", err)
 		}
-		if err := cleanPath(t.Context(), file); err != nil {
+		if err := cleanPath(t.Context(), discardLogger, file); err != nil {
 			t.Fatalf("cleanPath: %v", err)
 		}
 		if _, err := os.Stat(file); !os.IsNotExist(err) {
@@ -158,7 +161,7 @@ func TestCleanPath(t *testing.T) {
 		if err := os.Symlink(cwd, link); err != nil {
 			t.Fatalf("Symlink: %v", err)
 		}
-		if err := cleanPath(t.Context(), link); err != nil {
+		if err := cleanPath(t.Context(), discardLogger, link); err != nil {
 			t.Fatalf("removing a symlink to cwd should be safe, got: %v", err)
 		}
 		if _, err := os.Lstat(link); !os.IsNotExist(err) {
@@ -179,7 +182,7 @@ func TestCleanPath(t *testing.T) {
 		}
 		t.Chdir(job) // cwd is now base/job; restored automatically after the test
 
-		err := cleanPath(t.Context(), base)
+		err := cleanPath(t.Context(), discardLogger, base)
 		if err == nil {
 			t.Fatal("expected error, got nil")
 		}
@@ -198,7 +201,7 @@ func TestCleanPath(t *testing.T) {
 		ctx, cancel := context.WithCancel(t.Context())
 		cancel()
 
-		err := cleanPath(ctx, testDir)
+		err := cleanPath(ctx, discardLogger, testDir)
 		if err == nil {
 			t.Fatal("expected error, got nil")
 		}
@@ -249,7 +252,7 @@ func TestCleanPathWindowsDriveRoot(t *testing.T) {
 		t.Skip("Windows-specific test")
 	}
 
-	err := cleanPath(t.Context(), "C:\\")
+	err := cleanPath(t.Context(), discardLogger, "C:\\")
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -265,7 +268,7 @@ func TestCleanPathWindowsUNCShareRoot(t *testing.T) {
 
 	// A UNC share root cleans to the volume name with no trailing separator, so
 	// the drive-root guard misses it — cleanup must still refuse it.
-	err := cleanPath(t.Context(), `\\server\share`)
+	err := cleanPath(t.Context(), discardLogger, `\\server\share`)
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}

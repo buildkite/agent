@@ -4,13 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"slices"
 	"strings"
 	"time"
 
 	"github.com/buildkite/agent/v4/api"
 	"github.com/buildkite/agent/v4/internal/redact"
-	"github.com/buildkite/agent/v4/logger"
 	"github.com/buildkite/roko"
 	"github.com/urfave/cli/v3"
 )
@@ -75,7 +75,7 @@ var MetaDataSetBatchCommand = &cli.Command{
 
 		for i := range items {
 			if redactedValue := redact.String(items[i].Value, needles); redactedValue != items[i].Value {
-				l.Warnf("Meta-data value for key %q contained one or more secrets from environment variables that have been redacted. If this is deliberate, pass --redacted-vars='' or a list of patterns that does not match the variable containing the secret", items[i].Key)
+				l.Warn(fmt.Sprintf("Meta-data value for key %q contained one or more secrets from environment variables that have been redacted. If this is deliberate, pass --redacted-vars='' or a list of patterns that does not match the variable containing the secret", items[i].Key))
 				items[i].Value = redactedValue
 			}
 		}
@@ -120,7 +120,7 @@ func parseMetaDataBatchArgs(args []string) ([]api.MetaData, error) {
 	return items, nil
 }
 
-func setMetaDataBatch(ctx context.Context, cfg MetaDataSetBatchConfig, l logger.Logger, items []api.MetaData) error {
+func setMetaDataBatch(ctx context.Context, cfg MetaDataSetBatchConfig, l *slog.Logger, items []api.MetaData) error {
 	client := api.NewClient(l, loadAPIClientConfig(cfg, "AgentAccessToken"))
 
 	batch := &api.MetaDataBatch{Items: items}
@@ -134,7 +134,7 @@ func setMetaDataBatch(ctx context.Context, cfg MetaDataSetBatchConfig, l logger.
 			r.Break()
 		}
 		if err != nil {
-			l.Warnf("%s (%s)", err, r)
+			l.Warn(fmt.Sprintf("%s (%s)", err, r))
 			return err
 		}
 		return nil

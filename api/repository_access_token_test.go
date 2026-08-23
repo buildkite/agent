@@ -3,13 +3,13 @@ package api_test
 import (
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"sync/atomic"
 	"testing"
 
 	"github.com/buildkite/agent/v4/api"
-	"github.com/buildkite/agent/v4/logger"
 )
 
 func TestGenerateRepositoryAccessToken(t *testing.T) {
@@ -41,7 +41,7 @@ func TestGenerateRepositoryAccessToken(t *testing.T) {
 	}))
 	t.Cleanup(server.Close)
 
-	client := api.NewClient(logger.Discard, api.Config{Endpoint: server.URL, Token: "agent-token"})
+	client := api.NewClient(slog.New(slog.DiscardHandler), api.Config{Endpoint: server.URL, Token: "agent-token"})
 	token, response, err := client.GenerateRepositoryAccessToken(
 		t.Context(),
 		"https://git.example.com/acme/widgets.git",
@@ -72,7 +72,7 @@ func TestGenerateGithubCodeAccessTokenUsesRepositoryEndpoint(t *testing.T) {
 	}))
 	t.Cleanup(server.Close)
 
-	client := api.NewClient(logger.Discard, api.Config{Endpoint: server.URL, Token: "agent-token"})
+	client := api.NewClient(slog.New(slog.DiscardHandler), api.Config{Endpoint: server.URL, Token: "agent-token"})
 	token, _, err := client.GenerateGithubCodeAccessToken(
 		t.Context(),
 		"https://git.example.com/acme/widgets.git",
