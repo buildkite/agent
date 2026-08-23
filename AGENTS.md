@@ -20,7 +20,6 @@ Go CLI application with main packages:
 - **[`clicommand/`](clicommand/)**: CLI command implementations
 - **[`internal/`](internal/)**: Internal utilities (shell, sockets, artifacts, etc.)
 - **[`process/`](process/)**: Process execution, signal handling, output streaming
-- **[`logger/`](logger/)**: Structured logging
 - **[`env/`](env/)**: Environment variable management
 
 ## Code Style
