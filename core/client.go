@@ -212,7 +212,7 @@ func (c *Client) FinishJob(ctx context.Context, job *api.Job, finishedAt time.Ti
 	job.SignalReason = exit.SignalReason
 	job.ChunksFailedCount = failedChunkCount
 
-	c.Logger.DebugContext(ctx, "[JobRunner] Finishing job", "exit_status", job.ExitStatus, "signal", job.Signal, "signal_reason", job.SignalReason)
+	c.Logger.With("component", "JobRunner").DebugContext(ctx, "Finishing job", "exit_status", job.ExitStatus, "signal", job.Signal, "signal_reason", job.SignalReason)
 
 	ctx, cancel := context.WithTimeout(ctx, 1*time.Hour)
 	defer cancel()

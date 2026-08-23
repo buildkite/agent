@@ -107,10 +107,10 @@ func (p *Process) postStart() (err error) {
 
 func (p *Process) terminateProcessGroup() error {
 	if p.terminateFunc != nil {
-		p.logger.Debug("[Process] Terminating process")
+		p.logger.Debug("Terminating process")
 		return p.terminateFunc()
 	}
-	p.logger.Debug("[Process] Terminating process tree by destroying job")
+	p.logger.Debug("Terminating process tree by destroying job")
 	return windows.CloseHandle(windows.Handle(p.winJobHandle))
 }
 

@@ -78,6 +78,21 @@ func TestProcessOutputPTY(t *testing.T) {
 	for _, line := range handler.Messages() {
 		t.Logf("Process.logger: %q\n", line)
 	}
+	for _, record := range handler.Records() {
+		var component string
+		record.Attrs(func(attr slog.Attr) bool {
+			if attr.Key == "component" {
+				component = attr.Value.String()
+			}
+			return true
+		})
+		if got, want := component, "Process"; got != want {
+			t.Errorf("component = %q, want %q", got, want)
+		}
+		if strings.HasPrefix(record.Message, "[Process]") {
+			t.Errorf("message %q retains component prefix", record.Message)
+		}
+	}
 
 	assertProcessDoesntExist(t, p)
 }

@@ -400,6 +400,7 @@ One or more containers connected to the agent, but then stopped communicating wi
 
 func (r *JobRunner) cleanup(ctx context.Context, wg *sync.WaitGroup, exit core.ProcessExit, ignoreAgentInDispatches *bool) {
 	finishedAt := time.Now()
+	log := r.agentLogger.With("component", "JobRunner")
 
 	// Flush the job logs. If the process is never started, then logs from prior to the attempt to
 	// start the process will still be buffered. Also, there may still be logs in the buffer that
@@ -417,7 +418,7 @@ func (r *JobRunner) cleanup(ctx context.Context, wg *sync.WaitGroup, exit core.P
 	}
 
 	// Wait for the routines that we spun up to finish
-	r.agentLogger.DebugContext(ctx, "[JobRunner] Waiting for all other routines to finish")
+	log.DebugContext(ctx, "Waiting for all other routines to finish")
 	wg.Wait()
 
 	// Remove the env file, if any
@@ -426,17 +427,17 @@ func (r *JobRunner) cleanup(ctx context.Context, wg *sync.WaitGroup, exit core.P
 			continue
 		}
 		if err := os.Remove(f.Name()); err != nil {
-			r.agentLogger.WarnContext(ctx, "[JobRunner] Error cleaning up env file", "error", err)
+			log.WarnContext(ctx, "Error cleaning up env file", "error", err)
 			continue
 		}
-		r.agentLogger.DebugContext(ctx, "[JobRunner] Deleted env file", "path", f.Name())
+		log.DebugContext(ctx, "Deleted env file", "path", f.Name())
 	}
 
 	// Remove the job timeout marker file if it was created. It is fine if
 	// the file does not exist — Cancel only writes it on a job-level timeout.
 	if r.jobTimeoutFilePath != "" {
 		if err := os.Remove(r.jobTimeoutFilePath); err != nil && !os.IsNotExist(err) {
-			r.agentLogger.WarnContext(ctx, "[JobRunner] Error cleaning up job timeout file", "error", err)
+			log.WarnContext(ctx, "Error cleaning up job timeout file", "error", err)
 		}
 	}
 
@@ -462,7 +463,7 @@ func (r *JobRunner) streamJobLogsAfterProcessStart(ctx context.Context) {
 	setStat("🏃 Starting...")
 
 	defer func() {
-		r.agentLogger.DebugContext(ctx, "[JobRunner] Routine that processes the log has finished")
+		r.agentLogger.With("component", "JobRunner").DebugContext(ctx, "Routine that processes the log has finished")
 	}()
 
 	select {

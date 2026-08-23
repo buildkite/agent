@@ -174,6 +174,7 @@ func NewJobRunner(ctx context.Context, l *slog.Logger, apiClient *api.Client, co
 		clientConf.Token = conf.Job.Token
 		apiClient = apiClient.New(clientConf)
 	}
+	jobRunnerLogger := l.With("component", "JobRunner")
 
 	r := &JobRunner{
 		agentLogger: l,
@@ -220,7 +221,7 @@ func NewJobRunner(ctx context.Context, l *slog.Logger, apiClient *api.Client, co
 
 	contextDir := jobContextDir(conf)
 
-	r.envShellFile, r.envJSONFile, err = createJobEnvFiles(r.agentLogger, r.conf.Job.ID, contextDir)
+	r.envShellFile, r.envJSONFile, err = createJobEnvFiles(jobRunnerLogger, r.conf.Job.ID, contextDir)
 	if err != nil {
 		return nil, err
 	}
@@ -251,7 +252,7 @@ func NewJobRunner(ctx context.Context, l *slog.Logger, apiClient *api.Client, co
 		jobLogDir := ""
 		if conf.AgentConfiguration.JobLogPath != "" {
 			jobLogDir = conf.AgentConfiguration.JobLogPath
-			r.agentLogger.DebugContext(ctx, "[JobRunner] Job log path", "path", jobLogDir)
+			jobRunnerLogger.DebugContext(ctx, "Job log path", "path", jobLogDir)
 		}
 		tmpFile, err = os.CreateTemp(jobLogDir, "buildkite_job_log")
 		if err != nil {
@@ -890,7 +891,7 @@ func (r *JobRunner) jobCancellationChecker(ctx context.Context) {
 	defer done()
 	setStat("Starting...")
 
-	defer r.agentLogger.DebugContext(ctx, "[JobRunner] Routine that refreshes the job has finished")
+	defer r.agentLogger.With("component", "JobRunner").DebugContext(ctx, "Routine that refreshes the job has finished")
 
 	select {
 	case <-r.process.Started():
@@ -986,7 +987,7 @@ func createJobEnvFiles(l *slog.Logger, jobID, contextDir string) (shellFile, jso
 	if err != nil {
 		return nil, nil, err
 	}
-	l.Debug("[JobRunner] Created env file", "format", "shell", "path", shellFile.Name())
+	l.Debug("Created env file", "format", "shell", "path", shellFile.Name())
 
 	jsonFile, err = os.CreateTemp(contextDir, fmt.Sprintf("job-env-json-%s", jobID))
 	if err != nil {
@@ -994,7 +995,7 @@ func createJobEnvFiles(l *slog.Logger, jobID, contextDir string) (shellFile, jso
 		_ = os.Remove(shellFile.Name())
 		return nil, nil, err
 	}
-	l.Debug("[JobRunner] Created env file", "format", "json", "path", jsonFile.Name())
+	l.Debug("Created env file", "format", "json", "path", jsonFile.Name())
 
 	return shellFile, jsonFile, nil
 }

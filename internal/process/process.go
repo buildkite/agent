@@ -119,7 +119,7 @@ type Process struct {
 // New returns a new instance of Process
 func New(l *slog.Logger, c Config) *Process {
 	return &Process{
-		logger:  l,
+		logger:  l.With("component", "Process"),
 		conf:    c,
 		started: c.Started,
 		done:    c.Done,
@@ -158,7 +158,7 @@ func (p *Process) Run(ctx context.Context) error {
 	}
 	defer cleanup()
 
-	p.logger.InfoContext(ctx, "[Process] Process is running", "pid", p.pid())
+	p.logger.InfoContext(ctx, "Process is running", "pid", p.pid())
 
 	// Wait until the process has finished. The returned error is nil if the
 	// command runs, has no problems copying stdin, stdout, and stderr, and
@@ -193,7 +193,7 @@ func (p *Process) start(ctx context.Context) (func(), error) {
 	}
 
 	if err := p.postStart(); err != nil {
-		p.logger.ErrorContext(ctx, "[Process] postStart failed", "error", err)
+		p.logger.ErrorContext(ctx, "postStart failed", "error", err)
 	}
 	// Signal waiting consumers in Started() by closing the started channel
 	close(p.started)
@@ -242,7 +242,7 @@ func (p *Process) setup(ctx context.Context) error {
 // to stdout. The cleanup function waits for the copy to finish and closes the
 // PTY handle.
 func (p *Process) startWithPTY(ctx context.Context) (func(), error) {
-	p.logger.DebugContext(ctx, "[Process] Running with a PTY")
+	p.logger.DebugContext(ctx, "Running with a PTY")
 
 	// Commands like tput expect a TERM value for a PTY
 	p.command.Env = append(p.command.Env, "TERM="+termType)
@@ -257,7 +257,7 @@ func (p *Process) startWithPTY(ctx context.Context) (func(), error) {
 	afterPTYStartHook()
 
 	if rawPTY {
-		p.logger.DebugContext(ctx, "[Process] Setting raw mode for PTY", "path", pty.Name(), "fd", pty.Fd())
+		p.logger.DebugContext(ctx, "Setting raw mode for PTY", "path", pty.Name(), "fd", pty.Fd())
 	}
 
 	// Copy and close the PTY, if it exists.
@@ -267,11 +267,11 @@ func (p *Process) startWithPTY(ctx context.Context) (func(), error) {
 	return func() {
 		// Sometimes (in docker containers) io.Copy never seems to finish. This is a
 		// mega hack around it. If it doesn't finish after 10 seconds, just continue.
-		p.logger.DebugContext(ctx, "[Process] Waiting for routines to finish")
+		p.logger.DebugContext(ctx, "Waiting for routines to finish")
 
 		select {
 		case <-time.After(10 * time.Second):
-			p.logger.DebugContext(ctx, "[Process] Timed out waiting for PTY->stdout copy")
+			p.logger.DebugContext(ctx, "Timed out waiting for PTY->stdout copy")
 		case <-copyDone:
 			// it's done
 		}
@@ -283,7 +283,7 @@ func (p *Process) startWithPTY(ctx context.Context) (func(), error) {
 // startWithoutPTY starts the process without using a PTY. The cleanup function
 // is a no-op.
 func (p *Process) startWithoutPTY(context.Context) (func(), error) {
-	p.logger.Debug("[Process] Running without a PTY")
+	p.logger.Debug("Running without a PTY")
 
 	p.command.Stdin = p.conf.Stdin
 	p.command.Stdout = p.conf.Stdout
@@ -321,7 +321,7 @@ func (p *Process) waitDelay() time.Duration {
 // copyPTYToStdout copies pty to p.conf.Stdout. It should be a new goroutine.
 func (p *Process) copyPTYToStdout(pty *os.File, copyDone chan<- struct{}) {
 	defer close(copyDone)
-	p.logger.Debug("[Process] Starting to copy PTY to the buffer")
+	p.logger.Debug("Starting to copy PTY to the buffer")
 
 	// Copy the pty to our writer. This will block until it EOFs or something breaks.
 	_, err := io.Copy(p.conf.Stdout, pty)
@@ -334,13 +334,13 @@ func (p *Process) copyPTYToStdout(pty *os.File, copyDone chan<- struct{}) {
 		// See: https://github.com/buildkite/agent/pull/34#issuecomment-46080419
 		//
 		// We will still log the error to aid debugging on other platforms.
-		p.logger.Debug("[Process] PTY has finished being copied to the buffer", "error", err)
+		p.logger.Debug("PTY has finished being copied to the buffer", "error", err)
 
 	case err == nil:
-		p.logger.Debug("[Process] PTY has finished being copied to the buffer")
+		p.logger.Debug("PTY has finished being copied to the buffer")
 
 	default:
-		p.logger.Error("[Process] PTY output copy failed", "error", err)
+		p.logger.Error("PTY output copy failed", "error", err)
 	}
 }
 
@@ -374,7 +374,7 @@ func (p *Process) complete(waitResult error) error {
 			// EOFed. Without WaitDelay this manifested as Cmd.Wait blocking
 			// indefinitely. A clean exit must not be reported as a
 			// hook/command failure, so log and treat it as success (exit 0).
-			p.logger.Warn("[Process] Command exited cleanly but its output pipe stayed open past the wait delay (a child likely leaked stdout/stderr); continuing")
+			p.logger.Warn("Command exited cleanly but its output pipe stayed open past the wait delay (a child likely leaked stdout/stderr); continuing")
 
 			// The switch has decided this is a clean exit (process exited 0; only
 			// the post-exit pipe drain hit WaitDelay). Clear the stored result too:
@@ -401,9 +401,9 @@ func (p *Process) complete(waitResult error) error {
 // signal grace period, then terminates the process. It is called by the
 // Command.Cancel mechanism when the context for p.command is cancelled.
 func (p *Process) onContextCancel() error {
-	p.logger.Debug("[Process] Context done, terminating", "pid", p.pid())
+	p.logger.Debug("Context done, terminating", "pid", p.pid())
 	if err := p.Interrupt(); err != nil {
-		p.logger.Warn("[Process] Failed termination", "error", err)
+		p.logger.Warn("Failed termination", "error", err)
 	}
 
 	// We could almost use Command.WaitDelay to implement the signal grace
@@ -419,10 +419,10 @@ func (p *Process) onContextCancel() error {
 			// continue below
 		}
 
-		p.logger.Warn("[Process] Has not terminated in time, killing", "pid", p.pid(), "duration", p.conf.SignalGracePeriod)
+		p.logger.Warn("Has not terminated in time, killing", "pid", p.pid(), "duration", p.conf.SignalGracePeriod)
 		if err := p.Terminate(); err != nil {
 			// Oh Well, At Least We Tried™
-			p.logger.Error("[Process] error sending SIGKILL", "signal", "SIGKILL", "error", err)
+			p.logger.Error("error sending SIGKILL", "signal", "SIGKILL", "error", err)
 		}
 	}()
 
@@ -461,7 +461,7 @@ func (p *Process) Interrupt() error {
 	defer p.mu.Unlock()
 
 	if p.command == nil || p.command.Process == nil {
-		p.logger.Debug("[Process] No process to interrupt yet")
+		p.logger.Debug("No process to interrupt yet")
 		return nil
 	}
 
@@ -471,11 +471,11 @@ func (p *Process) Interrupt() error {
 	if err := p.interruptProcessGroup(); err != nil {
 		//  No process or process group can be found corresponding to that specified by pid.
 		if errors.Is(err, syscall.ESRCH) {
-			p.logger.Warn("[Process] Process has already exited", "pid", p.pid())
+			p.logger.Warn("Process has already exited", "pid", p.pid())
 			return nil
 		}
 
-		p.logger.Error("[Process] Failed to interrupt process", "pid", p.pid(), "error", err)
+		p.logger.Error("Failed to interrupt process", "pid", p.pid(), "error", err)
 
 		// Fallback to terminating if we get an error
 		return p.terminateProcessGroup()
@@ -494,7 +494,7 @@ func (p *Process) Terminate() error {
 	defer p.mu.Unlock()
 
 	if p.command == nil || p.command.Process == nil {
-		p.logger.Debug("[Process] No process to terminate yet")
+		p.logger.Debug("No process to terminate yet")
 		return nil
 	}
 

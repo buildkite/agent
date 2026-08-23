@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"math/rand/v2"
 	"time"
 
@@ -12,8 +13,9 @@ import (
 
 // runPingLoop runs the (classical) loop that pings Buildkite for work.
 func (a *AgentWorker) runPingLoop(ctx context.Context, bat *baton, outCh chan<- actionMessage) error {
-	a.logger.DebugContext(ctx, "[runPingLoop] Starting")
-	defer a.logger.DebugContext(ctx, "[runPingLoop] Exiting")
+	log := a.logger.With("component", "runPingLoop")
+	log.DebugContext(ctx, "Starting")
+	defer log.DebugContext(ctx, "Exiting")
 
 	// When this loop returns, close the channel to let the action handler loop
 	// stop listening for actions from it.
@@ -26,6 +28,7 @@ func (a *AgentWorker) runPingLoop(ctx context.Context, bat *baton, outCh chan<- 
 	pingInterval := time.Second * time.Duration(a.agent.PingInterval)
 	state := &pingLoopState{
 		AgentWorker:  a,
+		logger:       log,
 		bat:          bat,
 		outCh:        outCh,
 		pingInterval: pingInterval,
@@ -43,11 +46,11 @@ func (a *AgentWorker) runPingLoop(ctx context.Context, bat *baton, outCh chan<- 
 		close(state.skipWait)
 	}
 
-	a.logger.InfoContext(ctx, "Waiting for instructions...")
+	log.InfoContext(ctx, "Waiting for instructions...")
 
 	for {
 		startWait := time.Now()
-		a.logger.DebugContext(ctx, "[runPingLoop] Waiting for pingTicker")
+		log.DebugContext(ctx, "Waiting for pingTicker")
 		setStat("😴 Waiting until next ping interval tick")
 		select {
 		case <-state.skipWait:
@@ -55,17 +58,17 @@ func (a *AgentWorker) runPingLoop(ctx context.Context, bat *baton, outCh chan<- 
 		case <-state.pingTicker.C:
 			// continue below
 		case <-a.stop:
-			a.logger.DebugContext(ctx, "[runPingLoop] Stopping due to agent stop")
+			log.DebugContext(ctx, "Stopping due to agent stop")
 			return nil
 		case <-ctx.Done():
-			a.logger.DebugContext(ctx, "[runPingLoop] Stopping due to context cancel")
+			log.DebugContext(ctx, "Stopping due to context cancel")
 			return ctx.Err()
 		}
 
 		// Within the interval, wait a random amount of time to avoid
 		// spontaneous synchronisation across agents.
 		jitter := rand.N(pingInterval)
-		a.logger.DebugContext(ctx, "[runPingLoop] Waiting for jitter", "duration", jitter)
+		log.DebugContext(ctx, "Waiting for jitter", "duration", jitter)
 		setStat(fmt.Sprintf("🫨 Jittering for %v", jitter))
 		select {
 		case <-state.skipWait:
@@ -73,10 +76,10 @@ func (a *AgentWorker) runPingLoop(ctx context.Context, bat *baton, outCh chan<- 
 		case <-time.After(jitter):
 			// continue below
 		case <-a.stop:
-			a.logger.DebugContext(ctx, "[runPingLoop] Stopping due to agent stop")
+			log.DebugContext(ctx, "Stopping due to agent stop")
 			return nil
 		case <-ctx.Done():
-			a.logger.DebugContext(ctx, "[runPingLoop] Stopping due to context cancel")
+			log.DebugContext(ctx, "Stopping due to context cancel")
 			return ctx.Err()
 		}
 		pingWaitDurations.Observe(time.Since(startWait).Seconds())
@@ -94,6 +97,7 @@ func (a *AgentWorker) runPingLoop(ctx context.Context, bat *baton, outCh chan<- 
 // pingLoopState exists to pass parameters to pingLoopInner.
 type pingLoopState struct {
 	*AgentWorker
+	logger       *slog.Logger
 	bat          *baton
 	outCh        chan<- actionMessage
 	setStat      func(string)
@@ -110,25 +114,25 @@ func (a *pingLoopState) pingLoopInner(ctx context.Context) error {
 	// to prevent the streaming loop from resuming control until then,
 	// but we always release the baton, because the streaming loop is
 	// preferred.
-	a.logger.DebugContext(ctx, "[runPingLoop] Waiting for baton")
+	a.logger.DebugContext(ctx, "Waiting for baton")
 	select {
 	case <-a.bat.Acquire(): // the baton is ours!
 		a.bat.Acquired(actorPingLoop)
-		a.logger.DebugContext(ctx, "[runPingLoop] Acquired the baton")
+		a.logger.DebugContext(ctx, "Acquired the baton")
 		defer func() { // <- this is why the ping loop body is in a func
-			a.logger.DebugContext(ctx, "[runPingLoop] Releasing the baton")
+			a.logger.DebugContext(ctx, "Releasing the baton")
 			a.bat.Release(actorPingLoop)
 		}()
 
 	case <-a.stop:
-		a.logger.DebugContext(ctx, "[runPingLoop] Stopping due to agent stop")
+		a.logger.DebugContext(ctx, "Stopping due to agent stop")
 		return errInternalStop
 	case <-ctx.Done():
-		a.logger.DebugContext(ctx, "[runPingLoop] Stopping due to context cancel")
+		a.logger.DebugContext(ctx, "Stopping due to context cancel")
 		return ctx.Err()
 	}
 
-	a.logger.DebugContext(ctx, "[runPingLoop] Pinging buildkite for instructions")
+	a.logger.DebugContext(ctx, "Pinging buildkite for instructions")
 	a.setStat("📡 Pinging Buildkite for instructions")
 	pingsSent.Inc()
 	startPing := time.Now()
@@ -143,7 +147,7 @@ func (a *pingLoopState) pingLoopInner(ctx context.Context) error {
 	}
 	pingDurations.Observe(time.Since(startPing).Seconds())
 
-	a.logger.DebugContext(ctx, "[runPingLoop] Sending action")
+	a.logger.DebugContext(ctx, "Sending action")
 
 	// Send the action to the action loop
 	errCh := make(chan error)
@@ -156,10 +160,10 @@ func (a *pingLoopState) pingLoopInner(ctx context.Context) error {
 	case a.outCh <- msg:
 		// sent!
 	case <-a.stop:
-		a.logger.DebugContext(ctx, "[runPingLoop] Stopping due to agent stop")
+		a.logger.DebugContext(ctx, "Stopping due to agent stop")
 		return errInternalStop
 	case <-ctx.Done():
-		a.logger.DebugContext(ctx, "[runPingLoop] Stopping due to context cancel")
+		a.logger.DebugContext(ctx, "Stopping due to context cancel")
 		return ctx.Err()
 	}
 
@@ -193,10 +197,10 @@ func (a *pingLoopState) pingLoopInner(ctx context.Context) error {
 		}
 		return nil
 	case <-a.stop:
-		a.logger.DebugContext(ctx, "[runPingLoop] Stopping due to agent stop")
+		a.logger.DebugContext(ctx, "Stopping due to agent stop")
 		return errInternalStop
 	case <-ctx.Done():
-		a.logger.DebugContext(ctx, "[runPingLoop] Stopping due to context cancel")
+		a.logger.DebugContext(ctx, "Stopping due to context cancel")
 		return ctx.Err()
 	}
 }

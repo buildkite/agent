@@ -75,7 +75,7 @@ func NewLogStreamer(
 	conf LogStreamerConfig,
 ) *LogStreamer {
 	return &LogStreamer{
-		logger:   agentLogger,
+		logger:   agentLogger.With("component", "LogStreamer"),
 		conf:     conf,
 		callback: callback,
 		queue:    make(chan *api.Chunk, 1024),
@@ -170,15 +170,15 @@ func (ls *LogStreamer) Stop() {
 	close(ls.queue)
 	ls.processMutex.Unlock()
 
-	ls.logger.Debug("[LogStreamer] Waiting for workers to shut down")
+	ls.logger.Debug("Waiting for workers to shut down")
 	ls.workerWG.Wait()
 }
 
 // The actual log streamer worker
 func (ls *LogStreamer) worker(ctx context.Context, id int) {
-	ls.logger.DebugContext(ctx, "[LogStreamer] Worker is starting", "worker_id", id)
+	ls.logger.DebugContext(ctx, "Worker is starting", "worker_id", id)
 
-	defer ls.logger.DebugContext(ctx, "[LogStreamer] Worker has shutdown", "worker_id", id)
+	defer ls.logger.DebugContext(ctx, "Worker has shutdown", "worker_id", id)
 
 	ctx, setStat, done := status.AddSimpleItem(ctx, fmt.Sprintf("Log Streamer Worker %d", id))
 	defer done()

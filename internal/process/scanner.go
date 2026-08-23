@@ -12,7 +12,7 @@ type Scanner struct {
 
 func NewScanner(l *slog.Logger) *Scanner {
 	return &Scanner{
-		logger: l,
+		logger: l.With("component", "LineScanner"),
 	}
 }
 
@@ -20,7 +20,7 @@ func (s *Scanner) ScanLines(r io.Reader, f func(line string)) error {
 	reader := bufio.NewReader(r)
 	var appending []byte
 
-	s.logger.Debug("[LineScanner] Starting to read lines")
+	s.logger.Debug("Starting to read lines")
 
 	// Note that we do this manually rather than
 	// because we need to handle very long lines
@@ -29,7 +29,7 @@ func (s *Scanner) ScanLines(r io.Reader, f func(line string)) error {
 		line, isPrefix, err := reader.ReadLine()
 		if err != nil {
 			if err == io.EOF {
-				s.logger.Debug("[LineScanner] Encountered EOF")
+				s.logger.Debug("Encountered EOF")
 				break
 			}
 			return err
@@ -40,7 +40,7 @@ func (s *Scanner) ScanLines(r io.Reader, f func(line string)) error {
 		// until isPrefix is false (which means the long line
 		// has ended.
 		if isPrefix && appending == nil {
-			s.logger.Debug("[LineScanner] Line is too long to read, going to buffer it until it finishes")
+			s.logger.Debug("Line is too long to read, going to buffer it until it finishes")
 
 			// bufio.ReadLine returns a slice which is only valid until the next invocation
 			// since it points to its own internal buffer array. To accumulate the entire
@@ -58,7 +58,7 @@ func (s *Scanner) ScanLines(r io.Reader, f func(line string)) error {
 
 			// No more isPrefix! Line is finished!
 			if !isPrefix {
-				s.logger.Debug("[LineScanner] Finished buffering long line")
+				s.logger.Debug("Finished buffering long line")
 				line = appending
 
 				// Reset appending back to nil
@@ -72,6 +72,6 @@ func (s *Scanner) ScanLines(r io.Reader, f func(line string)) error {
 		f(string(line))
 	}
 
-	s.logger.Debug("[LineScanner] Finished")
+	s.logger.Debug("Finished")
 	return nil
 }
