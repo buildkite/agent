@@ -136,6 +136,7 @@ func TestAllFlagEnvs(t *testing.T) {
 		"BUILDKITE_AGENT_LOG_LEVEL",
 		"BUILDKITE_AGENT_NO_COLOR",
 		"BUILDKITE_AGENT_PROFILE",
+		"NO_COLOR",
 	}
 	if diff := cmp.Diff(got, want); diff != "" {
 		t.Errorf("allFlagEnvs(EnvDumpCommand) diff (-got +want):\n%s", diff)

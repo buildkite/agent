@@ -93,7 +93,7 @@ var (
 	NoColorFlag = &cli.BoolFlag{
 		Name:    "no-color",
 		Usage:   "Don't show colors in logging (default: false)",
-		Sources: cli.EnvVars("BUILDKITE_AGENT_NO_COLOR"),
+		Sources: cli.EnvVars("BUILDKITE_AGENT_NO_COLOR", "NO_COLOR"),
 	}
 
 	StrictSingleHooksFlag = &cli.BoolFlag{
