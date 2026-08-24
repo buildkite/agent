@@ -8,7 +8,6 @@ import (
 	"os"
 	"reflect"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/buildkite/agent/v4/api"
@@ -69,7 +68,7 @@ var (
 	LogLevelFlag = &cli.StringFlag{
 		Name:    "log-level",
 		Value:   "info",
-		Usage:   "Set the log level for the agent, making logging more or less verbose. Defaults to info. Allowed values are: debug, info, warn, error (fatal is an alias for error)",
+		Usage:   "Set the log level for the agent, making logging more or less verbose. Defaults to info. Allowed values are: debug, info, warn, error",
 		Sources: cli.EnvVars("BUILDKITE_AGENT_LOG_LEVEL"),
 	}
 
@@ -413,20 +412,9 @@ func CreateLogger(cfg any) *slog.Logger {
 		}
 	}
 
-	level := slog.LevelInfo
-	var levelErr error
-	if value, err := reflections.GetField(cfg, "LogLevel"); err == nil {
-		if levelString, ok := value.(string); ok {
-			level, levelErr = parseLogLevel(levelString)
-			if levelErr != nil {
-				level = slog.LevelInfo
-			}
-		} else {
-			levelErr = fmt.Errorf("log level %v (%T) couldn't be cast to string", value, value)
-		}
-	}
-	if debug, err := reflections.GetField(cfg, "Debug"); err == nil && debug == true {
-		level = slog.LevelDebug
+	level, levelErr := logLevelFromConfig(cfg)
+	if levelErr != nil {
+		level = slog.LevelInfo
 	}
 
 	var handler slog.Handler
@@ -484,19 +472,27 @@ func HandleGlobalFlags(ctx context.Context, l *slog.Logger, cfg any) (context.Co
 	return ctx, HandleProfileFlag(l, cfg)
 }
 
-func parseLogLevel(level string) (slog.Level, error) {
-	switch strings.ToLower(level) {
-	case "debug":
+func logLevelFromConfig(cfg any) (slog.Level, error) {
+	if debug, err := reflections.GetField(cfg, "Debug"); err == nil && debug == true {
 		return slog.LevelDebug, nil
-	case "info", "":
-		return slog.LevelInfo, nil
-	case "warn", "warning":
-		return slog.LevelWarn, nil
-	case "error", "fatal":
-		return slog.LevelError, nil
-	default:
-		return 0, fmt.Errorf("unknown log level %q", level)
 	}
+
+	val, err := reflections.GetField(cfg, "LogLevel")
+	if err != nil {
+		return 0, fmt.Errorf("getting log level from config struct: %w", err)
+	}
+
+	levelStr, ok := val.(string)
+	if !ok {
+		return 0, fmt.Errorf("couldn't convert LogLevel field into string")
+	}
+
+	var level slog.Level
+	if err := level.UnmarshalText([]byte(levelStr)); err != nil {
+		return 0, fmt.Errorf("parsing log level: %w", err)
+	}
+
+	return level, nil
 }
 
 func allFlagEnvs(c *cli.Command) iter.Seq[string] {

@@ -15,31 +15,64 @@ import (
 	"github.com/urfave/cli/v3"
 )
 
-func TestParseLogLevel(t *testing.T) {
-	tests := map[string]slog.Level{
-		"":        slog.LevelInfo,
-		"DEBUG":   slog.LevelDebug,
-		"info":    slog.LevelInfo,
-		"warn":    slog.LevelWarn,
-		"warning": slog.LevelWarn,
-		"error":   slog.LevelError,
-		"fatal":   slog.LevelError,
+type testConfig struct {
+	Debug     bool
+	LogLevel  string
+	LogFormat string
+	NoColor   bool
+}
+
+func TestLogLevelFromConfig(t *testing.T) {
+	tests := []struct {
+		name string
+		cfg  testConfig
+		want slog.Level
+	}{
+		{name: "info", cfg: testConfig{LogLevel: "info"}, want: slog.LevelInfo},
+		{name: "case insensitive", cfg: testConfig{LogLevel: "ERROR"}, want: slog.LevelError},
+		{name: "level offset", cfg: testConfig{LogLevel: "INFO+2"}, want: slog.LevelInfo + 2},
+		{name: "debug overrides log level", cfg: testConfig{Debug: true, LogLevel: "error"}, want: slog.LevelDebug},
+		{name: "debug bypasses invalid log level", cfg: testConfig{Debug: true, LogLevel: "invalid"}, want: slog.LevelDebug},
 	}
 
-	for input, want := range tests {
-		t.Run(input, func(t *testing.T) {
-			got, err := parseLogLevel(input)
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			got, err := logLevelFromConfig(&test.cfg)
 			if err != nil {
-				t.Fatalf("parseLogLevel(%q) error = %v", input, err)
+				t.Fatalf("logLevelFromConfig(%+v) error = %v", test.cfg, err)
 			}
-			if got != want {
-				t.Errorf("parseLogLevel(%q) = %v, want %v", input, got, want)
+			if got != test.want {
+				t.Errorf("logLevelFromConfig(%+v) = %v, want %v", test.cfg, got, test.want)
 			}
 		})
 	}
+}
 
-	if _, err := parseLogLevel("notice"); err == nil {
-		t.Error("parseLogLevel(\"notice\") error = nil, want non-nil")
+func TestLogLevelFromConfigErrors(t *testing.T) {
+	tests := []struct {
+		name    string
+		cfg     any
+		wantErr string
+	}{
+		{name: "invalid level", cfg: &struct {
+			LogLevel string
+		}{LogLevel: "invalid"}, wantErr: "parsing log level"},
+		{name: "non-string level", cfg: &struct {
+			LogLevel int
+		}{LogLevel: 1}, wantErr: "couldn't convert LogLevel field into string"},
+		{name: "missing level", cfg: &struct{}{}, wantErr: "getting log level from config struct"},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			_, err := logLevelFromConfig(test.cfg)
+			if err == nil {
+				t.Fatalf("logLevelFromConfig(%+v) error = nil, want error containing %q", test.cfg, test.wantErr)
+			}
+			if !strings.Contains(err.Error(), test.wantErr) {
+				t.Errorf("logLevelFromConfig(%+v) error = %q, want error containing %q", test.cfg, err, test.wantErr)
+			}
+		})
 	}
 }
 
@@ -59,7 +92,7 @@ func TestNoColorRequested(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			t.Setenv("NO_COLOR", test.environ)
-			cfg := &struct{ NoColor bool }{NoColor: test.flag}
+			cfg := &testConfig{NoColor: test.flag}
 			if got := noColorRequested(cfg); got != test.want {
 				t.Errorf("noColorRequested(%+v) = %t, want %t", cfg, got, test.want)
 			}
@@ -80,11 +113,7 @@ func TestCreateLoggerText(t *testing.T) {
 		_ = write.Close()
 	})
 
-	l := CreateLogger(&struct {
-		LogLevel  string
-		LogFormat string
-		NoColor   bool
-	}{NoColor: true})
+	l := CreateLogger(&testConfig{LogLevel: "info", NoColor: true})
 	os.Stderr = previousStderr
 	l.Debug("hidden")
 	l.Info("visible")
@@ -120,10 +149,7 @@ func TestCreateLoggerJSON(t *testing.T) {
 		_ = write.Close()
 	})
 
-	l := CreateLogger(&struct {
-		LogLevel  string
-		LogFormat string
-	}{LogLevel: "debug", LogFormat: "json"})
+	l := CreateLogger(&testConfig{LogLevel: "debug", LogFormat: "json"})
 	os.Stdout = previousStdout
 	l.Debug("visible", slog.Int("count", 2))
 	if err := write.Close(); err != nil {
