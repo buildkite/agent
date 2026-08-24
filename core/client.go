@@ -228,7 +228,7 @@ func (c *Client) FinishJob(ctx context.Context, job *api.Job, finishedAt time.Ti
 			// Non-retryable responses (e.g. 422, or 401 when job tokens are being used) mean the job has been cancelled or
 			// otherwise already finished. We should stop trying and go find more work to do.
 			if !api.BreakOnNonRetryable(retrier, response, err) {
-				c.Logger.WarnContext(ctx, "Failed to finish job; retrying", "error", err, "retry", retrier, "job_id", job.ID)
+				c.Logger.WarnContext(ctx, "Failed to finish job; retrying", "error", err, "retry", retrier.String(), "job_id", job.ID)
 			}
 		}
 
@@ -301,11 +301,11 @@ func (c *Client) StartJob(ctx context.Context, job *api.Job, startedAt time.Time
 		response, err := c.APIClient.StartJob(ctx, job)
 		if err != nil {
 			if response != nil && api.IsRetryableStatus(response) {
-				c.Logger.WarnContext(ctx, "Failed to start job; retrying", "error", err, "retry", rtr, "job_id", job.ID)
+				c.Logger.WarnContext(ctx, "Failed to start job; retrying", "error", err, "retry", rtr.String(), "job_id", job.ID)
 				return err
 			}
 			if api.IsRetryableError(err) {
-				c.Logger.WarnContext(ctx, "Failed to start job; retrying", "error", err, "retry", rtr, "job_id", job.ID)
+				c.Logger.WarnContext(ctx, "Failed to start job; retrying", "error", err, "retry", rtr.String(), "job_id", job.ID)
 				return err
 			}
 
@@ -344,7 +344,7 @@ func (c *Client) UploadChunk(ctx context.Context, jobID string, chunk *api.Chunk
 				retrier.Break()
 				return err
 			}
-			c.Logger.WarnContext(ctx, "Failed to upload chunk; retrying", "error", err, "retry", retrier, "job_id", jobID)
+			c.Logger.WarnContext(ctx, "Failed to upload chunk; retrying", "error", err, "retry", retrier.String(), "job_id", jobID)
 		}
 
 		return err
