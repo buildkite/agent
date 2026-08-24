@@ -107,7 +107,7 @@ var StepUpdateCommand = &cli.Command{
 			return err
 		}
 		if redactedValue := redact.String(cfg.Value, needles); redactedValue != cfg.Value {
-			l.Warn(fmt.Sprintf("New value for step %q attribute %q contained one or more secrets from environment variables that have been redacted. If this is deliberate, pass --redacted-vars='' or a list of patterns that does not match the variable containing the secret", cfg.StepOrKey, cfg.Attribute))
+			l.WarnContext(ctx, fmt.Sprintf("New value for step %q attribute %q contained one or more secrets from environment variables that have been redacted. If this is deliberate, pass --redacted-vars='' or a list of patterns that does not match the variable containing the secret", cfg.StepOrKey, cfg.Attribute))
 			cfg.Value = redactedValue
 		}
 

@@ -168,7 +168,7 @@ func saveWithClient(ctx context.Context, l *slog.Logger, c cacheOps, cacheIDs []
 
 					switch {
 					case result.CacheEntryCreated:
-						l.Info("Cache created",
+						l.InfoContext(ctx, "Cache created",
 							slog.String("cache_id", cacheID), slog.String("cache_key", result.Key),
 							slog.String("archive_size", humanize.Bytes(uint64(result.Archive.Size))),
 							slog.String("written_bytes", humanize.Bytes(uint64(result.Archive.WrittenBytes))),
@@ -177,7 +177,7 @@ func saveWithClient(ctx context.Context, l *slog.Logger, c cacheOps, cacheIDs []
 							slog.String("transfer_speed", fmt.Sprintf("%.2fMB/s", result.Transfer.TransferSpeed)),
 							slog.Int("part_count", result.Transfer.PartCount), slog.Int("concurrency", result.Transfer.Concurrency))
 					default:
-						l.Info("Cache already exists, not saving", slog.String("cache_id", cacheID), slog.String("cache_key", result.Key))
+						l.InfoContext(ctx, "Cache already exists, not saving", slog.String("cache_id", cacheID), slog.String("cache_key", result.Key))
 					}
 
 				case <-wctx.Done():

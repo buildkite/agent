@@ -156,7 +156,7 @@ func downloadWithRetry(ctx context.Context, log *slog.Logger, r *roko.Retrier, d
 		n, err := d.Download(ctx, destFile, in, opts...)
 		if err != nil {
 			if isPreconditionFailed(err) {
-				log.Warn("cache download hit 412 (concurrent ETag change), retrying",
+				log.WarnContext(ctx, "cache download hit 412 (concurrent ETag change), retrying",
 					"key", aws.ToString(in.Key), "retry", r.String())
 				return err // retryable
 			}

@@ -93,13 +93,13 @@ func ExtractFiles(ctx context.Context, log *slog.Logger, zipFile *os.File, zipFi
 
 		namespace, rest, ok := splitNamespace(file.Name)
 		if !ok {
-			log.Warn("archive entry has no namespace, skipping", "entry", file.Name)
+			log.WarnContext(ctx, "archive entry has no namespace, skipping", "entry", file.Name)
 			return discard(file.Name), nil
 		}
 
 		anchor, ok := manifest.Mappings[namespace]
 		if !ok {
-			log.Warn("archive entry namespace not in manifest, skipping", "entry", file.Name)
+			log.WarnContext(ctx, "archive entry namespace not in manifest, skipping", "entry", file.Name)
 			return discard(file.Name), nil
 		}
 

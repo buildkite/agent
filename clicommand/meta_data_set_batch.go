@@ -75,7 +75,7 @@ var MetaDataSetBatchCommand = &cli.Command{
 
 		for i := range items {
 			if redactedValue := redact.String(items[i].Value, needles); redactedValue != items[i].Value {
-				l.Warn(fmt.Sprintf("Meta-data value for key %q contained one or more secrets from environment variables that have been redacted. If this is deliberate, pass --redacted-vars='' or a list of patterns that does not match the variable containing the secret", items[i].Key))
+				l.WarnContext(ctx, fmt.Sprintf("Meta-data value for key %q contained one or more secrets from environment variables that have been redacted. If this is deliberate, pass --redacted-vars='' or a list of patterns that does not match the variable containing the secret", items[i].Key))
 				items[i].Value = redactedValue
 			}
 		}
