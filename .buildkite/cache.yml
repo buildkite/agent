@@ -95,15 +95,22 @@ caches:
       - ~/.gocache-target
 
   - name: acknowledgements
-    # The generated attributions file is a pure function of the dependency
-    # graph, build target, and pinned go-licenses version, so it is cached
-    # rather than regenerated for every target. go-licenses output varies by
-    # GOOS/GOARCH (see google/go-licenses#187), hence the target in the key --
-    # as the matrix labels rather than the normalised values, which
-    # over-partitions (arm and armhf get identical entries) but can never
-    # under-partition. Every key part is mandatory because reusing an
-    # attribution file from a different go.mod or generator version could
-    # produce incomplete or outdated acknowledgements.
+    # The generated attributions file varies with the transitive import graph,
+    # build target, and pinned go-licenses version. We deliberately use go.mod
+    # as a proxy for the import graph instead of hashing every Go source file.
+    # This has a known limitation: a source-only change can make a package from
+    # an already-listed module newly reachable without invalidating the cache.
+    # That only produces incomplete attributions if the package also introduces
+    # a licence or notice not already represented in the cached file. We accept
+    # this narrow risk because new modules and version changes update go.mod,
+    # while a subpackage of an existing module requiring distinct attribution
+    # is expected to be very rare. Hashing every Go source would substantially
+    # reduce reuse for the common case.
+    #
+    # go-licenses output also varies by GOOS/GOARCH (see google/go-licenses#187),
+    # hence the target in the key -- as the matrix labels rather than the
+    # normalised values, which over-partitions (arm and armhf get identical
+    # entries) but can never under-partition. Every key part is mandatory.
     cache_key:
       - agent-acknowledgements-v1
       - { env: TARGET_GOOS }
