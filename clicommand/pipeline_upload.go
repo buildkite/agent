@@ -71,7 +71,7 @@ Example:
     $ buildkite-agent pipeline upload my-custom-pipeline.yml
     $ ./script/dynamic_step_generator | buildkite-agent pipeline upload`
 
-const ifChangedSkippedMsg = "if_changed matched no unexcluded changed files in this build"
+const ifChangedSkippedMsg = "No changed files matched if_changed."
 
 const defaultGitDiffBase = "origin/main"
 
