@@ -1,0 +1,155 @@
+# Cache v2 definitions for the Agent's own CI.
+#
+# Every key ends at the dependency checksum and carries no per-commit part, so
+# an unchanged dependency graph resolves to an exact key. That matters on save
+# as much as on restore: `cache save` skips building and uploading an archive
+# when the exact key already exists, whereas a key containing the commit can
+# never match and so re-uploads on every job of every build. The trade is that
+# an entry is sealed until dependencies change, leaving packages that drift in
+# between to be recompiled -- correct, via Go's content-addressed build cache,
+# but not free.
+#
+# fallback_limit marks where matching may stop: parts after it are optional on
+# restore, so a dependency bump still lands on a compatible entry.
+#
+# One producer per key, and the producer must leave behind what the consumers
+# need. Exact keys make saves free but remove accumulation: once an entry
+# exists it is frozen until the checksum changes, so a key with two
+# differently-shaped producers keeps whichever one happened to win the first
+# build after a dependency bump, and no later build can add to it. Jobs that
+# compile this module but leave different artifacts behind therefore get
+# separate keys rather than sharing one.
+#
+# Checksums use go.mod, not go.sum, which would be redundant here.
+caches:
+  - name: gomodcache
+    # Prefer an exact go.mod match, while allowing a compatible cache from the
+    # same OS, architecture, and Go version as a fallback.
+    cache_key:
+      - agent-go-modules-v1
+      - { agent: os }
+      - { agent: arch }
+      - { env: AGENT_GO_VERSION, fallback_limit: true }
+      - { checksum: go.mod }
+    target_paths:
+      - ~/.gomodcache
+
+  - name: gocache
+    # Owned by shard 0 of each platform's test job, which is also the only
+    # consumer: a test run leaves compiled test binaries behind, which nothing
+    # else here produces. Lint has its own key for the same reason -- see
+    # lint_gocache.
+    cache_key:
+      - agent-go-build-v2
+      - { agent: os }
+      - { agent: arch }
+      - { env: AGENT_GO_VERSION, fallback_limit: true }
+      - { checksum: go.mod }
+    target_paths:
+      - ~/.gocache
+
+  - name: gocache_race
+    # Race objects compile to different build hashes. Go would keep them apart
+    # within one directory, but a separate cache gives the race job its own key
+    # and therefore its own single writer.
+    cache_key:
+      - agent-go-build-race-v2
+      - { agent: os }
+      - { agent: arch }
+      - { env: AGENT_GO_VERSION, fallback_limit: true }
+      - { checksum: go.mod }
+    target_paths:
+      - ~/.gocache_race
+
+  - name: lint_gocache
+    # Owned and consumed by the lint step alone. It runs custom analyzers whose
+    # results are cached under their own action IDs, and nothing else in the
+    # pipeline runs them, so a cache written by any other job sends lint back to
+    # analysing the module from scratch. Only ever built on one platform, but
+    # keyed by os/arch anyway so it cannot be shared across queues by accident.
+    cache_key:
+      - agent-go-build-lint-v1
+      - { agent: os }
+      - { agent: arch }
+      - { env: AGENT_GO_VERSION, fallback_limit: true }
+      - { checksum: go.mod }
+    target_paths:
+      - ~/.gocache-lint
+
+  - name: target_gocache
+    # Cross-compiled objects are reusable only for the same target and build
+    # mode, so the target is the key. The agent's own os/arch belongs there
+    # too: the cache also holds host-compiled tool artifacts, which two
+    # builder architectures sharing one key would thrash.
+    cache_key:
+      - agent-go-target-build-v2
+      - { agent: os }
+      - { agent: arch }
+      - { env: TARGET_GOOS }
+      - { env: TARGET_GOARCH }
+      - { env: TARGET_GOARM }
+      - { env: TARGET_BUILD_MODE }
+      - { env: TARGET_GO_VERSION, fallback_limit: true }
+      - { checksum: go.mod }
+    target_paths:
+      - ~/.gocache-target
+
+  - name: acknowledgements
+    # The generated attributions file is a pure function of the dependency
+    # graph, build target, and pinned go-licenses version, so it is cached
+    # rather than regenerated for every target. go-licenses output varies by
+    # GOOS/GOARCH (see google/go-licenses#187), hence the target in the key --
+    # as the matrix labels rather than the normalised values, which
+    # over-partitions (arm and armhf get identical entries) but can never
+    # under-partition. Every key part is mandatory because reusing an
+    # attribution file from a different go.mod or generator version could
+    # produce incomplete or outdated acknowledgements.
+    cache_key:
+      - agent-acknowledgements-v1
+      - { env: TARGET_GOOS }
+      - { env: TARGET_GOARCH }
+      - { env: TARGET_GO_VERSION }
+      - { checksum: .buildkite/go-licenses-version }
+      - { checksum: go.mod }
+    target_paths:
+      - clicommand/ACKNOWLEDGEMENTS.md.gz
+
+  - name: e2e_gomodcache
+    # The triggered E2E pipeline has one job, so it can safely own both its
+    # module cache and its compiled test cache without competing writers. Both
+    # are separate from the main pipeline's caches so the job transfers only
+    # its own dependencies.
+    cache_key:
+      - agent-e2e-go-modules-v1
+      - { agent: os }
+      - { agent: arch }
+      - { env: E2E_GO_VERSION, fallback_limit: true }
+      - { checksum: go.mod }
+    target_paths:
+      - ~/.e2e-gomodcache
+
+  - name: e2e_gocache
+    cache_key:
+      - agent-e2e-go-build-v2
+      - { agent: os }
+      - { agent: arch }
+      - { env: E2E_GO_VERSION, fallback_limit: true }
+      - { checksum: go.mod }
+    target_paths:
+      - ~/.e2e-gocache
+
+  - name: protobuf_tools
+    # Cache the installed protobuf tools as well as the Go caches used to build
+    # them. Any toolchain or tool version change gets a fresh entry.
+    cache_key:
+      - protobuf-tools-v1
+      - { agent: os }
+      - { agent: arch }
+      - { env: PROTOBUF_GO_VERSION }
+      - { env: PROTOBUF_BUF_VERSION }
+      - { env: PROTOBUF_PROTOC_GEN_GO_VERSION }
+      - { env: PROTOBUF_PROTOC_GEN_CONNECT_GO_VERSION }
+    target_paths:
+      - ~/.protobuf-tools/bin
+      - ~/.protobuf-tools/gocache
+      - ~/.protobuf-tools/gomodcache
