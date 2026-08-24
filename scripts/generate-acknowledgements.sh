@@ -32,7 +32,13 @@ export TEMPDIR="$(mktemp -d /tmp/generate-acknowledgements.XXXXXX)"
 export TEMPFILE="$(mktemp /tmp/acknowledgements.XXXXXX)"
 trap "rm -fr ${TEMPDIR} ${TEMPFILE}" EXIT
 
-"${GO_LICENSES}" save . --save_path="${TEMPDIR}" --force
+# Namespace's Buf-generated Go modules do not currently include license files.
+# Track their request to publish them at:
+# https://buildkite-corp.slack.com/archives/C0BBGCKJ2HJ/p1787538095689349
+"${GO_LICENSES}" save . \
+	--ignore buf.build/gen/go/namespace/cloud \
+	--save_path="${TEMPDIR}" \
+	--force
 
 # Build acknowledgements file
 cat > "${TEMPFILE}" <<EOF
