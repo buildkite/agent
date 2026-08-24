@@ -79,7 +79,7 @@ var MetaDataKeysCommand = &cli.Command{
 				return keys, err
 			}
 			if err != nil {
-				l.WarnContext(ctx, "Failed to get meta-data keys; retrying", "error", err, "retry", r)
+				l.WarnContext(ctx, "Failed to get meta-data keys; retrying", "error", err, "retry", r.String())
 			}
 			return keys, err
 		})

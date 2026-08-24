@@ -81,7 +81,7 @@ func pause(ctx context.Context, cfg AgentPauseConfig, l *slog.Logger) error {
 			return err
 		}
 		if err != nil {
-			l.WarnContext(ctx, "Agent pause retry", "error", err, "retry", r)
+			l.WarnContext(ctx, "Agent pause retry", "error", err, "retry", r.String())
 			return err
 		}
 

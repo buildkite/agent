@@ -104,7 +104,7 @@ func cancelStep(ctx context.Context, cfg StepCancelConfig, l *slog.Logger) error
 			return err
 		}
 		if err != nil {
-			l.WarnContext(ctx, "Step cancellation retry", "error", err, "retry", r)
+			l.WarnContext(ctx, "Step cancellation retry", "error", err, "retry", r.String())
 			return err
 		}
 

@@ -92,7 +92,7 @@ var StepGetCommand = &cli.Command{
 				return stepExportResponse, err
 			}
 			if err != nil {
-				l.WarnContext(ctx, "Failed to get step; retrying", "error", err, "retry", r)
+				l.WarnContext(ctx, "Failed to get step; retrying", "error", err, "retry", r.String())
 			}
 			return stepExportResponse, err
 		})

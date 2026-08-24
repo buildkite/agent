@@ -61,7 +61,7 @@ func resume(ctx context.Context, cfg AgentResumeConfig, l *slog.Logger) error {
 			return err
 		}
 		if err != nil {
-			l.WarnContext(ctx, "Agent resume retry", "error", err, "retry", r)
+			l.WarnContext(ctx, "Agent resume retry", "error", err, "retry", r.String())
 			return err
 		}
 

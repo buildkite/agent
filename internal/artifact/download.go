@@ -77,7 +77,7 @@ func (d Download) Start(ctx context.Context) error {
 		roko.WithStrategy(roko.Constant(5*time.Second)),
 	).DoWithContext(ctx, func(r *roko.Retrier) error {
 		if err := d.try(ctx); err != nil {
-			d.logger.WarnContext(ctx, "Artifact download failed; retrying", "url", d.conf.URL, "error", err, "retry", r)
+			d.logger.WarnContext(ctx, "Artifact download failed; retrying", "url", d.conf.URL, "error", err, "retry", r.String())
 			return err
 		}
 		return nil

@@ -86,7 +86,7 @@ func (c *Client) AcquireJob(ctx context.Context, jobID string) (*api.Job, error)
 		)
 		if err != nil {
 			if resp == nil {
-				c.Logger.WarnContext(timeoutCtx, "Job acquisition failed; retrying", "error", err, "retry", r)
+				c.Logger.WarnContext(timeoutCtx, "Job acquisition failed; retrying", "error", err, "retry", r.String())
 				return nil, err
 			}
 
@@ -123,7 +123,7 @@ func (c *Client) AcquireJob(ctx context.Context, jobID string) (*api.Job, error)
 				return nil, err
 
 			default:
-				c.Logger.WarnContext(timeoutCtx, "Job acquisition failed; retrying", "error", err, "retry", r)
+				c.Logger.WarnContext(timeoutCtx, "Job acquisition failed; retrying", "error", err, "retry", r.String())
 				return nil, err
 			}
 		}
@@ -135,7 +135,7 @@ func (c *Client) AcquireJob(ctx context.Context, jobID string) (*api.Job, error)
 func handleRetriableJobAcquisitionError(ctx context.Context, warning string, err error, resp *api.Response, r *roko.Retrier, logger *slog.Logger) {
 	// log the warning and the retrier state at the end of this function. if we logged the error before the call to
 	// `r.SetNextInterval`, the `Retrying in ...` message wouldn't include the server-set Retry-After, if it was set
-	defer func(r *roko.Retrier) { logger.WarnContext(ctx, warning, "error", err, "retry", r) }(r)
+	defer func(r *roko.Retrier) { logger.WarnContext(ctx, warning, "error", err, "retry", r.String()) }(r)
 
 	if resp == nil {
 		return
@@ -168,7 +168,7 @@ func (c *Client) Connect(ctx context.Context) error {
 	).DoWithContext(ctx, func(r *roko.Retrier) error {
 		_, err := c.APIClient.Connect(ctx)
 		if err != nil {
-			c.Logger.WarnContext(ctx, "Failed to connect to Buildkite; retrying", "error", err, "retry", r)
+			c.Logger.WarnContext(ctx, "Failed to connect to Buildkite; retrying", "error", err, "retry", r.String())
 		}
 		return err
 	})
@@ -185,7 +185,7 @@ func (c *Client) Disconnect(ctx context.Context) error {
 		roko.WithSleepFunc(c.RetrySleepFunc),
 	).DoWithContext(ctx, func(r *roko.Retrier) error {
 		if _, err := c.APIClient.Disconnect(ctx); err != nil {
-			c.Logger.WarnContext(ctx, "Failed to disconnect from Buildkite; retrying", "error", err, "retry", r)
+			c.Logger.WarnContext(ctx, "Failed to disconnect from Buildkite; retrying", "error", err, "retry", r.String())
 			return err
 		}
 		return nil
@@ -264,7 +264,7 @@ func (c *Client) Register(ctx context.Context, req api.AgentRegisterRequest) (*a
 		registered, resp, err := c.APIClient.Register(ctx, &req)
 		if err != nil {
 			if !api.BreakOnNonRetryable(r, resp, err) {
-				c.Logger.WarnContext(ctx, "Failed to register agent; retrying", "error", err, "retry", r)
+				c.Logger.WarnContext(ctx, "Failed to register agent; retrying", "error", err, "retry", r.String())
 			}
 			return registered, err
 		}

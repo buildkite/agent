@@ -688,6 +688,27 @@ func TestAlwaysHidePromptOverridesDebug(t *testing.T) {
 	}
 }
 
+func TestDebugIncludesProcessDiagnostics(t *testing.T) {
+	t.Parallel()
+
+	output := &process.Buffer{}
+	sh, err := shell.New(
+		shell.WithDebug(true),
+		shell.WithLogger(shell.NewWriterLogger(output, false, nil)),
+		shell.WithStdout(output),
+	)
+	if err != nil {
+		t.Fatalf("shell.New() error = %v", err)
+	}
+
+	if err := sh.Command("echo", "hi").Run(t.Context(), shell.ShowPrompt(false)); err != nil {
+		t.Fatalf(`sh.Command("echo", "hi").Run(ctx) = %v`, err)
+	}
+	if got := string(output.ReadAndTruncate()); !strings.Contains(got, "level=DEBUG") || !strings.Contains(got, "Running without a PTY") {
+		t.Errorf("debug output = %q, want process diagnostics", got)
+	}
+}
+
 func TestRound(t *testing.T) {
 	t.Parallel()
 

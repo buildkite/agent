@@ -43,6 +43,30 @@ func TestParseLogLevel(t *testing.T) {
 	}
 }
 
+func TestNoColorRequested(t *testing.T) {
+	tests := []struct {
+		name    string
+		flag    bool
+		environ string
+		want    bool
+	}{
+		{name: "not requested"},
+		{name: "agent flag", flag: true, want: true},
+		{name: "NO_COLOR arbitrary value", environ: "yes", want: true},
+		{name: "NO_COLOR false is still present", environ: "false", want: true},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Setenv("NO_COLOR", test.environ)
+			cfg := &struct{ NoColor bool }{NoColor: test.flag}
+			if got := noColorRequested(cfg); got != test.want {
+				t.Errorf("noColorRequested(%+v) = %t, want %t", cfg, got, test.want)
+			}
+		})
+	}
+}
+
 func TestCreateLoggerText(t *testing.T) {
 	read, write, err := os.Pipe()
 	if err != nil {
@@ -136,10 +160,19 @@ func TestAllFlagEnvs(t *testing.T) {
 		"BUILDKITE_AGENT_LOG_LEVEL",
 		"BUILDKITE_AGENT_NO_COLOR",
 		"BUILDKITE_AGENT_PROFILE",
-		"NO_COLOR",
 	}
 	if diff := cmp.Diff(got, want); diff != "" {
 		t.Errorf("allFlagEnvs(EnvDumpCommand) diff (-got +want):\n%s", diff)
+	}
+}
+
+func TestUnsetConfigFromEnvironmentPreservesNoColor(t *testing.T) {
+	t.Setenv("NO_COLOR", "yes")
+	if err := UnsetConfigFromEnvironment(EnvDumpCommand); err != nil {
+		t.Fatalf("UnsetConfigFromEnvironment(EnvDumpCommand) error = %v", err)
+	}
+	if got, want := os.Getenv("NO_COLOR"), "yes"; got != want {
+		t.Errorf("NO_COLOR = %q, want %q", got, want)
 	}
 }
 

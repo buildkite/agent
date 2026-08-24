@@ -105,7 +105,7 @@ func (a *BatchCreator) Batches(ctx context.Context) iter.Seq2[[]*api.Artifact, e
 					r.Break()
 				}
 				if err != nil {
-					a.logger.WarnContext(ctx, "Artifact creation failed; retrying", "error", err, "retry", r)
+					a.logger.WarnContext(ctx, "Artifact creation failed; retrying", "error", err, "retry", r.String())
 				}
 
 				// after four attempts (0, 1, 2, 3)...

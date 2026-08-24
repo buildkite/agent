@@ -166,7 +166,7 @@ var OIDCRequestTokenCommand = &cli.Command{
 				return nil, err
 			}
 			if err != nil {
-				l.WarnContext(ctx, "Failed to request OIDC token; retrying", "error", err, "retry", r)
+				l.WarnContext(ctx, "Failed to request OIDC token; retrying", "error", err, "retry", r.String())
 			}
 			return token, err
 		})

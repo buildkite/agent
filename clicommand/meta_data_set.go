@@ -115,7 +115,7 @@ var MetaDataSetCommand = &cli.Command{
 				return err
 			}
 			if err != nil {
-				l.WarnContext(ctx, "Failed to set meta-data; retrying", "error", err, "retry", r)
+				l.WarnContext(ctx, "Failed to set meta-data; retrying", "error", err, "retry", r.String())
 				return err
 			}
 			return nil

@@ -18,6 +18,7 @@ import (
 	"github.com/buildkite/agent/v4/internal/job"
 	"github.com/buildkite/agent/v4/version"
 	"github.com/lmittmann/tint"
+	"github.com/mattn/go-colorable"
 	"github.com/oleiade/reflections"
 	"github.com/urfave/cli/v3"
 	"go.opentelemetry.io/otel"
@@ -93,7 +94,7 @@ var (
 	NoColorFlag = &cli.BoolFlag{
 		Name:    "no-color",
 		Usage:   "Don't show colors in logging (default: false)",
-		Sources: cli.EnvVars("BUILDKITE_AGENT_NO_COLOR", "NO_COLOR"),
+		Sources: cli.EnvVars("BUILDKITE_AGENT_NO_COLOR"),
 	}
 
 	StrictSingleHooksFlag = &cli.BoolFlag{
@@ -399,6 +400,11 @@ func apiFlags() []cli.Flag {
 	}
 }
 
+func noColorRequested(cfg any) bool {
+	noColor, _ := reflections.GetField(cfg, "NoColor")
+	return noColor == true || os.Getenv("NO_COLOR") != ""
+}
+
 func CreateLogger(cfg any) *slog.Logger {
 	logFormat := "text"
 	if value, err := reflections.GetField(cfg, "LogFormat"); err == nil {
@@ -426,11 +432,10 @@ func CreateLogger(cfg any) *slog.Logger {
 	var handler slog.Handler
 	switch logFormat {
 	case "text", "":
-		noColor, _ := reflections.GetField(cfg, "NoColor")
-		handler = tint.NewTextHandler(os.Stderr, &tint.Options{
+		handler = tint.NewTextHandler(colorable.NewColorable(os.Stderr), &tint.Options{
 			Level:      level,
 			TimeFormat: time.DateTime + "Z07:00",
-			NoColor:    noColor == true || !term.IsTerminal(int(os.Stderr.Fd())),
+			NoColor:    noColorRequested(cfg) || !term.IsTerminal(int(os.Stderr.Fd())),
 		})
 	case "json":
 		handler = slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: level})

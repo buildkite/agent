@@ -80,7 +80,7 @@ var MetaDataExistsCommand = &cli.Command{
 				return nil, err
 			}
 			if err != nil {
-				l.WarnContext(ctx, "Failed to check whether meta-data exists; retrying", "error", err, "retry", r)
+				l.WarnContext(ctx, "Failed to check whether meta-data exists; retrying", "error", err, "retry", r.String())
 				return nil, err
 			}
 			return exists, nil

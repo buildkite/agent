@@ -184,7 +184,7 @@ func annotate(ctx context.Context, cfg AnnotateConfig, l *slog.Logger) error {
 			return err
 		}
 		if err != nil {
-			l.WarnContext(ctx, "Annotation retry", "error", err, "retry", r)
+			l.WarnContext(ctx, "Annotation retry", "error", err, "retry", r.String())
 			return err
 		}
 		return nil

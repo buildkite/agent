@@ -631,7 +631,7 @@ func (s *Shell) executeCommand(ctx context.Context, cmdCfg process.Config, stdou
 		}
 
 		// This should respect the log format we set for the agent
-		processLogger = slog.New(slog.NewTextHandler(cmdCfg.Stderr, nil))
+		processLogger = slog.New(slog.NewTextHandler(cmdCfg.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug}))
 	}
 
 	if s.commandLog != nil {

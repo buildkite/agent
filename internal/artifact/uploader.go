@@ -763,7 +763,7 @@ func (a *artifactUploadWorker) doWorkUnits(ctx context.Context, unitsCh <-chan w
 			partETag, err := roko.DoFunc(tracker.ctx, r, func(r *roko.Retrier) (*api.ArtifactPartETag, error) {
 				etag, err := workUnit.DoWork(tracker.ctx)
 				if err != nil {
-					a.logger.WarnContext(tracker.ctx, "Artifact upload failed; retrying", "error", err, "retry", r)
+					a.logger.WarnContext(tracker.ctx, "Artifact upload failed; retrying", "error", err, "retry", r.String())
 				}
 				return etag, err
 			})
@@ -894,7 +894,7 @@ func (a *artifactUploadWorker) updateStates(ctx context.Context) error {
 
 		_, err := a.apiClient.UpdateArtifacts(ctxTimeout, a.conf.JobID, statesToUpload)
 		if err != nil {
-			a.logger.WarnContext(ctx, "Artifact state update failed; retrying", "error", err, "retry", r)
+			a.logger.WarnContext(ctx, "Artifact state update failed; retrying", "error", err, "retry", r.String())
 		}
 
 		// after four attempts (0, 1, 2, 3)...

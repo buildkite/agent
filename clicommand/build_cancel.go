@@ -69,7 +69,7 @@ func cancelBuild(ctx context.Context, cfg BuildCancelConfig, l *slog.Logger) err
 			return err
 		}
 		if err != nil {
-			l.WarnContext(ctx, "Build cancellation retry", "error", err, "retry", r)
+			l.WarnContext(ctx, "Build cancellation retry", "error", err, "retry", r.String())
 			return err
 		}
 

@@ -73,7 +73,7 @@ func stop(ctx context.Context, cfg AgentStopConfig, l *slog.Logger) error {
 			return err
 		}
 		if err != nil {
-			l.WarnContext(ctx, "Agent stop retry", "error", err, "retry", r)
+			l.WarnContext(ctx, "Agent stop retry", "error", err, "retry", r.String())
 			return err
 		}
 
