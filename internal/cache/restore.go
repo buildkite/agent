@@ -407,7 +407,7 @@ func (c *client) downloadCache(ctx context.Context, retrieveResp api.CacheEntryR
 	)
 
 	// Create blob store
-	blobStore, err := store.NewBlobStore(ctx, retrieveResp.Store, bucketURL)
+	blobStore, err := store.NewBlobStore(ctx, retrieveResp.Store, bucketURL, nil)
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, "failed to create blob store")
