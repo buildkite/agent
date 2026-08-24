@@ -476,7 +476,11 @@ func TestNscStore_Integration(t *testing.T) {
 	}
 
 	holder := NewNscClient()
-	defer holder.Close()
+	t.Cleanup(func() {
+		if err := holder.Close(); err != nil {
+			t.Errorf("close Namespace client: %v", err)
+		}
+	})
 	store, err := NewNscStore("nsc://main", holder)
 	if err != nil {
 		t.Fatalf("NewNscStore: %v", err)

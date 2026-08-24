@@ -119,7 +119,7 @@ type NscStore struct {
 // NewNscStore creates a Namespace Storage API-backed store.
 func NewNscStore(bucketURL string, client *NscClient) (*NscStore, error) {
 	if client == nil {
-		return nil, fmt.Errorf("Namespace client is required for nsc:// cache stores")
+		return nil, fmt.Errorf("namespace client is required for nsc:// cache stores")
 	}
 	namespace, err := parseNscNamespace(bucketURL)
 	if err != nil {
@@ -152,7 +152,7 @@ func (n *NscStore) Upload(ctx context.Context, filePath, key string) (*TransferI
 	if err != nil {
 		return nil, fmt.Errorf("open upload file: %w", err)
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	fileInfo, err := file.Stat()
 	if err != nil {
