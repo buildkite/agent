@@ -12,10 +12,13 @@ import (
 	"regexp"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/buildkite/agent/v4/internal/cache/internal/trace"
 	"go.opentelemetry.io/otel/attribute"
+	"namespacelabs.dev/integrations/api/storage"
+	"namespacelabs.dev/integrations/auth"
 )
 
 // nscScheme is the URL scheme that routes an agent-managed cache store to NSC.
@@ -28,6 +31,64 @@ const nscScheme = "nsc"
 // expiry back out to this duration from now, keeping hot caches alive while
 // letting cold ones expire.
 const nscDefaultExpiry = "24h"
+
+type nscAPIClient interface {
+	Close() error
+}
+
+type nscClientFactory func(context.Context) (nscAPIClient, error)
+
+// NscClient lazily initializes one Namespace Storage API client for use by all
+// NSC cache transfers in a cache command.
+type NscClient struct {
+	initialize nscClientFactory
+	initOnce   sync.Once
+	client     nscAPIClient
+	initErr    error
+	closeOnce  sync.Once
+	closeErr   error
+}
+
+// NewNscClient creates a lazy Namespace Storage API client holder.
+func NewNscClient() *NscClient {
+	return newNscClient(newNscAPIClient)
+}
+
+func newNscClient(initialize nscClientFactory) *NscClient {
+	return &NscClient{initialize: initialize}
+}
+
+func newNscAPIClient(ctx context.Context) (nscAPIClient, error) {
+	token, err := auth.LoadDefaults()
+	if err != nil {
+		return nil, fmt.Errorf("load Namespace authentication: %w", err)
+	}
+
+	client, err := storage.NewClient(ctx, token)
+	if err != nil {
+		return nil, fmt.Errorf("create Namespace Storage API client: %w", err)
+	}
+	return client, nil
+}
+
+func (c *NscClient) get(ctx context.Context) (nscAPIClient, error) {
+	c.initOnce.Do(func() {
+		c.client, c.initErr = c.initialize(ctx)
+	})
+	return c.client, c.initErr
+}
+
+// Close closes the initialized Namespace Storage API client. It is a no-op if
+// no NSC cache transfer initialized the client.
+func (c *NscClient) Close() error {
+	if c.client == nil {
+		return nil
+	}
+	c.closeOnce.Do(func() {
+		c.closeErr = c.client.Close()
+	})
+	return c.closeErr
+}
 
 // commandRunner executes an external command. It is a seam so tests can assert
 // the arguments passed to the nsc CLI without invoking the real binary.

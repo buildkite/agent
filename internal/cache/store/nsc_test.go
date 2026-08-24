@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -14,6 +16,114 @@ import (
 func TestNscStore_Interface(t *testing.T) {
 	// This test ensures that NscStore properly implements the Blob interface
 	var _ Blob = (*NscStore)(nil)
+}
+
+type fakeNscAPIClient struct {
+	closeCalls atomic.Int32
+}
+
+func (c *fakeNscAPIClient) Close() error {
+	c.closeCalls.Add(1)
+	return nil
+}
+
+func TestNscClient_IsLazy(t *testing.T) {
+	var initializeCalls atomic.Int32
+	client := newNscClient(func(context.Context) (nscAPIClient, error) {
+		initializeCalls.Add(1)
+		return &fakeNscAPIClient{}, nil
+	})
+
+	if got := initializeCalls.Load(); got != 0 {
+		t.Fatalf("initialization calls after construction = %d, want 0", got)
+	}
+	if err := client.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+	if got := initializeCalls.Load(); got != 0 {
+		t.Fatalf("initialization calls after closing unused client = %d, want 0", got)
+	}
+}
+
+func TestNscClient_ConcurrentInitialization(t *testing.T) {
+	var initializeCalls atomic.Int32
+	want := &fakeNscAPIClient{}
+	client := newNscClient(func(context.Context) (nscAPIClient, error) {
+		initializeCalls.Add(1)
+		return want, nil
+	})
+
+	const callers = 32
+	results := make(chan nscAPIClient, callers)
+	errs := make(chan error, callers)
+	var wg sync.WaitGroup
+	for range callers {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			got, err := client.get(t.Context())
+			results <- got
+			errs <- err
+		}()
+	}
+	wg.Wait()
+	close(results)
+	close(errs)
+
+	for err := range errs {
+		if err != nil {
+			t.Errorf("get: %v", err)
+		}
+	}
+	for got := range results {
+		if got != want {
+			t.Errorf("get returned %p, want %p", got, want)
+		}
+	}
+	if got := initializeCalls.Load(); got != 1 {
+		t.Errorf("initialization calls = %d, want 1", got)
+	}
+}
+
+func TestNscClient_InitializationError(t *testing.T) {
+	var initializeCalls atomic.Int32
+	wantErr := errors.New("initialization failed")
+	client := newNscClient(func(context.Context) (nscAPIClient, error) {
+		initializeCalls.Add(1)
+		return nil, wantErr
+	})
+
+	for range 2 {
+		got, err := client.get(t.Context())
+		if got != nil {
+			t.Errorf("get returned client %v, want nil", got)
+		}
+		if !errors.Is(err, wantErr) {
+			t.Errorf("get error = %v, want %v", err, wantErr)
+		}
+	}
+	if got := initializeCalls.Load(); got != 1 {
+		t.Errorf("initialization calls = %d, want 1", got)
+	}
+}
+
+func TestNscClient_CloseOnce(t *testing.T) {
+	want := &fakeNscAPIClient{}
+	client := newNscClient(func(context.Context) (nscAPIClient, error) {
+		return want, nil
+	})
+	if _, err := client.get(t.Context()); err != nil {
+		t.Fatalf("get: %v", err)
+	}
+
+	for range 2 {
+		if err := client.Close(); err != nil {
+			t.Fatalf("Close: %v", err)
+		}
+	}
+	if got := want.closeCalls.Load(); got != 1 {
+		t.Errorf("close calls = %d, want 1", got)
+	}
 }
 
 func TestValidateFilePath(t *testing.T) {
