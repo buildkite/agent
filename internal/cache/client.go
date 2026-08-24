@@ -15,6 +15,7 @@ import (
 
 	"github.com/buildkite/agent/v4/api"
 	"github.com/buildkite/agent/v4/internal/cache/configuration"
+	"github.com/buildkite/agent/v4/internal/cache/store"
 	"github.com/buildkite/agent/v4/logger"
 )
 
@@ -47,9 +48,9 @@ var (
 
 // client is a configured handle for cache Save and Restore operations.
 //
-// It is not a network connection; it just bundles the API client, storage
-// bucket and the expanded, validated cache definitions used by every call.
-// Safe for concurrent use; honours context cancellation.
+// It bundles the API client, storage bucket, expanded cache definitions, and a
+// lazily initialized Namespace connection. Safe for concurrent use; honours
+// context cancellation.
 type client struct {
 	api        cacheAPI
 	bucketURL  string
@@ -57,6 +58,7 @@ type client struct {
 	platform   string
 	registry   string
 	caches     []configuration.Cache
+	nscClient  *store.NscClient
 	onProgress ProgressCallback
 }
 
@@ -100,6 +102,7 @@ func newClient(l logger.Logger, apiClient cacheAPI, cfg Config) (*client, []stri
 		platform:  fmt.Sprintf("%s/%s", runtime.GOOS, runtime.GOARCH),
 		registry:  registry,
 		caches:    expanded,
+		nscClient: store.NewNscClient(),
 		onProgress: func(cacheID, stage, message string, _, _ int) {
 			l.WithFields(
 				logger.StringField("cache_id", cacheID),
@@ -114,6 +117,10 @@ func newClient(l logger.Logger, apiClient cacheAPI, cfg Config) (*client, []stri
 		return nil, nil, err
 	}
 	return c, names, nil
+}
+
+func (c *client) close() error {
+	return c.nscClient.Close()
 }
 
 // resolveCacheNames returns requested if non-empty (after validating every name

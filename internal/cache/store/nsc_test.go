@@ -159,6 +159,26 @@ func TestNscClient_CloseOnce(t *testing.T) {
 	}
 }
 
+func TestNscClient_CloseError(t *testing.T) {
+	wantErr := errors.New("close failed")
+	want := &fakeNscAPIClient{close: func() error { return wantErr }}
+	client := newNscClient(func(context.Context) (nscAPIClient, error) {
+		return want, nil
+	})
+	if _, err := client.get(t.Context()); err != nil {
+		t.Fatalf("get: %v", err)
+	}
+
+	for range 2 {
+		if err := client.Close(); !errors.Is(err, wantErr) {
+			t.Fatalf("Close error = %v, want %v", err, wantErr)
+		}
+	}
+	if got := want.closeCalls.Load(); got != 1 {
+		t.Errorf("close calls = %d, want 1", got)
+	}
+}
+
 func TestParseNscNamespace(t *testing.T) {
 	tests := []struct {
 		name      string

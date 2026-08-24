@@ -277,7 +277,7 @@ func (c *client) Save(ctx context.Context, cacheID string) (SaveResult, error) {
 	c.callProgress(cacheID, "uploading", "Uploading cache archive", 0, int(archiveInfo.Size))
 
 	// Upload archive
-	blobStore, err := store.NewBlobStore(ctx, registryResp.Store, c.bucketURL, nil)
+	blobStore, err := store.NewBlobStore(ctx, registryResp.Store, c.bucketURL, c.nscClient)
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, "failed to create blob store")
