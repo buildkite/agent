@@ -34,25 +34,27 @@ type nscAPIClient interface {
 	Close() error
 }
 
-type namespaceStorageClient struct {
+// Namespace Storage API documentation:
+// https://buf.build/namespace/cloud/docs/main:namespace.cloud.storage.v1beta
+type nscStorageClient struct {
 	client storage.Client
 }
 
-func (c *namespaceStorageClient) UploadArtifact(ctx context.Context, namespace, path string, r io.Reader, opts storage.UploadOpts) error {
-	_, err := storage.UploadArtifactWithOpts(ctx, c.client, namespace, path, r, opts)
+func (c *nscStorageClient) UploadArtifact(ctx context.Context, nsc, path string, r io.Reader, opts storage.UploadOpts) error {
+	_, err := storage.UploadArtifactWithOpts(ctx, c.client, nsc, path, r, opts)
 	return err
 }
 
-func (c *namespaceStorageClient) ResolveArtifactStream(ctx context.Context, namespace, path string) (io.ReadCloser, error) {
-	return storage.ResolveArtifactStream(ctx, c.client, namespace, path)
+func (c *nscStorageClient) ResolveArtifactStream(ctx context.Context, nsc, path string) (io.ReadCloser, error) {
+	return storage.ResolveArtifactStream(ctx, c.client, nsc, path)
 }
 
-func (c *namespaceStorageClient) ExtendArtifact(ctx context.Context, req *storagev1beta.ExtendArtifactRequest) error {
+func (c *nscStorageClient) ExtendArtifact(ctx context.Context, req *storagev1beta.ExtendArtifactRequest) error {
 	_, err := c.client.Artifacts.ExtendArtifact(ctx, req)
 	return err
 }
 
-func (c *namespaceStorageClient) Close() error {
+func (c *nscStorageClient) Close() error {
 	return c.client.Close()
 }
 
@@ -88,7 +90,7 @@ func newNscAPIClient(ctx context.Context) (nscAPIClient, error) {
 	if err != nil {
 		return nil, fmt.Errorf("create Namespace Storage API client: %w", err)
 	}
-	return &namespaceStorageClient{client: client}, nil
+	return &nscStorageClient{client: client}, nil
 }
 
 func (c *NscClient) get(ctx context.Context) (nscAPIClient, error) {
@@ -112,8 +114,8 @@ func (c *NscClient) Close() error {
 
 // NscStore implements Blob using the Namespace Storage API.
 type NscStore struct {
-	namespace string
-	client    *NscClient
+	nsc    string
+	client *NscClient
 }
 
 // NewNscStore creates a Namespace Storage API-backed store.
@@ -121,11 +123,11 @@ func NewNscStore(bucketURL string, client *NscClient) (*NscStore, error) {
 	if client == nil {
 		return nil, fmt.Errorf("namespace client is required for nsc:// cache stores")
 	}
-	namespace, err := parseNscNamespace(bucketURL)
+	nsc, err := parseNscNamespace(bucketURL)
 	if err != nil {
 		return nil, err
 	}
-	return &NscStore{namespace: namespace, client: client}, nil
+	return &NscStore{nsc: nsc, client: client}, nil
 }
 
 // parseNscNamespace extracts the namespace from an nsc://<namespace> cache store
@@ -166,7 +168,7 @@ func (n *NscStore) Upload(ctx context.Context, filePath, key string) (*TransferI
 
 	start := time.Now()
 	expiresAt := start.Add(nscDefaultExpiry)
-	if err := client.UploadArtifact(ctx, n.namespace, key, file, storage.UploadOpts{
+	if err := client.UploadArtifact(ctx, n.nsc, key, file, storage.UploadOpts{
 		ExpiresAt: &expiresAt,
 		Length:    fileInfo.Size(),
 	}); err != nil {
@@ -201,7 +203,7 @@ func (n *NscStore) Download(ctx context.Context, key, filePath string) (*Transfe
 	}
 
 	start := time.Now()
-	body, err := client.ResolveArtifactStream(ctx, n.namespace, key)
+	body, err := client.ResolveArtifactStream(ctx, n.nsc, key)
 	if status.Code(err) == codes.NotFound {
 		return nil, fmt.Errorf("%w: nsc key %s: %w", ErrBlobNotFound, key, err)
 	}
@@ -251,7 +253,7 @@ func (n *NscStore) Download(ctx context.Context, key, filePath string) (*Transfe
 func (n *NscStore) refreshExpiry(ctx context.Context, client nscAPIClient, key string) {
 	err := client.ExtendArtifact(ctx, &storagev1beta.ExtendArtifactRequest{
 		Path:          key,
-		Namespace:     n.namespace,
+		Namespace:     n.nsc,
 		EnsureMinimum: durationpb.New(nscDefaultExpiry),
 	})
 	if err != nil {

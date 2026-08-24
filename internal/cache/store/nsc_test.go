@@ -31,18 +31,18 @@ type fakeNscAPIClient struct {
 	closeCalls atomic.Int32
 }
 
-func (c *fakeNscAPIClient) UploadArtifact(ctx context.Context, namespace, path string, r io.Reader, opts storage.UploadOpts) error {
+func (c *fakeNscAPIClient) UploadArtifact(ctx context.Context, nsc, path string, r io.Reader, opts storage.UploadOpts) error {
 	if c.upload == nil {
 		return nil
 	}
-	return c.upload(ctx, namespace, path, r, opts)
+	return c.upload(ctx, nsc, path, r, opts)
 }
 
-func (c *fakeNscAPIClient) ResolveArtifactStream(ctx context.Context, namespace, path string) (io.ReadCloser, error) {
+func (c *fakeNscAPIClient) ResolveArtifactStream(ctx context.Context, nsc, path string) (io.ReadCloser, error) {
 	if c.resolve == nil {
 		return io.NopCloser(strings.NewReader("")), nil
 	}
-	return c.resolve(ctx, namespace, path)
+	return c.resolve(ctx, nsc, path)
 }
 
 func (c *fakeNscAPIClient) ExtendArtifact(ctx context.Context, req *storagev1beta.ExtendArtifactRequest) error {
@@ -181,12 +181,12 @@ func TestNscClient_CloseError(t *testing.T) {
 
 func TestParseNscNamespace(t *testing.T) {
 	tests := []struct {
-		name      string
-		url       string
-		namespace string
-		wantErr   bool
+		name    string
+		url     string
+		nsc     string
+		wantErr bool
 	}{
-		{name: "nsc with namespace", url: "nsc://my-namespace", namespace: "my-namespace"},
+		{name: "nsc with namespace", url: "nsc://my-namespace", nsc: "my-namespace"},
 		{name: "not nsc", url: "s3://my-bucket", wantErr: true},
 		{name: "nsc without namespace", url: "nsc://", wantErr: true},
 		{name: "invalid url", url: "nsc://host:notaport", wantErr: true},
@@ -194,12 +194,12 @@ func TestParseNscNamespace(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			namespace, err := parseNscNamespace(tt.url)
+			nsc, err := parseNscNamespace(tt.url)
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("parseNscNamespace(%q) err = %v, wantErr %v", tt.url, err, tt.wantErr)
 			}
-			if namespace != tt.namespace {
-				t.Errorf("parseNscNamespace(%q) namespace = %q, want %q", tt.url, namespace, tt.namespace)
+			if nsc != tt.nsc {
+				t.Errorf("parseNscNamespace(%q) namespace = %q, want %q", tt.url, nsc, tt.nsc)
 			}
 		})
 	}
@@ -224,11 +224,11 @@ func TestNscStore_Upload(t *testing.T) {
 		t.Fatalf("WriteFile: %v", err)
 	}
 
-	var gotNamespace, gotPath string
+	var gotNsc, gotPath string
 	var gotContent []byte
 	var gotOpts storage.UploadOpts
-	api := &fakeNscAPIClient{upload: func(_ context.Context, namespace, path string, r io.Reader, opts storage.UploadOpts) error {
-		gotNamespace = namespace
+	api := &fakeNscAPIClient{upload: func(_ context.Context, nsc, path string, r io.Reader, opts storage.UploadOpts) error {
+		gotNsc = nsc
 		gotPath = path
 		gotOpts = opts
 		var err error
@@ -243,8 +243,8 @@ func TestNscStore_Upload(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Upload: %v", err)
 	}
-	if gotNamespace != "test-namespace" {
-		t.Errorf("namespace = %q, want test-namespace", gotNamespace)
+	if gotNsc != "test-namespace" {
+		t.Errorf("namespace = %q, want test-namespace", gotNsc)
 	}
 	if gotPath != "artifact-key" {
 		t.Errorf("path = %q, want artifact-key", gotPath)
@@ -319,11 +319,11 @@ func (r errorReader) Read([]byte) (int, error) {
 
 func TestNscStore_Download(t *testing.T) {
 	body := &trackingReadCloser{Reader: strings.NewReader("downloaded content")}
-	var gotNamespace, gotPath string
+	var gotNsc, gotPath string
 	var extendReq *storagev1beta.ExtendArtifactRequest
 	api := &fakeNscAPIClient{
-		resolve: func(_ context.Context, namespace, path string) (io.ReadCloser, error) {
-			gotNamespace = namespace
+		resolve: func(_ context.Context, nsc, path string) (io.ReadCloser, error) {
+			gotNsc = nsc
 			gotPath = path
 			return body, nil
 		},
@@ -339,8 +339,8 @@ func TestNscStore_Download(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Download: %v", err)
 	}
-	if gotNamespace != "test-namespace" || gotPath != "artifact-key" {
-		t.Errorf("ResolveArtifactStream(%q, %q), want (%q, %q)", gotNamespace, gotPath, "test-namespace", "artifact-key")
+	if gotNsc != "test-namespace" || gotPath != "artifact-key" {
+		t.Errorf("ResolveArtifactStream(%q, %q), want (%q, %q)", gotNsc, gotPath, "test-namespace", "artifact-key")
 	}
 	if !body.closed {
 		t.Error("download body was not closed")
@@ -481,8 +481,8 @@ func TestNewBlobStore_NscScheme(t *testing.T) {
 	if !ok {
 		t.Fatalf("NewBlobStore returned %T, want *NscStore", blob)
 	}
-	if nsc.namespace != "my-namespace" {
-		t.Errorf("namespace = %q, want my-namespace", nsc.namespace)
+	if nsc.nsc != "my-namespace" {
+		t.Errorf("namespace = %q, want my-namespace", nsc.nsc)
 	}
 
 	if _, err := NewBlobStore(t.Context(), AgentManaged, "nsc://my-namespace", nil); err == nil {
