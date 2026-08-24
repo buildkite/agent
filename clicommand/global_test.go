@@ -6,6 +6,7 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
@@ -76,6 +77,9 @@ func TestCreateLoggerText(t *testing.T) {
 	}
 	if strings.Contains(string(output), "\x1b[") {
 		t.Errorf("text log output = %q, want no colour escape codes", output)
+	}
+	if matched := regexp.MustCompile(`^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(?:Z|[+-]\d{2}:\d{2}) `).Match(output); !matched {
+		t.Errorf("text log output = %q, want date, time, and UTC offset", output)
 	}
 }
 

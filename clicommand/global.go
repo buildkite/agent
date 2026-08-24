@@ -429,7 +429,7 @@ func CreateLogger(cfg any) *slog.Logger {
 		noColor, _ := reflections.GetField(cfg, "NoColor")
 		handler = tint.NewTextHandler(os.Stderr, &tint.Options{
 			Level:      level,
-			TimeFormat: "2006-01-02 15:04:05",
+			TimeFormat: time.DateTime + "Z07:00",
 			NoColor:    noColor == true || !term.IsTerminal(int(os.Stderr.Fd())),
 		})
 	case "json":
