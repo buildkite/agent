@@ -224,6 +224,21 @@ func (cfg *AgentStartConfig) checkoutOverrideMode() (env.CheckoutOverrideMode, e
 	return resolveCheckoutOverrideMode(cfg.CheckoutOverrideMode, !cfg.NoCommandEval)
 }
 
+func (cfg *AgentStartConfig) acquireJobFromToken() error {
+	jobUUID, isJobAcquisitionToken, err := jobAcquisitionTokenJobUUID(cfg.Token)
+	if err != nil {
+		return fmt.Errorf("invalid job acquisition token: %w", err)
+	}
+	if !isJobAcquisitionToken {
+		return nil
+	}
+	if cfg.AcquireJob != "" && cfg.AcquireJob != jobUUID {
+		return fmt.Errorf("--acquire-job %q does not match job %q in job acquisition token", cfg.AcquireJob, jobUUID)
+	}
+	cfg.AcquireJob = jobUUID
+	return nil
+}
+
 func (asc AgentStartConfig) Features(ctx context.Context) []string {
 	if asc.NoFeatureReporting {
 		return []string{}
@@ -782,6 +797,10 @@ var AgentStartCommand = &cli.Command{
 				return fmt.Errorf("failed to resolve registration token %q: %w", cfg.Token, err)
 			}
 			cfg.Token = token
+		}
+
+		if err := cfg.acquireJobFromToken(); err != nil {
+			return err
 		}
 
 		// used later to force the shutdown of the agent

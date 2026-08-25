@@ -1,11 +1,15 @@
 package clicommand
 
 import (
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
 	"strconv"
 	"strings"
+
+	"github.com/google/uuid"
 )
 
 // The agent registration token is a long-lived secret, so we try to avoid
@@ -26,7 +30,10 @@ import (
 // fd://N instead (see reexecToScrubRegistrationToken), which replaces the
 // exec-time cmdline and environ with token-free versions.
 
-const registrationTokenEnvVar = "BUILDKITE_AGENT_TOKEN"
+const (
+	registrationTokenEnvVar   = "BUILDKITE_AGENT_TOKEN"
+	jobAcquisitionTokenPrefix = "bkjat_"
+)
 
 // maxTokenFileSize is a sanity limit when reading tokens from files or file
 // descriptors.
@@ -74,6 +81,37 @@ func resolveRegistrationToken(token string) (string, error) {
 	default:
 		return token, nil
 	}
+}
+
+// jobAcquisitionTokenJobUUID extracts the job UUID from a Job Acquisition
+// Token. The token's signature is validated by Buildkite during registration;
+// decoding it here only selects the agent's acquisition mode.
+func jobAcquisitionTokenJobUUID(token string) (string, bool, error) {
+	if !strings.HasPrefix(token, jobAcquisitionTokenPrefix) {
+		return "", false, nil
+	}
+
+	parts := strings.Split(strings.TrimPrefix(token, jobAcquisitionTokenPrefix), ".")
+	if len(parts) != 3 || parts[0] == "" || parts[1] == "" || parts[2] == "" {
+		return "", true, fmt.Errorf("expected a three-part JWT")
+	}
+
+	payload, err := base64.RawURLEncoding.DecodeString(parts[1])
+	if err != nil {
+		return "", true, fmt.Errorf("couldn't decode JWT payload: %w", err)
+	}
+
+	var claims struct {
+		Subject string `json:"sub"`
+	}
+	if err := json.Unmarshal(payload, &claims); err != nil {
+		return "", true, fmt.Errorf("couldn't decode JWT claims: %w", err)
+	}
+	if _, err := uuid.Parse(claims.Subject); err != nil {
+		return "", true, fmt.Errorf("invalid job UUID in JWT subject: %w", err)
+	}
+
+	return claims.Subject, true, nil
 }
 
 // registrationTokenFromArgs scans command line arguments for the registration

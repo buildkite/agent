@@ -1,6 +1,7 @@
 package clicommand
 
 import (
+	"encoding/base64"
 	"errors"
 	"os"
 	"path/filepath"
@@ -23,6 +24,46 @@ func TestAgentStartFeatures_OpenTelemetryTracing(t *testing.T) {
 	features := AgentStartConfig{OpenTelemetryTracing: true}.Features(t.Context())
 	if !slices.Contains(features, "opentelemetry-tracing") {
 		t.Fatalf("Features() = %v, want opentelemetry-tracing", features)
+	}
+}
+
+func TestAgentStartAcquireJobFromToken(t *testing.T) {
+	t.Parallel()
+
+	const jobUUID = "0198dfd7-b7a3-723f-a647-1f54f491f334"
+	jobAcquisitionToken := func(subject string) string {
+		payload := base64.RawURLEncoding.EncodeToString([]byte(`{"sub":"` + subject + `"}`))
+		return jobAcquisitionTokenPrefix + "e30." + payload + ".signature"
+	}
+
+	tests := []struct {
+		name       string
+		token      string
+		acquireJob string
+		want       string
+		wantErr    bool
+	}{
+		{name: "registration token is unchanged", token: "bkt_llamas"},
+		{name: "JAT sets acquire job", token: jobAcquisitionToken(jobUUID), want: jobUUID},
+		{name: "matching explicit acquire job", token: jobAcquisitionToken(jobUUID), acquireJob: jobUUID, want: jobUUID},
+		{name: "conflicting explicit acquire job", token: jobAcquisitionToken(jobUUID), acquireJob: "0198dfd7-b7a3-723f-a647-1f54f491f335", want: "0198dfd7-b7a3-723f-a647-1f54f491f335", wantErr: true},
+		{name: "malformed JAT", token: jobAcquisitionTokenPrefix + "not-a-jwt", wantErr: true},
+		{name: "JAT with invalid subject", token: jobAcquisitionToken("not-a-uuid"), wantErr: true},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			cfg := AgentStartConfig{Token: test.token, AcquireJob: test.acquireJob}
+			err := cfg.acquireJobFromToken()
+			if (err != nil) != test.wantErr {
+				t.Fatalf("acquireJobFromToken() error = %v, want error %t", err, test.wantErr)
+			}
+			if got := cfg.AcquireJob; got != test.want {
+				t.Errorf("AcquireJob = %q, want %q", got, test.want)
+			}
+		})
 	}
 }
 
