@@ -317,6 +317,18 @@ func (r errorReader) Read([]byte) (int, error) {
 	return 0, r.err
 }
 
+type partialErrorReader struct {
+	sent bool
+}
+
+func (r *partialErrorReader) Read(p []byte) (int, error) {
+	if r.sent {
+		return 0, io.ErrUnexpectedEOF
+	}
+	r.sent = true
+	return copy(p, "partial"), nil
+}
+
 func TestNscStore_Download(t *testing.T) {
 	body := &trackingReadCloser{Reader: strings.NewReader("downloaded content")}
 	var gotNsc, gotPath string
@@ -367,7 +379,9 @@ func TestNscStore_Download(t *testing.T) {
 }
 
 func TestNscStore_DownloadNotFound(t *testing.T) {
+	resolveCalls := 0
 	api := &fakeNscAPIClient{resolve: func(context.Context, string, string) (io.ReadCloser, error) {
+		resolveCalls++
 		return nil, status.Error(codes.NotFound, "artifact expired")
 	}}
 	store := newTestNscStore(t, api)
@@ -376,10 +390,13 @@ func TestNscStore_DownloadNotFound(t *testing.T) {
 	if !errors.Is(err, ErrBlobNotFound) {
 		t.Fatalf("Download error = %v, want ErrBlobNotFound", err)
 	}
+	if resolveCalls != 1 {
+		t.Errorf("resolve calls = %d, want 1", resolveCalls)
+	}
 }
 
 func TestNscStore_DownloadResolveFailure(t *testing.T) {
-	wantErr := status.Error(codes.Unavailable, "unavailable")
+	wantErr := status.Error(codes.PermissionDenied, "permission denied")
 	api := &fakeNscAPIClient{resolve: func(context.Context, string, string) (io.ReadCloser, error) {
 		return nil, wantErr
 	}}
@@ -391,6 +408,26 @@ func TestNscStore_DownloadResolveFailure(t *testing.T) {
 	}
 	if errors.Is(err, ErrBlobNotFound) {
 		t.Fatalf("Download error = %v, should not be ErrBlobNotFound", err)
+	}
+}
+
+func TestNscStore_DownloadRetriesTransientResolveFailure(t *testing.T) {
+	resolveCalls := 0
+	api := &fakeNscAPIClient{resolve: func(context.Context, string, string) (io.ReadCloser, error) {
+		resolveCalls++
+		if resolveCalls == 1 {
+			return nil, status.Error(codes.Unavailable, "unavailable")
+		}
+		return io.NopCloser(strings.NewReader("complete")), nil
+	}}
+	store := newTestNscStore(t, api)
+	dest := filepath.Join(t.TempDir(), "dest")
+
+	if _, err := store.Download(t.Context(), "key", dest); err != nil {
+		t.Fatalf("Download: %v", err)
+	}
+	if resolveCalls != 2 {
+		t.Errorf("resolve calls = %d, want 2", resolveCalls)
 	}
 }
 
@@ -423,6 +460,38 @@ func TestNscStore_DownloadClosesBodyWhenCopyFails(t *testing.T) {
 	}
 	if !body.closed {
 		t.Error("download body was not closed")
+	}
+}
+
+func TestNscStore_DownloadRetriesCopyFailureAndTruncatesDestination(t *testing.T) {
+	firstBody := &trackingReadCloser{Reader: &partialErrorReader{}}
+	secondBody := &trackingReadCloser{Reader: strings.NewReader("complete")}
+	resolveCalls := 0
+	api := &fakeNscAPIClient{resolve: func(context.Context, string, string) (io.ReadCloser, error) {
+		resolveCalls++
+		if resolveCalls == 1 {
+			return firstBody, nil
+		}
+		return secondBody, nil
+	}}
+	store := newTestNscStore(t, api)
+	dest := filepath.Join(t.TempDir(), "dest")
+
+	if _, err := store.Download(t.Context(), "key", dest); err != nil {
+		t.Fatalf("Download: %v", err)
+	}
+	if resolveCalls != 2 {
+		t.Errorf("resolve calls = %d, want 2", resolveCalls)
+	}
+	if !firstBody.closed || !secondBody.closed {
+		t.Errorf("body closure = first:%t second:%t, want both closed", firstBody.closed, secondBody.closed)
+	}
+	content, err := os.ReadFile(dest)
+	if err != nil {
+		t.Fatalf("ReadFile: %v", err)
+	}
+	if got := string(content); got != "complete" {
+		t.Errorf("downloaded content = %q, want complete", got)
 	}
 }
 

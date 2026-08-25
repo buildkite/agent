@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -11,7 +12,9 @@ import (
 	"time"
 
 	storagev1beta "buf.build/gen/go/namespace/cloud/protocolbuffers/go/proto/namespace/cloud/storage/v1beta"
+	"github.com/buildkite/agent/v4/api"
 	"github.com/buildkite/agent/v4/internal/cache/internal/trace"
+	"github.com/buildkite/roko"
 	"go.opentelemetry.io/otel/attribute"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -23,9 +26,14 @@ import (
 // nscScheme is the URL scheme that routes an agent-managed cache store to NSC.
 const nscScheme = "nsc"
 
-// nscDefaultExpiry is the artifact lifetime used both when uploading a cache
-// entry and when refreshing it on access.
-const nscDefaultExpiry = 24 * time.Hour
+const (
+	// nscDefaultExpiry is the artifact lifetime used both when uploading a cache
+	// entry and when refreshing it on access.
+	nscDefaultExpiry = 24 * time.Hour
+
+	// Match the retry allowance of the NSC CLI downloader this implementation replaces.
+	nscDownloadAttempts = 10
+)
 
 type nscAPIClient interface {
 	UploadArtifact(context.Context, string, string, io.Reader, storage.UploadOpts) error
@@ -203,30 +211,26 @@ func (n *NscStore) Download(ctx context.Context, key, filePath string) (*Transfe
 	}
 
 	start := time.Now()
-	body, err := client.ResolveArtifactStream(ctx, n.nsc, key)
-	if status.Code(err) == codes.NotFound {
-		return nil, fmt.Errorf("%w: nsc key %s: %w", ErrBlobNotFound, key, err)
-	}
+	var bytesTransferred int64
+	err = roko.NewRetrier(
+		roko.WithMaxAttempts(nscDownloadAttempts),
+		roko.WithStrategy(roko.ExponentialSubsecond(200*time.Millisecond)),
+		roko.WithJitterRange(0, 250*time.Millisecond),
+	).DoWithContext(ctx, func(r *roko.Retrier) error {
+		var err error
+		bytesTransferred, err = n.downloadOnce(ctx, client, key, filePath)
+		if err == nil {
+			return nil
+		}
+		if errors.Is(err, ErrBlobNotFound) || !isRetryableNscDownloadError(err) {
+			r.Break()
+			return err
+		}
+		slog.Warn("NSC cache download failed, retrying", "key", key, "error", err, "retrier", r.String())
+		return err
+	})
 	if err != nil {
-		return nil, fmt.Errorf("resolve Namespace artifact %q: %w", key, err)
-	}
-
-	dest, err := os.Create(filePath)
-	if err != nil {
-		_ = body.Close()
-		return nil, fmt.Errorf("create download file: %w", err)
-	}
-
-	bytesTransferred, copyErr := io.Copy(dest, body)
-	destCloseErr := dest.Close()
-	bodyCloseErr := body.Close()
-	switch {
-	case copyErr != nil:
-		return nil, fmt.Errorf("download Namespace artifact %q: %w", key, copyErr)
-	case destCloseErr != nil:
-		return nil, fmt.Errorf("close download file: %w", destCloseErr)
-	case bodyCloseErr != nil:
-		return nil, fmt.Errorf("close Namespace artifact stream %q: %w", key, bodyCloseErr)
+		return nil, err
 	}
 
 	duration := time.Since(start)
@@ -246,6 +250,45 @@ func (n *NscStore) Download(ctx context.Context, key, filePath string) (*Transfe
 		RequestID:        "", // The Namespace Storage API does not expose request IDs.
 		Duration:         duration,
 	}, nil
+}
+
+func (n *NscStore) downloadOnce(ctx context.Context, client nscAPIClient, key, filePath string) (int64, error) {
+	body, err := client.ResolveArtifactStream(ctx, n.nsc, key)
+	if status.Code(err) == codes.NotFound {
+		return 0, fmt.Errorf("%w: nsc key %s: %w", ErrBlobNotFound, key, err)
+	}
+	if err != nil {
+		return 0, fmt.Errorf("resolve Namespace artifact %q: %w", key, err)
+	}
+
+	dest, err := os.Create(filePath)
+	if err != nil {
+		_ = body.Close()
+		return 0, fmt.Errorf("create download file: %w", err)
+	}
+
+	bytesTransferred, copyErr := io.Copy(dest, body)
+	destCloseErr := dest.Close()
+	bodyCloseErr := body.Close()
+	switch {
+	case copyErr != nil:
+		return 0, fmt.Errorf("download Namespace artifact %q: %w", key, copyErr)
+	case destCloseErr != nil:
+		return 0, fmt.Errorf("close download file: %w", destCloseErr)
+	case bodyCloseErr != nil:
+		return 0, fmt.Errorf("close Namespace artifact stream %q: %w", key, bodyCloseErr)
+	default:
+		return bytesTransferred, nil
+	}
+}
+
+func isRetryableNscDownloadError(err error) bool {
+	switch status.Code(err) {
+	case codes.Aborted, codes.DeadlineExceeded, codes.Internal, codes.ResourceExhausted, codes.Unavailable:
+		return true
+	default:
+		return api.IsRetryableError(err)
+	}
 }
 
 // refreshExpiry best-effort ensures the artifact has at least 24 hours until
