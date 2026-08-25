@@ -240,6 +240,25 @@ steps:
 
   - group: ":hammer_and_wrench: Binary builds"
     steps:
+      # E2E only needs this artifact, so build it separately rather than
+      # waiting for every release target in the matrix below.
+      - name: ":linux: Build linux amd64 binary"
+        command: ".buildkite/steps/build-binary.sh linux amd64"
+        key: build-linux-amd64-binary
+        depends_on:
+          # don't wait for slower windows tests
+          - test-linux-amd64
+          - test-linux-arm64
+        artifact_paths: "pkg/*"
+        plugins:
+          - docker-compose#v4.14.0:
+              config: .buildkite/docker-compose.yml
+              cli-version: 2
+              run: agent
+          - generate-provenance-attestation#v1.1.0:
+              artifacts: "pkg/*"
+              attestation_name: "buildkite-agent-linux-amd64.build-attestation.json"
+
       - name: ":{{matrix.os}}: Build {{matrix.os}} {{matrix.arch}} binary"
         command: ".buildkite/steps/build-binary.sh {{matrix.os}} {{matrix.arch}}"
         key: build-binary
@@ -272,6 +291,9 @@ steps:
             - with: { os: darwin, arch: "386" }
               skip: "macOS no longer supports x86 binaries"
 
+            - with: { os: linux, arch: amd64 }
+              skip: "built separately for critical-path consumers"
+
             - with: { os: dragonflybsd, arch: amd64 }
 
             - with: { os: linux, arch: arm }
@@ -291,7 +313,7 @@ steps:
 
   - label: ":end::two::end: E2E Testing"
     key: e2e-tests
-    depends_on: build-binary
+    depends_on: build-linux-amd64-binary
     trigger: agent-e2e-tests
     async: false
     build:
@@ -305,12 +327,14 @@ steps:
 
   - label: ":bathtub: Check version string is clean"
     key: check-version-string
-    depends_on: build-binary
+    depends_on:
+      - build-binary
+      - build-linux-amd64-binary
     command: .buildkite/steps/check-version-string.sh
 
   - name: ":technologist: Test bk cli + Agent cli"
     key: test-bk-cli
-    depends_on: build-binary
+    depends_on: build-linux-amd64-binary
     command: ".buildkite/steps/test-bk.sh"
     plugins:
       - docker-compose#v4.14.0:
@@ -347,6 +371,7 @@ steps:
           queue: $AGENT_BUILDERS_QUEUE
         depends_on:
           - build-binary
+          - build-linux-amd64-binary
           - set-metadata
         command: ".buildkite/steps/build-docker-image.sh {{matrix}}"
         matrix:
@@ -425,6 +450,7 @@ steps:
     key: build-debian-packages
     depends_on:
       - build-binary
+      - build-linux-amd64-binary
       - set-metadata
     command: ".buildkite/steps/build-debian-packages.sh"
     artifact_paths: "deb/**/*"
@@ -437,6 +463,7 @@ steps:
     key: build-rpm-packages
     depends_on:
       - build-binary
+      - build-linux-amd64-binary
       - set-metadata
     command: ".buildkite/steps/build-rpm-packages.sh"
     artifact_paths: "rpm/**/*"
@@ -449,6 +476,7 @@ steps:
     key: build-github-release
     depends_on:
       - build-binary
+      - build-linux-amd64-binary
       - set-metadata
     command: ".buildkite/steps/build-github-release.sh"
     artifact_paths: "releases/**/*"
