@@ -1,30 +1,9 @@
 # Cache v2 definitions for the Agent's own CI.
-#
-# Every key ends at the dependency checksum and carries no per-commit part, so
-# an unchanged dependency graph resolves to an exact key. That matters on save
-# as much as on restore: `cache save` skips building and uploading an archive
-# when the exact key already exists, whereas a key containing the commit can
-# never match and so re-uploads on every job of every build. The trade is that
-# an entry is sealed until dependencies change, leaving packages that drift in
-# between to be recompiled -- correct, via Go's content-addressed build cache,
-# but not free.
-#
-# fallback_limit marks where matching may stop: parts after it are optional on
-# restore, so a dependency bump still lands on a compatible entry.
-#
-# One producer per key, and the producer must leave behind what the consumers
-# need. Exact keys make saves free but remove accumulation: once an entry
-# exists it is frozen until the checksum changes, so a key with two
-# differently-shaped producers keeps whichever one happened to win the first
-# build after a dependency bump, and no later build can add to it. Jobs that
-# compile this module but leave different artifacts behind therefore get
-# separate keys rather than sharing one.
-#
-# Checksums use go.mod, not go.sum, which would be redundant here.
+
+# Jobs that compile a module but leave different artifacts behind therefore get
+# separate keys rather than sharing one. This improves cache usage
 caches:
   - name: gomodcache
-    # Prefer an exact go.mod match, while allowing a compatible cache from the
-    # same OS, architecture, and Go version as a fallback.
     cache_key:
       - agent-go-modules-v1
       - { agent: os }
@@ -35,10 +14,7 @@ caches:
       - ~/.gomodcache
 
   - name: gocache
-    # Owned by shard 0 of each platform's test job, which is also the only
-    # consumer: a test run leaves compiled test binaries behind, which nothing
-    # else here produces. Lint has its own key for the same reason -- see
-    # lint_gocache.
+    # Shard 0 owns the test cache for each platform.
     cache_key:
       - agent-go-build-v2
       - { agent: os }
@@ -49,9 +25,7 @@ caches:
       - ~/.gocache
 
   - name: gocache_race
-    # Race objects compile to different build hashes. Go would keep them apart
-    # within one directory, but a separate cache gives the race job its own key
-    # and therefore its own single writer.
+    # Race builds use different objects and have their own writer.
     cache_key:
       - agent-go-build-race-v2
       - { agent: os }
@@ -62,11 +36,7 @@ caches:
       - ~/.gocache_race
 
   - name: lint_gocache
-    # Owned and consumed by the lint step alone. It runs custom analyzers whose
-    # results are cached under their own action IDs, and nothing else in the
-    # pipeline runs them, so a cache written by any other job sends lint back to
-    # analysing the module from scratch. Only ever built on one platform, but
-    # keyed by os/arch anyway so it cannot be shared across queues by accident.
+    # Lint owns this cache because no other job produces its analyzer results.
     cache_key:
       - agent-go-build-lint-v1
       - { agent: os }
@@ -77,10 +47,7 @@ caches:
       - ~/.gocache-lint
 
   - name: target_gocache
-    # Cross-compiled objects are reusable only for the same target and build
-    # mode, so the target is the key. The agent's own os/arch belongs there
-    # too: the cache also holds host-compiled tool artifacts, which two
-    # builder architectures sharing one key would thrash.
+    # Includes the host because this cache also contains host-compiled tools.
     cache_key:
       - agent-go-target-build-v2
       - { agent: os }
@@ -95,22 +62,10 @@ caches:
       - ~/.gocache-target
 
   - name: acknowledgements
-    # The generated attributions file varies with the transitive import graph,
-    # build target, and pinned go-licenses version. We deliberately use go.mod
-    # as a proxy for the import graph instead of hashing every Go source file.
-    # This has a known limitation: a source-only change can make a package from
-    # an already-listed module newly reachable without invalidating the cache.
-    # That only produces incomplete attributions if the package also introduces
-    # a licence or notice not already represented in the cached file. We accept
-    # this narrow risk because new modules and version changes update go.mod,
-    # while a subpackage of an existing module requiring distinct attribution
-    # is expected to be very rare. Hashing every Go source would substantially
-    # reduce reuse for the common case.
-    #
-    # go-licenses output also varies by GOOS/GOARCH (see google/go-licenses#187),
-    # hence the target in the key -- as the matrix labels rather than the
-    # normalised values, which over-partitions (arm and armhf get identical
-    # entries) but can never under-partition. Every key part is mandatory.
+    # go.mod intentionally stands in for the import graph. A source-only import
+    # from an existing module could need a new licence notice, but we accept
+    # that unlikely risk to preserve cache reuse.
+    # go-licenses output also varies by GOOS/GOARCH (google/go-licenses#187).
     cache_key:
       - agent-acknowledgements-v1
       - { env: TARGET_GOOS }
@@ -122,10 +77,7 @@ caches:
       - clicommand/ACKNOWLEDGEMENTS.md.gz
 
   - name: e2e_gomodcache
-    # The triggered E2E pipeline has one job, so it can safely own both its
-    # module cache and its compiled test cache without competing writers. Both
-    # are separate from the main pipeline's caches so the job transfers only
-    # its own dependencies.
+    # Separate from main CI; the single E2E job is the sole writer.
     cache_key:
       - agent-e2e-go-modules-v1
       - { agent: os }
@@ -146,8 +98,6 @@ caches:
       - ~/.e2e-gocache
 
   - name: protobuf_tools
-    # Cache the installed protobuf tools as well as the Go caches used to build
-    # them. Any toolchain or tool version change gets a fresh entry.
     cache_key:
       - protobuf-tools-v1
       - { agent: os }
