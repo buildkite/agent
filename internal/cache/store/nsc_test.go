@@ -417,6 +417,23 @@ func TestNscStore_DownloadStreamNotFound(t *testing.T) {
 	}
 }
 
+func TestNscStore_DownloadHTTPNotFound(t *testing.T) {
+	resolveCalls := 0
+	api := &fakeNscAPIClient{resolve: func(context.Context, string, string) (io.ReadCloser, error) {
+		resolveCalls++
+		return nil, errors.New("failed to download file: status 404")
+	}}
+	store := newTestNscStore(t, api)
+
+	_, err := store.Download(t.Context(), "missing", filepath.Join(t.TempDir(), "dest"))
+	if !errors.Is(err, ErrBlobNotFound) {
+		t.Fatalf("Download error = %v, want ErrBlobNotFound", err)
+	}
+	if resolveCalls != 1 {
+		t.Errorf("resolve calls = %d, want 1", resolveCalls)
+	}
+}
+
 func TestNscStore_DownloadResolveFailure(t *testing.T) {
 	wantErr := status.Error(codes.PermissionDenied, "permission denied")
 	api := &fakeNscAPIClient{resolve: func(context.Context, string, string) (io.ReadCloser, error) {

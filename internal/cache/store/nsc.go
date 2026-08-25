@@ -256,7 +256,8 @@ func (n *NscStore) Download(ctx context.Context, key, filePath string) (*Transfe
 
 func (n *NscStore) downloadOnce(ctx context.Context, client nscAPIClient, key, filePath string) (int64, error) {
 	body, err := client.ResolveArtifactStream(ctx, n.nsc, key)
-	if status.Code(err) == codes.NotFound {
+	httpStatus, hasHTTPStatus := nscDownloadHTTPStatus(err)
+	if status.Code(err) == codes.NotFound || hasHTTPStatus && httpStatus == 404 {
 		return 0, fmt.Errorf("%w: nsc key %s: %w", ErrBlobNotFound, key, err)
 	}
 	if err != nil {
@@ -304,6 +305,9 @@ func isRetryableNscDownloadError(err error) bool {
 }
 
 func nscDownloadHTTPStatus(err error) (int, bool) {
+	if err == nil {
+		return 0, false
+	}
 	_, statusText, ok := strings.Cut(err.Error(), "failed to download file: status ")
 	if !ok {
 		return 0, false
