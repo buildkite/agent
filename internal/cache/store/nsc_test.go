@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -14,6 +15,7 @@ import (
 	"time"
 
 	storagev1beta "buf.build/gen/go/namespace/cloud/protocolbuffers/go/proto/namespace/cloud/storage/v1beta"
+	"golang.org/x/net/http2"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"namespacelabs.dev/integrations/api/storage"
@@ -492,6 +494,16 @@ func TestNscStore_DownloadRetriesCopyFailureAndTruncatesDestination(t *testing.T
 	}
 	if got := string(content); got != "complete" {
 		t.Errorf("downloaded content = %q, want complete", got)
+	}
+}
+
+func TestIsRetryableNscDownloadError_HTTP2StreamError(t *testing.T) {
+	err := fmt.Errorf("read response body: %w", http2.StreamError{
+		StreamID: 1,
+		Code:     http2.ErrCodeCancel,
+	})
+	if !isRetryableNscDownloadError(err) {
+		t.Errorf("isRetryableNscDownloadError(%v) = false, want true", err)
 	}
 }
 

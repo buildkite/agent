@@ -16,6 +16,7 @@ import (
 	"github.com/buildkite/agent/v4/internal/cache/internal/trace"
 	"github.com/buildkite/roko"
 	"go.opentelemetry.io/otel/attribute"
+	"golang.org/x/net/http2"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/durationpb"
@@ -283,6 +284,10 @@ func (n *NscStore) downloadOnce(ctx context.Context, client nscAPIClient, key, f
 }
 
 func isRetryableNscDownloadError(err error) bool {
+	var streamErr http2.StreamError
+	if errors.As(err, &streamErr) {
+		return true
+	}
 	switch status.Code(err) {
 	case codes.Aborted, codes.DeadlineExceeded, codes.Internal, codes.ResourceExhausted, codes.Unavailable:
 		return true
