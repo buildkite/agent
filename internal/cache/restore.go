@@ -422,7 +422,9 @@ func (c *client) downloadCache(ctx context.Context, retrieveResp api.CacheEntryR
 		return "", "", nil, fmt.Errorf("failed to create temp directory: %w", err)
 	}
 
-	archiveFile = filepath.Join(tmpDir, storeObjectName)
+	// The object name comes from the cache API. Keep it as the remote lookup key,
+	// but never use it as a local path component.
+	archiveFile = filepath.Join(tmpDir, "archive")
 
 	// Download archive
 	transferInfo, err = blobStore.Download(ctx, storeObjectName, archiveFile)

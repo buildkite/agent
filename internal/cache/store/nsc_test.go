@@ -396,6 +396,27 @@ func TestNscStore_DownloadNotFound(t *testing.T) {
 	}
 }
 
+func TestNscStore_DownloadStreamNotFound(t *testing.T) {
+	resolveCalls := 0
+	body := &trackingReadCloser{Reader: errorReader{err: status.Error(codes.NotFound, "artifact expired")}}
+	api := &fakeNscAPIClient{resolve: func(context.Context, string, string) (io.ReadCloser, error) {
+		resolveCalls++
+		return body, nil
+	}}
+	store := newTestNscStore(t, api)
+
+	_, err := store.Download(t.Context(), "missing", filepath.Join(t.TempDir(), "dest"))
+	if !errors.Is(err, ErrBlobNotFound) {
+		t.Fatalf("Download error = %v, want ErrBlobNotFound", err)
+	}
+	if resolveCalls != 1 {
+		t.Errorf("resolve calls = %d, want 1", resolveCalls)
+	}
+	if !body.closed {
+		t.Error("download body was not closed")
+	}
+}
+
 func TestNscStore_DownloadResolveFailure(t *testing.T) {
 	wantErr := status.Error(codes.PermissionDenied, "permission denied")
 	api := &fakeNscAPIClient{resolve: func(context.Context, string, string) (io.ReadCloser, error) {

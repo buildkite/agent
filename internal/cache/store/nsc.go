@@ -272,6 +272,8 @@ func (n *NscStore) downloadOnce(ctx context.Context, client nscAPIClient, key, f
 	destCloseErr := dest.Close()
 	bodyCloseErr := body.Close()
 	switch {
+	case status.Code(copyErr) == codes.NotFound:
+		return 0, fmt.Errorf("%w: nsc key %s: %w", ErrBlobNotFound, key, copyErr)
 	case copyErr != nil:
 		return 0, fmt.Errorf("download Namespace artifact %q: %w", key, copyErr)
 	case destCloseErr != nil:
