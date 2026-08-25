@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/url"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -16,7 +17,6 @@ import (
 	"github.com/buildkite/agent/v4/internal/cache/internal/trace"
 	"github.com/buildkite/roko"
 	"go.opentelemetry.io/otel/attribute"
-	"golang.org/x/net/http2"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/durationpb"
@@ -284,8 +284,9 @@ func (n *NscStore) downloadOnce(ctx context.Context, client nscAPIClient, key, f
 }
 
 func isRetryableNscDownloadError(err error) bool {
-	var streamErr http2.StreamError
-	if errors.As(err, &streamErr) {
+	// net/http represents HTTP/2 stream resets with an unexported error type,
+	// so its stable Error prefix is the only available classification seam.
+	if strings.Contains(err.Error(), "stream error: stream ID ") {
 		return true
 	}
 	switch status.Code(err) {

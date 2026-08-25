@@ -15,7 +15,6 @@ import (
 	"time"
 
 	storagev1beta "buf.build/gen/go/namespace/cloud/protocolbuffers/go/proto/namespace/cloud/storage/v1beta"
-	"golang.org/x/net/http2"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"namespacelabs.dev/integrations/api/storage"
@@ -498,10 +497,7 @@ func TestNscStore_DownloadRetriesCopyFailureAndTruncatesDestination(t *testing.T
 }
 
 func TestIsRetryableNscDownloadError_HTTP2StreamError(t *testing.T) {
-	err := fmt.Errorf("read response body: %w", http2.StreamError{
-		StreamID: 1,
-		Code:     http2.ErrCodeCancel,
-	})
+	err := fmt.Errorf("read response body: %w", errors.New("stream error: stream ID 1; CANCEL; received from peer"))
 	if !isRetryableNscDownloadError(err) {
 		t.Errorf("isRetryableNscDownloadError(%v) = false, want true", err)
 	}
