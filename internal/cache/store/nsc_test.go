@@ -453,6 +453,44 @@ func TestNscStore_DownloadRetriesTransientResolveFailure(t *testing.T) {
 	}
 }
 
+func TestNscStore_DownloadRetriesTransientHTTPStatus(t *testing.T) {
+	resolveCalls := 0
+	api := &fakeNscAPIClient{resolve: func(context.Context, string, string) (io.ReadCloser, error) {
+		resolveCalls++
+		if resolveCalls == 1 {
+			return nil, errors.New("failed to download file: status 503")
+		}
+		return io.NopCloser(strings.NewReader("complete")), nil
+	}}
+	store := newTestNscStore(t, api)
+	dest := filepath.Join(t.TempDir(), "dest")
+
+	if _, err := store.Download(t.Context(), "key", dest); err != nil {
+		t.Fatalf("Download: %v", err)
+	}
+	if resolveCalls != 2 {
+		t.Errorf("resolve calls = %d, want 2", resolveCalls)
+	}
+}
+
+func TestIsRetryableNscDownloadError_HTTPStatus(t *testing.T) {
+	tests := []struct {
+		status    int
+		retryable bool
+	}{
+		{status: 429, retryable: true},
+		{status: 500, retryable: true},
+		{status: 503, retryable: true},
+		{status: 404, retryable: false},
+	}
+	for _, test := range tests {
+		err := fmt.Errorf("resolve artifact: failed to download file: status %d", test.status)
+		if got := isRetryableNscDownloadError(err); got != test.retryable {
+			t.Errorf("isRetryableNscDownloadError(status %d) = %t, want %t", test.status, got, test.retryable)
+		}
+	}
+}
+
 func TestNscStore_DownloadClosesBodyWhenDestinationCreationFails(t *testing.T) {
 	body := &trackingReadCloser{Reader: strings.NewReader("data")}
 	api := &fakeNscAPIClient{resolve: func(context.Context, string, string) (io.ReadCloser, error) {

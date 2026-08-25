@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -291,12 +292,28 @@ func isRetryableNscDownloadError(err error) bool {
 	if strings.Contains(err.Error(), "stream error: stream ID ") {
 		return true
 	}
+	if statusCode, ok := nscDownloadHTTPStatus(err); ok {
+		return statusCode == 429 || statusCode >= 500
+	}
 	switch status.Code(err) {
 	case codes.Aborted, codes.DeadlineExceeded, codes.Internal, codes.ResourceExhausted, codes.Unavailable:
 		return true
 	default:
 		return api.IsRetryableError(err)
 	}
+}
+
+func nscDownloadHTTPStatus(err error) (int, bool) {
+	_, statusText, ok := strings.Cut(err.Error(), "failed to download file: status ")
+	if !ok {
+		return 0, false
+	}
+	fields := strings.Fields(statusText)
+	if len(fields) == 0 {
+		return 0, false
+	}
+	statusCode, err := strconv.Atoi(fields[0])
+	return statusCode, err == nil
 }
 
 // refreshExpiry best-effort ensures the artifact has at least 24 hours until
