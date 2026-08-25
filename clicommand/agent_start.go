@@ -118,6 +118,7 @@ type AgentStartConfig struct {
 	DisconnectAfterJob         bool          `cli:"disconnect-after-job"`
 	DisconnectAfterIdleTimeout int           `cli:"disconnect-after-idle-timeout"`
 	DisconnectAfterUptime      int           `cli:"disconnect-after-uptime"`
+	ReportGracefulStop         bool          `cli:"report-graceful-stop"`
 	CancelSignalTimeout        time.Duration `cli:"cancel-signal-timeout"`
 	CancelCleanupTimeout       time.Duration `cli:"cancel-cleanup-timeout"`
 	ReflectExitStatus          bool          `cli:"reflect-exit-status"`
@@ -412,6 +413,12 @@ var AgentStartCommand = &cli.Command{
 			Value:   0,
 			Usage:   "The maximum uptime in seconds before the agent stops accepting new jobs and shuts down after any running jobs complete. The default of 0 means no timeout",
 			Sources: cli.EnvVars("BUILDKITE_AGENT_DISCONNECT_AFTER_UPTIME"),
+		},
+		&cli.BoolFlag{
+			Name:    "report-graceful-stop",
+			Value:   true,
+			Usage:   "Report graceful stops to Buildkite before disconnecting (default: true)",
+			Sources: cli.EnvVars("BUILDKITE_AGENT_REPORT_GRACEFUL_STOP"),
 		},
 		cancelSignalTimeoutFlag,
 		&cli.BoolFlag{
@@ -1306,6 +1313,7 @@ var AgentStartCommand = &cli.Command{
 					SignalGracePeriod:  cfg.CancelSignalTimeout,
 					Debug:              cfg.Debug,
 					DebugHTTP:          cfg.DebugHTTP,
+					ReportGracefulStop: cfg.ReportGracefulStop,
 					SpawnIndex:         i + 1,
 					AgentStdout:        os.Stdout,
 				},

@@ -26,6 +26,30 @@ func TestAgentStartFeatures_OpenTelemetryTracing(t *testing.T) {
 	}
 }
 
+func TestAgentStartReportGracefulStopFlag(t *testing.T) {
+	t.Parallel()
+
+	for _, f := range AgentStartCommand.Flags {
+		if !slices.Contains(f.Names(), "report-graceful-stop") {
+			continue
+		}
+
+		flag, ok := f.(*cli.BoolFlag)
+		if !ok {
+			t.Fatalf("report-graceful-stop flag type = %T, want *cli.BoolFlag", f)
+		}
+		if !flag.Value {
+			t.Error("report-graceful-stop default = false, want true")
+		}
+		if diff := cmp.Diff(flag.GetEnvVars(), []string{"BUILDKITE_AGENT_REPORT_GRACEFUL_STOP"}); diff != "" {
+			t.Errorf("report-graceful-stop environment variables diff (-got +want):\n%s", diff)
+		}
+		return
+	}
+
+	t.Fatal("report-graceful-stop flag not found")
+}
+
 func setupHooksPath(t *testing.T) (string, func()) {
 	t.Helper()
 
