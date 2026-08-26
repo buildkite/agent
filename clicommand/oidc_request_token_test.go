@@ -157,13 +157,18 @@ func TestOIDCTokenRefused(t *testing.T) {
 		err  error
 		want bool
 	}{
+		{name: "400 bad request", err: errorResponse(http.StatusBadRequest), want: true},
 		{name: "401 unauthorized", err: errorResponse(http.StatusUnauthorized), want: true},
 		{name: "403 forbidden", err: errorResponse(http.StatusForbidden), want: true},
+		{name: "404 not found", err: errorResponse(http.StatusNotFound), want: true},
+		{name: "410 gone", err: errorResponse(http.StatusGone), want: true},
 		{name: "422 unprocessable", err: errorResponse(http.StatusUnprocessableEntity), want: true},
 		{name: "wrapped 422", err: fmt.Errorf("could not obtain OIDC token: %w", errorResponse(http.StatusUnprocessableEntity)), want: true},
 		{name: "408 request timeout", err: errorResponse(http.StatusRequestTimeout), want: false},
+		{name: "421 misdirected request", err: errorResponse(http.StatusMisdirectedRequest), want: false},
 		{name: "425 too early", err: errorResponse(http.StatusTooEarly), want: false},
 		{name: "429 too many requests", err: errorResponse(http.StatusTooManyRequests), want: false},
+		{name: "unlisted 4xx (418)", err: errorResponse(http.StatusTeapot), want: false},
 		{name: "500 internal server error", err: errorResponse(http.StatusInternalServerError), want: false},
 		{name: "504 gateway timeout", err: errorResponse(http.StatusGatewayTimeout), want: false},
 		{name: "transport error", err: errors.New("net/http: request canceled"), want: false},

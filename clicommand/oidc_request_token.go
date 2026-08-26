@@ -32,13 +32,16 @@ type OIDCTokenConfig struct {
 }
 
 // OIDCTokenRefusedExitStatus is the exit status when the Buildkite API
-// positively refused to issue an OIDC token (a 4xx response such as 401, 403,
-// 404, or 422 — for example an audience disallowed by organization policy).
+// positively refused to issue an OIDC token: a 400, 401, 403, 404, 410, or
+// 422 response — for example an audience disallowed by organization policy.
 // Retrying such a request will not succeed.
 //
-// All other failures — exhausted retries on 429/5xx, timeout-like statuses
-// (408, 425), network timeouts, and other transport errors — exit with the
-// generic status 1 and may succeed if retried later.
+// All other failures — exhausted retries on 5xx, any other 4xx (408, 421,
+// 425, 429, nonstandard proxy statuses), network timeouts, and other
+// transport errors — exit with the generic status 1 and may succeed if
+// retried later. Ambiguity deliberately biases toward the transient exit
+// status: a spurious 1 costs callers a pointless retry, whereas a spurious 77
+// makes them abandon a credential they could have obtained.
 //
 // This exit status is a contract consumed by other tools (at least
 // github.com/buildkite/test-engine-client, which uses it to decide whether an
@@ -68,10 +71,11 @@ Requests and prints an OIDC token from Buildkite that claims the Job ID
 Exit statuses:
 
 - 0: the token was obtained and printed.
-- 77: the Buildkite API refused to issue the token (a 4xx response such as a
-  disallowed audience). Retrying will not succeed.
+- 77: the Buildkite API refused to issue the token (a 400, 401, 403, 404,
+  410, or 422 response, such as a disallowed audience). Retrying will not
+  succeed.
 - 1: any other failure, including transient API or network errors (timeouts,
-  5xx, 408/425/429) after exhausting retries. Retrying may succeed.`
+  5xx, other 4xx) after exhausting retries. Retrying may succeed.`
 )
 
 var OIDCRequestTokenCommand = &cli.Command{
@@ -233,20 +237,27 @@ var OIDCRequestTokenCommand = &cli.Command{
 }
 
 // oidcTokenRefused reports whether err represents the Buildkite API positively
-// refusing to issue an OIDC token: a 4xx API response that indicates retrying
-// will not succeed. Timeout-like and rate-limiting 4xx statuses (408, 425,
-// 429) are excluded: they can succeed if retried, so they must exit with the
-// generic transient status even when the retrier chose not to retry them.
-// 5xx and transport errors are transient by definition.
+// refusing to issue an OIDC token: an API response status that indicates
+// retrying will not succeed. Only statuses that definitively represent a
+// refusal are listed; every other status — including timeout-like or
+// connection-scoped 4xx (408, 421, 425, 429) and anything nonstandard from an
+// intermediary — is treated as transient, because a spurious transient
+// classification merely costs the caller a retry, while a spurious refusal
+// makes it abandon a credential it could have obtained.
 func oidcTokenRefused(err error) bool {
 	var errResp *api.ErrorResponse
 	if !errors.As(err, &errResp) || errResp.Response == nil {
 		return false
 	}
-	switch code := errResp.Response.StatusCode; code {
-	case http.StatusRequestTimeout, http.StatusTooEarly, http.StatusTooManyRequests:
-		return false
+	switch errResp.Response.StatusCode {
+	case http.StatusBadRequest, // 400
+		http.StatusUnauthorized,        // 401
+		http.StatusForbidden,           // 403
+		http.StatusNotFound,            // 404
+		http.StatusGone,                // 410
+		http.StatusUnprocessableEntity: // 422
+		return true
 	default:
-		return code >= 400 && code < 500
+		return false
 	}
 }
