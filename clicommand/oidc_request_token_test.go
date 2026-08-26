@@ -161,6 +161,8 @@ func TestOIDCTokenRefused(t *testing.T) {
 		{name: "403 forbidden", err: errorResponse(http.StatusForbidden), want: true},
 		{name: "422 unprocessable", err: errorResponse(http.StatusUnprocessableEntity), want: true},
 		{name: "wrapped 422", err: fmt.Errorf("could not obtain OIDC token: %w", errorResponse(http.StatusUnprocessableEntity)), want: true},
+		{name: "408 request timeout", err: errorResponse(http.StatusRequestTimeout), want: false},
+		{name: "425 too early", err: errorResponse(http.StatusTooEarly), want: false},
 		{name: "429 too many requests", err: errorResponse(http.StatusTooManyRequests), want: false},
 		{name: "500 internal server error", err: errorResponse(http.StatusInternalServerError), want: false},
 		{name: "504 gateway timeout", err: errorResponse(http.StatusGatewayTimeout), want: false},
