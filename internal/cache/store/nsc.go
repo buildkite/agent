@@ -33,8 +33,9 @@ const (
 	// entry and when refreshing it on access.
 	nscDefaultExpiry = 24 * time.Hour
 
-	// Match the retry allowance of the NSC CLI downloader this implementation replaces.
-	nscDownloadAttempts = 10
+	// Whole-file retries are bounded because, unlike the NSC CLI's ranged
+	// downloader, every attempt starts the download again from the beginning.
+	nscDownloadAttempts = 3
 )
 
 type nscAPIClient interface {
