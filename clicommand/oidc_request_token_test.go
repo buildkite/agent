@@ -2,6 +2,7 @@ package clicommand
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -11,6 +12,7 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/buildkite/agent/v4/api"
 	"github.com/urfave/cli/v3"
 )
 
@@ -98,6 +100,80 @@ func TestOIDCRequestToken(t *testing.T) {
 			t.Fatalf("runOIDCRequestTokenCommand() output = %q, want %q", out, want)
 		}
 	})
+}
+
+// A non-retryable 4xx means the API positively refused to issue a token, so
+// the command must not retry, and must exit with the documented distinct
+// status so callers (e.g. test-engine-client) can tell a refusal apart from a
+// transient failure without parsing stderr.
+func TestOIDCRequestTokenRefusalExitsWithDistinctStatus(t *testing.T) {
+	var requests atomic.Int32
+
+	server := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
+		requests.Add(1)
+		rw.Header().Set("Content-Type", "application/json")
+		rw.WriteHeader(http.StatusUnprocessableEntity)
+		_, _ = fmt.Fprint(rw, `{"message":"audience not allowed"}`)
+	}))
+	defer server.Close()
+
+	_, err := runOIDCRequestTokenCommand(t, server.URL)
+	if err == nil {
+		t.Fatal("runOIDCRequestTokenCommand() error = nil, want non-nil")
+	}
+
+	eerr := new(ExitError)
+	if !errors.As(err, &eerr) {
+		t.Fatalf("runOIDCRequestTokenCommand() error = %v (%T), want ExitError", err, err)
+	}
+	if got, want := eerr.Code(), OIDCTokenRefusedExitStatus; got != want {
+		t.Errorf("ExitError.Code() = %d, want %d", got, want)
+	}
+	if got, want := err.Error(), "audience not allowed"; !strings.Contains(got, want) {
+		t.Errorf("error = %q, want containing %q", got, want)
+	}
+
+	if got, want := requests.Load(), int32(1); got != want {
+		t.Errorf("server received %d requests, want %d (refusals must not be retried)", got, want)
+	}
+}
+
+func TestOIDCTokenRefused(t *testing.T) {
+	errorResponse := func(status int) error {
+		return &api.ErrorResponse{
+			Response: &http.Response{
+				StatusCode: status,
+				Request: &http.Request{
+					Method: "POST",
+					URL:    &url.URL{Scheme: "https", Host: "agent.buildkite.com", Path: "/v3/jobs/job-123/oidc/tokens"},
+				},
+			},
+			Message: "message",
+		}
+	}
+
+	tests := []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{name: "401 unauthorized", err: errorResponse(http.StatusUnauthorized), want: true},
+		{name: "403 forbidden", err: errorResponse(http.StatusForbidden), want: true},
+		{name: "422 unprocessable", err: errorResponse(http.StatusUnprocessableEntity), want: true},
+		{name: "wrapped 422", err: fmt.Errorf("could not obtain OIDC token: %w", errorResponse(http.StatusUnprocessableEntity)), want: true},
+		{name: "429 too many requests", err: errorResponse(http.StatusTooManyRequests), want: false},
+		{name: "500 internal server error", err: errorResponse(http.StatusInternalServerError), want: false},
+		{name: "504 gateway timeout", err: errorResponse(http.StatusGatewayTimeout), want: false},
+		{name: "transport error", err: errors.New("net/http: request canceled"), want: false},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got := oidcTokenRefused(test.err); got != test.want {
+				t.Errorf("oidcTokenRefused(%v) = %t, want %t", test.err, got, test.want)
+			}
+		})
+	}
 }
 
 // An intermediary in front of the API can answer with an HTML error page and a

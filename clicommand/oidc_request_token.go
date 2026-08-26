@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 	"slices"
 	"time"
 
@@ -30,6 +31,20 @@ type OIDCTokenConfig struct {
 	SubjectClaim   string   `cli:"subject-claim"`
 }
 
+// OIDCTokenRefusedExitStatus is the exit status when the Buildkite API
+// positively refused to issue an OIDC token (a non-retryable 4xx response such
+// as 401, 403, 404, or 422 — for example an audience disallowed by
+// organization policy). Retrying such a request will not succeed.
+//
+// All other failures — exhausted retries on 429/5xx, timeouts, and other
+// transport errors — exit with the generic status 1 and may succeed if
+// retried later.
+//
+// This exit status is a contract consumed by other tools (at least
+// github.com/buildkite/test-engine-client, which uses it to decide whether an
+// OTLP relay credential failure is terminal). Do not change or reuse it.
+const OIDCTokenRefusedExitStatus = 77
+
 const (
 	backoffSeconds       = 2
 	maxAttempts          = 5
@@ -48,7 +63,15 @@ Example:
     $ buildkite-agent oidc request-token --audience sts.amazonaws.com
 
 Requests and prints an OIDC token from Buildkite that claims the Job ID
-(amongst other things) and the audience "sts.amazonaws.com".`
+(amongst other things) and the audience "sts.amazonaws.com".
+
+Exit statuses:
+
+- 0: the token was obtained and printed.
+- 77: the Buildkite API refused to issue the token (a non-retryable 4xx
+  response, such as a disallowed audience). Retrying will not succeed.
+- 1: any other failure, including transient API or network errors after
+  exhausting retries. Retrying may succeed.`
 )
 
 var OIDCRequestTokenCommand = &cli.Command{
@@ -145,9 +168,14 @@ var OIDCRequestTokenCommand = &cli.Command{
 		})
 		if err != nil {
 			if len(cfg.Audience) > 0 {
-				return fmt.Errorf("could not obtain OIDC token for audience %s: %w", cfg.Audience, err)
+				err = fmt.Errorf("could not obtain OIDC token for audience %s: %w", cfg.Audience, err)
+			} else {
+				err = fmt.Errorf("could not obtain OIDC token for default audience: %w", err)
 			}
-			return fmt.Errorf("could not obtain OIDC token for default audience: %w", err)
+			if oidcTokenRefused(err) {
+				return NewExitError(OIDCTokenRefusedExitStatus, err)
+			}
+			return err
 		}
 
 		if !cfg.SkipRedaction {
@@ -202,4 +230,17 @@ var OIDCRequestTokenCommand = &cli.Command{
 
 		return nil
 	},
+}
+
+// oidcTokenRefused reports whether err represents the Buildkite API positively
+// refusing to issue an OIDC token: a non-retryable 4xx API response. This is
+// the same classification api.BreakOnNonRetryable uses to stop retrying, minus
+// the failures (429, 5xx, transport errors) that could succeed if retried.
+func oidcTokenRefused(err error) bool {
+	var errResp *api.ErrorResponse
+	if !errors.As(err, &errResp) || errResp.Response == nil {
+		return false
+	}
+	code := errResp.Response.StatusCode
+	return code >= 400 && code < 500 && code != http.StatusTooManyRequests
 }
