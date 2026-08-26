@@ -3,7 +3,6 @@ module github.com/buildkite/agent/v4
 go 1.26.5
 
 require (
-	buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go v1.36.12-20260709200747-435963d16310.1
 	buf.build/gen/go/namespace/cloud/protocolbuffers/go v1.36.12-20260820164744-a1973bcf4d87.1
 	cloud.google.com/go/compute/metadata v0.9.0
 	cloud.google.com/go/kms v1.33.0
