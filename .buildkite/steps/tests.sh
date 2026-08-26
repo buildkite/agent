@@ -50,12 +50,11 @@ go tool test-engine-client run
 # Shard 0 is the single writer for its platform's build cache, on every
 # platform including linux/amd64. Compiled test binaries only exist in a cache
 # a test run wrote, so the test jobs cannot share a key with a step that does
-# not build them -- lint keeps its own key for the mirror-image reason.
+# not build them.
 if [[ "${BUILDKITE_PARALLEL_JOB:-0}" == "0" ]]; then
   save_names=(--name "${gocache_name}")
 
-  # Lint is the sole writer for the shared module cache, and the race job
-  # shares the non-race module cache key, so neither competes here.
+  # Lint writes linux/amd64 modules. Race jobs never write this shared cache.
   if [[ -z "${RACE}" && "${goos}/${goarch}" != "linux/amd64" ]]; then
     save_names+=(--name gomodcache)
   fi

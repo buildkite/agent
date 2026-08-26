@@ -26,6 +26,5 @@ fi
 # concurrently, but cap parallelism to avoid overwhelming shared services.
 go tool gotestsum --junitfile junit.xml -- -tags e2e -parallel 4 ./internal/e2e/...
 
-# This pipeline has one E2E job, so it is the only writer for these caches.
 echo --- :outbox_tray: Saving E2E Go caches
 buildkite-agent cache save --name e2e_gomodcache --name e2e_gocache

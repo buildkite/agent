@@ -14,7 +14,7 @@ caches:
       - ~/.gomodcache
 
   - name: gocache
-    # Shard 0 owns the test cache for each platform.
+    # Shard 0 is the only writer for each platform.
     cache_key:
       - agent-go-build-v2
       - { agent: os }
@@ -25,7 +25,6 @@ caches:
       - ~/.gocache
 
   - name: gocache_race
-    # Race builds use different objects and have their own writer.
     cache_key:
       - agent-go-build-race-v2
       - { agent: os }
@@ -36,7 +35,7 @@ caches:
       - ~/.gocache_race
 
   - name: lint_gocache
-    # Lint owns this cache because no other job produces its analyzer results.
+    # Lint gets its own cache because no other job writes its analyzer results.
     cache_key:
       - agent-go-build-lint-v1
       - { agent: os }
@@ -47,7 +46,7 @@ caches:
       - ~/.gocache-lint
 
   - name: target_gocache
-    # Includes the host because this cache also contains host-compiled tools.
+    # The host is part of the key because this also contains host-built tools.
     cache_key:
       - agent-go-target-build-v2
       - { agent: os }
@@ -62,9 +61,8 @@ caches:
       - ~/.gocache-target
 
   - name: acknowledgements
-    # go.mod intentionally stands in for the import graph. A source-only import
-    # from an existing module could need a new licence notice, but we accept
-    # that unlikely risk to preserve cache reuse.
+    # We use go.mod as a stand-in for imports. This can miss a new licence from
+    # an existing module, but that seems unlikely and keeps the cache useful.
     # go-licenses output also varies by GOOS/GOARCH (google/go-licenses#187).
     cache_key:
       - agent-acknowledgements-v1
@@ -77,7 +75,7 @@ caches:
       - clicommand/ACKNOWLEDGEMENTS.md.gz
 
   - name: e2e_gomodcache
-    # Separate from main CI; the single E2E job is the sole writer.
+    # One E2E job writes both caches.
     cache_key:
       - agent-e2e-go-modules-v1
       - { agent: os }

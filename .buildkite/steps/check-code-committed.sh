@@ -73,16 +73,9 @@ fi
 
 echo +++ Everything is clean and tidy! 🎉
 
-# Populate the module cache with the complete dependency graph before saving
-# it. `go mod download` with no arguments fetches the whole build list, and
-# module zips are platform-independent, so this one download serves the
-# cross-compile jobs for every target.
+# Populate the shared module cache for every target.
 echo --- :arrow_down: Downloading Go modules
 go mod download
 
-# This unsharded step is the sole writer for both the shared module cache and
-# its own build cache. The latter has to be written here rather than shared with
-# the test jobs: this step runs analyzers nothing else runs, and a cache written
-# elsewhere would not carry their results.
 echo --- :outbox_tray: Saving Go caches
 buildkite-agent cache save --name gomodcache --name lint_gocache
