@@ -1,4 +1,4 @@
-# Cache v2 definitions for the Agent's own CI.
+# Cache definitions for the Agent's own CI.
 
 # Jobs that compile a module but leave different artifacts behind therefore get
 # separate keys rather than sharing one. This improves cache usage
