@@ -9,6 +9,8 @@ import (
 // Test that pipeline-level and step-level env vars are both applied to a
 // job, with step-level env taking precedence over pipeline-level env.
 func TestEnvPrecedence(t *testing.T) {
+	t.Parallel()
+
 	ctx := t.Context()
 
 	tc := newTestCase(t, "env_precedence.yaml")

@@ -10,6 +10,8 @@ import (
 // (including via meta-data exists and meta-data get --default) in a
 // later step.
 func TestMetaData(t *testing.T) {
+	t.Parallel()
+
 	ctx := t.Context()
 
 	tc := newTestCase(t, "meta_data.yaml")

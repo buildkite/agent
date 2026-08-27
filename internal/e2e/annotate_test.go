@@ -9,6 +9,8 @@ import (
 // Test that an agent can create, append to, and replace build annotations
 // across multiple contexts and styles.
 func TestAnnotate(t *testing.T) {
+	t.Parallel()
+
 	ctx := t.Context()
 
 	tc := newTestCase(t, "annotate.yaml")
