@@ -1022,6 +1022,61 @@ func TestAgentWorker_UnrecoverableErrorInPing(t *testing.T) {
 	}
 }
 
+func TestAgentWorker_UnrecoverableErrorInHeartbeatStopsAutoPingMode(t *testing.T) {
+	t.Parallel()
+
+	const agentSessionToken = "alpacas"
+
+	server := NewFakeAPIServer(WithStreaming)
+	defer server.Close()
+
+	agent := server.AddAgent(agentSessionToken)
+	defer close(agent.PingStream)
+	agent.HeartbeatHandler = func(rw http.ResponseWriter, _ *http.Request) {
+		rw.Header().Set("Content-Type", "application/json")
+		rw.WriteHeader(http.StatusNotFound)
+		_, _ = fmt.Fprint(rw, encodeMsg("agent not found"))
+	}
+
+	apiClient := api.NewClient(logger.Discard, api.Config{
+		Endpoint: server.URL,
+		Token:    "llamas",
+	})
+
+	l := logger.NewConsoleLogger(logger.NewTestPrinter(t), func(int) {})
+	worker := NewAgentWorker(
+		l,
+		&api.AgentRegisterResponse{
+			UUID:              uuid.New().String(),
+			Name:              "agent-1",
+			AccessToken:       agentSessionToken,
+			Endpoint:          server.URL,
+			PingInterval:      1,
+			JobStatusInterval: 5,
+			HeartbeatInterval: 1,
+		},
+		metrics.NewCollector(logger.Discard, metrics.CollectorConfig{}),
+		apiClient,
+		AgentWorkerConfig{
+			AgentConfiguration: AgentConfiguration{PingMode: PingModeAuto},
+		},
+	)
+
+	done := make(chan error, 1)
+	go func() {
+		done <- worker.Start(t.Context(), nil)
+	}()
+
+	select {
+	case err := <-done:
+		if !isUnrecoverable(err) {
+			t.Errorf("worker.Start() = %v, want an unrecoverable error", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("worker.Start() did not return after an unrecoverable heartbeat error")
+	}
+}
+
 func TestAgentWorker_Streaming_Disconnect(t *testing.T) {
 	t.Parallel()
 
