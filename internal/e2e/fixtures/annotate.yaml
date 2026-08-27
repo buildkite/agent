@@ -17,5 +17,5 @@ steps:
 
   - label: "replace annotation"
     commands:
-      - {{ .buildkite_agent_binary }} annotate 'Names of llama body parts: ears, poll, withers, back, hip, croup, tail.' --style warning --context llamas
-      - {{ .buildkite_agent_binary }} annotate 'Alpacas make a variety of sounds: Humming, Snorting, Grumbling, Clucking.' --style warning --context alpacas
+      - "{{ .buildkite_agent_binary }} annotate 'Names of llama body parts: ears, poll, withers, back, hip, croup, tail.' --style warning --context llamas"
+      - "{{ .buildkite_agent_binary }} annotate 'Alpacas make a variety of sounds: Humming, Snorting, Grumbling, Clucking.' --style warning --context alpacas"
