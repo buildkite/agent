@@ -69,6 +69,35 @@ func TestParseGittableURL(t *testing.T) {
 	}
 }
 
+func TestIsRelativeSubmoduleURL(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		repository string
+		want       bool
+	}{
+		{repository: "../java-prettify", want: true},
+		{repository: "../x:x", want: true},
+		{repository: "./modules/java-prettify", want: true},
+		{repository: "../../plugins/replication", want: true},
+		{repository: "..foo", want: false},
+		{repository: "java-prettify", want: false},
+		{repository: "/tmp/java-prettify", want: false},
+		{repository: "https://gerrit.googlesource.com/java-prettify", want: false},
+		{repository: "git@github.com:buildkite/agent.git", want: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.repository, func(t *testing.T) {
+			t.Parallel()
+
+			if got := isRelativeSubmoduleURL(tt.repository); got != tt.want {
+				t.Errorf("isRelativeSubmoduleURL(%q) = %t, want %t", tt.repository, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestHostFromSSHG(t *testing.T) {
 	t.Parallel()
 

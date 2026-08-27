@@ -624,7 +624,13 @@ func (e *Executor) updateGitSubmodules(ctx context.Context) (retErr error) {
 			subMirrorSpan, subMirrorCtx := e.traceOpSpan(ctx, "git.mirror.update")
 			subMirrorSpan.SetAttributes(attribute.String("git.repo", redact.URLCredentials(repository)))
 
-			mirrorDir, err := e.getOrUpdateMirrorDir(subMirrorCtx, repository, nil)
+			var mirrorDir string
+			var err error
+			if isRelativeSubmoduleURL(repository) {
+				e.shell.Commentf("Skipping git mirror for relative submodule URL %q", repository)
+			} else {
+				mirrorDir, err = e.getOrUpdateMirrorDir(subMirrorCtx, repository, nil)
+			}
 
 			tracetools.FinishWithError(subMirrorSpan, err)
 
