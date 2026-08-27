@@ -1,0 +1,21 @@
+agents:
+  queue: {{ .queue }}
+steps:
+  - label: "add annotation"
+    commands:
+      - {{ .buildkite_agent_binary }} annotate 'Llamas are very social animals and live with others as a herd.' --context llamas
+      - {{ .buildkite_agent_binary }} annotate 'Alpacas are kept in herds that graze on the level heights of the Andes.' --style info --context alpacas
+
+  - wait
+
+  - label: "append to annotation"
+    commands:
+      - {{ .buildkite_agent_binary }} annotate 'The ancestors of Llamas are thought to have originated from the central plains of North America.' --context llamas --append
+      - {{ .buildkite_agent_binary }} annotate 'Alpacas communicate through body language.' --style info --context alpacas --append
+
+  - wait
+
+  - label: "replace annotation"
+    commands:
+      - "{{ .buildkite_agent_binary }} annotate 'Names of llama body parts: ears, poll, withers, back, hip, croup, tail.' --style warning --context llamas"
+      - "{{ .buildkite_agent_binary }} annotate 'Alpacas make a variety of sounds: Humming, Snorting, Grumbling, Clucking.' --style warning --context alpacas"

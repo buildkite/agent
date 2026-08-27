@@ -308,22 +308,6 @@ steps:
     depends_on: build-binary
     command: .buildkite/steps/check-version-string.sh
 
-  - name: ":technologist: Test bk cli + Agent cli"
-    key: test-bk-cli
-    depends_on: build-binary
-    command: ".buildkite/steps/test-bk.sh"
-    plugins:
-      - docker-compose#v4.14.0:
-          config: .buildkite/docker-compose.yml
-          cli-version: 2
-          run: agent
-          env:
-            - BUILDKITE_AGENT_ACCESS_TOKEN
-            - BUILDKITE_BUILD_ID
-            - BUILDKITE_JOB_ID
-          volumes:
-            - "/usr/bin/buildkite-agent:/usr/bin/buildkite-agent"
-
   - name: ":mag: Extract Agent Version Metadata"
     key: set-metadata
     command: ".buildkite/steps/extract-agent-version-metadata.sh"
@@ -474,7 +458,6 @@ steps:
       - check-code-committed
       - check-version-string
       - e2e-tests
-      - test-bk-cli
       - test-docker-amd64
       - test-docker-arm64
       - test-windows
