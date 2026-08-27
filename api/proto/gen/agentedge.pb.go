@@ -7,7 +7,6 @@
 package agentedgev1
 
 import (
-	_ "buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go/buf/validate"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"
@@ -74,9 +73,10 @@ type StreamPingsResponse struct {
 	//	*StreamPingsResponse_Pause
 	//	*StreamPingsResponse_Disconnect
 	//	*StreamPingsResponse_JobAssigned
-	Action        isStreamPingsResponse_Action `protobuf_oneof:"action"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Action         isStreamPingsResponse_Action `protobuf_oneof:"action"`
+	RequestHeaders *RequestHeaders              `protobuf:"bytes,6,opt,name=request_headers,json=requestHeaders,proto3" json:"request_headers,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *StreamPingsResponse) Reset() {
@@ -152,6 +152,13 @@ func (x *StreamPingsResponse) GetJobAssigned() *JobAssignedAction {
 	return nil
 }
 
+func (x *StreamPingsResponse) GetRequestHeaders() *RequestHeaders {
+	if x != nil {
+		return x.RequestHeaders
+	}
+	return nil
+}
+
 type isStreamPingsResponse_Action interface {
 	isStreamPingsResponse_Action()
 }
@@ -180,6 +187,50 @@ func (*StreamPingsResponse_Disconnect) isStreamPingsResponse_Action() {}
 
 func (*StreamPingsResponse_JobAssigned) isStreamPingsResponse_Action() {}
 
+type RequestHeaders struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Values        map[string]string      `protobuf:"bytes,1,rep,name=values,proto3" json:"values,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RequestHeaders) Reset() {
+	*x = RequestHeaders{}
+	mi := &file_agentedge_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RequestHeaders) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RequestHeaders) ProtoMessage() {}
+
+func (x *RequestHeaders) ProtoReflect() protoreflect.Message {
+	mi := &file_agentedge_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RequestHeaders.ProtoReflect.Descriptor instead.
+func (*RequestHeaders) Descriptor() ([]byte, []int) {
+	return file_agentedge_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *RequestHeaders) GetValues() map[string]string {
+	if x != nil {
+		return x.Values
+	}
+	return nil
+}
+
 type ResumeAction struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	unknownFields protoimpl.UnknownFields
@@ -188,7 +239,7 @@ type ResumeAction struct {
 
 func (x *ResumeAction) Reset() {
 	*x = ResumeAction{}
-	mi := &file_agentedge_proto_msgTypes[2]
+	mi := &file_agentedge_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -200,7 +251,7 @@ func (x *ResumeAction) String() string {
 func (*ResumeAction) ProtoMessage() {}
 
 func (x *ResumeAction) ProtoReflect() protoreflect.Message {
-	mi := &file_agentedge_proto_msgTypes[2]
+	mi := &file_agentedge_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -213,7 +264,7 @@ func (x *ResumeAction) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResumeAction.ProtoReflect.Descriptor instead.
 func (*ResumeAction) Descriptor() ([]byte, []int) {
-	return file_agentedge_proto_rawDescGZIP(), []int{2}
+	return file_agentedge_proto_rawDescGZIP(), []int{3}
 }
 
 type PauseAction struct {
@@ -225,7 +276,7 @@ type PauseAction struct {
 
 func (x *PauseAction) Reset() {
 	*x = PauseAction{}
-	mi := &file_agentedge_proto_msgTypes[3]
+	mi := &file_agentedge_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -237,7 +288,7 @@ func (x *PauseAction) String() string {
 func (*PauseAction) ProtoMessage() {}
 
 func (x *PauseAction) ProtoReflect() protoreflect.Message {
-	mi := &file_agentedge_proto_msgTypes[3]
+	mi := &file_agentedge_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -250,7 +301,7 @@ func (x *PauseAction) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PauseAction.ProtoReflect.Descriptor instead.
 func (*PauseAction) Descriptor() ([]byte, []int) {
-	return file_agentedge_proto_rawDescGZIP(), []int{3}
+	return file_agentedge_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *PauseAction) GetReason() string {
@@ -269,7 +320,7 @@ type DisconnectAction struct {
 
 func (x *DisconnectAction) Reset() {
 	*x = DisconnectAction{}
-	mi := &file_agentedge_proto_msgTypes[4]
+	mi := &file_agentedge_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -281,7 +332,7 @@ func (x *DisconnectAction) String() string {
 func (*DisconnectAction) ProtoMessage() {}
 
 func (x *DisconnectAction) ProtoReflect() protoreflect.Message {
-	mi := &file_agentedge_proto_msgTypes[4]
+	mi := &file_agentedge_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -294,7 +345,7 @@ func (x *DisconnectAction) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DisconnectAction.ProtoReflect.Descriptor instead.
 func (*DisconnectAction) Descriptor() ([]byte, []int) {
-	return file_agentedge_proto_rawDescGZIP(), []int{4}
+	return file_agentedge_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *DisconnectAction) GetReason() string {
@@ -313,7 +364,7 @@ type JobAssignedAction struct {
 
 func (x *JobAssignedAction) Reset() {
 	*x = JobAssignedAction{}
-	mi := &file_agentedge_proto_msgTypes[5]
+	mi := &file_agentedge_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -325,7 +376,7 @@ func (x *JobAssignedAction) String() string {
 func (*JobAssignedAction) ProtoMessage() {}
 
 func (x *JobAssignedAction) ProtoReflect() protoreflect.Message {
-	mi := &file_agentedge_proto_msgTypes[5]
+	mi := &file_agentedge_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -338,7 +389,7 @@ func (x *JobAssignedAction) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use JobAssignedAction.ProtoReflect.Descriptor instead.
 func (*JobAssignedAction) Descriptor() ([]byte, []int) {
-	return file_agentedge_proto_rawDescGZIP(), []int{5}
+	return file_agentedge_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *JobAssignedAction) GetJob() *Job {
@@ -357,7 +408,7 @@ type Job struct {
 
 func (x *Job) Reset() {
 	*x = Job{}
-	mi := &file_agentedge_proto_msgTypes[6]
+	mi := &file_agentedge_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -369,7 +420,7 @@ func (x *Job) String() string {
 func (*Job) ProtoMessage() {}
 
 func (x *Job) ProtoReflect() protoreflect.Message {
-	mi := &file_agentedge_proto_msgTypes[6]
+	mi := &file_agentedge_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -382,7 +433,7 @@ func (x *Job) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Job.ProtoReflect.Descriptor instead.
 func (*Job) Descriptor() ([]byte, []int) {
-	return file_agentedge_proto_rawDescGZIP(), []int{6}
+	return file_agentedge_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *Job) GetId() string {
@@ -396,17 +447,23 @@ var File_agentedge_proto protoreflect.FileDescriptor
 
 const file_agentedge_proto_rawDesc = "" +
 	"\n" +
-	"\x0fagentedge.proto\x12\fagentedge.v1\x1a\x1bbuf/validate/validate.proto\"/\n" +
+	"\x0fagentedge.proto\x12\fagentedge.v1\"/\n" +
 	"\x12StreamPingsRequest\x12\x19\n" +
-	"\bagent_id\x18\x01 \x01(\tR\aagentId\"\x90\x02\n" +
+	"\bagent_id\x18\x01 \x01(\tR\aagentId\"\xe7\x02\n" +
 	"\x13StreamPingsResponse\x124\n" +
 	"\x06resume\x18\x02 \x01(\v2\x1a.agentedge.v1.ResumeActionH\x00R\x06resume\x121\n" +
 	"\x05pause\x18\x03 \x01(\v2\x19.agentedge.v1.PauseActionH\x00R\x05pause\x12@\n" +
 	"\n" +
 	"disconnect\x18\x04 \x01(\v2\x1e.agentedge.v1.DisconnectActionH\x00R\n" +
 	"disconnect\x12D\n" +
-	"\fjob_assigned\x18\x05 \x01(\v2\x1f.agentedge.v1.JobAssignedActionH\x00R\vjobAssignedB\b\n" +
-	"\x06action\"\x0e\n" +
+	"\fjob_assigned\x18\x05 \x01(\v2\x1f.agentedge.v1.JobAssignedActionH\x00R\vjobAssigned\x12E\n" +
+	"\x0frequest_headers\x18\x06 \x01(\v2\x1c.agentedge.v1.RequestHeadersR\x0erequestHeadersB\b\n" +
+	"\x06actionJ\x04\b\x01\x10\x02R\bendpoint\"\x8d\x01\n" +
+	"\x0eRequestHeaders\x12@\n" +
+	"\x06values\x18\x01 \x03(\v2(.agentedge.v1.RequestHeaders.ValuesEntryR\x06values\x1a9\n" +
+	"\vValuesEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x0e\n" +
 	"\fResumeAction\"%\n" +
 	"\vPauseAction\x12\x16\n" +
 	"\x06reason\x18\x01 \x01(\tR\x06reason\"*\n" +
@@ -432,29 +489,33 @@ func file_agentedge_proto_rawDescGZIP() []byte {
 	return file_agentedge_proto_rawDescData
 }
 
-var file_agentedge_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
+var file_agentedge_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
 var file_agentedge_proto_goTypes = []any{
 	(*StreamPingsRequest)(nil),  // 0: agentedge.v1.StreamPingsRequest
 	(*StreamPingsResponse)(nil), // 1: agentedge.v1.StreamPingsResponse
-	(*ResumeAction)(nil),        // 2: agentedge.v1.ResumeAction
-	(*PauseAction)(nil),         // 3: agentedge.v1.PauseAction
-	(*DisconnectAction)(nil),    // 4: agentedge.v1.DisconnectAction
-	(*JobAssignedAction)(nil),   // 5: agentedge.v1.JobAssignedAction
-	(*Job)(nil),                 // 6: agentedge.v1.Job
+	(*RequestHeaders)(nil),      // 2: agentedge.v1.RequestHeaders
+	(*ResumeAction)(nil),        // 3: agentedge.v1.ResumeAction
+	(*PauseAction)(nil),         // 4: agentedge.v1.PauseAction
+	(*DisconnectAction)(nil),    // 5: agentedge.v1.DisconnectAction
+	(*JobAssignedAction)(nil),   // 6: agentedge.v1.JobAssignedAction
+	(*Job)(nil),                 // 7: agentedge.v1.Job
+	nil,                         // 8: agentedge.v1.RequestHeaders.ValuesEntry
 }
 var file_agentedge_proto_depIdxs = []int32{
-	2, // 0: agentedge.v1.StreamPingsResponse.resume:type_name -> agentedge.v1.ResumeAction
-	3, // 1: agentedge.v1.StreamPingsResponse.pause:type_name -> agentedge.v1.PauseAction
-	4, // 2: agentedge.v1.StreamPingsResponse.disconnect:type_name -> agentedge.v1.DisconnectAction
-	5, // 3: agentedge.v1.StreamPingsResponse.job_assigned:type_name -> agentedge.v1.JobAssignedAction
-	6, // 4: agentedge.v1.JobAssignedAction.job:type_name -> agentedge.v1.Job
-	0, // 5: agentedge.v1.AgentEdgeService.StreamPings:input_type -> agentedge.v1.StreamPingsRequest
-	1, // 6: agentedge.v1.AgentEdgeService.StreamPings:output_type -> agentedge.v1.StreamPingsResponse
-	6, // [6:7] is the sub-list for method output_type
-	5, // [5:6] is the sub-list for method input_type
-	5, // [5:5] is the sub-list for extension type_name
-	5, // [5:5] is the sub-list for extension extendee
-	0, // [0:5] is the sub-list for field type_name
+	3, // 0: agentedge.v1.StreamPingsResponse.resume:type_name -> agentedge.v1.ResumeAction
+	4, // 1: agentedge.v1.StreamPingsResponse.pause:type_name -> agentedge.v1.PauseAction
+	5, // 2: agentedge.v1.StreamPingsResponse.disconnect:type_name -> agentedge.v1.DisconnectAction
+	6, // 3: agentedge.v1.StreamPingsResponse.job_assigned:type_name -> agentedge.v1.JobAssignedAction
+	2, // 4: agentedge.v1.StreamPingsResponse.request_headers:type_name -> agentedge.v1.RequestHeaders
+	8, // 5: agentedge.v1.RequestHeaders.values:type_name -> agentedge.v1.RequestHeaders.ValuesEntry
+	7, // 6: agentedge.v1.JobAssignedAction.job:type_name -> agentedge.v1.Job
+	0, // 7: agentedge.v1.AgentEdgeService.StreamPings:input_type -> agentedge.v1.StreamPingsRequest
+	1, // 8: agentedge.v1.AgentEdgeService.StreamPings:output_type -> agentedge.v1.StreamPingsResponse
+	8, // [8:9] is the sub-list for method output_type
+	7, // [7:8] is the sub-list for method input_type
+	7, // [7:7] is the sub-list for extension type_name
+	7, // [7:7] is the sub-list for extension extendee
+	0, // [0:7] is the sub-list for field type_name
 }
 
 func init() { file_agentedge_proto_init() }
@@ -474,7 +535,7 @@ func file_agentedge_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_agentedge_proto_rawDesc), len(file_agentedge_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   7,
+			NumMessages:   9,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

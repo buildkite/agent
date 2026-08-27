@@ -14,6 +14,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -1021,6 +1022,61 @@ func TestAgentWorker_UnrecoverableErrorInPing(t *testing.T) {
 	}
 }
 
+func TestAgentWorker_UnrecoverableErrorInHeartbeatStopsAutoPingMode(t *testing.T) {
+	t.Parallel()
+
+	const agentSessionToken = "alpacas"
+
+	server := NewFakeAPIServer(WithStreaming)
+	defer server.Close()
+
+	agent := server.AddAgent(agentSessionToken)
+	defer close(agent.PingStream)
+	agent.HeartbeatHandler = func(rw http.ResponseWriter, _ *http.Request) {
+		rw.Header().Set("Content-Type", "application/json")
+		rw.WriteHeader(http.StatusNotFound)
+		_, _ = fmt.Fprint(rw, encodeMsg("agent not found"))
+	}
+
+	apiClient := api.NewClient(logger.Discard, api.Config{
+		Endpoint: server.URL,
+		Token:    "llamas",
+	})
+
+	l := logger.NewConsoleLogger(logger.NewTestPrinter(t), func(int) {})
+	worker := NewAgentWorker(
+		l,
+		&api.AgentRegisterResponse{
+			UUID:              uuid.New().String(),
+			Name:              "agent-1",
+			AccessToken:       agentSessionToken,
+			Endpoint:          server.URL,
+			PingInterval:      1,
+			JobStatusInterval: 5,
+			HeartbeatInterval: 1,
+		},
+		metrics.NewCollector(logger.Discard, metrics.CollectorConfig{}),
+		apiClient,
+		AgentWorkerConfig{
+			AgentConfiguration: AgentConfiguration{PingMode: PingModeAuto},
+		},
+	)
+
+	done := make(chan error, 1)
+	go func() {
+		done <- worker.Start(t.Context(), nil)
+	}()
+
+	select {
+	case err := <-done:
+		if !isUnrecoverable(err) {
+			t.Errorf("worker.Start() = %v, want an unrecoverable error", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("worker.Start() did not return after an unrecoverable heartbeat error")
+	}
+}
+
 func TestAgentWorker_Streaming_Disconnect(t *testing.T) {
 	t.Parallel()
 
@@ -1062,6 +1118,101 @@ func TestAgentWorker_Streaming_Disconnect(t *testing.T) {
 
 	if err := worker.Start(t.Context(), nil); err != nil {
 		t.Errorf("worker.Start() error = %v, want nil", err)
+	}
+	if got, want := agent.Pings, 0; got != want {
+		t.Errorf("agent.Pings = %d, want %d", got, want)
+	}
+}
+
+func TestAgentWorker_Streaming_RequestHeadersRestartStream(t *testing.T) {
+	t.Parallel()
+
+	const (
+		agentSessionToken = "alpacas"
+		headerKey         = "Buildkite-Hello"
+		headerValue       = "world"
+	)
+
+	server := NewFakeAPIServer(WithStreaming)
+	defer server.Close()
+
+	agent := server.AddAgent(agentSessionToken)
+	agent.PingHandler = func(*http.Request) (api.Ping, error) {
+		return api.Ping{}, errors.New("too many pings")
+	}
+
+	var connections atomic.Int32
+	agent.PingStreamHandler = func(ctx context.Context, req *connect.Request[agentedgev1.StreamPingsRequest], resp *connect.ServerStream[agentedgev1.StreamPingsResponse]) error {
+		switch connection := connections.Add(1); connection {
+		case 1:
+			if got := req.Header().Get(headerKey); got != "" {
+				t.Errorf("first stream header = %q, want empty", got)
+			}
+			return resp.Send(&agentedgev1.StreamPingsResponse{
+				Action: &agentedgev1.StreamPingsResponse_Resume{},
+				RequestHeaders: &agentedgev1.RequestHeaders{
+					Values: map[string]string{headerKey: headerValue},
+				},
+			})
+
+		case 2:
+			if got := req.Header().Get(headerKey); got != headerValue {
+				t.Errorf("second stream header = %q, want %q", got, headerValue)
+			}
+			// Repeating the current headers must not restart the stream before
+			// the following message clears them.
+			if err := resp.Send(&agentedgev1.StreamPingsResponse{
+				Action: &agentedgev1.StreamPingsResponse_Resume{},
+				RequestHeaders: &agentedgev1.RequestHeaders{
+					Values: map[string]string{headerKey: headerValue},
+				},
+			}); err != nil {
+				return err
+			}
+			return resp.Send(&agentedgev1.StreamPingsResponse{
+				Action:         &agentedgev1.StreamPingsResponse_Resume{},
+				RequestHeaders: &agentedgev1.RequestHeaders{},
+			})
+
+		case 3:
+			if got := req.Header().Get(headerKey); got != "" {
+				t.Errorf("third stream header = %q, want empty", got)
+			}
+			return resp.Send(&agentedgev1.StreamPingsResponse{
+				Action: &agentedgev1.StreamPingsResponse_Disconnect{},
+			})
+
+		default:
+			return connect.NewError(connect.CodeInternal, fmt.Errorf("unexpected stream connection %d", connection))
+		}
+	}
+
+	l := logger.NewConsoleLogger(logger.NewTestPrinter(t), func(int) {})
+	worker := NewAgentWorker(
+		l,
+		&api.AgentRegisterResponse{
+			UUID:              uuid.New().String(),
+			Name:              "agent-1",
+			AccessToken:       agentSessionToken,
+			Endpoint:          server.URL,
+			PingInterval:      1,
+			JobStatusInterval: 5,
+			HeartbeatInterval: 60,
+		},
+		metrics.NewCollector(logger.Discard, metrics.CollectorConfig{}),
+		api.NewClient(logger.Discard, api.Config{
+			Endpoint: server.URL,
+			Token:    "llamas",
+		}),
+		AgentWorkerConfig{},
+	)
+	worker.noWaitBetweenPingsForTesting = true
+
+	if err := worker.Start(t.Context(), nil); err != nil {
+		t.Errorf("worker.Start() error = %v, want nil", err)
+	}
+	if got, want := connections.Load(), int32(3); got != want {
+		t.Errorf("stream connections = %d, want %d", got, want)
 	}
 	if got, want := agent.Pings, 0; got != want {
 		t.Errorf("agent.Pings = %d, want %d", got, want)
