@@ -183,23 +183,19 @@ func TestNoCacheSettings_DoesNotLogMessage(t *testing.T) {
 }
 
 func TestBuildkiteRequestHeaders(t *testing.T) {
-	t.Parallel()
-
 	// create a mock agent API
 	e := createTestAgentEndpoint()
 	server := e.server()
 	defer server.Close()
 
 	// create a client with server-specified headers
+	t.Setenv("BUILDKITE_REQUEST_HEADER_BUILDKITE_HELLO", "world")
 	l := logger.NewConsoleLogger(logger.NewTestPrinter(t), func(int) {})
 	client := api.NewClient(l, api.Config{
 		Endpoint:  server.URL,
 		Token:     "llamasrock",
 		DebugHTTP: true,
 	})
-	headers := client.ServerSpecifiedRequestHeaders()
-	// That getter isn't designed to modify the headers, but all's fair in test setup code and war.
-	headers.Set("Buildkite-Hello", "world")
 
 	mb := mockBootstrap(t)
 	defer mb.CheckAndClose(t) //nolint:errcheck // bintest logs to t

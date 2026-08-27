@@ -2,13 +2,13 @@ syntax = "proto3";
 
 package agentedge.v1;
 
-import "buf/validate/validate.proto";
-
 message StreamPingsRequest {
   string agent_id = 1;
 }
 
 message StreamPingsResponse {
+  reserved 1;
+  reserved "endpoint";
 
   oneof action {
     ResumeAction resume = 2;
@@ -16,6 +16,12 @@ message StreamPingsResponse {
     DisconnectAction disconnect = 4;
     JobAssignedAction job_assigned = 5;
   }
+
+  RequestHeaders request_headers = 6;
+}
+
+message RequestHeaders {
+  map<string, string> values = 1;
 }
 
 message ResumeAction {}
