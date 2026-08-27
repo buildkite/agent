@@ -1,56 +1,144 @@
 package store
 
 import (
-	"bytes"
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/url"
 	"os"
-	"os/exec"
-	"path/filepath"
-	"regexp"
-	"runtime"
+	"strconv"
 	"strings"
+	"sync"
 	"time"
 
+	storagev1beta "buf.build/gen/go/namespace/cloud/protocolbuffers/go/proto/namespace/cloud/storage/v1beta"
+	"github.com/buildkite/agent/v4/api"
 	"github.com/buildkite/agent/v4/internal/cache/internal/trace"
+	"github.com/buildkite/roko"
 	"go.opentelemetry.io/otel/attribute"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/durationpb"
+	"namespacelabs.dev/integrations/api/storage"
+	"namespacelabs.dev/integrations/auth"
 )
 
 // nscScheme is the URL scheme that routes an agent-managed cache store to NSC.
 const nscScheme = "nsc"
 
-// nscDefaultExpiry is the artifact lifetime used both when uploading a cache
-// entry (--expires_in) and when refreshing it on access (--ensure_minimum).
-// Cache entries are content-addressed and short-lived, so we cap storage growth
-// rather than relying on NSC's no-expiry default. Every restore pushes the
-// expiry back out to this duration from now, keeping hot caches alive while
-// letting cold ones expire.
-const nscDefaultExpiry = "24h"
+const (
+	// nscDefaultExpiry is the artifact lifetime used both when uploading a cache
+	// entry and when refreshing it on access.
+	nscDefaultExpiry = 24 * time.Hour
 
-// commandRunner executes an external command. It is a seam so tests can assert
-// the arguments passed to the nsc CLI without invoking the real binary.
-type commandRunner func(ctx context.Context, workingDir string, args ...string) (*CommandResult, error)
+	// Whole-file retries are bounded because, unlike the NSC CLI's ranged
+	// downloader, every attempt starts the download again from the beginning.
+	nscDownloadAttempts = 3
+)
 
-// NscStore implements the Blob interface for NSC artifact storage which uses the nsc CLI tool
-// https://namespace.so/docs/reference/cli/artifact-download
-// https://namespace.so/docs/reference/cli/artifact-upload
-type NscStore struct {
-	// namespace is taken from the nsc://<namespace> cache store URL and passed
-	// as --namespace to the nsc CLI. It is always non-empty.
-	namespace string
-	run       commandRunner
+type nscAPIClient interface {
+	UploadArtifact(context.Context, string, string, io.Reader, storage.UploadOpts) error
+	ResolveArtifactStream(context.Context, string, string) (io.ReadCloser, error)
+	ExtendArtifact(context.Context, *storagev1beta.ExtendArtifactRequest) error
+	Close() error
 }
 
-// NewNscStore creates a store backed by the nsc CLI. The namespace is parsed
-// from the nsc://<namespace> cache store URL and is required.
-func NewNscStore(bucketURL string) (*NscStore, error) {
-	namespace, err := parseNscNamespace(bucketURL)
+// Namespace Storage API documentation:
+// https://buf.build/namespace/cloud/docs/main:namespace.cloud.storage.v1beta
+type nscStorageClient struct {
+	client storage.Client
+}
+
+func (c *nscStorageClient) UploadArtifact(ctx context.Context, nsc, path string, r io.Reader, opts storage.UploadOpts) error {
+	_, err := storage.UploadArtifactWithOpts(ctx, c.client, nsc, path, r, opts)
+	return err
+}
+
+func (c *nscStorageClient) ResolveArtifactStream(ctx context.Context, nsc, path string) (io.ReadCloser, error) {
+	return storage.ResolveArtifactStream(ctx, c.client, nsc, path)
+}
+
+func (c *nscStorageClient) ExtendArtifact(ctx context.Context, req *storagev1beta.ExtendArtifactRequest) error {
+	_, err := c.client.Artifacts.ExtendArtifact(ctx, req)
+	return err
+}
+
+func (c *nscStorageClient) Close() error {
+	return c.client.Close()
+}
+
+type nscClientFactory func(context.Context) (nscAPIClient, error)
+
+// NscClient lazily initializes one Namespace Storage API client for use by all
+// NSC cache transfers in a cache command.
+type NscClient struct {
+	initialize nscClientFactory
+	initOnce   sync.Once
+	client     nscAPIClient
+	initErr    error
+	closeOnce  sync.Once
+	closeErr   error
+}
+
+// NewNscClient creates a lazy Namespace Storage API client holder.
+func NewNscClient() *NscClient {
+	return newNscClient(newNscAPIClient)
+}
+
+func newNscClient(initialize nscClientFactory) *NscClient {
+	return &NscClient{initialize: initialize}
+}
+
+func newNscAPIClient(ctx context.Context) (nscAPIClient, error) {
+	token, err := auth.LoadDefaults()
+	if err != nil {
+		return nil, fmt.Errorf("load Namespace authentication: %w", err)
+	}
+
+	client, err := storage.NewClient(ctx, token)
+	if err != nil {
+		return nil, fmt.Errorf("create Namespace Storage API client: %w", err)
+	}
+	return &nscStorageClient{client: client}, nil
+}
+
+func (c *NscClient) get(ctx context.Context) (nscAPIClient, error) {
+	c.initOnce.Do(func() {
+		c.client, c.initErr = c.initialize(ctx)
+	})
+	return c.client, c.initErr
+}
+
+// Close closes the initialized Namespace Storage API client. It is a no-op if
+// no NSC cache transfer initialized the client.
+func (c *NscClient) Close() error {
+	if c.client == nil {
+		return nil
+	}
+	c.closeOnce.Do(func() {
+		c.closeErr = c.client.Close()
+	})
+	return c.closeErr
+}
+
+// NscStore implements Blob using the Namespace Storage API.
+type NscStore struct {
+	nsc    string
+	client *NscClient
+}
+
+// NewNscStore creates a Namespace Storage API-backed store.
+func NewNscStore(bucketURL string, client *NscClient) (*NscStore, error) {
+	if client == nil {
+		return nil, fmt.Errorf("namespace client is required for nsc:// cache stores")
+	}
+	nsc, err := parseNscNamespace(bucketURL)
 	if err != nil {
 		return nil, err
 	}
-	return &NscStore{namespace: namespace, run: runCommand}, nil
+	return &NscStore{nsc: nsc, client: client}, nil
 }
 
 // parseNscNamespace extracts the namespace from an nsc://<namespace> cache store
@@ -69,98 +157,33 @@ func parseNscNamespace(bucketURL string) (string, error) {
 	return u.Host, nil
 }
 
-// artifactArgs builds the nsc CLI argument list, including --namespace.
-func (n *NscStore) artifactArgs(args ...string) []string {
-	cmd := append([]string{"nsc", "artifact"}, args...)
-	return append(cmd, "--namespace", n.namespace)
-}
-
-// validateFilePath validates that a file path is safe for use in commands
-func validateFilePath(filePath string) error {
-	if filePath == "" {
-		return fmt.Errorf("file path cannot be empty")
-	}
-
-	// Clean the path to normalize it
-	cleanPath := filepath.Clean(filePath)
-
-	// Check for potentially dangerous characters that could be used for command injection.
-	// Backslash is the path separator on Windows so it must be allowed there.
-	dangerousChars := []string{";", "&", "|", "`", "$", "(", ")", "{", "}", "[", "]", "<", ">", "\"", "'"}
-	if runtime.GOOS != "windows" {
-		dangerousChars = append(dangerousChars, "\\")
-	}
-	for _, char := range dangerousChars {
-		if strings.Contains(cleanPath, char) {
-			return fmt.Errorf("file path contains potentially dangerous character: %s", char)
-		}
-	}
-
-	// Check for path traversal attempts
-	if strings.Contains(cleanPath, "..") {
-		return fmt.Errorf("file path contains path traversal sequence")
-	}
-
-	return nil
-}
-
-// validateKey validates that an artifact key is safe for use in commands
-func validateKey(key string) error {
-	if key == "" {
-		return fmt.Errorf("key cannot be empty")
-	}
-
-	// Check length - reasonable limit for artifact keys
-	if len(key) > 256 {
-		return fmt.Errorf("key too long (max 256 characters)")
-	}
-
-	// NSC artifact keys should be alphanumeric with some safe special characters
-	// Allow: alphanumeric, hyphens, underscores, dots, forward slashes
-	validKeyPattern := regexp.MustCompile(`^[a-zA-Z0-9._/-]+$`)
-	if !validKeyPattern.MatchString(key) {
-		return fmt.Errorf("key contains invalid characters (only alphanumeric, ., _, /, - are allowed)")
-	}
-
-	// Check for potentially dangerous patterns
-	dangerousPatterns := []string{"../", "./", "//", "&&", "||", ";", "`", "$"}
-	for _, pattern := range dangerousPatterns {
-		if strings.Contains(key, pattern) {
-			return fmt.Errorf("key contains potentially dangerous pattern: %s", pattern)
-		}
-	}
-
-	return nil
-}
-
 func (n *NscStore) Upload(ctx context.Context, filePath, key string) (*TransferInfo, error) {
 	_, span := trace.Start(ctx, "NscStore.Upload")
 	defer span.End()
 
-	// Validate input parameters to prevent command injection
-	if err := validateFilePath(filePath); err != nil {
-		return nil, fmt.Errorf("invalid file path: %w", err)
+	file, err := os.Open(filePath)
+	if err != nil {
+		return nil, fmt.Errorf("open upload file: %w", err)
 	}
-	if err := validateKey(key); err != nil {
-		return nil, fmt.Errorf("invalid key: %w", err)
+	defer func() { _ = file.Close() }()
+
+	fileInfo, err := file.Stat()
+	if err != nil {
+		return nil, fmt.Errorf("get upload file info: %w", err)
+	}
+
+	client, err := n.client.get(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("initialize Namespace client for upload: %w", err)
 	}
 
 	start := time.Now()
-
-	// Execute nsc artifact upload command
-	result, err := n.run(ctx, "", n.artifactArgs("upload", filePath, key, "--expires_in", nscDefaultExpiry)...)
-	if err != nil {
-		return nil, fmt.Errorf("failed to execute nsc upload command: %w", err)
-	}
-
-	if result.ExitCode != 0 {
-		return nil, fmt.Errorf("nsc upload failed with exit code %d: %s", result.ExitCode, result.Stderr)
-	}
-
-	// Get file size for transfer info
-	fileInfo, err := os.Stat(filePath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get file info: %w", err)
+	expiresAt := start.Add(nscDefaultExpiry)
+	if err := client.UploadArtifact(ctx, n.nsc, key, file, storage.UploadOpts{
+		ExpiresAt: &expiresAt,
+		Length:    fileInfo.Size(),
+	}); err != nil {
+		return nil, fmt.Errorf("upload Namespace artifact %q: %w", key, err)
 	}
 
 	duration := time.Since(start)
@@ -176,7 +199,7 @@ func (n *NscStore) Upload(ctx context.Context, filePath, key string) (*TransferI
 	return &TransferInfo{
 		BytesTransferred: bytesTransferred,
 		TransferSpeed:    averageSpeed,
-		RequestID:        "", // NSC doesn't expose request IDs
+		RequestID:        "", // The Namespace Storage API does not expose request IDs.
 		Duration:         duration,
 	}, nil
 }
@@ -185,41 +208,35 @@ func (n *NscStore) Download(ctx context.Context, key, filePath string) (*Transfe
 	_, span := trace.Start(ctx, "NscStore.Download")
 	defer span.End()
 
-	// Validate input parameters to prevent command injection
-	if err := validateKey(key); err != nil {
-		return nil, fmt.Errorf("invalid key: %w", err)
-	}
-	if err := validateFilePath(filePath); err != nil {
-		return nil, fmt.Errorf("invalid file path: %w", err)
+	client, err := n.client.get(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("initialize Namespace client for download: %w", err)
 	}
 
 	start := time.Now()
-
-	// Execute nsc artifact download command
-	result, err := n.run(ctx, "", n.artifactArgs("download", key, filePath)...)
-	if err != nil {
-		return nil, fmt.Errorf("failed to execute nsc download command: %w", err)
-	}
-
-	if result.ExitCode != 0 {
-		// Map a missing or expired artifact to ErrBlobNotFound so the restore
-		// treats it as a cache miss (invalidating the stale entry and continuing)
-		// rather than failing the build.
-		if strings.Contains(result.Stderr, "not found") ||
-			strings.Contains(result.Stderr, "has expired") {
-			return nil, fmt.Errorf("%w: nsc key %s: %s", ErrBlobNotFound, key, strings.TrimSpace(result.Stderr))
+	var bytesTransferred int64
+	err = roko.NewRetrier(
+		roko.WithMaxAttempts(nscDownloadAttempts),
+		roko.WithStrategy(roko.ExponentialSubsecond(200*time.Millisecond)),
+		roko.WithJitterRange(0, 250*time.Millisecond),
+	).DoWithContext(ctx, func(r *roko.Retrier) error {
+		var err error
+		bytesTransferred, err = n.downloadOnce(ctx, client, key, filePath)
+		if err == nil {
+			return nil
 		}
-		return nil, fmt.Errorf("nsc download failed with exit code %d: %s", result.ExitCode, result.Stderr)
-	}
-
-	// Get file size for transfer info
-	fileInfo, err := os.Stat(filePath)
+		if errors.Is(err, ErrBlobNotFound) || !isRetryableNscDownloadError(err) {
+			r.Break()
+			return err
+		}
+		slog.Warn("NSC cache download failed, retrying", "key", key, "error", err, "retrier", r.String())
+		return err
+	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to get downloaded file info: %w", err)
+		return nil, err
 	}
 
 	duration := time.Since(start)
-	bytesTransferred := fileInfo.Size()
 	averageSpeed := calculateTransferSpeedMBps(bytesTransferred, duration)
 
 	span.SetAttributes(
@@ -228,103 +245,93 @@ func (n *NscStore) Download(ctx context.Context, key, filePath string) (*Transfe
 		attribute.String("nsc_key", key),
 	)
 
-	// Refresh the artifact's TTL on access so hot caches stay alive, mirroring
-	// the S3 store's self-CopyObject refresh. Unlike CopyObject this is cheap,
-	// so we refresh on every restore rather than gating it behind a minimum
-	// interval.
-	n.refreshExpiry(ctx, key)
+	n.refreshExpiry(ctx, client, key)
 
 	return &TransferInfo{
 		BytesTransferred: bytesTransferred,
 		TransferSpeed:    averageSpeed,
-		RequestID:        "", // NSC doesn't expose request IDs
+		RequestID:        "", // The Namespace Storage API does not expose request IDs.
 		Duration:         duration,
 	}, nil
 }
 
-// refreshExpiry pushes the artifact's expiry out to at least nscDefaultExpiry
-// from now via `nsc artifact extend --ensure_minimum`. Using --ensure_minimum
-// (rather than the additive --by) makes the refresh idempotent, so calling it
-// on every restore keeps a hot cache alive without growing its expiry unbounded.
-//
-// This is best-effort: any failure is logged and swallowed so a restore never
-// fails because its TTL could not be refreshed.
-func (n *NscStore) refreshExpiry(ctx context.Context, key string) {
-	if !n.extendSupported(ctx) {
-		// `nsc artifact extend` is still being rolled out by Namespace. Update
-		// the nsc CLI as a contingency so the command becomes available.
-		slog.Debug("nsc artifact extend unavailable, updating nsc CLI")
-		if _, err := n.run(ctx, "", "nsc", "version", "update"); err != nil {
-			slog.Warn("failed to update nsc CLI, skipping cache TTL refresh (non-fatal)",
-				"key", key, "error", err)
-			return
-		}
+func (n *NscStore) downloadOnce(ctx context.Context, client nscAPIClient, key, filePath string) (int64, error) {
+	body, err := client.ResolveArtifactStream(ctx, n.nsc, key)
+	httpStatus, hasHTTPStatus := nscDownloadHTTPStatus(err)
+	if status.Code(err) == codes.NotFound || hasHTTPStatus && httpStatus == 404 {
+		return 0, fmt.Errorf("%w: nsc key %s: %w", ErrBlobNotFound, key, err)
 	}
-
-	result, err := n.run(ctx, "", n.artifactArgs("extend", key, "--ensure_minimum", nscDefaultExpiry)...)
-	switch {
-	case err != nil:
-		slog.Warn("failed to refresh cache TTL, continuing (non-fatal)", "key", key, "error", err)
-	case result.ExitCode != 0:
-		slog.Warn("failed to refresh cache TTL, continuing (non-fatal)",
-			"key", key, "exit_code", result.ExitCode, "stderr", result.Stderr)
-	default:
-		slog.Debug("refreshed cache TTL", "key", key)
-	}
-}
-
-// extendSupported reports whether the installed nsc CLI supports
-// `nsc artifact extend`. During Namespace's rollout of this command, older CLIs
-// exit non-zero for its --help.
-func (n *NscStore) extendSupported(ctx context.Context) bool {
-	result, err := n.run(ctx, "", "nsc", "artifact", "extend", "--help")
-	return err == nil && result.ExitCode == 0 &&
-		strings.Contains(result.Stdout, "--ensure_minimum")
-}
-
-type CommandResult struct {
-	Stdout   string
-	Stderr   string
-	ExitCode int
-}
-
-func runCommand(ctx context.Context, workingDir string, args ...string) (*CommandResult, error) {
-	_, span := trace.Start(ctx, "runCommand")
-	defer span.End()
-
-	// Validate that args is not empty to prevent panic
-	if len(args) == 0 {
-		return nil, fmt.Errorf("no command provided")
-	}
-
-	span.SetAttributes(attribute.StringSlice("command", args))
-
-	cr := &CommandResult{}
-
-	// #nosec G204 - args are validated by callers (validateFilePath, validateKey)
-	// and this function is internal to the store package with controlled usage
-	cmd := exec.CommandContext(ctx, args[0], args[1:]...)
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-	cmd.Env = os.Environ() // inherit the environment
-
-	if workingDir != "" {
-		cmd.Dir = workingDir
-	}
-
-	err := cmd.Run()
 	if err != nil {
-		span.RecordError(err)
-		if exitError, ok := err.(*exec.ExitError); ok {
-			cr.ExitCode = exitError.ExitCode()
-		} else {
-			return nil, err
-		}
+		return 0, fmt.Errorf("resolve Namespace artifact %q: %w", key, err)
 	}
 
-	cr.Stdout = stdout.String()
-	cr.Stderr = stderr.String()
+	dest, err := os.Create(filePath)
+	if err != nil {
+		_ = body.Close()
+		return 0, fmt.Errorf("create download file: %w", err)
+	}
 
-	return cr, nil
+	bytesTransferred, copyErr := io.Copy(dest, body)
+	destCloseErr := dest.Close()
+	bodyCloseErr := body.Close()
+	switch {
+	case status.Code(copyErr) == codes.NotFound:
+		return 0, fmt.Errorf("%w: nsc key %s: %w", ErrBlobNotFound, key, copyErr)
+	case copyErr != nil:
+		return 0, fmt.Errorf("download Namespace artifact %q: %w", key, copyErr)
+	case destCloseErr != nil:
+		return 0, fmt.Errorf("close download file: %w", destCloseErr)
+	case bodyCloseErr != nil:
+		return 0, fmt.Errorf("close Namespace artifact stream %q: %w", key, bodyCloseErr)
+	default:
+		return bytesTransferred, nil
+	}
+}
+
+func isRetryableNscDownloadError(err error) bool {
+	// net/http represents HTTP/2 stream resets with an unexported error type,
+	// so its stable Error prefix is the only available classification seam.
+	if strings.Contains(err.Error(), "stream error: stream ID ") {
+		return true
+	}
+	if statusCode, ok := nscDownloadHTTPStatus(err); ok {
+		return statusCode == 429 || statusCode >= 500
+	}
+	switch status.Code(err) {
+	case codes.Aborted, codes.DeadlineExceeded, codes.Internal, codes.ResourceExhausted, codes.Unavailable:
+		return true
+	default:
+		return api.IsRetryableError(err)
+	}
+}
+
+func nscDownloadHTTPStatus(err error) (int, bool) {
+	if err == nil {
+		return 0, false
+	}
+	_, statusText, ok := strings.Cut(err.Error(), "failed to download file: status ")
+	if !ok {
+		return 0, false
+	}
+	fields := strings.Fields(statusText)
+	if len(fields) == 0 {
+		return 0, false
+	}
+	statusCode, err := strconv.Atoi(fields[0])
+	return statusCode, err == nil
+}
+
+// refreshExpiry best-effort ensures the artifact has at least 24 hours until
+// expiry. A refresh failure never turns a successful download into a failure.
+func (n *NscStore) refreshExpiry(ctx context.Context, client nscAPIClient, key string) {
+	err := client.ExtendArtifact(ctx, &storagev1beta.ExtendArtifactRequest{
+		Path:          key,
+		Namespace:     n.nsc,
+		EnsureMinimum: durationpb.New(nscDefaultExpiry),
+	})
+	if err != nil {
+		slog.Warn("failed to refresh cache TTL, continuing (non-fatal)", "key", key, "error", err)
+		return
+	}
+	slog.Debug("refreshed cache TTL", "key", key)
 }

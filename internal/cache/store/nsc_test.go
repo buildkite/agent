@@ -1,228 +1,193 @@
 package store
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 
-	"github.com/google/go-cmp/cmp"
+	storagev1beta "buf.build/gen/go/namespace/cloud/protocolbuffers/go/proto/namespace/cloud/storage/v1beta"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+	"namespacelabs.dev/integrations/api/storage"
 )
 
 func TestNscStore_Interface(t *testing.T) {
-	// This test ensures that NscStore properly implements the Blob interface
 	var _ Blob = (*NscStore)(nil)
 }
 
-func TestValidateFilePath(t *testing.T) {
-	tests := []struct {
-		name        string
-		filePath    string
-		expectError bool
-		errorMsg    string
-	}{
-		{
-			name:        "valid simple path",
-			filePath:    "test.txt",
-			expectError: false,
-		},
-		{
-			name:        "valid relative path",
-			filePath:    "dir/subdir/file.txt",
-			expectError: false,
-		},
-		{
-			name:        "valid absolute path",
-			filePath:    "/tmp/test.txt",
-			expectError: false,
-		},
-		{
-			name:        "empty path",
-			filePath:    "",
-			expectError: true,
-			errorMsg:    "file path cannot be empty",
-		},
-		{
-			name:        "path with semicolon",
-			filePath:    "file;rm -rf /",
-			expectError: true,
-			errorMsg:    "file path contains potentially dangerous character: ;",
-		},
-		{
-			name:        "path with ampersand",
-			filePath:    "file&malicious",
-			expectError: true,
-			errorMsg:    "file path contains potentially dangerous character: &",
-		},
-		{
-			name:        "path with pipe",
-			filePath:    "file|cat /etc/passwd",
-			expectError: true,
-			errorMsg:    "file path contains potentially dangerous character: |",
-		},
-		{
-			name:        "path with backtick",
-			filePath:    "file`whoami`",
-			expectError: true,
-			errorMsg:    "file path contains potentially dangerous character: `",
-		},
-		{
-			name:        "path with dollar sign",
-			filePath:    "file$(whoami)",
-			expectError: true,
-			errorMsg:    "file path contains potentially dangerous character: $",
-		},
-		{
-			name:        "path traversal attempt",
-			filePath:    "../../../etc/passwd",
-			expectError: true,
-			errorMsg:    "file path contains path traversal sequence",
-		},
-		{
-			name:        "path with quotes",
-			filePath:    `file"test"`,
-			expectError: true,
-			errorMsg:    `file path contains potentially dangerous character: "`,
-		},
+type fakeNscAPIClient struct {
+	upload     func(context.Context, string, string, io.Reader, storage.UploadOpts) error
+	resolve    func(context.Context, string, string) (io.ReadCloser, error)
+	extend     func(context.Context, *storagev1beta.ExtendArtifactRequest) error
+	close      func() error
+	closeCalls atomic.Int32
+}
+
+func (c *fakeNscAPIClient) UploadArtifact(ctx context.Context, nsc, path string, r io.Reader, opts storage.UploadOpts) error {
+	if c.upload == nil {
+		return nil
 	}
+	return c.upload(ctx, nsc, path, r, opts)
+}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := validateFilePath(tt.filePath)
+func (c *fakeNscAPIClient) ResolveArtifactStream(ctx context.Context, nsc, path string) (io.ReadCloser, error) {
+	if c.resolve == nil {
+		return io.NopCloser(strings.NewReader("")), nil
+	}
+	return c.resolve(ctx, nsc, path)
+}
 
-			if tt.expectError {
-				if err == nil {
-					t.Fatal("expected error, got nil")
-				}
-				if tt.errorMsg != "" && !strings.Contains(err.Error(), tt.errorMsg) {
-					t.Errorf("error %q does not contain %q", err.Error(), tt.errorMsg)
-				}
-			} else {
-				if err != nil {
-					t.Fatalf("validateFilePath: %v", err)
-				}
-			}
-		})
+func (c *fakeNscAPIClient) ExtendArtifact(ctx context.Context, req *storagev1beta.ExtendArtifactRequest) error {
+	if c.extend == nil {
+		return nil
+	}
+	return c.extend(ctx, req)
+}
+
+func (c *fakeNscAPIClient) Close() error {
+	c.closeCalls.Add(1)
+	if c.close == nil {
+		return nil
+	}
+	return c.close()
+}
+
+func TestNscClient_IsLazy(t *testing.T) {
+	var initializeCalls atomic.Int32
+	client := newNscClient(func(context.Context) (nscAPIClient, error) {
+		initializeCalls.Add(1)
+		return &fakeNscAPIClient{}, nil
+	})
+
+	if got := initializeCalls.Load(); got != 0 {
+		t.Fatalf("initialization calls after construction = %d, want 0", got)
+	}
+	if err := client.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+	if got := initializeCalls.Load(); got != 0 {
+		t.Fatalf("initialization calls after closing unused client = %d, want 0", got)
 	}
 }
 
-func TestValidateKey(t *testing.T) {
-	tests := []struct {
-		name        string
-		key         string
-		expectError bool
-		errorMsg    string
-	}{
-		{
-			name:        "valid simple key",
-			key:         "mykey",
-			expectError: false,
-		},
-		{
-			name:        "valid key with path",
-			key:         "builds/123/artifacts/report.txt",
-			expectError: false,
-		},
-		{
-			name:        "valid key with dots and underscores",
-			key:         "test_file.tar.gz",
-			expectError: false,
-		},
-		{
-			name:        "valid key with hyphens",
-			key:         "build-artifact-v1.0.0",
-			expectError: false,
-		},
-		{
-			name:        "empty key",
-			key:         "",
-			expectError: true,
-			errorMsg:    "key cannot be empty",
-		},
-		{
-			name:        "key too long",
-			key:         string(make([]byte, 257)), // 257 characters
-			expectError: true,
-			errorMsg:    "key too long (max 256 characters)",
-		},
-		{
-			name:        "key with invalid characters",
-			key:         "key with spaces",
-			expectError: true,
-			errorMsg:    "key contains invalid characters",
-		},
-		{
-			name:        "key with special characters",
-			key:         "key@domain.com",
-			expectError: true,
-			errorMsg:    "key contains invalid characters",
-		},
-		{
-			name:        "key with path traversal",
-			key:         "../secret",
-			expectError: true,
-			errorMsg:    "key contains potentially dangerous pattern: ../",
-		},
-		{
-			name:        "key with command injection attempt",
-			key:         "file&&rm-rf",
-			expectError: true,
-			errorMsg:    "key contains invalid characters", // regex catches it first
-		},
-		{
-			name:        "key with backtick",
-			key:         "file`whoami`",
-			expectError: true,
-			errorMsg:    "key contains invalid characters", // regex catches it first
-		},
+func TestNscClient_ConcurrentInitialization(t *testing.T) {
+	var initializeCalls atomic.Int32
+	want := &fakeNscAPIClient{}
+	client := newNscClient(func(context.Context) (nscAPIClient, error) {
+		initializeCalls.Add(1)
+		return want, nil
+	})
+
+	const callers = 32
+	results := make(chan nscAPIClient, callers)
+	errs := make(chan error, callers)
+	var wg sync.WaitGroup
+	for range callers {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			got, err := client.get(t.Context())
+			results <- got
+			errs <- err
+		}()
 	}
+	wg.Wait()
+	close(results)
+	close(errs)
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := validateKey(tt.key)
-
-			if tt.expectError {
-				if err == nil {
-					t.Fatal("expected error, got nil")
-				}
-				if tt.errorMsg != "" && !strings.Contains(err.Error(), tt.errorMsg) {
-					t.Errorf("error %q does not contain %q", err.Error(), tt.errorMsg)
-				}
-			} else {
-				if err != nil {
-					t.Fatalf("validateKey: %v", err)
-				}
-			}
-		})
+	for err := range errs {
+		if err != nil {
+			t.Errorf("get: %v", err)
+		}
+	}
+	for got := range results {
+		if got != want {
+			t.Errorf("get returned %p, want %p", got, want)
+		}
+	}
+	if got := initializeCalls.Load(); got != 1 {
+		t.Errorf("initialization calls = %d, want 1", got)
 	}
 }
 
-func TestRunCommandValidation(t *testing.T) {
-	ctx := t.Context()
+func TestNscClient_InitializationError(t *testing.T) {
+	var initializeCalls atomic.Int32
+	wantErr := errors.New("initialization failed")
+	client := newNscClient(func(context.Context) (nscAPIClient, error) {
+		initializeCalls.Add(1)
+		return nil, wantErr
+	})
 
-	// Test empty args
-	result, err := runCommand(ctx, "" /* no args */)
-	if err == nil {
-		t.Fatal("expected error, got nil")
+	for range 2 {
+		got, err := client.get(t.Context())
+		if got != nil {
+			t.Errorf("get returned client %v, want nil", got)
+		}
+		if !errors.Is(err, wantErr) {
+			t.Errorf("get error = %v, want %v", err, wantErr)
+		}
 	}
-	if !strings.Contains(err.Error(), "no command provided") {
-		t.Errorf("error %q does not contain %q", err.Error(), "no command provided")
+	if got := initializeCalls.Load(); got != 1 {
+		t.Errorf("initialization calls = %d, want 1", got)
 	}
-	if result != nil {
-		t.Errorf("expected nil result, got %v", result)
+}
+
+func TestNscClient_CloseOnce(t *testing.T) {
+	want := &fakeNscAPIClient{}
+	client := newNscClient(func(context.Context) (nscAPIClient, error) {
+		return want, nil
+	})
+	if _, err := client.get(t.Context()); err != nil {
+		t.Fatalf("get: %v", err)
+	}
+
+	for range 2 {
+		if err := client.Close(); err != nil {
+			t.Fatalf("Close: %v", err)
+		}
+	}
+	if got := want.closeCalls.Load(); got != 1 {
+		t.Errorf("close calls = %d, want 1", got)
+	}
+}
+
+func TestNscClient_CloseError(t *testing.T) {
+	wantErr := errors.New("close failed")
+	want := &fakeNscAPIClient{close: func() error { return wantErr }}
+	client := newNscClient(func(context.Context) (nscAPIClient, error) {
+		return want, nil
+	})
+	if _, err := client.get(t.Context()); err != nil {
+		t.Fatalf("get: %v", err)
+	}
+
+	for range 2 {
+		if err := client.Close(); !errors.Is(err, wantErr) {
+			t.Fatalf("Close error = %v, want %v", err, wantErr)
+		}
+	}
+	if got := want.closeCalls.Load(); got != 1 {
+		t.Errorf("close calls = %d, want 1", got)
 	}
 }
 
 func TestParseNscNamespace(t *testing.T) {
 	tests := []struct {
-		name      string
-		url       string
-		namespace string
-		wantErr   bool
+		name    string
+		url     string
+		nsc     string
+		wantErr bool
 	}{
-		{name: "nsc with namespace", url: "nsc://my-namespace", namespace: "my-namespace"},
+		{name: "nsc with namespace", url: "nsc://my-namespace", nsc: "my-namespace"},
 		{name: "not nsc", url: "s3://my-bucket", wantErr: true},
 		{name: "nsc without namespace", url: "nsc://", wantErr: true},
 		{name: "invalid url", url: "nsc://host:notaport", wantErr: true},
@@ -230,227 +195,438 @@ func TestParseNscNamespace(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			namespace, err := parseNscNamespace(tt.url)
+			nsc, err := parseNscNamespace(tt.url)
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("parseNscNamespace(%q) err = %v, wantErr %v", tt.url, err, tt.wantErr)
 			}
-			if namespace != tt.namespace {
-				t.Errorf("parseNscNamespace(%q) namespace = %q, want %q", tt.url, namespace, tt.namespace)
+			if nsc != tt.nsc {
+				t.Errorf("parseNscNamespace(%q) namespace = %q, want %q", tt.url, nsc, tt.nsc)
 			}
 		})
 	}
 }
 
-// fakeRunner records the args of the last command and returns a successful result.
-func fakeRunner(captured *[]string) commandRunner {
-	return func(_ context.Context, _ string, args ...string) (*CommandResult, error) {
-		*captured = args
-		return &CommandResult{}, nil
+func newTestNscStore(t *testing.T, api nscAPIClient) *NscStore {
+	t.Helper()
+	holder := newNscClient(func(context.Context) (nscAPIClient, error) {
+		return api, nil
+	})
+	store, err := NewNscStore("nsc://test-namespace", holder)
+	if err != nil {
+		t.Fatalf("NewNscStore: %v", err)
 	}
+	return store
 }
 
-func TestNscStore_PassesNamespace(t *testing.T) {
-	ctx := t.Context()
-
-	tmpDir := t.TempDir()
-	testFile := filepath.Join(tmpDir, "test.txt")
-	if err := os.WriteFile(testFile, []byte("test content"), 0o600); err != nil {
+func TestNscStore_Upload(t *testing.T) {
+	content := []byte("cache content")
+	filePath := filepath.Join(t.TempDir(), "cache archive")
+	if err := os.WriteFile(filePath, content, 0o600); err != nil {
 		t.Fatalf("WriteFile: %v", err)
 	}
 
-	var captured []string
-	store := &NscStore{namespace: "my-namespace", run: fakeRunner(&captured)}
+	var gotNsc, gotPath string
+	var gotContent []byte
+	var gotOpts storage.UploadOpts
+	api := &fakeNscAPIClient{upload: func(_ context.Context, nsc, path string, r io.Reader, opts storage.UploadOpts) error {
+		gotNsc = nsc
+		gotPath = path
+		gotOpts = opts
+		var err error
+		gotContent, err = io.ReadAll(r)
+		return err
+	}}
+	store := newTestNscStore(t, api)
 
-	if _, err := store.Upload(ctx, testFile, "key"); err != nil {
+	before := time.Now()
+	info, err := store.Upload(t.Context(), filePath, "artifact-key")
+	after := time.Now()
+	if err != nil {
 		t.Fatalf("Upload: %v", err)
 	}
-
-	wantArgs := []string{"nsc", "artifact", "upload", testFile, "key", "--expires_in", "24h", "--namespace", "my-namespace"}
-	if diff := cmp.Diff(wantArgs, captured); diff != "" {
-		t.Errorf("upload args mismatch (-want +got):\n%s", diff)
+	if gotNsc != "test-namespace" {
+		t.Errorf("namespace = %q, want test-namespace", gotNsc)
+	}
+	if gotPath != "artifact-key" {
+		t.Errorf("path = %q, want artifact-key", gotPath)
+	}
+	if !bytes.Equal(gotContent, content) {
+		t.Errorf("content = %q, want %q", gotContent, content)
+	}
+	if gotOpts.Length != int64(len(content)) {
+		t.Errorf("Length = %d, want %d", gotOpts.Length, len(content))
+	}
+	if gotOpts.ExpiresAt == nil || gotOpts.ExpiresAt.Before(before.Add(nscDefaultExpiry)) || gotOpts.ExpiresAt.After(after.Add(nscDefaultExpiry)) {
+		t.Errorf("ExpiresAt = %v, want between %v and %v", gotOpts.ExpiresAt, before.Add(nscDefaultExpiry), after.Add(nscDefaultExpiry))
+	}
+	if info.BytesTransferred != int64(len(content)) {
+		t.Errorf("BytesTransferred = %d, want %d", info.BytesTransferred, len(content))
 	}
 }
 
-// isCommand reports whether args starts with the given nsc subcommand tokens.
-func isCommand(args []string, tokens ...string) bool {
-	if len(args) < len(tokens) {
-		return false
+func TestNscStore_UploadFailure(t *testing.T) {
+	wantErr := errors.New("upload failed")
+	api := &fakeNscAPIClient{upload: func(context.Context, string, string, io.Reader, storage.UploadOpts) error {
+		return wantErr
+	}}
+	store := newTestNscStore(t, api)
+	filePath := filepath.Join(t.TempDir(), "cache")
+	if err := os.WriteFile(filePath, []byte("data"), 0o600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
 	}
-	for i, tok := range tokens {
-		if args[i] != tok {
-			return false
-		}
-	}
-	return true
-}
 
-// recordingRunner records every command invocation and delegates the result to
-// respond. When respond is nil, every command succeeds. Download commands write
-// their destination file so the store's os.Stat succeeds.
-func recordingRunner(calls *[][]string, respond func(args []string) (*CommandResult, error)) commandRunner {
-	return func(_ context.Context, _ string, args ...string) (*CommandResult, error) {
-		*calls = append(*calls, args)
-
-		if isCommand(args, "nsc", "artifact", "download") {
-			// download args: nsc artifact download <key> <filePath> ...
-			if err := os.WriteFile(args[4], []byte("data"), 0o600); err != nil {
-				return nil, err
-			}
-		}
-
-		if respond != nil {
-			return respond(args)
-		}
-		return &CommandResult{}, nil
+	if _, err := store.Upload(t.Context(), filePath, "key"); !errors.Is(err, wantErr) {
+		t.Fatalf("Upload error = %v, want %v", err, wantErr)
 	}
 }
 
-func TestNscStore_RefreshesTTLOnDownload(t *testing.T) {
-	ctx := t.Context()
-	dest := filepath.Join(t.TempDir(), "out.txt")
+func TestNscStore_UploadOpensFileBeforeInitializingClient(t *testing.T) {
+	var initializeCalls atomic.Int32
+	holder := newNscClient(func(context.Context) (nscAPIClient, error) {
+		initializeCalls.Add(1)
+		return &fakeNscAPIClient{}, nil
+	})
+	store, err := NewNscStore("nsc://ns", holder)
+	if err != nil {
+		t.Fatalf("NewNscStore: %v", err)
+	}
 
-	var calls [][]string
-	store := &NscStore{namespace: "my-namespace", run: recordingRunner(&calls, nil)}
+	if _, err := store.Upload(t.Context(), filepath.Join(t.TempDir(), "missing"), "key"); err == nil {
+		t.Fatal("Upload: expected error")
+	}
+	if got := initializeCalls.Load(); got != 0 {
+		t.Errorf("initialization calls = %d, want 0", got)
+	}
+}
 
-	if _, err := store.Download(ctx, "key", dest); err != nil {
+type trackingReadCloser struct {
+	io.Reader
+	closed   bool
+	closeErr error
+}
+
+func (r *trackingReadCloser) Close() error {
+	r.closed = true
+	return r.closeErr
+}
+
+type errorReader struct {
+	err error
+}
+
+func (r errorReader) Read([]byte) (int, error) {
+	return 0, r.err
+}
+
+type partialErrorReader struct {
+	sent bool
+}
+
+func (r *partialErrorReader) Read(p []byte) (int, error) {
+	if r.sent {
+		return 0, io.ErrUnexpectedEOF
+	}
+	r.sent = true
+	return copy(p, "partial"), nil
+}
+
+func TestNscStore_Download(t *testing.T) {
+	body := &trackingReadCloser{Reader: strings.NewReader("downloaded content")}
+	var gotNsc, gotPath string
+	var extendReq *storagev1beta.ExtendArtifactRequest
+	api := &fakeNscAPIClient{
+		resolve: func(_ context.Context, nsc, path string) (io.ReadCloser, error) {
+			gotNsc = nsc
+			gotPath = path
+			return body, nil
+		},
+		extend: func(_ context.Context, req *storagev1beta.ExtendArtifactRequest) error {
+			extendReq = req
+			return nil
+		},
+	}
+	store := newTestNscStore(t, api)
+	dest := filepath.Join(t.TempDir(), "downloaded")
+
+	info, err := store.Download(t.Context(), "artifact-key", dest)
+	if err != nil {
 		t.Fatalf("Download: %v", err)
 	}
-
-	wantExtend := []string{"nsc", "artifact", "extend", "key", "--ensure_minimum", "24h", "--namespace", "my-namespace"}
-	var gotExtend []string
-	for _, c := range calls {
-		if isCommand(c, "nsc", "artifact", "extend") && !isCommand(c, "nsc", "artifact", "extend", "--help") {
-			gotExtend = c
-		}
+	if gotNsc != "test-namespace" || gotPath != "artifact-key" {
+		t.Errorf("ResolveArtifactStream(%q, %q), want (%q, %q)", gotNsc, gotPath, "test-namespace", "artifact-key")
 	}
-	if diff := cmp.Diff(wantExtend, gotExtend); diff != "" {
-		t.Errorf("extend args mismatch (-want +got):\n%s", diff)
+	if !body.closed {
+		t.Error("download body was not closed")
 	}
-}
-
-func TestNscStore_UpdatesCLIWhenExtendUnsupported(t *testing.T) {
-	ctx := t.Context()
-	dest := filepath.Join(t.TempDir(), "out.txt")
-
-	var calls [][]string
-	respond := func(args []string) (*CommandResult, error) {
-		// Simulate an old CLI: `nsc artifact extend --help` exits non-zero.
-		if isCommand(args, "nsc", "artifact", "extend", "--help") {
-			return &CommandResult{ExitCode: 1}, nil
-		}
-		return &CommandResult{}, nil
+	got, err := os.ReadFile(dest)
+	if err != nil {
+		t.Fatalf("ReadFile: %v", err)
 	}
-	store := &NscStore{namespace: "ns", run: recordingRunner(&calls, respond)}
-
-	if _, err := store.Download(ctx, "key", dest); err != nil {
-		t.Fatalf("Download: %v", err)
+	if string(got) != "downloaded content" {
+		t.Errorf("downloaded content = %q", got)
 	}
-
-	var updated, extended bool
-	for _, c := range calls {
-		if isCommand(c, "nsc", "version", "update") {
-			updated = true
-		}
-		if isCommand(c, "nsc", "artifact", "extend", "key") {
-			extended = true
-		}
+	if info.BytesTransferred != int64(len(got)) {
+		t.Errorf("BytesTransferred = %d, want %d", info.BytesTransferred, len(got))
 	}
-	if !updated {
-		t.Error("expected nsc version update to run when extend is unsupported")
+	if extendReq == nil {
+		t.Fatal("ExtendArtifact was not called")
 	}
-	if !extended {
-		t.Error("expected nsc artifact extend to run after updating the CLI")
+	if extendReq.GetNamespace() != "test-namespace" || extendReq.GetPath() != "artifact-key" {
+		t.Errorf("ExtendArtifact request namespace/path = %q/%q", extendReq.GetNamespace(), extendReq.GetPath())
+	}
+	if got := extendReq.GetEnsureMinimum().AsDuration(); got != nscDefaultExpiry {
+		t.Errorf("EnsureMinimum = %v, want %v", got, nscDefaultExpiry)
 	}
 }
 
-func TestNscStore_UpdatesCLIWhenExtendHelpLacksEnsureMinimum(t *testing.T) {
-	ctx := t.Context()
-	dest := filepath.Join(t.TempDir(), "out.txt")
+func TestNscStore_DownloadNotFound(t *testing.T) {
+	resolveCalls := 0
+	api := &fakeNscAPIClient{resolve: func(context.Context, string, string) (io.ReadCloser, error) {
+		resolveCalls++
+		return nil, status.Error(codes.NotFound, "artifact expired")
+	}}
+	store := newTestNscStore(t, api)
 
-	var calls [][]string
-	respond := func(args []string) (*CommandResult, error) {
-		if isCommand(args, "nsc", "artifact", "extend", "--help") {
-			return &CommandResult{
-				ExitCode: 0,
-				Stdout: "Artifact-related activities.\n" +
-					"Usage:\n  nsc artifact [command]\n" +
-					"Available Commands:\n" +
-					"  download   Download an artifact.\n" +
-					"  upload     Upload an artifact.\n",
-			}, nil
-		}
-		return &CommandResult{}, nil
+	_, err := store.Download(t.Context(), "missing", filepath.Join(t.TempDir(), "dest"))
+	if !errors.Is(err, ErrBlobNotFound) {
+		t.Fatalf("Download error = %v, want ErrBlobNotFound", err)
 	}
-	store := &NscStore{namespace: "ns", run: recordingRunner(&calls, respond)}
+	if resolveCalls != 1 {
+		t.Errorf("resolve calls = %d, want 1", resolveCalls)
+	}
+}
 
-	if _, err := store.Download(ctx, "key", dest); err != nil {
+func TestNscStore_DownloadStreamNotFound(t *testing.T) {
+	resolveCalls := 0
+	body := &trackingReadCloser{Reader: errorReader{err: status.Error(codes.NotFound, "artifact expired")}}
+	api := &fakeNscAPIClient{resolve: func(context.Context, string, string) (io.ReadCloser, error) {
+		resolveCalls++
+		return body, nil
+	}}
+	store := newTestNscStore(t, api)
+
+	_, err := store.Download(t.Context(), "missing", filepath.Join(t.TempDir(), "dest"))
+	if !errors.Is(err, ErrBlobNotFound) {
+		t.Fatalf("Download error = %v, want ErrBlobNotFound", err)
+	}
+	if resolveCalls != 1 {
+		t.Errorf("resolve calls = %d, want 1", resolveCalls)
+	}
+	if !body.closed {
+		t.Error("download body was not closed")
+	}
+}
+
+func TestNscStore_DownloadHTTPNotFound(t *testing.T) {
+	resolveCalls := 0
+	api := &fakeNscAPIClient{resolve: func(context.Context, string, string) (io.ReadCloser, error) {
+		resolveCalls++
+		return nil, errors.New("failed to download file: status 404")
+	}}
+	store := newTestNscStore(t, api)
+
+	_, err := store.Download(t.Context(), "missing", filepath.Join(t.TempDir(), "dest"))
+	if !errors.Is(err, ErrBlobNotFound) {
+		t.Fatalf("Download error = %v, want ErrBlobNotFound", err)
+	}
+	if resolveCalls != 1 {
+		t.Errorf("resolve calls = %d, want 1", resolveCalls)
+	}
+}
+
+func TestNscStore_DownloadResolveFailure(t *testing.T) {
+	wantErr := status.Error(codes.PermissionDenied, "permission denied")
+	api := &fakeNscAPIClient{resolve: func(context.Context, string, string) (io.ReadCloser, error) {
+		return nil, wantErr
+	}}
+	store := newTestNscStore(t, api)
+
+	_, err := store.Download(t.Context(), "key", filepath.Join(t.TempDir(), "dest"))
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("Download error = %v, want %v", err, wantErr)
+	}
+	if errors.Is(err, ErrBlobNotFound) {
+		t.Fatalf("Download error = %v, should not be ErrBlobNotFound", err)
+	}
+}
+
+func TestNscStore_DownloadRetriesTransientResolveFailure(t *testing.T) {
+	resolveCalls := 0
+	api := &fakeNscAPIClient{resolve: func(context.Context, string, string) (io.ReadCloser, error) {
+		resolveCalls++
+		if resolveCalls == 1 {
+			return nil, status.Error(codes.Unavailable, "unavailable")
+		}
+		return io.NopCloser(strings.NewReader("complete")), nil
+	}}
+	store := newTestNscStore(t, api)
+	dest := filepath.Join(t.TempDir(), "dest")
+
+	if _, err := store.Download(t.Context(), "key", dest); err != nil {
 		t.Fatalf("Download: %v", err)
 	}
+	if resolveCalls != 2 {
+		t.Errorf("resolve calls = %d, want 2", resolveCalls)
+	}
+}
 
-	var updated, extended bool
-	for _, c := range calls {
-		if isCommand(c, "nsc", "version", "update") {
-			updated = true
+func TestNscStore_DownloadRetriesTransientHTTPStatus(t *testing.T) {
+	resolveCalls := 0
+	api := &fakeNscAPIClient{resolve: func(context.Context, string, string) (io.ReadCloser, error) {
+		resolveCalls++
+		if resolveCalls == 1 {
+			return nil, errors.New("failed to download file: status 503")
 		}
-		if isCommand(c, "nsc", "artifact", "extend", "key") {
-			extended = true
+		return io.NopCloser(strings.NewReader("complete")), nil
+	}}
+	store := newTestNscStore(t, api)
+	dest := filepath.Join(t.TempDir(), "dest")
+
+	if _, err := store.Download(t.Context(), "key", dest); err != nil {
+		t.Fatalf("Download: %v", err)
+	}
+	if resolveCalls != 2 {
+		t.Errorf("resolve calls = %d, want 2", resolveCalls)
+	}
+}
+
+func TestIsRetryableNscDownloadError_HTTPStatus(t *testing.T) {
+	tests := []struct {
+		status    int
+		retryable bool
+	}{
+		{status: 429, retryable: true},
+		{status: 500, retryable: true},
+		{status: 503, retryable: true},
+		{status: 404, retryable: false},
+	}
+	for _, test := range tests {
+		err := fmt.Errorf("resolve artifact: failed to download file: status %d", test.status)
+		if got := isRetryableNscDownloadError(err); got != test.retryable {
+			t.Errorf("isRetryableNscDownloadError(status %d) = %t, want %t", test.status, got, test.retryable)
 		}
 	}
-	if !updated {
-		t.Error("expected nsc version update to run when extend --help exits 0 but omits --ensure_minimum")
+}
+
+func TestNscStore_DownloadClosesBodyWhenDestinationCreationFails(t *testing.T) {
+	body := &trackingReadCloser{Reader: strings.NewReader("data")}
+	api := &fakeNscAPIClient{resolve: func(context.Context, string, string) (io.ReadCloser, error) {
+		return body, nil
+	}}
+	store := newTestNscStore(t, api)
+
+	if _, err := store.Download(t.Context(), "key", t.TempDir()); err == nil {
+		t.Fatal("Download: expected error")
 	}
-	if !extended {
-		t.Error("expected nsc artifact extend to run after updating the CLI")
+	if !body.closed {
+		t.Error("download body was not closed")
+	}
+}
+
+func TestNscStore_DownloadClosesBodyWhenCopyFails(t *testing.T) {
+	wantErr := errors.New("read failed")
+	body := &trackingReadCloser{Reader: errorReader{err: wantErr}}
+	api := &fakeNscAPIClient{resolve: func(context.Context, string, string) (io.ReadCloser, error) {
+		return body, nil
+	}}
+	store := newTestNscStore(t, api)
+
+	_, err := store.Download(t.Context(), "key", filepath.Join(t.TempDir(), "dest"))
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("Download error = %v, want %v", err, wantErr)
+	}
+	if !body.closed {
+		t.Error("download body was not closed")
+	}
+}
+
+func TestNscStore_DownloadRetriesCopyFailureAndTruncatesDestination(t *testing.T) {
+	firstBody := &trackingReadCloser{Reader: &partialErrorReader{}}
+	secondBody := &trackingReadCloser{Reader: strings.NewReader("complete")}
+	resolveCalls := 0
+	api := &fakeNscAPIClient{resolve: func(context.Context, string, string) (io.ReadCloser, error) {
+		resolveCalls++
+		if resolveCalls == 1 {
+			return firstBody, nil
+		}
+		return secondBody, nil
+	}}
+	store := newTestNscStore(t, api)
+	dest := filepath.Join(t.TempDir(), "dest")
+
+	if _, err := store.Download(t.Context(), "key", dest); err != nil {
+		t.Fatalf("Download: %v", err)
+	}
+	if resolveCalls != 2 {
+		t.Errorf("resolve calls = %d, want 2", resolveCalls)
+	}
+	if !firstBody.closed || !secondBody.closed {
+		t.Errorf("body closure = first:%t second:%t, want both closed", firstBody.closed, secondBody.closed)
+	}
+	content, err := os.ReadFile(dest)
+	if err != nil {
+		t.Fatalf("ReadFile: %v", err)
+	}
+	if got := string(content); got != "complete" {
+		t.Errorf("downloaded content = %q, want complete", got)
+	}
+}
+
+func TestIsRetryableNscDownloadError_HTTP2StreamError(t *testing.T) {
+	err := fmt.Errorf("read response body: %w", errors.New("stream error: stream ID 1; CANCEL; received from peer"))
+	if !isRetryableNscDownloadError(err) {
+		t.Errorf("isRetryableNscDownloadError(%v) = false, want true", err)
+	}
+}
+
+func TestNscStore_DownloadFailsWhenBodyCloseFails(t *testing.T) {
+	wantErr := errors.New("close failed")
+	body := &trackingReadCloser{Reader: strings.NewReader("data"), closeErr: wantErr}
+	api := &fakeNscAPIClient{resolve: func(context.Context, string, string) (io.ReadCloser, error) {
+		return body, nil
+	}}
+	store := newTestNscStore(t, api)
+
+	_, err := store.Download(t.Context(), "key", filepath.Join(t.TempDir(), "dest"))
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("Download error = %v, want %v", err, wantErr)
 	}
 }
 
 func TestNscStore_DownloadSucceedsWhenRefreshFails(t *testing.T) {
-	ctx := t.Context()
-	dest := filepath.Join(t.TempDir(), "out.txt")
-
-	respond := func(args []string) (*CommandResult, error) {
-		if isCommand(args, "nsc", "artifact", "extend", "key") {
-			return &CommandResult{ExitCode: 1, Stderr: "boom"}, nil
-		}
-		return &CommandResult{}, nil
+	wantErr := errors.New("extend failed")
+	api := &fakeNscAPIClient{
+		resolve: func(context.Context, string, string) (io.ReadCloser, error) {
+			return io.NopCloser(strings.NewReader("data")), nil
+		},
+		extend: func(context.Context, *storagev1beta.ExtendArtifactRequest) error {
+			return wantErr
+		},
 	}
-	var calls [][]string
-	store := &NscStore{namespace: "ns", run: recordingRunner(&calls, respond)}
+	store := newTestNscStore(t, api)
 
-	if _, err := store.Download(ctx, "key", dest); err != nil {
-		t.Fatalf("Download should succeed despite a failed TTL refresh: %v", err)
-	}
-}
-
-func TestNewNscStore_RequiresNamespace(t *testing.T) {
-	if _, err := NewNscStore("nsc://"); err == nil {
-		t.Error(`NewNscStore("nsc://"): expected error, got nil`)
+	if _, err := store.Download(t.Context(), "key", filepath.Join(t.TempDir(), "dest")); err != nil {
+		t.Fatalf("Download should succeed despite failed expiry refresh: %v", err)
 	}
 }
 
-// TestNscStore_ValidationShortCircuits ensures unsafe inputs are rejected before
-// the CLI is ever invoked.
-func TestNscStore_ValidationShortCircuits(t *testing.T) {
-	ctx := t.Context()
-	ran := false
-	store := &NscStore{namespace: "ns", run: func(context.Context, string, ...string) (*CommandResult, error) {
-		ran = true
-		return &CommandResult{}, nil
-	}}
-
-	if _, err := store.Upload(ctx, "invalid;path", "valid-key"); err == nil {
-		t.Error("Upload with unsafe path: expected error, got nil")
+func TestNewNscStore_RequiresNamespaceAndClient(t *testing.T) {
+	holder := newNscClient(func(context.Context) (nscAPIClient, error) {
+		return &fakeNscAPIClient{}, nil
+	})
+	if _, err := NewNscStore("nsc://", holder); err == nil {
+		t.Error(`NewNscStore("nsc://"): expected error`)
 	}
-	if _, err := store.Download(ctx, "invalid key with spaces", "dest.txt"); err == nil {
-		t.Error("Download with unsafe key: expected error, got nil")
-	}
-	if ran {
-		t.Error("nsc CLI should not run when input validation fails")
+	if _, err := NewNscStore("nsc://namespace", nil); err == nil {
+		t.Error("NewNscStore with nil client: expected error")
 	}
 }
 
 func TestNewBlobStore_NscScheme(t *testing.T) {
-	blob, err := NewBlobStore(t.Context(), AgentManaged, "nsc://my-namespace")
+	holder := newNscClient(func(context.Context) (nscAPIClient, error) {
+		return &fakeNscAPIClient{}, nil
+	})
+	blob, err := NewBlobStore(t.Context(), AgentManaged, "nsc://my-namespace", holder)
 	if err != nil {
 		t.Fatalf("NewBlobStore: %v", err)
 	}
@@ -458,123 +634,51 @@ func TestNewBlobStore_NscScheme(t *testing.T) {
 	if !ok {
 		t.Fatalf("NewBlobStore returned %T, want *NscStore", blob)
 	}
-	if nsc.namespace != "my-namespace" {
-		t.Errorf("namespace = %q, want %q", nsc.namespace, "my-namespace")
+	if nsc.nsc != "my-namespace" {
+		t.Errorf("namespace = %q, want my-namespace", nsc.nsc)
+	}
+
+	if _, err := NewBlobStore(t.Context(), AgentManaged, "nsc://my-namespace", nil); err == nil {
+		t.Error("NewBlobStore with nil Namespace client: expected error")
 	}
 }
 
-// TestNscStore_Integration runs integration tests if NSC CLI is available
-// This test can be skipped if NSC is not installed or configured
 func TestNscStore_Integration(t *testing.T) {
-	// Skip this test if NSC_INTEGRATION_TEST environment variable is not set
 	if os.Getenv("NSC_INTEGRATION_TEST") == "" {
 		t.Skip("Skipping NSC integration test (set NSC_INTEGRATION_TEST=1 to run)")
 	}
 
-	// "main" is the nsc CLI's default namespace.
-	store, err := NewNscStore("nsc://main")
+	holder := NewNscClient()
+	t.Cleanup(func() {
+		if err := holder.Close(); err != nil {
+			t.Errorf("close Namespace client: %v", err)
+		}
+	})
+	store, err := NewNscStore("nsc://main", holder)
 	if err != nil {
 		t.Fatalf("NewNscStore: %v", err)
 	}
 
-	ctx := t.Context()
-
-	// Create temporary directories and files
-	tmpDir, err := os.MkdirTemp("", "nsc-integration-test")
-	if err != nil {
-		t.Fatalf("MkdirTemp: %v", err)
-	}
-	defer func() { _ = os.RemoveAll(tmpDir) }()
-
-	// Create a test file
-	testFile := filepath.Join(tmpDir, "test-upload.txt")
+	testFile := filepath.Join(t.TempDir(), "test-upload.txt")
 	testContent := "Hello from NSC integration test!"
-	err = os.WriteFile(testFile, []byte(testContent), 0o600)
-	if err != nil {
+	if err := os.WriteFile(testFile, []byte(testContent), 0o600); err != nil {
 		t.Fatalf("WriteFile: %v", err)
 	}
 
-	// Test upload
 	key := "integration-test/test-file.txt"
-	transferInfo, err := store.Upload(ctx, testFile, key)
-	if err != nil {
-		t.Fatalf("Upload should succeed with valid NSC setup: %v", err)
+	if _, err := store.Upload(t.Context(), testFile, key); err != nil {
+		t.Fatalf("Upload: %v", err)
 	}
 
-	if transferInfo.BytesTransferred <= 0 {
-		t.Errorf("expected BytesTransferred > 0, got %d", transferInfo.BytesTransferred)
+	downloadFile := filepath.Join(t.TempDir(), "test-download.txt")
+	if _, err := store.Download(t.Context(), key, downloadFile); err != nil {
+		t.Fatalf("Download: %v", err)
 	}
-	if transferInfo.TransferSpeed <= 0.0 {
-		t.Errorf("expected TransferSpeed > 0, got %f", transferInfo.TransferSpeed)
-	}
-	if transferInfo.Duration <= 0 {
-		t.Errorf("expected Duration > 0, got %v", transferInfo.Duration)
-	}
-
-	// Test download
-	downloadFile := filepath.Join(tmpDir, "test-download.txt")
-	transferInfo, err = store.Download(ctx, key, downloadFile)
-	if err != nil {
-		t.Fatalf("Download should succeed: %v", err)
-	}
-
-	if transferInfo.BytesTransferred <= 0 {
-		t.Errorf("expected BytesTransferred > 0, got %d", transferInfo.BytesTransferred)
-	}
-
-	// Verify downloaded content
 	downloadedContent, err := os.ReadFile(downloadFile)
 	if err != nil {
 		t.Fatalf("ReadFile: %v", err)
 	}
 	if string(downloadedContent) != testContent {
-		t.Errorf("downloaded content mismatch: got %q, want %q", string(downloadedContent), testContent)
+		t.Errorf("downloaded content = %q, want %q", downloadedContent, testContent)
 	}
-
-	t.Logf("Upload: %d bytes at %.2f MB/s in %v",
-		transferInfo.BytesTransferred,
-		transferInfo.TransferSpeed,
-		transferInfo.Duration)
-}
-
-// TestNscStore_DownloadNotFound checks the store-specific not-found mapping
-func TestNscStore_DownloadNotFound(t *testing.T) {
-	ctx := t.Context()
-	dest := filepath.Join(t.TempDir(), "dest")
-
-	t.Run("stderr not found maps to ErrBlobNotFound", func(t *testing.T) {
-		store := &NscStore{namespace: "ns", run: func(context.Context, string, ...string) (*CommandResult, error) {
-			return &CommandResult{ExitCode: 1, Stderr: "Error: artifact not found"}, nil
-		}}
-		_, err := store.Download(ctx, "valid-key", dest)
-		if !errors.Is(err, ErrBlobNotFound) {
-			t.Fatalf("Download err = %v, want ErrBlobNotFound", err)
-		}
-	})
-
-	t.Run("stderr expired maps to ErrBlobNotFound", func(t *testing.T) {
-		store := &NscStore{namespace: "ns", run: func(context.Context, string, ...string) (*CommandResult, error) {
-			return &CommandResult{
-				ExitCode: 1,
-				Stderr:   "Failed: the artifact has expired at 2026-07-14T02:06:24Z (request id: cbdorlqepas5e10ldvfvdpog40).",
-			}, nil
-		}}
-		_, err := store.Download(ctx, "valid-key", dest)
-		if !errors.Is(err, ErrBlobNotFound) {
-			t.Fatalf("Download err = %v, want ErrBlobNotFound", err)
-		}
-	})
-
-	t.Run("other failures are not ErrBlobNotFound", func(t *testing.T) {
-		store := &NscStore{namespace: "ns", run: func(context.Context, string, ...string) (*CommandResult, error) {
-			return &CommandResult{ExitCode: 1, Stderr: "connection refused"}, nil
-		}}
-		_, err := store.Download(ctx, "valid-key", dest)
-		if err == nil {
-			t.Fatal("Download: expected error, got nil")
-		}
-		if errors.Is(err, ErrBlobNotFound) {
-			t.Errorf("Download err = %v, should not be ErrBlobNotFound", err)
-		}
-	})
 }

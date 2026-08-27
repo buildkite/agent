@@ -53,6 +53,27 @@ type FileMetadata struct {
 	Version   int    `json:"version"`          // Metadata schema version
 }
 
+func validateFilePath(filePath string) error {
+	if filePath == "" {
+		return fmt.Errorf("file path cannot be empty")
+	}
+
+	cleanPath := filepath.Clean(filePath)
+	dangerousChars := []string{";", "&", "|", "`", "$", "(", ")", "{", "}", "[", "]", "<", ">", "\"", "'"}
+	if runtime.GOOS != "windows" {
+		dangerousChars = append(dangerousChars, "\\")
+	}
+	for _, char := range dangerousChars {
+		if strings.Contains(cleanPath, char) {
+			return fmt.Errorf("file path contains potentially dangerous character: %s", char)
+		}
+	}
+	if strings.Contains(cleanPath, "..") {
+		return fmt.Errorf("file path contains path traversal sequence")
+	}
+	return nil
+}
+
 // NewLocalFileBlob creates a new local file storage backend from a file:// URL.
 //
 // Supported URL formats:

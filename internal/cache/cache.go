@@ -34,6 +34,19 @@ type cacheOps interface {
 	ListCaches() []configuration.Cache
 }
 
+type cacheClientCloser interface {
+	close() error
+}
+
+func withClientCleanup(l logger.Logger, c cacheClientCloser, run func() error) error {
+	defer func() {
+		if closeErr := c.close(); closeErr != nil {
+			l.Warnf("Failed to close Namespace storage client: %v", closeErr)
+		}
+	}()
+	return run()
+}
+
 // RunSave saves caches based on the provided configuration and logs results as
 // each cache is processed.
 func RunSave(ctx context.Context, l logger.Logger, apiClient *api.Client, cfg Config) error {
@@ -45,7 +58,9 @@ func RunSave(ctx context.Context, l logger.Logger, apiClient *api.Client, cfg Co
 		l.Infof("No caches defined in the cache configuration file, nothing to save")
 		return nil
 	}
-	return saveWithClient(ctx, l, c, cacheIDs, cfg.Concurrency)
+	return withClientCleanup(l, c, func() error {
+		return saveWithClient(ctx, l, c, cacheIDs, cfg.Concurrency)
+	})
 }
 
 // RunRestore restores caches based on the provided configuration and logs results
@@ -59,7 +74,9 @@ func RunRestore(ctx context.Context, l logger.Logger, apiClient *api.Client, cfg
 		l.Infof("No caches defined in the cache configuration file, nothing to restore")
 		return nil
 	}
-	return restoreWithClient(ctx, l, c, cacheIDs, cfg.Concurrency)
+	return withClientCleanup(l, c, func() error {
+		return restoreWithClient(ctx, l, c, cacheIDs, cfg.Concurrency)
+	})
 }
 
 // ListCaches returns all cache definitions configured on the client.

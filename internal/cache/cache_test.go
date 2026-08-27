@@ -43,6 +43,63 @@ func (m *mockCacheClient) ListCaches() []configuration.Cache {
 	return nil
 }
 
+type fakeCacheClientCloser struct {
+	closeFunc func() error
+}
+
+func (c fakeCacheClientCloser) close() error {
+	return c.closeFunc()
+}
+
+func TestWithClientCleanup(t *testing.T) {
+	t.Run("closes after work completes", func(t *testing.T) {
+		workComplete := false
+		closed := false
+		closer := fakeCacheClientCloser{closeFunc: func() error {
+			if !workComplete {
+				t.Error("client closed before work completed")
+			}
+			closed = true
+			return nil
+		}}
+
+		err := withClientCleanup(logger.Discard, closer, func() error {
+			workComplete = true
+			return nil
+		})
+		if err != nil {
+			t.Fatalf("withClientCleanup error = %v, want nil", err)
+		}
+		if !closed {
+			t.Error("client was not closed")
+		}
+	})
+
+	t.Run("close failure is logged without masking work error", func(t *testing.T) {
+		workErr := errors.New("worker failed")
+		closeErr := errors.New("close failed")
+		log := logger.NewBuffer()
+		closer := fakeCacheClientCloser{closeFunc: func() error { return closeErr }}
+
+		err := withClientCleanup(log, closer, func() error { return workErr })
+		if !errors.Is(err, workErr) {
+			t.Fatalf("withClientCleanup error = %v, want %v", err, workErr)
+		}
+		if got := strings.Join(log.Messages, "\n"); !strings.Contains(got, closeErr.Error()) {
+			t.Errorf("log messages = %q, want close error", got)
+		}
+	})
+
+	t.Run("close failure does not turn success into failure", func(t *testing.T) {
+		closeErr := errors.New("close failed")
+		closer := fakeCacheClientCloser{closeFunc: func() error { return closeErr }}
+
+		if err := withClientCleanup(logger.Discard, closer, func() error { return nil }); err != nil {
+			t.Fatalf("withClientCleanup error = %v, want nil", err)
+		}
+	})
+}
+
 // Test helpers
 
 func createTempCacheConfig(t *testing.T, content string) string {
@@ -395,6 +452,12 @@ func TestNewClient_ValidCacheIDs(t *testing.T) {
 	}
 	if got := client; got == nil {
 		t.Fatalf("newClient(logger.Discard, nil, cfg) = %v, want non-nil value", got)
+	}
+	if client.nscClient == nil {
+		t.Fatal("newClient did not create a Namespace client holder")
+	}
+	if err := client.close(); err != nil {
+		t.Fatalf("close unused client: %v", err)
 	}
 	if diff := cmp.Diff(cacheIDs, []string{"cache1", "cache2"}); diff != "" {
 		t.Fatalf("newClient(logger.Discard, nil, cfg) diff (-got +want):\n%s", diff)
