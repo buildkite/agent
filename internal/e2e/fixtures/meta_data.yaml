@@ -1,0 +1,21 @@
+agents:
+  queue: {{ .queue }}
+steps:
+  - label: "set metadata"
+    commands:
+      - {{ .buildkite_agent_binary }} meta-data set "family" "camelids"
+
+  - wait
+
+  - label: "get metadata"
+    commands:
+      - {{ .buildkite_agent_binary }} meta-data exists "family"
+      - |
+        family=$$({{ .buildkite_agent_binary }} meta-data get "family")
+        [[ "$$family" == "camelids" ]]
+
+  - label: "get metadata with default"
+    commands:
+      - |
+        kingdom=$$({{ .buildkite_agent_binary }} meta-data get "kingdom" --default "animalia")
+        [[ "$$kingdom" == "animalia" ]]

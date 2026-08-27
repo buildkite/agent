@@ -1,0 +1,15 @@
+agents:
+  queue: {{ .queue }}
+env:
+  GLOBAL_ENV: llamas
+  ENV_ORDER: global
+steps:
+  - label: "test env"
+    env:
+      LOCAL_ENV: alpacas
+      ENV_ORDER: local
+    commands:
+      - |
+        [[ "$${GLOBAL_ENV?}" == "llamas" ]]
+        [[ "$${LOCAL_ENV?}" == "alpacas" ]]
+        [[ "$${ENV_ORDER?}" == "local" ]]
