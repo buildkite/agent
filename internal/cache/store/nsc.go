@@ -23,11 +23,13 @@ const nscScheme = "nsc"
 
 // nscDefaultExpiry is the artifact lifetime used both when uploading a cache
 // entry (--expires_in) and when refreshing it on access (--ensure_minimum).
+// Keep this aligned with CacheRegistry::Entry::DEFAULT_EXPIRES in the Buildkite
+// backend.
 // Cache entries are content-addressed and short-lived, so we cap storage growth
 // rather than relying on NSC's no-expiry default. Every restore pushes the
 // expiry back out to this duration from now, keeping hot caches alive while
 // letting cold ones expire.
-const nscDefaultExpiry = "24h"
+const nscDefaultExpiry = "72h"
 
 // commandRunner executes an external command. It is a seam so tests can assert
 // the arguments passed to the nsc CLI without invoking the real binary.
