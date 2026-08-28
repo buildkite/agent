@@ -49,7 +49,8 @@ type FakeAgent struct {
 	Heartbeats         int
 	IgnoreInDispatches bool
 
-	PingHandler func(*http.Request) (api.Ping, error)
+	PingHandler      func(*http.Request) (api.Ping, error)
+	HeartbeatHandler http.HandlerFunc
 
 	// PingStream is a simple way of providing streaming responses concurrently.
 	// It is used for the default handler.
@@ -428,6 +429,10 @@ func (fs *FakeAPIServer) handleHeartbeat(rw http.ResponseWriter, req *http.Reque
 	}
 
 	agent.Heartbeats++
+	if agent.HeartbeatHandler != nil {
+		agent.HeartbeatHandler(rw, req)
+		return
+	}
 
 	var hb api.Heartbeat
 	if err := json.NewDecoder(req.Body).Decode(&hb); err != nil {

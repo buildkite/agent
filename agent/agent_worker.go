@@ -265,16 +265,20 @@ func (a *AgentWorker) Start(ctx context.Context, idleMon *idleMonitor) (startErr
 	}
 	defer a.metricsCollector.Stop() //nolint:errcheck // Best-effort cleanup
 
-	// There are as many as 4 different loops that send 1 error here each.
-	errCh := make(chan error, 4)
-
 	// Use this context to control the heartbeat loop.
 	heartbeatCtx, stopHeartbeats := context.WithCancel(ctx)
-	defer stopHeartbeats()
+	heartbeatDone := make(chan struct{})
+	var heartbeatErr error
 
-	// Start the heartbeat loop but don't wait for it to return (yet).
+	// Start the heartbeat loop. Stop and wait for it on every return path.
 	go func() {
-		errCh <- a.runHeartbeatLoop(heartbeatCtx)
+		defer close(heartbeatDone)
+		heartbeatErr = a.runHeartbeatLoop(heartbeatCtx)
+	}()
+	defer func() {
+		stopHeartbeats()
+		<-heartbeatDone
+		startErr = errors.Join(startErr, heartbeatErr)
 	}()
 
 	// If the agent is booted in acquisition mode, acquire that particular job
@@ -314,10 +318,10 @@ func (a *AgentWorker) Start(ctx context.Context, idleMon *idleMonitor) (startErr
 
 	// Based on configuration, we have our choice of ping loop,
 	// streaming loop+debouncer loop, or both.
-	pingLoop := func() {
-		errCh <- a.runPingLoop(ctx, bat, fromPingLoopCh)
+	pingLoop := func() error {
+		return a.runPingLoop(ctx, bat, fromPingLoopCh)
 	}
-	streamingLoop := func() {
+	streamingLoop := func() error {
 		err := a.runStreamingPingLoop(ctx, fromStreamingLoopCh)
 		if err != nil {
 			switch a.agentConfiguration.PingMode {
@@ -337,25 +341,25 @@ func (a *AgentWorker) Start(ctx context.Context, idleMon *idleMonitor) (startErr
 				err = nil
 			}
 		}
-		errCh <- err
+		return err
 	}
-	debouncerLoop := func() {
-		errCh <- a.runDebouncer(ctx, bat, fromDebouncerCh, fromStreamingLoopCh)
+	debouncerLoop := func() error {
+		return a.runDebouncer(ctx, bat, fromDebouncerCh, fromStreamingLoopCh)
 	}
 
-	var loops []func()
+	var loops []func() error
 	switch a.agentConfiguration.PingMode {
 	case "", PingModeAuto: // note: "" can happen in some tests
-		loops = []func(){pingLoop, streamingLoop, debouncerLoop}
+		loops = []func() error{pingLoop, streamingLoop, debouncerLoop}
 		<-bat.Acquire()
 		bat.Acquired(actorDebouncer)
 
 	case PingModePollOnly:
-		loops = []func(){pingLoop}
+		loops = []func() error{pingLoop}
 		fromDebouncerCh = nil // prevent action loop listening to streaming side
 
 	case PingModeStreamOnly:
-		loops = []func(){streamingLoop, debouncerLoop}
+		loops = []func() error{streamingLoop, debouncerLoop}
 		fromPingLoopCh = nil // prevent action loop listening to ping side
 		<-bat.Acquire()
 		bat.Acquired(actorDebouncer)
@@ -365,29 +369,22 @@ func (a *AgentWorker) Start(ctx context.Context, idleMon *idleMonitor) (startErr
 	}
 
 	// There's always an action handler.
-	actionLoop := func() {
-		errCh <- a.runActionLoop(ctx, idleMon, fromPingLoopCh, fromDebouncerCh)
+	actionLoop := func() error {
+		return a.runActionLoop(ctx, idleMon, fromPingLoopCh, fromDebouncerCh)
 	}
 	loops = append(loops, actionLoop)
 
 	// Start the loops and block until they have all stopped.
+	loopErrs := make([]error, len(loops))
 	var wg sync.WaitGroup
-	for _, l := range loops {
-		wg.Go(l)
+	for i, loop := range loops {
+		wg.Go(func() {
+			loopErrs[i] = loop()
+		})
 	}
 	wg.Wait()
 
-	// The source loops have ended, so stop the heartbeat loop.
-	stopHeartbeats()
-
-	// Block until all loops have returned, then join the errors.
-	// (Note that errors.Join does the right thing with nil.)
-	// All loops are context aware, so no need to wait on ctx here.
-	var err error
-	for range len(loops) + 1 { // loops + heartbeat loop
-		err = errors.Join(err, <-errCh)
-	}
-	return err
+	return errors.Join(loopErrs...)
 }
 
 func (a *AgentWorker) internalStop() {
