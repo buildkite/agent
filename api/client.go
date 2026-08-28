@@ -8,12 +8,15 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"net/url"
 	"os"
 	"reflect"
+	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/buildkite/agent/v3/internal/agenthttp"
@@ -72,7 +75,8 @@ type Client struct {
 	logger logger.Logger
 
 	// server-specified HTTP request headers to include in all requests
-	requestHeaders http.Header
+	requestHeadersMu sync.RWMutex
+	requestHeaders   http.Header
 }
 
 // NewClient returns a new Buildkite Agent API Client.
@@ -141,7 +145,7 @@ func requestHeadersFromEnv(environ []string) http.Header {
 // request headers and the logger.
 func (c *Client) New(conf Config) *Client {
 	client := NewClient(c.logger, conf)
-	client.requestHeaders = c.requestHeaders
+	client.requestHeaders = c.requestHeadersSnapshot()
 	return client
 }
 
@@ -153,7 +157,7 @@ func (c *Client) Config() Config {
 // ServerSpecifiedRequestHeaders returns the HTTP headers that the Buildkite register/ping
 // APIs have advised the client to send in all requests.
 func (c *Client) ServerSpecifiedRequestHeaders() http.Header {
-	return c.requestHeaders
+	return c.requestHeadersSnapshot()
 }
 
 // FromAgentRegisterResponse returns a new instance using the access token and endpoint
@@ -177,26 +181,44 @@ func (c *Client) FromAgentRegisterResponse(reg *AgentRegisterResponse) *Client {
 	return newClient
 }
 
-func (c *Client) setRequestHeaders(headers map[string]string) {
+// setRequestHeaders replaces the current headers when headers is non-nil and
+// reports whether the effective set of permitted headers changed.
+func (c *Client) setRequestHeaders(headers map[string]string) bool {
 	if headers == nil {
-		return
+		return false
 	}
 
-	c.requestHeaders = make(http.Header)
+	next := make(http.Header)
 	for k, v := range headers {
 		if !strings.HasPrefix(k, "Buildkite-") {
 			continue
 		}
-		c.requestHeaders.Set(k, v)
+		next.Set(k, v)
 	}
 
-	if c.logger.Level() <= logger.DEBUG {
-		for k, values := range c.requestHeaders {
+	c.requestHeadersMu.Lock()
+	changed := !maps.EqualFunc(c.requestHeaders, next, slices.Equal)
+	if changed {
+		c.requestHeaders = next
+	}
+	c.requestHeadersMu.Unlock()
+
+	if changed && c.logger.Level() <= logger.DEBUG {
+		for k, values := range next {
 			for _, v := range values {
 				c.logger.Debugf("Server-specified request header: %s: %s", k, v)
 			}
 		}
 	}
+
+	return changed
+}
+
+func (c *Client) requestHeadersSnapshot() http.Header {
+	c.requestHeadersMu.RLock()
+	defer c.requestHeadersMu.RUnlock()
+
+	return c.requestHeaders.Clone()
 }
 
 // FromPing returns a new instance using a new endpoint from a ping response
@@ -254,7 +276,7 @@ func (c *Client) newRequest(
 	}
 
 	// add any request headers specified by the server during register/ping
-	for k, values := range c.requestHeaders {
+	for k, values := range c.requestHeadersSnapshot() {
 		for _, v := range values {
 			req.Header.Add(k, v)
 		}
@@ -288,7 +310,7 @@ func (c *Client) newFormRequest(ctx context.Context, method, urlStr string, body
 	}
 
 	// add any request headers specified by the server during register/ping
-	for k, values := range c.requestHeaders {
+	for k, values := range c.requestHeadersSnapshot() {
 		for _, v := range values {
 			req.Header.Add(k, v)
 		}

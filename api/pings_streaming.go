@@ -38,7 +38,7 @@ func (c *Client) StreamPings(ctx context.Context, agentID string, opts ...connec
 	h := callInfo.RequestHeader()
 
 	// Add any request headers specified by the server during register/ping
-	for k, values := range c.requestHeaders {
+	for k, values := range c.requestHeadersSnapshot() {
 		for _, v := range values {
 			h.Add(k, v)
 		}
@@ -61,10 +61,29 @@ func (c *Client) StreamPings(ctx context.Context, agentID string, opts ...connec
 	return func(yield func(*agentedgev1.StreamPingsResponse, error) bool) {
 		defer stream.Close() //nolint:errcheck // Best-effort cleanup
 		for stream.Receive() {
-			if !yield(stream.Msg(), nil) {
+			msg := stream.Msg()
+
+			headersDidChange := false
+			if headers := msg.GetRequestHeaders(); headers != nil {
+				values := headers.GetValues()
+				if values == nil {
+					values = map[string]string{}
+				}
+				headersDidChange = c.setRequestHeaders(values)
+			}
+
+			// Always yield the action before restarting so that a message
+			// containing both an action and new headers doesn't lose the action.
+			if !yield(msg, nil) {
+				return
+			}
+
+			if headersDidChange {
+				// Restart the stream to pick up the new headers
 				return
 			}
 		}
+
 		if err := stream.Err(); err != nil {
 			yield(nil, err)
 		}
