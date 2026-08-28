@@ -334,6 +334,12 @@ var (
 		Sources: cli.EnvVars("BUILDKITE_GIT_SKIP_FETCH_EXISTING_COMMITS"),
 	}
 
+	GitFetchBaseBranchFlag = &cli.BoolFlag{
+		Name:    "git-fetch-base-branch",
+		Usage:   "Also fetch the base branch during checkout, so every command in the job can diff against its current tip. The base branch is the first non-empty value of {$BUILDKITE_PULL_REQUEST_BASE_BRANCH, $BUILDKITE_PIPELINE_DEFAULT_BRANCH}, and nothing is fetched when it is the branch being built (default: false)",
+		Sources: cli.EnvVars("BUILDKITE_GIT_FETCH_BASE_BRANCH"),
+	}
+
 	CheckoutAttemptsFlag = &cli.IntFlag{
 		Name:    "checkout-attempts",
 		Value:   6,
