@@ -416,7 +416,7 @@ func TestRunUnwrappedHookSetsLastHookExitStatus(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			e := newCancelTestExecutor(t)
 			hookPath := filepath.Join(t.TempDir(), "hook")
-			hook := []byte(fmt.Sprintf("#!/bin/sh\nexit %d\n", test.exitStatus))
+			hook := []byte(fmt.Sprintf("#!/usr/bin/env python\nimport sys; sys.exit(%d)\n", test.exitStatus))
 			if err := os.WriteFile(hookPath, hook, 0o755); err != nil {
 				t.Fatalf("os.WriteFile(%q) error = %v", hookPath, err)
 			}
