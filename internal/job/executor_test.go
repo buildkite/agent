@@ -139,41 +139,6 @@ func newCancelTestExecutor(t *testing.T) *Executor {
 	return e
 }
 
-func TestRunUnwrappedHookSetsLastHookExitStatus(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("script hooks aren't supported on Windows")
-	}
-
-	for _, test := range []struct {
-		name       string
-		exitStatus int
-	}{
-		{name: "success", exitStatus: 0},
-		{name: "failure", exitStatus: 7},
-	} {
-		t.Run(test.name, func(t *testing.T) {
-			e := newCancelTestExecutor(t)
-			hookPath := filepath.Join(t.TempDir(), "hook")
-			hook := []byte(fmt.Sprintf("#!/bin/sh\nexit %d\n", test.exitStatus))
-			if err := os.WriteFile(hookPath, hook, 0o755); err != nil {
-				t.Fatalf("os.WriteFile(%q) error = %v", hookPath, err)
-			}
-
-			err := e.runUnwrappedHook(t.Context(), "test hook", HookConfig{
-				Name: "test",
-				Path: hookPath,
-				Env:  e.shell.Env,
-			})
-			if got := shell.ExitCode(err); got != test.exitStatus {
-				t.Fatalf("shell.ExitCode(e.runUnwrappedHook()) = %d, want %d", got, test.exitStatus)
-			}
-			if got, ok := e.shell.Env.Get("BUILDKITE_LAST_HOOK_EXIT_STATUS"); !ok || got != strconv.Itoa(test.exitStatus) {
-				t.Errorf("BUILDKITE_LAST_HOOK_EXIT_STATUS = (%q, %v), want (%q, true)", got, ok, strconv.Itoa(test.exitStatus))
-			}
-		})
-	}
-}
-
 // TestSetUpGitLFSSkipSmudge is a regression test for #4041: setUp used to set
 // GIT_LFS_SKIP_SMUDGE=1 unconditionally, disabling git's default LFS smudge for
 // every job. It must only be set when LFS handling is enabled.
@@ -431,6 +396,41 @@ func TestConfigureRepositoryProviderGitCredentials(t *testing.T) {
 			hasRewrite := strings.Contains(config, "url.https://github.com/.insteadof=git@github.com:")
 			if hasRewrite != test.wantGitHubRewrite {
 				t.Errorf("GitHub rewrite present = %t, want %t\n%s", hasRewrite, test.wantGitHubRewrite, config)
+			}
+		})
+	}
+}
+
+func TestRunUnwrappedHookSetsLastHookExitStatus(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("script hooks aren't supported on Windows")
+	}
+
+	for _, test := range []struct {
+		name       string
+		exitStatus int
+	}{
+		{name: "success", exitStatus: 0},
+		{name: "failure", exitStatus: 7},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			e := newCancelTestExecutor(t)
+			hookPath := filepath.Join(t.TempDir(), "hook")
+			hook := []byte(fmt.Sprintf("#!/bin/sh\nexit %d\n", test.exitStatus))
+			if err := os.WriteFile(hookPath, hook, 0o755); err != nil {
+				t.Fatalf("os.WriteFile(%q) error = %v", hookPath, err)
+			}
+
+			err := e.runUnwrappedHook(t.Context(), "test hook", HookConfig{
+				Name: "test",
+				Path: hookPath,
+				Env:  e.shell.Env,
+			})
+			if got := shell.ExitCode(err); got != test.exitStatus {
+				t.Fatalf("shell.ExitCode(e.runUnwrappedHook()) = %d, want %d", got, test.exitStatus)
+			}
+			if got, ok := e.shell.Env.Get("BUILDKITE_LAST_HOOK_EXIT_STATUS"); !ok || got != strconv.Itoa(test.exitStatus) {
+				t.Errorf("BUILDKITE_LAST_HOOK_EXIT_STATUS = (%q, %v), want (%q, true)", got, ok, strconv.Itoa(test.exitStatus))
 			}
 		})
 	}
