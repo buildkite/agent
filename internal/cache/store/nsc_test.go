@@ -265,7 +265,7 @@ func TestNscStore_PassesNamespace(t *testing.T) {
 		t.Fatalf("Upload: %v", err)
 	}
 
-	wantArgs := []string{"nsc", "artifact", "upload", testFile, "key", "--expires_in", "24h", "--namespace", "my-namespace"}
+	wantArgs := []string{"nsc", "artifact", "upload", testFile, "key", "--expires_in", "72h", "--namespace", "my-namespace"}
 	if diff := cmp.Diff(wantArgs, captured); diff != "" {
 		t.Errorf("upload args mismatch (-want +got):\n%s", diff)
 	}
@@ -316,7 +316,7 @@ func TestNscStore_RefreshesTTLOnDownload(t *testing.T) {
 		t.Fatalf("Download: %v", err)
 	}
 
-	wantExtend := []string{"nsc", "artifact", "extend", "key", "--ensure_minimum", "24h", "--namespace", "my-namespace"}
+	wantExtend := []string{"nsc", "artifact", "extend", "key", "--ensure_minimum", "72h", "--namespace", "my-namespace"}
 	var gotExtend []string
 	for _, c := range calls {
 		if isCommand(c, "nsc", "artifact", "extend") && !isCommand(c, "nsc", "artifact", "extend", "--help") {
