@@ -14,7 +14,7 @@ caches:
       - ~/.gomodcache
 
   - name: gocache
-    # Shard 0 is the only writer for each platform.
+    # The first parallel job is the only writer for each platform.
     cache_key:
       - agent-go-build-v2
       - { agent: os }

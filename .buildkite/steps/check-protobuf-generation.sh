@@ -2,7 +2,14 @@
 
 set -euf
 
+repo_root="$(git rev-parse --show-toplevel)"
+
+. "${repo_root}/.buildkite/steps/protobuf-tool-versions.sh"
+export PROTOBUF_GO_VERSION="$(go env GOVERSION | cut -d. -f1,2)"
 export PATH="${GOBIN}:${PATH}"
+
+cd "${repo_root}"
+buildkite-agent cache restore --name protobuf_tools
 
 install_go_tool() {
   binary="$1"
@@ -17,7 +24,7 @@ install_go_tool() {
   go install "${package}@${version}"
 }
 
-cd api/proto
+cd "${repo_root}/api/proto"
 
 echo --- :buf: Installing buf...
 mkdir -p "${GOBIN}"
@@ -33,3 +40,6 @@ if ! git diff --no-ext-diff --exit-code; then
   echo "Please run \`buf generate\` in the api/proto directory locally, and commit the result."
   exit 1
 fi
+
+cd "${repo_root}"
+buildkite-agent cache save --name protobuf_tools

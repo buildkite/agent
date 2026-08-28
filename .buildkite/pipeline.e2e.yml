@@ -31,8 +31,6 @@ steps:
             - AWS_ACCESS_KEY_ID
             - AWS_SECRET_ACCESS_KEY
             - AWS_SESSION_TOKEN
-            - BUILDKITE_BRANCH
-            - BUILDKITE_COMMIT
       - test-collector#v1.11.0:
           files: "junit.xml"
           format: "junit"

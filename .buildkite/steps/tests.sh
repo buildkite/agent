@@ -47,10 +47,7 @@ fi
 
 go tool test-engine-client run
 
-# Shard 0 is the single writer for its platform's build cache, on every
-# platform including linux/amd64. Compiled test binaries only exist in a cache
-# a test run wrote, so the test jobs cannot share a key with a step that does
-# not build them.
+# Only the first parallel job writes each platform's build cache.
 if [[ "${BUILDKITE_PARALLEL_JOB:-0}" == "0" ]]; then
   save_names=(--name "${gocache_name}")
 

@@ -22,7 +22,7 @@ steps:
       - .buildkite/cache.yml
       - .buildkite/docker-compose.yml
     plugins:
-      - &cache_v2_role
+      - &assume_cache_role
         aws-assume-role-with-web-identity#v1.4.0:
           role_arn: "arn:aws:iam::445615400570:role/pipeline-buildkite-agent"
           session-tags:
@@ -41,8 +41,6 @@ steps:
             - AWS_ACCESS_KEY_ID
             - AWS_SECRET_ACCESS_KEY
             - AWS_SESSION_TOKEN
-            - BUILDKITE_BRANCH
-            - BUILDKITE_COMMIT
 
   - name: ":go::robot_face: Check protobuf generation"
     key: check-protobuf-genreation
@@ -50,12 +48,7 @@ steps:
       GOBIN: /root/.protobuf-tools/bin
       GOCACHE: /root/.protobuf-tools/gocache
       GOMODCACHE: /root/.protobuf-tools/gomodcache
-    command:
-      - . .buildkite/steps/protobuf-tool-versions.sh
-      - 'export PROTOBUF_GO_VERSION="$(go env GOVERSION | cut -d. -f1,2)"'
-      - buildkite-agent cache restore --name protobuf_tools
-      - .buildkite/steps/check-protobuf-generation.sh
-      - buildkite-agent cache save --name protobuf_tools
+    command: .buildkite/steps/check-protobuf-generation.sh
     if_changed:
       - api/proto/**
       - .buildkite/steps/check-protobuf-generation.sh
@@ -63,7 +56,7 @@ steps:
       - .buildkite/cache.yml
       - .buildkite/docker-compose.yml
     plugins:
-      - *cache_v2_role
+      - *assume_cache_role
       - docker-compose#v4.14.0:
           config: .buildkite/docker-compose.yml
           cli-version: 2
@@ -128,7 +121,7 @@ steps:
           - junit-*.xml
           - "coverage-*/**"
         plugins:
-          - *cache_v2_role
+          - *assume_cache_role
           - tests#v1.0.0:
               suite-slug: buildkite-agent
               test-runner: gotest
@@ -152,8 +145,6 @@ steps:
                 - AWS_ACCESS_KEY_ID
                 - AWS_SECRET_ACCESS_KEY
                 - AWS_SESSION_TOKEN
-                - BUILDKITE_BRANCH
-                - BUILDKITE_COMMIT
 
       - name: ":linux: Linux ARM64 Tests"
         key: test-linux-arm64
@@ -165,7 +156,7 @@ steps:
         agents:
           queue: $AGENT_RUNNERS_LINUX_ARM64_QUEUE
         plugins:
-          - *cache_v2_role
+          - *assume_cache_role
           - tests#v1.0.0:
               suite-slug: buildkite-agent
               test-runner: gotest
@@ -189,8 +180,6 @@ steps:
                 - AWS_ACCESS_KEY_ID
                 - AWS_SECRET_ACCESS_KEY
                 - AWS_SESSION_TOKEN
-                - BUILDKITE_BRANCH
-                - BUILDKITE_COMMIT
 
       - name: ":windows: Windows AMD64 Tests"
         key: test-windows
@@ -202,7 +191,7 @@ steps:
         agents:
           queue: $AGENT_RUNNERS_WINDOWS_QUEUE
         plugins:
-          - *cache_v2_role
+          - *assume_cache_role
           - tests#v1.0.0:
               suite-slug: buildkite-agent
               test-runner: gotest
@@ -226,7 +215,7 @@ steps:
         agents:
           queue: $AGENT_RUNNERS_LINUX_ARM64_QUEUE
         plugins:
-          - *cache_v2_role
+          - *assume_cache_role
           - tests#v1.0.0:
               suite-slug: buildkite-agent
               test-runner: gotest
@@ -250,8 +239,6 @@ steps:
                 - AWS_ACCESS_KEY_ID
                 - AWS_SECRET_ACCESS_KEY
                 - AWS_SESSION_TOKEN
-                - BUILDKITE_BRANCH
-                - BUILDKITE_COMMIT
 
       - name: ":coverage: Test coverage report Linux ARM64"
         key: test-coverage-linux-arm64
@@ -325,7 +312,7 @@ steps:
           - test-linux-arm64
         artifact_paths: "pkg/*"
         plugins:
-          - *cache_v2_role
+          - *assume_cache_role
           - docker-compose#v4.14.0:
               config: .buildkite/docker-compose.yml
               cli-version: 2
@@ -334,7 +321,6 @@ steps:
               env:
                 - BUILDKITE_AGENT_CACHE_REGISTRY
                 - BUILDKITE_AGENT_CACHE_STORE_URL
-                - BUILDKITE_COMMIT
                 - AWS_ACCESS_KEY_ID
                 - AWS_SECRET_ACCESS_KEY
                 - AWS_SESSION_TOKEN
