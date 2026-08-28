@@ -115,6 +115,7 @@ var checkoutOverrideScope = map[string]struct{}{
 	"BUILDKITE_GIT_CLEAN_FLAGS":                 {},
 	"BUILDKITE_GIT_CLONE_FLAGS":                 {},
 	"BUILDKITE_GIT_COMMIT_VERIFICATION":         {},
+	"BUILDKITE_GIT_FETCH_BASE_BRANCH":           {},
 	"BUILDKITE_GIT_FETCH_FLAGS":                 {},
 	"BUILDKITE_GIT_SKIP_FETCH_EXISTING_COMMITS": {},
 	"BUILDKITE_GIT_SPARSE_CHECKOUT_MODE":        {},
