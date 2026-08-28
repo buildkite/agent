@@ -5,7 +5,7 @@
 caches:
   - name: gomodcache
     cache_key:
-      - agent-go-modules-v1
+      - agent-go-modules
       - { agent: os }
       - { agent: arch }
       - { env: AGENT_GO_VERSION, fallback_limit: true }
@@ -16,7 +16,7 @@ caches:
   - name: gocache
     # The first parallel job is the only writer for each platform.
     cache_key:
-      - agent-go-build-v2
+      - agent-go-build
       - { agent: os }
       - { agent: arch }
       - { env: AGENT_GO_VERSION, fallback_limit: true }
@@ -26,7 +26,7 @@ caches:
 
   - name: gocache_race
     cache_key:
-      - agent-go-build-race-v2
+      - agent-go-build-race
       - { agent: os }
       - { agent: arch }
       - { env: AGENT_GO_VERSION, fallback_limit: true }
@@ -37,7 +37,7 @@ caches:
   - name: lint_gocache
     # Lint gets its own cache because no other job writes its analyzer results.
     cache_key:
-      - agent-go-build-lint-v1
+      - agent-go-build-lint
       - { agent: os }
       - { agent: arch }
       - { env: AGENT_GO_VERSION, fallback_limit: true }
@@ -48,7 +48,7 @@ caches:
   - name: target_gocache
     # The host is part of the key because this also contains host-built tools.
     cache_key:
-      - agent-go-target-build-v2
+      - agent-go-target-build
       - { agent: os }
       - { agent: arch }
       - { env: TARGET_GOOS }
@@ -65,7 +65,7 @@ caches:
     # an existing module, but that seems unlikely and keeps the cache useful.
     # go-licenses output also varies by GOOS/GOARCH (google/go-licenses#187).
     cache_key:
-      - agent-acknowledgements-v1
+      - agent-acknowledgements
       - { env: TARGET_GOOS }
       - { env: TARGET_GOARCH }
       - { env: TARGET_GO_VERSION }
@@ -77,7 +77,7 @@ caches:
   - name: e2e_gomodcache
     # One E2E job writes both caches.
     cache_key:
-      - agent-e2e-go-modules-v1
+      - agent-e2e-go-modules
       - { agent: os }
       - { agent: arch }
       - { env: E2E_GO_VERSION, fallback_limit: true }
@@ -87,7 +87,7 @@ caches:
 
   - name: e2e_gocache
     cache_key:
-      - agent-e2e-go-build-v2
+      - agent-e2e-go-build
       - { agent: os }
       - { agent: arch }
       - { env: E2E_GO_VERSION, fallback_limit: true }
@@ -97,7 +97,7 @@ caches:
 
   - name: protobuf_tools
     cache_key:
-      - protobuf-tools-v1
+      - protobuf-tools
       - { agent: os }
       - { agent: arch }
       - { env: PROTOBUF_GO_VERSION }
