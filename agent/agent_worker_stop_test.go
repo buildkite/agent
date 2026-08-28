@@ -103,7 +103,7 @@ func (s *gracefulStopTestServer) snapshot() (events []string, stopRequests []api
 	return slices.Clone(s.events), slices.Clone(s.stopRequests)
 }
 
-func newGracefulStopTestWorker(t *testing.T, server *gracefulStopTestServer, reportGracefulStop bool) (*AgentWorker, *logger.Buffer) {
+func newGracefulStopTestWorker(t *testing.T, server *gracefulStopTestServer) (*AgentWorker, *logger.Buffer) {
 	t.Helper()
 
 	l := logger.NewBuffer()
@@ -120,7 +120,7 @@ func newGracefulStopTestWorker(t *testing.T, server *gracefulStopTestServer, rep
 			Endpoint: server.URL,
 			Token:    "registration-token",
 		}),
-		AgentWorkerConfig{ReportGracefulStop: reportGracefulStop},
+		AgentWorkerConfig{},
 	), l
 }
 
@@ -129,7 +129,7 @@ func TestAgentWorker_ReportsGracefulStopBeforeDisconnect(t *testing.T) {
 
 	releaseStop := make(chan struct{})
 	server := newGracefulStopTestServer(t, http.StatusOK, releaseStop)
-	worker, _ := newGracefulStopTestWorker(t, server, true)
+	worker, _ := newGracefulStopTestWorker(t, server)
 
 	worker.StopGracefully()
 	worker.StopGracefully()
@@ -177,7 +177,7 @@ func TestAgentWorker_GracefulStopReportFailureDoesNotPreventDisconnect(t *testin
 	t.Parallel()
 
 	server := newGracefulStopTestServer(t, http.StatusInternalServerError, nil)
-	worker, l := newGracefulStopTestWorker(t, server, true)
+	worker, l := newGracefulStopTestWorker(t, server)
 
 	worker.StopGracefully()
 	if err := worker.Disconnect(t.Context()); err != nil {
@@ -199,22 +199,15 @@ func TestAgentWorker_DoesNotReportOtherStops(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name               string
-		reportGracefulStop bool
-		stop               func(*AgentWorker)
+		name string
+		stop func(*AgentWorker)
 	}{
 		{
-			name: "graceful reporting disabled",
-			stop: (*AgentWorker).StopGracefully,
+			name: "ungraceful stop",
+			stop: (*AgentWorker).StopUngracefully,
 		},
 		{
-			name:               "ungraceful stop",
-			reportGracefulStop: true,
-			stop:               (*AgentWorker).StopUngracefully,
-		},
-		{
-			name:               "no stop requested",
-			reportGracefulStop: true,
+			name: "no stop requested",
 		},
 	}
 
@@ -223,7 +216,7 @@ func TestAgentWorker_DoesNotReportOtherStops(t *testing.T) {
 			t.Parallel()
 
 			server := newGracefulStopTestServer(t, http.StatusOK, nil)
-			worker, _ := newGracefulStopTestWorker(t, server, test.reportGracefulStop)
+			worker, _ := newGracefulStopTestWorker(t, server)
 			if test.stop != nil {
 				test.stop(worker)
 			}

@@ -66,11 +66,12 @@ func TestDisconnect(t *testing.T) {
 	}
 
 	worker := &AgentWorker{
-		logger:             l,
-		agent:              nil,
-		apiClient:          apiClient,
-		client:             client,
-		agentConfiguration: AgentConfiguration{},
+		logger:                 l,
+		agent:                  nil,
+		apiClient:              apiClient,
+		client:                 client,
+		agentConfiguration:     AgentConfiguration{},
+		reportGracefulStopDone: make(chan struct{}),
 	}
 
 	err := worker.Disconnect(t.Context())
@@ -121,11 +122,12 @@ func TestDisconnectRetry(t *testing.T) {
 	}
 
 	worker := &AgentWorker{
-		logger:             l,
-		agent:              nil,
-		apiClient:          apiClient,
-		client:             client,
-		agentConfiguration: AgentConfiguration{},
+		logger:                 l,
+		agent:                  nil,
+		apiClient:              apiClient,
+		client:                 client,
+		agentConfiguration:     AgentConfiguration{},
+		reportGracefulStopDone: make(chan struct{}),
 	}
 
 	err := worker.Disconnect(t.Context())

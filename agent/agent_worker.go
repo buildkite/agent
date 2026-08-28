@@ -49,9 +49,6 @@ type AgentWorkerConfig struct {
 	// The configuration of the agent from the CLI
 	AgentConfiguration AgentConfiguration
 
-	// ReportGracefulStop controls whether graceful stops are reported to the Buildkite Agent API.
-	ReportGracefulStop bool
-
 	// Stdout of the parent agent process. Used for job log stdout writing arg, for simpler containerized log collection.
 	AgentStdout io.Writer
 }
@@ -109,7 +106,6 @@ type AgentWorker struct {
 
 	// A graceful stop report is launched by StopGracefully and joined by
 	// Disconnect so the worker does not disconnect before reporting.
-	reportGracefulStop     bool
 	reportGracefulStopOnce sync.Once
 	reportGracefulStopDone chan struct{}
 
@@ -224,7 +220,6 @@ func NewAgentWorker(l logger.Logger, reg *api.AgentRegisterResponse, m *metrics.
 		debugHTTP:              c.DebugHTTP,
 		agentConfiguration:     c.AgentConfiguration,
 		stop:                   make(chan struct{}),
-		reportGracefulStop:     c.ReportGracefulStop,
 		reportGracefulStopDone: make(chan struct{}),
 		cancelSig:              c.CancelSignal,
 		spawnIndex:             c.SpawnIndex,
@@ -438,11 +433,9 @@ func (a *AgentWorker) StopGracefully() {
 		// continue below
 	}
 
-	if a.reportGracefulStop {
-		a.reportGracefulStopOnce.Do(func() {
-			go a.reportGracefulStopToAPI()
-		})
-	}
+	a.reportGracefulStopOnce.Do(func() {
+		go a.reportGracefulStopToAPI()
+	})
 
 	// If we have a job, tell the user that we'll wait for it to finish
 	// before disconnecting
@@ -607,13 +600,11 @@ func (a *AgentWorker) RunJob(ctx context.Context, acceptResponse *api.Job, ignor
 // permanently disconnecting. Don't spend long retrying, because we want to
 // disconnect as fast as possible.
 func (a *AgentWorker) Disconnect(ctx context.Context) error {
-	if a.reportGracefulStop {
-		// If no graceful stop was requested, make the wait below a no-op.
-		a.reportGracefulStopOnce.Do(func() {
-			close(a.reportGracefulStopDone)
-		})
-		<-a.reportGracefulStopDone
-	}
+	// If no graceful stop was requested, make the wait below a no-op.
+	a.reportGracefulStopOnce.Do(func() {
+		close(a.reportGracefulStopDone)
+	})
+	<-a.reportGracefulStopDone
 
 	return a.client.Disconnect(ctx)
 }
