@@ -192,7 +192,7 @@ func (c *client) Restore(ctx context.Context, cacheID string) (RestoreResult, er
 				attribute.Bool("cache.invalidated", invalidated),
 			)
 			span.SetStatus(codes.Ok, "cache miss (missing blob)")
-			c.callProgress(cacheID, "complete", "Cache miss (missing blob, invalidated stale entry)", 0, 0)
+			c.callProgress(cacheID, "complete", "Cache miss (missing blob)", 0, 0)
 			return result, nil
 		}
 		if errors.Is(err, ErrDigestMismatch) {
@@ -214,7 +214,7 @@ func (c *client) Restore(ctx context.Context, cacheID string) (RestoreResult, er
 				attribute.Bool("cache.invalidated", invalidated),
 			)
 			span.SetStatus(codes.Ok, "cache miss (digest mismatch)")
-			c.callProgress(cacheID, "complete", "Cache miss (blob digest mismatch, invalidated entry)", 0, 0)
+			c.callProgress(cacheID, "complete", "Cache miss (blob digest mismatch)", 0, 0)
 			return result, nil
 		}
 		span.RecordError(err)
@@ -353,22 +353,30 @@ func (c *client) Restore(ctx context.Context, cacheID string) (RestoreResult, er
 
 // invalidateStaleEntry uses the retrieve response to expire a cache entry whose
 // blob is missing or fails digest verification, so a subsequent save re-uploads it.
+// It returns true only when the server confirms the entry existed and was deleted;
+// false means the entry was already gone (or the request failed), so a concurrent
+// replacement is left intact.
 func (c *client) invalidateStaleEntry(ctx context.Context, retrieveResp api.CacheEntryRetrieveResp) bool {
-	if len(retrieveResp.TargetPaths) == 0 || len(retrieveResp.CacheKey) == 0 {
-		slog.Warn("cannot invalidate stale cache entry: retrieve response missing resolved address")
+	if retrieveResp.EntryRef == "" && (len(retrieveResp.TargetPaths) == 0 || len(retrieveResp.CacheKey) == 0) {
+		slog.Warn("cannot invalidate stale cache entry: retrieve response missing entry ref and resolved address")
 		return false
 	}
 
+	// EntryRef scopes the expire to exactly the entry that was retrieved; the
+	// legacy resolved address is sent alongside for servers that don't
+	// understand entry_ref yet.
 	req := api.CacheEntryExpireReq{
 		TargetPaths: retrieveResp.TargetPaths,
 		CacheKey:    retrieveResp.CacheKey,
+		EntryRef:    retrieveResp.EntryRef,
 	}
+	var expireResp api.CacheEntryExpireResp
 	err := roko.NewRetrier(
 		roko.WithMaxAttempts(5),
 		roko.WithStrategy(roko.ExponentialSubsecond(500*time.Millisecond)),
 		roko.WithJitter(),
 	).DoWithContext(ctx, func(r *roko.Retrier) error {
-		apiResp, err := c.api.CacheEntryExpire(ctx, c.registry, req)
+		resp, apiResp, err := c.api.CacheEntryExpire(ctx, c.registry, req)
 		if api.BreakOnNonRetryable(r, apiResp, err) {
 			return err
 		}
@@ -376,10 +384,15 @@ func (c *client) invalidateStaleEntry(ctx context.Context, retrieveResp api.Cach
 			slog.Warn("cache entry invalidation failed, retrying", "err", err, "retrier", r.String())
 			return err
 		}
+		expireResp = resp
 		return nil
 	})
 	if err != nil {
 		slog.Warn("cache entry invalidation failed", "registry", c.registry, "err", err)
+		return false
+	}
+	if !expireResp.Existed {
+		slog.Info("stale cache entry was already gone, nothing invalidated", "registry", c.registry)
 		return false
 	}
 	return true

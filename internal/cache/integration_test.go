@@ -24,6 +24,10 @@ type mockAPIClient struct {
 	registries map[string]*mockRegistry
 	// expireCalls records the addresses passed to CacheEntryExpire
 	expireCalls []api.CacheEntryExpireReq
+	// expireForceNotExisted makes CacheEntryExpire report existed=false
+	// without deleting anything, simulating an entry that was concurrently
+	// replaced (entry ref no longer matches) or already gone.
+	expireForceNotExisted bool
 }
 
 type mockRegistry struct {
@@ -41,6 +45,9 @@ type mockCacheEntry struct {
 	committed       bool
 	expiresAt       time.Time
 	platform        string
+	// entryRef is the opaque expiration reference the backend mints for each
+	// stored entry and echoes in retrieve responses.
+	entryRef string
 }
 
 // cacheAddr builds the v2 entry address from the order-insensitive target_paths
@@ -126,6 +133,7 @@ func (m *mockAPIClient) CacheEntryCreate(ctx context.Context, registry string, r
 		committed:       false,
 		expiresAt:       time.Now().Add(7 * 24 * time.Hour),
 		platform:        req.Platform,
+		entryRef:        fmt.Sprintf("entry-ref-%d", time.Now().UnixNano()),
 	}
 
 	reg.cache[cacheAddr(req.TargetPaths, req.CacheKey)] = entry
@@ -166,24 +174,43 @@ func (m *mockAPIClient) CacheEntryRetrieve(ctx context.Context, registry string,
 			Blobs:       entry.blobs,
 			Fallback:    false,
 			ExpiresAt:   entry.expiresAt,
+			EntryRef:    entry.entryRef,
 		}, true, nil, nil
 	}
 
 	return api.CacheEntryRetrieveResp{Message: api.CacheEntryNotFound}, false, nil, nil
 }
 
-func (m *mockAPIClient) CacheEntryExpire(ctx context.Context, registry string, req api.CacheEntryExpireReq) (*api.Response, error) {
+func (m *mockAPIClient) CacheEntryExpire(ctx context.Context, registry string, req api.CacheEntryExpireReq) (api.CacheEntryExpireResp, *api.Response, error) {
 	m.expireCalls = append(m.expireCalls, req)
 
 	reg, ok := m.registries[registry]
 	if !ok {
-		return nil, fmt.Errorf("registry not found: %s", registry)
+		return api.CacheEntryExpireResp{}, nil, fmt.Errorf("registry not found: %s", registry)
 	}
 
-	// Mirror the backend's delete_item so a subsequent save
-	// re-uploads the invalidated entry.
-	delete(reg.cache, cacheAddr(req.TargetPaths, req.CacheKey))
-	return nil, nil
+	if m.expireForceNotExisted {
+		return api.CacheEntryExpireResp{Message: "Cache entry not found", Existed: false}, nil, nil
+	}
+
+	// Mirror the backend: an entry ref deletes exactly the entry it was minted
+	// for; the legacy address falls back to the composed cache key.
+	if req.EntryRef != "" {
+		for addr, entry := range reg.cache {
+			if entry.entryRef == req.EntryRef {
+				delete(reg.cache, addr)
+				return api.CacheEntryExpireResp{Message: "Cache entry expired", Existed: true}, nil, nil
+			}
+		}
+		return api.CacheEntryExpireResp{Message: "Cache entry not found", Existed: false}, nil, nil
+	}
+
+	addr := cacheAddr(req.TargetPaths, req.CacheKey)
+	if _, exists := reg.cache[addr]; !exists {
+		return api.CacheEntryExpireResp{Message: "Cache entry not found", Existed: false}, nil, nil
+	}
+	delete(reg.cache, addr)
+	return api.CacheEntryExpireResp{Message: "Cache entry expired", Existed: true}, nil, nil
 }
 
 // createRandomFile creates a file filled with random data
@@ -524,6 +551,16 @@ func TestCacheIntegration_RestoreMissingBlobInvalidates(t *testing.T) {
 		t.Fatal("expected initial save to create an entry")
 	}
 
+	// Capture the entry ref the mock minted at save so we can assert the expire
+	// echoes exactly the retrieved entry's ref.
+	var wantRef string
+	for _, e := range mockClient.registries["~"].cache {
+		wantRef = e.entryRef
+	}
+	if wantRef == "" {
+		t.Fatal("expected the saved mock entry to have an entry ref")
+	}
+
 	// Simulate the blob being lifecycle/TTL-deleted while the entry survives.
 	blobEntries, err := os.ReadDir(storageDir)
 	if err != nil {
@@ -554,6 +591,9 @@ func TestCacheIntegration_RestoreMissingBlobInvalidates(t *testing.T) {
 	got := mockClient.expireCalls[0]
 	if len(got.CacheKey) != 1 || got.CacheKey[0].Value != "v1-test-key" {
 		t.Errorf("expire targeted cache_key %+v, want single part v1-test-key", got.CacheKey)
+	}
+	if got.EntryRef != wantRef {
+		t.Errorf("expire echoed EntryRef = %q, want the retrieved entry's ref %q", got.EntryRef, wantRef)
 	}
 
 	// A subsequent save must re-upload, proving the entry was invalidated.
@@ -898,6 +938,15 @@ func TestCacheIntegration_RestorePoisonedBlobIsMiss(t *testing.T) {
 		t.Fatal("expected save to create an entry")
 	}
 
+	// Capture the legitimate entry's ref so we can assert the expire echoes it.
+	var wantRef string
+	for _, e := range mockClient.registries["~"].cache {
+		wantRef = e.entryRef
+	}
+	if wantRef == "" {
+		t.Fatal("expected the saved mock entry to have an entry ref")
+	}
+
 	// Poison the store: keep the legitimate blob's content-addressed name but
 	// swap in the poisoned bytes, so the fingerprint no longer matches the name.
 	blobPath := filepath.Join(storageDir, saveResult.Archive.Sha256Sum)
@@ -942,6 +991,9 @@ func TestCacheIntegration_RestorePoisonedBlobIsMiss(t *testing.T) {
 	if len(expired.CacheKey) != 1 || expired.CacheKey[0].Value != "v1-test-key" {
 		t.Errorf("expire targeted cache_key %+v, want single part v1-test-key", expired.CacheKey)
 	}
+	if expired.EntryRef != wantRef {
+		t.Errorf("expire echoed EntryRef = %q, want the retrieved entry's ref %q", expired.EntryRef, wantRef)
+	}
 
 	// A subsequent save must re-upload, proving the entry was invalidated.
 	resaveResult, err := cacheClient.Save(ctx, "test-cache")
@@ -950,6 +1002,50 @@ func TestCacheIntegration_RestorePoisonedBlobIsMiss(t *testing.T) {
 	}
 	if !resaveResult.CacheEntryCreated {
 		t.Error("expected re-save to re-create the invalidated entry")
+	}
+}
+
+// TestCacheIntegration_RestoreMissingBlobExpireNoOp covers the scope-aware
+// no-op: the entry was concurrently replaced or removed between retrieve and
+// expire, so the server reports existed=false and nothing is deleted. The
+// restore must still be a clean miss rather than an error.
+func TestCacheIntegration_RestoreMissingBlobExpireNoOp(t *testing.T) {
+	ctx := t.Context()
+
+	cacheClient, _, storageDir := setupTestCache(t, "local_file")
+	mockClient := cacheClient.api.(*mockAPIClient)
+
+	if _, err := cacheClient.Save(ctx, "test-cache"); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+
+	// Simulate the blob disappearing while the entry survives.
+	blobEntries, err := os.ReadDir(storageDir)
+	if err != nil {
+		t.Fatalf("ReadDir: %v", err)
+	}
+	for _, e := range blobEntries {
+		if err := os.RemoveAll(filepath.Join(storageDir, e.Name())); err != nil {
+			t.Fatalf("RemoveAll: %v", err)
+		}
+	}
+
+	// The expire lands after the entry was concurrently replaced: the server
+	// reports existed=false and deletes nothing.
+	mockClient.expireForceNotExisted = true
+
+	restoreResult, err := cacheClient.Restore(ctx, "test-cache")
+	if err != nil {
+		t.Fatalf("Restore with a no-op expire should not error, got: %v", err)
+	}
+	if restoreResult.CacheRestored {
+		t.Error("missing blob should degrade to CacheRestored=false")
+	}
+	if restoreResult.CacheHit {
+		t.Error("missing blob should not be a cache hit")
+	}
+	if len(mockClient.expireCalls) != 1 {
+		t.Fatalf("expire calls = %d, want 1", len(mockClient.expireCalls))
 	}
 }
 
