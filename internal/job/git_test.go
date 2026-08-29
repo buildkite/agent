@@ -35,6 +35,11 @@ func TestParseGittableURL(t *testing.T) {
 			wantHost:   "github.com",
 		},
 		{
+			url:        "git@gerrit.example.com:/var/git/project.git",
+			wantParsed: "ssh://git@gerrit.example.com/var/git/project.git",
+			wantHost:   "gerrit.example.com",
+		},
+		{
 			url:        "git@github.com-alias1:buildkite/agent.git",
 			wantParsed: "ssh://git@github.com-alias1/buildkite/agent.git",
 			wantHost:   "github.com-alias1",
@@ -64,6 +69,135 @@ func TestParseGittableURL(t *testing.T) {
 			}
 			if got, want := u.Host, test.wantHost; got != want {
 				t.Errorf("parseGittableURL(%q) u.Host = %q, want %q", test.url, got, want)
+			}
+		})
+	}
+}
+
+func TestResolveGitSubmoduleURL(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name         string
+		superproject string
+		submodule    string
+		want         string
+	}{
+		{
+			name:         "absolute https submodule is unchanged",
+			superproject: "https://gerrit.googlesource.com/gerrit.git",
+			submodule:    "https://gerrit.googlesource.com/java-prettify",
+			want:         "https://gerrit.googlesource.com/java-prettify",
+		},
+		{
+			name:         "absolute local submodule is unchanged",
+			superproject: "/var/git/gerrit",
+			submodule:    "/var/git/java-prettify",
+			want:         "/var/git/java-prettify",
+		},
+		{
+			name:         "relative https sibling",
+			superproject: "https://gerrit.googlesource.com/gerrit.git",
+			submodule:    "../java-prettify",
+			want:         "https://gerrit.googlesource.com/java-prettify",
+		},
+		{
+			name:         "relative https child",
+			superproject: "https://gerrit.googlesource.com/gerrit.git",
+			submodule:    "./modules/java-prettify",
+			want:         "https://gerrit.googlesource.com/gerrit.git/modules/java-prettify",
+		},
+		{
+			name:         "relative ssh sibling",
+			superproject: "ssh://git@gerrit.example.com:29418/gerrit.git",
+			submodule:    "../java-prettify",
+			want:         "ssh://git@gerrit.example.com:29418/java-prettify",
+		},
+		{
+			name:         "relative scp-like sibling",
+			superproject: "git@github.com:buildkite/agent.git",
+			submodule:    "../plugins.git",
+			want:         "git@github.com:buildkite/plugins.git",
+		},
+		{
+			name:         "relative scp-like absolute path sibling",
+			superproject: "git@gerrit.example.com:/var/git/gerrit.git",
+			submodule:    "../java-prettify.git",
+			want:         "git@gerrit.example.com:/var/git/java-prettify.git",
+		},
+		{
+			name:         "relative absolute local sibling",
+			superproject: "/var/git/gerrit",
+			submodule:    "../java-prettify",
+			want:         "/var/git/java-prettify",
+		},
+		{
+			name:         "relative local child",
+			superproject: "/var/git/gerrit",
+			submodule:    "./modules/java-prettify",
+			want:         "/var/git/gerrit/modules/java-prettify",
+		},
+		{
+			name:         "relative local path is cleaned",
+			superproject: "/var/git/projects/gerrit",
+			submodule:    "../../plugins/replication",
+			want:         "/var/git/plugins/replication",
+		},
+		{
+			name:         "bare repository name is unchanged",
+			superproject: "https://gerrit.googlesource.com/gerrit.git",
+			submodule:    "java-prettify",
+			want:         "java-prettify",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got, err := resolveGitSubmoduleURL(tt.superproject, tt.submodule)
+			if err != nil {
+				t.Fatalf("resolveGitSubmoduleURL(%q, %q) error = %v", tt.superproject, tt.submodule, err)
+			}
+			if got != tt.want {
+				t.Errorf("resolveGitSubmoduleURL(%q, %q) = %q, want %q", tt.superproject, tt.submodule, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestResolveGitSubmoduleURLReturnsParseError(t *testing.T) {
+	t.Parallel()
+
+	if _, err := resolveGitSubmoduleURL("https://example.com/%zz", "../module.git"); err == nil {
+		t.Fatal(`resolveGitSubmoduleURL("https://example.com/%zz", "../module.git") error = nil, want non-nil`)
+	}
+}
+
+func TestIsRelativeSubmoduleURL(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		repository string
+		want       bool
+	}{
+		{repository: "../java-prettify", want: true},
+		{repository: "../x:x", want: true},
+		{repository: "./modules/java-prettify", want: true},
+		{repository: "../../plugins/replication", want: true},
+		{repository: "..foo", want: false},
+		{repository: "java-prettify", want: false},
+		{repository: "/tmp/java-prettify", want: false},
+		{repository: "https://gerrit.googlesource.com/java-prettify", want: false},
+		{repository: "git@github.com:buildkite/agent.git", want: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.repository, func(t *testing.T) {
+			t.Parallel()
+
+			if got := isRelativeSubmoduleURL(tt.repository); got != tt.want {
+				t.Errorf("isRelativeSubmoduleURL(%q) = %t, want %t", tt.repository, got, tt.want)
 			}
 		})
 	}

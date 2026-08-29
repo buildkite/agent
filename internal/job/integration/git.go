@@ -138,6 +138,21 @@ func newGitRepository() (*gitRepository, error) {
 	return gr, gitErr
 }
 
+func newGitRepositoryAt(path string) (*gitRepository, error) {
+	if err := os.MkdirAll(path, 0o700); err != nil {
+		return nil, fmt.Errorf("creating git repository directory: %w", err)
+	}
+
+	gr := &gitRepository{Path: path}
+	gitErr := gr.ExecuteAll([][]string{
+		{"init"},
+		{"config", "user.email", "you@example.com"},
+		{"config", "user.name", "Your Name"},
+	})
+
+	return gr, gitErr
+}
+
 func newGitRepositoryPath() (string, error) {
 	tempDirRaw, err := os.MkdirTemp("", "git-repo")
 	if err != nil {

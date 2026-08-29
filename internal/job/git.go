@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/url"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"regexp"
 	"slices"
@@ -449,6 +450,35 @@ func gitEnumerateSubmoduleURLs(ctx context.Context, sh *shell.Shell) ([]string, 
 	return urls, nil
 }
 
+func resolveGitSubmoduleURL(superprojectURL, submoduleURL string) (string, error) {
+	if !isRelativeSubmoduleURL(submoduleURL) {
+		return submoduleURL, nil
+	}
+
+	if hasSchemePattern.MatchString(superprojectURL) {
+		base, err := url.Parse(superprojectURL)
+		if err != nil {
+			return "", err
+		}
+		base.Path = path.Join(base.Path, submoduleURL)
+		return base.String(), nil
+	}
+
+	if scpLikeURLPattern.MatchString(superprojectURL) {
+		matched := scpLikeURLPattern.FindStringSubmatch(superprojectURL)
+		user := matched[1]
+		host := matched[2]
+		repoPath := matched[3]
+		return fmt.Sprintf("%s%s:%s", user, host, path.Join(repoPath, submoduleURL)), nil
+	}
+
+	return filepath.Join(superprojectURL, filepath.FromSlash(submoduleURL)), nil
+}
+
+func isRelativeSubmoduleURL(repository string) bool {
+	return strings.HasPrefix(repository, "./") || strings.HasPrefix(repository, "../")
+}
+
 func gitRevParseInWorkingDirectory(ctx context.Context, sh *shell.Shell, workingDirectory string, extraRevParseArgs ...string) (string, error) {
 	gitDirectory := filepath.Join(workingDirectory, ".git")
 
@@ -459,8 +489,10 @@ func gitRevParseInWorkingDirectory(ctx context.Context, sh *shell.Shell, working
 }
 
 var (
-	hasSchemePattern  = regexp.MustCompile("^[^:]+://")
-	scpLikeURLPattern = regexp.MustCompile("^([^@]+@)?([^:]{2,}):/?(.+)$")
+	hasSchemePattern = regexp.MustCompile("^[^:]+://")
+	// Require at least two non-colon characters before ":" so Windows drive
+	// paths like C:\repo are handled as local filesystem paths, not scp-like URLs.
+	scpLikeURLPattern = regexp.MustCompile("^([^@]+@)?([^:]{2,}):(.+)$")
 )
 
 // parseGittableURL parses and converts a git repository url into a url.URL
@@ -470,8 +502,12 @@ func parseGittableURL(ref string) (*url.URL, error) {
 			matched := scpLikeURLPattern.FindStringSubmatch(ref)
 			user := matched[1]
 			host := matched[2]
-			path := matched[3]
-			ref = fmt.Sprintf("ssh://%s%s/%s", user, host, path)
+			repoPath := matched[3]
+			if strings.HasPrefix(repoPath, "/") {
+				ref = fmt.Sprintf("ssh://%s%s%s", user, host, repoPath)
+			} else {
+				ref = fmt.Sprintf("ssh://%s%s/%s", user, host, repoPath)
+			}
 		} else {
 			normalizedRef := strings.ReplaceAll(ref, "\\", "/")
 			ref = fmt.Sprintf("file:///%s", strings.TrimPrefix(normalizedRef, "/"))
