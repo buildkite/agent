@@ -618,18 +618,42 @@ func (e *Executor) updateGitSubmodules(ctx context.Context) (retErr error) {
 	mirrorSubmodules := e.GitMirrorsPath != ""
 	if mirrorSubmodules {
 		for _, repository := range submoduleRepos {
-			// getOrUpdateMirrorDir is shared with the main repo's mirror update, so
-			// this produces the same sub-tree of spans; git.repo distinguishes
-			// submodules since the span names repeat.
-			subMirrorSpan, subMirrorCtx := e.traceOpSpan(ctx, "git.mirror.update")
-			subMirrorSpan.SetAttributes(attribute.String("git.repo", redact.URLCredentials(repository)))
+			isRelativeSubmodule := isRelativeSubmoduleURL(repository)
+			mirrorRepository := repository
+			if isRelativeSubmodule {
+				resolvedRepository, err := resolveGitSubmoduleURL(e.Repository, repository)
+				if err != nil {
+					e.shell.Warningf("Failed to resolve relative submodule URL %q against %q for git mirror: %v", repository, redact.URLCredentials(e.Repository), err)
+					mirrorRepository = ""
+				} else {
+					mirrorRepository = resolvedRepository
+				}
+			}
 
-			mirrorDir, err := e.getOrUpdateMirrorDir(subMirrorCtx, repository, nil)
+			var mirrorDir string
+			if mirrorRepository != "" {
+				// getOrUpdateMirrorDir is shared with the main repo's mirror update, so
+				// this produces the same sub-tree of spans; git.repo distinguishes
+				// submodules since the span names repeat.
+				subMirrorSpan, subMirrorCtx := e.traceOpSpan(ctx, "git.mirror.update")
+				subMirrorSpan.SetAttributes(attribute.String("git.repo", redact.URLCredentials(mirrorRepository)))
+				if mirrorRepository != repository {
+					subMirrorSpan.SetAttributes(attribute.String("git.raw_repo", redact.URLCredentials(repository)))
+					e.shell.Commentf("Resolved relative submodule URL %q to %q for git mirror", repository, redact.URLCredentials(mirrorRepository))
+				}
 
-			tracetools.FinishWithError(subMirrorSpan, err)
+				var err error
+				mirrorDir, err = e.getOrUpdateMirrorDir(subMirrorCtx, mirrorRepository, nil)
 
-			if err != nil {
-				return fmt.Errorf("getting/updating mirror dir for submodules: %w", err)
+				tracetools.FinishWithError(subMirrorSpan, err)
+
+				if err != nil {
+					if !isRelativeSubmodule {
+						return fmt.Errorf("getting/updating mirror dir for submodules: %w", err)
+					}
+					e.shell.Warningf("Failed to update git mirror for resolved relative submodule URL %q (%q): %v", repository, redact.URLCredentials(mirrorRepository), err)
+					mirrorDir = ""
+				}
 			}
 
 			// Switch back to the checkout dir, doing other operations from GitMirrorsPath will fail.
