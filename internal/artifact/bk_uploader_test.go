@@ -293,7 +293,7 @@ func TestFormUploadFileMissing(t *testing.T) {
 
 func TestFormUploadTooBig(t *testing.T) {
 	uploader := NewBKUploader(logger.Discard, BKUploaderConfig{})
-	const size = int64(6442450944) // 6Gb
+	const size = int64(6 * 1024 * 1024 * 1024)
 	artifact := &api.Artifact{
 		ID:                 "xxxxx-xxxx-xxxx-xxxx-xxxxxxxxxx",
 		Path:               "llamas.txt",
@@ -307,5 +307,38 @@ func TestFormUploadTooBig(t *testing.T) {
 	wantErr := errArtifactTooLarge{Size: size}
 	if _, err := uploader.CreateWork(artifact); !errors.Is(err, wantErr) {
 		t.Fatalf("uploader.CreateWork(artifact) error = %v, want %v", err, wantErr)
+	}
+}
+
+func TestMultipartUploadAboveFormLimit(t *testing.T) {
+	uploader := NewBKUploader(logger.Discard, BKUploaderConfig{})
+	const size = int64(5*1024*1024*1024 + 1)
+	actions := []api.ArtifactUploadAction{
+		{URL: "https://example.com/part-2", Method: "PUT", PartNumber: 2},
+		{URL: "https://example.com/part-1", Method: "PUT", PartNumber: 1},
+	}
+	artifact := &api.Artifact{
+		ID:       "xxxxx-xxxx-xxxx-xxxx-xxxxxxxxxx",
+		Path:     "llamas.txt",
+		FileSize: size,
+		UploadInstructions: &api.ArtifactUploadInstructions{
+			Actions: actions,
+		},
+	}
+
+	work, err := uploader.CreateWork(artifact)
+	if err != nil {
+		t.Fatalf("uploader.CreateWork(artifact) error = %v", err)
+	}
+
+	want := []workUnit{
+		&bkMultipartUpload{BKUploader: uploader, artifact: artifact, partCount: 2, action: &actions[0], offset: 0, size: size/2 + 1},
+		&bkMultipartUpload{BKUploader: uploader, artifact: artifact, partCount: 2, action: &actions[1], offset: size/2 + 1, size: size / 2},
+	}
+	if diff := cmp.Diff(work, want,
+		cmp.AllowUnexported(bkMultipartUpload{}),
+		cmpopts.EquateComparable(uploader),
+	); diff != "" {
+		t.Fatalf("CreateWork diff (-got +want):\n%s", diff)
 	}
 }
