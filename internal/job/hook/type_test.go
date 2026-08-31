@@ -123,6 +123,22 @@ func TestHookType(t *testing.T) {
 	}
 }
 
+func TestHookTypeReleasesFile(t *testing.T) {
+	hookPath := filepath.Join(t.TempDir(), "hook")
+	if err := os.WriteFile(hookPath, []byte("#!/bin/sh\n"), 0o700); err != nil {
+		t.Fatalf("os.WriteFile(%q) error = %v, want nil", hookPath, err)
+	}
+
+	if _, err := hook.Type(hookPath); err != nil {
+		t.Fatalf("hook.Type(%q) error = %v, want nil", hookPath, err)
+	}
+
+	// On Windows, removing the hook fails if Type retained a handle without delete sharing.
+	if err := os.Remove(hookPath); err != nil {
+		t.Fatalf("os.Remove(%q) error = %v, want nil", hookPath, err)
+	}
+}
+
 func hookFixture(wd string, fixturePath ...string) string {
 	return filepath.Join(append([]string{wd, "test", "fixtures", "hook"}, fixturePath...)...)
 }

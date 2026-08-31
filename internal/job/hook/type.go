@@ -2,7 +2,6 @@ package hook
 
 import (
 	"fmt"
-	"os"
 
 	"github.com/buildkite/agent/v4/internal/shellscript"
 )
@@ -15,11 +14,6 @@ const (
 )
 
 func Type(path string) (string, error) {
-	_, err := os.Open(path)
-	if err != nil {
-		return TypeUnknown, fmt.Errorf("opening hook: %w", err)
-	}
-
 	isBinary, err := isBinaryExecutable(path)
 	if err != nil {
 		return TypeUnknown, fmt.Errorf("determining if %q is a binary: %w", path, err)
