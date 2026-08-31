@@ -88,6 +88,11 @@ type CacheEntryRetrieveResp struct {
 	Multipart            bool           `json:"multipart"`
 	DownloadInstructions []string       `json:"download_instructions"`
 	Message              string         `json:"message"`
+	// Scopes are the resolved entry's own scope labels (nil when unscoped),
+	// e.g. {"branch": "main"}. Echo these back on CacheEntryExpireReq to
+	// invalidate this exact entry — its scope may no longer match what the
+	// registry's current policy would resolve.
+	Scopes map[string]string `json:"scopes"`
 }
 
 // CacheEntryExpireReq is the request body for invalidating a cache entry.
@@ -95,6 +100,19 @@ type CacheEntryRetrieveResp struct {
 type CacheEntryExpireReq struct {
 	TargetPaths []string       `json:"target_paths"`
 	CacheKey    []CacheKeyPart `json:"cache_key"`
+	// Scopes should be copied verbatim from the CacheEntryRetrieveResp that
+	// resolved this entry, not recomputed — omit only when the entry was
+	// retrieved unscoped.
+	Scopes map[string]string `json:"scopes,omitempty"`
+}
+
+// CacheEntryExpireResp acknowledges an expire request. Existed distinguishes
+// an actual deletion from an idempotent no-op (e.g. the entry was already
+// gone, or the supplied address/scopes didn't match anything) — callers must
+// not assume a 2xx response means something was deleted.
+type CacheEntryExpireResp struct {
+	Message string `json:"message"`
+	Existed bool   `json:"existed"`
 }
 
 // CacheEntryPeekReq is the request body for checking whether an entry exists.
@@ -242,24 +260,28 @@ func (c *Client) CacheEntryRetrieve(ctx context.Context, registry string, retrie
 	return cacheResp, exists, apiResp, err
 }
 
-// CacheEntryExpire invalidates a cache entry so a subsequent save re-uploads it.
-func (c *Client) CacheEntryExpire(ctx context.Context, registry string, expire CacheEntryExpireReq) (*Response, error) {
+// CacheEntryExpire invalidates a cache entry so a subsequent save re-uploads
+// it. Check the returned Existed field before treating this as a successful
+// deletion — a 2xx response is also returned for an idempotent no-op.
+func (c *Client) CacheEntryExpire(ctx context.Context, registry string, expire CacheEntryExpireReq) (CacheEntryExpireResp, *Response, error) {
 	ctx, span := cacheTracer.Start(ctx, "Client.CacheEntryExpire")
 	defer span.End()
 
+	var cacheResp CacheEntryExpireResp
+
 	req, err := c.newRequest(ctx, http.MethodPost, cachePath("/cache_registries/%s/expire", registry), &expire)
 	if err != nil {
-		return nil, cacheSpanErr(span, "failed to create request: %w", err)
+		return cacheResp, nil, cacheSpanErr(span, "failed to create request: %w", err)
 	}
 
-	apiResp, err := c.cacheDo(req, &struct{}{})
+	apiResp, err := c.cacheDo(req, &cacheResp)
 	if err != nil {
-		return apiResp, cacheSpanErr(span, "%w", err)
+		return cacheResp, apiResp, cacheSpanErr(span, "%w", err)
 	}
 	if apiResp.StatusCode < 200 || apiResp.StatusCode >= 300 {
-		return apiResp, cacheSpanErr(span, "failed to expire cache entry: %s", apiResp.Status)
+		return cacheResp, apiResp, cacheSpanErr(span, "failed to expire cache entry: %s", apiResp.Status)
 	}
-	return apiResp, nil
+	return cacheResp, apiResp, nil
 }
 
 // cachePath formats a cache API path with URL-safe escaping for path components.

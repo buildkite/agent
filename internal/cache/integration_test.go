@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"sort"
 	"strings"
@@ -41,6 +42,10 @@ type mockCacheEntry struct {
 	committed       bool
 	expiresAt       time.Time
 	platform        string
+	// scopes is set directly by tests (the mock doesn't model scope-aware
+	// save/restore addressing) to exercise scope propagation through
+	// CacheEntryRetrieve and CacheEntryExpire.
+	scopes map[string]string
 }
 
 // cacheAddr builds the v2 entry address from the order-insensitive target_paths
@@ -166,24 +171,28 @@ func (m *mockAPIClient) CacheEntryRetrieve(ctx context.Context, registry string,
 			Blobs:       entry.blobs,
 			Fallback:    false,
 			ExpiresAt:   entry.expiresAt,
+			Scopes:      entry.scopes,
 		}, true, nil, nil
 	}
 
 	return api.CacheEntryRetrieveResp{Message: api.CacheEntryNotFound}, false, nil, nil
 }
 
-func (m *mockAPIClient) CacheEntryExpire(ctx context.Context, registry string, req api.CacheEntryExpireReq) (*api.Response, error) {
+func (m *mockAPIClient) CacheEntryExpire(ctx context.Context, registry string, req api.CacheEntryExpireReq) (api.CacheEntryExpireResp, *api.Response, error) {
 	m.expireCalls = append(m.expireCalls, req)
 
 	reg, ok := m.registries[registry]
 	if !ok {
-		return nil, fmt.Errorf("registry not found: %s", registry)
+		return api.CacheEntryExpireResp{}, nil, fmt.Errorf("registry not found: %s", registry)
 	}
+
+	addr := cacheAddr(req.TargetPaths, req.CacheKey)
+	_, existed := reg.cache[addr]
 
 	// Mirror the backend's delete_item so a subsequent save
 	// re-uploads the invalidated entry.
-	delete(reg.cache, cacheAddr(req.TargetPaths, req.CacheKey))
-	return nil, nil
+	delete(reg.cache, addr)
+	return api.CacheEntryExpireResp{Existed: existed}, nil, nil
 }
 
 // createRandomFile creates a file filled with random data
@@ -557,6 +566,69 @@ func TestCacheIntegration_RestoreMissingBlobInvalidates(t *testing.T) {
 	}
 
 	// A subsequent save must re-upload, proving the entry was invalidated.
+	resaveResult, err := cacheClient.Save(ctx, "test-cache")
+	if err != nil {
+		t.Fatalf("re-Save: %v", err)
+	}
+	if !resaveResult.CacheEntryCreated {
+		t.Error("expected re-save to re-create the invalidated entry")
+	}
+}
+
+// TestCacheIntegration_RestoreMissingBlobInvalidatesScopedEntry is the scoped
+// variant of TestCacheIntegration_RestoreMissingBlobInvalidates, exercised
+// through the same public Restore/Save path rather than calling the private
+// invalidation method directly. The mock doesn't model scope-aware addressing
+// (retrieve is always an exact match here), so scopes are set directly on the
+// stored entry to simulate "this entry was saved under this scope" — what's
+// under test is that Restore correctly threads the scope value all the way
+// from CacheEntryRetrieve's response through to the CacheEntryExpire request,
+// through the real wire structs, not a hand-passed value.
+func TestCacheIntegration_RestoreMissingBlobInvalidatesScopedEntry(t *testing.T) {
+	ctx := t.Context()
+
+	cacheClient, _, storageDir := setupTestCache(t, "local_file")
+	mockClient := cacheClient.api.(*mockAPIClient)
+
+	saveResult, err := cacheClient.Save(ctx, "test-cache")
+	if err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	if !saveResult.CacheEntryCreated {
+		t.Fatal("expected initial save to create an entry")
+	}
+
+	wantScopes := map[string]string{"branch": "main"}
+	for _, entry := range mockClient.registries["~"].cache {
+		entry.scopes = wantScopes
+	}
+
+	blobEntries, err := os.ReadDir(storageDir)
+	if err != nil {
+		t.Fatalf("ReadDir: %v", err)
+	}
+	for _, e := range blobEntries {
+		if err := os.RemoveAll(filepath.Join(storageDir, e.Name())); err != nil {
+			t.Fatalf("RemoveAll: %v", err)
+		}
+	}
+
+	restoreResult, err := cacheClient.Restore(ctx, "test-cache")
+	if err != nil {
+		t.Fatalf("Restore with missing blob should not error, got: %v", err)
+	}
+	if restoreResult.CacheRestored {
+		t.Error("missing blob should degrade to CacheRestored=false")
+	}
+
+	if len(mockClient.expireCalls) != 1 {
+		t.Fatalf("expire calls = %d, want 1", len(mockClient.expireCalls))
+	}
+	if got := mockClient.expireCalls[0].Scopes; !reflect.DeepEqual(got, wantScopes) {
+		t.Errorf("expire request scopes = %+v, want %+v", got, wantScopes)
+	}
+
+	// A subsequent save must re-upload, proving the scoped entry was actually invalidated.
 	resaveResult, err := cacheClient.Save(ctx, "test-cache")
 	if err != nil {
 		t.Fatalf("re-Save: %v", err)

@@ -192,7 +192,7 @@ func (c *client) Restore(ctx context.Context, cacheID string) (RestoreResult, er
 				attribute.Bool("cache.invalidated", invalidated),
 			)
 			span.SetStatus(codes.Ok, "cache miss (missing blob)")
-			c.callProgress(cacheID, "complete", "Cache miss (missing blob, invalidated stale entry)", 0, 0)
+			c.callProgress(cacheID, "complete", missCompleteMessage("missing blob", invalidated), 0, 0)
 			return result, nil
 		}
 		if errors.Is(err, ErrDigestMismatch) {
@@ -214,7 +214,7 @@ func (c *client) Restore(ctx context.Context, cacheID string) (RestoreResult, er
 				attribute.Bool("cache.invalidated", invalidated),
 			)
 			span.SetStatus(codes.Ok, "cache miss (digest mismatch)")
-			c.callProgress(cacheID, "complete", "Cache miss (blob digest mismatch, invalidated entry)", 0, 0)
+			c.callProgress(cacheID, "complete", missCompleteMessage("blob digest mismatch", invalidated), 0, 0)
 			return result, nil
 		}
 		span.RecordError(err)
@@ -255,7 +255,7 @@ func (c *client) Restore(ctx context.Context, cacheID string) (RestoreResult, er
 			attribute.Bool("cache.invalidated", invalidated),
 		)
 		span.SetStatus(codes.Ok, "cache miss (archive failed verification)")
-		c.callProgress(cacheID, "complete", "Cache miss (archive failed verification, invalidated stale entry)", 0, 0)
+		c.callProgress(cacheID, "complete", missCompleteMessage("archive failed verification", invalidated), 0, 0)
 		return result, nil
 	}
 
@@ -353,6 +353,8 @@ func (c *client) Restore(ctx context.Context, cacheID string) (RestoreResult, er
 
 // invalidateStaleEntry uses the retrieve response to expire a cache entry whose
 // blob is missing or fails digest verification, so a subsequent save re-uploads it.
+// Returns whether an entry was actually deleted — a successful (2xx) call can
+// still be an idempotent no-op, which must not be reported as invalidated.
 func (c *client) invalidateStaleEntry(ctx context.Context, retrieveResp api.CacheEntryRetrieveResp) bool {
 	if len(retrieveResp.TargetPaths) == 0 || len(retrieveResp.CacheKey) == 0 {
 		slog.Warn("cannot invalidate stale cache entry: retrieve response missing resolved address")
@@ -362,13 +364,15 @@ func (c *client) invalidateStaleEntry(ctx context.Context, retrieveResp api.Cach
 	req := api.CacheEntryExpireReq{
 		TargetPaths: retrieveResp.TargetPaths,
 		CacheKey:    retrieveResp.CacheKey,
+		Scopes:      retrieveResp.Scopes,
 	}
+	var existed bool
 	err := roko.NewRetrier(
 		roko.WithMaxAttempts(5),
 		roko.WithStrategy(roko.ExponentialSubsecond(500*time.Millisecond)),
 		roko.WithJitter(),
 	).DoWithContext(ctx, func(r *roko.Retrier) error {
-		apiResp, err := c.api.CacheEntryExpire(ctx, c.registry, req)
+		expireResp, apiResp, err := c.api.CacheEntryExpire(ctx, c.registry, req)
 		if api.BreakOnNonRetryable(r, apiResp, err) {
 			return err
 		}
@@ -376,13 +380,24 @@ func (c *client) invalidateStaleEntry(ctx context.Context, retrieveResp api.Cach
 			slog.Warn("cache entry invalidation failed, retrying", "err", err, "retrier", r.String())
 			return err
 		}
+		existed = expireResp.Existed
 		return nil
 	})
 	if err != nil {
 		slog.Warn("cache entry invalidation failed", "registry", c.registry, "err", err)
 		return false
 	}
-	return true
+	return existed
+}
+
+// missCompleteMessage builds the progress text for a stale-entry miss,
+// distinguishing an actual deletion from a no-op so callers aren't told an
+// entry was invalidated when it wasn't.
+func missCompleteMessage(reason string, invalidated bool) string {
+	if invalidated {
+		return fmt.Sprintf("Cache miss (%s, invalidated stale entry)", reason)
+	}
+	return fmt.Sprintf("Cache miss (%s, stale entry could not be invalidated)", reason)
 }
 
 // downloadCache downloads a cache archive from storage
