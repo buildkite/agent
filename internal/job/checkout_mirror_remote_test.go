@@ -69,7 +69,8 @@ func TestUpdateGitMirrorCreatesFromRemoteMirrorAndKeepsCanonicalOrigin(t *testin
 		if got, want := info.Mode().Perm(), os.FileMode(0o777&^osutil.Umask); got != want {
 			t.Errorf("shared mirror mode = %o, want %o", got, want)
 		}
-		if info.Mode()&os.ModeSetgid == 0 {
+		// macOS inherits the parent directory's group without propagating the setgid bit.
+		if runtime.GOOS != "darwin" && info.Mode()&os.ModeSetgid == 0 {
 			t.Errorf("shared mirror mode = %v, want setgid preserved", info.Mode())
 		}
 	}
