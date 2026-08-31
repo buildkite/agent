@@ -74,28 +74,22 @@ output_steps_yaml() {
   wait_step
 
   case "${agent_version}" in
-    *beta*|*rc*)
+    *alpha*|*beta*|*rc*)
       trigger_step \
         "beta ${agent_version}" \
         "agent-release-beta"
       ;;
 
     4.*)
-      # This case shouldn't be reached while the v4 branch version string
-      # includes "beta".
-      trigger_step \
-        "beta ${agent_version}" \
-        "agent-release-beta"
-      ;;
-
-    3.*)
-      # TODO(v4 release): move stable release to v4
-      trigger_step \
-        "oldstable ${agent_version}" \
-        "agent-release-oldstable"
       trigger_step \
         "stable ${agent_version}" \
         "agent-release-stable"
+      ;;
+
+    3.*)
+      trigger_step \
+        "oldstable ${agent_version}" \
+        "agent-release-oldstable"
       ;;
   esac
 }
@@ -117,7 +111,7 @@ edge_steps_yaml | buildkite-agent pipeline upload
 
 # If there is already a release (which means a tag), we want to avoid trying to create
 # another one, as this will fail and cause partial broken releases
-if [[ "${DRY_RUN:-false}" == "false" ]] && git ls-remote --tags origin | grep "refs/tags/v${agent_version}" ; then
+if [[ "${DRY_RUN:-false}" == "false" ]] && git ls-remote --exit-code --tags origin "refs/tags/v${agent_version}" > /dev/null; then
   echo "Tag refs/tags/v${agent_version} already exists"
   exit 0
 fi
