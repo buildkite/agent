@@ -75,6 +75,7 @@ caches:
       - clicommand/ACKNOWLEDGEMENTS.md.gz
 
   - name: e2e_gomodcache
+    # Keep E2E separate so regular jobs don't download its extra modules.
     # One E2E job writes both caches.
     cache_key:
       - agent-e2e-go-modules
