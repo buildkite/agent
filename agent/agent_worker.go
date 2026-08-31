@@ -25,6 +25,8 @@ const (
 	PingModeAuto       = "auto" // empty string can be used from tests
 	PingModeStreamOnly = "stream-only"
 	PingModePollOnly   = "poll-only"
+
+	gracefulStopReportTimeout = 5 * time.Second
 )
 
 type AgentWorkerConfig struct {
@@ -98,6 +100,11 @@ type AgentWorker struct {
 	// for an explanation.
 	stopOnce sync.Once // prevents double-closing the channel
 	stop     chan struct{}
+
+	// A graceful stop report is launched by StopGracefully and joined by
+	// Disconnect so the worker does not disconnect before reporting.
+	reportGracefulStopOnce sync.Once
+	reportGracefulStopDone chan struct{}
 
 	// The index of this agent worker
 	spawnIndex int
@@ -206,14 +213,15 @@ func NewAgentWorker(l logger.Logger, reg *api.AgentRegisterResponse, m *metrics.
 			APIClient: apiClient,
 			Logger:    l,
 		},
-		debug:              c.Debug,
-		debugHTTP:          c.DebugHTTP,
-		agentConfiguration: c.AgentConfiguration,
-		stop:               make(chan struct{}),
-		cancelSig:          c.CancelSignal,
-		spawnIndex:         c.SpawnIndex,
-		agentStdout:        c.AgentStdout,
-		state:              agentWorkerStateIdle,
+		debug:                  c.Debug,
+		debugHTTP:              c.DebugHTTP,
+		agentConfiguration:     c.AgentConfiguration,
+		stop:                   make(chan struct{}),
+		reportGracefulStopDone: make(chan struct{}),
+		cancelSig:              c.CancelSignal,
+		spawnIndex:             c.SpawnIndex,
+		agentStdout:            c.AgentStdout,
+		state:                  agentWorkerStateIdle,
 	}
 }
 
@@ -395,6 +403,21 @@ func (a *AgentWorker) internalStop() {
 	})
 }
 
+func (a *AgentWorker) reportGracefulStopToAPI() {
+	defer close(a.reportGracefulStopDone)
+
+	// Reporting must outlive the worker loops, but it remains bounded so an API
+	// failure cannot prevent Disconnect from continuing.
+	reportCtx, cancel := context.WithTimeout(context.Background(), gracefulStopReportTimeout)
+	defer cancel()
+
+	if _, err := a.apiClient.Stop(reportCtx, &api.AgentStopRequest{}); err != nil {
+		a.logger.Warnf("Failed to report graceful stop to Buildkite: %v", err)
+		return
+	}
+	a.logger.Infof("Reported graceful stop to Buildkite")
+}
+
 // StopGracefully stops the agent from accepting new work. It allows the current
 // job to finish without interruption. Does not block.
 func (a *AgentWorker) StopGracefully() {
@@ -406,6 +429,10 @@ func (a *AgentWorker) StopGracefully() {
 	default:
 		// continue below
 	}
+
+	a.reportGracefulStopOnce.Do(func() {
+		go a.reportGracefulStopToAPI()
+	})
 
 	// If we have a job, tell the user that we'll wait for it to finish
 	// before disconnecting
@@ -575,6 +602,12 @@ func (a *AgentWorker) RunJob(ctx context.Context, acceptResponse *api.Job, ignor
 // permanently disconnecting. Don't spend long retrying, because we want to
 // disconnect as fast as possible.
 func (a *AgentWorker) Disconnect(ctx context.Context) error {
+	// If no graceful stop was requested, make the wait below a no-op.
+	a.reportGracefulStopOnce.Do(func() {
+		close(a.reportGracefulStopDone)
+	})
+	<-a.reportGracefulStopDone
+
 	return a.client.Disconnect(ctx)
 }
 
