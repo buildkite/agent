@@ -109,7 +109,7 @@ edge_steps_yaml | buildkite-agent pipeline upload
 
 # If there is already a release (which means a tag), we want to avoid trying to create
 # another one, as this will fail and cause partial broken releases
-if [[ "${DRY_RUN:-false}" == "false" ]] && git ls-remote --tags origin | grep "refs/tags/v${agent_version}" ; then
+if [[ "${DRY_RUN:-false}" == "false" ]] && git ls-remote --exit-code --tags origin "refs/tags/v${agent_version}" > /dev/null; then
   echo "Tag refs/tags/v${agent_version} already exists"
   exit 0
 fi
