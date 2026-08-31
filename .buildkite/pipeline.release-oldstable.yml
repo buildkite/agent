@@ -78,39 +78,6 @@ steps:
         - exit_status: 1
           limit: 3
 
-  - group: ":redhat: Publish Oldstable RPM Package to Buildkite Packages"
-    steps:
-      - name: ":redhat: Publish Oldstable {{matrix.pkg_arch}} RPM Package to Buildkite Packages"
-        plugins:
-          - publish-to-packages#v2.2.0:
-              artifacts: "rpm/buildkite-agent_*_{{matrix.pkg_arch}}.rpm"
-              registry: "buildkite/agent-rpm-oldstable"
-              artifact_build_id: "${BUILDKITE_TRIGGERED_FROM_BUILD_ID}"
-              attestations:
-                - "buildkite-agent-linux-{{matrix.go_arch}}.build-attestation.json"
-                - "buildkite-agent-rpm-packages.package-attestation.json"
-        soft_fail: true
-        matrix:
-          setup:
-            go_arch:
-              - "amd64"
-              - "386"
-              - "arm64"
-              - "ppc64"
-              - "ppc64le"
-              - "riscv64"
-            pkg_arch:
-              - "SKIP_FAKE_ARCH"
-          adjustments:
-            - with: { go_arch: "amd64", pkg_arch: "x86_64" }
-            - with: { go_arch: "386", pkg_arch: "i386" }
-            - with: { go_arch: "arm64", pkg_arch: "aarch64" }
-            - with: { go_arch: "ppc64", pkg_arch: "ppc64" }
-            - with: { go_arch: "ppc64le", pkg_arch: "ppc64le" }
-            - with: { go_arch: "riscv64", pkg_arch: "riscv64" }
-            - with: { pkg_arch: "SKIP_FAKE_ARCH" }
-              skip: true
-
   - name: ":debian: Publish Oldstable Debian Package"
     command: ".buildkite/steps/publish-debian-package.sh"
     env:
@@ -137,43 +104,6 @@ steps:
           mount-buildkite-agent: true
           tmpfs:
             - "/root/.gnupg"
-
-  - group: ":debian: Publish Oldstable Debian Package to Buildkite Packages"
-    steps:
-      - name: ":debian: Publish Oldstable {{matrix.pkg_arch}} Debian Package to Buildkite Packages"
-        plugins:
-          - publish-to-packages#v2.2.0:
-              artifacts: "deb/buildkite-agent_*_{{matrix.pkg_arch}}.deb"
-              registry: "buildkite/agent-deb-oldstable"
-              artifact_build_id: "${BUILDKITE_TRIGGERED_FROM_BUILD_ID}"
-              attestations:
-                - "buildkite-agent-linux-{{matrix.go_arch}}.build-attestation.json"
-                - "buildkite-agent-debian-packages.package-attestation.json"
-        soft_fail: true
-        matrix:
-          setup:
-            go_arch:
-              - "amd64"
-              - "386"
-              - "arm"
-              - "armhf"
-              - "arm64"
-              - "ppc64"
-              - "ppc64le"
-              - "riscv64"
-            pkg_arch:
-              - "SKIP_FAKE_ARCH"
-          adjustments:
-            - with: { go_arch: "amd64", pkg_arch: "x86_64" }
-            - with: { go_arch: "386", pkg_arch: "i386" }
-            - with: { go_arch: "arm", pkg_arch: "arm" }
-            - with: { go_arch: "armhf", pkg_arch: "armhf" }
-            - with: { go_arch: "arm64", pkg_arch: "arm64" }
-            - with: { go_arch: "ppc64", pkg_arch: "ppc64" }
-            - with: { go_arch: "ppc64le", pkg_arch: "ppc64el" }
-            - with: { go_arch: "riscv64", pkg_arch: "riscv64" }
-            - with: { pkg_arch: "SKIP_FAKE_ARCH" }
-              skip: true
 
   - group: ":docker: Publish Oldstable Docker Images"
     steps:
