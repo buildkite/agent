@@ -26,7 +26,6 @@ steps:
           mount-buildkite-agent: true
 
   - name: ":octocat: :rocket: Create Github Release (if necessary)"
-    skip: "TODO(v4 release): unskip when v3 no longer stable"
     command: ".buildkite/steps/github-release.sh"
     env:
       CODENAME: "oldstable"
@@ -207,7 +206,6 @@ steps:
   - wait
 
   - name: ":beer: Publish Oldstable Homebrew Package"
-    skip: "TODO(v4 release): unskip when v3 no longer stable"
     command: ".buildkite/steps/release-homebrew.sh"
     artifact_paths: "pkg/*.rb;pkg/*.json"
     env:
