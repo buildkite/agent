@@ -88,13 +88,26 @@ type CacheEntryRetrieveResp struct {
 	Multipart            bool           `json:"multipart"`
 	DownloadInstructions []string       `json:"download_instructions"`
 	Message              string         `json:"message"`
+	EntryRef             string         `json:"entry_ref"`
 }
 
 // CacheEntryExpireReq is the request body for invalidating a cache entry.
-// The address should be the resolved entry, as echoed by the retrieve response.
+// EntryRef is the opaque reference echoed from the retrieve response; when
+// set, the server invalidates exactly the entry that was retrieved. The
+// target paths and cache key are the legacy address, kept for compatibility
+// with servers that don't understand entry_ref.
 type CacheEntryExpireReq struct {
 	TargetPaths []string       `json:"target_paths"`
 	CacheKey    []CacheKeyPart `json:"cache_key"`
+	EntryRef    string         `json:"entry_ref,omitempty"`
+}
+
+// CacheEntryExpireResp is the response body for invalidating a cache entry.
+// Existed reports whether the referenced entry existed and was deleted;
+// false means it was already gone (an idempotent no-op).
+type CacheEntryExpireResp struct {
+	Message string `json:"message"`
+	Existed bool   `json:"existed"`
 }
 
 // CacheEntryPeekReq is the request body for checking whether an entry exists.
@@ -243,23 +256,25 @@ func (c *Client) CacheEntryRetrieve(ctx context.Context, registry string, retrie
 }
 
 // CacheEntryExpire invalidates a cache entry so a subsequent save re-uploads it.
-func (c *Client) CacheEntryExpire(ctx context.Context, registry string, expire CacheEntryExpireReq) (*Response, error) {
+func (c *Client) CacheEntryExpire(ctx context.Context, registry string, expire CacheEntryExpireReq) (CacheEntryExpireResp, *Response, error) {
 	ctx, span := cacheTracer.Start(ctx, "Client.CacheEntryExpire")
 	defer span.End()
 
+	var expireResp CacheEntryExpireResp
+
 	req, err := c.newRequest(ctx, http.MethodPost, cachePath("/cache_registries/%s/expire", registry), &expire)
 	if err != nil {
-		return nil, cacheSpanErr(span, "failed to create request: %w", err)
+		return expireResp, nil, cacheSpanErr(span, "failed to create request: %w", err)
 	}
 
-	apiResp, err := c.cacheDo(req, &struct{}{})
+	apiResp, err := c.cacheDo(req, &expireResp)
 	if err != nil {
-		return apiResp, cacheSpanErr(span, "%w", err)
+		return expireResp, apiResp, cacheSpanErr(span, "%w", err)
 	}
 	if apiResp.StatusCode < 200 || apiResp.StatusCode >= 300 {
-		return apiResp, cacheSpanErr(span, "failed to expire cache entry: %s", apiResp.Status)
+		return expireResp, apiResp, cacheSpanErr(span, "failed to expire cache entry: %s", apiResp.Status)
 	}
-	return apiResp, nil
+	return expireResp, apiResp, nil
 }
 
 // cachePath formats a cache API path with URL-safe escaping for path components.

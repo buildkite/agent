@@ -218,6 +218,7 @@ func TestCacheEntryRetrieve_Success(t *testing.T) {
 			Multipart:            false,
 			DownloadInstructions: []string{"curl -X GET..."},
 			Message:              "Retrieved successfully",
+			EntryRef:             "opaque-entry-ref",
 		})
 	}))
 	defer server.Close()
@@ -239,6 +240,9 @@ func TestCacheEntryRetrieve_Success(t *testing.T) {
 	}
 	if resp.Fallback {
 		t.Error("resp.Fallback = true, want false")
+	}
+	if got, want := resp.EntryRef, "opaque-entry-ref"; got != want {
+		t.Errorf("resp.EntryRef = %q, want %q", got, want)
 	}
 }
 
@@ -332,6 +336,9 @@ func TestCacheEntryExpire_Success(t *testing.T) {
 		if len(req.TargetPaths) != 1 || req.TargetPaths[0] != "node_modules" {
 			t.Errorf("req.TargetPaths = %v, want [node_modules]", req.TargetPaths)
 		}
+		if got, want := req.EntryRef, "opaque-entry-ref"; got != want {
+			t.Errorf("req.EntryRef = %q, want %q", got, want)
+		}
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
@@ -341,12 +348,39 @@ func TestCacheEntryExpire_Success(t *testing.T) {
 
 	client := newTestCacheClient(t, server.URL)
 
-	_, err := client.CacheEntryExpire(t.Context(), "test-slug", api.CacheEntryExpireReq{
+	resp, _, err := client.CacheEntryExpire(t.Context(), "test-slug", api.CacheEntryExpireReq{
 		TargetPaths: []string{"node_modules"},
 		CacheKey:    []api.CacheKeyPart{{Value: "v1", Mandatory: true}},
+		EntryRef:    "opaque-entry-ref",
 	})
 	if err != nil {
 		t.Fatalf("CacheEntryExpire error = %v, want nil", err)
+	}
+	if !resp.Existed {
+		t.Error("resp.Existed = false, want true")
+	}
+}
+
+// An expire of an entry that is already gone is an idempotent no-op: the
+// server responds 2xx with existed=false, and no error is returned.
+func TestCacheEntryExpire_AlreadyGone(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(map[string]any{"message": "Cache entry not found", "existed": false})
+	}))
+	defer server.Close()
+
+	client := newTestCacheClient(t, server.URL)
+
+	resp, _, err := client.CacheEntryExpire(t.Context(), "test-slug", api.CacheEntryExpireReq{
+		EntryRef: "opaque-entry-ref",
+	})
+	if err != nil {
+		t.Fatalf("CacheEntryExpire error = %v, want nil", err)
+	}
+	if resp.Existed {
+		t.Error("resp.Existed = true, want false")
 	}
 }
 
@@ -363,7 +397,7 @@ func TestCacheEntryExpire_NonSuccessIsError(t *testing.T) {
 
 	client := newTestCacheClient(t, server.URL)
 
-	_, err := client.CacheEntryExpire(t.Context(), "test-slug", api.CacheEntryExpireReq{
+	_, _, err := client.CacheEntryExpire(t.Context(), "test-slug", api.CacheEntryExpireReq{
 		TargetPaths: []string{"node_modules"},
 		CacheKey:    []api.CacheKeyPart{{Value: "v1", Mandatory: true}},
 	})
