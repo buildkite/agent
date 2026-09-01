@@ -574,7 +574,7 @@ var AgentStartCommand = &cli.Command{
 		},
 		&cli.BoolFlag{
 			Name:    "no-ssh-keyscan",
-			Usage:   "Require known SSH host keys for the default checkout instead of accepting new keys (flag retained for compatibility; default: false)",
+			Usage:   "Require known SSH host keys for the default checkout instead of accepting new keys (default: false)",
 			Sources: cli.EnvVars("BUILDKITE_NO_SSH_KEYSCAN"),
 		},
 		&cli.BoolFlag{
