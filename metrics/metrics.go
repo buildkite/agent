@@ -15,6 +15,7 @@ import (
 
 	"github.com/buildkite/agent/v4/logger"
 	"github.com/buildkite/agent/v4/version"
+	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc"
 	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp"
@@ -142,12 +143,22 @@ func (c *Collector) newMeterProvider(ctx context.Context, protocol string) (*sdk
 		return nil, err
 	}
 
-	resources := resource.NewWithAttributes(
-		semconv.SchemaURL,
-		semconv.ServiceNameKey.String(c.config.ServiceName),
-		semconv.ServiceVersionKey.String(version.Version()),
-		semconv.DeploymentEnvironmentKey.String("ci"),
+	resources, err := resource.New(ctx,
+		resource.WithFromEnv(),
+		resource.WithSchemaURL(semconv.SchemaURL),
+		// Explicit agent attributes take precedence over attributes from the environment.
+		resource.WithAttributes(
+			semconv.ServiceNameKey.String(c.config.ServiceName),
+			semconv.ServiceVersionKey.String(version.Version()),
+			semconv.DeploymentEnvironmentKey.String("ci"),
+		),
 	)
+	if err != nil {
+		if !errors.Is(err, resource.ErrPartialResource) {
+			return nil, fmt.Errorf("creating OpenTelemetry metrics resource: %w", err)
+		}
+		otel.Handle(err)
+	}
 
 	return sdkmetric.NewMeterProvider(
 		sdkmetric.WithReader(sdkmetric.NewPeriodicReader(exporter)),

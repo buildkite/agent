@@ -2,6 +2,7 @@ package job
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"maps"
 	"os"
@@ -107,7 +108,18 @@ func InitOTelTracerProvider(ctx context.Context, serviceName string, extraAttrs 
 	}
 	attributes = append(attributes, extraAttrs...)
 
-	resources := resource.NewWithAttributes(semconv.SchemaURL, attributes...)
+	resources, err := resource.New(ctx,
+		resource.WithFromEnv(),
+		resource.WithSchemaURL(semconv.SchemaURL),
+		// Explicit agent attributes take precedence over attributes from the environment.
+		resource.WithAttributes(attributes...),
+	)
+	if err != nil {
+		if !errors.Is(err, resource.ErrPartialResource) {
+			return nil, fmt.Errorf("creating OpenTelemetry trace resource: %w", err)
+		}
+		otel.Handle(err)
+	}
 	tracerProvider := sdktrace.NewTracerProvider(
 		sdktrace.WithBatcher(exporter),
 		sdktrace.WithResource(resources),

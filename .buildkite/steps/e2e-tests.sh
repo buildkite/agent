@@ -1,6 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+export GOCACHE="$HOME/.e2e-gocache"
+export GOMODCACHE="$HOME/.e2e-gomodcache"
+export E2E_GO_VERSION="$(go env GOVERSION | cut -d. -f1,2)"
+
+echo --- :inbox_tray: Restoring E2E Go caches
+buildkite-agent cache restore --name e2e_gomodcache --name e2e_gocache
+
 if [[ -z "${BUILDKITE_TRIGGERED_FROM_BUILD_ID:-}" ]] ; then
 	echo "Running e2e tests on the agent that's currently running"
 	# For now, e2e test the agent that's currently running
@@ -18,3 +25,6 @@ fi
 # Each test provisions its own queue, pipeline, and agent. Run isolated tests
 # concurrently, but cap parallelism to avoid overwhelming shared services.
 go tool gotestsum --junitfile junit.xml -- -tags e2e -parallel 4 ./internal/e2e/...
+
+echo --- :outbox_tray: Saving E2E Go caches
+buildkite-agent cache save --name e2e_gomodcache --name e2e_gocache

@@ -574,7 +574,7 @@ var AgentStartCommand = &cli.Command{
 		},
 		&cli.BoolFlag{
 			Name:    "no-ssh-keyscan",
-			Usage:   "Don't automatically run ssh-keyscan before checkout (default: false)",
+			Usage:   "Require known SSH host keys for the default checkout instead of accepting new keys (default: false)",
 			Sources: cli.EnvVars("BUILDKITE_NO_SSH_KEYSCAN"),
 		},
 		&cli.BoolFlag{
@@ -661,7 +661,7 @@ var AgentStartCommand = &cli.Command{
 		},
 		&cli.StringFlag{
 			Name:    "spawn-with-priority",
-			Usage:   `Assign priorities to every spawned agent (when using --spawn or --spawn-per-cpu). Pass "static" (1, 1, 1, ...), "ascending" (1, 2, 3, ...), or "descending" (-1, -2, -3, ...). Descending helps jobs be assigned across all hosts when the value of --spawn varies between hosts`,
+			Usage:   `Assign priorities to every spawned agent (when using --spawn or --spawn-per-cpu). Pass "static" (the configured --priority for every agent, or no priority if unset), "ascending" (1, 2, 3, ...), or "descending" (-1, -2, -3, ...). Descending helps jobs be assigned across all hosts when the value of --spawn varies between hosts`,
 			Value:   "static",
 			Sources: cli.EnvVars("BUILDKITE_AGENT_SPAWN_WITH_PRIORITY"),
 		},
@@ -1100,7 +1100,7 @@ var AgentStartCommand = &cli.Command{
 		}
 
 		if !agentConf.SSHKeyscan {
-			l.Infof("Automatic ssh-keyscan has been disabled")
+			l.Infof("Strict SSH host key checking has been enabled")
 		}
 
 		if !agentConf.CommandEval {

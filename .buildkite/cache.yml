@@ -1,0 +1,111 @@
+# Cache definitions for the Agent's own CI.
+
+# Jobs that compile a module but leave different artifacts behind therefore get
+# separate keys rather than sharing one. This improves cache usage
+caches:
+  - name: gomodcache
+    cache_key:
+      - agent-go-modules
+      - { agent: os }
+      - { agent: arch }
+      - { env: AGENT_GO_VERSION, fallback_limit: true }
+      - { checksum: go.mod }
+    target_paths:
+      - ~/.gomodcache
+
+  - name: gocache
+    # The first parallel job is the only writer for each platform.
+    cache_key:
+      - agent-go-build
+      - { agent: os }
+      - { agent: arch }
+      - { env: AGENT_GO_VERSION, fallback_limit: true }
+      - { checksum: go.mod }
+    target_paths:
+      - ~/.gocache
+
+  - name: gocache_race
+    cache_key:
+      - agent-go-build-race
+      - { agent: os }
+      - { agent: arch }
+      - { env: AGENT_GO_VERSION, fallback_limit: true }
+      - { checksum: go.mod }
+    target_paths:
+      - ~/.gocache_race
+
+  - name: lint_gocache
+    # Lint gets its own cache because no other job writes its analyzer results.
+    cache_key:
+      - agent-go-build-lint
+      - { agent: os }
+      - { agent: arch }
+      - { env: AGENT_GO_VERSION, fallback_limit: true }
+      - { checksum: go.mod }
+    target_paths:
+      - ~/.gocache-lint
+
+  - name: target_gocache
+    # The host is part of the key because this also contains host-built tools.
+    cache_key:
+      - agent-go-target-build
+      - { agent: os }
+      - { agent: arch }
+      - { env: TARGET_GOOS }
+      - { env: TARGET_GOARCH }
+      - { env: TARGET_GOARM }
+      - { env: TARGET_BUILD_MODE }
+      - { env: TARGET_GO_VERSION, fallback_limit: true }
+      - { checksum: go.mod }
+    target_paths:
+      - ~/.gocache-target
+
+  - name: acknowledgements
+    # We use go.mod as a stand-in for imports. This can miss a new licence from
+    # an existing module, but that seems unlikely and keeps the cache useful.
+    # go-licenses output also varies by GOOS/GOARCH (google/go-licenses#187).
+    cache_key:
+      - agent-acknowledgements
+      - { env: TARGET_GOOS }
+      - { env: TARGET_GOARCH }
+      - { env: TARGET_GO_VERSION }
+      - { checksum: .buildkite/go-licenses-version }
+      - { checksum: go.mod }
+    target_paths:
+      - clicommand/ACKNOWLEDGEMENTS.md.gz
+
+  - name: e2e_gomodcache
+    # Keep E2E separate so regular jobs don't download its extra modules.
+    # One E2E job writes both caches.
+    cache_key:
+      - agent-e2e-go-modules
+      - { agent: os }
+      - { agent: arch }
+      - { env: E2E_GO_VERSION, fallback_limit: true }
+      - { checksum: go.mod }
+    target_paths:
+      - ~/.e2e-gomodcache
+
+  - name: e2e_gocache
+    cache_key:
+      - agent-e2e-go-build
+      - { agent: os }
+      - { agent: arch }
+      - { env: E2E_GO_VERSION, fallback_limit: true }
+      - { checksum: go.mod }
+    target_paths:
+      - ~/.e2e-gocache
+
+  - name: protobuf_tools
+    cache_key:
+      - protobuf-tools
+      - { agent: os }
+      - { agent: arch }
+      - { env: PROTOBUF_GO_VERSION }
+      - { env: PROTOBUF_BUF_VERSION }
+      - { env: PROTOBUF_PROTOC_GEN_GO_VERSION }
+      - { env: PROTOBUF_PROTOC_GEN_CONNECT_GO_VERSION }
+    target_paths:
+      - ~/.protobuf-tools/bin
+      - ~/.protobuf-tools/gocache
+      - ~/.protobuf-tools/gomodcache

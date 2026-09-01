@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -341,12 +342,40 @@ func TestCacheEntryExpire_Success(t *testing.T) {
 
 	client := newTestCacheClient(t, server.URL)
 
-	_, err := client.CacheEntryExpire(t.Context(), "test-slug", api.CacheEntryExpireReq{
+	resp, _, err := client.CacheEntryExpire(t.Context(), "test-slug", api.CacheEntryExpireReq{
 		TargetPaths: []string{"node_modules"},
 		CacheKey:    []api.CacheKeyPart{{Value: "v1", Mandatory: true}},
 	})
 	if err != nil {
 		t.Fatalf("CacheEntryExpire error = %v, want nil", err)
+	}
+	if !resp.Existed {
+		t.Error("resp.Existed = false, want true")
+	}
+}
+
+// A 2xx response reporting existed: false is an idempotent no-op, not an
+// error — callers must be able to tell the two apart rather than assuming
+// every successful call deleted something.
+func TestCacheEntryExpire_ExistedFalseIsNotAnError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(map[string]any{"message": "Cache entry expired", "existed": false})
+	}))
+	defer server.Close()
+
+	client := newTestCacheClient(t, server.URL)
+
+	resp, _, err := client.CacheEntryExpire(t.Context(), "test-slug", api.CacheEntryExpireReq{
+		TargetPaths: []string{"node_modules"},
+		CacheKey:    []api.CacheKeyPart{{Value: "v1", Mandatory: true}},
+	})
+	if err != nil {
+		t.Fatalf("CacheEntryExpire error = %v, want nil", err)
+	}
+	if resp.Existed {
+		t.Error("resp.Existed = true, want false for an idempotent no-op")
 	}
 }
 
@@ -363,11 +392,76 @@ func TestCacheEntryExpire_NonSuccessIsError(t *testing.T) {
 
 	client := newTestCacheClient(t, server.URL)
 
-	_, err := client.CacheEntryExpire(t.Context(), "test-slug", api.CacheEntryExpireReq{
+	_, _, err := client.CacheEntryExpire(t.Context(), "test-slug", api.CacheEntryExpireReq{
 		TargetPaths: []string{"node_modules"},
 		CacheKey:    []api.CacheKeyPart{{Value: "v1", Mandatory: true}},
 	})
 	if err == nil {
 		t.Error("CacheEntryExpire error = nil, want non-nil for non-2xx status")
+	}
+}
+
+// TestCacheEntryRetrieveAndExpire_ScopesRoundTripThroughWire proves Scopes
+// survives real JSON encoding/decoding across both endpoints — not just
+// struct-to-struct assignment in Go — mirroring what invalidateStaleEntry does:
+// take the scopes retrieve resolved and echo them back on expire verbatim.
+func TestCacheEntryRetrieveAndExpire_ScopesRoundTripThroughWire(t *testing.T) {
+	wantScopes := map[string]string{"branch": "main"}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+
+		switch {
+		case strings.HasSuffix(r.URL.Path, "/retrieve"):
+			w.WriteHeader(http.StatusOK)
+			_ = json.NewEncoder(w).Encode(api.CacheEntryRetrieveResp{
+				TargetPaths: []string{"node_modules"},
+				CacheKey:    []api.CacheKeyPart{{Value: "test-key", Mandatory: true}},
+				Blobs:       []api.CacheBlob{{Digest: api.CacheDigest{Algorithm: "sha256", Value: "abc123"}, FileSize: 1024}},
+				ExpiresAt:   time.Now().Add(24 * time.Hour),
+				Scopes:      wantScopes,
+			})
+		case strings.HasSuffix(r.URL.Path, "/expire"):
+			var req api.CacheEntryExpireReq
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+				t.Fatalf("decode expire request body: %v", err)
+			}
+			if got := req.Scopes; !reflect.DeepEqual(got, wantScopes) {
+				t.Errorf("expire request scopes = %+v, want %+v", got, wantScopes)
+			}
+			w.WriteHeader(http.StatusOK)
+			_ = json.NewEncoder(w).Encode(map[string]any{"message": "Cache entry expired", "existed": true})
+		default:
+			t.Fatalf("unexpected request path: %s", r.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	client := newTestCacheClient(t, server.URL)
+
+	retrieveResp, found, _, err := client.CacheEntryRetrieve(t.Context(), "test-slug", api.CacheEntryRetrieveReq{
+		TargetPaths: []string{"node_modules"},
+		CacheKey:    []api.CacheKeyPart{{Value: "test-key", Mandatory: true}},
+	})
+	if err != nil {
+		t.Fatalf("CacheEntryRetrieve error = %v, want nil", err)
+	}
+	if !found {
+		t.Fatal("found = false, want true")
+	}
+	if got := retrieveResp.Scopes; !reflect.DeepEqual(got, wantScopes) {
+		t.Fatalf("retrieve response scopes = %+v, want %+v", got, wantScopes)
+	}
+
+	expireResp, _, err := client.CacheEntryExpire(t.Context(), "test-slug", api.CacheEntryExpireReq{
+		TargetPaths: retrieveResp.TargetPaths,
+		CacheKey:    retrieveResp.CacheKey,
+		Scopes:      retrieveResp.Scopes,
+	})
+	if err != nil {
+		t.Fatalf("CacheEntryExpire error = %v, want nil", err)
+	}
+	if !expireResp.Existed {
+		t.Error("expireResp.Existed = false, want true")
 	}
 }

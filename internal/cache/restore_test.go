@@ -5,10 +5,79 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"strings"
 	"testing"
+
+	"github.com/buildkite/agent/v4/api"
 )
+
+func TestInvalidateStaleEntry_EchoesScopesFromRetrieve(t *testing.T) {
+	mockClient := newMockAPIClient("s3")
+	c := &client{api: mockClient, registry: "~"}
+
+	scopes := map[string]string{"branch": "main"}
+	targetPaths := []string{"node_modules"}
+	cacheKey := []api.CacheKeyPart{{Value: "v1-test-key", Mandatory: true}}
+	retrieveResp := api.CacheEntryRetrieveResp{
+		TargetPaths: targetPaths,
+		CacheKey:    cacheKey,
+		Scopes:      scopes,
+	}
+
+	// An entry actually exists at this address, so expire should report a real
+	// deletion, not an idempotent no-op.
+	mockClient.registries["~"].cache[cacheAddr(targetPaths, cacheKey)] = &mockCacheEntry{
+		targetPaths: targetPaths,
+		cacheKey:    cacheKey,
+		committed:   true,
+	}
+
+	invalidated := c.invalidateStaleEntry(t.Context(), retrieveResp)
+	if !invalidated {
+		t.Fatalf("invalidateStaleEntry() = false, want true")
+	}
+
+	if len(mockClient.expireCalls) != 1 {
+		t.Fatalf("expire calls = %d, want 1", len(mockClient.expireCalls))
+	}
+	if got := mockClient.expireCalls[0].Scopes; !reflect.DeepEqual(got, scopes) {
+		t.Errorf("expire request scopes = %+v, want %+v", got, scopes)
+	}
+}
+
+// TestInvalidateStaleEntry_ExistedFalseIsNotReportedAsInvalidated guards against
+// treating every successful (2xx) expire call as a deletion — expire is
+// idempotent, so a 200 response can mean nothing was actually there to delete.
+func TestInvalidateStaleEntry_ExistedFalseIsNotReportedAsInvalidated(t *testing.T) {
+	mockClient := newMockAPIClient("s3")
+	c := &client{api: mockClient, registry: "~"}
+
+	// No entry exists at this address, so the mock's expire call succeeds but
+	// reports existed: false.
+	retrieveResp := api.CacheEntryRetrieveResp{
+		TargetPaths: []string{"node_modules"},
+		CacheKey:    []api.CacheKeyPart{{Value: "v1-test-key", Mandatory: true}},
+	}
+
+	invalidated := c.invalidateStaleEntry(t.Context(), retrieveResp)
+	if invalidated {
+		t.Error("invalidateStaleEntry() = true, want false for an idempotent no-op")
+	}
+}
+
+// TestMissCompleteMessage guards the progress text agents/users see against
+// claiming an invalidation happened when invalidateStaleEntry reported an
+// idempotent no-op (existed: false).
+func TestMissCompleteMessage(t *testing.T) {
+	if got, want := missCompleteMessage("missing blob", true), "Cache miss (missing blob, invalidated stale entry)"; got != want {
+		t.Errorf("missCompleteMessage(invalidated=true) = %q, want %q", got, want)
+	}
+	if got, want := missCompleteMessage("missing blob", false), "Cache miss (missing blob, stale entry could not be invalidated)"; got != want {
+		t.Errorf("missCompleteMessage(invalidated=false) = %q, want %q", got, want)
+	}
+}
 
 func TestCleanPath(t *testing.T) {
 	t.Run("removes directory and contents", func(t *testing.T) {

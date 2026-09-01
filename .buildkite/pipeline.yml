@@ -1,5 +1,7 @@
 env:
   DRY_RUN: false # set to true to disable publishing releases
+  BUILDKITE_AGENT_CACHE_REGISTRY: "agent-cache"
+  BUILDKITE_AGENT_CACHE_STORE_URL: "s3://bk-agent-cache-v2-dogfood-445615400570-us-east-1?region=us-east-1"
   AGENT_RUNNERS_LINUX_QUEUE: "${AGENT_RUNNERS_LINUX_QUEUE:-agent-runners-linux-amd64}"
   AGENT_RUNNERS_LINUX_ARM64_QUEUE: "${AGENT_RUNNERS_LINUX_ARM64_QUEUE:-agent-runners-linux-arm64}"
   AGENT_RUNNERS_WINDOWS_QUEUE: "${AGENT_RUNNERS_WINDOWS_QUEUE:-agent-runners-windows-amd64}"
@@ -17,25 +19,59 @@ steps:
       - go.{mod,sum}
       - "**.go"
       - .buildkite/steps/check-code-committed.sh
+      - .buildkite/cache.yml
+      - .buildkite/docker-compose.yml
     plugins:
+      - &assume_cache_role
+        aws-assume-role-with-web-identity#v1.4.0:
+          role_arn: "arn:aws:iam::445615400570:role/pipeline-buildkite-agent"
+          session-tags:
+            - organization_slug
+            - organization_id
+            - pipeline_slug
       - docker-compose#v4.14.0:
           config: .buildkite/docker-compose.yml
           cli-version: 2
           mount-buildkite-agent: true
           run: lint
+          env:
+            - BUILDKITE_AGENT_ACCESS_TOKEN
+            - BUILDKITE_AGENT_CACHE_REGISTRY
+            - BUILDKITE_AGENT_CACHE_STORE_URL
+            - AWS_ACCESS_KEY_ID
+            - AWS_SECRET_ACCESS_KEY
+            - AWS_SESSION_TOKEN
 
   - name: ":go::robot_face: Check protobuf generation"
     key: check-protobuf-genreation
+    env:
+      GOBIN: /root/.protobuf-tools/bin
+      GOCACHE: /root/.protobuf-tools/gocache
+      GOMODCACHE: /root/.protobuf-tools/gomodcache
     command: .buildkite/steps/check-protobuf-generation.sh
     if_changed:
       - api/proto/**
       - .buildkite/steps/check-protobuf-generation.sh
+      - .buildkite/steps/protobuf-tool-versions.sh
+      - .buildkite/cache.yml
+      - .buildkite/docker-compose.yml
     plugins:
+      - *assume_cache_role
       - docker-compose#v4.14.0:
           config: .buildkite/docker-compose.yml
           cli-version: 2
           mount-buildkite-agent: true
           run: lint
+          env:
+            - BUILDKITE_AGENT_ACCESS_TOKEN
+            - BUILDKITE_AGENT_CACHE_REGISTRY
+            - BUILDKITE_AGENT_CACHE_STORE_URL
+            - AWS_ACCESS_KEY_ID
+            - AWS_SECRET_ACCESS_KEY
+            - AWS_SESSION_TOKEN
+            - GOBIN
+            - GOCACHE
+            - GOMODCACHE
 
   # Send git commit metadata to the Test Engine plan-metadata pipeline on
   # every build. Plan output is discarded -- the Tests and Coverage group
@@ -74,6 +110,8 @@ steps:
       - "**.go"
       - "**/fixtures/**"
       - .buildkite/steps/{tests,test-coverage-report}.sh
+      - .buildkite/cache.yml
+      - .buildkite/docker-compose.yml
     steps:
       - name: ":linux: Linux AMD64 Tests"
         key: test-linux-amd64
@@ -83,6 +121,7 @@ steps:
           - junit-*.xml
           - "coverage-*/**"
         plugins:
+          - *assume_cache_role
           - tests#v1.0.0:
               suite-slug: buildkite-agent
               test-runner: gotest
@@ -98,7 +137,14 @@ steps:
               config: .buildkite/docker-compose.yml
               cli-version: 2
               propagate-environment: true
+              mount-buildkite-agent: true
               run: agent
+              env:
+                - BUILDKITE_AGENT_CACHE_REGISTRY
+                - BUILDKITE_AGENT_CACHE_STORE_URL
+                - AWS_ACCESS_KEY_ID
+                - AWS_SECRET_ACCESS_KEY
+                - AWS_SESSION_TOKEN
 
       - name: ":linux: Linux ARM64 Tests"
         key: test-linux-arm64
@@ -110,6 +156,7 @@ steps:
         agents:
           queue: $AGENT_RUNNERS_LINUX_ARM64_QUEUE
         plugins:
+          - *assume_cache_role
           - tests#v1.0.0:
               suite-slug: buildkite-agent
               test-runner: gotest
@@ -125,7 +172,14 @@ steps:
               config: .buildkite/docker-compose.yml
               cli-version: 2
               propagate-environment: true
+              mount-buildkite-agent: true
               run: agent
+              env:
+                - BUILDKITE_AGENT_CACHE_REGISTRY
+                - BUILDKITE_AGENT_CACHE_STORE_URL
+                - AWS_ACCESS_KEY_ID
+                - AWS_SECRET_ACCESS_KEY
+                - AWS_SESSION_TOKEN
 
       - name: ":windows: Windows AMD64 Tests"
         key: test-windows
@@ -137,6 +191,7 @@ steps:
         agents:
           queue: $AGENT_RUNNERS_WINDOWS_QUEUE
         plugins:
+          - *assume_cache_role
           - tests#v1.0.0:
               suite-slug: buildkite-agent
               test-runner: gotest
@@ -160,6 +215,7 @@ steps:
         agents:
           queue: $AGENT_RUNNERS_LINUX_ARM64_QUEUE
         plugins:
+          - *assume_cache_role
           - tests#v1.0.0:
               suite-slug: buildkite-agent
               test-runner: gotest
@@ -175,7 +231,14 @@ steps:
               config: .buildkite/docker-compose.yml
               cli-version: 2
               propagate-environment: true
+              mount-buildkite-agent: true
               run: agent
+              env:
+                - BUILDKITE_AGENT_CACHE_REGISTRY
+                - BUILDKITE_AGENT_CACHE_STORE_URL
+                - AWS_ACCESS_KEY_ID
+                - AWS_SECRET_ACCESS_KEY
+                - AWS_SESSION_TOKEN
 
       - name: ":coverage: Test coverage report Linux ARM64"
         key: test-coverage-linux-arm64
@@ -249,10 +312,18 @@ steps:
           - test-linux-arm64
         artifact_paths: "pkg/*"
         plugins:
+          - *assume_cache_role
           - docker-compose#v4.14.0:
               config: .buildkite/docker-compose.yml
               cli-version: 2
+              mount-buildkite-agent: true
               run: agent
+              env:
+                - BUILDKITE_AGENT_CACHE_REGISTRY
+                - BUILDKITE_AGENT_CACHE_STORE_URL
+                - AWS_ACCESS_KEY_ID
+                - AWS_SECRET_ACCESS_KEY
+                - AWS_SESSION_TOKEN
           - generate-provenance-attestation#v1.1.0:
               artifacts: "pkg/*"
               attestation_name: "buildkite-agent-{{matrix.os}}-{{matrix.arch}}.build-attestation.json"
@@ -412,10 +483,6 @@ steps:
       - set-metadata
     command: ".buildkite/steps/build-debian-packages.sh"
     artifact_paths: "deb/**/*"
-    plugins:
-      - generate-provenance-attestation#v1.1.0:
-          artifacts: "deb/*"
-          attestation_name: "buildkite-agent-debian-packages.package-attestation.json"
 
   - name: ":redhat: RPM Package build"
     key: build-rpm-packages
@@ -424,10 +491,6 @@ steps:
       - set-metadata
     command: ".buildkite/steps/build-rpm-packages.sh"
     artifact_paths: "rpm/**/*"
-    plugins:
-      - generate-provenance-attestation#v1.1.0:
-          artifacts: "rpm/*"
-          attestation_name: "buildkite-agent-rpm-packages.package-attestation.json"
 
   - name: ":github: Build Github Release"
     key: build-github-release
