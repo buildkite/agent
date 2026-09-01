@@ -27,7 +27,7 @@ var (
 	cancelCleanupTimeoutFlag = &cli.DurationFlag{
 		Name:    "cancel-cleanup-timeout",
 		Value:   defaultCancelCleanupTimeout,
-		Usage:   "The amount of time given to the agent after the process exits or is killed to upload logs and artifacts",
+		Usage:   "Extra time for a stopping agent to upload logs and artifacts after a job process exits or is killed, before the agent forcefully exits",
 		Sources: cli.EnvVars("BUILDKITE_CANCEL_CLEANUP_TIMEOUT"),
 	}
 )

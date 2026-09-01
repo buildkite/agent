@@ -192,7 +192,7 @@ type ExecutorConfig struct {
 	// A custom destination to upload artifacts to (for example, s3://...)
 	ArtifactUploadDestination string `env:"BUILDKITE_ARTIFACT_UPLOAD_DESTINATION"`
 
-	// Whether ssh-keyscan is run on ssh hosts before checkout
+	// Whether new SSH host keys are accepted during checkout
 	SSHKeyscan bool
 
 	// The shell used to execute commands

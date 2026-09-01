@@ -330,7 +330,7 @@ var BootstrapCommand = &cli.Command{
 		},
 		&cli.BoolFlag{
 			Name:    "ssh-keyscan",
-			Usage:   "Automatically run ssh-keyscan before checkout (default: true)",
+			Usage:   "Accept new SSH host keys for the default checkout instead of requiring known hosts (flag retained for compatibility; default: true)",
 			Value:   true,
 			Sources: cli.EnvVars("BUILDKITE_SSH_KEYSCAN"),
 		},
