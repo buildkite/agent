@@ -75,7 +75,7 @@ Exit statuses:
   410, or 422 response, such as a disallowed audience). Retrying will not
   succeed.
 - 1: any other failure, including transient API or network errors (timeouts,
-  5xx, other 4xx) after exhausting retries. Retrying may succeed.`
+  5xx, other 4xx). Retrying may succeed.`
 )
 
 var OIDCRequestTokenCommand = &cli.Command{
