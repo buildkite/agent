@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"slices"
 	"strings"
@@ -14,7 +15,6 @@ import (
 	"github.com/buildkite/agent/v4/env"
 	"github.com/buildkite/agent/v4/internal/redact"
 	"github.com/buildkite/agent/v4/jobapi"
-	"github.com/buildkite/agent/v4/logger"
 	"github.com/urfave/cli/v3"
 )
 
@@ -120,7 +120,7 @@ JSON does not allow duplicate keys. If you repeat the same key ("key"), the JSON
 			secretsReader = bufio.NewReader(secretsFile)
 		}
 
-		l.Infof("Reading secrets from %s for redaction", fileName)
+		l.InfoContext(ctx, "Reading secrets for redaction", "path", fileName)
 
 		secrets, err := ParseSecrets(l, cfg, secretsReader)
 		if err != nil {
@@ -147,7 +147,7 @@ JSON does not allow duplicate keys. If you repeat the same key ("key"), the JSON
 }
 
 func ParseSecrets(
-	l logger.Logger,
+	l *slog.Logger,
 	cfg RedactorAddConfig,
 	secretsReader io.Reader,
 ) ([]string, error) {
@@ -165,7 +165,7 @@ func ParseSecrets(
 				return nil, fmt.Errorf("couldn't match object keys against redacted-vars: %w", err)
 			}
 			if len(short) > 0 {
-				l.Warnf("Some object keys had values below minimum length (%d bytes) and will not be redacted: %s", redact.LengthMin, strings.Join(short, ", "))
+				l.Warn(fmt.Sprintf("Some object keys had values below minimum length (%d bytes) and will not be redacted: %s", redact.LengthMin, strings.Join(short, ", ")))
 			}
 			parsedSecrets = make([]string, 0, len(matched))
 			for _, m := range matched {
@@ -195,7 +195,7 @@ func ParseSecrets(
 
 func AddToRedactor(
 	ctx context.Context,
-	l logger.Logger,
+	l *slog.Logger,
 	client *jobapi.Client,
 	secrets ...string,
 ) error {

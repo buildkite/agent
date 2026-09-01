@@ -1,8 +1,10 @@
 package agenthttp
 
 import (
+	"context"
 	"crypto/tls"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/http/httptrace"
 	"net/http/httputil"
@@ -10,12 +12,10 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/buildkite/agent/v4/logger"
 )
 
 // Do wraps the http.Client's Do method with debug logging and tracing options.
-func Do(l logger.Logger, client *http.Client, req *http.Request, opts ...DoOption) (*http.Response, error) {
+func Do(l *slog.Logger, client *http.Client, req *http.Request, opts ...DoOption) (*http.Response, error) {
 	var cfg doConfig
 	for _, opt := range opts {
 		opt(&cfg)
@@ -29,9 +29,9 @@ func Do(l logger.Logger, client *http.Client, req *http.Request, opts ...DoOptio
 		dumpBody := !strings.Contains(req.Header.Get("Content-Type"), "multipart/form-data")
 		requestDump, err := httputil.DumpRequestOut(req, dumpBody)
 		if err != nil {
-			l.Debugf("ERR: %s\n%s", err, string(requestDump))
+			l.DebugContext(req.Context(), fmt.Sprintf("ERR: %s\n%s", err, string(requestDump)))
 		} else {
-			l.Debugf("%s", string(requestDump))
+			l.DebugContext(req.Context(), string(requestDump))
 		}
 	}
 
@@ -44,32 +44,34 @@ func Do(l logger.Logger, client *http.Client, req *http.Request, opts ...DoOptio
 
 	ts := time.Now()
 
-	l.Debugf("%s %s", req.Method, req.URL)
+	l.DebugContext(req.Context(), "HTTP request", "method", req.Method, "url", req.URL.String())
 
 	resp, err := client.Do(req)
 	if err != nil {
 		if cfg.traceHTTP {
-			tracer.EmitTraceToLog(logger.ERROR)
+			tracer.EmitTraceToLog(slog.LevelError)
 		}
 		return nil, err
 	}
 
-	l.WithFields(
-		logger.StringField("proto", resp.Proto),
-		logger.IntField("status", resp.StatusCode),
-		logger.DurationField("Δ", time.Since(ts)),
-	).Debugf("↳ %s %s", req.Method, req.URL)
+	l.With(
+		slog.String("proto", resp.Proto),
+		slog.Int("status", resp.StatusCode),
+		slog.Duration("duration", time.Since(ts)),
+		slog.String("method", req.Method),
+		slog.String("url", req.URL.String()),
+	).DebugContext(req.Context(), "HTTP response")
 
 	if cfg.debugHTTP {
 		responseDump, err := httputil.DumpResponse(resp, true)
 		if err != nil {
-			l.Debugf("\nERR: %s\n%s", err, string(responseDump))
+			l.DebugContext(req.Context(), fmt.Sprintf("\nERR: %s\n%s", err, string(responseDump)))
 		} else {
-			l.Debugf("\n%s", string(responseDump))
+			l.DebugContext(req.Context(), "\n"+string(responseDump))
 		}
 	}
 	if cfg.traceHTTP {
-		tracer.EmitTraceToLog(logger.DEBUG)
+		tracer.EmitTraceToLog(slog.LevelDebug)
 	}
 
 	return resp, err
@@ -87,7 +89,7 @@ func WithTraceHTTP(t bool) DoOption { return func(c *doConfig) { c.traceHTTP = t
 
 type tracer struct {
 	startTime time.Time
-	logger.Logger
+	*slog.Logger
 }
 
 func (t *tracer) Start() {
@@ -95,63 +97,53 @@ func (t *tracer) Start() {
 }
 
 func (t *tracer) LogTiming(event string) {
-	t.Logger = t.WithFields(logger.DurationField(event, time.Since(t.startTime)))
+	t.Logger = t.With(slog.Duration(event, time.Since(t.startTime)))
 }
 
 func (t *tracer) LogField(key, value string) {
-	t.Logger = t.WithFields(logger.StringField(key, value))
+	t.Logger = t.With(slog.String(key, value))
 }
 
 func (t *tracer) LogDuration(event string, d time.Duration) {
-	t.Logger = t.WithFields(logger.DurationField(event, d))
+	t.Logger = t.With(slog.Duration(event, d))
 }
 
-// Currently logger.Logger doesn't give us a way to set the level we want to emit logs at dynamically
-func (t *tracer) EmitTraceToLog(level logger.Level) {
+func (t *tracer) EmitTraceToLog(level slog.Level) {
 	const msg = "HTTP Timing Trace"
-	switch level {
-	case logger.DEBUG:
-		t.Debugf(msg)
-	case logger.INFO:
-		t.Infof(msg)
-	case logger.WARN:
-		t.Warnf(msg)
-	case logger.ERROR:
-		t.Errorf(msg)
-	}
+	t.Log(context.Background(), level, msg)
 }
 
 func traceHTTPRequest(req *http.Request, t *tracer) *http.Request {
 	trace := &httptrace.ClientTrace{
 		GetConn: func(hostPort string) {
-			t.LogField("hostPort", hostPort)
-			t.LogTiming("getConn")
+			t.LogField("host_port", hostPort)
+			t.LogTiming("get_conn")
 		},
 		GotConn: func(info httptrace.GotConnInfo) {
-			t.LogTiming("gotConn")
+			t.LogTiming("got_conn")
 			t.LogField("reused", strconv.FormatBool(info.Reused))
 			t.LogField("idle", strconv.FormatBool(info.WasIdle))
-			t.LogDuration("idleTime", info.IdleTime)
-			t.LogField("localAddr", info.Conn.LocalAddr().String())
+			t.LogDuration("idle_time", info.IdleTime)
+			t.LogField("local_addr", info.Conn.LocalAddr().String())
 		},
 		PutIdleConn: func(err error) {
-			t.LogTiming("putIdleConn")
+			t.LogTiming("put_idle_conn")
 			if err != nil {
-				t.LogField("putIdleConnectionError", err.Error())
+				t.LogField("put_idle_connection_error", err.Error())
 			}
 		},
 		GotFirstResponseByte: func() {
-			t.LogTiming("gotFirstResponseByte")
+			t.LogTiming("got_first_response_byte")
 		},
 		Got1xxResponse: func(code int, header textproto.MIMEHeader) error {
-			t.LogTiming("got1xxResponse")
+			t.LogTiming("got_1xx_response")
 			return nil
 		},
 		DNSStart: func(_ httptrace.DNSStartInfo) {
-			t.LogTiming("dnsStart")
+			t.LogTiming("dns_start")
 		},
 		DNSDone: func(_ httptrace.DNSDoneInfo) {
-			t.LogTiming("dnsDone")
+			t.LogTiming("dns_done")
 		},
 		ConnectStart: func(network, addr string) {
 			t.LogTiming(fmt.Sprintf("connectStart.%s.%s", network, addr))
@@ -160,16 +152,16 @@ func traceHTTPRequest(req *http.Request, t *tracer) *http.Request {
 			t.LogTiming(fmt.Sprintf("connectDone.%s.%s", network, addr))
 		},
 		TLSHandshakeStart: func() {
-			t.LogTiming("tlsHandshakeStart")
+			t.LogTiming("tls_handshake_start")
 		},
 		TLSHandshakeDone: func(_ tls.ConnectionState, _ error) {
-			t.LogTiming("tlsHandshakeDone")
+			t.LogTiming("tls_handshake_done")
 		},
 		WroteHeaders: func() {
-			t.LogTiming("wroteHeaders")
+			t.LogTiming("wrote_headers")
 		},
 		WroteRequest: func(_ httptrace.WroteRequestInfo) {
-			t.LogTiming("wroteRequest")
+			t.LogTiming("wrote_request")
 		},
 	}
 

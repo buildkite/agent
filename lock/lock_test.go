@@ -3,6 +3,7 @@ package lock
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"sync"
@@ -11,7 +12,6 @@ import (
 	"time"
 
 	"github.com/buildkite/agent/v4/internal/agentapi"
-	"github.com/buildkite/agent/v4/logger"
 )
 
 var testSocketCounter uint32
@@ -21,13 +21,9 @@ func testSocketPath() string {
 	return filepath.Join(os.TempDir(), fmt.Sprintf("lock_test-%d-%d", os.Getpid(), id))
 }
 
-func testLogger(t *testing.T) logger.Logger {
+func testLogger(t *testing.T) *slog.Logger {
 	t.Helper()
-	logger := logger.NewConsoleLogger(
-		logger.NewTextPrinter(os.Stderr),
-		func(c int) { t.Errorf("exit(%d)", c) },
-	)
-	return logger
+	return slog.New(slog.NewTextHandler(os.Stderr, nil))
 }
 
 func testServerAndClient(t *testing.T, ctx context.Context) (*agentapi.Server, *Client) {

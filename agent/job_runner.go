@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"maps"
 	"math/rand/v2"
 	"os"
@@ -23,7 +24,6 @@ import (
 	"github.com/buildkite/agent/v4/internal/process"
 	"github.com/buildkite/agent/v4/internal/shell"
 	"github.com/buildkite/agent/v4/kubernetes"
-	"github.com/buildkite/agent/v4/logger"
 	"github.com/buildkite/agent/v4/metrics"
 	"github.com/buildkite/agent/v4/status"
 	"github.com/buildkite/shellwords"
@@ -109,7 +109,7 @@ type JobRunner struct {
 	VerificationFailureBehavior string
 
 	// agentLogger is a agentLogger that outputs to the agent logs
-	agentLogger logger.Logger
+	agentLogger *slog.Logger
 
 	// The APIClient that will be used when updating the job
 	apiClient *api.Client
@@ -166,7 +166,7 @@ type jobProcess interface {
 }
 
 // Initializes the job runner
-func NewJobRunner(ctx context.Context, l logger.Logger, apiClient *api.Client, conf JobRunnerConfig) (*JobRunner, error) {
+func NewJobRunner(ctx context.Context, l *slog.Logger, apiClient *api.Client, conf JobRunnerConfig) (*JobRunner, error) {
 	// If the accept response has a token attached, we should use that instead of the Agent Access Token that
 	// our current apiClient is using
 	if conf.Job.Token != "" {
@@ -174,6 +174,7 @@ func NewJobRunner(ctx context.Context, l logger.Logger, apiClient *api.Client, c
 		clientConf.Token = conf.Job.Token
 		apiClient = apiClient.New(clientConf)
 	}
+	jobRunnerLogger := l.With("component", "JobRunner")
 
 	r := &JobRunner{
 		agentLogger: l,
@@ -220,7 +221,7 @@ func NewJobRunner(ctx context.Context, l logger.Logger, apiClient *api.Client, c
 
 	contextDir := jobContextDir(conf)
 
-	r.envShellFile, r.envJSONFile, err = createJobEnvFiles(r.agentLogger, r.conf.Job.ID, contextDir)
+	r.envShellFile, r.envJSONFile, err = createJobEnvFiles(jobRunnerLogger, r.conf.Job.ID, contextDir)
 	if err != nil {
 		return nil, err
 	}
@@ -251,7 +252,7 @@ func NewJobRunner(ctx context.Context, l logger.Logger, apiClient *api.Client, c
 		jobLogDir := ""
 		if conf.AgentConfiguration.JobLogPath != "" {
 			jobLogDir = conf.AgentConfiguration.JobLogPath
-			r.agentLogger.Debugf("[JobRunner] Job Log Path: %s", jobLogDir)
+			jobRunnerLogger.DebugContext(ctx, "Job log path", "path", jobLogDir)
 		}
 		tmpFile, err = os.CreateTemp(jobLogDir, "buildkite_job_log")
 		if err != nil {
@@ -340,7 +341,7 @@ func NewJobRunner(ctx context.Context, l logger.Logger, apiClient *api.Client, c
 		<-r.process.Done()
 		if tmpFile != nil {
 			if err := os.Remove(tmpFile.Name()); err != nil {
-				r.agentLogger.Errorf("Couldn't remove job log temp file: %v", err)
+				r.agentLogger.ErrorContext(ctx, "Couldn't remove job log temp file", "error", err)
 			}
 		}
 	}()
@@ -419,7 +420,7 @@ func (r *JobRunner) createEnvironment(ctx context.Context) ([]string, error) {
 	if pluginsJSON := env["BUILDKITE_PLUGINS"]; pluginsJSON != "" && r.conf.KubernetesExec {
 		filtered, err := removeKubernetesPlugin([]byte(pluginsJSON))
 		if err != nil {
-			r.agentLogger.Errorf("Invalid BUILDKITE_PLUGINS: %v", err)
+			r.agentLogger.ErrorContext(ctx, "Invalid BUILDKITE_PLUGINS", "error", err)
 		}
 		if string(filtered) == "" {
 			delete(env, "BUILDKITE_PLUGINS")
@@ -551,7 +552,7 @@ BUILDKITE_AGENT_JWKS_KEY_ID`
 	if len(r.conf.Job.Step.Secrets) > 0 {
 		secretsJSON, err := json.Marshal(r.conf.Job.Step.Secrets)
 		if err != nil {
-			r.agentLogger.Errorf("Failed to marshal secrets configuration: %v", err)
+			r.agentLogger.ErrorContext(ctx, "Failed to marshal secrets configuration", "error", err)
 			return nil, err
 		}
 
@@ -763,7 +764,7 @@ BUILDKITE_AGENT_JWKS_KEY_ID`
 	// so there is no partial merge).
 	if exp := r.conf.AgentConfiguration.ControlPlaneTracingExporter; exp != nil && r.conf.AgentConfiguration.OpenTelemetryTracing {
 		if jobEnvHasOTLPDestination {
-			r.agentLogger.Infof("Not delivering control-plane OTLP exporter to job %s: the job env already sets an OTEL_EXPORTER_OTLP_* destination, which takes precedence", r.conf.Job.ID)
+			r.agentLogger.InfoContext(ctx, "Not delivering control-plane OTLP exporter: job environment already sets an OTEL_EXPORTER_OTLP_* destination", "job_id", r.conf.Job.ID)
 		} else {
 			maps.Copy(env, controlPlaneOTLPEnv(exp))
 		}
@@ -778,7 +779,7 @@ BUILDKITE_AGENT_JWKS_KEY_ID`
 
 	// see documentation for BuildkiteMessageMax
 	if err := truncateEnv(r.agentLogger, env, BuildkiteMessageName, BuildkiteMessageMax); err != nil {
-		r.agentLogger.Warnf("failed to truncate %s: %v", BuildkiteMessageName, err)
+		r.agentLogger.WarnContext(ctx, "Failed to truncate environment variable", "name", BuildkiteMessageName, "error", err)
 		// attempt to continue anyway
 	}
 
@@ -799,7 +800,7 @@ BUILDKITE_AGENT_JWKS_KEY_ID`
 
 // truncateEnv cuts environment variable `key` down to `max` length, such that
 // "key=value\0" does not exceed the max.
-func truncateEnv(l logger.Logger, env map[string]string, key string, max int) error {
+func truncateEnv(l *slog.Logger, env map[string]string, key string, max int) error {
 	msglen := len(env[key])
 	if msglen <= max {
 		return nil
@@ -812,7 +813,7 @@ func truncateEnv(l logger.Logger, env map[string]string, key string, max int) er
 	}
 	keeplen := msgmax - len(apology)
 	env[key] = env[key][0:keeplen] + apology
-	l.Warnf("%s %s", key, description)
+	l.Warn("Environment variable value truncated", "name", key, "description", description)
 	return nil
 }
 
@@ -829,16 +830,16 @@ func removeKubernetesPlugin(pluginsJSON []byte) ([]byte, error) {
 }
 
 type LogWriter struct {
-	l logger.Logger
+	l *slog.Logger
 }
 
 func (w LogWriter) Write(bytes []byte) (int, error) {
-	w.l.Infof("%s", bytes)
+	w.l.Info(string(bytes))
 	return len(bytes), nil
 }
 
 func (r *JobRunner) executePreBootstrapHook(ctx context.Context, hook string) (bool, error) {
-	r.agentLogger.Infof("Running pre-bootstrap hook %q", hook)
+	r.agentLogger.InfoContext(ctx, "Running pre-bootstrap hook", "hook", hook)
 
 	sh, err := shell.New(
 		shell.WithStdout(LogWriter{l: r.agentLogger}),
@@ -871,14 +872,14 @@ func (r *JobRunner) executePreBootstrapHook(ctx context.Context, hook string) (b
 
 	script, err := sh.Script(hook, r.conf.AgentConfiguration.HooksShell)
 	if err != nil {
-		r.agentLogger.Errorf("Finished pre-bootstrap hook %q: script not runnable: %v", hook, err)
+		r.agentLogger.ErrorContext(ctx, "Finished pre-bootstrap hook: script not runnable", "hook", hook, "error", err)
 		return false, err
 	}
 	if err := script.Run(ctx, shell.ShowPrompt(false), shell.WithExtraEnv(environ)); err != nil {
-		r.agentLogger.Errorf("Finished pre-bootstrap hook %q: job rejected: %v", hook, err)
+		r.agentLogger.ErrorContext(ctx, "Finished pre-bootstrap hook: job rejected", "hook", hook, "error", err)
 		return false, err
 	}
-	r.agentLogger.Infof("Finished pre-bootstrap hook %q: job accepted", hook)
+	r.agentLogger.InfoContext(ctx, "Finished pre-bootstrap hook: job accepted", "hook", hook)
 	return true, nil
 }
 
@@ -890,7 +891,7 @@ func (r *JobRunner) jobCancellationChecker(ctx context.Context) {
 	defer done()
 	setStat("Starting...")
 
-	defer r.agentLogger.Debugf("[JobRunner] Routine that refreshes the job has finished")
+	defer r.agentLogger.With("component", "JobRunner").DebugContext(ctx, "Routine that refreshes the job has finished")
 
 	select {
 	case <-r.process.Started():
@@ -935,24 +936,24 @@ func (r *JobRunner) jobCancellationChecker(ctx context.Context) {
 		jobState, response, err := r.apiClient.GetJobState(ctx, r.conf.Job.ID)
 		if err != nil {
 			if response != nil && response.StatusCode == 401 {
-				r.agentLogger.Errorf("Invalid access token, cancelling job %s", r.conf.Job.ID)
+				r.agentLogger.ErrorContext(ctx, "Invalid access token; cancelling job", "job_id", r.conf.Job.ID)
 				if err := r.Cancel(CancelReasonInvalidToken); err != nil {
-					r.agentLogger.Errorf("Failed to cancel the process (job: %s): %v", r.conf.Job.ID, err)
+					r.agentLogger.ErrorContext(ctx, "Failed to cancel process", "job_id", r.conf.Job.ID, "error", err)
 				}
 			} else {
 				// We don't really care if it fails, we'll just try again soon anyway
-				r.agentLogger.Warnf("Problem with getting job state %s (%s)", r.conf.Job.ID, err)
+				r.agentLogger.WarnContext(ctx, "Problem getting job state", "job_id", r.conf.Job.ID, "error", err)
 			}
 			continue // the loop
 		}
 		switch jobState.State {
 		case "canceling", "canceled":
 			if err := r.Cancel(CancelReasonJobState); err != nil {
-				r.agentLogger.Errorf("Unexpected error canceling process as requested by server (job: %s) (err: %s)", r.conf.Job.ID, err)
+				r.agentLogger.ErrorContext(ctx, "Unexpected error canceling process as requested by server", "job_id", r.conf.Job.ID, "error", err)
 			}
 		case "timing_out", "timed_out":
 			if err := r.Cancel(CancelReasonJobTimeout); err != nil {
-				r.agentLogger.Errorf("Unexpected error canceling process as requested by server (job: %s) (err: %s)", r.conf.Job.ID, err)
+				r.agentLogger.ErrorContext(ctx, "Unexpected error canceling process as requested by server", "job_id", r.conf.Job.ID, "error", err)
 			}
 		}
 	}
@@ -973,7 +974,7 @@ func jobContextDir(conf JobRunnerConfig) string {
 	return os.TempDir()
 }
 
-func createJobEnvFiles(l logger.Logger, jobID, contextDir string) (shellFile, jsonFile *os.File, err error) {
+func createJobEnvFiles(l *slog.Logger, jobID, contextDir string) (shellFile, jsonFile *os.File, err error) {
 	// contextDir is not guaranteed to exist
 	if _, err := os.Stat(contextDir); os.IsNotExist(err) {
 		// Actual file permissions will be reduced by umask, and won't be 0o777 unless the user has manually changed the umask to 000
@@ -986,7 +987,7 @@ func createJobEnvFiles(l logger.Logger, jobID, contextDir string) (shellFile, js
 	if err != nil {
 		return nil, nil, err
 	}
-	l.Debugf("[JobRunner] Created env file (shell format): %s", shellFile.Name())
+	l.Debug("Created env file", "format", "shell", "path", shellFile.Name())
 
 	jsonFile, err = os.CreateTemp(contextDir, fmt.Sprintf("job-env-json-%s", jobID))
 	if err != nil {
@@ -994,7 +995,7 @@ func createJobEnvFiles(l logger.Logger, jobID, contextDir string) (shellFile, js
 		_ = os.Remove(shellFile.Name())
 		return nil, nil, err
 	}
-	l.Debugf("[JobRunner] Created env file (JSON format): %s", jsonFile.Name())
+	l.Debug("Created env file", "format", "json", "path", jsonFile.Name())
 
 	return shellFile, jsonFile, nil
 }

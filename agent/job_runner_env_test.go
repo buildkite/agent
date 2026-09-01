@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"log/slog"
 	"os"
 	"runtime"
 	"strings"
@@ -8,7 +9,6 @@ import (
 
 	"github.com/buildkite/agent/v4/api"
 	envutil "github.com/buildkite/agent/v4/env"
-	"github.com/buildkite/agent/v4/logger"
 )
 
 // controlPlaneTestRunner builds the minimal JobRunner that createEnvironment
@@ -28,10 +28,10 @@ func controlPlaneTestRunner(t *testing.T, jobEnv map[string]string, agentConf Ag
 	}
 
 	return &JobRunner{
-		agentLogger:  logger.Discard,
+		agentLogger:  slog.New(slog.DiscardHandler),
 		envShellFile: envShellFile,
 		envJSONFile:  envJSONFile,
-		apiClient: api.NewClient(logger.Discard, api.Config{
+		apiClient: api.NewClient(slog.New(slog.DiscardHandler), api.Config{
 			Endpoint: "http://localhost/fake",
 			Token:    "llamas",
 		}),

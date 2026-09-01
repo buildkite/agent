@@ -3,12 +3,12 @@ package clicommand_test
 import (
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"slices"
 	"strings"
 	"testing"
 
 	"github.com/buildkite/agent/v4/clicommand"
-	"github.com/buildkite/agent/v4/logger"
 	"github.com/google/go-cmp/cmp"
 )
 
@@ -52,7 +52,7 @@ func TestParseSecrets(t *testing.T) {
 				ApplyVarsFilter: tc.applyVarsFilter,
 				RedactedVars:    clicommand.RedactedVars.Value,
 			}
-			secrets, err := clicommand.ParseSecrets(logger.Discard, cfg, input)
+			secrets, err := clicommand.ParseSecrets(slog.New(slog.DiscardHandler), cfg, input)
 			if err != nil {
 				t.Errorf("clicommand.ParseSecrets(logger, %v, %q) error = %v", cfg, tc.inputData, err)
 			}
@@ -91,7 +91,7 @@ func TestParseSecrets_JSONErrors(t *testing.T) {
 			input := strings.NewReader(tc.inputData)
 
 			_, err := clicommand.ParseSecrets(
-				logger.Discard,
+				slog.New(slog.DiscardHandler),
 				clicommand.RedactorAddConfig{
 					Format: clicommand.FormatStringJSON,
 				},

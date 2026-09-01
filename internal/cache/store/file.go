@@ -38,6 +38,7 @@ const (
 //   - SHA256 integrity checksums computed during upload
 //   - Last-writer-wins semantics for concurrent updates
 type LocalFileBlob struct {
+	log  *slog.Logger
 	root string // Absolute path to the root storage directory
 }
 
@@ -66,7 +67,7 @@ type FileMetadata struct {
 //   - URL scheme is not "file"
 //   - Path is empty or invalid (e.g., "/", ".")
 //   - Directory creation fails
-func NewLocalFileBlob(ctx context.Context, fileURL string) (*LocalFileBlob, error) {
+func NewLocalFileBlob(ctx context.Context, log *slog.Logger, fileURL string) (*LocalFileBlob, error) {
 	u, err := url.Parse(fileURL)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse file URL: %w", err)
@@ -108,9 +109,9 @@ func NewLocalFileBlob(ctx context.Context, fileURL string) (*LocalFileBlob, erro
 		return nil, fmt.Errorf("failed to create root directory: %w", err)
 	}
 
-	slog.Debug("configured local file store", "root", root)
+	log.DebugContext(ctx, "configured local file store", "path", root)
 
-	return &LocalFileBlob{root: root}, nil
+	return &LocalFileBlob{log: log, root: root}, nil
 }
 
 // Upload copies a file from srcPath to the cache storage identified by key.
@@ -203,7 +204,7 @@ func (b *LocalFileBlob) Upload(ctx context.Context, srcPath, key string) (*Trans
 	// Fsync parent directory for durability (optional but recommended)
 	if dir, err := os.Open(filepath.Dir(dataPath)); err == nil {
 		if err := dir.Sync(); err != nil {
-			slog.Warn("failed to fsync directory after upload", "path", filepath.Dir(dataPath), "error", err)
+			b.log.WarnContext(ctx, "failed to fsync directory after upload", "path", filepath.Dir(dataPath), "error", err)
 		}
 		_ = dir.Close()
 	}
@@ -359,7 +360,7 @@ func (b *LocalFileBlob) Download(ctx context.Context, key, destPath string) (*Tr
 	// Fsync parent directory for durability (optional but recommended)
 	if dir, err := os.Open(filepath.Dir(destPath)); err == nil {
 		if err := dir.Sync(); err != nil {
-			slog.Warn("failed to fsync directory after download", "path", filepath.Dir(destPath), "error", err)
+			b.log.WarnContext(ctx, "failed to fsync directory after download", "path", filepath.Dir(destPath), "error", err)
 		}
 		_ = dir.Close()
 	}
@@ -374,7 +375,7 @@ func (b *LocalFileBlob) Download(ctx context.Context, key, destPath string) (*Tr
 				}
 			}
 		} else {
-			slog.Warn("failed to parse metadata file", "path", metaPath, "error", err)
+			b.log.WarnContext(ctx, "failed to parse metadata file", "path", metaPath, "error", err)
 		}
 	}
 

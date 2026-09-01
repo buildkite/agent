@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -12,7 +13,6 @@ import (
 	"time"
 
 	"github.com/buildkite/agent/v4/api"
-	"github.com/buildkite/agent/v4/logger"
 	"github.com/buildkite/roko"
 )
 
@@ -58,7 +58,7 @@ type PipelineUploader struct {
 //
 // If, during a retry loop in option 3, the API returns a 2xx that is a 202, then we assume the API
 // changed to supporting Async Uploads between retries and option 1 will be taken.
-func (u *PipelineUploader) Upload(ctx context.Context, l logger.Logger) error {
+func (u *PipelineUploader) Upload(ctx context.Context, l *slog.Logger) error {
 	result, err := u.pipelineUploadAsyncWithRetry(ctx, l)
 	if err != nil {
 		return fmt.Errorf("failed to upload and accept pipeline: %w", err)
@@ -110,7 +110,7 @@ type pipelineUploadAsyncResult struct {
 
 func (u *PipelineUploader) pipelineUploadAsyncWithRetry(
 	ctx context.Context,
-	l logger.Logger,
+	l *slog.Logger,
 ) (*pipelineUploadAsyncResult, error) {
 	// Retry the pipeline upload a few times before giving up
 
@@ -137,7 +137,7 @@ func (u *PipelineUploader) pipelineUploadAsyncWithRetry(
 			}
 
 			if !api.BreakOnNonRetryable(r, resp, err) {
-				l.Warnf("%s (%s)", err, r)
+				l.WarnContext(ctx, "Uploading pipeline failed; retrying", "error", err, "retry", r.String())
 			}
 			return nil, err
 		}
@@ -159,7 +159,7 @@ func (u *PipelineUploader) pipelineUploadAsyncWithRetry(
 		}
 
 		if result.pipelineStatusURL, err = resp.Location(); err != nil {
-			l.Warnf("%s (%s)", err, r)
+			l.WarnContext(ctx, "Uploading pipeline failed; retrying", "error", err, "retry", r.String())
 			return nil, err
 		}
 
@@ -167,7 +167,7 @@ func (u *PipelineUploader) pipelineUploadAsyncWithRetry(
 	})
 }
 
-func (u *PipelineUploader) pollForPiplineUploadStatus(ctx context.Context, l logger.Logger) error {
+func (u *PipelineUploader) pollForPiplineUploadStatus(ctx context.Context, l *slog.Logger) error {
 	return roko.NewRetrier(
 		roko.WithMaxAttempts(defaultAttempts),
 		roko.WithStrategy(roko.Constant(defaultSleepDuration)),
@@ -183,11 +183,11 @@ func (u *PipelineUploader) pollForPiplineUploadStatus(ctx context.Context, l log
 			},
 		)
 		if err != nil {
-			l.Warnf("%s (%s)", err, r)
+			l.WarnContext(ctx, "Uploading pipeline failed; retrying", "error", err, "retry", r.String())
 
 			// 422 responses will always fail no need to retry
 			if api.IsErrHavingStatus(err, http.StatusUnprocessableEntity) {
-				l.Errorf("Unrecoverable error, skipping retries")
+				l.ErrorContext(ctx, "Unrecoverable error, skipping retries")
 				r.Break()
 				return err
 			}
@@ -202,14 +202,14 @@ func (u *PipelineUploader) pollForPiplineUploadStatus(ctx context.Context, l log
 		case "pending", "processing":
 			setNextIntervalFromResponse(r, resp)
 			err := fmt.Errorf("pipeline upload not yet applied: %s", uploadStatus.State)
-			l.Infof("%s (%s)", err, r)
+			l.InfoContext(ctx, "Uploading pipeline failed; retrying", "error", err, "retry", r.String())
 			return err
 		case "rejected", "failed":
-			l.Errorf("Unrecoverable error, skipping retries")
+			l.ErrorContext(ctx, "Unrecoverable error, skipping retries")
 			r.Break()
 			return fmt.Errorf("pipeline upload %s: %s", uploadStatus.State, uploadStatus.Message)
 		default:
-			l.Errorf("Unrecoverable error, skipping retries")
+			l.ErrorContext(ctx, "Unrecoverable error, skipping retries")
 			r.Break()
 			return fmt.Errorf("unexpected pipeline upload state from API: %s", uploadStatus.State)
 		}

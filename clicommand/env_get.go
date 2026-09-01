@@ -102,7 +102,7 @@ func envGetAction(ctx context.Context, c *cli.Command) error {
 			v, ok := envMap[arg]
 			if !ok {
 				notFound = true
-				l.Warnf("%q is not set", arg)
+				l.WarnContext(ctx, fmt.Sprintf("%q is not set", arg))
 				continue
 			}
 			em[arg] = v
@@ -137,7 +137,7 @@ func envGetAction(ctx context.Context, c *cli.Command) error {
 		}
 
 	default:
-		l.Errorf("Invalid output format %q\n", cfg.Format)
+		l.ErrorContext(ctx, "Invalid output format", "format", cfg.Format)
 	}
 
 	if notFound {

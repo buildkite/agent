@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -13,7 +14,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/buildkite/agent/v4/api"
 	"github.com/buildkite/agent/v4/internal/agenthttp"
-	"github.com/buildkite/agent/v4/logger"
 )
 
 type DownloaderConfig struct {
@@ -46,13 +46,13 @@ type Downloader struct {
 	conf DownloaderConfig
 
 	// The logger instance to use
-	logger logger.Logger
+	logger *slog.Logger
 
 	// The APIClient that will be used when uploading jobs
 	apiClient APIClient
 }
 
-func NewDownloader(l logger.Logger, ac APIClient, c DownloaderConfig) Downloader {
+func NewDownloader(l *slog.Logger, ac APIClient, c DownloaderConfig) Downloader {
 	return Downloader{
 		logger:    l,
 		apiClient: ac,
@@ -84,7 +84,7 @@ func (a *Downloader) Download(ctx context.Context) error {
 		return errors.New("no artifacts found for downloading")
 	}
 
-	a.logger.Infof("Found %d artifacts. Starting to download to: %s", artifactCount, destination)
+	a.logger.InfoContext(ctx, "Found artifacts; starting download", "artifact_count", artifactCount, "destination", destination)
 
 	s3Clients, err := a.generateS3Clients(ctx, artifacts)
 	if err != nil {
@@ -137,7 +137,7 @@ func (a *Downloader) Download(ctx context.Context) error {
 				dler := a.createDownloader(artifact, path, destination, s3Clients)
 
 				if err := dler.Start(ctx); err != nil {
-					a.logger.Errorf("Failed to download artifact: %s", err)
+					a.logger.ErrorContext(ctx, "Failed to download artifact", "error", err, "artifact", artifact.ID, "path", path)
 					select {
 					case errorsCh <- err:
 						// error sent

@@ -127,7 +127,7 @@ func (c *client) Restore(ctx context.Context, cacheID string) (RestoreResult, er
 			return err
 		}
 		if err != nil {
-			slog.Warn("cache retrieve failed, retrying", "err", err, "retrier", r.String())
+			c.log.WarnContext(ctx, "cache retrieve failed, retrying", "error", err, "retry", r.String())
 			return err
 		}
 		return nil
@@ -177,8 +177,8 @@ func (c *client) Restore(ctx context.Context, cacheID string) (RestoreResult, er
 	tmpDir, archiveFile, transferInfo, err := c.downloadCache(ctx, retrieveResp, c.bucketURL)
 	if err != nil {
 		if errors.Is(err, store.ErrBlobNotFound) {
-			slog.Warn("cache blob missing, treating as miss and invalidating entry",
-				"cache_id", cacheID, "err", err)
+			c.log.WarnContext(ctx, "cache blob missing, treating as miss and invalidating entry",
+				"cache_id", cacheID, "error", err)
 			invalidated := c.invalidateStaleEntry(ctx, retrieveResp)
 			// The blob is gone, so nothing was restored: clear the hit/fallback
 			// state set earlier so callers and the span reflect a clean miss.
@@ -200,8 +200,8 @@ func (c *client) Restore(ctx context.Context, cacheID string) (RestoreResult, er
 			// before any target folder was touched, so existing files are intact.
 			// The blob will never verify, so expire the entry to let a subsequent
 			// save re-upload it, and let the build continue with a clean miss.
-			slog.Warn("cache blob digest mismatch, treating as miss and invalidating entry",
-				"cache_id", cacheID, "err", err)
+			c.log.WarnContext(ctx, "cache blob digest mismatch, treating as miss and invalidating entry",
+				"cache_id", cacheID, "error", err)
 			invalidated := c.invalidateStaleEntry(ctx, retrieveResp)
 			result.CacheHit = false
 			result.FallbackUsed = false
@@ -241,8 +241,8 @@ func (c *client) Restore(ctx context.Context, cacheID string) (RestoreResult, er
 		// unreadable archive degrades to a miss and invalidates the entry
 		// (targets untouched — this runs before cleaning).
 		unrecognized := errors.Is(err, archive.ErrUnrecognizedFormat)
-		slog.Warn("cache archive failed verification, treating as miss and invalidating entry",
-			"cache_id", cacheID, "unrecognized_format", unrecognized, "err", err)
+		c.log.WarnContext(ctx, "cache archive failed verification, treating as miss and invalidating entry",
+			"cache_id", cacheID, "unrecognized_format", unrecognized, "error", err)
 		invalidated := c.invalidateStaleEntry(ctx, retrieveResp)
 		result.CacheHit = false
 		result.FallbackUsed = false
@@ -273,7 +273,7 @@ func (c *client) Restore(ctx context.Context, cacheID string) (RestoreResult, er
 		resolvedTargets[i] = resolved
 	}
 	if a, b, ok := archive.OverlappingPaths(resolvedTargets); ok {
-		slog.Warn("configured cache targets overlap after re-resolving anchors, treating as miss",
+		c.log.WarnContext(ctx, "configured cache targets overlap after re-resolving anchors, treating as miss",
 			"cache_id", cacheID, "target_a", cacheConfig.TargetPaths[a], "target_b", cacheConfig.TargetPaths[b])
 		result.CacheHit = false
 		result.FallbackUsed = false
@@ -300,9 +300,9 @@ func (c *client) Restore(ctx context.Context, cacheID string) (RestoreResult, er
 			return result, fmt.Errorf("failed to resolve target path %q: %w", path, err)
 		}
 
-		slog.Debug("cleaning path", "path", path, "extractedPath", extractedPath)
+		c.log.DebugContext(ctx, "cleaning path", "path", path, "extracted_path", extractedPath)
 
-		if err := cleanPath(ctx, extractedPath); err != nil {
+		if err := cleanPath(ctx, c.log, extractedPath); err != nil {
 			span.RecordError(err)
 			span.SetStatus(codes.Error, "failed to clean path")
 			return result, fmt.Errorf("failed to clean path %q: %w", extractedPath, err)
@@ -355,7 +355,7 @@ func (c *client) Restore(ctx context.Context, cacheID string) (RestoreResult, er
 // blob is missing or fails digest verification, so a subsequent save re-uploads it.
 func (c *client) invalidateStaleEntry(ctx context.Context, retrieveResp api.CacheEntryRetrieveResp) bool {
 	if len(retrieveResp.TargetPaths) == 0 || len(retrieveResp.CacheKey) == 0 {
-		slog.Warn("cannot invalidate stale cache entry: retrieve response missing resolved address")
+		c.log.WarnContext(ctx, "cannot invalidate stale cache entry: retrieve response missing resolved address")
 		return false
 	}
 
@@ -373,13 +373,13 @@ func (c *client) invalidateStaleEntry(ctx context.Context, retrieveResp api.Cach
 			return err
 		}
 		if err != nil {
-			slog.Warn("cache entry invalidation failed, retrying", "err", err, "retrier", r.String())
+			c.log.WarnContext(ctx, "cache entry invalidation failed, retrying", "error", err, "retry", r.String())
 			return err
 		}
 		return nil
 	})
 	if err != nil {
-		slog.Warn("cache entry invalidation failed", "registry", c.registry, "err", err)
+		c.log.WarnContext(ctx, "cache entry invalidation failed", "registry", c.registry, "error", err)
 		return false
 	}
 	return true
@@ -407,7 +407,7 @@ func (c *client) downloadCache(ctx context.Context, retrieveResp api.CacheEntryR
 	)
 
 	// Create blob store
-	blobStore, err := store.NewBlobStore(ctx, retrieveResp.Store, bucketURL)
+	blobStore, err := store.NewBlobStore(ctx, c.log, retrieveResp.Store, bucketURL)
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, "failed to create blob store")
@@ -479,7 +479,7 @@ func (c *client) extractCache(ctx context.Context, archiveFile string, archiveSi
 	defer func() { _ = archiveFileHandle.Close() }()
 
 	// Extract files
-	archiveInfo, err := archive.ExtractFiles(ctx, archiveFileHandle, archiveSize, paths)
+	archiveInfo, err := archive.ExtractFiles(ctx, c.log, archiveFileHandle, archiveSize, paths)
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, "failed to extract archive")
@@ -498,7 +498,7 @@ func (c *client) extractCache(ctx context.Context, archiveFile string, archiveSi
 // cleanPath removes a directory tree for a configured cache path.
 // It handles Go module cache directories that have 0555 permissions by
 // making them writable before removal.
-func cleanPath(ctx context.Context, dir string) error {
+func cleanPath(ctx context.Context, log *slog.Logger, dir string) error {
 	if dir == "" {
 		return fmt.Errorf("cleanPath: empty directory path")
 	}
@@ -534,7 +534,7 @@ func cleanPath(ctx context.Context, dir string) error {
 
 		// Module cache has 0555 directories; make them writable before removal.
 		if lstat.IsDir() {
-			if err := makeTreeWritable(ctx, clean); err != nil {
+			if err := makeTreeWritable(ctx, log, clean); err != nil {
 				return err
 			}
 		}
@@ -585,7 +585,7 @@ func pathContains(info os.FileInfo, dir string) bool {
 // cache). The os.Root handle is closed before returning so that the caller
 // can remove `clean` on platforms (Windows) that disallow removing a
 // directory with an open handle.
-func makeTreeWritable(ctx context.Context, clean string) error {
+func makeTreeWritable(ctx context.Context, log *slog.Logger, clean string) error {
 	root, err := os.OpenRoot(clean)
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
@@ -603,7 +603,7 @@ func makeTreeWritable(ctx context.Context, clean string) error {
 		}
 
 		if walkErr != nil {
-			slog.Debug("cleanPath: error walking path", "path", relPath, "err", walkErr)
+			log.DebugContext(ctx, "cleanPath: error walking path", "path", relPath, "error", walkErr)
 			return nil
 		}
 

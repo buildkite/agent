@@ -6,12 +6,12 @@ import (
 	"bytes"
 	"context"
 	"io"
+	"log/slog"
 	"os"
 	"testing"
 	"time"
 
 	"github.com/buildkite/agent/v4/internal/process"
-	"github.com/buildkite/agent/v4/logger"
 )
 
 func TestProcessNiceValue(t *testing.T) {
@@ -21,7 +21,7 @@ func TestProcessNiceValue(t *testing.T) {
 	stdinR, stdinW := io.Pipe()
 	started := make(chan struct{})
 
-	p := process.New(logger.Discard, process.Config{
+	p := process.New(slog.New(slog.DiscardHandler), process.Config{
 		Path:    os.Args[0],
 		Env:     []string{"TEST_MAIN=tester-nice"},
 		Stdout:  stdout,

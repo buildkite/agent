@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"log/slog"
 	"maps"
 	"net/url"
 	"os"
@@ -9,7 +10,6 @@ import (
 
 	"github.com/buildkite/agent/v4/api"
 	envutil "github.com/buildkite/agent/v4/env"
-	"github.com/buildkite/agent/v4/logger"
 	"github.com/buildkite/agent/v4/tracetools"
 )
 
@@ -48,7 +48,7 @@ func HasLocalOTLPDestination() bool {
 // exporter, and an explicitly-set local propagate-traceparent keeps its
 // value. Logs one line describing what was applied or ignored; exporter
 // endpoints are reduced to scheme+host and headers are never logged.
-func ApplyControlPlaneTracing(l logger.Logger, conf *AgentConfiguration, tracing *api.AgentTracing, local LocalTracingConfig) {
+func ApplyControlPlaneTracing(l *slog.Logger, conf *AgentConfiguration, tracing *api.AgentTracing, local LocalTracingConfig) {
 	if tracing == nil {
 		return
 	}
@@ -58,7 +58,7 @@ func ApplyControlPlaneTracing(l logger.Logger, conf *AgentConfiguration, tracing
 	// already OpenTelemetry (its exporter and propagation settings were meant
 	// for that other backend, not ours).
 	if tracing.Backend != tracetools.BackendOpenTelemetry {
-		l.Warnf("Ignoring control-plane tracing configuration: unsupported backend %q", tracing.Backend)
+		l.Warn("Ignoring control-plane tracing configuration: unsupported backend", "backend", tracing.Backend)
 		return
 	}
 	conf.OpenTelemetryTracing = true
@@ -78,7 +78,7 @@ func ApplyControlPlaneTracing(l logger.Logger, conf *AgentConfiguration, tracing
 		parts = append(parts, "exporter="+sanitizedEndpoint(tracing.Exporter.Endpoint))
 	}
 
-	l.Infof("Control-plane tracing configuration applied: %s", strings.Join(parts, ", "))
+	l.Info("Control-plane tracing configuration applied", "configuration", strings.Join(parts, ", "))
 }
 
 // sanitizedEndpoint reduces an exporter endpoint to scheme://host for

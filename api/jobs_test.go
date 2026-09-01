@@ -4,13 +4,13 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"testing"
 
 	"github.com/buildkite/agent/v4/api"
-	"github.com/buildkite/agent/v4/logger"
 )
 
 func TestJobURL(t *testing.T) {
@@ -111,7 +111,7 @@ func TestPromiseFailure(t *testing.T) {
 			}))
 			defer server.Close()
 
-			client := api.NewClient(logger.Discard, api.Config{
+			client := api.NewClient(slog.New(slog.DiscardHandler), api.Config{
 				UserAgent: "Test",
 				Endpoint:  server.URL,
 				Token:     accessToken,

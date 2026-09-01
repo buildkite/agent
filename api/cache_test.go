@@ -2,6 +2,7 @@ package api_test
 
 import (
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -9,12 +10,11 @@ import (
 	"time"
 
 	"github.com/buildkite/agent/v4/api"
-	"github.com/buildkite/agent/v4/logger"
 )
 
 func newTestCacheClient(t *testing.T, endpoint string) *api.Client {
 	t.Helper()
-	return api.NewClient(logger.Discard, api.Config{
+	return api.NewClient(slog.New(slog.DiscardHandler), api.Config{
 		Endpoint:  endpoint,
 		Token:     "test-token",
 		UserAgent: "test-agent",

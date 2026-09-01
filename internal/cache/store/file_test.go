@@ -3,12 +3,15 @@ package store
 import (
 	"bytes"
 	"errors"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
 )
+
+var discardLogger = slog.New(slog.DiscardHandler)
 
 func TestNewLocalFileBlob(t *testing.T) {
 	ctx := t.Context()
@@ -47,7 +50,7 @@ func TestNewLocalFileBlob(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			blob, err := NewLocalFileBlob(ctx, tt.url)
+			blob, err := NewLocalFileBlob(ctx, discardLogger, tt.url)
 			if tt.wantErr {
 				if err == nil {
 					t.Fatal("expected error, got nil")
@@ -156,7 +159,7 @@ func TestLocalFileBlobUpload(t *testing.T) {
 		t.Fatalf("MkdirAll: %v", err)
 	}
 
-	blob, err := NewLocalFileBlob(ctx, fileURL(rootDir))
+	blob, err := NewLocalFileBlob(ctx, discardLogger, fileURL(rootDir))
 	if err != nil {
 		t.Fatalf("NewLocalFileBlob: %v", err)
 	}
@@ -217,7 +220,7 @@ func TestLocalFileBlobDownload(t *testing.T) {
 		t.Fatalf("MkdirAll destDir: %v", err)
 	}
 
-	blob, err := NewLocalFileBlob(ctx, fileURL(rootDir))
+	blob, err := NewLocalFileBlob(ctx, discardLogger, fileURL(rootDir))
 	if err != nil {
 		t.Fatalf("NewLocalFileBlob: %v", err)
 	}
@@ -272,7 +275,7 @@ func TestLocalFileBlobUploadOverwrite(t *testing.T) {
 		t.Fatalf("MkdirAll: %v", err)
 	}
 
-	blob, err := NewLocalFileBlob(ctx, fileURL(rootDir))
+	blob, err := NewLocalFileBlob(ctx, discardLogger, fileURL(rootDir))
 	if err != nil {
 		t.Fatalf("NewLocalFileBlob: %v", err)
 	}
@@ -327,7 +330,7 @@ func TestLocalFileBlobDownloadNonExistent(t *testing.T) {
 		t.Fatalf("MkdirAll: %v", err)
 	}
 
-	blob, err := NewLocalFileBlob(ctx, fileURL(rootDir))
+	blob, err := NewLocalFileBlob(ctx, discardLogger, fileURL(rootDir))
 	if err != nil {
 		t.Fatalf("NewLocalFileBlob: %v", err)
 	}
@@ -353,7 +356,7 @@ func TestLocalFileBlobUploadInvalidKey(t *testing.T) {
 		t.Fatalf("MkdirAll: %v", err)
 	}
 
-	blob, err := NewLocalFileBlob(ctx, fileURL(rootDir))
+	blob, err := NewLocalFileBlob(ctx, discardLogger, fileURL(rootDir))
 	if err != nil {
 		t.Fatalf("NewLocalFileBlob: %v", err)
 	}
@@ -383,7 +386,7 @@ func TestLocalFileBlobDownloadInvalidKey(t *testing.T) {
 		t.Fatalf("MkdirAll: %v", err)
 	}
 
-	blob, err := NewLocalFileBlob(ctx, fileURL(rootDir))
+	blob, err := NewLocalFileBlob(ctx, discardLogger, fileURL(rootDir))
 	if err != nil {
 		t.Fatalf("NewLocalFileBlob: %v", err)
 	}
@@ -402,7 +405,7 @@ func TestKeyToPaths(t *testing.T) {
 	tmpDir := t.TempDir()
 	ctx := t.Context()
 
-	blob, err := NewLocalFileBlob(ctx, fileURL(tmpDir))
+	blob, err := NewLocalFileBlob(ctx, discardLogger, fileURL(tmpDir))
 	if err != nil {
 		t.Fatalf("NewLocalFileBlob: %v", err)
 	}
@@ -494,7 +497,7 @@ func TestLocalFileBlobConcurrentUpload(t *testing.T) {
 		t.Fatalf("MkdirAll: %v", err)
 	}
 
-	blob, err := NewLocalFileBlob(ctx, fileURL(rootDir))
+	blob, err := NewLocalFileBlob(ctx, discardLogger, fileURL(rootDir))
 	if err != nil {
 		t.Fatalf("NewLocalFileBlob: %v", err)
 	}
@@ -560,7 +563,7 @@ func TestNewBlobStoreLocalFile(t *testing.T) {
 	ctx := t.Context()
 	tmpDir := t.TempDir()
 
-	blob, err := NewBlobStore(ctx, LocalFileStore, fileURL(tmpDir))
+	blob, err := NewBlobStore(ctx, discardLogger, LocalFileStore, fileURL(tmpDir))
 	if err != nil {
 		t.Fatalf("NewBlobStore: %v", err)
 	}
@@ -576,7 +579,7 @@ func TestNewBlobStoreLocalFile(t *testing.T) {
 // file:// is accepted for agent_managed (local testing) and must reach the local
 // file store rather than the S3 store, matching validateCacheStore.
 func TestNewBlobStoreAgentManagedFile(t *testing.T) {
-	blob, err := NewBlobStore(t.Context(), AgentManaged, fileURL(t.TempDir()))
+	blob, err := NewBlobStore(t.Context(), discardLogger, AgentManaged, fileURL(t.TempDir()))
 	if err != nil {
 		t.Fatalf("NewBlobStore: %v", err)
 	}

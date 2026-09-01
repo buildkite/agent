@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"math/rand/v2"
 	"os"
 	"regexp"
@@ -20,7 +21,6 @@ import (
 	"github.com/buildkite/agent/v4/internal/process"
 	"github.com/buildkite/agent/v4/internal/redact"
 	"github.com/buildkite/agent/v4/kubernetes"
-	"github.com/buildkite/agent/v4/logger"
 	"github.com/buildkite/agent/v4/metrics"
 	"github.com/buildkite/agent/v4/status"
 	"github.com/buildkite/go-pipeline"
@@ -77,7 +77,7 @@ func (r *JobRunner) Run(ctx context.Context, ignoreAgentInDispatches *bool) (err
 		return errors.New("job already cancelled before running")
 	}
 
-	r.agentLogger.Infof("Starting job at %s", r.conf.Job.URL())
+	r.agentLogger.InfoContext(ctx, "Starting job", "url", r.conf.Job.URL())
 
 	ctx, done := status.AddItem(ctx, "Job Runner", "", nil)
 	defer done()
@@ -96,7 +96,7 @@ func (r *JobRunner) Run(ctx context.Context, ignoreAgentInDispatches *bool) (err
 	if r.conf.Job.RunnableAt != "" {
 		runnableAt, err := time.Parse(time.RFC3339Nano, r.conf.Job.RunnableAt)
 		if err != nil {
-			r.agentLogger.Errorf("Metric submission failed to parse %s", r.conf.Job.RunnableAt)
+			r.agentLogger.ErrorContext(ctx, "Metric submission failed to parse runnable time", "runnable_at", r.conf.Job.RunnableAt, "error", err)
 		} else {
 			r.conf.MetricsScope.Timing("queue.duration", r.startedAt.Sub(runnableAt))
 		}
@@ -132,6 +132,7 @@ func (r *JobRunner) Run(ctx context.Context, ignoreAgentInDispatches *bool) (err
 
 	if r.conf.JWKS == nil && job.Step.Signature != nil {
 		r.verificationFailureLogs(
+			ctx,
 			VerificationBehaviourBlock,
 			fmt.Errorf("cannot verify signature. JWK for pipeline verification is not configured"),
 		)
@@ -147,7 +148,7 @@ func (r *JobRunner) Run(ctx context.Context, ignoreAgentInDispatches *bool) (err
 		ise := &invalidSignatureError{}
 		switch err := r.verifyJob(ctx, r.conf.JWKS); {
 		case errors.Is(err, ErrNoSignature) || errors.As(err, &ise):
-			r.verificationFailureLogs(r.VerificationFailureBehavior, err)
+			r.verificationFailureLogs(ctx, r.VerificationFailureBehavior, err)
 			if r.VerificationFailureBehavior == VerificationBehaviourBlock {
 				exit.Status = -1
 				exit.SignalReason = SignalReasonSignatureRejected
@@ -155,14 +156,14 @@ func (r *JobRunner) Run(ctx context.Context, ignoreAgentInDispatches *bool) (err
 			}
 
 		case err != nil: // some other error
-			r.verificationFailureLogs(VerificationBehaviourBlock, err) // errors in verification are always fatal
+			r.verificationFailureLogs(ctx, VerificationBehaviourBlock, err) // errors in verification are always fatal
 			exit.Status = -1
 			exit.SignalReason = SignalReasonSignatureRejected
 			return nil
 
 		default: // no error, all good, keep going
-			l := r.agentLogger.WithFields(logger.StringField("jobID", job.ID), logger.StringField("signature", job.Step.Signature.Value))
-			l.Infof("Successfully verified job")
+			l := r.agentLogger.With(slog.String("job_id", job.ID), slog.String("signature", job.Step.Signature.Value))
+			l.InfoContext(ctx, "Successfully verified job")
 			_, _ = fmt.Fprintln(r.jobLogs, "~~~ ✅ Job signature verified")
 			_, _ = fmt.Fprintf(r.jobLogs, "signature: %s\n", job.Step.Signature.Value)
 		}
@@ -173,14 +174,14 @@ func (r *JobRunner) Run(ctx context.Context, ignoreAgentInDispatches *bool) (err
 		if job.Env["BUILDKITE_COMPUTE_TYPE"] == "self-hosted" {
 			_, _ = fmt.Fprintln(r.jobLogs, "+++ ⚠️ Cache settings detected on self-hosted agent")
 			_, _ = fmt.Fprintf(r.jobLogs, "cache paths: %s\n", strings.Join(cache.Paths, ", "))
-			r.agentLogger.Infof("Job %s has cache settings but is running on a self-hosted agent", job.ID)
+			r.agentLogger.InfoContext(ctx, "Job has cache settings but is running on a self-hosted agent", "job_id", job.ID)
 		}
 	}
 
 	// Validate the repository if the list of allowed repositories is set.
 	if err := r.validateConfigAllowlists(job); err != nil {
 		_, _ = fmt.Fprintln(r.jobLogs, err.Error())
-		r.agentLogger.Errorf("%v", err)
+		r.agentLogger.ErrorContext(ctx, "Job configuration allowlist validation failed", "error", err)
 
 		exit.Status = -1
 		exit.SignalReason = SignalReasonAgentRefused
@@ -203,7 +204,7 @@ func (r *JobRunner) Run(ctx context.Context, ignoreAgentInDispatches *bool) (err
 			// Ensure the Job UI knows why this job resulted in failure
 			_, _ = fmt.Fprintln(r.jobLogs, "pre-bootstrap hook rejected this job, see the buildkite-agent logs for more details")
 			// But disclose more information in the agent logs
-			r.agentLogger.Errorf("pre-bootstrap hook rejected this job: %s", err)
+			r.agentLogger.ErrorContext(ctx, "Pre-bootstrap hook rejected this job", "error", err)
 
 			exit.Status = -1
 			exit.SignalReason = SignalReasonAgentRefused
@@ -300,17 +301,17 @@ func (r *JobRunner) validatePlugins() error {
 	return nil
 }
 
-func (r *JobRunner) verificationFailureLogs(behavior string, err error) {
-	l := r.agentLogger.WithFields(
-		logger.StringField("jobID", r.conf.Job.ID),
-		logger.StringField("error", err.Error()),
+func (r *JobRunner) verificationFailureLogs(ctx context.Context, behavior string, err error) {
+	l := r.agentLogger.With(
+		slog.String("job_id", r.conf.Job.ID),
+		slog.Any("error", err),
 	)
 	prefix := "+++ ⚠️"
 	if behavior == VerificationBehaviourBlock {
 		prefix = "+++ ⛔"
 	}
 
-	l.Warnf("Job verification failed")
+	l.WarnContext(ctx, "Job verification failed")
 	_, _ = fmt.Fprintf(r.jobLogs, "%s Job signature verification failed\n", prefix)
 	_, _ = fmt.Fprintf(r.jobLogs, "error: %s\n", err)
 
@@ -323,8 +324,8 @@ func (r *JobRunner) verificationFailureLogs(behavior string, err error) {
 	}
 
 	if behavior == VerificationBehaviourWarn {
-		l.Warnf("Job will be run whether or not it can be verified - this is not recommended.")
-		l.Warnf("You can change this behavior with the `verification-failure-behavior` agent configuration option.")
+		l.WarnContext(ctx, "Job will be run whether or not it can be verified - this is not recommended.")
+		l.WarnContext(ctx, "You can change this behavior with the `verification-failure-behavior` agent configuration option.")
 		_, _ = fmt.Fprintln(r.jobLogs, "Job will be run without verification")
 	}
 }
@@ -399,12 +400,13 @@ One or more containers connected to the agent, but then stopped communicating wi
 
 func (r *JobRunner) cleanup(ctx context.Context, wg *sync.WaitGroup, exit core.ProcessExit, ignoreAgentInDispatches *bool) {
 	finishedAt := time.Now()
+	log := r.agentLogger.With("component", "JobRunner")
 
 	// Flush the job logs. If the process is never started, then logs from prior to the attempt to
 	// start the process will still be buffered. Also, there may still be logs in the buffer that
 	// were left behind because the uploader goroutine exited before it could flush them.
 	if err := r.logStreamer.Process(ctx, r.output.ReadAndTruncate()); err != nil {
-		r.agentLogger.Warnf("Log streamer couldn't process final logs: %v", err)
+		r.agentLogger.WarnContext(ctx, "Log streamer couldn't process final logs", "error", err)
 	}
 
 	// Stop the log streamer. This will block until all the chunks have been uploaded
@@ -412,11 +414,11 @@ func (r *JobRunner) cleanup(ctx context.Context, wg *sync.WaitGroup, exit core.P
 
 	// Warn about failed chunks
 	if count := r.logStreamer.FailedChunks(); count > 0 {
-		r.agentLogger.Warnf("%d chunks failed to upload for this job", count)
+		r.agentLogger.WarnContext(ctx, "Chunks failed to upload for this job", "chunk_count", count)
 	}
 
 	// Wait for the routines that we spun up to finish
-	r.agentLogger.Debugf("[JobRunner] Waiting for all other routines to finish")
+	log.DebugContext(ctx, "Waiting for all other routines to finish")
 	wg.Wait()
 
 	// Remove the env file, if any
@@ -425,17 +427,17 @@ func (r *JobRunner) cleanup(ctx context.Context, wg *sync.WaitGroup, exit core.P
 			continue
 		}
 		if err := os.Remove(f.Name()); err != nil {
-			r.agentLogger.Warnf("[JobRunner] Error cleaning up env file: %s", err)
+			log.WarnContext(ctx, "Error cleaning up env file", "error", err)
 			continue
 		}
-		r.agentLogger.Debugf("[JobRunner] Deleted env file: %s", f.Name())
+		log.DebugContext(ctx, "Deleted env file", "path", f.Name())
 	}
 
 	// Remove the job timeout marker file if it was created. It is fine if
 	// the file does not exist — Cancel only writes it on a job-level timeout.
 	if r.jobTimeoutFilePath != "" {
 		if err := os.Remove(r.jobTimeoutFilePath); err != nil && !os.IsNotExist(err) {
-			r.agentLogger.Warnf("[JobRunner] Error cleaning up job timeout file: %s", err)
+			log.WarnContext(ctx, "Error cleaning up job timeout file", "error", err)
 		}
 	}
 
@@ -447,10 +449,10 @@ func (r *JobRunner) cleanup(ctx context.Context, wg *sync.WaitGroup, exit core.P
 	// Finish the build in the Buildkite Agent API
 	// Once we tell the API we're finished it might assign us new work, so make sure everything else is done first.
 	if err := r.client.FinishJob(ctx, r.conf.Job, finishedAt, exit, r.logStreamer.FailedChunks(), ignoreAgentInDispatches); err != nil {
-		r.agentLogger.Errorf("Couldn't mark job as finished: %v", err)
+		r.agentLogger.ErrorContext(ctx, "Couldn't mark job as finished", "error", err)
 	}
 
-	r.agentLogger.Infof("Finished job at %s", r.conf.Job.URL())
+	r.agentLogger.InfoContext(ctx, "Finished job", "url", r.conf.Job.URL())
 }
 
 // streamJobLogsAfterProcessStart waits for the process to start, then grabs the job output
@@ -461,7 +463,7 @@ func (r *JobRunner) streamJobLogsAfterProcessStart(ctx context.Context) {
 	setStat("🏃 Starting...")
 
 	defer func() {
-		r.agentLogger.Debugf("[JobRunner] Routine that processes the log has finished")
+		r.agentLogger.With("component", "JobRunner").DebugContext(ctx, "Routine that processes the log has finished")
 	}()
 
 	select {
@@ -532,14 +534,14 @@ func (r *JobRunner) streamJobLogsAfterProcessStart(ctx context.Context) {
 
 			// Send the output of the process to the log streamer for processing
 			if err := r.logStreamer.Process(ctx, r.output.ReadAndTruncate()); err != nil {
-				r.agentLogger.Errorf("Could not stream the log output: %v", err)
+				r.agentLogger.ErrorContext(ctx, "Could not stream the log output", "error", err)
 				// LogStreamer.Process only returns an error when it can no longer
 				// accept logs (maybe Stop was called, or a hard limit was reached).
 				// Since we can no longer send logs, Close the buffer, which causes
 				// future Writes to return io.ErrClosedPipe, typically SIGPIPE-ing
 				// the running process (if it is still running).
 				if err := r.output.Close(); err != nil && err != process.ErrAlreadyClosed {
-					r.agentLogger.Errorf("Process output buffer could not be closed: %v", err)
+					r.agentLogger.ErrorContext(ctx, "Process output buffer could not be closed", "error", err)
 				}
 				return
 			}
@@ -594,16 +596,11 @@ func (r *JobRunner) Cancel(reason CancelReason) error {
 	}
 
 	if r.process == nil {
-		r.agentLogger.Errorf("No process to kill")
+		r.agentLogger.Error("No process to kill")
 		return nil
 	}
 
-	r.agentLogger.Infof(
-		"Canceling job %s with a signal grace period of %v (%s)",
-		r.conf.Job.ID,
-		r.conf.AgentConfiguration.CancelSignalTimeout,
-		reason,
-	)
+	r.agentLogger.Info("Canceling job", "job_id", r.conf.Job.ID, "signal_grace_period", r.conf.AgentConfiguration.CancelSignalTimeout, "reason", reason)
 
 	// If we are cancelling because of a Buildkite job-level timeout, write the
 	// marker file before sending the signal. The bootstrap's signal handler
@@ -613,7 +610,7 @@ func (r *JobRunner) Cancel(reason CancelReason) error {
 	// proceeds and the hook will simply see BUILDKITE_JOB_CANCELLED only.
 	if reason == CancelReasonJobTimeout && r.jobTimeoutFilePath != "" {
 		if err := os.WriteFile(r.jobTimeoutFilePath, []byte("true"), 0o644); err != nil {
-			r.agentLogger.Warnf("Failed to write job timeout marker file %s: %v", r.jobTimeoutFilePath, err)
+			r.agentLogger.Warn("Failed to write job timeout marker file", "path", r.jobTimeoutFilePath, "error", err)
 		}
 	}
 
@@ -631,11 +628,7 @@ func (r *JobRunner) Cancel(reason CancelReason) error {
 	// cancel grace period is the time we (agent side) need to upload logs and
 	// disconnect (if the agent is exiting).
 	case <-time.After(r.conf.AgentConfiguration.CancelSignalTimeout):
-		r.agentLogger.Infof(
-			"Job %s hasn't stopped within %v, terminating",
-			r.conf.Job.ID,
-			r.conf.AgentConfiguration.CancelSignalTimeout,
-		)
+		r.agentLogger.Info("Job has not stopped within signal grace period; terminating", "job_id", r.conf.Job.ID, "signal_grace_period", r.conf.AgentConfiguration.CancelSignalTimeout)
 
 		// Terminate the process as we've exceeded our context
 		return r.process.Terminate()

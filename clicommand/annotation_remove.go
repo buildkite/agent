@@ -83,7 +83,7 @@ var AnnotationRemoveCommand = &cli.Command{
 				return err
 			}
 			if err != nil {
-				l.Warnf("%s (%s)", err, r)
+				l.WarnContext(ctx, "Failed to remove annotation; retrying", "error", err, "retry", r.String())
 				return err
 			}
 			return nil
@@ -91,7 +91,7 @@ var AnnotationRemoveCommand = &cli.Command{
 			return fmt.Errorf("failed to remove annotation: %w", err)
 		}
 
-		l.Debugf("Successfully removed annotation")
+		l.DebugContext(ctx, "Successfully removed annotation")
 
 		return nil
 	},

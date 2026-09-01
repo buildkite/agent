@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"iter"
+	"log/slog"
 	"os"
 	"reflect"
 	"strconv"
@@ -14,13 +15,15 @@ import (
 	"github.com/buildkite/agent/v4/env"
 	"github.com/buildkite/agent/v4/internal/experiments"
 	"github.com/buildkite/agent/v4/internal/job"
-	"github.com/buildkite/agent/v4/logger"
 	"github.com/buildkite/agent/v4/version"
+	"github.com/lmittmann/tint"
+	"github.com/mattn/go-colorable"
 	"github.com/oleiade/reflections"
 	"github.com/urfave/cli/v3"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/propagation"
+	"golang.org/x/term"
 )
 
 const (
@@ -64,8 +67,8 @@ var (
 
 	LogLevelFlag = &cli.StringFlag{
 		Name:    "log-level",
-		Value:   "notice",
-		Usage:   "Set the log level for the agent, making logging more or less verbose. Defaults to notice. Allowed values are: debug, info, error, warn, fatal",
+		Value:   "info",
+		Usage:   "Set the log level for the agent, making logging more or less verbose. Defaults to info. Allowed values are: debug, info, warn, error",
 		Sources: cli.EnvVars("BUILDKITE_AGENT_LOG_LEVEL"),
 	}
 
@@ -396,65 +399,47 @@ func apiFlags() []cli.Flag {
 	}
 }
 
-func CreateLogger(cfg any) logger.Logger {
-	var l logger.Logger
-	logFormat := "text"
+func noColorRequested(cfg any) bool {
+	noColor, _ := reflections.GetField(cfg, "NoColor")
+	return noColor == true || os.Getenv("NO_COLOR") != ""
+}
 
-	// Check the LogFormat config field
-	if logFormatCfg, err := reflections.GetField(cfg, "LogFormat"); err == nil {
-		if logFormatString, ok := logFormatCfg.(string); ok {
-			logFormat = logFormatString
+func CreateLogger(cfg any) *slog.Logger {
+	logFormat := "text"
+	if value, err := reflections.GetField(cfg, "LogFormat"); err == nil {
+		if value, ok := value.(string); ok {
+			logFormat = value
 		}
 	}
 
-	// Create a logger based on the type
+	level, levelErr := logLevelFromConfig(cfg)
+	if levelErr != nil {
+		level = slog.LevelInfo
+	}
+
+	var handler slog.Handler
 	switch logFormat {
 	case "text", "":
-		printer := logger.NewTextPrinter(os.Stderr)
-
-		// Show agent fields as a prefix
-		printer.IsPrefixFn = func(field logger.Field) bool {
-			switch field.Key() {
-			case "agent", "hook":
-				return true
-			default:
-				return false
-			}
-		}
-
-		// Turn off color if a NoColor option is present
-		noColor, err := reflections.GetField(cfg, "NoColor")
-		if noColor == true && err == nil {
-			printer.Colors = false
-		} else {
-			printer.Colors = true
-		}
-
-		l = logger.NewConsoleLogger(printer, os.Exit)
+		handler = tint.NewTextHandler(colorable.NewColorable(os.Stderr), &tint.Options{
+			Level:      level,
+			TimeFormat: time.DateTime + "Z07:00",
+			NoColor:    noColorRequested(cfg) || !term.IsTerminal(int(os.Stderr.Fd())),
+		})
 	case "json":
-		l = logger.NewConsoleLogger(logger.NewJSONPrinter(os.Stdout), os.Exit)
+		handler = slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: level})
 	default:
 		fmt.Printf("Unknown log-format of %q, try text or json\n", logFormat)
 		os.Exit(1)
 	}
 
-	l.SetLevel(logger.NOTICE)
-
-	err := handleLogLevelFlag(l, cfg)
-	if err != nil {
-		l.Warnf("Error when setting log level: %v. Defaulting log level to NOTICE", err)
+	l := slog.New(handler)
+	if levelErr != nil {
+		l.Warn("Error when setting log level; defaulting log level to INFO", "error", levelErr)
 	}
-
-	// Enable debugging if a Debug option is present
-	debugI, _ := reflections.GetField(cfg, "Debug")
-	if debug, ok := debugI.(bool); ok && debug {
-		l.SetLevel(logger.DEBUG)
-	}
-
 	return l
 }
 
-func HandleProfileFlag(l logger.Logger, cfg any) func() {
+func HandleProfileFlag(l *slog.Logger, cfg any) func() {
 	// Enable profiling a profiling mode if Profile is present
 	modeField, _ := reflections.GetField(cfg, "Profile")
 	if mode, ok := modeField.(string); ok && mode != "" {
@@ -463,7 +448,7 @@ func HandleProfileFlag(l logger.Logger, cfg any) func() {
 	return func() {}
 }
 
-func HandleGlobalFlags(ctx context.Context, l logger.Logger, cfg any) (context.Context, func()) {
+func HandleGlobalFlags(ctx context.Context, l *slog.Logger, cfg any) (context.Context, func()) {
 	// Enable experiments
 	experimentNames, err := reflections.GetField(cfg, "Experiments")
 	if err != nil {
@@ -478,7 +463,7 @@ func HandleGlobalFlags(ctx context.Context, l logger.Logger, cfg any) (context.C
 	for _, name := range experimentNamesSlice {
 		nctx, state := experiments.EnableWithWarnings(ctx, l, name)
 		if state == experiments.StateKnown {
-			l.Debugf("Enabled experiment %q", name)
+			l.DebugContext(ctx, "Enabled experiment", "experiment", name)
 		}
 		ctx = nctx
 	}
@@ -487,24 +472,27 @@ func HandleGlobalFlags(ctx context.Context, l logger.Logger, cfg any) (context.C
 	return ctx, HandleProfileFlag(l, cfg)
 }
 
-func handleLogLevelFlag(l logger.Logger, cfg any) error {
-	logLevel, err := reflections.GetField(cfg, "LogLevel")
-	if err != nil {
-		return err
+func logLevelFromConfig(cfg any) (slog.Level, error) {
+	if debug, err := reflections.GetField(cfg, "Debug"); err == nil && debug == true {
+		return slog.LevelDebug, nil
 	}
 
-	llStr, ok := logLevel.(string)
+	val, err := reflections.GetField(cfg, "LogLevel")
+	if err != nil {
+		return 0, fmt.Errorf("getting log level from config struct: %w", err)
+	}
+
+	levelStr, ok := val.(string)
 	if !ok {
-		return fmt.Errorf("log level %v (%T) couldn't be cast to string", logLevel, logLevel)
+		return 0, fmt.Errorf("couldn't convert LogLevel field into string")
 	}
 
-	level, err := logger.LevelFromString(llStr)
-	if err != nil {
-		return err
+	var level slog.Level
+	if err := level.UnmarshalText([]byte(levelStr)); err != nil {
+		return 0, fmt.Errorf("parsing log level: %w", err)
 	}
 
-	l.SetLevel(level)
-	return nil
+	return level, nil
 }
 
 func allFlagEnvs(c *cli.Command) iter.Seq[string] {
@@ -600,7 +588,7 @@ func withConfigFilePaths(paths []string) func(*cliconfig.Loader) {
 func setupLoggerAndConfig[T any](ctx context.Context, c *cli.Command, opts ...configOpts) (
 	newCtx context.Context,
 	cfg T,
-	l logger.Logger,
+	l *slog.Logger,
 	f *cliconfig.File,
 	done func(),
 ) {
@@ -619,14 +607,14 @@ func setupLoggerAndConfig[T any](ctx context.Context, c *cli.Command, opts ...co
 	l = CreateLogger(&cfg)
 
 	if debug, err := reflections.GetField(cfg, "Debug"); err == nil && debug.(bool) {
-		l = l.WithFields(logger.StringField("command", c.FullName()))
+		l = l.With("command", c.FullName())
 	}
 
-	l.Debugf("Loaded config")
+	l.DebugContext(ctx, "Loaded config")
 
 	// Now that we have a logger, log out the warnings that loading config generated
 	for _, warning := range warnings {
-		l.Warnf("%s", warning)
+		l.WarnContext(ctx, warning)
 	}
 
 	// Setup any global configuration options
@@ -658,7 +646,7 @@ func setupLoggerAndConfig[T any](ctx context.Context, c *cli.Command, opts ...co
 
 		traceProvider, err := job.InitOTelTracerProvider(ctx, serviceName, resourceAttrs)
 		if err != nil {
-			l.Warnf("Failed to initialize tracing: %v", err)
+			l.WarnContext(ctx, "Failed to initialize tracing", "error", err)
 		} else {
 			// Extract any incoming trace context so spans created in this process
 			// are linked to the parent job's trace.

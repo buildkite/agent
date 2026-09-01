@@ -57,7 +57,7 @@ var JobUpdateCommand = &cli.Command{
 		defer done()
 
 		if c.Args().Len() < 2 {
-			l.Infof("Reading value from STDIN")
+			l.InfoContext(ctx, "Reading value from STDIN")
 
 			input, err := io.ReadAll(os.Stdin)
 			if err != nil {
@@ -73,7 +73,7 @@ var JobUpdateCommand = &cli.Command{
 			return err
 		}
 		if redactedValue := redact.String(cfg.Value, needles); redactedValue != cfg.Value {
-			l.Warnf("New value for job %q attribute %q contained one or more secrets from environment variables that have been redacted. If this is deliberate, pass --redacted-vars='' or a list of patterns that does not match the variable containing the secret", cfg.Job, cfg.Attribute)
+			l.WarnContext(ctx, fmt.Sprintf("New value for job %q attribute %q contained one or more secrets from environment variables that have been redacted. If this is deliberate, pass --redacted-vars='' or a list of patterns that does not match the variable containing the secret", cfg.Job, cfg.Attribute))
 			cfg.Value = redactedValue
 		}
 
@@ -88,7 +88,7 @@ var JobUpdateCommand = &cli.Command{
 				return err
 			}
 			if err != nil {
-				l.Warnf("%s (%s)", err, r)
+				l.WarnContext(ctx, "Failed to update job; retrying", "error", err, "retry", r.String())
 				return err
 			}
 			return nil

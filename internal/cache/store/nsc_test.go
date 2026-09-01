@@ -259,7 +259,7 @@ func TestNscStore_PassesNamespace(t *testing.T) {
 	}
 
 	var captured []string
-	store := &NscStore{namespace: "my-namespace", run: fakeRunner(&captured)}
+	store := &NscStore{log: discardLogger, namespace: "my-namespace", run: fakeRunner(&captured)}
 
 	if _, err := store.Upload(ctx, testFile, "key"); err != nil {
 		t.Fatalf("Upload: %v", err)
@@ -310,7 +310,7 @@ func TestNscStore_RefreshesTTLOnDownload(t *testing.T) {
 	dest := filepath.Join(t.TempDir(), "out.txt")
 
 	var calls [][]string
-	store := &NscStore{namespace: "my-namespace", run: recordingRunner(&calls, nil)}
+	store := &NscStore{log: discardLogger, namespace: "my-namespace", run: recordingRunner(&calls, nil)}
 
 	if _, err := store.Download(ctx, "key", dest); err != nil {
 		t.Fatalf("Download: %v", err)
@@ -340,7 +340,7 @@ func TestNscStore_UpdatesCLIWhenExtendUnsupported(t *testing.T) {
 		}
 		return &CommandResult{}, nil
 	}
-	store := &NscStore{namespace: "ns", run: recordingRunner(&calls, respond)}
+	store := &NscStore{log: discardLogger, namespace: "ns", run: recordingRunner(&calls, respond)}
 
 	if _, err := store.Download(ctx, "key", dest); err != nil {
 		t.Fatalf("Download: %v", err)
@@ -381,7 +381,7 @@ func TestNscStore_UpdatesCLIWhenExtendHelpLacksEnsureMinimum(t *testing.T) {
 		}
 		return &CommandResult{}, nil
 	}
-	store := &NscStore{namespace: "ns", run: recordingRunner(&calls, respond)}
+	store := &NscStore{log: discardLogger, namespace: "ns", run: recordingRunner(&calls, respond)}
 
 	if _, err := store.Download(ctx, "key", dest); err != nil {
 		t.Fatalf("Download: %v", err)
@@ -415,7 +415,7 @@ func TestNscStore_DownloadSucceedsWhenRefreshFails(t *testing.T) {
 		return &CommandResult{}, nil
 	}
 	var calls [][]string
-	store := &NscStore{namespace: "ns", run: recordingRunner(&calls, respond)}
+	store := &NscStore{log: discardLogger, namespace: "ns", run: recordingRunner(&calls, respond)}
 
 	if _, err := store.Download(ctx, "key", dest); err != nil {
 		t.Fatalf("Download should succeed despite a failed TTL refresh: %v", err)
@@ -423,7 +423,7 @@ func TestNscStore_DownloadSucceedsWhenRefreshFails(t *testing.T) {
 }
 
 func TestNewNscStore_RequiresNamespace(t *testing.T) {
-	if _, err := NewNscStore("nsc://"); err == nil {
+	if _, err := NewNscStore(discardLogger, "nsc://"); err == nil {
 		t.Error(`NewNscStore("nsc://"): expected error, got nil`)
 	}
 }
@@ -433,7 +433,7 @@ func TestNewNscStore_RequiresNamespace(t *testing.T) {
 func TestNscStore_ValidationShortCircuits(t *testing.T) {
 	ctx := t.Context()
 	ran := false
-	store := &NscStore{namespace: "ns", run: func(context.Context, string, ...string) (*CommandResult, error) {
+	store := &NscStore{log: discardLogger, namespace: "ns", run: func(context.Context, string, ...string) (*CommandResult, error) {
 		ran = true
 		return &CommandResult{}, nil
 	}}
@@ -450,7 +450,7 @@ func TestNscStore_ValidationShortCircuits(t *testing.T) {
 }
 
 func TestNewBlobStore_NscScheme(t *testing.T) {
-	blob, err := NewBlobStore(t.Context(), AgentManaged, "nsc://my-namespace")
+	blob, err := NewBlobStore(t.Context(), discardLogger, AgentManaged, "nsc://my-namespace")
 	if err != nil {
 		t.Fatalf("NewBlobStore: %v", err)
 	}
@@ -472,7 +472,7 @@ func TestNscStore_Integration(t *testing.T) {
 	}
 
 	// "main" is the nsc CLI's default namespace.
-	store, err := NewNscStore("nsc://main")
+	store, err := NewNscStore(discardLogger, "nsc://main")
 	if err != nil {
 		t.Fatalf("NewNscStore: %v", err)
 	}
@@ -543,7 +543,7 @@ func TestNscStore_DownloadNotFound(t *testing.T) {
 	dest := filepath.Join(t.TempDir(), "dest")
 
 	t.Run("stderr not found maps to ErrBlobNotFound", func(t *testing.T) {
-		store := &NscStore{namespace: "ns", run: func(context.Context, string, ...string) (*CommandResult, error) {
+		store := &NscStore{log: discardLogger, namespace: "ns", run: func(context.Context, string, ...string) (*CommandResult, error) {
 			return &CommandResult{ExitCode: 1, Stderr: "Error: artifact not found"}, nil
 		}}
 		_, err := store.Download(ctx, "valid-key", dest)
@@ -553,7 +553,7 @@ func TestNscStore_DownloadNotFound(t *testing.T) {
 	})
 
 	t.Run("stderr expired maps to ErrBlobNotFound", func(t *testing.T) {
-		store := &NscStore{namespace: "ns", run: func(context.Context, string, ...string) (*CommandResult, error) {
+		store := &NscStore{log: discardLogger, namespace: "ns", run: func(context.Context, string, ...string) (*CommandResult, error) {
 			return &CommandResult{
 				ExitCode: 1,
 				Stderr:   "Failed: the artifact has expired at 2026-07-14T02:06:24Z (request id: cbdorlqepas5e10ldvfvdpog40).",
@@ -566,7 +566,7 @@ func TestNscStore_DownloadNotFound(t *testing.T) {
 	})
 
 	t.Run("other failures are not ErrBlobNotFound", func(t *testing.T) {
-		store := &NscStore{namespace: "ns", run: func(context.Context, string, ...string) (*CommandResult, error) {
+		store := &NscStore{log: discardLogger, namespace: "ns", run: func(context.Context, string, ...string) (*CommandResult, error) {
 			return &CommandResult{ExitCode: 1, Stderr: "connection refused"}, nil
 		}}
 		_, err := store.Download(ctx, "valid-key", dest)

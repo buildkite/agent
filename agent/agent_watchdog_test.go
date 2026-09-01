@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -13,7 +14,6 @@ import (
 	"time"
 
 	"github.com/buildkite/agent/v4/api"
-	"github.com/buildkite/agent/v4/logger"
 )
 
 type fakeWatchdogNotifier struct {
@@ -174,11 +174,11 @@ func TestAgentWorkerHeartbeatRecordsOnlySuccessfulBuildkiteContact(t *testing.T)
 
 	worker := &AgentWorker{
 		agent: &api.AgentRegisterResponse{HeartbeatInterval: 60},
-		apiClient: api.NewClient(logger.Discard, api.Config{
+		apiClient: api.NewClient(slog.New(slog.DiscardHandler), api.Config{
 			Endpoint: server.URL,
 			Token:    "test-token",
 		}),
-		logger: logger.Discard,
+		logger: slog.New(slog.DiscardHandler),
 		stats: agentStats{
 			lastHeartbeat:        time.Now().Add(-time.Minute),
 			watchdogRunningSince: time.Now().Add(-2 * time.Minute),
@@ -225,7 +225,7 @@ func TestAgentPoolWatchdogNotifiesForHealthyWorkers(t *testing.T) {
 		watchdog: notifier,
 	}
 
-	pool.notifyWatchdog(logger.Discard, now.Add(time.Minute))
+	pool.notifyWatchdog(slog.New(slog.DiscardHandler), now.Add(time.Minute))
 	if got := notifier.watchdogCount(); got != 1 {
 		t.Errorf("Watchdog() calls = %d, want 1", got)
 	}
@@ -246,7 +246,7 @@ func TestAgentPoolWatchdogSkipsUnhealthyWorkers(t *testing.T) {
 		}},
 		watchdog: notifier,
 	}
-	pool.notifyWatchdog(logger.Discard, now)
+	pool.notifyWatchdog(slog.New(slog.DiscardHandler), now)
 	if got := notifier.watchdogCount(); got != 0 {
 		t.Errorf("Watchdog() calls = %d, want 0", got)
 	}
@@ -270,8 +270,8 @@ func TestAgentPoolWatchdogContinuesAfterNotificationError(t *testing.T) {
 		watchdog: notifier,
 	}
 
-	pool.notifyWatchdog(logger.Discard, now)
-	pool.notifyWatchdog(logger.Discard, now)
+	pool.notifyWatchdog(slog.New(slog.DiscardHandler), now)
+	pool.notifyWatchdog(slog.New(slog.DiscardHandler), now)
 	if got := notifier.watchdogCount(); got != 2 {
 		t.Errorf("Watchdog() calls = %d, want 2", got)
 	}
@@ -285,7 +285,7 @@ func TestAgentPoolWatchdogNotifiesImmediately(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 
-	pool.runWatchdog(ctx, logger.Discard, time.Hour)
+	pool.runWatchdog(ctx, slog.New(slog.DiscardHandler), time.Hour)
 	if got := notifier.watchdogCount(); got != 1 {
 		t.Errorf("Watchdog() calls = %d, want 1", got)
 	}
@@ -299,7 +299,7 @@ func TestAgentPoolWatchdogLoopStops(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	done := make(chan struct{})
 	go func() {
-		pool.runWatchdogLoop(ctx, logger.Discard, ticks)
+		pool.runWatchdogLoop(ctx, slog.New(slog.DiscardHandler), ticks)
 		close(done)
 	}()
 

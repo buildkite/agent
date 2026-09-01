@@ -1,13 +1,12 @@
 package clicommand
 
 import (
+	"log/slog"
 	"os"
 	"path/filepath"
 	"runtime"
 	"runtime/pprof"
 	"runtime/trace"
-
-	"github.com/buildkite/agent/v4/logger"
 )
 
 type profilerMode string
@@ -22,13 +21,13 @@ const (
 )
 
 type profiler struct {
-	logger logger.Logger
+	logger *slog.Logger
 	mode   profilerMode
 	closer func()
 }
 
 // Profile starts a profiling session
-func Profile(l logger.Logger, mode string) func() {
+func Profile(l *slog.Logger, mode string) func() {
 	p := profiler{logger: l}
 
 	switch mode {
@@ -45,7 +44,8 @@ func Profile(l logger.Logger, mode string) func() {
 	case "trace":
 		p.mode = traceMode
 	default:
-		p.logger.Fatalf("Unknown profile mode %q", mode)
+		p.logger.Error("Unknown profile mode", "mode", mode)
+		os.Exit(1)
 	}
 
 	p.Start()
@@ -61,33 +61,37 @@ func (p *profiler) Stop() {
 func (p *profiler) Start() {
 	path, err := os.MkdirTemp("", "profile")
 	if err != nil {
-		p.logger.Fatalf("Could not create initial output directory: %v", err)
+		p.logger.Error("Could not create initial output directory", "error", err)
+		os.Exit(1)
 	}
 
 	// create a pprof file for the mode
 	fn := filepath.Join(path, string(p.mode)+".pprof")
 	f, err := os.Create(fn)
 	if err != nil {
-		p.logger.Fatalf("Could not create %s profile %q: %v", p.mode, fn, err)
+		p.logger.Error("Could not create profile", "mode", p.mode, "path", fn, "error", err)
+		os.Exit(1)
 	}
 
 	// called after mode specific closers
 	closer := func() {
 		if err := f.Close(); err != nil {
-			p.logger.Fatalf("Failed to close %s: %v", fn, err)
+			p.logger.Error("Failed to close profile", "path", fn, "error", err)
+			os.Exit(1)
 		}
-		p.logger.Infof("Finished %s profiling finished, %s", p.mode, fn)
+		p.logger.Info("Finished profiling", "mode", p.mode, "path", fn)
 	}
 
 	must := func(err error) {
 		if err != nil {
-			p.logger.Fatalf("Profiler mode %s failed: %v", p.mode, err)
+			p.logger.Error("Profiler failed", "mode", p.mode, "error", err)
+			os.Exit(1)
 		}
 	}
 
 	switch p.mode {
 	case cpuMode:
-		p.logger.Infof("CPU profiling enabled, %s", fn)
+		p.logger.Info("CPU profiling enabled", "path", fn)
 		must(pprof.StartCPUProfile(f))
 		p.closer = func() {
 			pprof.StopCPUProfile()
@@ -95,7 +99,7 @@ func (p *profiler) Start() {
 		}
 
 	case memMode:
-		p.logger.Infof("Memory profiling enabled, %s", fn)
+		p.logger.Info("Memory profiling enabled", "path", fn)
 		p.closer = func() {
 			must(pprof.WriteHeapProfile(f))
 			closer()
@@ -103,7 +107,7 @@ func (p *profiler) Start() {
 
 	case mutexMode:
 		runtime.SetMutexProfileFraction(1)
-		p.logger.Infof("Mutex profiling enabled, %s", fn)
+		p.logger.Info("Mutex profiling enabled", "path", fn)
 		p.closer = func() {
 			if mp := pprof.Lookup("mutex"); mp != nil {
 				must(mp.WriteTo(f, 0))
@@ -114,7 +118,7 @@ func (p *profiler) Start() {
 
 	case blockMode:
 		runtime.SetBlockProfileRate(1)
-		p.logger.Infof("Block profiling enabled, %s", fn)
+		p.logger.Info("Block profiling enabled", "path", fn)
 		p.closer = func() {
 			must(pprof.Lookup("block").WriteTo(f, 0))
 			runtime.SetBlockProfileRate(0)
@@ -122,7 +126,7 @@ func (p *profiler) Start() {
 		}
 
 	case threadCreateMode:
-		p.logger.Infof("Thread creation profiling enabled, %s", fn)
+		p.logger.Info("Thread creation profiling enabled", "path", fn)
 		p.closer = func() {
 			if mp := pprof.Lookup("threadcreate"); mp != nil {
 				must(mp.WriteTo(f, 0))
@@ -132,9 +136,10 @@ func (p *profiler) Start() {
 
 	case traceMode:
 		if err := trace.Start(f); err != nil {
-			p.logger.Fatalf("Could not start profiling trace: %v", err)
+			p.logger.Error("Could not start profiling trace", "error", err)
+			os.Exit(1)
 		}
-		p.logger.Infof("Trace enabled, %s", fn)
+		p.logger.Info("Trace enabled", "path", fn)
 		p.closer = func() {
 			trace.Stop()
 			closer()

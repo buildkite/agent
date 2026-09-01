@@ -2,17 +2,16 @@ package agent
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
-
-	"github.com/buildkite/agent/v4/logger"
 )
 
 func TestTruncateEnv(t *testing.T) {
-	l := logger.NewBuffer()
+	l := slog.New(slog.DiscardHandler)
 	key := "FOO"
 	env := map[string]string{key: strings.Repeat("a", 100)}
 	limit := 64

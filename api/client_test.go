@@ -3,13 +3,13 @@ package api_test
 import (
 	"crypto/tls"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
 	"github.com/buildkite/agent/v4/api"
-	"github.com/buildkite/agent/v4/logger"
 )
 
 func TestRegisteringAndConnectingClient(t *testing.T) {
@@ -44,7 +44,7 @@ func TestRegisteringAndConnectingClient(t *testing.T) {
 	ctx := t.Context()
 
 	// Initial client with a registration token
-	c := api.NewClient(logger.Discard, api.Config{
+	c := api.NewClient(slog.New(slog.DiscardHandler), api.Config{
 		Endpoint:  server.URL,
 		Token:     "llamas",
 		TLSConfig: &tls.Config{InsecureSkipVerify: true},

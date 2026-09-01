@@ -3,14 +3,13 @@ package artifact
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
 	"path"
 	"path/filepath"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
 	"github.com/buildkite/agent/v4/internal/osutil"
-	"github.com/buildkite/agent/v4/logger"
-	"github.com/dustin/go-humanize"
 )
 
 // AzureBlobUploaderConfig configures AzureBlobDownloader.
@@ -25,12 +24,12 @@ type AzureBlobDownloaderConfig struct {
 
 // AzureBlobDownloader downloads files from Azure Blob storage.
 type AzureBlobDownloader struct {
-	logger logger.Logger
+	logger *slog.Logger
 	conf   AzureBlobDownloaderConfig
 }
 
 // NewAzureBlobDownloader creates a new AzureBlobDownloader.
-func NewAzureBlobDownloader(l logger.Logger, c AzureBlobDownloaderConfig) *AzureBlobDownloader {
+func NewAzureBlobDownloader(l *slog.Logger, c AzureBlobDownloaderConfig) *AzureBlobDownloader {
 	return &AzureBlobDownloader{
 		logger: l,
 		conf:   c,
@@ -44,7 +43,7 @@ func (d *AzureBlobDownloader) Start(ctx context.Context) error {
 		return err
 	}
 
-	d.logger.Debugf("Azure Blob Storage path: %v", loc)
+	d.logger.DebugContext(ctx, "Resolved Azure Blob Storage path", "path", d.conf.Repository)
 
 	client, err := NewAzureBlobClient(d.logger, loc.StorageAccountName)
 	if err != nil {
@@ -71,7 +70,7 @@ func (d *AzureBlobDownloader) Start(ctx context.Context) error {
 	fullPath := path.Join(loc.BlobPath, d.conf.Path)
 
 	// Show a nice message that we're starting to download the file
-	d.logger.Debugf("Downloading %s to %s", loc.URL(d.conf.Path), targetPath)
+	d.logger.DebugContext(ctx, "Downloading artifact from Azure Blob Storage", "url", loc.URL(d.conf.Path), "path", targetPath)
 
 	opts := &azblob.DownloadFileOptions{
 		RetryReaderOptionsPerBlock: azblob.RetryReaderOptions{
@@ -103,7 +102,7 @@ func (d *AzureBlobDownloader) Start(ctx context.Context) error {
 		return fmt.Errorf("renaming temp file to target (%T: %w)", err, err)
 	}
 
-	d.logger.Infof("Successfully downloaded %q %s", d.conf.Path, humanize.IBytes(uint64(bytes)))
+	d.logger.InfoContext(ctx, "Successfully downloaded artifact", "artifact", d.conf.Path, "bytes", bytes)
 
 	return nil
 }

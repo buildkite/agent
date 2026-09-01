@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"slices"
@@ -11,9 +12,10 @@ import (
 	"testing"
 
 	"github.com/buildkite/agent/v4/internal/cache/configuration"
-	"github.com/buildkite/agent/v4/logger"
 	"github.com/google/go-cmp/cmp"
 )
+
+var testLogger = slog.New(slog.DiscardHandler)
 
 // mockCacheClient is a mock implementation of the CacheClient interface for testing
 type mockCacheClient struct {
@@ -80,7 +82,7 @@ func TestSaveWithClient_CacheEntryCreated(t *testing.T) {
 		},
 	}
 
-	err := saveWithClient(ctx, logger.Discard, mock, []string{"cache1"}, 1)
+	err := saveWithClient(ctx, testLogger, mock, []string{"cache1"}, 1)
 	if err != nil {
 		t.Fatalf("saveWithClient(ctx, logger.Discard, mock, []string{\"cache1\"}, %d) error = %v, want nil", 1, err)
 	}
@@ -99,7 +101,7 @@ func TestSaveWithClient_CacheAlreadyExists(t *testing.T) {
 		},
 	}
 
-	err := saveWithClient(ctx, logger.Discard, mock, []string{"cache1"}, 1)
+	err := saveWithClient(ctx, testLogger, mock, []string{"cache1"}, 1)
 	if err != nil {
 		t.Fatalf("saveWithClient(ctx, logger.Discard, mock, []string{\"cache1\"}, %d) error = %v, want nil", 1, err)
 	}
@@ -129,7 +131,7 @@ func TestSaveWithClient_MultipleCaches(t *testing.T) {
 		},
 	}
 
-	err := saveWithClient(ctx, logger.Discard, mock, []string{"cache1", "cache2", "cache3"}, 1)
+	err := saveWithClient(ctx, testLogger, mock, []string{"cache1", "cache2", "cache3"}, 1)
 	if err != nil {
 		t.Fatalf("saveWithClient(ctx, logger.Discard, mock, []string{\"cache1\", \"cache2\", \"cache3\"}, %d) error = %v, want nil", 1, err)
 	}
@@ -149,7 +151,7 @@ func TestSaveWithClient_Error(t *testing.T) {
 		},
 	}
 
-	err := saveWithClient(ctx, logger.Discard, mock, []string{"cache1"}, 1)
+	err := saveWithClient(ctx, testLogger, mock, []string{"cache1"}, 1)
 	if err == nil {
 		t.Fatalf("saveWithClient(ctx, logger.Discard, mock, []string{\"cache1\"}, %d) error = %v, want non-nil error", 1, err)
 	}
@@ -172,7 +174,7 @@ func TestSaveWithClient_EmptyCacheIDs(t *testing.T) {
 		},
 	}
 
-	err := saveWithClient(ctx, logger.Discard, mock, []string{}, 1)
+	err := saveWithClient(ctx, testLogger, mock, []string{}, 1)
 	if err != nil {
 		t.Fatalf("saveWithClient(ctx, logger.Discard, mock, []string{}, %d) error = %v, want nil", 1, err)
 	}
@@ -204,7 +206,7 @@ func TestRestoreWithClient_CacheHit(t *testing.T) {
 		},
 	}
 
-	err := restoreWithClient(ctx, logger.Discard, mock, []string{"cache1"}, 1)
+	err := restoreWithClient(ctx, testLogger, mock, []string{"cache1"}, 1)
 	if err != nil {
 		t.Fatalf("restoreWithClient(ctx, logger.Discard, mock, []string{\"cache1\"}, %d) error = %v, want nil", 1, err)
 	}
@@ -234,7 +236,7 @@ func TestRestoreWithClient_FallbackUsed(t *testing.T) {
 		},
 	}
 
-	err := restoreWithClient(ctx, logger.Discard, mock, []string{"cache1"}, 1)
+	err := restoreWithClient(ctx, testLogger, mock, []string{"cache1"}, 1)
 	if err != nil {
 		t.Fatalf("restoreWithClient(ctx, logger.Discard, mock, []string{\"cache1\"}, %d) error = %v, want nil", 1, err)
 	}
@@ -255,7 +257,7 @@ func TestRestoreWithClient_CacheMiss(t *testing.T) {
 		},
 	}
 
-	err := restoreWithClient(ctx, logger.Discard, mock, []string{"cache1"}, 1)
+	err := restoreWithClient(ctx, testLogger, mock, []string{"cache1"}, 1)
 	if err != nil {
 		t.Fatalf("restoreWithClient(ctx, logger.Discard, mock, []string{\"cache1\"}, %d) error = %v, want nil", 1, err)
 	}
@@ -277,7 +279,7 @@ func TestRestoreWithClient_MultipleCaches(t *testing.T) {
 		},
 	}
 
-	err := restoreWithClient(ctx, logger.Discard, mock, []string{"cache1", "cache2", "cache3"}, 1)
+	err := restoreWithClient(ctx, testLogger, mock, []string{"cache1", "cache2", "cache3"}, 1)
 	if err != nil {
 		t.Fatalf("restoreWithClient(ctx, logger.Discard, mock, []string{\"cache1\", \"cache2\", \"cache3\"}, %d) error = %v, want nil", 1, err)
 	}
@@ -297,7 +299,7 @@ func TestRestoreWithClient_Error(t *testing.T) {
 		},
 	}
 
-	err := restoreWithClient(ctx, logger.Discard, mock, []string{"cache1"}, 1)
+	err := restoreWithClient(ctx, testLogger, mock, []string{"cache1"}, 1)
 	if err == nil {
 		t.Fatalf("restoreWithClient(ctx, logger.Discard, mock, []string{\"cache1\"}, %d) error = %v, want non-nil error", 1, err)
 	}
@@ -320,7 +322,7 @@ func TestRestoreWithClient_EmptyCacheIDs(t *testing.T) {
 		},
 	}
 
-	err := restoreWithClient(ctx, logger.Discard, mock, []string{}, 1)
+	err := restoreWithClient(ctx, testLogger, mock, []string{}, 1)
 	if err != nil {
 		t.Fatalf("restoreWithClient(ctx, logger.Discard, mock, []string{}, %d) error = %v, want nil", 1, err)
 	}
@@ -351,7 +353,7 @@ func TestNewClient_InvalidCacheIDs(t *testing.T) {
 		BucketURL:       "s3://test-bucket",
 	}
 
-	_, _, err := newClient(logger.Discard, nil, cfg)
+	_, _, err := newClient(testLogger, nil, cfg)
 	if err == nil {
 		t.Fatalf("newClient(logger.Discard, nil, cfg) error = %v, want non-nil error", err)
 	}
@@ -389,7 +391,7 @@ func TestNewClient_ValidCacheIDs(t *testing.T) {
 		BucketURL:       "s3://test-bucket",
 	}
 
-	client, cacheIDs, err := newClient(logger.Discard, nil, cfg)
+	client, cacheIDs, err := newClient(testLogger, nil, cfg)
 	if err != nil {
 		t.Fatalf("newClient(logger.Discard, nil, cfg) error = %v, want nil", err)
 	}
@@ -424,7 +426,7 @@ func TestNewClient_AllCaches(t *testing.T) {
 		BucketURL:       "s3://test-bucket",
 	}
 
-	client, cacheIDs, err := newClient(logger.Discard, nil, cfg)
+	client, cacheIDs, err := newClient(testLogger, nil, cfg)
 	if err != nil {
 		t.Fatalf("newClient(logger.Discard, nil, cfg) error = %v, want nil", err)
 	}

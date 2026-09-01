@@ -19,7 +19,7 @@ import (
 )
 
 // BuildArchive builds a cache archive for the given target paths.
-func BuildArchive(ctx context.Context, paths []string, key string) (*ArchiveInfo, error) {
+func BuildArchive(ctx context.Context, log *slog.Logger, paths []string, key string) (*ArchiveInfo, error) {
 	_, span := trace.Start(ctx, "BuildArchive")
 	defer span.End()
 
@@ -60,7 +60,7 @@ func BuildArchive(ctx context.Context, paths []string, key string) (*ArchiveInfo
 	for _, mapping := range mappings {
 		if _, err := os.Stat(mapping.ResolvedPath()); err != nil {
 			if os.IsNotExist(err) {
-				slog.Warn("cache path does not exist, skipping", "path", mapping.Path, "resolved", mapping.ResolvedPath())
+				log.WarnContext(ctx, "cache path does not exist, skipping", "path", mapping.Path, "resolved", mapping.ResolvedPath())
 				continue
 			}
 			return nil, fmt.Errorf("failed to stat file: %w", err)

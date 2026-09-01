@@ -38,7 +38,7 @@ func TestJSONJobLogger_JobFields(t *testing.T) {
 	}
 
 	// Ignore timestamp field from comparison
-	delete(got, "ts")
+	delete(got, "time")
 
 	want := map[string]string{
 		"source":       "job",

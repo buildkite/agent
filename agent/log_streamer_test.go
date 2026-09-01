@@ -3,13 +3,14 @@ package agent
 import (
 	"context"
 	"errors"
-	"os"
+	"log/slog"
 	"sort"
+	"strings"
 	"sync"
 	"testing"
 
 	"github.com/buildkite/agent/v4/api"
-	"github.com/buildkite/agent/v4/logger"
+	"github.com/buildkite/agent/v4/internal/logtest"
 	"github.com/google/go-cmp/cmp"
 )
 
@@ -17,10 +18,7 @@ func TestLogStreamer(t *testing.T) {
 	t.Parallel()
 	ctx := t.Context()
 
-	logger := logger.NewConsoleLogger(
-		logger.NewTextPrinter(os.Stderr),
-		func(c int) { t.Errorf("exit(%d)", c) },
-	)
+	logger, logHandler := logtest.NewLogger()
 
 	var mu sync.Mutex
 	var got []*api.Chunk
@@ -92,5 +90,21 @@ func TestLogStreamer(t *testing.T) {
 	input = "¿more log after stop?"
 	if err := ls.Process(ctx, []byte(input)); !errors.Is(err, errStreamerStopped) {
 		t.Errorf("after Stop: LogStreamer.Process(ctx, %q) err = %v, want %v", input, err, errStreamerStopped)
+	}
+
+	for _, record := range logHandler.Records() {
+		var component string
+		record.Attrs(func(attr slog.Attr) bool {
+			if attr.Key == "component" {
+				component = attr.Value.String()
+			}
+			return true
+		})
+		if got, want := component, "LogStreamer"; got != want {
+			t.Errorf("component = %q, want %q", got, want)
+		}
+		if strings.HasPrefix(record.Message, "[LogStreamer]") {
+			t.Errorf("message %q retains component prefix", record.Message)
+		}
 	}
 }

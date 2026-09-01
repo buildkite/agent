@@ -7,9 +7,8 @@ package experiments
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"sync"
-
-	"github.com/buildkite/agent/v4/logger"
 )
 
 type State string
@@ -92,15 +91,15 @@ type experimentCtxKey struct {
 
 // EnableWithWarnings enables an experiment in a new context, logging
 // information about unknown and promoted experiments.
-func EnableWithWarnings(ctx context.Context, l logger.Logger, key string) (context.Context, State) {
+func EnableWithWarnings(ctx context.Context, l *slog.Logger, key string) (context.Context, State) {
 	newctx, state := Enable(ctx, key)
 	switch state {
 	case StateKnown:
 	// Noop
 	case StateUnknown:
-		l.Warnf("Unknown experiment %q", key)
+		l.WarnContext(ctx, "Unknown experiment", "experiment", key)
 	case StatePromoted:
-		l.Warnf("%s", Promoted[key])
+		l.WarnContext(ctx, Promoted[key])
 	}
 	return newctx, state
 }

@@ -28,9 +28,9 @@ func (p *Process) setupProcessGroup() {
 
 func (p *Process) postStart() error {
 	if p.conf.Nice != 0 {
-		p.logger.Debugf("[Process] Setting nice value %d on PGID %d", p.conf.Nice, p.pid())
+		p.logger.Debug("Setting nice value", "nice", p.conf.Nice, "pid", p.pid())
 		if err := syscall.Setpriority(syscall.PRIO_PGRP, p.pid(), p.conf.Nice); err != nil {
-			p.logger.Warnf("[Process] Failed to set nice value %d on PGID %d: %v", p.conf.Nice, p.pid(), err)
+			p.logger.Warn("Failed to set nice value", "nice", p.conf.Nice, "pid", p.pid(), "error", err)
 		}
 	}
 	return nil
@@ -39,7 +39,7 @@ func (p *Process) postStart() error {
 func (p *Process) terminateProcessGroup() error {
 	// Note: terminateProcessGroup is called from within p.Terminate, which
 	// holds p.mu.
-	p.logger.Debugf("[Process] Sending signal SIGKILL to PGID: %d", p.pid())
+	p.logger.Debug("Sending signal to process group", "signal", "SIGKILL", "pid", p.pid())
 	return syscall.Kill(-p.pid(), syscall.SIGKILL)
 }
 
@@ -53,7 +53,7 @@ func (p *Process) interruptProcessGroup() error {
 		intSignal = SIGTERM
 	}
 
-	p.logger.Debugf("[Process] Sending signal %s to PGID: %d", intSignal, p.pid())
+	p.logger.Debug("Sending signal to process group", "signal", intSignal, "pid", p.pid())
 	return syscall.Kill(-p.pid(), syscall.Signal(intSignal))
 }
 

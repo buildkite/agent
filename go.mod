@@ -40,6 +40,8 @@ require (
 	github.com/gowebpki/jcs v1.0.1
 	github.com/klauspost/compress v1.19.2
 	github.com/lestrrat-go/jwx/v3 v3.2.0
+	github.com/lmittmann/tint v1.2.0
+	github.com/mattn/go-colorable v0.1.14
 	github.com/oleiade/reflections v1.1.0
 	github.com/pborman/uuid v1.2.1
 	github.com/prometheus/client_golang v1.24.1
@@ -128,7 +130,6 @@ require (
 	github.com/lestrrat-go/httpcc v1.0.1 // indirect
 	github.com/lestrrat-go/httprc/v3 v3.0.6 // indirect
 	github.com/lestrrat-go/option/v2 v2.0.0 // indirect
-	github.com/mattn/go-colorable v0.1.14 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/mattn/go-runewidth v0.0.16 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect

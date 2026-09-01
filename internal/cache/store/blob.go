@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 )
 
@@ -20,21 +21,21 @@ type Blob interface {
 	Download(ctx context.Context, key, destPath string) (*TransferInfo, error)
 }
 
-func NewBlobStore(ctx context.Context, store, bucketURL string) (Blob, error) {
+func NewBlobStore(ctx context.Context, log *slog.Logger, store, bucketURL string) (Blob, error) {
 	switch store {
 	case AgentManaged:
 		scheme, _, _ := strings.Cut(bucketURL, "://")
 		switch scheme {
 		case nscScheme:
-			return NewNscStore(bucketURL)
+			return NewNscStore(log, bucketURL)
 		case "file":
 			// Supported only for local testing, kept consistent with validateCacheStore.
-			return NewLocalFileBlob(ctx, bucketURL)
+			return NewLocalFileBlob(ctx, log, bucketURL)
 		default:
-			return NewS3Blob(ctx, bucketURL)
+			return NewS3Blob(ctx, log, bucketURL)
 		}
 	case LocalFileStore:
-		return NewLocalFileBlob(ctx, bucketURL)
+		return NewLocalFileBlob(ctx, log, bucketURL)
 	default:
 		return nil, fmt.Errorf("unsupported store type: %s", store)
 	}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -12,7 +13,6 @@ import (
 	"time"
 
 	"github.com/buildkite/agent/v4/api"
-	"github.com/buildkite/agent/v4/logger"
 	"github.com/google/go-cmp/cmp"
 )
 
@@ -123,7 +123,7 @@ func TestSetMetaDataBatch(t *testing.T) {
 			{Key: "baz", Value: "qux"},
 		}
 
-		l := logger.NewBuffer()
+		l := slog.New(slog.DiscardHandler)
 		if err := setMetaDataBatch(t.Context(), cfg, l, items); err != nil {
 			t.Fatalf("setMetaDataBatch error = %v, want nil", err)
 		}
@@ -151,7 +151,7 @@ func TestSetMetaDataBatch(t *testing.T) {
 		ctx, cancel := context.WithTimeout(t.Context(), 100*time.Millisecond)
 		defer cancel()
 
-		l := logger.NewBuffer()
+		l := slog.New(slog.DiscardHandler)
 		err := setMetaDataBatch(ctx, cfg, l, items)
 		if err == nil {
 			t.Fatal("setMetaDataBatch error = nil, want error")
@@ -179,7 +179,7 @@ func TestSetMetaDataBatch(t *testing.T) {
 
 		items := []api.MetaData{{Key: "a", Value: "1"}}
 
-		l := logger.NewBuffer()
+		l := slog.New(slog.DiscardHandler)
 		if err := setMetaDataBatch(t.Context(), cfg, l, items); err == nil {
 			t.Fatal("setMetaDataBatch error = nil, want error")
 		}
@@ -206,7 +206,7 @@ func TestSetMetaDataBatch(t *testing.T) {
 
 		items := []api.MetaData{{Key: "a", Value: "1"}}
 
-		l := logger.NewBuffer()
+		l := slog.New(slog.DiscardHandler)
 		if err := setMetaDataBatch(t.Context(), cfg, l, items); err == nil {
 			t.Fatal("setMetaDataBatch error = nil, want error")
 		}

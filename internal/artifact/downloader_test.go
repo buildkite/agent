@@ -2,13 +2,13 @@ package artifact
 
 import (
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"testing"
 
 	"github.com/buildkite/agent/v4/api"
-	"github.com/buildkite/agent/v4/logger"
 )
 
 func TestArtifactDownloaderConnectsToEndpoint(t *testing.T) {
@@ -37,12 +37,12 @@ func TestArtifactDownloaderConnectsToEndpoint(t *testing.T) {
 
 	ctx := t.Context()
 
-	ac := api.NewClient(logger.Discard, api.Config{
+	ac := api.NewClient(slog.New(slog.DiscardHandler), api.Config{
 		Endpoint: server.URL,
 		Token:    "llamasforever",
 	})
 
-	d := NewDownloader(logger.Discard, ac, DownloaderConfig{
+	d := NewDownloader(slog.New(slog.DiscardHandler), ac, DownloaderConfig{
 		BuildID: "my-build",
 	})
 

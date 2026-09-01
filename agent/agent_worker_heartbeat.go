@@ -22,7 +22,7 @@ func (a *AgentWorker) runHeartbeatLoop(ctx context.Context) error {
 			setStat("❤️ Sending heartbeat")
 			if err := a.Heartbeat(ctx); err != nil {
 				if isUnrecoverable(err) {
-					a.logger.Errorf("%s", err)
+					a.logger.ErrorContext(ctx, "Heartbeat failed with an unrecoverable error", "error", err)
 					// unrecoverable heartbeat failure also stops everything else
 					a.StopUngracefully()
 					return err
@@ -31,17 +31,15 @@ func (a *AgentWorker) runHeartbeatLoop(ctx context.Context) error {
 				// Get the last heartbeat time to the nearest microsecond
 				a.stats.Lock()
 				if a.stats.lastHeartbeat.IsZero() {
-					a.logger.Errorf("Failed to heartbeat %s. Will try again in %v. (No heartbeat yet)",
-						err, heartbeatInterval)
+					a.logger.ErrorContext(ctx, "Failed to heartbeat; will retry (no heartbeat yet)", "error", err, "retry_in", heartbeatInterval)
 				} else {
-					a.logger.Errorf("Failed to heartbeat %s. Will try again in %v. (Last successful was %v ago)",
-						err, heartbeatInterval, time.Since(a.stats.lastHeartbeat))
+					a.logger.ErrorContext(ctx, "Failed to heartbeat; will retry", "error", err, "retry_in", heartbeatInterval, "last_success_ago", time.Since(a.stats.lastHeartbeat))
 				}
 				a.stats.Unlock()
 			}
 
 		case <-ctx.Done():
-			a.logger.Debugf("Stopping heartbeats due to context cancel")
+			a.logger.DebugContext(ctx, "Stopping heartbeats due to context cancel")
 			// An alternative to returning nil would be ctx.Err(), but we use
 			// the context for ordinary termination of this loop.
 			// A context cancellation from outside the agent worker would still

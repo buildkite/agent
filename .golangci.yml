@@ -2,8 +2,17 @@ version: "2"
 
 linters:
   enable:
+    - sloglint
     - usetesting
   settings:
+    sloglint:
+      context: scope
+      forbidden-keys:
+        - level
+        - msg
+        - time
+      key-naming-case: snake
+      no-global: all
     usetesting:
       os-create-temp: false
       os-mkdir-temp: false

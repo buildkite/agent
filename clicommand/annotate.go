@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"slices"
 	"time"
@@ -11,7 +12,6 @@ import (
 	"github.com/buildkite/agent/v4/api"
 	"github.com/buildkite/agent/v4/internal/redact"
 	"github.com/buildkite/agent/v4/internal/stdin"
-	"github.com/buildkite/agent/v4/logger"
 	"github.com/buildkite/roko"
 	"github.com/urfave/cli/v3"
 	"go.opentelemetry.io/otel"
@@ -126,13 +126,13 @@ var AnnotateCommand = &cli.Command{
 	},
 }
 
-func annotate(ctx context.Context, cfg AnnotateConfig, l logger.Logger) error {
+func annotate(ctx context.Context, cfg AnnotateConfig, l *slog.Logger) error {
 	var body string
 
 	if cfg.Body != "" {
 		body = cfg.Body
 	} else if stdin.IsReadable() {
-		l.Infof("Reading annotation body from STDIN")
+		l.InfoContext(ctx, "Reading annotation body from STDIN")
 
 		// Actually read the file from STDIN
 		stdin, err := io.ReadAll(os.Stdin)
@@ -150,7 +150,7 @@ func annotate(ctx context.Context, cfg AnnotateConfig, l logger.Logger) error {
 		return err
 	}
 	if redactedBody := redact.String(body, needles); redactedBody != body {
-		l.Warnf("Annotation body contained one or more secrets from environment variables that have been redacted. If this is deliberate, pass --redacted-vars='' or a list of patterns that does not match the variable containing the secret")
+		l.WarnContext(ctx, "Annotation body contained one or more secrets from environment variables that have been redacted. If this is deliberate, pass --redacted-vars='' or a list of patterns that does not match the variable containing the secret")
 		body = redactedBody
 	}
 
@@ -184,7 +184,7 @@ func annotate(ctx context.Context, cfg AnnotateConfig, l logger.Logger) error {
 			return err
 		}
 		if err != nil {
-			l.Warnf("%s (%s)", err, r)
+			l.WarnContext(ctx, "Annotation retry", "error", err, "retry", r.String())
 			return err
 		}
 		return nil
@@ -192,7 +192,7 @@ func annotate(ctx context.Context, cfg AnnotateConfig, l logger.Logger) error {
 		return fmt.Errorf("failed to annotate build: %w", err)
 	}
 
-	l.Debugf("Successfully annotated build")
+	l.DebugContext(ctx, "Successfully annotated build")
 
 	return nil
 }

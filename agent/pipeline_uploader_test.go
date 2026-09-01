@@ -3,6 +3,7 @@ package agent_test
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -11,7 +12,6 @@ import (
 
 	"github.com/buildkite/agent/v4/agent"
 	"github.com/buildkite/agent/v4/api"
-	"github.com/buildkite/agent/v4/logger"
 	"github.com/buildkite/go-pipeline"
 	"github.com/google/go-cmp/cmp"
 )
@@ -20,7 +20,7 @@ func TestAsyncPipelineUpload(t *testing.T) {
 	t.Parallel()
 
 	ctx := t.Context()
-	l := logger.NewBuffer()
+	l := slog.New(slog.DiscardHandler)
 
 	for _, test := range []struct {
 		replace        bool
@@ -105,7 +105,7 @@ steps:
 
 			retrySleeps := []time.Duration{}
 			uploader := &agent.PipelineUploader{
-				Client: api.NewClient(logger.Discard, api.Config{
+				Client: api.NewClient(slog.New(slog.DiscardHandler), api.Config{
 					Endpoint: server.URL,
 					Token:    "llamas",
 				}),
@@ -141,7 +141,7 @@ func TestFallbackPipelineUpload(t *testing.T) {
 	t.Parallel()
 
 	ctx := t.Context()
-	l := logger.NewBuffer()
+	l := slog.New(slog.DiscardHandler)
 
 	genSleeps := func(n int, s time.Duration) []time.Duration {
 		sleeps := make([]time.Duration, 0, n)
@@ -255,7 +255,7 @@ steps:
 
 			retrySleeps := []time.Duration{}
 			uploader := &agent.PipelineUploader{
-				Client: api.NewClient(logger.Discard, api.Config{
+				Client: api.NewClient(slog.New(slog.DiscardHandler), api.Config{
 					Endpoint: server.URL,
 					Token:    "llamas",
 				}),

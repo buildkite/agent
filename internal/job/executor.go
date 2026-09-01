@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -36,7 +37,6 @@ import (
 	"github.com/buildkite/agent/v4/internal/shellscript"
 	"github.com/buildkite/agent/v4/internal/tempfile"
 	"github.com/buildkite/agent/v4/jobapi"
-	"github.com/buildkite/agent/v4/logger"
 	"github.com/buildkite/agent/v4/tracetools"
 	"github.com/buildkite/go-pipeline"
 	"github.com/buildkite/shellwords"
@@ -1047,7 +1047,7 @@ func (e *Executor) fetchAndSetSecrets(ctx context.Context) error {
 	}
 
 	// Create API client for fetching secrets.
-	secretLogger := logger.NewBuffer()
+	secretLogger := slog.New(slog.DiscardHandler)
 	apiClient := api.NewClient(secretLogger, api.Config{
 		Endpoint: e.shell.Env.GetString("BUILDKITE_AGENT_ENDPOINT", ""),
 		Token:    e.shell.Env.GetString("BUILDKITE_AGENT_ACCESS_TOKEN", ""),

@@ -3,13 +3,31 @@ package clicommand
 import (
 	"bytes"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
-	"slices"
 	"testing"
 
-	"github.com/buildkite/agent/v4/logger"
+	"github.com/buildkite/agent/v4/internal/logtest"
 )
+
+func findLogAttr(records []slog.Record, message, key string) (any, bool) {
+	for _, record := range records {
+		if record.Message != message {
+			continue
+		}
+		var value any
+		record.Attrs(func(attr slog.Attr) bool {
+			if attr.Key == key {
+				value = attr.Value.Any()
+				return false
+			}
+			return true
+		})
+		return value, value != nil
+	}
+	return nil, false
+}
 
 func newArtifactTestServer(t *testing.T) *httptest.Server {
 	t.Helper()
@@ -40,7 +58,7 @@ func TestSearchAndPrintSha1Sum(t *testing.T) {
 			Endpoint:         server.URL,
 		},
 	}
-	l := logger.NewBuffer()
+	l, lh := logtest.NewLogger()
 	stdout := new(bytes.Buffer)
 
 	if err := searchAndPrintShaSum(ctx, cfg, l, stdout); err != nil {
@@ -51,11 +69,11 @@ func TestSearchAndPrintSha1Sum(t *testing.T) {
 		t.Errorf("stdout.String() = %q, want %q", got, want)
 	}
 
-	if got, want := l.Messages, `[info] Searching for artifacts: "foo.*"`; !slices.Contains(got, want) {
-		t.Errorf("l.Messages = %v, want containing %q", got, want)
+	if got, ok := findLogAttr(lh.Records(), "Searching for artifacts", "query"); !ok || got != "foo.*" {
+		t.Errorf("search query attr = %v, %t, want %q, true", got, ok, "foo.*")
 	}
-	if got, want := l.Messages, `[debug] Artifact "foo.txt" found`; !slices.Contains(got, want) {
-		t.Errorf("l.Messages = %v, want containing %q", got, want)
+	if got, ok := findLogAttr(lh.Records(), "Artifact found", "path"); !ok || got != "foo.txt" {
+		t.Errorf("artifact path attr = %v, %t, want %q, true", got, ok, "foo.txt")
 	}
 }
 
@@ -76,7 +94,7 @@ func TestSearchAndPrintSha256Sum(t *testing.T) {
 			Endpoint:         server.URL,
 		},
 	}
-	l := logger.NewBuffer()
+	l, lh := logtest.NewLogger()
 	stdout := new(bytes.Buffer)
 
 	if err := searchAndPrintShaSum(ctx, cfg, l, stdout); err != nil {
@@ -87,10 +105,10 @@ func TestSearchAndPrintSha256Sum(t *testing.T) {
 		t.Errorf("stdout.String() = %q, want %q", got, want)
 	}
 
-	if got, want := l.Messages, `[info] Searching for artifacts: "foo.*"`; !slices.Contains(got, want) {
-		t.Errorf("l.Messages = %v, want containing %q", got, want)
+	if got, ok := findLogAttr(lh.Records(), "Searching for artifacts", "query"); !ok || got != "foo.*" {
+		t.Errorf("search query attr = %v, %t, want %q, true", got, ok, "foo.*")
 	}
-	if got, want := l.Messages, `[debug] Artifact "foo.txt" found`; !slices.Contains(got, want) {
-		t.Errorf("l.Messages = %v, want containing %q", got, want)
+	if got, ok := findLogAttr(lh.Records(), "Artifact found", "path"); !ok || got != "foo.txt" {
+		t.Errorf("artifact path attr = %v, %t, want %q, true", got, ok, "foo.txt")
 	}
 }

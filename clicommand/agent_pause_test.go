@@ -6,7 +6,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/buildkite/agent/v4/logger"
+	"github.com/buildkite/agent/v4/internal/logtest"
 )
 
 func newAgentPauseTestServer(t *testing.T) *httptest.Server {
@@ -31,12 +31,12 @@ func TestAgentPause(t *testing.T) {
 			Endpoint:         server.URL,
 		},
 	}
-	l := logger.NewBuffer()
+	l, lh := logtest.NewLogger()
 
 	if err := pause(ctx, cfg, l); err != nil {
 		t.Errorf("pause(ctx, %v, l) = %v", cfg, err)
 	}
-	if got, want := l.Messages, "[info] Successfully paused agent"; !slices.Contains(got, want) {
-		t.Errorf("after pause, l.Messages = %q\nis missing %q", got, want)
+	if got, want := lh.Messages(), "Successfully paused agent"; !slices.Contains(got, want) {
+		t.Errorf("after pause, lh.Messages() = %q\nis missing %q", got, want)
 	}
 }

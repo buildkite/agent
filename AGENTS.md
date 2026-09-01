@@ -20,7 +20,6 @@ Go CLI application with main packages:
 - **[`clicommand/`](clicommand/)**: CLI command implementations
 - **[`internal/`](internal/)**: Internal utilities (shell, sockets, artifacts, etc.)
 - **[`process/`](process/)**: Process execution, signal handling, output streaming
-- **[`logger/`](logger/)**: Structured logging
 - **[`env/`](env/)**: Environment variable management
 
 ## Code Style
@@ -47,7 +46,7 @@ Prerequisites (a plain checkout does not install these for you):
   `go.mod`'s `tool` block) and run via `go tool ...`.
 - `golangci-lint` is a standalone binary (not a `go tool`), pinned in `mise.toml`. Get it
   via `mise install`, or install the pinned version manually and put it on `PATH`, e.g.:
-  `curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v2.9.0`
+  `curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v2.13.1`
   (then ensure `$(go env GOPATH)/bin` is on your `PATH`).
 - The polyglot hook integration tests (e.g. `TestPolyglotScriptHooksCanBeRun`) require
   `ruby` on `PATH`; install it via your OS package manager if it is missing.

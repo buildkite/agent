@@ -3,7 +3,6 @@ package cache
 import (
 	"context"
 	"fmt"
-	"log/slog"
 	"os"
 	"strings"
 	"time"
@@ -124,7 +123,7 @@ func (c *client) Save(ctx context.Context, cacheID string) (SaveResult, error) {
 			return err
 		}
 		if err != nil {
-			slog.Warn("cache peek failed, retrying", "err", err, "retrier", r.String())
+			c.log.WarnContext(ctx, "cache peek failed, retrying", "error", err, "retry", r.String())
 			return err
 		}
 		return nil
@@ -168,7 +167,7 @@ func (c *client) Save(ctx context.Context, cacheID string) (SaveResult, error) {
 			return err
 		}
 		if err != nil {
-			slog.Warn("cache registry lookup failed, retrying", "err", err, "retrier", r.String())
+			c.log.WarnContext(ctx, "cache registry lookup failed, retrying", "error", err, "retry", r.String())
 			return err
 		}
 		return nil
@@ -193,7 +192,7 @@ func (c *client) Save(ctx context.Context, cacheID string) (SaveResult, error) {
 	c.callProgress(cacheID, "building_archive", "Building archive", 0, len(cacheConfig.TargetPaths))
 
 	// Build archive
-	archiveInfo, err := archive.BuildArchive(ctx, cacheConfig.TargetPaths, cacheID)
+	archiveInfo, err := archive.BuildArchive(ctx, c.log, cacheConfig.TargetPaths, cacheID)
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, "failed to build archive")
@@ -252,7 +251,7 @@ func (c *client) Save(ctx context.Context, cacheID string) (SaveResult, error) {
 			return err
 		}
 		if err != nil {
-			slog.Warn("cache entry create failed, retrying", "err", err, "retrier", r.String())
+			c.log.WarnContext(ctx, "cache entry create failed, retrying", "error", err, "retry", r.String())
 			return err
 		}
 		return nil
@@ -277,7 +276,7 @@ func (c *client) Save(ctx context.Context, cacheID string) (SaveResult, error) {
 	c.callProgress(cacheID, "uploading", "Uploading cache archive", 0, int(archiveInfo.Size))
 
 	// Upload archive
-	blobStore, err := store.NewBlobStore(ctx, registryResp.Store, c.bucketURL)
+	blobStore, err := store.NewBlobStore(ctx, c.log, registryResp.Store, c.bucketURL)
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, "failed to create blob store")
@@ -330,7 +329,7 @@ func (c *client) Save(ctx context.Context, cacheID string) (SaveResult, error) {
 			return err
 		}
 		if err != nil {
-			slog.Warn("cache entry commit failed, retrying", "err", err, "retrier", r.String())
+			c.log.WarnContext(ctx, "cache entry commit failed, retrying", "error", err, "retry", r.String())
 			return err
 		}
 		return nil

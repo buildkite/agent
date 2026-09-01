@@ -2,16 +2,16 @@ package artifact
 
 import (
 	"context"
+	"log/slog"
 	"time"
 
 	"github.com/buildkite/agent/v4/api"
-	"github.com/buildkite/agent/v4/logger"
 	"github.com/buildkite/roko"
 )
 
 type Searcher struct {
 	// The logger instance to use
-	logger logger.Logger
+	logger *slog.Logger
 
 	// The APIClient that will be used when uploading jobs
 	apiClient APIClient
@@ -20,7 +20,7 @@ type Searcher struct {
 	buildID string
 }
 
-func NewSearcher(l logger.Logger, ac APIClient, buildID string) *Searcher {
+func NewSearcher(l *slog.Logger, ac APIClient, buildID string) *Searcher {
 	return &Searcher{
 		logger:    l,
 		apiClient: ac,
@@ -30,9 +30,9 @@ func NewSearcher(l logger.Logger, ac APIClient, buildID string) *Searcher {
 
 func (a *Searcher) Search(ctx context.Context, query, scope string, includeRetriedJobs, includeDuplicates bool) ([]*api.Artifact, error) {
 	if scope == "" {
-		a.logger.Infof("Searching for artifacts: \"%s\"", query)
+		a.logger.InfoContext(ctx, "Searching for artifacts", "query", query)
 	} else {
-		a.logger.Infof("Searching for artifacts: \"%s\" within step: \"%s\"", query, scope)
+		a.logger.InfoContext(ctx, "Searching for artifacts", "query", query, "step", scope)
 	}
 
 	// Retry on transport errors, a failed search will return 0 artifacts

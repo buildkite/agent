@@ -39,6 +39,7 @@ type commandRunner func(ctx context.Context, workingDir string, args ...string) 
 // https://namespace.so/docs/reference/cli/artifact-download
 // https://namespace.so/docs/reference/cli/artifact-upload
 type NscStore struct {
+	log *slog.Logger
 	// namespace is taken from the nsc://<namespace> cache store URL and passed
 	// as --namespace to the nsc CLI. It is always non-empty.
 	namespace string
@@ -47,12 +48,12 @@ type NscStore struct {
 
 // NewNscStore creates a store backed by the nsc CLI. The namespace is parsed
 // from the nsc://<namespace> cache store URL and is required.
-func NewNscStore(bucketURL string) (*NscStore, error) {
+func NewNscStore(log *slog.Logger, bucketURL string) (*NscStore, error) {
 	namespace, err := parseNscNamespace(bucketURL)
 	if err != nil {
 		return nil, err
 	}
-	return &NscStore{namespace: namespace, run: runCommand}, nil
+	return &NscStore{log: log, namespace: namespace, run: runCommand}, nil
 }
 
 // parseNscNamespace extracts the namespace from an nsc://<namespace> cache store
@@ -255,9 +256,9 @@ func (n *NscStore) refreshExpiry(ctx context.Context, key string) {
 	if !n.extendSupported(ctx) {
 		// `nsc artifact extend` is still being rolled out by Namespace. Update
 		// the nsc CLI as a contingency so the command becomes available.
-		slog.Debug("nsc artifact extend unavailable, updating nsc CLI")
+		n.log.DebugContext(ctx, "nsc artifact extend unavailable, updating nsc CLI")
 		if _, err := n.run(ctx, "", "nsc", "version", "update"); err != nil {
-			slog.Warn("failed to update nsc CLI, skipping cache TTL refresh (non-fatal)",
+			n.log.WarnContext(ctx, "failed to update nsc CLI, skipping cache TTL refresh (non-fatal)",
 				"key", key, "error", err)
 			return
 		}
@@ -266,12 +267,12 @@ func (n *NscStore) refreshExpiry(ctx context.Context, key string) {
 	result, err := n.run(ctx, "", n.artifactArgs("extend", key, "--ensure_minimum", nscDefaultExpiry)...)
 	switch {
 	case err != nil:
-		slog.Warn("failed to refresh cache TTL, continuing (non-fatal)", "key", key, "error", err)
+		n.log.WarnContext(ctx, "failed to refresh cache TTL, continuing (non-fatal)", "key", key, "error", err)
 	case result.ExitCode != 0:
-		slog.Warn("failed to refresh cache TTL, continuing (non-fatal)",
+		n.log.WarnContext(ctx, "failed to refresh cache TTL, continuing (non-fatal)",
 			"key", key, "exit_code", result.ExitCode, "stderr", result.Stderr)
 	default:
-		slog.Debug("refreshed cache TTL", "key", key)
+		n.log.DebugContext(ctx, "refreshed cache TTL", "key", key)
 	}
 }
 

@@ -4,12 +4,12 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"slices"
 
 	"github.com/buildkite/agent/v4/api"
 	"github.com/buildkite/agent/v4/internal/artifact"
-	"github.com/buildkite/agent/v4/logger"
 	"github.com/urfave/cli/v3"
 	"go.opentelemetry.io/otel"
 )
@@ -101,7 +101,7 @@ var ArtifactShasumCommand = &cli.Command{
 func searchAndPrintShaSum(
 	ctx context.Context,
 	cfg ArtifactShasumConfig,
-	l logger.Logger,
+	l *slog.Logger,
 	stdout io.Writer,
 ) error {
 	// Create the API client
@@ -122,7 +122,7 @@ func searchAndPrintShaSum(
 		return fmt.Errorf("multiple artifacts were found. try being more specific with the search or scope by step")
 	} else {
 		a := artifacts[0]
-		l.Debugf("Artifact \"%s\" found", a.Path)
+		l.DebugContext(ctx, "Artifact found", "path", a.Path)
 
 		var sha string
 		if cfg.Sha256 {

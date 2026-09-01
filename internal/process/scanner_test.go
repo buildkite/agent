@@ -3,13 +3,14 @@ package process_test
 import (
 	"fmt"
 	"io"
+	"log/slog"
 	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/buildkite/agent/v4/internal/logtest"
 	"github.com/buildkite/agent/v4/internal/process"
-	"github.com/buildkite/agent/v4/logger"
 	"github.com/google/go-cmp/cmp"
 )
 
@@ -41,7 +42,8 @@ func TestScanLines(t *testing.T) {
 		}
 	}()
 
-	scanner := process.NewScanner(logger.Discard)
+	logger, logHandler := logtest.NewLogger()
+	scanner := process.NewScanner(logger)
 
 	scanFunc := func(l string) {
 		lineNumber := atomic.AddInt32(&lineCounter, 1)
@@ -62,5 +64,21 @@ func TestScanLines(t *testing.T) {
 
 	if diff := cmp.Diff(lines, wantLines); diff != "" {
 		t.Errorf("lines diff (-got +want):\n%s", diff)
+	}
+
+	for _, record := range logHandler.Records() {
+		var component string
+		record.Attrs(func(attr slog.Attr) bool {
+			if attr.Key == "component" {
+				component = attr.Value.String()
+			}
+			return true
+		})
+		if got, want := component, "LineScanner"; got != want {
+			t.Errorf("component = %q, want %q", got, want)
+		}
+		if strings.HasPrefix(record.Message, "[LineScanner]") {
+			t.Errorf("message %q retains component prefix", record.Message)
+		}
 	}
 }

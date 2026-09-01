@@ -1,13 +1,13 @@
 package clicommand
 
 import (
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
-	"slices"
 	"strings"
 	"testing"
 
-	"github.com/buildkite/agent/v4/logger"
+	"github.com/buildkite/agent/v4/internal/logtest"
 )
 
 func TestStepCancel(t *testing.T) {
@@ -31,13 +31,13 @@ func TestStepCancel(t *testing.T) {
 			},
 		}
 
-		l := logger.NewBuffer()
+		l, lh := logtest.NewLogger()
 		err := cancelStep(ctx, cfg, l)
 		if got := err; got != nil {
 			t.Errorf("cancelStep(ctx, cfg, l) = %v, want nil", got)
 		}
-		if got, want := l.Messages, "[info] Successfully cancelled step: b0db1550-e68c-428f-9b4d-edf5599b2cff"; !slices.Contains(got, want) {
-			t.Errorf("l.Messages = %v, want containing %q", got, want)
+		if got, ok := findLogAttr(lh.Records(), "Successfully cancelled step", "step_id"); !ok || got != "b0db1550-e68c-428f-9b4d-edf5599b2cff" {
+			t.Errorf("step_id attr = %v, %t, want %q, true", got, ok, "b0db1550-e68c-428f-9b4d-edf5599b2cff")
 		}
 	})
 
@@ -56,7 +56,7 @@ func TestStepCancel(t *testing.T) {
 			},
 		}
 
-		l := logger.NewBuffer()
+		l := slog.New(slog.DiscardHandler)
 		err := cancelStep(ctx, cfg, l)
 		if got, want := err.Error(), "failed to cancel step"; !strings.Contains(got, want) {
 			t.Errorf("err.Error() = %q, want containing %q", got, want)

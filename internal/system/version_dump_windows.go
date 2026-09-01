@@ -4,8 +4,8 @@ package system
 
 import (
 	"fmt"
+	"log/slog"
 
-	"github.com/buildkite/agent/v4/logger"
 	"golang.org/x/sys/windows"
 )
 
@@ -15,7 +15,7 @@ var (
 	VER_NT_SERVER            = byte(0x0000003)
 )
 
-func VersionDump(_ logger.Logger) (string, error) {
+func VersionDump(_ *slog.Logger) (string, error) {
 	info := windows.RtlGetVersion()
 
 	return fmt.Sprintf("Windows version %d.%d (Build %d) (ProductType %s)\n", info.MajorVersion, info.MinorVersion, info.BuildNumber, productTypeToString(info.ProductType)), nil
