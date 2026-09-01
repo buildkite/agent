@@ -62,10 +62,11 @@ func (u *BKUploader) URL(*api.Artifact) string { return "" }
 
 // CreateWork creates workers for the artifact's upload instructions.
 func (u *BKUploader) CreateWork(artifact *api.Artifact) ([]workUnit, error) {
-	actions := artifact.UploadInstructions.Actions
-	if len(actions) == 0 && artifact.FileSize > maxFormUploadedArtifactSize {
+	if artifact.FileSize > maxFormUploadedArtifactSize &&
+		(artifact.UploadInstructions == nil || len(artifact.UploadInstructions.Actions) == 0) {
 		return nil, errArtifactTooLarge{Size: artifact.FileSize}
 	}
+	actions := artifact.UploadInstructions.Actions
 	if len(actions) == 0 {
 		// Not multiple actions - use a single form upload.
 		return []workUnit{&bkFormUpload{
