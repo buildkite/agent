@@ -2,12 +2,14 @@ package api_test
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"testing"
+	"time"
 
 	"github.com/buildkite/agent/v4/api"
 	"github.com/buildkite/agent/v4/logger"
@@ -28,6 +30,80 @@ func TestJobURL(t *testing.T) {
 	}
 	if got := job.URL(); got != want {
 		t.Errorf("job.URL() = %q, want %q", got, want)
+	}
+}
+
+func TestCreateJobOutput(t *testing.T) {
+	const (
+		jobID       = "b078e2d2-86e9-4c12-bf3b-612a8058d0a4"
+		accessToken = "llamas"
+		schema      = "example.error.v1"
+		outputUUID  = "019c9efe-1471-7f26-84de-0eda90f61d02"
+	)
+	wantPayload := json.RawMessage(`{"code":"rate_limited","retryable":true}`)
+	wantCreatedAt := time.Date(2026, time.September, 1, 12, 34, 56, 0, time.UTC)
+
+	server := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
+		if got, want := authToken(req), accessToken; got != want {
+			http.Error(rw, fmt.Sprintf("authToken(req) = %q, want %q", got, want), http.StatusUnauthorized)
+			return
+		}
+		if got, want := req.Method, http.MethodPost; got != want {
+			t.Errorf("req.Method = %q, want %q", got, want)
+		}
+		if got, want := req.URL.Path, fmt.Sprintf("/jobs/%s/outputs", url.PathEscape(jobID)); got != want {
+			t.Errorf("req.URL.Path = %q, want %q", got, want)
+		}
+
+		var body api.JobOutputRequest
+		if err := json.NewDecoder(req.Body).Decode(&body); err != nil {
+			t.Fatalf("decoding request body: %v", err)
+		}
+		if got, want := body.Schema, schema; got != want {
+			t.Errorf("body.Schema = %q, want %q", got, want)
+		}
+		if !bytes.Equal(body.Payload, wantPayload) {
+			t.Errorf("body.Payload = %s, want %s", body.Payload, wantPayload)
+		}
+
+		rw.Header().Set("Content-Type", "application/json")
+		rw.WriteHeader(http.StatusCreated)
+		_ = json.NewEncoder(rw).Encode(api.JobOutput{
+			UUID:      outputUUID,
+			Schema:    schema,
+			Payload:   wantPayload,
+			CreatedAt: wantCreatedAt,
+		})
+	}))
+	defer server.Close()
+
+	client := api.NewClient(logger.Discard, api.Config{
+		UserAgent: "Test",
+		Endpoint:  server.URL,
+		Token:     accessToken,
+	})
+
+	output, resp, err := client.CreateJobOutput(t.Context(), jobID, &api.JobOutputRequest{
+		Schema:  schema,
+		Payload: wantPayload,
+	})
+	if err != nil {
+		t.Fatalf("CreateJobOutput() error = %v, want nil", err)
+	}
+	if got, want := resp.StatusCode, http.StatusCreated; got != want {
+		t.Errorf("resp.StatusCode = %d, want %d", got, want)
+	}
+	if got, want := output.UUID, outputUUID; got != want {
+		t.Errorf("output.UUID = %q, want %q", got, want)
+	}
+	if got, want := output.Schema, schema; got != want {
+		t.Errorf("output.Schema = %q, want %q", got, want)
+	}
+	if !bytes.Equal(output.Payload, wantPayload) {
+		t.Errorf("output.Payload = %s, want %s", output.Payload, wantPayload)
+	}
+	if got, want := output.CreatedAt, wantCreatedAt; !got.Equal(want) {
+		t.Errorf("output.CreatedAt = %s, want %s", got, want)
 	}
 }
 

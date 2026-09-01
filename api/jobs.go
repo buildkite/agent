@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -148,6 +149,38 @@ func (c *Client) FinishJob(ctx context.Context, job *Job, ignoreAgentInDispatche
 	}
 
 	return c.doRequest(req, nil)
+}
+
+// JobOutputRequest contains a structured output emitted by a job.
+type JobOutputRequest struct {
+	Schema  string          `json:"schema"`
+	Payload json.RawMessage `json:"payload"`
+}
+
+// JobOutput represents a structured output created by a job.
+type JobOutput struct {
+	UUID      string          `json:"uuid"`
+	Schema    string          `json:"schema"`
+	Payload   json.RawMessage `json:"payload"`
+	CreatedAt time.Time       `json:"created_at"`
+}
+
+// CreateJobOutput emits a structured output for a job.
+func (c *Client) CreateJobOutput(ctx context.Context, id string, output *JobOutputRequest) (*JobOutput, *Response, error) {
+	u := fmt.Sprintf("jobs/%s/outputs", railsPathEscape(id))
+
+	req, err := c.newRequest(ctx, "POST", u, output)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	result := new(JobOutput)
+	resp, err := c.doRequest(req, result)
+	if err != nil {
+		return nil, resp, err
+	}
+
+	return result, resp, nil
 }
 
 // JobPromiseFailureRequest declares a promised (early) exit-status failure for
