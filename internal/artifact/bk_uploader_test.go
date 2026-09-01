@@ -293,20 +293,30 @@ func TestFormUploadFileMissing(t *testing.T) {
 
 func TestFormUploadTooBig(t *testing.T) {
 	uploader := NewBKUploader(logger.Discard, BKUploaderConfig{})
-	const size = int64(6 * 1024 * 1024 * 1024)
-	artifact := &api.Artifact{
-		ID:                 "xxxxx-xxxx-xxxx-xxxx-xxxxxxxxxx",
-		Path:               "llamas.txt",
-		AbsolutePath:       "/llamas.txt",
-		GlobPath:           "llamas.txt",
-		ContentType:        "text/plain",
-		FileSize:           size,
-		UploadInstructions: &api.ArtifactUploadInstructions{},
-	}
+	const size = int64(6 * 1024 * 1024 * 1024) // 6 GiB
+	for _, test := range []struct {
+		name         string
+		instructions *api.ArtifactUploadInstructions
+	}{
+		{name: "no actions", instructions: &api.ArtifactUploadInstructions{}},
+		{name: "nil instructions"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			artifact := &api.Artifact{
+				ID:                 "xxxxx-xxxx-xxxx-xxxx-xxxxxxxxxx",
+				Path:               "llamas.txt",
+				AbsolutePath:       "/llamas.txt",
+				GlobPath:           "llamas.txt",
+				ContentType:        "text/plain",
+				FileSize:           size,
+				UploadInstructions: test.instructions,
+			}
 
-	wantErr := errArtifactTooLarge{Size: size}
-	if _, err := uploader.CreateWork(artifact); !errors.Is(err, wantErr) {
-		t.Fatalf("uploader.CreateWork(artifact) error = %v, want %v", err, wantErr)
+			wantErr := errArtifactTooLarge{Size: size}
+			if _, err := uploader.CreateWork(artifact); !errors.Is(err, wantErr) {
+				t.Fatalf("uploader.CreateWork(artifact) error = %v, want %v", err, wantErr)
+			}
+		})
 	}
 }
 
