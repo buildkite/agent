@@ -3,6 +3,7 @@ package job
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -10,6 +11,7 @@ import (
 	"time"
 
 	"github.com/buildkite/agent/v4/version"
+	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploggrpc"
 	"go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploghttp"
@@ -84,11 +86,22 @@ func newOTLPJobLogger(ctx context.Context, e *Executor) (*otlpJobLogger, error) 
 	if serviceName == "" {
 		serviceName = "buildkite-agent"
 	}
-	resources := resource.NewWithAttributes(semconv.SchemaURL,
-		semconv.ServiceNameKey.String(serviceName),
-		semconv.ServiceVersionKey.String(version.Version()),
-		semconv.DeploymentEnvironmentKey.String("ci"),
+	resources, err := resource.New(ctx,
+		resource.WithFromEnv(),
+		resource.WithSchemaURL(semconv.SchemaURL),
+		// Explicit agent attributes take precedence over attributes from the environment.
+		resource.WithAttributes(
+			semconv.ServiceNameKey.String(serviceName),
+			semconv.ServiceVersionKey.String(version.Version()),
+			semconv.DeploymentEnvironmentKey.String("ci"),
+		),
 	)
+	if err != nil {
+		if !errors.Is(err, resource.ErrPartialResource) {
+			return nil, fmt.Errorf("creating OpenTelemetry log resource: %w", err)
+		}
+		otel.Handle(err)
+	}
 	provider := sdklog.NewLoggerProvider(
 		// Job logs must not be silently dropped when the SDK batch queue fills.
 		// Back-pressure the command output on the exporter instead.
