@@ -15,12 +15,18 @@ if [[ ! -f "./go.mod" ]]; then
     exit 1
 fi
 
+if [[ "${ACKNOWLEDGEMENTS_REUSE_EXISTING:-false}" == "true" && -s clicommand/ACKNOWLEDGEMENTS.md.gz ]]; then
+    echo 'Reusing restored clicommand/ACKNOWLEDGEMENTS.md.gz'
+    exit 0
+fi
+
 # Ensure modules are downloaded
 go mod download
 
 # Get go-licenses tool
 if ! command -v go-licenses >/dev/null; then
-	go install github.com/google/go-licenses@latest
+	GO_LICENSES_VERSION="$(cat .buildkite/go-licenses-version)"
+	go install "github.com/google/go-licenses@${GO_LICENSES_VERSION}"
 	GO_LICENSES="$(go env GOPATH)/bin/go-licenses"
 else
 	GO_LICENSES="$(command -v go-licenses)"

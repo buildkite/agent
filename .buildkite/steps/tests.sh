@@ -9,6 +9,28 @@ if [[ $* == *-race* ]] ; then
   RACE='-race'
 fi
 
+goos="$(go env GOOS)"
+goarch="$(go env GOARCH)"
+export AGENT_GO_VERSION="$(go env GOVERSION | cut -d. -f1,2)"
+
+if [[ "${goos}" == "windows" ]]; then
+  cache_home="${USERPROFILE}"
+else
+  cache_home="${HOME}"
+fi
+
+if [[ -n "${RACE}" ]]; then
+  gocache_name="gocache_race"
+  export GOCACHE="${cache_home}/.gocache_race"
+else
+  gocache_name="gocache"
+  export GOCACHE="${cache_home}/.gocache"
+fi
+export GOMODCACHE="${cache_home}/.gomodcache"
+
+echo --- :inbox_tray: Restoring Go caches
+buildkite-agent cache restore --name gomodcache --name "${gocache_name}"
+
 export BUILDKITE_TEST_ENGINE_SUITE_SLUG=buildkite-agent
 export BUILDKITE_TEST_ENGINE_TEST_RUNNER=gotest
 export BUILDKITE_TEST_ENGINE_RESULT_PATH="junit-${BUILDKITE_JOB_ID}.xml"
@@ -24,3 +46,16 @@ else
 fi
 
 go tool test-engine-client run
+
+# Only the first parallel job writes each platform's build cache.
+if [[ "${BUILDKITE_PARALLEL_JOB:-0}" == "0" ]]; then
+  save_names=(--name "${gocache_name}")
+
+  # Lint writes linux/amd64 modules. Race jobs never write this shared cache.
+  if [[ -z "${RACE}" && "${goos}/${goarch}" != "linux/amd64" ]]; then
+    save_names+=(--name gomodcache)
+  fi
+
+  echo --- :outbox_tray: Saving Go caches
+  buildkite-agent cache save "${save_names[@]}"
+fi

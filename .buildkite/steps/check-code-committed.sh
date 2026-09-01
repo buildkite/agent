@@ -2,6 +2,13 @@
 
 set -euf
 
+export GOCACHE="$HOME/.gocache-lint"
+export GOMODCACHE="$HOME/.gomodcache"
+export AGENT_GO_VERSION="$(go env GOVERSION | cut -d. -f1,2)"
+
+echo --- :inbox_tray: Restoring Go caches
+buildkite-agent cache restore --name gomodcache --name lint_gocache
+
 echo --- :go: Checking go mod tidyness
 go mod tidy
 if ! git diff --no-ext-diff --exit-code; then
@@ -65,3 +72,10 @@ EOF
 fi
 
 echo +++ Everything is clean and tidy! 🎉
+
+# Populate the shared module cache for every target.
+echo --- :arrow_down: Downloading Go modules
+go mod download
+
+echo --- :outbox_tray: Saving Go caches
+buildkite-agent cache save --name gomodcache --name lint_gocache
