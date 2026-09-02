@@ -61,6 +61,9 @@ type agentStats struct {
 
 	// The last error that occurred during heartbeat, or nil if it was successful
 	lastHeartbeatError error
+
+	watchdogRunningSince time.Time
+	watchdogErr          error
 }
 
 type AgentWorker struct {
