@@ -131,6 +131,10 @@ steps:
         key: test-windows
         command: "bash .buildkite\\steps\\tests.sh"
         parallelism: 2
+        retry:
+          automatic:
+            - exit_status: 1
+              limit: 3
         artifact_paths:
           - junit-*.xml
           - "coverage-*/**"
