@@ -45,7 +45,7 @@ require (
 	github.com/prometheus/client_golang v1.24.1
 	github.com/puzpuzpuz/xsync/v2 v2.5.1
 	github.com/qri-io/jsonschema v0.2.1
-	github.com/urfave/cli/v3 v3.10.1
+	github.com/urfave/cli/v3 v3.11.0
 	github.com/wolfeidau/quickzip v1.0.3
 	go.opentelemetry.io/contrib/propagators/aws v1.45.0
 	go.opentelemetry.io/contrib/propagators/b3 v1.45.0
