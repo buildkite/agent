@@ -16,6 +16,7 @@ steps:
     if_changed:
       - go.{mod,sum}
       - "**.go"
+      - .buildkite/Dockerfile-lint
       - .buildkite/steps/check-code-committed.sh
     plugins:
       - docker-compose#v4.14.0:
