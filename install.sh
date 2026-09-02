@@ -144,13 +144,11 @@ Hey!
 
 Sorry to be a pain, but we've renamed ~/.buildkite to ~/.buildkite-agent
 
-I've renamed your .buildkite folder to .buildkite-agent, and created a symlink
+We've renamed your .buildkite folder to .buildkite-agent, and created a symlink
 from the old location to the new location, just in case you had any scripts that
 referenced the previous location.
 
-If you have any questions, feel free to email me at: keith@buildkite.com
-
-~ Keith
+If you have any questions, feel free to email us at: support@buildkite.com
 
 ==========================================================================
 EON
