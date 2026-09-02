@@ -110,8 +110,8 @@ func TestServerHandler(t *testing.T) {
 
 	cli := &http.Client{
 		Transport: &http.Transport{
-			Dial: func(string, string) (net.Conn, error) {
-				return net.Dial("unix", sockPath)
+			DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
+				return (&net.Dialer{}).DialContext(ctx, "unix", sockPath)
 			},
 		},
 	}
