@@ -5,6 +5,7 @@ env:
   AGENT_RUNNERS_LINUX_QUEUE: "${AGENT_RUNNERS_LINUX_QUEUE:-agent-runners-linux-amd64}"
   AGENT_RUNNERS_LINUX_ARM64_QUEUE: "${AGENT_RUNNERS_LINUX_ARM64_QUEUE:-agent-runners-linux-arm64}"
   AGENT_RUNNERS_WINDOWS_QUEUE: "${AGENT_RUNNERS_WINDOWS_QUEUE:-agent-runners-windows-amd64}"
+  AGENT_RUNNERS_MACOS_QUEUE: "${AGENT_RUNNERS_MACOS_QUEUE:-agent-runners-hosted-macos}"
   AGENT_BUILDERS_QUEUE: "${AGENT_BUILDERS_QUEUE:-elastic-builders}"
   AGENT_BUILDERS_ARM64_QUEUE: "${AGENT_BUILDERS_QUEUE:-elastic-builders}"
 
@@ -182,6 +183,29 @@ steps:
                 - AWS_SECRET_ACCESS_KEY
                 - AWS_SESSION_TOKEN
 
+      - name: ":mac: macOS ARM64 Tests"
+        key: test-macos
+        command: ".buildkite/steps/tests.sh"
+        parallelism: 2
+        artifact_paths:
+          - junit-*.xml
+          - "coverage-*/**"
+        agents:
+          queue: $AGENT_RUNNERS_MACOS_QUEUE
+        plugins:
+          - *assume_cache_role
+          - tests#v1.0.0:
+              suite-slug: buildkite-agent
+              test-runner: gotest
+              result-path: junit.xml
+              install-client: false
+              upload-results: true
+              oidc-lifetime: 7200
+              tags:
+                - "os=darwin"
+                - "arch=arm64"
+                - "race=false"
+
       - name: ":windows: Windows AMD64 Tests"
         key: test-windows
         command: "bash .buildkite\\steps\\tests.sh"
@@ -298,6 +322,7 @@ steps:
           - test-linux-amd64
           - test-race-linux-arm64
           - test-linux-arm64
+          - test-macos
           - test-windows
         allow_dependency_failure: true
         plugins:
@@ -528,6 +553,7 @@ steps:
       - e2e-tests
       - test-docker-amd64
       - test-docker-arm64
+      - test-macos
       - test-windows
     command: ".buildkite/steps/upload-release-steps.sh"
     if: build.env("DRY_RUN") == "true" || build.branch =~ /^(main|.*-.*-stable|v\d+)$$/
