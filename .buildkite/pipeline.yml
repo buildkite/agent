@@ -4,8 +4,8 @@ env:
   BUILDKITE_AGENT_CACHE_STORE_URL: "s3://bk-agent-cache-v2-dogfood-445615400570-us-east-1?region=us-east-1"
   AGENT_RUNNERS_LINUX_QUEUE: "${AGENT_RUNNERS_LINUX_QUEUE:-agent-runners-linux-amd64}"
   AGENT_RUNNERS_LINUX_ARM64_QUEUE: "${AGENT_RUNNERS_LINUX_ARM64_QUEUE:-agent-runners-linux-arm64}"
-  AGENT_RUNNERS_WINDOWS_QUEUE: "${AGENT_RUNNERS_WINDOWS_QUEUE:-agent-runners-windows-amd64}"
   AGENT_RUNNERS_MACOS_QUEUE: "${AGENT_RUNNERS_MACOS_QUEUE:-agent-runners-hosted-macos}"
+  AGENT_RUNNERS_WINDOWS_QUEUE: "${AGENT_RUNNERS_WINDOWS_QUEUE:-agent-runners-hosted-windows}"
   AGENT_BUILDERS_QUEUE: "${AGENT_BUILDERS_QUEUE:-elastic-builders}"
   AGENT_BUILDERS_ARM64_QUEUE: "${AGENT_BUILDERS_QUEUE:-elastic-builders}"
 
