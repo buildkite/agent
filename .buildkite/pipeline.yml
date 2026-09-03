@@ -1,5 +1,6 @@
 env:
   DRY_RUN: "false" # set to true to disable publishing releases
+  BUILDKITE_PLUGIN_VALIDATION: "true"
   BUILDKITE_AGENT_CACHE_REGISTRY: "agent-cache"
   BUILDKITE_AGENT_CACHE_STORE_URL: "s3://bk-agent-cache-v2-dogfood-445615400570-us-east-1?region=us-east-1"
   AGENT_RUNNERS_LINUX_QUEUE: "${AGENT_RUNNERS_LINUX_QUEUE:-agent-runners-linux-amd64}"
