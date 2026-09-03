@@ -1,5 +1,5 @@
 env:
-  DRY_RUN: false # set to true to disable publishing releases
+  DRY_RUN: "false" # set to true to disable publishing releases
   BUILDKITE_AGENT_CACHE_REGISTRY: "agent-cache"
   BUILDKITE_AGENT_CACHE_STORE_URL: "s3://bk-agent-cache-v2-dogfood-445615400570-us-east-1?region=us-east-1"
   AGENT_RUNNERS_LINUX_QUEUE: "${AGENT_RUNNERS_LINUX_QUEUE:-agent-runners-linux-amd64}"
@@ -78,7 +78,7 @@ common:
           variant: *docker_variants
 
 steps:
-  - name: ":go::robot_face: Lint"
+  - label: ":go::robot_face: Lint"
     key: check-code-committed
     command: .buildkite/steps/check-code-committed.sh
     if_changed:
@@ -100,7 +100,7 @@ steps:
             - BUILDKITE_AGENT_CACHE_REGISTRY
             - BUILDKITE_AGENT_CACHE_STORE_URL
 
-  - name: ":go::robot_face: Check protobuf generation"
+  - label: ":go::robot_face: Check protobuf generation"
     key: check-protobuf-generation
     env:
       GOBIN: /root/.protobuf-tools/bin
@@ -128,17 +128,10 @@ steps:
             - GOCACHE
             - GOMODCACHE
 
-  # Send git commit metadata to the Test Engine plan-metadata pipeline on
-  # every build. Plan output is discarded -- the Tests and Coverage group
-  # below continues to use its declared parallelism. This step has no
-  # depends_on and no dependents, and is soft_fail, so a Test Engine API
-  # hiccup never blocks the build.
-  #
-  # Runs inside the `agent` compose service so bktec's gotest runner has
-  # `go` on PATH (needed for `go list ./...` package discovery) and the
-  # Test Engine API token is forwarded (declared in docker-compose.yml).
-  # See TE-5828.
-  - name: ":test_tube: Collect commit metadata"
+  # Send metadata to Test Engine without changing the test group's declared
+  # parallelism. This independent, soft-fail step uses the agent container so
+  # bktec has Go and the Test Engine API token. See TE-5828.
+  - label: ":test_tube: Collect commit metadata"
     key: collect-commit-metadata
     command: .buildkite/steps/collect-commit-metadata.sh
     soft_fail: true
@@ -167,9 +160,9 @@ steps:
       - .buildkite/cache.yml
       - .buildkite/docker-compose.yml
     steps:
-      - name: ":linux: Linux AMD64 Tests"
+      - label: ":linux: Linux AMD64 Tests"
         key: test-linux-amd64
-        command: ".buildkite/steps/tests.sh"
+        command: .buildkite/steps/tests.sh
         parallelism: 2
         artifact_paths: *test_artifacts
         plugins:
@@ -182,9 +175,9 @@ steps:
                 - "race=false"
           - *test_container
 
-      - name: ":linux: Linux ARM64 Tests"
+      - label: ":linux: Linux ARM64 Tests"
         key: test-linux-arm64
-        command: ".buildkite/steps/tests.sh"
+        command: .buildkite/steps/tests.sh
         parallelism: 2
         artifact_paths: *test_artifacts
         agents:
@@ -199,7 +192,7 @@ steps:
                 - "race=false"
           - *test_container
 
-      - name: ":windows: Windows AMD64 Tests"
+      - label: ":windows: Windows AMD64 Tests"
         key: test-windows
         command: "bash .buildkite\\steps\\tests.sh"
         parallelism: 2
@@ -219,9 +212,9 @@ steps:
                 - "arch=amd64"
                 - "race=false"
 
-      - name: ":satellite: Detect Data Races"
+      - label: ":satellite: Detect Data Races"
         key: test-race-linux-arm64
-        command: ".buildkite/steps/tests.sh -race"
+        command: .buildkite/steps/tests.sh -race
         # Extra parallelism because this data race test is slow
         parallelism: 3
         artifact_paths: *test_artifacts
@@ -237,9 +230,9 @@ steps:
                 - "race=true"
           - *test_container
 
-      - name: ":coverage: Test coverage report Linux ARM64"
+      - label: ":coverage: Test coverage report Linux ARM64"
         key: test-coverage-linux-arm64
-        command: ".buildkite/steps/test-coverage-report.sh coverage-linux-arm64"
+        command: .buildkite/steps/test-coverage-report.sh coverage-linux-arm64
         artifact_paths: *coverage_artifacts
         depends_on:
           - test-linux-arm64
@@ -248,9 +241,9 @@ steps:
           - artifacts#v1.9.4:
               download: "coverage-linux-arm64/**"
 
-      - name: ":coverage: Test coverage report Linux AMD64"
+      - label: ":coverage: Test coverage report Linux AMD64"
         key: test-coverage-linux-amd64
-        command: ".buildkite/steps/test-coverage-report.sh coverage-linux-amd64"
+        command: .buildkite/steps/test-coverage-report.sh coverage-linux-amd64
         artifact_paths: *coverage_artifacts
         depends_on:
           - test-linux-amd64
@@ -259,9 +252,9 @@ steps:
           - artifacts#v1.9.4:
               download: "coverage-linux-amd64/**"
 
-      - name: ":coverage: Test coverage report Linux ARM64 Race"
+      - label: ":coverage: Test coverage report Linux ARM64 Race"
         key: test-coverage-linux-arm64-race
-        command: ".buildkite/steps/test-coverage-report.sh coverage-linux-arm64-race"
+        command: .buildkite/steps/test-coverage-report.sh coverage-linux-arm64-race
         artifact_paths: *coverage_artifacts
         depends_on:
           - test-race-linux-arm64
@@ -285,11 +278,11 @@ steps:
 
   - group: ":hammer_and_wrench: Binary builds"
     steps:
-      - name: ":{{matrix.os}}: Build {{matrix.os}} {{matrix.arch}} binary"
-        command: ".buildkite/steps/build-binary.sh {{matrix.os}} {{matrix.arch}}"
+      - label: ":{{matrix.os}}: Build {{matrix.os}} {{matrix.arch}} binary"
+        command: .buildkite/steps/build-binary.sh {{matrix.os}} {{matrix.arch}}
         key: build-binary
         depends_on:
-          # don't wait for slower windows tests
+          # Don't wait for slower Windows tests.
           - test-linux-amd64
           - test-linux-arm64
         artifact_paths: "pkg/*"
@@ -343,7 +336,6 @@ steps:
     key: e2e-tests
     depends_on: build-binary
     trigger: agent-e2e-tests
-    async: false
     build:
       message: "${BUILDKITE_MESSAGE}"
       commit: "${BUILDKITE_COMMIT}"
@@ -358,13 +350,13 @@ steps:
     depends_on: build-binary
     command: .buildkite/steps/check-version-string.sh
 
-  - name: ":mag: Extract Agent Version Metadata"
+  - label: ":mag: Extract Agent Version Metadata"
     key: set-metadata
-    command: ".buildkite/steps/extract-agent-version-metadata.sh"
+    command: .buildkite/steps/extract-agent-version-metadata.sh
 
   - group: ":docker: Docker Image Builds"
     steps:
-      - name: ":docker: {{matrix}} image build"
+      - label: ":docker: {{matrix}} image build"
         key: build-docker
         plugins: *builder_plugins
         agents:
@@ -372,48 +364,48 @@ steps:
         depends_on:
           - build-binary
           - set-metadata
-        command: ".buildkite/steps/build-docker-image.sh {{matrix}}"
+        command: .buildkite/steps/build-docker-image.sh {{matrix}}
         matrix:
           setup: *docker_variants
 
   - group: ":docker: Docker Image Tests"
     steps:
       - <<: *docker_image_test
-        name: ":docker: {{matrix.variant}} amd64 image test"
+        label: ":docker: {{matrix.variant}} amd64 image test"
         key: test-docker-amd64
         agents:
           queue: $AGENT_BUILDERS_QUEUE
 
       - <<: *docker_image_test
-        name: ":docker: {{matrix.variant}} arm64 image test"
+        label: ":docker: {{matrix.variant}} arm64 image test"
         key: test-docker-arm64
         agents:
           queue: $AGENT_BUILDERS_ARM64_QUEUE
 
-  # --- end Docker Image tests ---
+  # --- end Docker Image Tests ---
 
-  - name: ":debian: Debian package build"
+  - label: ":debian: Debian package build"
     key: build-debian-packages
     depends_on:
       - build-binary
       - set-metadata
-    command: ".buildkite/steps/build-debian-packages.sh"
+    command: .buildkite/steps/build-debian-packages.sh
     artifact_paths: "deb/**/*"
 
-  - name: ":redhat: RPM Package build"
+  - label: ":redhat: RPM Package build"
     key: build-rpm-packages
     depends_on:
       - build-binary
       - set-metadata
-    command: ".buildkite/steps/build-rpm-packages.sh"
+    command: .buildkite/steps/build-rpm-packages.sh
     artifact_paths: "rpm/**/*"
 
-  - name: ":github: Build Github Release"
+  - label: ":github: Build GitHub release"
     key: build-github-release
     depends_on:
       - build-binary
       - set-metadata
-    command: ".buildkite/steps/build-github-release.sh"
+    command: .buildkite/steps/build-github-release.sh
     artifact_paths: "releases/**/*"
     plugins:
       - docker-compose#v5.13.0:
@@ -423,12 +415,12 @@ steps:
           artifacts: "releases/*.tar.gz;releases/*.zip"
           attestation_name: "buildkite-agent-github-releases.attestation.json"
 
-  - name: ":memo: Trigger docs draft"
+  - label: ":memo: Trigger docs draft"
     if: build.branch == "main"
     soft_fail: true
     command: .buildkite/steps/trigger-docs-draft.sh
 
-  - name: ":pipeline: Upload Release Pipeline"
+  - label: ":pipeline: Upload Release Pipeline"
     key: upload-release-steps
     depends_on:
       - build-debian-packages
@@ -440,5 +432,5 @@ steps:
       - test-docker-amd64
       - test-docker-arm64
       - test-windows
-    command: ".buildkite/steps/upload-release-steps.sh"
+    command: .buildkite/steps/upload-release-steps.sh
     if: build.env("DRY_RUN") == "true" || build.branch =~ /^(main|.*-.*-stable|v\d+)$$/
