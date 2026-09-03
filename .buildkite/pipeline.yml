@@ -23,6 +23,7 @@ steps:
       - .buildkite/steps/check-code-committed.sh
       - .buildkite/cache.yml
       - .buildkite/docker-compose.yml
+      - .buildkite/pipeline.yml
     plugins:
       - &assume_cache_role
         aws-assume-role-with-web-identity#v1.4.0:
@@ -57,6 +58,7 @@ steps:
       - .buildkite/steps/protobuf-tool-versions.sh
       - .buildkite/cache.yml
       - .buildkite/docker-compose.yml
+      - .buildkite/pipeline.yml
     plugins:
       - *assume_cache_role
       - docker-compose#v4.14.0:
@@ -114,6 +116,7 @@ steps:
       - .buildkite/steps/{tests,test-coverage-report}.sh
       - .buildkite/cache.yml
       - .buildkite/docker-compose.yml
+      - .buildkite/pipeline.yml
     steps:
       - name: ":linux: Linux AMD64 Tests"
         key: test-linux-amd64
