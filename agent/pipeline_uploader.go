@@ -41,18 +41,18 @@ type PipelineUploader struct {
 // 3. Status Route: /jobs/:job_uuid/pipelines/:upload_uuid
 //
 // In this method, the agent will first upload the pipeline to the Async Route.
-// Then, depending on the response it will behave differetly
+// Then, depending on the response it will behave differently
 //
-// 1. The Async Route responds 202: poll the Status Route until the upload has beed "applied"
+// 1. The Async Route responds 202: poll the Status Route until the upload has been "applied"
 // 2. The Async Route responds with other 2xx: exit, the upload succeeded synchronously (possibly after retry)
 // 3. The Async Route responds with other xxx: retry uploading the pipeline to the Async Route
 //
-// Note that the Sync Route is not used by this version of the agent at all. Typically, the Aysnc
+// Note that the Sync Route is not used by this version of the agent at all. Typically, the Async
 // Route will return 202 whether or not the pipeline upload has been processed.
 //
 // However, the API has the option to treat the Async Route as if it were the Sync Route by
-// returning a 2xx that's not a 202. This will tigger option 2. While the API currently does not do
-// this, we want to maintain the flexbitity to do so in the future. If that is implemented, the
+// returning a 2xx that's not a 202. This will trigger option 2. While the API currently does not do
+// this, we want to maintain the flexibility to do so in the future. If that is implemented, the
 // Status Route will not be polled, and either the Async Route will be retried until a (non 202) 2xx
 // is returned from the API, or the method will exit early with no error. This reiterates option 2.
 //

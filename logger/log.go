@@ -275,7 +275,7 @@ var Discard = &ConsoleLogger{
 	},
 }
 
-// TestPrinter is a log printer than calls the Logf method of a [testing.T]
+// TestPrinter is a log printer that calls the Logf method of a [testing.T]
 // or [testing.B].
 type TestPrinter struct {
 	tb testing.TB

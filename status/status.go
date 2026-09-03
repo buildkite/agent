@@ -225,7 +225,7 @@ func Handle(w http.ResponseWriter, r *http.Request) {
 // AddItem adds an item to be displayed on the status page. On each page load,
 // the item's callback is called, and the data returned used to fill the
 // HTML template in tmpl. The title should be unique (among items under this
-// parent.
+// parent).
 func AddItem(parent context.Context, title, tmpl string, cb func(context.Context) (any, error)) (context.Context, func()) {
 	if cb == nil {
 		cb = func(context.Context) (any, error) { return nil, nil }
