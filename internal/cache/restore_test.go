@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/buildkite/agent/v4/api"
+	"github.com/buildkite/agent/v4/internal/cache/store"
 )
 
 func TestInvalidateStaleEntry_EchoesScopesFromRetrieve(t *testing.T) {
@@ -341,4 +342,64 @@ func TestCleanPathWindowsUNCShareRoot(t *testing.T) {
 	if !strings.Contains(err.Error(), "refusing to remove") {
 		t.Errorf("error %q should contain %q", err.Error(), "refusing to remove")
 	}
+}
+
+// fakeRefreshingBlob is a minimal store.Blob that also implements
+// store.RetentionRefresher, mirroring NscStore/S3Blob.
+type fakeRefreshingBlob struct {
+	refreshCalls []string
+}
+
+func (f *fakeRefreshingBlob) Upload(_ context.Context, _, _ string) (*store.TransferInfo, error) {
+	return nil, nil
+}
+
+func (f *fakeRefreshingBlob) Download(_ context.Context, _, _ string) (*store.TransferInfo, error) {
+	return nil, nil
+}
+
+func (f *fakeRefreshingBlob) RefreshRetention(_ context.Context, key string) {
+	f.refreshCalls = append(f.refreshCalls, key)
+}
+
+// fakeNonRefreshingBlob is a store.Blob with no RefreshRetention method,
+// mirroring LocalFileBlob (no retention concept to refresh).
+type fakeNonRefreshingBlob struct{}
+
+func (f *fakeNonRefreshingBlob) Upload(_ context.Context, _, _ string) (*store.TransferInfo, error) {
+	return nil, nil
+}
+
+func (f *fakeNonRefreshingBlob) Download(_ context.Context, _, _ string) (*store.TransferInfo, error) {
+	return nil, nil
+}
+
+func TestMaybeRefreshRetention(t *testing.T) {
+	t.Run("refreshes on an exact match", func(t *testing.T) {
+		blob := &fakeRefreshingBlob{}
+
+		maybeRefreshRetention(t.Context(), blob, false, "key")
+
+		if len(blob.refreshCalls) != 1 {
+			t.Errorf("refresh calls = %d, want 1", len(blob.refreshCalls))
+		}
+	})
+
+	// Mirrors the backend's `unless entry_result.fallback_used?` TTL-bump
+	// guard: a fallback match must not refresh the blob's retention.
+	t.Run("skips the refresh on a fallback match", func(t *testing.T) {
+		blob := &fakeRefreshingBlob{}
+
+		maybeRefreshRetention(t.Context(), blob, true, "key")
+
+		if len(blob.refreshCalls) != 0 {
+			t.Errorf("refresh calls = %d, want 0 for a fallback match", len(blob.refreshCalls))
+		}
+	})
+
+	t.Run("does nothing for a store with no retention concept", func(t *testing.T) {
+		blob := &fakeNonRefreshingBlob{}
+
+		maybeRefreshRetention(t.Context(), blob, false, "key") // must not panic
+	})
 }

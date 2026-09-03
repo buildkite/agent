@@ -440,7 +440,7 @@ func (c *client) downloadCache(ctx context.Context, retrieveResp api.CacheEntryR
 	archiveFile = filepath.Join(tmpDir, storeObjectName)
 
 	// Download archive
-	transferInfo, err = blobStore.Download(ctx, storeObjectName, archiveFile, retrieveResp.Fallback)
+	transferInfo, err = blobStore.Download(ctx, storeObjectName, archiveFile)
 	if err != nil {
 		// Clean up temporary directory on failure
 		_ = os.RemoveAll(tmpDir)
@@ -467,9 +467,25 @@ func (c *client) downloadCache(ctx context.Context, retrieveResp api.CacheEntryR
 		return "", "", nil, err
 	}
 
+	// Extend the blob's retention now that it's confirmed good.
+	maybeRefreshRetention(ctx, blobStore, retrieveResp.Fallback, storeObjectName)
+
 	span.SetStatus(codes.Ok, "download completed")
 
 	return tmpDir, archiveFile, transferInfo, nil
+}
+
+// maybeRefreshRetention extends key's retention via blobStore, unless
+// fallback is true — a fallback hit means the entry was saved under a
+// shorter key sequence, and refreshing it would reset the clock on a blob
+// the caller didn't explicitly target (mirrors the backend's
+// `unless entry_result.fallback_used?` TTL-bump guard).
+func maybeRefreshRetention(ctx context.Context, blobStore store.Blob, fallback bool, key string) {
+	refresher, ok := blobStore.(store.RetentionRefresher)
+	if !ok || fallback {
+		return
+	}
+	refresher.RefreshRetention(ctx, key)
 }
 
 // extractCache extracts files from a cache archive

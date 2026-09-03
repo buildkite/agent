@@ -603,7 +603,7 @@ func TestRefreshObjectExpiry(t *testing.T) {
 	t.Run("self-copies the object to refresh LastModified", func(t *testing.T) {
 		copier := &fakeCopier{}
 
-		refreshObjectExpiry(t.Context(), copier, "my-bucket", "prefix/key", false)
+		refreshObjectExpiry(t.Context(), copier, "my-bucket", "prefix/key")
 
 		if len(copier.calls) != 1 {
 			t.Fatalf("CopyObject calls = %d, want 1", len(copier.calls))
@@ -620,27 +620,31 @@ func TestRefreshObjectExpiry(t *testing.T) {
 		}
 	})
 
-	// Mirrors the backend's `unless entry_result.fallback_used?` TTL-bump
-	// guard: a fallback match must not refresh the blob's retention.
-	t.Run("skips the refresh on a fallback match", func(t *testing.T) {
-		copier := &fakeCopier{}
-
-		refreshObjectExpiry(t.Context(), copier, "my-bucket", "key", true)
-
-		if len(copier.calls) != 0 {
-			t.Errorf("CopyObject calls = %d, want 0 for a fallback match", len(copier.calls))
-		}
-	})
-
 	t.Run("swallows a precondition-failed error (recently refreshed)", func(t *testing.T) {
 		copier := &fakeCopier{err: responseErrorWithStatus(http.StatusPreconditionFailed)}
 
-		refreshObjectExpiry(t.Context(), copier, "my-bucket", "key", false) // must not panic
+		refreshObjectExpiry(t.Context(), copier, "my-bucket", "key") // must not panic
 	})
 
 	t.Run("swallows any other error (best-effort)", func(t *testing.T) {
 		copier := &fakeCopier{err: errors.New("boom")}
 
-		refreshObjectExpiry(t.Context(), copier, "my-bucket", "key", false) // must not panic
+		refreshObjectExpiry(t.Context(), copier, "my-bucket", "key") // must not panic
 	})
+}
+
+// TestS3Blob_RefreshRetention covers the method wrapper — that it resolves
+// the prefixed full key and delegates to refreshObjectExpiry.
+func TestS3Blob_RefreshRetention(t *testing.T) {
+	copier := &fakeCopier{}
+	b := &S3Blob{client: copier, bucketName: "my-bucket", prefix: "prefix"}
+
+	b.RefreshRetention(t.Context(), "key")
+
+	if len(copier.calls) != 1 {
+		t.Fatalf("CopyObject calls = %d, want 1", len(copier.calls))
+	}
+	if got := aws.ToString(copier.calls[0].Key); got != "prefix/key" {
+		t.Errorf("CopyObjectInput.Key = %q, want %q", got, "prefix/key")
+	}
 }

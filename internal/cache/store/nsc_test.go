@@ -305,16 +305,35 @@ func recordingRunner(calls *[][]string, respond func(args []string) (*CommandRes
 	}
 }
 
-func TestNscStore_RefreshesTTLOnDownload(t *testing.T) {
+// TestNscStore_Download_DoesNotRefreshRetention guards against Download
+// reaching back into RefreshRetention itself — that decision belongs to the
+// restore flow (which knows about fallback), not this store. See
+// store.RetentionRefresher.
+func TestNscStore_Download_DoesNotRefreshRetention(t *testing.T) {
 	ctx := t.Context()
 	dest := filepath.Join(t.TempDir(), "out.txt")
 
 	var calls [][]string
 	store := &NscStore{namespace: "my-namespace", run: recordingRunner(&calls, nil)}
 
-	if _, err := store.Download(ctx, "key", dest, false); err != nil {
+	if _, err := store.Download(ctx, "key", dest); err != nil {
 		t.Fatalf("Download: %v", err)
 	}
+
+	for _, c := range calls {
+		if isCommand(c, "nsc", "artifact", "extend") {
+			t.Errorf("unexpected extend command from Download: %v", c)
+		}
+	}
+}
+
+func TestNscStore_RefreshRetention(t *testing.T) {
+	ctx := t.Context()
+
+	var calls [][]string
+	store := &NscStore{namespace: "my-namespace", run: recordingRunner(&calls, nil)}
+
+	store.RefreshRetention(ctx, "key")
 
 	wantExtend := []string{"nsc", "artifact", "extend", "key", "--ensure_minimum", "72h", "--namespace", "my-namespace"}
 	var gotExtend []string
@@ -328,30 +347,8 @@ func TestNscStore_RefreshesTTLOnDownload(t *testing.T) {
 	}
 }
 
-// TestNscStore_SkipsRefreshOnFallbackDownload mirrors the backend's
-// `unless entry_result.fallback_used?` TTL-bump guard: a fallback match must
-// not refresh the blob's retention.
-func TestNscStore_SkipsRefreshOnFallbackDownload(t *testing.T) {
+func TestNscStore_RefreshRetention_UpdatesCLIWhenExtendUnsupported(t *testing.T) {
 	ctx := t.Context()
-	dest := filepath.Join(t.TempDir(), "out.txt")
-
-	var calls [][]string
-	store := &NscStore{namespace: "my-namespace", run: recordingRunner(&calls, nil)}
-
-	if _, err := store.Download(ctx, "key", dest, true); err != nil {
-		t.Fatalf("Download: %v", err)
-	}
-
-	for _, c := range calls {
-		if isCommand(c, "nsc", "artifact", "extend") {
-			t.Errorf("unexpected extend command on fallback download: %v", c)
-		}
-	}
-}
-
-func TestNscStore_UpdatesCLIWhenExtendUnsupported(t *testing.T) {
-	ctx := t.Context()
-	dest := filepath.Join(t.TempDir(), "out.txt")
 
 	var calls [][]string
 	respond := func(args []string) (*CommandResult, error) {
@@ -363,9 +360,7 @@ func TestNscStore_UpdatesCLIWhenExtendUnsupported(t *testing.T) {
 	}
 	store := &NscStore{namespace: "ns", run: recordingRunner(&calls, respond)}
 
-	if _, err := store.Download(ctx, "key", dest, false); err != nil {
-		t.Fatalf("Download: %v", err)
-	}
+	store.RefreshRetention(ctx, "key")
 
 	var updated, extended bool
 	for _, c := range calls {
@@ -384,9 +379,8 @@ func TestNscStore_UpdatesCLIWhenExtendUnsupported(t *testing.T) {
 	}
 }
 
-func TestNscStore_UpdatesCLIWhenExtendHelpLacksEnsureMinimum(t *testing.T) {
+func TestNscStore_RefreshRetention_UpdatesCLIWhenExtendHelpLacksEnsureMinimum(t *testing.T) {
 	ctx := t.Context()
-	dest := filepath.Join(t.TempDir(), "out.txt")
 
 	var calls [][]string
 	respond := func(args []string) (*CommandResult, error) {
@@ -404,9 +398,7 @@ func TestNscStore_UpdatesCLIWhenExtendHelpLacksEnsureMinimum(t *testing.T) {
 	}
 	store := &NscStore{namespace: "ns", run: recordingRunner(&calls, respond)}
 
-	if _, err := store.Download(ctx, "key", dest, false); err != nil {
-		t.Fatalf("Download: %v", err)
-	}
+	store.RefreshRetention(ctx, "key")
 
 	var updated, extended bool
 	for _, c := range calls {
@@ -425,9 +417,11 @@ func TestNscStore_UpdatesCLIWhenExtendHelpLacksEnsureMinimum(t *testing.T) {
 	}
 }
 
-func TestNscStore_DownloadSucceedsWhenRefreshFails(t *testing.T) {
+// TestNscStore_RefreshRetention_SwallowsFailure guards the best-effort
+// contract: a failed refresh must not panic or otherwise propagate, since
+// RefreshRetention has no error return for a caller to check.
+func TestNscStore_RefreshRetention_SwallowsFailure(t *testing.T) {
 	ctx := t.Context()
-	dest := filepath.Join(t.TempDir(), "out.txt")
 
 	respond := func(args []string) (*CommandResult, error) {
 		if isCommand(args, "nsc", "artifact", "extend", "key") {
@@ -438,9 +432,7 @@ func TestNscStore_DownloadSucceedsWhenRefreshFails(t *testing.T) {
 	var calls [][]string
 	store := &NscStore{namespace: "ns", run: recordingRunner(&calls, respond)}
 
-	if _, err := store.Download(ctx, "key", dest, false); err != nil {
-		t.Fatalf("Download should succeed despite a failed TTL refresh: %v", err)
-	}
+	store.RefreshRetention(ctx, "key") // must not panic
 }
 
 func TestNewNscStore_RequiresNamespace(t *testing.T) {
@@ -462,7 +454,7 @@ func TestNscStore_ValidationShortCircuits(t *testing.T) {
 	if _, err := store.Upload(ctx, "invalid;path", "valid-key"); err == nil {
 		t.Error("Upload with unsafe path: expected error, got nil")
 	}
-	if _, err := store.Download(ctx, "invalid key with spaces", "dest.txt", false); err == nil {
+	if _, err := store.Download(ctx, "invalid key with spaces", "dest.txt"); err == nil {
 		t.Error("Download with unsafe key: expected error, got nil")
 	}
 	if ran {
@@ -534,7 +526,7 @@ func TestNscStore_Integration(t *testing.T) {
 
 	// Test download
 	downloadFile := filepath.Join(tmpDir, "test-download.txt")
-	transferInfo, err = store.Download(ctx, key, downloadFile, false)
+	transferInfo, err = store.Download(ctx, key, downloadFile)
 	if err != nil {
 		t.Fatalf("Download should succeed: %v", err)
 	}
@@ -567,7 +559,7 @@ func TestNscStore_DownloadNotFound(t *testing.T) {
 		store := &NscStore{namespace: "ns", run: func(context.Context, string, ...string) (*CommandResult, error) {
 			return &CommandResult{ExitCode: 1, Stderr: "Error: artifact not found"}, nil
 		}}
-		_, err := store.Download(ctx, "valid-key", dest, false)
+		_, err := store.Download(ctx, "valid-key", dest)
 		if !errors.Is(err, ErrBlobNotFound) {
 			t.Fatalf("Download err = %v, want ErrBlobNotFound", err)
 		}
@@ -580,7 +572,7 @@ func TestNscStore_DownloadNotFound(t *testing.T) {
 				Stderr:   "Failed: the artifact has expired at 2026-07-14T02:06:24Z (request id: cbdorlqepas5e10ldvfvdpog40).",
 			}, nil
 		}}
-		_, err := store.Download(ctx, "valid-key", dest, false)
+		_, err := store.Download(ctx, "valid-key", dest)
 		if !errors.Is(err, ErrBlobNotFound) {
 			t.Fatalf("Download err = %v, want ErrBlobNotFound", err)
 		}
@@ -590,7 +582,7 @@ func TestNscStore_DownloadNotFound(t *testing.T) {
 		store := &NscStore{namespace: "ns", run: func(context.Context, string, ...string) (*CommandResult, error) {
 			return &CommandResult{ExitCode: 1, Stderr: "connection refused"}, nil
 		}}
-		_, err := store.Download(ctx, "valid-key", dest, false)
+		_, err := store.Download(ctx, "valid-key", dest)
 		if err == nil {
 			t.Fatal("Download: expected error, got nil")
 		}

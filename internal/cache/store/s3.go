@@ -393,7 +393,7 @@ func (b *S3Blob) Upload(ctx context.Context, filePath, key string) (*TransferInf
 const restoreRefreshMinInterval = 12 * time.Hour
 
 // Download downloads a file from S3 using parallel range requests for large files
-func (b *S3Blob) Download(ctx context.Context, key, destPath string, fallback bool) (*TransferInfo, error) {
+func (b *S3Blob) Download(ctx context.Context, key, destPath string) (*TransferInfo, error) {
 	ctx, span := trace.Start(ctx, "S3Blob.Download")
 	defer span.End()
 
@@ -464,8 +464,6 @@ func (b *S3Blob) Download(ctx context.Context, key, destPath string, fallback bo
 		attribute.Int("concurrency", b.downloadConcurrency),
 	)
 
-	refreshObjectExpiry(ctx, b.client, b.bucketName, fullKey, fallback)
-
 	return &TransferInfo{
 		BytesTransferred: bytesWritten,
 		TransferSpeed:    averageSpeed,
@@ -476,13 +474,12 @@ func (b *S3Blob) Download(ctx context.Context, key, destPath string, fallback bo
 	}, nil
 }
 
-// refreshObjectExpiry extends an object's effective TTL by performing
-// CopyObject on itself to refresh its LastModified timestamp.
+// RefreshRetention extends an object's effective TTL by performing CopyObject
+// on itself to refresh its LastModified timestamp — S3 has no native
+// touch/extend-TTL API, and lifecycle expiration rules key off LastModified.
 //
-// Skipped on a fallback match — mirrors the backend's
-// `unless entry_result.fallback_used?` TTL-bump guard: a fallback hit means
-// the entry was saved under a shorter key sequence, and refreshing it would
-// reset the clock on a blob the caller didn't explicitly target.
+// Whether to call this at all (e.g. skipping it on a fallback match) is the
+// restore flow's decision, not this store's — see store.RetentionRefresher.
 //
 // The CopySourceIfUnmodifiedSince precondition aborts the operation with an
 // HTTP status code 412 if the object's LastModified timestamp falls within
@@ -490,11 +487,12 @@ func (b *S3Blob) Download(ctx context.Context, key, destPath string, fallback bo
 //
 // This refresh is best-effort only: any failure (incl. objects exceeding
 // S3's 5GB CopyObject limit) must not cause the overall restore operation to fail.
-func refreshObjectExpiry(ctx context.Context, copier objectCopier, bucket, fullKey string, fallback bool) {
-	if fallback {
-		return
-	}
+func (b *S3Blob) RefreshRetention(ctx context.Context, key string) {
+	fullKey := b.getFullKey(key)
+	refreshObjectExpiry(ctx, b.client, b.bucketName, fullKey)
+}
 
+func refreshObjectExpiry(ctx context.Context, copier objectCopier, bucket, fullKey string) {
 	copySource := fmt.Sprintf("%s/%s", bucket, fullKey)
 	_, err := copier.CopyObject(ctx, &s3.CopyObjectInput{
 		Bucket:                      aws.String(bucket),

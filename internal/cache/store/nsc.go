@@ -183,7 +183,7 @@ func (n *NscStore) Upload(ctx context.Context, filePath, key string) (*TransferI
 	}, nil
 }
 
-func (n *NscStore) Download(ctx context.Context, key, filePath string, fallback bool) (*TransferInfo, error) {
+func (n *NscStore) Download(ctx context.Context, key, filePath string) (*TransferInfo, error) {
 	_, span := trace.Start(ctx, "NscStore.Download")
 	defer span.End()
 
@@ -230,14 +230,6 @@ func (n *NscStore) Download(ctx context.Context, key, filePath string, fallback 
 		attribute.String("nsc_key", key),
 	)
 
-	// Refresh TTL on exact-match access to keep hot caches alive; cheap enough
-	// to run every time, unlike S3's gated CopyObject refresh. Skipped on
-	// fallback (mirrors the backend's TTL-bump guard) since the blob wasn't
-	// explicitly targeted.
-	if !fallback {
-		n.refreshExpiry(ctx, key)
-	}
-
 	return &TransferInfo{
 		BytesTransferred: bytesTransferred,
 		TransferSpeed:    averageSpeed,
@@ -246,14 +238,17 @@ func (n *NscStore) Download(ctx context.Context, key, filePath string, fallback 
 	}, nil
 }
 
-// refreshExpiry pushes the artifact's expiry out to at least nscDefaultExpiry
-// from now via `nsc artifact extend --ensure_minimum`. Using --ensure_minimum
-// (rather than the additive --by) makes the refresh idempotent, so calling it
-// on every restore keeps a hot cache alive without growing its expiry unbounded.
+// RefreshRetention pushes the artifact's expiry out to at least
+// nscDefaultExpiry from now via `nsc artifact extend --ensure_minimum`. Using
+// --ensure_minimum (rather than the additive --by) makes the refresh
+// idempotent, so calling it on every restore keeps a hot cache alive without
+// growing its expiry unbounded.
 //
 // This is best-effort: any failure is logged and swallowed so a restore never
-// fails because its TTL could not be refreshed.
-func (n *NscStore) refreshExpiry(ctx context.Context, key string) {
+// fails because its TTL could not be refreshed. Whether to call this at all
+// (e.g. skipping it on a fallback match) is the restore flow's decision, not
+// this store's — see store.RetentionRefresher.
+func (n *NscStore) RefreshRetention(ctx context.Context, key string) {
 	if !n.extendSupported(ctx) {
 		// `nsc artifact extend` is still being rolled out by Namespace. Update
 		// the nsc CLI as a contingency so the command becomes available.
