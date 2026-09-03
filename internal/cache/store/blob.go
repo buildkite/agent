@@ -20,6 +20,14 @@ type Blob interface {
 	Download(ctx context.Context, key, destPath string) (*TransferInfo, error)
 }
 
+// RetentionRefresher is implemented by Blob stores that support extending a
+// blob's effective retention/TTL on access (NscStore, S3Blob). Optional
+// because not every store has a retention concept to refresh (LocalFileBlob
+// does not implement it).
+type RetentionRefresher interface {
+	RefreshRetention(ctx context.Context, key string)
+}
+
 func NewBlobStore(ctx context.Context, store, bucketURL string) (Blob, error) {
 	switch store {
 	case AgentManaged:

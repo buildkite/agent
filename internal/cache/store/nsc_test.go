@@ -305,7 +305,11 @@ func recordingRunner(calls *[][]string, respond func(args []string) (*CommandRes
 	}
 }
 
-func TestNscStore_RefreshesTTLOnDownload(t *testing.T) {
+// TestNscStore_Download_DoesNotRefreshRetention guards against Download
+// reaching back into RefreshRetention itself — that decision belongs to the
+// restore flow (which knows about fallback), not this store. See
+// store.RetentionRefresher.
+func TestNscStore_Download_DoesNotRefreshRetention(t *testing.T) {
 	ctx := t.Context()
 	dest := filepath.Join(t.TempDir(), "out.txt")
 
@@ -315,6 +319,21 @@ func TestNscStore_RefreshesTTLOnDownload(t *testing.T) {
 	if _, err := store.Download(ctx, "key", dest); err != nil {
 		t.Fatalf("Download: %v", err)
 	}
+
+	for _, c := range calls {
+		if isCommand(c, "nsc", "artifact", "extend") {
+			t.Errorf("unexpected extend command from Download: %v", c)
+		}
+	}
+}
+
+func TestNscStore_RefreshRetention(t *testing.T) {
+	ctx := t.Context()
+
+	var calls [][]string
+	store := &NscStore{namespace: "my-namespace", run: recordingRunner(&calls, nil)}
+
+	store.RefreshRetention(ctx, "key")
 
 	wantExtend := []string{"nsc", "artifact", "extend", "key", "--ensure_minimum", "72h", "--namespace", "my-namespace"}
 	var gotExtend []string
@@ -328,9 +347,8 @@ func TestNscStore_RefreshesTTLOnDownload(t *testing.T) {
 	}
 }
 
-func TestNscStore_UpdatesCLIWhenExtendUnsupported(t *testing.T) {
+func TestNscStore_RefreshRetention_UpdatesCLIWhenExtendUnsupported(t *testing.T) {
 	ctx := t.Context()
-	dest := filepath.Join(t.TempDir(), "out.txt")
 
 	var calls [][]string
 	respond := func(args []string) (*CommandResult, error) {
@@ -342,9 +360,7 @@ func TestNscStore_UpdatesCLIWhenExtendUnsupported(t *testing.T) {
 	}
 	store := &NscStore{namespace: "ns", run: recordingRunner(&calls, respond)}
 
-	if _, err := store.Download(ctx, "key", dest); err != nil {
-		t.Fatalf("Download: %v", err)
-	}
+	store.RefreshRetention(ctx, "key")
 
 	var updated, extended bool
 	for _, c := range calls {
@@ -363,9 +379,8 @@ func TestNscStore_UpdatesCLIWhenExtendUnsupported(t *testing.T) {
 	}
 }
 
-func TestNscStore_UpdatesCLIWhenExtendHelpLacksEnsureMinimum(t *testing.T) {
+func TestNscStore_RefreshRetention_UpdatesCLIWhenExtendHelpLacksEnsureMinimum(t *testing.T) {
 	ctx := t.Context()
-	dest := filepath.Join(t.TempDir(), "out.txt")
 
 	var calls [][]string
 	respond := func(args []string) (*CommandResult, error) {
@@ -383,9 +398,7 @@ func TestNscStore_UpdatesCLIWhenExtendHelpLacksEnsureMinimum(t *testing.T) {
 	}
 	store := &NscStore{namespace: "ns", run: recordingRunner(&calls, respond)}
 
-	if _, err := store.Download(ctx, "key", dest); err != nil {
-		t.Fatalf("Download: %v", err)
-	}
+	store.RefreshRetention(ctx, "key")
 
 	var updated, extended bool
 	for _, c := range calls {
@@ -404,9 +417,11 @@ func TestNscStore_UpdatesCLIWhenExtendHelpLacksEnsureMinimum(t *testing.T) {
 	}
 }
 
-func TestNscStore_DownloadSucceedsWhenRefreshFails(t *testing.T) {
+// TestNscStore_RefreshRetention_SwallowsFailure guards the best-effort
+// contract: a failed refresh must not panic or otherwise propagate, since
+// RefreshRetention has no error return for a caller to check.
+func TestNscStore_RefreshRetention_SwallowsFailure(t *testing.T) {
 	ctx := t.Context()
-	dest := filepath.Join(t.TempDir(), "out.txt")
 
 	respond := func(args []string) (*CommandResult, error) {
 		if isCommand(args, "nsc", "artifact", "extend", "key") {
@@ -417,9 +432,7 @@ func TestNscStore_DownloadSucceedsWhenRefreshFails(t *testing.T) {
 	var calls [][]string
 	store := &NscStore{namespace: "ns", run: recordingRunner(&calls, respond)}
 
-	if _, err := store.Download(ctx, "key", dest); err != nil {
-		t.Fatalf("Download should succeed despite a failed TTL refresh: %v", err)
-	}
+	store.RefreshRetention(ctx, "key") // must not panic
 }
 
 func TestNewNscStore_RequiresNamespace(t *testing.T) {
