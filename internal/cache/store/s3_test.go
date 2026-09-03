@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
 	awshttp "github.com/aws/aws-sdk-go-v2/aws/transport/http"
 	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
@@ -581,4 +582,65 @@ func TestIsNotFound(t *testing.T) {
 			}
 		})
 	}
+}
+
+// fakeCopier is a test double for objectCopier, recording the input of every
+// CopyObject call and returning the configured result.
+type fakeCopier struct {
+	calls []*s3.CopyObjectInput
+	err   error
+}
+
+func (f *fakeCopier) CopyObject(_ context.Context, input *s3.CopyObjectInput, _ ...func(*s3.Options)) (*s3.CopyObjectOutput, error) {
+	f.calls = append(f.calls, input)
+	if f.err != nil {
+		return nil, f.err
+	}
+	return &s3.CopyObjectOutput{}, nil
+}
+
+func TestRefreshObjectExpiry(t *testing.T) {
+	t.Run("self-copies the object to refresh LastModified", func(t *testing.T) {
+		copier := &fakeCopier{}
+
+		refreshObjectExpiry(t.Context(), copier, "my-bucket", "prefix/key", false)
+
+		if len(copier.calls) != 1 {
+			t.Fatalf("CopyObject calls = %d, want 1", len(copier.calls))
+		}
+		got := copier.calls[0]
+		if aws.ToString(got.Bucket) != "my-bucket" || aws.ToString(got.Key) != "prefix/key" {
+			t.Errorf("CopyObjectInput bucket/key = %q/%q, want %q/%q", aws.ToString(got.Bucket), aws.ToString(got.Key), "my-bucket", "prefix/key")
+		}
+		if aws.ToString(got.CopySource) != "my-bucket/prefix/key" {
+			t.Errorf("CopySource = %q, want %q", aws.ToString(got.CopySource), "my-bucket/prefix/key")
+		}
+		if got.MetadataDirective != types.MetadataDirectiveReplace {
+			t.Errorf("MetadataDirective = %v, want REPLACE", got.MetadataDirective)
+		}
+	})
+
+	// Mirrors the backend's `unless entry_result.fallback_used?` TTL-bump
+	// guard: a fallback match must not refresh the blob's retention.
+	t.Run("skips the refresh on a fallback match", func(t *testing.T) {
+		copier := &fakeCopier{}
+
+		refreshObjectExpiry(t.Context(), copier, "my-bucket", "key", true)
+
+		if len(copier.calls) != 0 {
+			t.Errorf("CopyObject calls = %d, want 0 for a fallback match", len(copier.calls))
+		}
+	})
+
+	t.Run("swallows a precondition-failed error (recently refreshed)", func(t *testing.T) {
+		copier := &fakeCopier{err: responseErrorWithStatus(http.StatusPreconditionFailed)}
+
+		refreshObjectExpiry(t.Context(), copier, "my-bucket", "key", false) // must not panic
+	})
+
+	t.Run("swallows any other error (best-effort)", func(t *testing.T) {
+		copier := &fakeCopier{err: errors.New("boom")}
+
+		refreshObjectExpiry(t.Context(), copier, "my-bucket", "key", false) // must not panic
+	})
 }

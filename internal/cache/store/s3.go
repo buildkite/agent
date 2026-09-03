@@ -112,6 +112,12 @@ type objectDownloader interface {
 	Download(ctx context.Context, w io.WriterAt, input *s3.GetObjectInput, options ...func(*manager.Downloader)) (int64, error) //nolint:staticcheck // SA1019: pending migration to transfermanager
 }
 
+// objectCopier is the subset of *s3.Client used for the TTL-refresh self-copy,
+// declared so the refresh decision can be tested with a fake.
+type objectCopier interface {
+	CopyObject(ctx context.Context, input *s3.CopyObjectInput, opts ...func(*s3.Options)) (*s3.CopyObjectOutput, error)
+}
+
 // isPreconditionFailed returns true when an error is an S3 412 PreconditionFailed.
 // This happens when:
 //
@@ -172,7 +178,7 @@ func downloadWithRetry(ctx context.Context, r *roko.Retrier, d objectDownloader,
 
 // S3Blob implements the Blob interface using AWS S3
 type S3Blob struct {
-	client              *s3.Client
+	client              objectCopier
 	uploader            *manager.Uploader   //nolint:staticcheck // SA1019: pending migration to transfermanager
 	downloader          *manager.Downloader //nolint:staticcheck // SA1019: pending migration to transfermanager
 	bucketName          string
@@ -387,7 +393,7 @@ func (b *S3Blob) Upload(ctx context.Context, filePath, key string) (*TransferInf
 const restoreRefreshMinInterval = 12 * time.Hour
 
 // Download downloads a file from S3 using parallel range requests for large files
-func (b *S3Blob) Download(ctx context.Context, key, destPath string) (*TransferInfo, error) {
+func (b *S3Blob) Download(ctx context.Context, key, destPath string, fallback bool) (*TransferInfo, error) {
 	ctx, span := trace.Start(ctx, "S3Blob.Download")
 	defer span.End()
 
@@ -458,33 +464,7 @@ func (b *S3Blob) Download(ctx context.Context, key, destPath string) (*TransferI
 		attribute.Int("concurrency", b.downloadConcurrency),
 	)
 
-	// Extend an object's effective TTL by performing CopyObject on itself to
-	// refresh its LastModified timestamp.
-	//
-	// The CopySourceIfUnmodifiedSince precondition aborts the operation with an
-	// HTTP status code 412 if the object's LastModified timestamp falls within
-	// restoreRefreshMinInterval.
-	//
-	// This refresh is best-effort only: any failure (incl. objects exceeding
-	// S3's 5GB CopyObject limit) must not cause the overall restore operation to fail.
-	copySource := fmt.Sprintf("%s/%s", b.bucketName, fullKey)
-	_, err = b.client.CopyObject(ctx, &s3.CopyObjectInput{
-		Bucket:                      aws.String(b.bucketName),
-		Key:                         aws.String(fullKey),
-		CopySource:                  aws.String(copySource),
-		MetadataDirective:           "REPLACE",
-		CopySourceIfUnmodifiedSince: aws.Time(time.Now().Add(-restoreRefreshMinInterval)),
-	})
-	switch {
-	case err == nil:
-		slog.Debug("refreshed object expiration", "key", fullKey, "bucket", b.bucketName)
-	case isPreconditionFailed(err):
-		slog.Debug("skipping cache TTL refresh, blob modified recently",
-			"key", fullKey, "bucket", b.bucketName)
-	default:
-		slog.Warn("failed to refresh object expiration, continuing (non-fatal)",
-			"key", fullKey, "bucket", b.bucketName, "error", err)
-	}
+	refreshObjectExpiry(ctx, b.client, b.bucketName, fullKey, fallback)
 
 	return &TransferInfo{
 		BytesTransferred: bytesWritten,
@@ -494,6 +474,45 @@ func (b *S3Blob) Download(ctx context.Context, key, destPath string) (*TransferI
 		PartCount:        actualPartCount,
 		Concurrency:      b.downloadConcurrency,
 	}, nil
+}
+
+// refreshObjectExpiry extends an object's effective TTL by performing
+// CopyObject on itself to refresh its LastModified timestamp.
+//
+// Skipped on a fallback match — mirrors the backend's
+// `unless entry_result.fallback_used?` TTL-bump guard: a fallback hit means
+// the entry was saved under a shorter key sequence, and refreshing it would
+// reset the clock on a blob the caller didn't explicitly target.
+//
+// The CopySourceIfUnmodifiedSince precondition aborts the operation with an
+// HTTP status code 412 if the object's LastModified timestamp falls within
+// restoreRefreshMinInterval.
+//
+// This refresh is best-effort only: any failure (incl. objects exceeding
+// S3's 5GB CopyObject limit) must not cause the overall restore operation to fail.
+func refreshObjectExpiry(ctx context.Context, copier objectCopier, bucket, fullKey string, fallback bool) {
+	if fallback {
+		return
+	}
+
+	copySource := fmt.Sprintf("%s/%s", bucket, fullKey)
+	_, err := copier.CopyObject(ctx, &s3.CopyObjectInput{
+		Bucket:                      aws.String(bucket),
+		Key:                         aws.String(fullKey),
+		CopySource:                  aws.String(copySource),
+		MetadataDirective:           "REPLACE",
+		CopySourceIfUnmodifiedSince: aws.Time(time.Now().Add(-restoreRefreshMinInterval)),
+	})
+	switch {
+	case err == nil:
+		slog.Debug("refreshed object expiration", "key", fullKey, "bucket", bucket)
+	case isPreconditionFailed(err):
+		slog.Debug("skipping cache TTL refresh, blob modified recently",
+			"key", fullKey, "bucket", bucket)
+	default:
+		slog.Warn("failed to refresh object expiration, continuing (non-fatal)",
+			"key", fullKey, "bucket", bucket, "error", err)
+	}
 }
 
 // getFullKey combines the prefix with the key

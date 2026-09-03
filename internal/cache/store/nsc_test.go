@@ -312,7 +312,7 @@ func TestNscStore_RefreshesTTLOnDownload(t *testing.T) {
 	var calls [][]string
 	store := &NscStore{namespace: "my-namespace", run: recordingRunner(&calls, nil)}
 
-	if _, err := store.Download(ctx, "key", dest); err != nil {
+	if _, err := store.Download(ctx, "key", dest, false); err != nil {
 		t.Fatalf("Download: %v", err)
 	}
 
@@ -325,6 +325,27 @@ func TestNscStore_RefreshesTTLOnDownload(t *testing.T) {
 	}
 	if diff := cmp.Diff(wantExtend, gotExtend); diff != "" {
 		t.Errorf("extend args mismatch (-want +got):\n%s", diff)
+	}
+}
+
+// TestNscStore_SkipsRefreshOnFallbackDownload mirrors the backend's
+// `unless entry_result.fallback_used?` TTL-bump guard: a fallback match must
+// not refresh the blob's retention.
+func TestNscStore_SkipsRefreshOnFallbackDownload(t *testing.T) {
+	ctx := t.Context()
+	dest := filepath.Join(t.TempDir(), "out.txt")
+
+	var calls [][]string
+	store := &NscStore{namespace: "my-namespace", run: recordingRunner(&calls, nil)}
+
+	if _, err := store.Download(ctx, "key", dest, true); err != nil {
+		t.Fatalf("Download: %v", err)
+	}
+
+	for _, c := range calls {
+		if isCommand(c, "nsc", "artifact", "extend") {
+			t.Errorf("unexpected extend command on fallback download: %v", c)
+		}
 	}
 }
 
@@ -342,7 +363,7 @@ func TestNscStore_UpdatesCLIWhenExtendUnsupported(t *testing.T) {
 	}
 	store := &NscStore{namespace: "ns", run: recordingRunner(&calls, respond)}
 
-	if _, err := store.Download(ctx, "key", dest); err != nil {
+	if _, err := store.Download(ctx, "key", dest, false); err != nil {
 		t.Fatalf("Download: %v", err)
 	}
 
@@ -383,7 +404,7 @@ func TestNscStore_UpdatesCLIWhenExtendHelpLacksEnsureMinimum(t *testing.T) {
 	}
 	store := &NscStore{namespace: "ns", run: recordingRunner(&calls, respond)}
 
-	if _, err := store.Download(ctx, "key", dest); err != nil {
+	if _, err := store.Download(ctx, "key", dest, false); err != nil {
 		t.Fatalf("Download: %v", err)
 	}
 
@@ -417,7 +438,7 @@ func TestNscStore_DownloadSucceedsWhenRefreshFails(t *testing.T) {
 	var calls [][]string
 	store := &NscStore{namespace: "ns", run: recordingRunner(&calls, respond)}
 
-	if _, err := store.Download(ctx, "key", dest); err != nil {
+	if _, err := store.Download(ctx, "key", dest, false); err != nil {
 		t.Fatalf("Download should succeed despite a failed TTL refresh: %v", err)
 	}
 }
@@ -441,7 +462,7 @@ func TestNscStore_ValidationShortCircuits(t *testing.T) {
 	if _, err := store.Upload(ctx, "invalid;path", "valid-key"); err == nil {
 		t.Error("Upload with unsafe path: expected error, got nil")
 	}
-	if _, err := store.Download(ctx, "invalid key with spaces", "dest.txt"); err == nil {
+	if _, err := store.Download(ctx, "invalid key with spaces", "dest.txt", false); err == nil {
 		t.Error("Download with unsafe key: expected error, got nil")
 	}
 	if ran {
@@ -513,7 +534,7 @@ func TestNscStore_Integration(t *testing.T) {
 
 	// Test download
 	downloadFile := filepath.Join(tmpDir, "test-download.txt")
-	transferInfo, err = store.Download(ctx, key, downloadFile)
+	transferInfo, err = store.Download(ctx, key, downloadFile, false)
 	if err != nil {
 		t.Fatalf("Download should succeed: %v", err)
 	}
@@ -546,7 +567,7 @@ func TestNscStore_DownloadNotFound(t *testing.T) {
 		store := &NscStore{namespace: "ns", run: func(context.Context, string, ...string) (*CommandResult, error) {
 			return &CommandResult{ExitCode: 1, Stderr: "Error: artifact not found"}, nil
 		}}
-		_, err := store.Download(ctx, "valid-key", dest)
+		_, err := store.Download(ctx, "valid-key", dest, false)
 		if !errors.Is(err, ErrBlobNotFound) {
 			t.Fatalf("Download err = %v, want ErrBlobNotFound", err)
 		}
@@ -559,7 +580,7 @@ func TestNscStore_DownloadNotFound(t *testing.T) {
 				Stderr:   "Failed: the artifact has expired at 2026-07-14T02:06:24Z (request id: cbdorlqepas5e10ldvfvdpog40).",
 			}, nil
 		}}
-		_, err := store.Download(ctx, "valid-key", dest)
+		_, err := store.Download(ctx, "valid-key", dest, false)
 		if !errors.Is(err, ErrBlobNotFound) {
 			t.Fatalf("Download err = %v, want ErrBlobNotFound", err)
 		}
@@ -569,7 +590,7 @@ func TestNscStore_DownloadNotFound(t *testing.T) {
 		store := &NscStore{namespace: "ns", run: func(context.Context, string, ...string) (*CommandResult, error) {
 			return &CommandResult{ExitCode: 1, Stderr: "connection refused"}, nil
 		}}
-		_, err := store.Download(ctx, "valid-key", dest)
+		_, err := store.Download(ctx, "valid-key", dest, false)
 		if err == nil {
 			t.Fatal("Download: expected error, got nil")
 		}

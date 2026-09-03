@@ -16,8 +16,9 @@ type Blob interface {
 	// Upload uploads a file to blob storage
 	Upload(ctx context.Context, filePath, key string) (*TransferInfo, error)
 
-	// Download downloads a file from blob storage
-	Download(ctx context.Context, key, destPath string) (*TransferInfo, error)
+	// Download downloads a file from blob storage. fallback reports whether the
+	// restore that resolved this key was a fallback match or an exact  one.
+	Download(ctx context.Context, key, destPath string, fallback bool) (*TransferInfo, error)
 }
 
 func NewBlobStore(ctx context.Context, store, bucketURL string) (Blob, error) {

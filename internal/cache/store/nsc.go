@@ -183,7 +183,7 @@ func (n *NscStore) Upload(ctx context.Context, filePath, key string) (*TransferI
 	}, nil
 }
 
-func (n *NscStore) Download(ctx context.Context, key, filePath string) (*TransferInfo, error) {
+func (n *NscStore) Download(ctx context.Context, key, filePath string, fallback bool) (*TransferInfo, error) {
 	_, span := trace.Start(ctx, "NscStore.Download")
 	defer span.End()
 
@@ -230,11 +230,13 @@ func (n *NscStore) Download(ctx context.Context, key, filePath string) (*Transfe
 		attribute.String("nsc_key", key),
 	)
 
-	// Refresh the artifact's TTL on access so hot caches stay alive, mirroring
-	// the S3 store's self-CopyObject refresh. Unlike CopyObject this is cheap,
-	// so we refresh on every restore rather than gating it behind a minimum
-	// interval.
-	n.refreshExpiry(ctx, key)
+	// Refresh TTL on exact-match access to keep hot caches alive; cheap enough
+	// to run every time, unlike S3's gated CopyObject refresh. Skipped on
+	// fallback (mirrors the backend's TTL-bump guard) since the blob wasn't
+	// explicitly targeted.
+	if !fallback {
+		n.refreshExpiry(ctx, key)
+	}
 
 	return &TransferInfo{
 		BytesTransferred: bytesTransferred,
