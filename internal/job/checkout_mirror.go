@@ -88,9 +88,9 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string, attem
 		}
 	}
 
-	if err := e.shell.Chdir(e.GitMirrorsPath); err != nil {
-		return "", fmt.Errorf("failed to change directory to %q: %w", e.GitMirrorsPath, err)
-	}
+	// Every git command below addresses the mirror by absolute path (--git-dir
+	// or an absolute clone destination), so the shell's working directory is
+	// left alone: it stays in the checkout dir for the rest of the checkout.
 
 	lockTimeout := time.Second * time.Duration(e.GitMirrorsLockTimeout)
 

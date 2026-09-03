@@ -216,10 +216,29 @@ func (h *checkoutHarness) newExecutor(cfg ExecutorConfig) *Executor {
 }
 
 // checkout runs the whole checkout phase and fails the test on error.
+//
+// Whatever else a checkout does, the rest of the job depends on it leaving the
+// shell inside BUILDKITE_BUILD_CHECKOUT_PATH with the checkout root open there,
+// so that is asserted after every successful phase.
 func (h *checkoutHarness) checkout(e *Executor) {
 	h.t.Helper()
 	if err := e.CheckoutPhase(h.t.Context()); err != nil {
 		h.t.Fatalf("CheckoutPhase() error = %v, want nil", err)
+	}
+	h.assertShellInCheckout(e)
+}
+
+func (h *checkoutHarness) assertShellInCheckout(e *Executor) {
+	h.t.Helper()
+	want := e.checkoutPath()
+	if got := e.shell.Getwd(); got != want {
+		h.t.Errorf("shell working directory = %q, want checkout path %q", got, want)
+	}
+	if e.checkoutRoot == nil {
+		h.t.Fatal("checkoutRoot = nil, want it open on the checkout path")
+	}
+	if got := e.checkoutRoot.Name(); got != want {
+		h.t.Errorf("checkoutRoot.Name() = %q, want checkout path %q", got, want)
 	}
 }
 
@@ -383,9 +402,29 @@ func TestCheckoutBehaviour_EmptyRepositoryUsesTempDir(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(got, ".git")); !errors.Is(err, os.ErrNotExist) {
 		t.Errorf(".git in temp checkout: err = %v, want not exist (no repository to clone)", err)
 	}
-	if e.shell.Getwd() != got {
-		t.Errorf("shell working directory = %q, want %q", e.shell.Getwd(), got)
-	}
+}
+
+// --- Skipping the checkout ------------------------------------------------
+
+func TestCheckoutBehaviour_SkipCheckout(t *testing.T) {
+	h := newCheckoutHarness(t)
+	commit := h.pushBranch("feature")
+
+	t.Run("no checkout yet", func(t *testing.T) {
+		// The checkout dir is still created and entered so hooks and commands
+		// have somewhere to run, but nothing is cloned.
+		h.checkout(h.newExecutor(ExecutorConfig{Commit: commit, Branch: "feature", SkipCheckout: true}))
+		h.assertFileExists(".git", false)
+	})
+
+	t.Run("existing checkout is left untouched", func(t *testing.T) {
+		h.checkout(h.newExecutor(ExecutorConfig{Commit: commit, Branch: "feature"}))
+		h.writeFile("scratch.txt", "left over from a previous job")
+
+		h.checkout(h.newExecutor(ExecutorConfig{Commit: "0000000000000000000000000000000000000000", Branch: "other", SkipCheckout: true}))
+		h.assertHead(commit)
+		h.assertFileExists("scratch.txt", true)
+	})
 }
 
 // --- Re-using an existing checkout ----------------------------------------
@@ -638,6 +677,32 @@ func TestCheckoutBehaviour_Submodules(t *testing.T) {
 		h.assertHead(commit)
 		h.assertFileExists("vendor/library", true)
 		h.assertFileExists("vendor/library/README.md", false)
+	})
+
+	t.Run("submodules are mirrored alongside the main repository", func(t *testing.T) {
+		if err := os.RemoveAll(h.checkoutDir); err != nil {
+			t.Fatal(err)
+		}
+		mirrorsPath := t.TempDir()
+		h.checkout(h.newExecutor(ExecutorConfig{
+			Commit: commit, Branch: "with-submodule", GitSubmodules: true,
+			GitMirrorsPath: mirrorsPath, GitMirrorCheckoutMode: "reference",
+		}))
+		h.assertHead(commit)
+		h.assertFileExists("vendor/library/README.md", true)
+		h.assertCleanWorkingTree()
+
+		subMirror := filepath.Join(mirrorsPath, dirForRepository(h.server.RepoURL(subName)))
+		if got := gitOutput(t, subMirror, "rev-parse", "--is-bare-repository"); got != "true" {
+			t.Errorf("submodule mirror at %s is not a bare repository", subMirror)
+		}
+		alternates, err := os.ReadFile(filepath.Join(h.checkoutDir, ".git", "modules", "vendor", "library", "objects", "info", "alternates"))
+		if err != nil {
+			t.Fatalf("reference-mode submodule has no alternates file: %v", err)
+		}
+		if !strings.Contains(string(alternates), filepath.Join(subMirror, "objects")) {
+			t.Errorf("submodule alternates = %q, want reference to %s", alternates, subMirror)
+		}
 	})
 }
 
