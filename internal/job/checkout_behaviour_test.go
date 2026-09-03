@@ -696,6 +696,21 @@ func TestCheckoutBehaviour_OnHostMirror(t *testing.T) {
 			t.Errorf("mirror was not updated with the new commit")
 		}
 	})
+
+	t.Run("mirror is updated for a HEAD build", func(t *testing.T) {
+		// Without a known commit there is nothing to look for in the existing
+		// mirror, so it must be brought up to date with the branch tip.
+		tip := h.pushBranch("feature-v3")
+		e := h.newExecutor(ExecutorConfig{
+			Commit: "HEAD", Branch: "feature-v3", GitMirrorsPath: mirrorsPath, GitMirrorCheckoutMode: "dissociate",
+		})
+		h.checkout(e)
+
+		h.assertHead(tip)
+		if got := gitOutput(t, mirrorDir, "rev-parse", "refs/heads/feature-v3"); got != tip {
+			t.Errorf("mirror refs/heads/feature-v3 = %s, want branch tip %s", got, tip)
+		}
+	})
 }
 
 // --- Sparse checkout ---------------------------------------------------------

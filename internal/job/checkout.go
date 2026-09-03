@@ -467,17 +467,12 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context, previousAttempts in
 		return err
 	}
 
-	gitCheckoutFlags := e.GitCheckoutFlags
-
+	// Check out the known commit, or FETCH_HEAD when the commit had to be
+	// resolved by the fetch above.
+	checkoutRef := e.checkoutTarget().checkoutRef()
 	if err := e.traceOp(ctx, "git.checkout", func(ctx context.Context) error {
-		if e.Commit == "HEAD" {
-			if err := gitCheckout(ctx, e.shell, gitCheckoutFlags, "FETCH_HEAD"); err != nil {
-				return fmt.Errorf("checking out FETCH_HEAD: %w", err)
-			}
-		} else {
-			if err := gitCheckout(ctx, e.shell, gitCheckoutFlags, e.Commit); err != nil {
-				return fmt.Errorf("checking out commit %q: %w", e.Commit, err)
-			}
+		if err := gitCheckout(ctx, e.shell, e.GitCheckoutFlags, checkoutRef); err != nil {
+			return fmt.Errorf("checking out %q: %w", checkoutRef, err)
 		}
 		return nil
 	}); err != nil {
