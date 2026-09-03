@@ -24,24 +24,21 @@ steps:
       - .buildkite/docker-compose.yml
     plugins:
       - &assume_cache_role
-        aws-assume-role-with-web-identity#v1.4.0:
-          role_arn: "arn:aws:iam::445615400570:role/pipeline-buildkite-agent"
+        aws-assume-role-with-web-identity#v1.7.0:
+          role-arn: "arn:aws:iam::445615400570:role/pipeline-buildkite-agent"
           session-tags:
             - organization_slug
             - organization_id
             - pipeline_slug
-      - docker-compose#v4.14.0:
+      - docker-compose#v5.13.0:
           config: .buildkite/docker-compose.yml
-          cli-version: 2
           mount-buildkite-agent: true
+          propagate-aws-auth-tokens: true
           run: lint
           env:
             - BUILDKITE_AGENT_ACCESS_TOKEN
             - BUILDKITE_AGENT_CACHE_REGISTRY
             - BUILDKITE_AGENT_CACHE_STORE_URL
-            - AWS_ACCESS_KEY_ID
-            - AWS_SECRET_ACCESS_KEY
-            - AWS_SESSION_TOKEN
 
   - name: ":go::robot_face: Check protobuf generation"
     key: check-protobuf-generation
@@ -58,18 +55,15 @@ steps:
       - .buildkite/docker-compose.yml
     plugins:
       - *assume_cache_role
-      - docker-compose#v4.14.0:
+      - docker-compose#v5.13.0:
           config: .buildkite/docker-compose.yml
-          cli-version: 2
           mount-buildkite-agent: true
+          propagate-aws-auth-tokens: true
           run: lint
           env:
             - BUILDKITE_AGENT_ACCESS_TOKEN
             - BUILDKITE_AGENT_CACHE_REGISTRY
             - BUILDKITE_AGENT_CACHE_STORE_URL
-            - AWS_ACCESS_KEY_ID
-            - AWS_SECRET_ACCESS_KEY
-            - AWS_SESSION_TOKEN
             - GOBIN
             - GOCACHE
             - GOMODCACHE
@@ -96,9 +90,8 @@ steps:
       BUILDKITE_TEST_ENGINE_MAX_PARALLELISM: "2"
       BUILDKITE_TEST_ENGINE_TARGET_TIME: "1m"
     plugins:
-      - docker-compose#v4.14.0:
+      - docker-compose#v5.13.0:
           config: .buildkite/docker-compose.yml
-          cli-version: 2
           propagate-environment: true
           # Mount the agent binary so the step can stash the xgboost plan
           # identifier via `buildkite-agent meta-data set`. See TE-6071.
@@ -128,24 +121,17 @@ steps:
               test-runner: gotest
               result-path: junit.xml
               install-client: false
-              upload-results: true
               oidc-lifetime: 7200
               tags:
                 - "os=linux"
                 - "arch=amd64"
                 - "race=false"
-          - docker-compose#v4.14.0:
+          - docker-compose#v5.13.0:
               config: .buildkite/docker-compose.yml
-              cli-version: 2
               propagate-environment: true
+              propagate-aws-auth-tokens: true
               mount-buildkite-agent: true
               run: agent
-              env:
-                - BUILDKITE_AGENT_CACHE_REGISTRY
-                - BUILDKITE_AGENT_CACHE_STORE_URL
-                - AWS_ACCESS_KEY_ID
-                - AWS_SECRET_ACCESS_KEY
-                - AWS_SESSION_TOKEN
 
       - name: ":linux: Linux ARM64 Tests"
         key: test-linux-arm64
@@ -163,24 +149,17 @@ steps:
               test-runner: gotest
               result-path: junit.xml
               install-client: false
-              upload-results: true
               oidc-lifetime: 7200
               tags:
                 - "os=linux"
                 - "arch=arm64"
                 - "race=false"
-          - docker-compose#v4.14.0:
+          - docker-compose#v5.13.0:
               config: .buildkite/docker-compose.yml
-              cli-version: 2
               propagate-environment: true
+              propagate-aws-auth-tokens: true
               mount-buildkite-agent: true
               run: agent
-              env:
-                - BUILDKITE_AGENT_CACHE_REGISTRY
-                - BUILDKITE_AGENT_CACHE_STORE_URL
-                - AWS_ACCESS_KEY_ID
-                - AWS_SECRET_ACCESS_KEY
-                - AWS_SESSION_TOKEN
 
       - name: ":windows: Windows AMD64 Tests"
         key: test-windows
@@ -202,7 +181,6 @@ steps:
               test-runner: gotest
               result-path: junit.xml
               install-client: false
-              upload-results: true
               oidc-lifetime: 7200
               tags:
                 - "os=windows"
@@ -226,24 +204,17 @@ steps:
               test-runner: gotest
               result-path: junit.xml
               install-client: false
-              upload-results: true
               oidc-lifetime: 7200
               tags:
                 - "os=linux"
                 - "arch=arm64"
                 - "race=true"
-          - docker-compose#v4.14.0:
+          - docker-compose#v5.13.0:
               config: .buildkite/docker-compose.yml
-              cli-version: 2
               propagate-environment: true
+              propagate-aws-auth-tokens: true
               mount-buildkite-agent: true
               run: agent
-              env:
-                - BUILDKITE_AGENT_CACHE_REGISTRY
-                - BUILDKITE_AGENT_CACHE_STORE_URL
-                - AWS_ACCESS_KEY_ID
-                - AWS_SECRET_ACCESS_KEY
-                - AWS_SESSION_TOKEN
 
       - name: ":coverage: Test coverage report Linux ARM64"
         key: test-coverage-linux-arm64
@@ -254,9 +225,8 @@ steps:
         depends_on:
           - test-linux-arm64
         plugins:
-          - docker-compose#v4.14.0:
+          - docker-compose#v5.13.0:
               config: .buildkite/docker-compose.yml
-              cli-version: 2
               run: agent
           - artifacts#v1.9.4:
               download: "coverage-linux-arm64/**"
@@ -270,9 +240,8 @@ steps:
         depends_on:
           - test-linux-amd64
         plugins:
-          - docker-compose#v4.14.0:
+          - docker-compose#v5.13.0:
               config: .buildkite/docker-compose.yml
-              cli-version: 2
               run: agent
           - artifacts#v1.9.4:
               download: "coverage-linux-amd64/**"
@@ -286,9 +255,8 @@ steps:
         depends_on:
           - test-race-linux-arm64
         plugins:
-          - docker-compose#v4.14.0:
+          - docker-compose#v5.13.0:
               config: .buildkite/docker-compose.yml
-              cli-version: 2
               run: agent
           - artifacts#v1.9.4:
               download: "coverage-linux-arm64-race/**"
@@ -301,7 +269,7 @@ steps:
           - test-windows
         allow_dependency_failure: true
         plugins:
-          - junit-annotate#v1.6.0:
+          - junit-annotate#v2.7.0:
               artifacts: junit-*.xml
 
   # --- end Tests and Coverage ---
@@ -318,17 +286,14 @@ steps:
         artifact_paths: "pkg/*"
         plugins:
           - *assume_cache_role
-          - docker-compose#v4.14.0:
+          - docker-compose#v5.13.0:
               config: .buildkite/docker-compose.yml
-              cli-version: 2
               mount-buildkite-agent: true
+              propagate-aws-auth-tokens: true
               run: agent
               env:
                 - BUILDKITE_AGENT_CACHE_REGISTRY
                 - BUILDKITE_AGENT_CACHE_STORE_URL
-                - AWS_ACCESS_KEY_ID
-                - AWS_SECRET_ACCESS_KEY
-                - AWS_SESSION_TOKEN
           - generate-provenance-attestation#v1.1.0:
               artifacts: "pkg/*"
               attestation_name: "buildkite-agent-{{matrix.os}}-{{matrix.arch}}.build-attestation.json"
@@ -393,15 +358,14 @@ steps:
       - name: ":docker: {{matrix}} image build"
         key: build-docker
         plugins:
-          - aws-assume-role-with-web-identity#v1.4.0:
-              role_arn: "arn:aws:iam::${BUILD_AWS_ACCOUNT_ID}:role/${BUILD_AWS_ROLE_NAME}"
+          - aws-assume-role-with-web-identity#v1.7.0:
+              role-arn: "arn:aws:iam::${BUILD_AWS_ACCOUNT_ID}:role/${BUILD_AWS_ROLE_NAME}"
               session-tags:
                 - organization_slug
                 - organization_id
                 - pipeline_slug
-          - ecr#v2.9.0:
-              login: true
-              account_ids: "${BUILD_AWS_ACCOUNT_ID}"
+          - ecr#v2.12.0:
+              account-ids: "${BUILD_AWS_ACCOUNT_ID}"
               region: "us-east-1"
         agents:
           queue: $AGENT_BUILDERS_QUEUE
@@ -429,15 +393,14 @@ steps:
           - build-docker
         command: .buildkite/steps/test-docker-image.sh {{matrix.variant}}
         plugins:
-          - aws-assume-role-with-web-identity#v1.4.0:
-              role_arn: "arn:aws:iam::${BUILD_AWS_ACCOUNT_ID}:role/${BUILD_AWS_ROLE_NAME}"
+          - aws-assume-role-with-web-identity#v1.7.0:
+              role-arn: "arn:aws:iam::${BUILD_AWS_ACCOUNT_ID}:role/${BUILD_AWS_ROLE_NAME}"
               session-tags:
                 - organization_slug
                 - organization_id
                 - pipeline_slug
-          - ecr#v2.9.0:
-              login: true
-              account_ids: "${BUILD_AWS_ACCOUNT_ID}"
+          - ecr#v2.12.0:
+              account-ids: "${BUILD_AWS_ACCOUNT_ID}"
               region: "us-east-1"
         matrix:
           setup:
@@ -452,15 +415,14 @@ steps:
 
       - name: ":docker: {{matrix.variant}} arm64 image test"
         plugins:
-          - aws-assume-role-with-web-identity#v1.4.0:
-              role_arn: "arn:aws:iam::${BUILD_AWS_ACCOUNT_ID}:role/${BUILD_AWS_ROLE_NAME}"
+          - aws-assume-role-with-web-identity#v1.7.0:
+              role-arn: "arn:aws:iam::${BUILD_AWS_ACCOUNT_ID}:role/${BUILD_AWS_ROLE_NAME}"
               session-tags:
                 - organization_slug
                 - organization_id
                 - pipeline_slug
-          - ecr#v2.9.0:
-              login: true
-              account_ids: "${BUILD_AWS_ACCOUNT_ID}"
+          - ecr#v2.12.0:
+              account-ids: "${BUILD_AWS_ACCOUNT_ID}"
               region: "us-east-1"
         key: test-docker-arm64
         agents:
@@ -505,7 +467,7 @@ steps:
     command: ".buildkite/steps/build-github-release.sh"
     artifact_paths: "releases/**/*"
     plugins:
-      - docker-compose#v4.14.0:
+      - docker-compose#v5.13.0:
           config: .buildkite/docker-compose.release.yml
           run: github-release
       - generate-provenance-attestation#v1.1.0:
