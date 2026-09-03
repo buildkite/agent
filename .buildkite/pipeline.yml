@@ -11,6 +11,72 @@ env:
 agents:
   queue: "$AGENT_RUNNERS_LINUX_QUEUE"
 
+common:
+  - assume-cache-role: &assume_cache_role
+      aws-assume-role-with-web-identity#v1.7.0:
+        role-arn: "arn:aws:iam::445615400570:role/pipeline-buildkite-agent"
+        session-tags:
+          - organization_slug
+          - organization_id
+          - pipeline_slug
+
+  - test-artifacts: &test_artifacts
+      - junit-*.xml
+      - "coverage-*/**"
+
+  - tests-plugin: &tests_plugin
+      suite-slug: buildkite-agent
+      test-runner: gotest
+      result-path: junit.xml
+      install-client: false
+      oidc-lifetime: 7200
+
+  - test-container: &test_container
+      docker-compose#v5.13.0:
+        config: .buildkite/docker-compose.yml
+        propagate-environment: true
+        propagate-aws-auth-tokens: true
+        mount-buildkite-agent: true
+        run: agent
+
+  - coverage-artifacts: &coverage_artifacts
+      - "cover.html"
+      - "cover.out"
+
+  - coverage-container: &coverage_container
+      docker-compose#v5.13.0:
+        config: .buildkite/docker-compose.yml
+        run: agent
+
+  - docker-variants: &docker_variants
+      - "alpine"
+      - "alpine-k8s"
+      - "ubuntu-20.04"
+      - "ubuntu-22.04"
+      - "ubuntu-24.04"
+      - "ubuntu-26.04"
+      - "sidecar"
+
+  - builder-plugins: &builder_plugins
+      - aws-assume-role-with-web-identity#v1.7.0:
+          role-arn: "arn:aws:iam::${BUILD_AWS_ACCOUNT_ID}:role/${BUILD_AWS_ROLE_NAME}"
+          session-tags:
+            - organization_slug
+            - organization_id
+            - pipeline_slug
+      - ecr#v2.12.0:
+          account-ids: "${BUILD_AWS_ACCOUNT_ID}"
+          region: "us-east-1"
+
+  - docker-image-test: &docker_image_test
+      depends_on:
+        - build-docker
+      command: .buildkite/steps/test-docker-image.sh {{matrix.variant}}
+      plugins: *builder_plugins
+      matrix:
+        setup:
+          variant: *docker_variants
+
 steps:
   - name: ":go::robot_face: Lint"
     key: check-code-committed
@@ -23,13 +89,7 @@ steps:
       - .buildkite/cache.yml
       - .buildkite/docker-compose.yml
     plugins:
-      - &assume_cache_role
-        aws-assume-role-with-web-identity#v1.7.0:
-          role-arn: "arn:aws:iam::445615400570:role/pipeline-buildkite-agent"
-          session-tags:
-            - organization_slug
-            - organization_id
-            - pipeline_slug
+      - *assume_cache_role
       - docker-compose#v5.13.0:
           config: .buildkite/docker-compose.yml
           mount-buildkite-agent: true
@@ -111,55 +171,33 @@ steps:
         key: test-linux-amd64
         command: ".buildkite/steps/tests.sh"
         parallelism: 2
-        artifact_paths:
-          - junit-*.xml
-          - "coverage-*/**"
+        artifact_paths: *test_artifacts
         plugins:
           - *assume_cache_role
           - tests#v1.0.0:
-              suite-slug: buildkite-agent
-              test-runner: gotest
-              result-path: junit.xml
-              install-client: false
-              oidc-lifetime: 7200
+              <<: *tests_plugin
               tags:
                 - "os=linux"
                 - "arch=amd64"
                 - "race=false"
-          - docker-compose#v5.13.0:
-              config: .buildkite/docker-compose.yml
-              propagate-environment: true
-              propagate-aws-auth-tokens: true
-              mount-buildkite-agent: true
-              run: agent
+          - *test_container
 
       - name: ":linux: Linux ARM64 Tests"
         key: test-linux-arm64
         command: ".buildkite/steps/tests.sh"
         parallelism: 2
-        artifact_paths:
-          - junit-*.xml
-          - "coverage-*/**"
+        artifact_paths: *test_artifacts
         agents:
           queue: $AGENT_RUNNERS_LINUX_ARM64_QUEUE
         plugins:
           - *assume_cache_role
           - tests#v1.0.0:
-              suite-slug: buildkite-agent
-              test-runner: gotest
-              result-path: junit.xml
-              install-client: false
-              oidc-lifetime: 7200
+              <<: *tests_plugin
               tags:
                 - "os=linux"
                 - "arch=arm64"
                 - "race=false"
-          - docker-compose#v5.13.0:
-              config: .buildkite/docker-compose.yml
-              propagate-environment: true
-              propagate-aws-auth-tokens: true
-              mount-buildkite-agent: true
-              run: agent
+          - *test_container
 
       - name: ":windows: Windows AMD64 Tests"
         key: test-windows
@@ -169,19 +207,13 @@ steps:
           automatic:
             - exit_status: 1
               limit: 3
-        artifact_paths:
-          - junit-*.xml
-          - "coverage-*/**"
+        artifact_paths: *test_artifacts
         agents:
           queue: $AGENT_RUNNERS_WINDOWS_QUEUE
         plugins:
           - *assume_cache_role
           - tests#v1.0.0:
-              suite-slug: buildkite-agent
-              test-runner: gotest
-              result-path: junit.xml
-              install-client: false
-              oidc-lifetime: 7200
+              <<: *tests_plugin
               tags:
                 - "os=windows"
                 - "arch=amd64"
@@ -192,72 +224,49 @@ steps:
         command: ".buildkite/steps/tests.sh -race"
         # Extra parallelism because this data race test is slow
         parallelism: 3
-        artifact_paths:
-          - junit-*.xml
-          - "coverage-*/**"
+        artifact_paths: *test_artifacts
         agents:
           queue: $AGENT_RUNNERS_LINUX_ARM64_QUEUE
         plugins:
           - *assume_cache_role
           - tests#v1.0.0:
-              suite-slug: buildkite-agent
-              test-runner: gotest
-              result-path: junit.xml
-              install-client: false
-              oidc-lifetime: 7200
+              <<: *tests_plugin
               tags:
                 - "os=linux"
                 - "arch=arm64"
                 - "race=true"
-          - docker-compose#v5.13.0:
-              config: .buildkite/docker-compose.yml
-              propagate-environment: true
-              propagate-aws-auth-tokens: true
-              mount-buildkite-agent: true
-              run: agent
+          - *test_container
 
       - name: ":coverage: Test coverage report Linux ARM64"
         key: test-coverage-linux-arm64
         command: ".buildkite/steps/test-coverage-report.sh coverage-linux-arm64"
-        artifact_paths:
-          - "cover.html"
-          - "cover.out"
+        artifact_paths: *coverage_artifacts
         depends_on:
           - test-linux-arm64
         plugins:
-          - docker-compose#v5.13.0:
-              config: .buildkite/docker-compose.yml
-              run: agent
+          - *coverage_container
           - artifacts#v1.9.4:
               download: "coverage-linux-arm64/**"
 
       - name: ":coverage: Test coverage report Linux AMD64"
         key: test-coverage-linux-amd64
         command: ".buildkite/steps/test-coverage-report.sh coverage-linux-amd64"
-        artifact_paths:
-          - "cover.html"
-          - "cover.out"
+        artifact_paths: *coverage_artifacts
         depends_on:
           - test-linux-amd64
         plugins:
-          - docker-compose#v5.13.0:
-              config: .buildkite/docker-compose.yml
-              run: agent
+          - *coverage_container
           - artifacts#v1.9.4:
               download: "coverage-linux-amd64/**"
 
       - name: ":coverage: Test coverage report Linux ARM64 Race"
         key: test-coverage-linux-arm64-race
         command: ".buildkite/steps/test-coverage-report.sh coverage-linux-arm64-race"
-        artifact_paths:
-          - "cover.html"
-          - "cover.out"
+        artifact_paths: *coverage_artifacts
         depends_on:
           - test-race-linux-arm64
         plugins:
-          - docker-compose#v5.13.0:
-              config: .buildkite/docker-compose.yml
-              run: agent
+          - *coverage_container
           - artifacts#v1.9.4:
               download: "coverage-linux-arm64-race/**"
 
@@ -357,16 +366,7 @@ steps:
     steps:
       - name: ":docker: {{matrix}} image build"
         key: build-docker
-        plugins:
-          - aws-assume-role-with-web-identity#v1.7.0:
-              role-arn: "arn:aws:iam::${BUILD_AWS_ACCOUNT_ID}:role/${BUILD_AWS_ROLE_NAME}"
-              session-tags:
-                - organization_slug
-                - organization_id
-                - pipeline_slug
-          - ecr#v2.12.0:
-              account-ids: "${BUILD_AWS_ACCOUNT_ID}"
-              region: "us-east-1"
+        plugins: *builder_plugins
         agents:
           queue: $AGENT_BUILDERS_QUEUE
         depends_on:
@@ -374,72 +374,21 @@ steps:
           - set-metadata
         command: ".buildkite/steps/build-docker-image.sh {{matrix}}"
         matrix:
-          setup:
-            - "alpine"
-            - "alpine-k8s"
-            - "ubuntu-20.04"
-            - "ubuntu-22.04"
-            - "ubuntu-24.04"
-            - "ubuntu-26.04"
-            - "sidecar"
+          setup: *docker_variants
 
   - group: ":docker: Docker Image Tests"
     steps:
-      - name: ":docker: {{matrix.variant}} amd64 image test"
+      - <<: *docker_image_test
+        name: ":docker: {{matrix.variant}} amd64 image test"
         key: test-docker-amd64
         agents:
           queue: $AGENT_BUILDERS_QUEUE
-        depends_on:
-          - build-docker
-        command: .buildkite/steps/test-docker-image.sh {{matrix.variant}}
-        plugins:
-          - aws-assume-role-with-web-identity#v1.7.0:
-              role-arn: "arn:aws:iam::${BUILD_AWS_ACCOUNT_ID}:role/${BUILD_AWS_ROLE_NAME}"
-              session-tags:
-                - organization_slug
-                - organization_id
-                - pipeline_slug
-          - ecr#v2.12.0:
-              account-ids: "${BUILD_AWS_ACCOUNT_ID}"
-              region: "us-east-1"
-        matrix:
-          setup:
-            variant:
-              - alpine
-              - alpine-k8s
-              - ubuntu-20.04
-              - ubuntu-22.04
-              - ubuntu-24.04
-              - ubuntu-26.04
-              - sidecar
 
-      - name: ":docker: {{matrix.variant}} arm64 image test"
-        plugins:
-          - aws-assume-role-with-web-identity#v1.7.0:
-              role-arn: "arn:aws:iam::${BUILD_AWS_ACCOUNT_ID}:role/${BUILD_AWS_ROLE_NAME}"
-              session-tags:
-                - organization_slug
-                - organization_id
-                - pipeline_slug
-          - ecr#v2.12.0:
-              account-ids: "${BUILD_AWS_ACCOUNT_ID}"
-              region: "us-east-1"
+      - <<: *docker_image_test
+        name: ":docker: {{matrix.variant}} arm64 image test"
         key: test-docker-arm64
         agents:
           queue: $AGENT_BUILDERS_ARM64_QUEUE
-        depends_on:
-          - build-docker
-        command: .buildkite/steps/test-docker-image.sh {{matrix.variant}}
-        matrix:
-          setup:
-            variant:
-              - alpine
-              - alpine-k8s
-              - ubuntu-20.04
-              - ubuntu-22.04
-              - ubuntu-24.04
-              - ubuntu-26.04
-              - sidecar
 
   # --- end Docker Image tests ---
 
