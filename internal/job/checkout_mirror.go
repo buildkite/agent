@@ -88,9 +88,9 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string, attem
 		}
 	}
 
-	if err := e.shell.Chdir(e.GitMirrorsPath); err != nil {
-		return "", fmt.Errorf("failed to change directory to %q: %w", e.GitMirrorsPath, err)
-	}
+	// Every git command below addresses the mirror by absolute path (--git-dir
+	// or an absolute clone destination), so the shell's working directory is
+	// left alone: it stays in the checkout dir for the rest of the checkout.
 
 	lockTimeout := time.Second * time.Duration(e.GitMirrorsLockTimeout)
 
@@ -272,16 +272,21 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string, attem
 		}
 	}()
 
+	target := e.checkoutTarget()
+
 	commitAlreadyPresent := false
-	if isMainRepository {
+	if isMainRepository && target.commitKnown() {
 		// Another process may have fetched the commit while we waited for the lock.
 		//
 		// Presence-only by design (C22): proving the object is also reachable from a
 		// mirror ref requires a global `for-each-ref --contains` scan, which costs
 		// minutes on large mirrors. An unpinned object pruned by mirror gc fails one
 		// job with a retryable git error that the retry-clean path heals.
-		if hasGitCommit(ctx, e.shell, mirrorDir, e.Commit) {
-			e.shell.Commentf("Commit %q exists in mirror", e.Commit)
+		//
+		// Only meaningful when the build is for a known commit: without one the
+		// mirror must be brought up to date with the branch tip regardless.
+		if hasGitCommit(ctx, e.shell, mirrorDir, target.commit) {
+			e.shell.Commentf("Commit %q exists in mirror", target.commit)
 			commitAlreadyPresent = true
 		}
 	}
@@ -322,31 +327,18 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string, attem
 	}
 
 	if isMainRepository && !commitAlreadyPresent && !remoteMirrorHit {
-		var refspecs []string
-		var retry, isMergeRefspec bool
-
-		switch {
-		case e.RefSpec != "":
-			// If a custom refspec is provided, use it instead of the branch
-			e.shell.Commentf("Fetching and mirroring custom refspec %s", e.RefSpec)
-			refspecs = []string{e.RefSpec}
-		case e.PullRequest != "false" && strings.Contains(e.PipelineProvider, "github"):
-			var refspec string
-			if e.PullRequestUsingMergeRefspec {
-				// As in fetchSource: a missing merge ref usually means a real
-				// merge conflict, so fail fast rather than retrying for ~2m.
-				e.shell.Commentf("Fetching and mirroring pull request merge commit from GitHub")
-				refspec = fmt.Sprintf("refs/pull/%s/merge", e.PullRequest)
-				isMergeRefspec = true
-			} else {
-				e.shell.Commentf("Fetching and mirroring pull request head from GitHub. This will be retried if it fails, as the pull request head might not be available yet — GitHub creates them asynchronously")
-				refspec = fmt.Sprintf("refs/pull/%s/head", e.PullRequest)
-				retry = true
-			}
-			refspecs = []string{refspec}
-		default:
-			// Fetch the build branch from the upstream repository into the mirror.
-			refspecs = []string{e.Branch}
+		// The mirror fetches the same ref the checkout will (custom refspec,
+		// GitHub PR ref, or the build branch), never the bare commit: a mirror
+		// only has to make the objects reachable for --reference.
+		switch target.kind {
+		case targetCustomRefspec:
+			e.shell.Commentf("Fetching and mirroring custom refspec %s", target.refspec)
+		case targetGithubPRMerge:
+			// As in fetchSource: a missing merge ref usually means a real
+			// merge conflict, so fail fast rather than retrying for ~2m.
+			e.shell.Commentf("Fetching and mirroring pull request merge commit from GitHub")
+		case targetGithubPRHead:
+			e.shell.Commentf("Fetching and mirroring pull request head from GitHub. This will be retried if it fails, as the pull request head might not be available yet — GitHub creates them asynchronously")
 		}
 
 		// Fetch the refspecs from the upstream repository into the mirror.
@@ -355,11 +347,11 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string, attem
 				Shell:      e.shell,
 				GitFlags:   []string{"--git-dir", mirrorDir},
 				Repository: "origin",
-				RefSpecs:   refspecs,
-				Retry:      retry,
+				RefSpecs:   []string{target.refspec},
+				Retry:      target.retryFetch,
 			})
 		}); err != nil {
-			return "", fmt.Errorf("%w%s", err, prMergeRefspecHint(isMergeRefspec))
+			return "", fmt.Errorf("%w%s", err, prMergeRefspecHint(target.kind == targetGithubPRMerge))
 		}
 	}
 	if !isMainRepository {

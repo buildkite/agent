@@ -467,17 +467,12 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context, previousAttempts in
 		return err
 	}
 
-	gitCheckoutFlags := e.GitCheckoutFlags
-
+	// Check out the known commit, or FETCH_HEAD when the commit had to be
+	// resolved by the fetch above.
+	checkoutRef := e.checkoutTarget().checkoutRef()
 	if err := e.traceOp(ctx, "git.checkout", func(ctx context.Context) error {
-		if e.Commit == "HEAD" {
-			if err := gitCheckout(ctx, e.shell, gitCheckoutFlags, "FETCH_HEAD"); err != nil {
-				return fmt.Errorf("checking out FETCH_HEAD: %w", err)
-			}
-		} else {
-			if err := gitCheckout(ctx, e.shell, gitCheckoutFlags, e.Commit); err != nil {
-				return fmt.Errorf("checking out commit %q: %w", e.Commit, err)
-			}
+		if err := gitCheckout(ctx, e.shell, e.GitCheckoutFlags, checkoutRef); err != nil {
+			return fmt.Errorf("checking out %q: %w", checkoutRef, err)
 		}
 		return nil
 	}); err != nil {
@@ -632,11 +627,6 @@ func (e *Executor) updateGitSubmodules(ctx context.Context) (retErr error) {
 				return fmt.Errorf("getting/updating mirror dir for submodules: %w", err)
 			}
 
-			// Switch back to the checkout dir, doing other operations from GitMirrorsPath will fail.
-			if err := e.createCheckoutDir(); err != nil {
-				return fmt.Errorf("creating checkout dir: %w", err)
-			}
-
 			submoduleArgs := slices.Clone(args)
 			if mirrorDir != "" {
 				submoduleArgs = append(submoduleArgs, "submodule", "update", "--init", "--recursive", "--force", "--reference", mirrorDir)
@@ -671,12 +661,20 @@ func (e *Executor) updateGitSubmodules(ctx context.Context) (retErr error) {
 	return nil
 }
 
+// checkoutPath returns the checkout directory. BUILDKITE_BUILD_CHECKOUT_PATH
+// in the job environment is the single source of truth for it: the executor
+// sets a default before any hooks run, and hooks may change it.
+func (e *Executor) checkoutPath() string {
+	checkoutPath, _ := e.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH")
+	return checkoutPath
+}
+
 // createCheckoutDir checks for the existence of a directory at
 // $BUILDKITE_BUILD_CHECKOUT_PATH, and creates it if it does not exist.
 // It opens the checkout directory as an [os.Root], saved to e.checkoutRoot.
 // It then changes e.shell's working directory to the checkout directory.
 func (e *Executor) createCheckoutDir() error {
-	checkoutPath, _ := e.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH")
+	checkoutPath := e.checkoutPath()
 
 	if !osutil.FileExists(checkoutPath) {
 		e.shell.Commentf("Creating %q", checkoutPath)
@@ -701,7 +699,7 @@ func (e *Executor) createCheckoutDir() error {
 
 // refreshCheckoutRoot refreshes e.checkoutRoot
 func (e *Executor) refreshCheckoutRoot() error {
-	checkoutPath, _ := e.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH")
+	checkoutPath := e.checkoutPath()
 	if e.checkoutRoot != nil {
 		if err := e.checkoutRoot.Close(); err != nil {
 			// While it's unlikely, it's not a blocking error
@@ -720,7 +718,7 @@ func (e *Executor) refreshCheckoutRoot() error {
 }
 
 func (e *Executor) removeCheckoutDir() error {
-	checkoutPath, _ := e.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH")
+	checkoutPath := e.checkoutPath()
 
 	if e.checkoutRoot != nil {
 		_ = e.checkoutRoot.Close()

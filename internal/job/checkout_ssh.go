@@ -66,8 +66,8 @@ func (e *Executor) prepareGitSSHKey() (sshKeyPath string, cleanup func() error, 
 		return "", nil, nil
 	}
 
-	checkoutPath, exists := e.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH")
-	if !exists || checkoutPath == "" {
+	checkoutPath := e.checkoutPath()
+	if checkoutPath == "" {
 		return "", nil, errors.New("BUILDKITE_BUILD_CHECKOUT_PATH is not set")
 	}
 
