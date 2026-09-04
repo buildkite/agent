@@ -330,12 +330,12 @@ func (c *client) Restore(ctx context.Context, cacheID string) (RestoreResult, er
 	}
 
 	result.CacheRestored = true
-	result.TotalDuration = time.Since(startTime)
 
 	// The restore is now fully verified (downloaded, digest-checked, and
 	// extracted) — confirm it with the server so retention refreshes off a
 	// restore that's actually known to be good.
 	confirmed := c.confirmRestoreSucceeded(ctx, retrieveResp)
+	result.TotalDuration = time.Since(startTime)
 
 	// Add result attributes to span
 	span.SetAttributes(
@@ -396,6 +396,12 @@ func (c *client) invalidateStaleEntry(ctx context.Context, retrieveResp api.Cach
 	return existed
 }
 
+// confirmRestoreTimeout bounds the entire confirmRestoreSucceeded retry loop.
+// Confirmation is best-effort and non-essential to a successful restore, so it
+// must not be allowed to hold up job startup for anywhere near the API
+// client's per-attempt timeout multiplied by roko's max attempts.
+const confirmRestoreTimeout = 5 * time.Second
+
 // confirmRestoreSucceeded tells the server this restore's blob was verified,
 // so the registry can safely refresh the entry's retention now rather than
 // when retrieve first served it, before the blob was known to be good.
@@ -405,7 +411,12 @@ func (c *client) invalidateStaleEntry(ctx context.Context, retrieveResp api.Cach
 // entry was saved under a shorter key sequence, and refreshing it would
 // reset the clock on an entry the caller didn't explicitly target.
 //
-// Best-effort: never fails the build.
+// Best-effort: never fails the build. The whole retry loop is bounded by
+// confirmRestoreTimeout, not just each individual attempt — retrieve's exact-match
+// success path (unlike the failure path invalidateStaleEntry handles) runs on
+// every cache hit, so a network partition here must not be able to stall an
+// otherwise-successful, latency-sensitive restore by using up 5 full client
+// timeouts.
 func (c *client) confirmRestoreSucceeded(ctx context.Context, retrieveResp api.CacheEntryRetrieveResp) bool {
 	if retrieveResp.Fallback {
 		return false
@@ -414,6 +425,9 @@ func (c *client) confirmRestoreSucceeded(ctx context.Context, retrieveResp api.C
 		slog.Warn("cannot confirm cache restore: retrieve response missing resolved address")
 		return false
 	}
+
+	ctx, cancel := context.WithTimeout(ctx, confirmRestoreTimeout)
+	defer cancel()
 
 	req := api.CacheEntryConfirmReq{
 		TargetPaths: retrieveResp.TargetPaths,
