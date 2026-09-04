@@ -465,3 +465,57 @@ func TestCacheEntryRetrieveAndExpire_ScopesRoundTripThroughWire(t *testing.T) {
 		t.Error("expireResp.Existed = false, want true")
 	}
 }
+
+func TestCacheEntryConfirm_Success(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Errorf("method = %q, want %q", r.Method, http.MethodPost)
+		}
+		if !strings.HasSuffix(r.URL.Path, "/cache_registries/test-slug/confirm") {
+			t.Errorf("path = %q, want suffix %q", r.URL.Path, "/cache_registries/test-slug/confirm")
+		}
+		var req api.CacheEntryConfirmReq
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			t.Fatalf("decode request body: %v", err)
+		}
+		if len(req.TargetPaths) != 1 || req.TargetPaths[0] != "node_modules" {
+			t.Errorf("req.TargetPaths = %v, want [node_modules]", req.TargetPaths)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(map[string]any{"message": "Restore confirmed"})
+	}))
+	defer server.Close()
+
+	client := newTestCacheClient(t, server.URL)
+
+	_, _, err := client.CacheEntryConfirm(t.Context(), "test-slug", api.CacheEntryConfirmReq{
+		TargetPaths: []string{"node_modules"},
+		CacheKey:    []api.CacheKeyPart{{Value: "v1", Mandatory: true}},
+	})
+	if err != nil {
+		t.Fatalf("CacheEntryConfirm error = %v, want nil", err)
+	}
+}
+
+// A non-2xx status must surface as an error rather than be swallowed as a
+// successful confirmation.
+func TestCacheEntryConfirm_NonSuccessIsError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusNotFound)
+		_ = json.NewEncoder(w).Encode(map[string]string{"message": "Not Found"})
+	}))
+	defer server.Close()
+
+	client := newTestCacheClient(t, server.URL)
+
+	_, _, err := client.CacheEntryConfirm(t.Context(), "test-slug", api.CacheEntryConfirmReq{
+		TargetPaths: []string{"node_modules"},
+		CacheKey:    []api.CacheKeyPart{{Value: "v1", Mandatory: true}},
+	})
+	if err == nil {
+		t.Error("CacheEntryConfirm error = nil, want non-nil for non-2xx status")
+	}
+}

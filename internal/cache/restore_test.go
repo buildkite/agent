@@ -68,6 +68,67 @@ func TestInvalidateStaleEntry_ExistedFalseIsNotReportedAsInvalidated(t *testing.
 	}
 }
 
+func TestConfirmRestoreSucceeded_EchoesScopesFromRetrieve(t *testing.T) {
+	mockClient := newMockAPIClient("s3")
+	c := &client{api: mockClient, registry: "~"}
+
+	scopes := map[string]string{"branch": "main"}
+	retrieveResp := api.CacheEntryRetrieveResp{
+		TargetPaths: []string{"node_modules"},
+		CacheKey:    []api.CacheKeyPart{{Value: "v1-test-key", Mandatory: true}},
+		Scopes:      scopes,
+		Fallback:    false,
+	}
+
+	confirmed := c.confirmRestoreSucceeded(t.Context(), retrieveResp)
+	if !confirmed {
+		t.Fatalf("confirmRestoreSucceeded() = false, want true")
+	}
+
+	if len(mockClient.confirmCalls) != 1 {
+		t.Fatalf("confirm calls = %d, want 1", len(mockClient.confirmCalls))
+	}
+	if got := mockClient.confirmCalls[0].Scopes; !reflect.DeepEqual(got, scopes) {
+		t.Errorf("confirm request scopes = %+v, want %+v", got, scopes)
+	}
+}
+
+// TestConfirmRestoreSucceeded_SkipsFallbackMatch mirrors the backend's
+// (now-removed) `unless entry_result.fallback_used?` TTL-bump guard: a
+// fallback hit means the entry was saved under a shorter key sequence, and
+// confirming it would refresh a blob the caller didn't explicitly target.
+func TestConfirmRestoreSucceeded_SkipsFallbackMatch(t *testing.T) {
+	mockClient := newMockAPIClient("s3")
+	c := &client{api: mockClient, registry: "~"}
+
+	retrieveResp := api.CacheEntryRetrieveResp{
+		TargetPaths: []string{"node_modules"},
+		CacheKey:    []api.CacheKeyPart{{Value: "v1-test-key", Mandatory: true}},
+		Fallback:    true,
+	}
+
+	confirmed := c.confirmRestoreSucceeded(t.Context(), retrieveResp)
+	if confirmed {
+		t.Error("confirmRestoreSucceeded() = true, want false for a fallback match")
+	}
+	if len(mockClient.confirmCalls) != 0 {
+		t.Errorf("confirm calls = %d, want 0 for a fallback match", len(mockClient.confirmCalls))
+	}
+}
+
+func TestConfirmRestoreSucceeded_MissingResolvedAddress(t *testing.T) {
+	mockClient := newMockAPIClient("s3")
+	c := &client{api: mockClient, registry: "~"}
+
+	confirmed := c.confirmRestoreSucceeded(t.Context(), api.CacheEntryRetrieveResp{})
+	if confirmed {
+		t.Error("confirmRestoreSucceeded() = true, want false when the retrieve response has no resolved address")
+	}
+	if len(mockClient.confirmCalls) != 0 {
+		t.Errorf("confirm calls = %d, want 0", len(mockClient.confirmCalls))
+	}
+}
+
 // TestMissCompleteMessage guards the progress text agents/users see against
 // claiming an invalidation happened when invalidateStaleEntry reported an
 // idempotent no-op (existed: false).

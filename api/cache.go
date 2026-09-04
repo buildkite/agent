@@ -115,6 +115,23 @@ type CacheEntryExpireResp struct {
 	Existed bool   `json:"existed"`
 }
 
+// CacheEntryConfirmReq is the request body for confirming a successful
+// restore, so the registry can refresh the entry's retention now that the
+// backing blob is actually known to be good.
+type CacheEntryConfirmReq struct {
+	TargetPaths []string       `json:"target_paths"`
+	CacheKey    []CacheKeyPart `json:"cache_key"`
+	// Scopes should be copied verbatim from the CacheEntryRetrieveResp that
+	// resolved this entry, not recomputed — omit only when the entry was
+	// retrieved unscoped.
+	Scopes map[string]string `json:"scopes,omitempty"`
+}
+
+// CacheEntryConfirmResp acknowledges a confirm request.
+type CacheEntryConfirmResp struct {
+	Message string `json:"message"`
+}
+
 // CacheEntryPeekReq is the request body for checking whether an entry exists.
 type CacheEntryPeekReq struct {
 	TargetPaths []string       `json:"target_paths"`
@@ -280,6 +297,29 @@ func (c *Client) CacheEntryExpire(ctx context.Context, registry string, expire C
 	}
 	if apiResp.StatusCode < 200 || apiResp.StatusCode >= 300 {
 		return cacheResp, apiResp, cacheSpanErr(span, "failed to expire cache entry: %s", apiResp.Status)
+	}
+	return cacheResp, apiResp, nil
+}
+
+// CacheEntryConfirm confirms a successful, verified restore so the registry
+// can refresh the entry's retention.
+func (c *Client) CacheEntryConfirm(ctx context.Context, registry string, confirm CacheEntryConfirmReq) (CacheEntryConfirmResp, *Response, error) {
+	ctx, span := cacheTracer.Start(ctx, "Client.CacheEntryConfirm")
+	defer span.End()
+
+	var cacheResp CacheEntryConfirmResp
+
+	req, err := c.newRequest(ctx, http.MethodPost, cachePath("/cache_registries/%s/confirm", registry), &confirm)
+	if err != nil {
+		return cacheResp, nil, cacheSpanErr(span, "failed to create request: %w", err)
+	}
+
+	apiResp, err := c.cacheDo(req, &cacheResp)
+	if err != nil {
+		return cacheResp, apiResp, cacheSpanErr(span, "%w", err)
+	}
+	if apiResp.StatusCode < 200 || apiResp.StatusCode >= 300 {
+		return cacheResp, apiResp, cacheSpanErr(span, "failed to confirm cache restore: %s", apiResp.Status)
 	}
 	return cacheResp, apiResp, nil
 }
