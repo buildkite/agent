@@ -615,6 +615,7 @@ BUILDKITE_AGENT_JWKS_KEY_ID`
 		setEnv("BUILDKITE_GIT_SUBMODULES", fmt.Sprint(r.conf.AgentConfiguration.GitSubmodules))
 		setEnv("BUILDKITE_SKIP_CHECKOUT", fmt.Sprint(r.conf.AgentConfiguration.SkipCheckout))
 		setEnv("BUILDKITE_GIT_SKIP_FETCH_EXISTING_COMMITS", fmt.Sprint(r.conf.AgentConfiguration.GitSkipFetchExistingCommits))
+		setEnv("BUILDKITE_GIT_FETCH_BASE_BRANCH", fmt.Sprint(r.conf.AgentConfiguration.GitFetchBaseBranch))
 		// A zero timeout means no checkout timeout; emit it anyway under strict so
 		// a job-supplied value can't reintroduce one past the agent config.
 		setEnv("BUILDKITE_GIT_CHECKOUT_TIMEOUT", strconv.Itoa(r.conf.AgentConfiguration.GitCheckoutTimeout))
@@ -632,6 +633,9 @@ BUILDKITE_AGENT_JWKS_KEY_ID`
 		}
 		if r.conf.AgentConfiguration.GitSkipFetchExistingCommits {
 			setCheckoutEnv("BUILDKITE_GIT_SKIP_FETCH_EXISTING_COMMITS", "true")
+		}
+		if r.conf.AgentConfiguration.GitFetchBaseBranch {
+			setCheckoutEnv("BUILDKITE_GIT_FETCH_BASE_BRANCH", "true")
 		}
 		if r.conf.AgentConfiguration.GitCheckoutTimeout > 0 {
 			setCheckoutEnv("BUILDKITE_GIT_CHECKOUT_TIMEOUT", strconv.Itoa(r.conf.AgentConfiguration.GitCheckoutTimeout))

@@ -176,7 +176,9 @@ point a reader would otherwise file a bug. §10 lists each one and where it goes
 4. `git clean`, optional `git lfs install --local`.
 5. `fetchSource` → `git fetch <flags> -- origin <refspec>`, where the refspec is
    the custom refspec, or `refs/pull/N/{head,merge}`, or the branch (when
-   `BUILDKITE_COMMIT=HEAD`), or — the common case — the commit SHA.
+   `BUILDKITE_COMMIT=HEAD`), or — the common case — the commit SHA. With
+   `--git-fetch-base-branch`, an additional fetch runs first and updates
+   `refs/remotes/origin/<base>`.
 6. Commit verification, sparse setup, `git checkout`, submodules, LFS, clean.
 
 Four things are easy to get wrong, and the plan depends on all of them:
