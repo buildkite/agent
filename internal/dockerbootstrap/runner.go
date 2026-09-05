@@ -34,6 +34,7 @@ func (r Runner) Run(ctx context.Context, cfg Config) (code int, err error) {
 	if r.Stderr == nil {
 		r.Stderr = io.Discard
 	}
+	r.Client = withDiagnostics(r.Client, cfg.Environment)
 	// All cancellation cleanup shares one outer budget, including time spent
 	// waiting for a killed Docker client. Leave a little scheduling headroom
 	// before JobRunner SIGKILLs this supervisor.
@@ -61,14 +62,8 @@ func (r Runner) Run(ctx context.Context, cfg Config) (code int, err error) {
 	operation := func(parent context.Context, timeout time.Duration, args ...string) error {
 		callCtx, cancel := context.WithTimeout(parent, timeout)
 		defer cancel()
-		status, err := r.Client.Run(callCtx, args, nil, io.Discard, io.Discard)
-		if err != nil {
-			return fmt.Errorf("docker %s failed: %w", args[0], err)
-		}
-		if status != 0 {
-			return fmt.Errorf("docker %s failed (exit %d)", args[0], status)
-		}
-		return nil
+		_, err := r.Client.Run(callCtx, args, nil, io.Discard, io.Discard)
+		return err
 	}
 	if err := operation(ctx, cfg.OperationTimeout, "info"); err != nil {
 		return SetupFailure, err
@@ -84,10 +79,10 @@ func (r Runner) Run(ctx context.Context, cfg Config) (code int, err error) {
 	// Inspect only safe image identity fields, not image configuration or env.
 	var identity bytes.Buffer
 	inspectCtx, inspectCancel := context.WithTimeout(ctx, cfg.OperationTimeout)
-	status, inspectErr := r.Client.Run(inspectCtx, []string{"image", "inspect", "--format", "{{.Id}} {{json .RepoDigests}}", cfg.Image}, nil, &identity, io.Discard)
+	_, inspectErr := r.Client.Run(inspectCtx, []string{"image", "inspect", "--format", "{{.Id}} {{json .RepoDigests}}", cfg.Image}, nil, &identity, io.Discard)
 	inspectCancel()
-	if inspectErr != nil || status != 0 {
-		return SetupFailure, fmt.Errorf("docker image identity inspection failed")
+	if inspectErr != nil {
+		return SetupFailure, inspectErr
 	}
 	fields := strings.Fields(identity.String())
 	if len(fields) == 0 || !strings.HasPrefix(fields[0], "sha256:") {
@@ -112,9 +107,12 @@ func (r Runner) Run(ctx context.Context, cfg Config) (code int, err error) {
 		if listErr == nil && status == 0 && strings.TrimSpace(found.String()) == "" {
 			return
 		}
-		_, _ = fmt.Fprintln(r.Stderr, "Docker bootstrap cleanup failed; container may remain:", name)
+		_, _ = fmt.Fprintf(r.Stderr, "Docker bootstrap cleanup failed; container may remain: %s: %v\n", name, removeErr)
+		if listErr != nil {
+			_, _ = fmt.Fprintf(r.Stderr, "Could not verify container removal: %v\n", listErr)
+		}
 		if err == nil && code == 0 {
-			code, err = SetupFailure, fmt.Errorf("docker container cleanup failed")
+			code, err = SetupFailure, fmt.Errorf("docker container cleanup failed: %w", removeErr)
 		}
 	}()
 	args := append([]string{"create", "--pull", "never", "--name", name, "--label", "com.buildkite.bootstrap=docker", "--label", "com.buildkite.agent=true"}, job.args...)
@@ -136,10 +134,10 @@ exec /buildkite-docker/bin/buildkite-agent bootstrap`
 	createCtx, createCancel := context.WithTimeout(ctx, cfg.OperationTimeout)
 	// Keep stdout connected to the supervisor PTY so Docker records its initial
 	// console size. The only create output is the new container ID.
-	status, createErr := r.Client.Run(createCtx, args, job.env, r.Stdout, io.Discard)
+	_, createErr := r.Client.Run(createCtx, args, job.env, r.Stdout, io.Discard)
 	createCancel()
-	if createErr != nil || status != 0 {
-		return SetupFailure, fmt.Errorf("docker container create failed")
+	if createErr != nil {
+		return SetupFailure, createErr
 	}
 	if ctx.Err() != nil {
 		return SetupFailure, ctx.Err()
@@ -193,6 +191,9 @@ waiting:
 				}
 				attachCancel()
 				<-done
+				if probeErr != nil {
+					return SetupFailure, fmt.Errorf("docker startup check failed: %w", probeErr)
+				}
 				return SetupFailure, fmt.Errorf("docker container did not start within the operation timeout")
 			}
 			startupDeadline = nil
