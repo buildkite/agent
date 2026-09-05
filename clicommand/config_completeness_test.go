@@ -29,6 +29,7 @@ var commandConfigPairs = []configCommandPair{
 	{Config: BuildCancelConfig{}, Command: BuildCancelCommand},
 	{Config: BootstrapConfig{}, Command: BootstrapCommand},
 	{Config: CacheExecConfig{}, Command: CacheExecCommand},
+	{Config: DockerBootstrapConfig{}, Command: DockerBootstrapCommand},
 	{Config: CacheRestoreConfig{}, Command: CacheRestoreCommand},
 	{Config: CacheSaveConfig{}, Command: CacheSaveCommand},
 	{Config: EnvDumpConfig{}, Command: EnvDumpCommand},
