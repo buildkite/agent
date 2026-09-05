@@ -313,7 +313,7 @@ func setupTestCache(t *testing.T, storageType string) (cacheClient *client, cach
 func TestCacheIntegration_SaveAndRestore(t *testing.T) {
 	ctx := t.Context()
 
-	// Setup test cache with local file storage
+	// Set up test cache with local file storage
 	cacheClient, cacheDir, storageDir := setupTestCache(t, "local_file")
 
 	// Save the cache

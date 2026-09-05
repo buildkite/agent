@@ -2,7 +2,7 @@
 
 # This is a shim to make the upgrade process from v2 -> v3 smoother as
 # v2 configurations will still have bootstrap-path=/usr/share/buildkite-agent/bootstrap.sh
-# which will cause all sorts of wierd behaviour
+# which will cause all sorts of weird behaviour
 
 echo "+++ :warning: Your buildkite-agent.cfg file contains a deprecated bootstrap.sh"
 echo "As part of the upgrade from Agent v2 to v3, a bootstrap-script compatibility shim was added to your buildkite-agent.cfg."

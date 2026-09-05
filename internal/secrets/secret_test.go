@@ -259,7 +259,7 @@ func TestFetchSecrets_APIClientError(t *testing.T) {
 		isConnRefused = errors.Is(netErr.Err, syscall.ECONNREFUSED)
 	}
 
-	// Fallback to string matching if the syscall check didn't work
+	// Fall back to string matching if the syscall check didn't work
 	if !isConnRefused {
 		errStr := netErr.Err.Error()
 		isConnRefused = strings.Contains(errStr, "connection refused") ||

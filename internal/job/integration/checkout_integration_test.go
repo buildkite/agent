@@ -862,7 +862,7 @@ func TestCheckingOutLocalGitProjectWithSubmodules(t *testing.T) {
 	}
 	defer tester.Close()
 
-	submoduleRepo, err := createTestGitRespository()
+	submoduleRepo, err := createTestGitRepository()
 	if err != nil {
 		t.Fatalf("createTestGitRepository() error = %v", err)
 	}
@@ -934,9 +934,9 @@ func TestCheckingOutLocalGitProjectWithSparseCheckoutSkipsSubmodules(t *testing.
 	}
 	defer tester.Close()
 
-	submoduleRepo, err := createTestGitRespository()
+	submoduleRepo, err := createTestGitRepository()
 	if err != nil {
-		t.Fatalf("createTestGitRespository() error = %v", err)
+		t.Fatalf("createTestGitRepository() error = %v", err)
 	}
 	defer submoduleRepo.Close()
 
@@ -999,9 +999,9 @@ func TestCheckingOutLocalGitProjectWithSubmodulesDisabled(t *testing.T) {
 	}
 	defer tester.Close()
 
-	submoduleRepo, err := createTestGitRespository()
+	submoduleRepo, err := createTestGitRepository()
 	if err != nil {
-		t.Fatalf("createTestGitRespository() error = %v", err)
+		t.Fatalf("createTestGitRepository() error = %v", err)
 	}
 	defer submoduleRepo.Close()
 

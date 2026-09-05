@@ -132,7 +132,7 @@ func (d Download) try(ctx context.Context) error {
 		return err
 	}
 
-	// If no user agent provided, use the agents default [eg buildkite-agent/3.63.0.8023 (linux; amd64)]
+	// If no user agent is provided, use the agent's default [e.g. buildkite-agent/3.63.0.8023 (linux; amd64)]
 	if _, ok := d.conf.Headers[headerUserAgent]; !ok {
 		request.Header.Add(headerUserAgent, version.UserAgent())
 	}

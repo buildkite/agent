@@ -23,7 +23,7 @@ func Do(l logger.Logger, client *http.Client, req *http.Request, opts ...DoOptio
 
 	if cfg.debugHTTP {
 		// If the request is a multi-part form, then it's probably a
-		// file upload, in which case we don't want to spewing out the
+		// file upload, in which case we don't want to spew out the
 		// file contents into the debug log (especially if it's been
 		// gzipped)
 		dumpBody := !strings.Contains(req.Header.Get("Content-Type"), "multipart/form-data")

@@ -35,6 +35,6 @@ for ARCH in "amd64" "386" "arm" "armhf" "arm64" "ppc64" "ppc64le" "riscv64"; do
   # Make sure it's got execute permissions so we can extract the version out of it
   chmod +x "$BINARY"
 
-  # Build the debian package using the architectre and binary, they are saved to deb/
+  # Build the Debian package using the architecture and binary, and save it to deb/
   ./scripts/ruby-env ./scripts/build-debian-package.sh "$ARCH" "$BINARY" "$AGENT_VERSION" "$BUILD_VERSION"
 done

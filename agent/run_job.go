@@ -500,7 +500,7 @@ func (r *JobRunner) streamJobLogsAfterProcessStart(ctx context.Context) {
 	//
 	// 32 intervals is an arbitrarily chosen amount of time between jittering.
 	// Increasing it will make it more susceptible to spontaneous
-	// synchronsiation problems like clock drift,
+	// synchronisation problems like clock drift,
 	// decreasing it will add more variability but also add more "large gaps"
 	// at the point where jitter is added.
 	//

@@ -14,7 +14,7 @@ For example, a link to a GitHub issue or a Buildkite internal document such as L
 ## Changes
 
 <!--
-List of what the PR changes. If the PR changes the CLI arguments, consider adding the output of the various levels of `buildkite-agent <subcomand> --help`.
+List of what the PR changes. If the PR changes the CLI arguments, consider adding the output of the various levels of `buildkite-agent <subcommand> --help`.
 
 Can skip if changes are simple or clear from the commit messages.
 -->

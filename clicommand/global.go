@@ -297,7 +297,7 @@ var (
 	GitMirrorCheckoutModeFlag = &cli.StringFlag{
 		Name:    "git-mirror-checkout-mode",
 		Value:   "reference",
-		Usage:   fmt.Sprintf("Changes how clones of a mirror are made; available modes are %v. In ′dissociate′ mode, clones from a mirror uses the git clone ′--dissociate′ flag, which copies underlying objects from the mirror, making the clone robust to changes in the mirror such as garbage collection, at the expense of additional disk usage and setup time. ′reference′ mode does not pass ′--dissociate′, which causes the clone to directly use objects from the mirror, which is more fragile and can cause the clone to break under entirely normal operation of the mirror, but is slightly faster to clone and uses less disk space.", mirrorCheckoutModes),
+		Usage:   fmt.Sprintf("Changes how clones of a mirror are made; available modes are %v. In ′dissociate′ mode, clones from a mirror use the git clone ′--dissociate′ flag, which copies underlying objects from the mirror, making the clone robust to changes in the mirror such as garbage collection, at the expense of additional disk usage and setup time. ′reference′ mode does not pass ′--dissociate′, which causes the clone to directly use objects from the mirror, which is more fragile and can cause the clone to break under entirely normal operation of the mirror, but is slightly faster to clone and uses less disk space.", mirrorCheckoutModes),
 		Sources: cli.EnvVars("BUILDKITE_GIT_MIRROR_CHECKOUT_MODE"),
 	}
 
@@ -317,7 +317,7 @@ var (
 	GitSubmoduleCloneConfigFlag = &cli.StringSliceFlag{
 		Name:    "git-submodule-clone-config",
 		Value:   nil,
-		Usage:   "Comma separated key=value git config pairs applied before git submodule clone commands such as ′update --init′. If the config is needed to be applied to all git commands, supply it in a global git config file for the system that the agent runs in instead",
+		Usage:   "Comma-separated key=value git config pairs applied before git submodule clone commands such as ′update --init′. If the config needs to apply to all git commands, supply it in a global git config file for the system that the agent runs in instead",
 		Sources: cli.EnvVars("BUILDKITE_GIT_SUBMODULE_CLONE_CONFIG"),
 	}
 
@@ -629,7 +629,7 @@ func setupLoggerAndConfig[T any](ctx context.Context, c *cli.Command, opts ...co
 		l.Warnf("%s", warning)
 	}
 
-	// Setup any global configuration options
+	// Set up any global configuration options
 	ctx, done = HandleGlobalFlags(ctx, l, cfg)
 
 	// When OpenTelemetry tracing is enabled, always initialize a TracerProvider

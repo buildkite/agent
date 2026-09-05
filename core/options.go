@@ -47,7 +47,7 @@ func WithEndpoint(endpoint string) ControllerOption {
 }
 
 // WithUserAgent allows overriding the user agent.
-// Defaults to the value retuned from [version.UserAgent].
+// Defaults to the value returned from [version.UserAgent].
 func WithUserAgent(userAgent string) ControllerOption {
 	return func(c *controllerConfig) {
 		c.userAgent = userAgent

@@ -15,7 +15,7 @@ def parse(version_string)
     (\.(?<tiny>\d+))?
     # Pre is a string like alpha, beta, etc
     (\-(?<prerelease>[a-z]+))?
-    # The rest are numbers, and we dont care if they use dashes or dots
+    # The rest are numbers, and we don't care if they use dashes or dots
     ([\-\.](?<prerelease_major>\d+))?
     ([\-\.](?<prerelease_minor>\d+))?
     ([\-\.](?<prerelease_patch>\d+))?
@@ -40,7 +40,7 @@ def parse(version_string)
 end
 
 def sort(v1, v2)
-  # Stable release get preferred over pre-releases, but if we just let Ruby
+  # Stable releases get preferred over pre-releases, but if we just let Ruby
   # sort v1.values <=> v2.values:
   #
   # [2, 3, 2, 1, nil,     0, 0, 0, 0]

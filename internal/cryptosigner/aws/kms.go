@@ -26,13 +26,13 @@ type KMS struct {
 	kid    string
 }
 
-// NewKMS creates a new ECDSA object. This object isnot complete by itself -- it
-// needs is setup with the algorithm name to use (see
+// NewKMS creates a new ECDSA object. This object is not complete by itself -- it
+// needs to be set up with the algorithm name to use (see
 // https://pkg.go.dev/github.com/aws/aws-sdk-go-v2/service/kms/types#SigningAlgorithmSpec),
 // a key ID to use while the AWS SDK makes network
 // requests.
 
-// NewKMS creates a new crypto signer which uses AWS KMS to sign data. The keys signing algorithm spec
+// NewKMS creates a new crypto signer which uses AWS KMS to sign data. The key's signing algorithm spec
 // dictates the type of signature that will be generated (see
 // https://pkg.go.dev/github.com/aws/aws-sdk-go-v2/service/kms/types#SigningAlgorithmSpec),
 

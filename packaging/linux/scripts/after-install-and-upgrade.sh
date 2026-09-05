@@ -22,7 +22,7 @@ if [ "$OPERATION" = "install" ] ; then
     BK_USER_EXISTS=true
   fi
 
-  # We create its home folder in a seperate command so it doesn't blow up if
+  # We create its home folder in a separate command so it doesn't blow up if
   # the folder already exists
   mkdir -p /var/lib/buildkite-agent
 fi
@@ -64,7 +64,7 @@ elif [ -d /etc/init.d ]; then
 
   START_COMMAND="sudo /etc/init.d/buildkite-agent start"
 else
-  # If all the others fails, warn them and just let them run it the old
+  # If all the others fail, warn them and just let them run it the old
   # fashioned way.
   echo "============================== WARNING ==================================="
   echo ""

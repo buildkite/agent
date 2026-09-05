@@ -68,7 +68,7 @@ Examples:
 	Flags: slices.Concat(globalFlags(), apiFlags(), []cli.Flag{
 		&cli.StringFlag{
 			Name:    "job",
-			Usage:   "Which job should should the secret be for",
+			Usage:   "Which job should the secret be for",
 			Sources: cli.EnvVars("BUILDKITE_JOB_ID"),
 		},
 		&cli.StringFlag{

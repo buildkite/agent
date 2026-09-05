@@ -151,7 +151,7 @@ func (p *Process) WaitStatus() WaitStatus {
 
 // Run the command and block until it finishes
 func (p *Process) Run(ctx context.Context) error {
-	// Setup and start the command.
+	// Set up and start the command.
 	cleanup, err := p.start(ctx)
 	if err != nil {
 		return err
@@ -212,7 +212,7 @@ func (p *Process) setup(ctx context.Context) error {
 	p.command = exec.CommandContext(ctx, p.conf.Path, p.conf.Args...)
 	p.command.Cancel = p.onContextCancel
 
-	// Setup the process to create a process group if supported
+	// Set up the process to create a process group if supported
 	p.setupProcessGroup()
 
 	// Configure working dir and fail if it doesn't exist, otherwise
@@ -229,7 +229,7 @@ func (p *Process) setup(ctx context.Context) error {
 	p.done = cmp.Or(p.done, make(chan struct{}))
 	p.started = cmp.Or(p.started, make(chan struct{}))
 
-	// Copy the current processes ENV and merge in the new ones. We do this
+	// Copy the current process's ENV and merge in the new ones. We do this
 	// so the sub process gets PATH and stuff. We merge our path in over
 	// the top of the current one so the ENV from Buildkite and the agent
 	// take precedence over the agent
@@ -478,7 +478,7 @@ func (p *Process) Interrupt() error {
 
 		p.logger.Errorf("[Process] Failed to interrupt process %d: %v", p.pid(), err)
 
-		// Fallback to terminating if we get an error
+		// Fall back to terminating if we get an error
 		return p.terminateProcessGroup()
 	}
 

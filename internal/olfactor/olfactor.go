@@ -8,8 +8,8 @@ import (
 )
 
 // Olfactor may be used for 'sniffing' an io stream for strings. In other
-// words, the io stream can be monitored for a particular strings, and if they
-// string are written to the io stream, the olfactor will record that it has
+// words, the io stream can be monitored for a particular string, and if that
+// string is written to the io stream, the olfactor will record that it has
 // 'smelt' that string.
 type Olfactor struct {
 	smelt *trie.Trie
@@ -20,7 +20,7 @@ type Olfactor struct {
 // elements of `smells` have been written to the io.Writer.
 //
 // If a smell is the empty string, we consider it to have been smelt, even if
-// nothing was wrtten to the io.Writer. This is consistent with the notion that
+// nothing was written to the io.Writer. This is consistent with the notion that
 // writing an empty string to a writer is the same as writing nothing to the
 // writer.
 func New(dst io.Writer, smells []string) (io.Writer, *Olfactor) {

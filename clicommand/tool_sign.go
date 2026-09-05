@@ -48,7 +48,7 @@ type ToolSignConfig struct {
 	// Enable debug logging for pipeline signing, this depends on debug logging also being enabled
 	DebugSigning bool `cli:"debug-signing"`
 
-	// Needed for to use GraphQL API
+	// Needed to use the GraphQL API
 	OrganizationSlug string `cli:"organization-slug"`
 	PipelineSlug     string `cli:"pipeline-slug"`
 	GraphQLEndpoint  string `cli:"graphql-endpoint"`
@@ -92,7 +92,7 @@ Retrieving the pipeline from the GraphQL API and signing it:
     $ buildkite-agent tool sign \
         --graphql-token <graphql token> \
         --organization-slug <your org slug> \
-        --pipeline-slug <slug of the pipeline whose steps you want to sign \
+        --pipeline-slug <slug of the pipeline whose steps you want to sign> \
         --jwks-file /path/to/private/key.json \
         --update
 
@@ -108,7 +108,7 @@ Signing a pipeline from a file:
 	Flags: append(globalFlags(),
 		&cli.StringFlag{
 			Name:    "graphql-token",
-			Usage:   "A token for the buildkite graphql API. This will be used to populate the value of the repository URL, and download the pipeline definition. Both ′repo′ and ′pipeline-file′ will be ignored in preference of values from the GraphQL API if the token in provided.",
+			Usage:   "A token for the Buildkite GraphQL API. This will be used to populate the value of the repository URL and download the pipeline definition. Both ′repo′ and ′pipeline-file′ will be ignored in favor of values from the GraphQL API if the token is provided.",
 			Sources: cli.EnvVars("BUILDKITE_GRAPHQL_TOKEN"),
 		},
 		&cli.BoolFlag{
@@ -163,7 +163,7 @@ Signing a pipeline from a file:
 		},
 		&cli.StringFlag{
 			Name:    "graphql-endpoint",
-			Usage:   "The endpoint for the Buildkite GraphQL API. This is only needed if you are using the the graphql-token flag, and is mostly useful for development purposes",
+			Usage:   "The endpoint for the Buildkite GraphQL API. This is only needed if you are using the graphql-token flag, and is mostly useful for development purposes",
 			Value:   bkgql.DefaultEndpoint,
 			Sources: cli.EnvVars("BUILDKITE_GRAPHQL_ENDPOINT"),
 		},

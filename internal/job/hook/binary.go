@@ -18,7 +18,7 @@ var (
 
 	// macOS uses Mach-O binaries. There are two variants: fat and thin.
 	// Thin binaries are further divided into 32-bit and 64-bit variants,
-	// which are furtherer subdivided by processor endianess. It's a mess.
+	// which are further subdivided by processor endianness. It's a mess.
 
 	// For "fat" binaries, which contain multiple architectures
 	MachOFatMagic = []byte{0xCA, 0xFE, 0xBA, 0xBE}

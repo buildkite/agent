@@ -110,7 +110,7 @@ type ArtifactState struct {
 	State     string `json:"state"`
 	Multipart bool   `json:"multipart,omitempty"`
 	// If this artifact was a multipart upload and is complete, we need the
-	// the ETag from each uploaded part so that they can be joined together.
+	// ETag from each uploaded part so that they can be joined together.
 	MultipartETags []ArtifactPartETag `json:"multipart_etags,omitempty"`
 }
 

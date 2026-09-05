@@ -46,7 +46,7 @@ steps:
             - AWS_SESSION_TOKEN
 
   - name: ":go::robot_face: Check protobuf generation"
-    key: check-protobuf-genreation
+    key: check-protobuf-generation
     env:
       GOBIN: /root/.protobuf-tools/bin
       GOCACHE: /root/.protobuf-tools/gocache

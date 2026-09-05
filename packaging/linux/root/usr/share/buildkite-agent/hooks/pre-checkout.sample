@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# The `pre-checkout` hook will run just before your pipelines source code is
+# The `pre-checkout` hook will run just before your pipeline's source code is
 # checked out from your SCM provider
 
 # Note that as the script is sourced not run directly, the shebang line will be ignored

@@ -83,7 +83,7 @@ func NewExecutorTester(ctx context.Context) (*ExecutorTester, error) {
 		return nil, fmt.Errorf("making bootstrap-plugins directory: %w", err)
 	}
 
-	repo, err := createTestGitRespository()
+	repo, err := createTestGitRepository()
 	if err != nil {
 		return nil, fmt.Errorf("creating test git repo: %w", err)
 	}

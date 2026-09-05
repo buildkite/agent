@@ -23,7 +23,7 @@ func (s *Scanner) ScanLines(r io.Reader, f func(line string)) error {
 
 	s.logger.Debugf("[LineScanner] Starting to read lines")
 
-	// Note that we do this manually rather than
+	// Note that we do this manually
 	// because we need to handle very long lines
 
 	for {
@@ -39,7 +39,7 @@ func (s *Scanner) ScanLines(r io.Reader, f func(line string)) error {
 		// If isPrefix is true, that means we've got a really
 		// long line incoming, and we'll keep appending to it
 		// until isPrefix is false (which means the long line
-		// has ended.
+		// has ended).
 		if isPrefix && appending == nil {
 			s.logger.Debugf("[LineScanner] Line is too long to read, going to buffer it until it finishes")
 

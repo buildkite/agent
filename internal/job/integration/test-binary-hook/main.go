@@ -8,7 +8,7 @@ import (
 	"github.com/buildkite/agent/v4/jobapi"
 )
 
-// This file gets built and commited to this repo, then used as part of the hooks integration test to ensure that the
+// This file gets built and committed to this repo, then used as part of the hooks integration test to ensure that the
 // bootstrap can run binary hooks
 func main() {
 	c, err := jobapi.NewDefaultClient(context.TODO())

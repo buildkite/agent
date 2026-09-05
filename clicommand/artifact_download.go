@@ -46,7 +46,7 @@ jobs, you can target the particular job you want to download the artifact from:
 
     $ buildkite-agent artifact download "pkg/*.tar.gz" . --step "tests" --build xxx
 
-You can also use the step's jobs id (provided by the environment variable $BUILDKITE_JOB_ID)`
+You can also use the step's job ID (provided by the environment variable $BUILDKITE_JOB_ID)`
 
 type ArtifactDownloadConfig struct {
 	GlobalConfig
@@ -96,7 +96,7 @@ var ArtifactDownloadCommand = &cli.Command{
 		// Create the API client
 		client := api.NewClient(l, loadAPIClientConfig(cfg, "AgentAccessToken"))
 
-		// Setup the downloader
+		// Set up the downloader
 		downloader := artifact.NewDownloader(l, client, artifact.DownloaderConfig{
 			Query:              cfg.Query,
 			Destination:        cfg.Destination,

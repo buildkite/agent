@@ -141,7 +141,7 @@ func addZstdTypes(types map[string]string) error {
 }
 
 func addYamlTypes(types map[string]string) error {
-	// Most recent movement on the IEFT is
+	// Most recent movement at the IETF is
 	// https://mailarchive.ietf.org/arch/msg/media-types/bdCyTe91zNz-i-9tuJGDa9bHcpQ/
 	// where the thread collectively advocates text/yaml and discusses that
 	// others are already using this

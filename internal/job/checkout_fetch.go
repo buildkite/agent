@@ -37,7 +37,7 @@ const (
 	// No specific commit is known (e.Commit == "HEAD"), so fetch the branch's remote HEAD
 	refspecBranch refspecKind = "branch"
 
-	// Default: a specific commit is known, so fetch and checkout it directly
+	// Default: a specific commit is known, so fetch and check it out directly
 	refspecCommit refspecKind = "commit"
 )
 
@@ -102,7 +102,7 @@ func (e *Executor) fetchSource(ctx context.Context, addBloblessFilter bool, atte
 	case refspecCustom:
 		// If a refspec is provided then use it instead.
 		// For example, `refs/not/a/head`
-		e.shell.Commentf("Fetch and checkout custom refspec")
+		e.shell.Commentf("Fetch and check out custom refspec")
 		if err := gitFetch(ctx, gitFetchArgs{
 			Shell:         e.shell,
 			GitFetchFlags: gitFetchFlags,
@@ -116,18 +116,18 @@ func (e *Executor) fetchSource(ctx context.Context, addBloblessFilter bool, atte
 		var refspec string
 
 		if kind == refspecGithubPRMerge {
-			// Merge refspecs represents a speculative merge of the PR branch against the base branch.
+			// Merge refspecs represent a speculative merge of the PR branch against the base branch.
 			// Checking out this refspec enables testing the result of the merge before it happens.
 			// If a merge conflict exists, this refspec won't be created and the fetch will fail. In this
 			// case we want the job to fail earlier, rather than retrying the fetch (which adds ~2-3 mins job run time before failing)
 			// Note: An outer retry loop will still retry the failed checkout 3 times before failing.
-			e.shell.Commentf("Fetch and checkout pull request merge commit from GitHub")
+			e.shell.Commentf("Fetch and check out pull request merge commit from GitHub")
 			refspec = fmt.Sprintf("refs/pull/%s/merge", e.PullRequest)
 		} else {
 			// GitHub has a special ref which lets us fetch a pull request head, whether
 			// or not it's a current head in this repository or a fork. See:
 			// https://help.github.com/articles/checking-out-pull-requests-locally/#modifying-an-inactive-pull-request-locally
-			e.shell.Commentf("Fetch and checkout pull request head from GitHub")
+			e.shell.Commentf("Fetch and check out pull request head from GitHub")
 			refspec = fmt.Sprintf("refs/pull/%s/head", e.PullRequest)
 		}
 		refspecs := []string{refspec}
@@ -181,8 +181,8 @@ func (e *Executor) fetchSource(ctx context.Context, addBloblessFilter bool, atte
 
 	case refspecBranch:
 		// If the commit is "HEAD" then we can't do a commit-specific fetch and will
-		// need to fetch the remote head and checkout the fetched head explicitly.
-		e.shell.Commentf("Fetch and checkout remote branch HEAD commit")
+		// need to fetch the remote head and check out the fetched head explicitly.
+		e.shell.Commentf("Fetch and check out remote branch HEAD commit")
 		if err := gitFetch(ctx, gitFetchArgs{
 			Shell:         e.shell,
 			GitFetchFlags: gitFetchFlags,
@@ -201,8 +201,8 @@ func (e *Executor) fetchSource(ctx context.Context, addBloblessFilter bool, atte
 			return nil
 		}
 
-		// Otherwise fetch and checkout the commit directly.
-		e.shell.Commentf("Fetch and checkout commit")
+		// Otherwise fetch and check out the commit directly.
+		e.shell.Commentf("Fetch and check out commit")
 		if err := gitFetchWithFallback(ctx, e.shell, gitFetchFlags, e.Commit); err != nil {
 			return fmt.Errorf("fetching commit %q: %w", e.Commit, err)
 		}

@@ -220,7 +220,7 @@ else
       sed -i "s/token=\"xxx\"/token=\"${TOKEN}\"/g" "${DESTINATION}/buildkite-agent.cfg"
     fi
   else
-    echo -e "\n\033[36mDon't forget to update the config with your agent token! You can find it token on your \"Agents\" page in Buildkite\033[0m"
+    echo -e "\n\033[36mDon't forget to update the config with your agent token! You can find your token on your \"Agents\" page in Buildkite\033[0m"
   fi
 fi
 

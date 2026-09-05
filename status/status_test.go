@@ -80,7 +80,7 @@ func TestSmokeHandle(t *testing.T) {
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "/status", nil)
 	if err != nil {
-		t.Fatalf("http.NewReqeustWithContext(GET /status) error = %v", err)
+		t.Fatalf("http.NewRequestWithContext(GET /status) error = %v", err)
 	}
 	rec := httptest.NewRecorder()
 	Handle(rec, req)

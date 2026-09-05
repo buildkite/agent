@@ -16,7 +16,7 @@ import (
 var (
 	nonIDCharacterRE    = regexp.MustCompile(`[^a-zA-Z0-9]`)
 	consecutiveHyphenRE = regexp.MustCompile(`-+`)
-	hypenOrSpaceRE      = regexp.MustCompile(`-|\s`)
+	hyphenOrSpaceRE     = regexp.MustCompile(`-|\s`)
 	whitespaceRE        = regexp.MustCompile(`\s+`)
 )
 
@@ -232,7 +232,7 @@ func (p *Plugin) RepositorySubdirectory() (string, error) {
 // formatEnvKey converts strings into an ENV key friendly format
 func formatEnvKey(key string) string {
 	newKey := strings.ToUpper(key)
-	return hypenOrSpaceRE.ReplaceAllString(newKey, "_")
+	return hyphenOrSpaceRE.ReplaceAllString(newKey, "_")
 }
 
 func flattenConfigToEnvMap(into map[string]string, v any, envPrefix string) error {

@@ -6,7 +6,7 @@ import (
 	"unicode/utf8"
 )
 
-// FormatCommand formats a command amd arguments for human reading
+// FormatCommand formats a command and arguments for human reading
 func FormatCommand(command string, args []string) string {
 	truncate := func(s string, i int) string {
 		if len(s) < i {

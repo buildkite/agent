@@ -51,7 +51,7 @@ func NewSilentExitError(code int) *SilentExitError {
 }
 
 // Error prints a message with the exit code. It should not be used as the
-// the purpose of this error is to not print anything.
+// purpose of this error is to not print anything.
 func (e *SilentExitError) Error() string {
 	return fmt.Sprintf("silently exited status %d", e.code)
 }

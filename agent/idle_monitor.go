@@ -10,7 +10,7 @@ import (
 //
 // In addition to "busy", "idle", and "dead", idleMonitor has an implicit
 // "initial" state. Agents always start in the "initial" state, but typically
-// quickly transistion into either the idle or busy states (as soon as they
+// quickly transition into either the idle or busy states (as soon as they
 // have completed their first ping.)
 /*
 //                -> Busy --

@@ -105,7 +105,7 @@ type PipelineUploadConfig struct {
 
 var PipelineUploadCommand = &cli.Command{
 	Name:        "upload",
-	Usage:       "Uploads a description of a build pipeline adds it to the currently running build after the current job",
+	Usage:       "Uploads a description of a build pipeline and adds it to the currently running build after the current job",
 	Description: pipelineUploadHelpDescription,
 	Flags: slices.Concat(globalFlags(), apiFlags(), []cli.Flag{
 		&cli.BoolFlag{
@@ -147,7 +147,7 @@ var PipelineUploadCommand = &cli.Command{
 		},
 		&cli.BoolFlag{
 			Name:    "apply-if-changed",
-			Usage:   "When enabled, steps containing an ′if_changed′ key are evaluated against the git diff. If the ′if_changed′ glob pattern match no files changed in the build, the step is skipped. Minimum Buildkite Agent version: v3.99 (with --apply-if-changed flag), v3.103.0 (enabled by default) (default: true)",
+			Usage:   "When enabled, steps containing an ′if_changed′ key are evaluated against the git diff. If the ′if_changed′ glob pattern matches no files changed in the build, the step is skipped. Minimum Buildkite Agent version: v3.99 (with --apply-if-changed flag), v3.103.0 (enabled by default) (default: true)",
 			Value:   true,
 			Sources: cli.EnvVars("BUILDKITE_AGENT_APPLY_IF_CHANGED", "BUILDKITE_AGENT_APPLY_SKIP_IF_UNCHANGED"),
 		},
@@ -168,7 +168,7 @@ var PipelineUploadCommand = &cli.Command{
 		},
 
 		// Note: changes to these environment variables need to be reflected in the environment created
-		// in the job runner. At the momenet, that's at agent/job_runner.go:500-507
+		// in the job runner. At the moment, that's at agent/job_runner.go:500-507
 		&cli.StringFlag{
 			Name:    "jwks-file",
 			Usage:   "Path to a file containing a JWKS. Passing this flag enables pipeline signing",

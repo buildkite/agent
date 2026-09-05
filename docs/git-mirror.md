@@ -1,4 +1,4 @@
-# How Git Mirrors Works
+# How Git Mirrors Work
 
 ## The goal
 
@@ -76,9 +76,7 @@ You're probably familiar with `git clone`: this gives you a copy of a repo you
 can use to make changes, with all the git magic hidden in a secret `.git`
 directory.
 
-You might also be familiar with `git clone --bare`: this exposes all the
-normally-hidden Git magic, at the expense of not checking out the main branch
-for you in the root of the directory.
+You might also be familiar with `git clone --bare`: this exposes all the normally hidden Git magic, at the expense of not checking out the main branch for you in the root of the directory.
 
 So instead of:
 
@@ -185,9 +183,7 @@ will happily remove objects still in use by `Checkout`!
 Which corrupts `Checkout`. It's as though a gremlin went into `Checkout`'s
 object storage and randomly started unlinking files.
 
-Even if those objects bear no relation to the commit the job is trying to build.
-Git can still try to clean up the reference, see it is missing, and then fatal
-out.
+Even if those objects bear no relation to the commit the job is trying to build, Git can still try to clean up the reference, see it is missing, and then exit with a fatal error.
 
 This happens more often than it used to, since GitHub got more
 aggressive about removing older commits when you force-push.
@@ -222,10 +218,7 @@ directories.
 
 ## Did I see something about `--dissociate`?
 
-`git clone --reference <path> --dissociate` is like `--reference`, but makes
-copies of the objects during the clone. This will probably spare us repo
-corruption, and continue reducing network usage, but consume hard disk usage
-for each clone.
+`git clone --reference <path> --dissociate` is like `--reference`, but makes copies of the objects during the clone. This will probably spare us repo corruption and continue reducing network usage, but consume disk space for each clone.
 
 ## Worktrees are cool, can we do something with those?
 

@@ -333,7 +333,7 @@ func TestRepositoryAndSubdirectory(t *testing.T) {
 	}
 }
 
-func TestRespositoryAndSubdirectoryErrors(t *testing.T) {
+func TestRepositoryAndSubdirectoryErrors(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
 		location string

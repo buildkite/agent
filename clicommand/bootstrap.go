@@ -158,7 +158,7 @@ var BootstrapCommand = &cli.Command{
 		&cli.StringFlag{
 			Name:    "commit",
 			Value:   "",
-			Usage:   "The commit to checkout in the repository",
+			Usage:   "The commit to check out in the repository",
 			Sources: cli.EnvVars("BUILDKITE_COMMIT"),
 		},
 		&cli.StringFlag{
@@ -170,7 +170,7 @@ var BootstrapCommand = &cli.Command{
 		&cli.StringFlag{
 			Name:    "tag",
 			Value:   "",
-			Usage:   "The tag the commit",
+			Usage:   "The tag associated with the commit",
 			Sources: cli.EnvVars("BUILDKITE_TAG"),
 		},
 		&cli.StringFlag{
@@ -205,7 +205,7 @@ var BootstrapCommand = &cli.Command{
 		},
 		&cli.BoolFlag{
 			Name:    "pull-request-using-merge-refspec",
-			Usage:   "Whether the agent should attempt to checkout the pull request commit using the merge refspec. This feature is in private preview and requires backend enablement—contact support to enable (default: false)",
+			Usage:   "Whether the agent should attempt to check out the pull request commit using the merge refspec. This feature is in private preview and requires backend enablement—contact support to enable (default: false)",
 			Sources: cli.EnvVars("BUILDKITE_PULL_REQUEST_USING_MERGE_REFSPEC"),
 		},
 		&cli.StringFlag{
@@ -359,7 +359,7 @@ var BootstrapCommand = &cli.Command{
 		},
 		&cli.StringFlag{
 			Name:    "hooks-shell",
-			Usage:   "The shell to use to interpret hooks commands",
+			Usage:   "The shell to use to interpret hook commands",
 			Sources: cli.EnvVars("BUILDKITE_HOOKS_SHELL"),
 		},
 		&cli.StringSliceFlag{
@@ -432,7 +432,7 @@ var BootstrapCommand = &cli.Command{
 			}
 		}
 
-		// Turn of PTY support if we're on Windows
+		// Turn off PTY support if we're on Windows
 		runInPty := cfg.PTY
 		if runtime.GOOS == "windows" {
 			runInPty = false
@@ -472,7 +472,7 @@ var BootstrapCommand = &cli.Command{
 			tracingBackend = tracetools.BackendOpenTelemetry
 		}
 
-		// Configure the bootstraper
+		// Configure the bootstrapper
 		bootstrap := job.New(job.ExecutorConfig{
 			AgentName:                    cfg.AgentName,
 			ArtifactUploadDestination:    cfg.ArtifactUploadDestination,
@@ -622,7 +622,7 @@ func signalSelf(l logger.Logger, sig os.Signal) error {
 	}
 
 	// Wait for a bit to allow the signal to be processed. Without this, the program can exit before the signal actually
-	// get sent and received, and the WaitStatus of this process won't indicate that it was signalled.
+	// gets sent and received, and the WaitStatus of this process won't indicate that it was signalled.
 	// Note that in almost all cases, we won't actually wait for 10 seconds, as the signal is generally processed extremely
 	// quickly. Sending ourself a SIGTERM will stop the agent before the time.Sleep is up.
 	time.Sleep(10 * time.Second)

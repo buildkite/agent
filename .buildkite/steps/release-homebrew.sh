@@ -124,7 +124,7 @@ echo "Homebrew release arm64 download SHA256: ${RELEASE_SHA256_ARM64}"
   "${DOWNLOAD_URL_ARM64}" "${RELEASE_SHA256_ARM64}" \
   < "${FORMULA_FILE}" > "${UPDATED_FORMULA_FILE}"
 
-echo "--- :rocket: Commiting new formula to buildkite/homebrew-buildkite master branch via GitHub Contents API"
+echo "--- :rocket: Committing new formula to buildkite/homebrew-buildkite master branch via GitHub Contents API"
 
 UPDATED_FORMULA_BASE64="$(openssl enc -base64 -A < "${UPDATED_FORMULA_FILE}")"
 MAIN_FORMULA_SHA="$(parse_json '["sha"]' <<< "${CONTENTS_API_RESPONSE}")"

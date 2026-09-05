@@ -223,7 +223,7 @@ func TestCheckingOutLocalGitProjectWithSubmodules_WithGitMirrors(t *testing.T) {
 		t.Fatalf("EnableGitMirrors() error = %v", err)
 	}
 
-	submoduleRepo, err := createTestGitRespository()
+	submoduleRepo, err := createTestGitRepository()
 	if err != nil {
 		t.Fatalf("createTestGitRepository() error = %v", err)
 	}
@@ -300,9 +300,9 @@ func TestCheckingOutLocalGitProjectWithSubmodulesDisabled_WithGitMirrors(t *test
 		t.Fatalf("EnableGitMirrors() error = %v", err)
 	}
 
-	submoduleRepo, err := createTestGitRespository()
+	submoduleRepo, err := createTestGitRepository()
 	if err != nil {
-		t.Fatalf("createTestGitRespository() error = %v", err)
+		t.Fatalf("createTestGitRepository() error = %v", err)
 	}
 	defer func() {
 		if err := submoduleRepo.CloseErr(); err != nil {

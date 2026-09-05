@@ -96,7 +96,7 @@ func (r *JobRunner) verifyJob(ctx context.Context, keySet any) error {
 	// under normal circumstances, and verifying it all is a bit complex.
 	//
 	// 1. Every step env var must at least exist in the job env.
-	// 2. Every pipline env var must at least exist in the job env.
+	// 2. Every pipeline env var must at least exist in the job env.
 	// 3. If a var was a pipeline env var, and wasn't overridden by a step var,
 	//    it went in the "env::" namespace, and Signature.Verify has checked its
 	//    value implicitly.
