@@ -19,6 +19,7 @@ import (
 	"github.com/buildkite/agent/v4/api"
 	"github.com/buildkite/agent/v4/core"
 	envutil "github.com/buildkite/agent/v4/env"
+	"github.com/buildkite/agent/v4/internal/dockerbootstrap"
 	"github.com/buildkite/agent/v4/internal/experiments"
 	"github.com/buildkite/agent/v4/internal/process"
 	"github.com/buildkite/agent/v4/internal/shell"
@@ -149,6 +150,9 @@ type JobRunner struct {
 	// to the bootstrap subprocess via BUILDKITE_AGENT_JOB_TIMEOUT_FILE.
 	jobTimeoutFilePath string
 
+	// Set only for the Docker bootstrap; removed after coordination files.
+	dockerContextDir string
+
 	// droppedRemoteMirrorURL records a backend-provided mirror removed from the
 	// bootstrap environment because it did not match --allowed-repositories.
 	// createEnvironment runs before jobLogs exists, so Run emits the warning.
@@ -219,6 +223,19 @@ func NewJobRunner(ctx context.Context, l logger.Logger, apiClient *api.Client, c
 	)
 
 	contextDir := jobContextDir(conf)
+	if usesDockerBootstrap(conf) {
+		contextDir, err = createDockerJobContext(conf.JobContextDir)
+		if err != nil {
+			return nil, err
+		}
+		r.dockerContextDir = contextDir
+		// Construction may fail before Run gets a chance to clean up.
+		defer func() {
+			if r.process == nil {
+				_ = os.RemoveAll(contextDir)
+			}
+		}()
+	}
 
 	r.envShellFile, r.envJSONFile, err = createJobEnvFiles(r.agentLogger, r.conf.Job.ID, contextDir)
 	if err != nil {
@@ -437,6 +454,7 @@ func (r *JobRunner) createEnvironment(ctx context.Context) ([]string, error) {
 		}
 		env[name] = value
 	}
+	setEnv(dockerbootstrap.ContextEnv, r.dockerContextDir)
 	// For some checkout env vars, we allow the Job env (if present) to have
 	// higher precedence than the agent configuration, unless the checkout-override
 	// mode locks them. Only checkout-scoped vars are passed here.
@@ -971,6 +989,38 @@ func jobContextDir(conf JobRunnerConfig) string {
 		return kubernetes.DefaultContextDir
 	}
 	return os.TempDir()
+}
+
+// The prototype integrates through the existing bootstrap-script seam. Wrapper
+// scripts are not supported: JobRunner must recognize the command to allocate
+// private coordination files and enforce the step-image policy.
+func usesDockerBootstrap(conf JobRunnerConfig) bool {
+	args, err := shellwords.Split(conf.AgentConfiguration.BootstrapScript)
+	return !conf.KubernetesExec && err == nil && len(args) >= 2 && args[1] == "docker-bootstrap"
+}
+
+func validateDockerBootstrapStep(conf JobRunnerConfig) error {
+	if usesDockerBootstrap(conf) {
+		if _, present := conf.Job.Step.RemainingFields["image"]; present {
+			return fmt.Errorf("docker bootstrap setup failed (125): step image is rejected by agent-only policy; pipeline image selection is not supported yet")
+		}
+	}
+	return nil
+}
+
+func createDockerJobContext(base string) (string, error) {
+	base = filepath.Clean(base)
+	if !filepath.IsAbs(base) || base == string(filepath.Separator) || base == filepath.Clean(os.TempDir()) || base == "/tmp" {
+		return "", fmt.Errorf("docker-bootstrap requires --job-context-dir set to a dedicated absolute per-agent directory")
+	}
+	if err := os.MkdirAll(base, 0o700); err != nil {
+		return "", fmt.Errorf("create Docker job context root: %w", err)
+	}
+	dir, err := os.MkdirTemp(base, "docker-job-")
+	if err != nil {
+		return "", fmt.Errorf("create private Docker job context: %w", err)
+	}
+	return dir, nil
 }
 
 func createJobEnvFiles(l logger.Logger, jobID, contextDir string) (shellFile, jsonFile *os.File, err error) {
