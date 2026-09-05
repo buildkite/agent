@@ -161,6 +161,8 @@ exec /buildkite-docker/bin/buildkite-agent bootstrap`
 	startup := time.NewTimer(cfg.OperationTimeout)
 	defer startup.Stop()
 	startupDeadline := startup.C
+	draining := false
+	var drainProbeErr error
 waiting:
 	for {
 		select {
@@ -172,14 +174,22 @@ waiting:
 		case <-ctx.Done():
 			break waiting
 		case <-startupDeadline:
+			if draining {
+				attachCancel()
+				<-done
+				if drainProbeErr != nil {
+					return SetupFailure, fmt.Errorf("docker attachment did not finish within the drain timeout: %w", drainProbeErr)
+				}
+				return SetupFailure, fmt.Errorf("docker attachment did not finish within the drain timeout")
+			}
 			var state bytes.Buffer
 			probeCtx, probeCancel := context.WithTimeout(ctx, cfg.OperationTimeout)
-			status, probeErr := r.Client.Run(probeCtx, []string{"inspect", "--format", "{{.State.Running}}", name}, nil, &state, io.Discard)
+			_, probeErr := r.Client.Run(probeCtx, []string{"inspect", "--format", "{{.State.Status}}", name}, nil, &state, io.Discard)
 			probeCancel()
 			if ctx.Err() != nil {
 				break waiting
 			}
-			if probeErr != nil || status != 0 || strings.TrimSpace(state.String()) != "true" {
+			if probeErr == nil && strings.TrimSpace(state.String()) == "created" {
 				// Prefer a concurrently completed attachment, including fast exits.
 				select {
 				case result := <-done:
@@ -191,12 +201,18 @@ waiting:
 				}
 				attachCancel()
 				<-done
-				if probeErr != nil {
-					return SetupFailure, fmt.Errorf("docker startup check failed: %w", probeErr)
-				}
 				return SetupFailure, fmt.Errorf("docker container did not start within the operation timeout")
 			}
-			startupDeadline = nil
+			if status := strings.TrimSpace(state.String()); probeErr == nil && (status == "running" || status == "paused") {
+				startupDeadline = nil
+				continue
+			}
+			// An exited or auto-removed container can still have logs and exit
+			// status draining through start --attach. Even a failed inspection
+			// may race auto-removal; give attachment a bounded chance to finish.
+			draining, drainProbeErr = true, probeErr
+			startup.Reset(cfg.OperationTimeout)
+			startupDeadline = startup.C
 		}
 	}
 
