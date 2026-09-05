@@ -5,8 +5,11 @@
 Implementation plan with an agreed first-milestone scope. An initial CLI prototype
 is implemented; a real pipeline smoke test has passed on an OrbStack Linux
 machine, including the container marker and absence of the host Docker socket.
-Live cancellation and broader lifecycle validation are still pending. Later phases describe
-the intended supported feature, not requirements for the first milestone.
+Manual validation has also confirmed exit-code preservation, graceful
+cancellation, supervisor-forced removal, and subsequent agent recovery. See the
+[validation runbook and results](docker-validation.md). Broader lifecycle
+validation remains pending. Later phases describe the intended supported feature,
+not requirements for the first milestone.
 
 First-milestone decisions:
 
@@ -60,9 +63,10 @@ Current implementation details and limits:
   Once auto-removal has discarded that state, the CLI exit code is retained;
   some Docker client failures can therefore remain indistinguishable from a
   bootstrap exit. Exact signal reporting and reliable OOM reporting are deferred.
-- A real pipeline smoke test has passed on OrbStack Linux. Live cancellation,
-  failure handling, hooks, artifacts, and lock compatibility still require
-  validation before treating this as an end-to-end validated milestone.
+- Real pipeline smoke, exit-code, cancellation, cleanup, and recovery tests have
+  passed on OrbStack Linux. Setup failure handling, hooks, artifacts, and lock
+  compatibility still require validation before treating this as an end-to-end
+  validated milestone.
 
 ## Objective
 
