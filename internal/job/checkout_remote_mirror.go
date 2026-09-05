@@ -100,12 +100,16 @@ const (
 	remoteMirrorSkipRecursiveSubmodules remoteMirrorSkipReason = "recursive-submodules"
 	remoteMirrorSkipSeparateGitDir      remoteMirrorSkipReason = "separate-git-dir"
 	remoteMirrorSkipURLConfigConflict   remoteMirrorSkipReason = "url-config-conflict"
+	remoteMirrorSkipCloneKit            remoteMirrorSkipReason = "origin-clonekit"
 )
 
 type remoteMirrorAttempt struct {
 	site       remoteMirrorSite
 	url        string
 	skipReason remoteMirrorSkipReason
+	// cloneKitURL is independently eligible for cold on-host mirror creation.
+	// It never grants a remote-mirror hit or bypasses canonical commit fetching.
+	cloneKitURL string
 
 	outcome  remoteMirrorOutcome
 	duration time.Duration

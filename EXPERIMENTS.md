@@ -18,6 +18,25 @@ If an experiment doesn't exist, no error will be raised.
 
 ## Available Experiments
 
+### `origin-clonekit`
+
+Seeds a missing on-host Git mirror using Cursor Origin's CloneKit pack data.
+Requires `BUILDKITE_GIT_MIRRORS_PATH` and a repository URL of the form
+`https://origin.cursor.com/owner/repo.git`. The backend-provided remote mirror
+URL takes precedence over the canonical repository URL. Credentials come only
+from the agent's repository credential helper; SSH authentication is not supported.
+
+Only the first checkout attempt of a fresh checkout is eligible. Existing mirrors,
+submodule mirrors, skipped mirror updates, hook-rewritten repositories and custom
+mirror clone flags retain their normal behavior. Downloads and verification have
+a 30-second budget; failures fall back directly to canonical Git in the same
+attempt. Cancellation does not start fallback. Canonical Git remains authoritative
+for the build commit. Disable the experiment to restore normal mirror creation;
+already-created mirrors remain usable.
+
+**Status:** Experimental, HTTPS Origin only. Uses primary artifact URLs, not the
+optional S3 delivery URLs. No top-up fetch or verification bypass is provided.
+
 ### `agent-api`
 
 This exposes a local API for interacting with the agent process.
