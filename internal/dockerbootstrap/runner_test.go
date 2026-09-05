@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"sync"
@@ -18,6 +19,9 @@ import (
 
 func testConfig(t *testing.T) Config {
 	t.Helper()
+	if runtime.GOOS == "windows" {
+		t.Skip("Docker bootstrap mounts require POSIX filesystem paths")
+	}
 	base := t.TempDir()
 	contextDir := filepath.Join(base, "context")
 	if err := os.Mkdir(contextDir, 0o700); err != nil {
@@ -273,10 +277,13 @@ func TestCancellationDuringSetup(t *testing.T) {
 func TestStartupTimeout(t *testing.T) {
 	cfg := testConfig(t)
 	cfg.OperationTimeout = 20 * time.Millisecond
-	f := &fakeClient{run: func(ctx context.Context, args []string, _ map[string]string, _, _ io.Writer) (int, error) {
+	f := &fakeClient{run: func(ctx context.Context, args []string, _ map[string]string, out, _ io.Writer) (int, error) {
 		if args[0] == "start" {
 			<-ctx.Done()
 			return 0, ctx.Err()
+		}
+		if args[0] == "inspect" {
+			_, _ = io.WriteString(out, "created")
 		}
 		return 0, nil
 	}}
@@ -286,6 +293,118 @@ func TestStartupTimeout(t *testing.T) {
 	}
 	if !f.called("rm") {
 		t.Fatal("startup timeout left container behind")
+	}
+}
+
+func TestStartupProbePreservesDrainingCompletion(t *testing.T) {
+	for _, state := range []string{"exited", "removed", "running"} {
+		t.Run(state, func(t *testing.T) {
+			cfg := testConfig(t)
+			cfg.OperationTimeout = 100 * time.Millisecond
+			probed := make(chan struct{})
+			f := &fakeClient{run: func(ctx context.Context, args []string, _ map[string]string, out, _ io.Writer) (int, error) {
+				switch args[0] {
+				case "start":
+					select {
+					case <-probed:
+					case <-ctx.Done():
+						return 0, ctx.Err()
+					}
+					// Inspection finishes before attachment returns its final logs
+					// and status. Running jobs must outlive the drain timeout too.
+					delay := 20 * time.Millisecond
+					if state == "running" {
+						delay = 2 * cfg.OperationTimeout
+					}
+					select {
+					case <-time.After(delay):
+						_, _ = io.WriteString(out, "final job output\n")
+						return 42, nil
+					case <-ctx.Done():
+						return 0, ctx.Err()
+					}
+				case "inspect":
+					if slices.Contains(args, "{{.State.Status}}") {
+						close(probed)
+						if state == "removed" {
+							return 1, nil
+						}
+						_, _ = io.WriteString(out, state)
+					} else {
+						return 1, nil
+					} // Auto-remove wins final inspection.
+				}
+				return 0, nil
+			}}
+			var out bytes.Buffer
+			code, err := (Runner{Client: f, Stdout: &out}).Run(t.Context(), cfg)
+			if code != 42 || err != nil {
+				t.Fatalf("got (%d, %v), want (42, nil)", code, err)
+			}
+			if !strings.Contains(out.String(), "final job output") {
+				t.Fatal("lost final output")
+			}
+			if !f.called("rm") {
+				t.Fatal("container not removed")
+			}
+		})
+	}
+}
+
+func TestAttachmentDrainIsBounded(t *testing.T) {
+	cfg := testConfig(t)
+	cfg.OperationTimeout = 20 * time.Millisecond
+	f := &fakeClient{run: func(ctx context.Context, args []string, _ map[string]string, out, _ io.Writer) (int, error) {
+		if args[0] == "start" {
+			<-ctx.Done()
+			return 0, ctx.Err()
+		}
+		if args[0] == "inspect" {
+			_, _ = io.WriteString(out, "exited")
+		}
+		return 0, nil
+	}}
+	code, err := (Runner{Client: f}).Run(t.Context(), cfg)
+	if code != SetupFailure || err == nil || !strings.Contains(err.Error(), "drain timeout") {
+		t.Fatalf("got (%d, %v)", code, err)
+	}
+	if !f.called("rm") {
+		t.Fatal("drain timeout left container behind")
+	}
+}
+
+func TestScalarMountPathsRejectCommasBeforeCreatingDirectories(t *testing.T) {
+	for _, name := range []string{"BUILDKITE_BUILD_PATH", "BUILDKITE_PLUGINS_PATH", "BUILDKITE_HOOKS_PATH", "BUILDKITE_GIT_MIRRORS_PATH"} {
+		t.Run(name, func(t *testing.T) {
+			cfg := testConfig(t)
+			base := t.TempDir()
+			left, right := filepath.Join(base, "left"), filepath.Join(base, "right")
+			cfg.Environment = append(cfg.Environment, name+"="+left+","+right)
+			if _, err := prepare(cfg); err == nil || !strings.Contains(err.Error(), name) {
+				t.Fatalf("expected scalar-path rejection, got %v", err)
+			}
+			for _, path := range []string{left, right, left + "," + right} {
+				if _, err := os.Stat(path); !os.IsNotExist(err) {
+					t.Errorf("unexpected filesystem change at %s: %v", path, err)
+				}
+			}
+		})
+	}
+}
+
+func TestAdditionalHooksPathsRemainAList(t *testing.T) {
+	cfg := testConfig(t)
+	first, second := t.TempDir(), t.TempDir()
+	cfg.Environment = append(cfg.Environment, "BUILDKITE_ADDITIONAL_HOOKS_PATHS="+first+","+second)
+	job, err := prepare(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range []string{first, second} {
+		mount := "type=bind,src=" + path + ",dst=" + path + ",readonly"
+		if !slices.Contains(job.args, mount) {
+			t.Errorf("missing read-only hook mount %s", path)
+		}
 	}
 }
 

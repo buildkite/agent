@@ -138,9 +138,18 @@ func prepare(cfg Config) (jobConfig, error) {
 		return job, err
 	}
 	for _, name := range []string{"BUILDKITE_BUILD_PATH", "BUILDKITE_PLUGINS_PATH", "BUILDKITE_HOOKS_PATH", "BUILDKITE_GIT_MIRRORS_PATH", "BUILDKITE_ADDITIONAL_HOOKS_PATHS"} {
-		for _, path := range strings.Split(all[name], ",") {
+		paths := []string{all[name]}
+		if name == "BUILDKITE_ADDITIONAL_HOOKS_PATHS" {
+			paths = strings.Split(all[name], ",")
+		}
+		for _, path := range paths {
 			if path == "" {
 				continue
+			}
+			// Validate before cleaning or creating directories. Only additional
+			// hooks are a list; a comma in a scalar path must never add a mount.
+			if !filepath.IsAbs(path) || strings.ContainsAny(path, ",\r\n") {
+				return job, fmt.Errorf("%s requires absolute paths without commas or newlines", name)
 			}
 			path = filepath.Clean(path)
 			if path == "/tmp" || within(contextDir, path) || within(containerRoot, path) || within(path, containerRoot) {
@@ -153,9 +162,6 @@ func prepare(cfg Config) (jobConfig, error) {
 				}
 			}
 			if !readonly {
-				if !filepath.IsAbs(path) {
-					return job, fmt.Errorf("%s must be absolute", name)
-				}
 				if err := os.MkdirAll(path, 0o755); err != nil {
 					return job, err
 				}

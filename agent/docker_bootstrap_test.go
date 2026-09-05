@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -51,7 +52,8 @@ func TestDockerJobContextIsolation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if info.Mode().Perm()&0o077 != 0 {
+	// Windows synthesizes mode bits; they do not describe directory ACLs.
+	if runtime.GOOS != "windows" && info.Mode().Perm()&0o077 != 0 {
 		t.Fatal("job context accessible to other users")
 	}
 	for _, invalid := range []string{"", ".", "/", "/tmp", os.TempDir()} {
