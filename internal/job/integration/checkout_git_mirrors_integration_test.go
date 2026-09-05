@@ -282,6 +282,124 @@ func TestCheckingOutLocalGitProjectWithSubmodules_WithGitMirrors(t *testing.T) {
 	tester.RunAndCheck(t, env...)
 }
 
+func TestCheckingOutLocalGitProjectWithRelativeSubmoduleURL_WithGitMirrors(t *testing.T) {
+	t.Parallel()
+
+	// Git for windows seems to struggle with local submodules in the temp dir
+	if runtime.GOOS == "windows" {
+		t.Skip()
+	}
+
+	tester, err := NewExecutorTester(mainCtx)
+	if err != nil {
+		t.Fatalf("NewExecutorTester() error = %v", err)
+	}
+	defer tester.Close()
+
+	if err := tester.EnableGitMirrors(); err != nil {
+		t.Fatalf("EnableGitMirrors() error = %v", err)
+	}
+
+	remoteRoot := filepath.Join(t.TempDir(), "remotes")
+	superprojectRepo, err := newGitRepositoryAt(filepath.Join(remoteRoot, "gerrit"))
+	if err != nil {
+		t.Fatalf("newGitRepositoryAt(superproject) error = %v", err)
+	}
+	if err := superprojectRepo.CreateBranch("main"); err != nil {
+		t.Fatalf("superprojectRepo.CreateBranch(main) error = %v", err)
+	}
+	submoduleRepo, err := newGitRepositoryAt(filepath.Join(remoteRoot, "java-prettify"))
+	if err != nil {
+		t.Fatalf("newGitRepositoryAt(submodule) error = %v", err)
+	}
+	if err := submoduleRepo.CreateBranch("main"); err != nil {
+		t.Fatalf("submoduleRepo.CreateBranch(main) error = %v", err)
+	}
+
+	if err := os.WriteFile(filepath.Join(submoduleRepo.Path, "submodule.txt"), []byte("submodule"), 0o600); err != nil {
+		t.Fatalf("writing submodule file: %v", err)
+	}
+	if err := submoduleRepo.Add("submodule.txt"); err != nil {
+		t.Fatalf("submoduleRepo.Add() error = %v", err)
+	}
+	if err := submoduleRepo.Commit("Add submodule content"); err != nil {
+		t.Fatalf("submoduleRepo.Commit() error = %v", err)
+	}
+
+	if err := os.WriteFile(filepath.Join(superprojectRepo.Path, "superproject.txt"), []byte("superproject"), 0o600); err != nil {
+		t.Fatalf("writing superproject file: %v", err)
+	}
+	if err := superprojectRepo.Add("superproject.txt"); err != nil {
+		t.Fatalf("superprojectRepo.Add() error = %v", err)
+	}
+	if err := superprojectRepo.Commit("Add superproject content"); err != nil {
+		t.Fatalf("superprojectRepo.Commit() error = %v", err)
+	}
+
+	out, err := superprojectRepo.Execute("-c", "protocol.file.allow=always", "submodule", "add", submoduleRepo.Path, "modules/java-prettify")
+	if err != nil {
+		t.Fatalf("superprojectRepo.Execute(submodule add) error = %v\nout = %s", err, out)
+	}
+	out, err = superprojectRepo.Execute("config", "-f", ".gitmodules", "submodule.modules/java-prettify.url", "../java-prettify")
+	if err != nil {
+		t.Fatalf("superprojectRepo.Execute(config relative URL) error = %v\nout = %s", err, out)
+	}
+	if err := superprojectRepo.Add(".gitmodules"); err != nil {
+		t.Fatalf("superprojectRepo.Add(.gitmodules) error = %v", err)
+	}
+	if err := superprojectRepo.Commit("Add relative submodule"); err != nil {
+		t.Fatalf("superprojectRepo.Commit(relative submodule) error = %v", err)
+	}
+
+	// Point the build at the isolated superproject; its relative submodule
+	// URL (../java-prettify) then resolves to the sibling remote.
+	for i, envVar := range tester.Env {
+		if strings.HasPrefix(envVar, "BUILDKITE_REPO=") {
+			tester.Env[i] = "BUILDKITE_REPO=" + superprojectRepo.Path
+			break
+		}
+	}
+
+	env := []string{
+		"BUILDKITE_GIT_CLONE_FLAGS=-v",
+		"BUILDKITE_GIT_CLEAN_FLAGS=-fdq",
+		"BUILDKITE_GIT_FETCH_FLAGS=-v",
+		"BUILDKITE_GIT_SUBMODULE_CLONE_CONFIG=protocol.file.allow=always",
+	}
+
+	// Actually execute git commands, but with expectations
+	git := tester.
+		MustMock(t, "git").
+		PassthroughToLocalCommand()
+
+	// The relative submodule URL must not be passed to the mirror clone path.
+	git.ExpectAll([][]any{
+		{"clone", "--mirror", "-v", "--", superprojectRepo.Path, matchSubDir(tester.GitMirrorsDir)},
+		{"clone", "-v", "--reference", matchSubDir(tester.GitMirrorsDir), "--", superprojectRepo.Path, "."},
+		{"clean", "-fdq"},
+		{"submodule", "foreach", "--recursive", "git clean -fdq"},
+		{"fetch", "-v", "--", "origin", "main"},
+		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
+		{"submodule", "sync", "--recursive"},
+		{"config", "--file", ".gitmodules", "--null", "--get-regexp", "submodule\\..+\\.url"},
+		{"-c", "protocol.file.allow=always", "submodule", "update", "--init", "--recursive", "--force"},
+		{"submodule", "foreach", "--recursive", "git reset --hard"},
+		{"clean", "-fdq"},
+		{"submodule", "foreach", "--recursive", "git clean -fdq"},
+		{"rev-parse", "HEAD"},
+		{"--no-pager", "log", "-1", "HEAD", "-s", "--no-color", gitShowFormatArg},
+	})
+
+	agent := tester.MockAgent(t)
+	agent.Expect("meta-data", "exists", job.CommitMetadataKey).AndExitWith(1)
+	agent.Expect("meta-data", "set", job.CommitMetadataKey).WithStdin(commitPattern)
+
+	tester.RunAndCheck(t, env...)
+	if got, want := tester.Output, `Skipping git mirror for relative submodule URL "../java-prettify"`; !strings.Contains(got, want) {
+		t.Fatalf("tester.Output does not contain %q\noutput = %s", want, got)
+	}
+}
+
 func TestCheckingOutLocalGitProjectWithSubmodulesDisabled_WithGitMirrors(t *testing.T) {
 	t.Parallel()
 

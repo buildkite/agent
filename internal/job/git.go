@@ -449,6 +449,10 @@ func gitEnumerateSubmoduleURLs(ctx context.Context, sh *shell.Shell) ([]string, 
 	return urls, nil
 }
 
+func isRelativeSubmoduleURL(repository string) bool {
+	return strings.HasPrefix(repository, "./") || strings.HasPrefix(repository, "../")
+}
+
 func gitRevParseInWorkingDirectory(ctx context.Context, sh *shell.Shell, workingDirectory string, extraRevParseArgs ...string) (string, error) {
 	gitDirectory := filepath.Join(workingDirectory, ".git")
 
