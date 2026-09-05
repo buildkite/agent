@@ -531,7 +531,10 @@ func (e *Executor) runUnwrappedHook(ctx context.Context, _ string, hookCfg HookC
 	environ.Set("BUILDKITE_HOOK_PATH", hookCfg.Path)
 	environ.Set("BUILDKITE_HOOK_SCOPE", hookCfg.Scope)
 
-	if err := e.shell.Command(hookCfg.Path).Run(ctx, shell.WithExtraEnv(environ)); err != nil {
+	err := e.shell.Command(hookCfg.Path).Run(ctx, shell.WithExtraEnv(environ))
+	// Store the last hook exit code for subsequent steps, matching wrapped shell hooks.
+	e.shell.Env.Set("BUILDKITE_LAST_HOOK_EXIT_STATUS", strconv.Itoa(shell.ExitCode(err)))
+	if err != nil {
 		return err
 	}
 	// Passing an empty env changes through because in polyglot hook we can't detect
