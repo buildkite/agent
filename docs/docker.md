@@ -2,9 +2,11 @@
 
 ## Status
 
-Implementation plan with an agreed first-milestone scope. No implementation
-exists yet. Later phases describe the intended supported feature, not requirements
-for the first milestone.
+Implementation plan with an agreed first-milestone scope. An initial CLI prototype
+is implemented; a real pipeline smoke test has passed on an OrbStack Linux
+machine, including the container marker and absence of the host Docker socket.
+Live cancellation and broader lifecycle validation are still pending. Later phases describe
+the intended supported feature, not requirements for the first milestone.
 
 First-milestone decisions:
 
@@ -19,6 +21,48 @@ First-milestone decisions:
 - Defer local Linux/OrbStack setup and live Docker validation initially. Start
   with unit tests and Linux builds; live validation remains required to complete
   the executable prototype.
+
+### Running the initial prototype
+
+On a Linux host with a local Docker Engine and a statically linked Linux agent:
+
+```sh
+buildkite-agent start \
+  --job-context-dir=/var/lib/buildkite-agent/docker-context \
+  --bootstrap-script='/usr/bin/buildkite-agent docker-bootstrap'
+```
+
+The agent executable in `--bootstrap-script` must be the development binary.
+An agent token and the normal agent configuration are still required. The Docker
+CLI defaults to `/usr/bin/docker`; override it with `--docker-path` inside the
+bootstrap-script argument if needed. Other prototype arguments are `--image`,
+`--cleanup-margin`, `--operation-timeout`, and `--pull-timeout`. None read policy
+from job environment variables or inherited agent configuration files.
+
+Current implementation details and limits:
+
+- `docker start --attach` performs attach, exit-observer registration, start, and
+  wait in one CLI invocation. Separate CLI processes cannot guarantee that
+  ordering for fast-exiting auto-removed containers.
+- The local endpoint is fixed to `unix:///var/run/docker.sock`. Docker uses an
+  empty private configuration directory; public images and images already in
+  the daemon's cache are supported. Private registry authentication is deferred.
+- Job-defined `DOCKER_*` variables are rejected because name-only environment
+  transport would also apply them to the host Docker client.
+- The image's configured user is used. The default image runs as root; UID/GID
+  mapping is deferred. Bind-mounted build outputs can therefore be root-owned.
+- Job API sockets use a container-private tmpfs. Only existing agent API socket
+  files are mounted for agent-level lock commands.
+- Wrapper scripts around `docker-bootstrap` are not supported: JobRunner must
+  recognize the command to allocate private coordination files and reject step
+  images. Host `PATH`, `HOME`, and other unavailable host paths are omitted.
+- Startup and attachment errors map to setup failures when state is available.
+  Once auto-removal has discarded that state, the CLI exit code is retained;
+  some Docker client failures can therefore remain indistinguishable from a
+  bootstrap exit. Exact signal reporting and reliable OOM reporting are deferred.
+- A real pipeline smoke test has passed on OrbStack Linux. Live cancellation,
+  failure handling, hooks, artifacts, and lock compatibility still require
+  validation before treating this as an end-to-end validated milestone.
 
 ## Objective
 
