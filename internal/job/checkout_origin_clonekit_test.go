@@ -17,6 +17,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/buildkite/agent/v4/env"
 	"github.com/buildkite/agent/v4/internal/experiments"
 	"github.com/buildkite/agent/v4/internal/shell"
 )
@@ -83,7 +84,7 @@ func TestOriginCloneKitSource(t *testing.T) {
 	ctx, _ := experiments.Enable(t.Context(), experiments.OriginCloneKit)
 	canonical := "https://origin.cursor.com/acme/repo.git"
 	newExecutor := func() *Executor {
-		sh, err := shell.New()
+		sh, err := shell.New(shell.WithEnv(env.New()))
 		if err != nil {
 			t.Fatal(err)
 		}
