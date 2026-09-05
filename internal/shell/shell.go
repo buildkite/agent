@@ -267,9 +267,10 @@ retryLoop:
 
 // Command represents a command that can be run in a shell.
 type Command struct {
-	shell   *Shell
-	command string
-	args    []string
+	shell          *Shell
+	command        string
+	args           []string
+	windowsCmdLine string
 }
 
 // Command returns a command that can be run in the shell.
@@ -295,6 +296,9 @@ func (s *Shell) Script(path, commandOverride string) (Command, error) {
 	isSh := filepath.Ext(path) == "" || filepath.Ext(path) == ".sh"
 	isWindows := runtime.GOOS == "windows"
 	isPwsh := filepath.Ext(path) == ".ps1"
+	ext := strings.ToLower(filepath.Ext(path))
+	isBatch := isWindows && (ext == ".bat" || ext == ".cmd")
+	var windowsCmdLine string
 
 	if commandOverride != "" {
 		// first element is the command, all others are args to which we append path
@@ -311,6 +315,21 @@ func (s *Shell) Script(path, commandOverride string) (Command, error) {
 	}
 
 	switch {
+	case isBatch:
+		// Batch files are interpreted by cmd.exe, not executed directly by
+		// CreateProcess. Use a raw command line because cmd.exe's quoting rules
+		// differ from the CommandLineToArgvW rules used by os/exec.
+		if strings.Contains(path, "%") {
+			return Command{}, fmt.Errorf("cannot run Windows batch script %q: path contains '%%', which cmd.exe expands", path)
+		}
+		cmdPath, err := systemCommandProcessor()
+		if err != nil {
+			return Command{}, fmt.Errorf("finding command processor for Windows batch script: %w", err)
+		}
+		command = cmdPath
+		args = []string{"/D", "/V:OFF", "/S", "/C", path}
+		windowsCmdLine = `"` + command + `" /D /V:OFF /S /C ""` + path + `""`
+
 	case isWindows && isSh:
 		if s.debug {
 			s.Commentf("Attempting to run %s with Bash for Windows", path)
@@ -386,9 +405,10 @@ func (s *Shell) Script(path, commandOverride string) (Command, error) {
 	}
 
 	return Command{
-		shell:   s,
-		command: command,
-		args:    args,
+		shell:          s,
+		command:        command,
+		args:           args,
+		windowsCmdLine: windowsCmdLine,
 	}, nil
 }
 
@@ -420,6 +440,7 @@ func (c Command) Run(ctx context.Context, opts ...RunCommandOpt) error {
 		c.shell.Errorf("Error building command: %v", err)
 		return err
 	}
+	cmdCfg.WindowsCmdLine = c.windowsCmdLine
 
 	// Merge in any extra env vars.
 	if cfg.extraEnv != nil {
