@@ -272,7 +272,7 @@ func createFormUploadRequest(ctx context.Context, _ logger.Logger, artifact *api
 
 	// It's important that we add the form field last because when
 	// uploading to an S3 form, they are really nit-picky about the field
-	// order, and the file needs to be the last one other it doesn't work.
+	// order, and the file needs to be the last one; otherwise it doesn't work.
 	if err := streamer.WriteFile(action.FileInput, artifact.Path, fh); err != nil {
 		return nil, err
 	}
@@ -291,7 +291,7 @@ func createFormUploadRequest(ctx context.Context, _ logger.Logger, artifact *api
 		return nil, err
 	}
 
-	// Setup the content type and length that s3 requires
+	// Set up the content type and length that s3 requires
 	req.Header.Add("Content-Type", streamer.ContentType)
 	// Letting the server know the agent version can be helpful for debugging
 	req.Header.Add("User-Agent", version.UserAgent())

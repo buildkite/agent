@@ -9,7 +9,7 @@ export AGENT_GO_VERSION="$(go env GOVERSION | cut -d. -f1,2)"
 echo --- :inbox_tray: Restoring Go caches
 buildkite-agent cache restore --name gomodcache --name lint_gocache
 
-echo --- :go: Checking go mod tidyness
+echo --- :go: Checking go mod tidiness
 go mod tidy
 if ! git diff --no-ext-diff --exit-code; then
   echo ^^^ +++
@@ -35,7 +35,7 @@ echo --- :go: Generating code
 go generate ./...
 if ! git diff --no-ext-diff --exit-code; then
   echo ^^^ +++
-  echo :x: Generated code was not commited.
+  echo :x: Generated code was not committed.
   echo "Run"
   echo "  go generate ./..."
   echo "and make a commit."

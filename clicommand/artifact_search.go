@@ -135,7 +135,7 @@ var ArtifactSearchCommand = &cli.Command{
 		// Create the API client
 		client := api.NewClient(l, loadAPIClientConfig(cfg, "AgentAccessToken"))
 
-		// Setup the searcher and try get the artifacts
+		// Set up the searcher and try to get the artifacts
 		searcher := artifact.NewSearcher(l, client, cfg.Build)
 		artifacts, err := searcher.Search(ctx, cfg.Query, cfg.Step, cfg.IncludeRetriedJobs, true)
 		if err != nil {

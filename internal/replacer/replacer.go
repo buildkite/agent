@@ -332,7 +332,7 @@ func (r *Replacer) Needles() []string {
 	return slices.Collect(maps.Keys(r.allNeedles))
 }
 
-// Reset removes all current needes and sets new set of needles. It is not
+// Reset removes all current needles and sets a new set of needles. It is not
 // necessary to Flush beforehand, but:
 //   - any previous needles which have begun matching will continue matching
 //     (until they reach a terminal state), and

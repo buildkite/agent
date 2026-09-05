@@ -67,7 +67,7 @@ type ExecutorConfig struct {
 	// env tag so hooks cannot change which merge commit the agent accepts.
 	PullRequestHeadCommit string
 
-	// Whether the agent should attempt to checkout the pull request commit using the merge refspec
+	// Whether the agent should attempt to check out the pull request commit using the merge refspec
 	PullRequestUsingMergeRefspec bool
 
 	// The provider of the pipeline
@@ -220,7 +220,7 @@ type ExecutorConfig struct {
 	// Service name to use when reporting traces.
 	TelemetryServiceName string
 
-	// Traceing context information
+	// Tracing context information
 	TracingTraceParent string
 
 	// W3C tracestate accompanying TracingTraceParent. Plumbed through to the

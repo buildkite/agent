@@ -3,11 +3,7 @@
 ![Build status](https://badge.buildkite.com/08e4e12a0a1e478f0994eb1e8d51822c5c74d395.svg?branch=main)
 [![Go Reference](https://pkg.go.dev/badge/github.com/buildkite/agent/v4.svg)](https://pkg.go.dev/github.com/buildkite/agent/v4)
 
-The buildkite-agent is a small, reliable, and cross-platform build runner that
-makes it easy to run automated builds on your own infrastructure. It’s main
-responsibilities are polling [buildkite.com](https://buildkite.com/) for work,
-running build jobs, reporting back the status code and output log of the job,
-and uploading the job's artifacts.
+The buildkite-agent is a small, reliable, and cross-platform build runner that makes it easy to run automated builds on your own infrastructure. Its main responsibilities are polling [buildkite.com](https://buildkite.com/) for work, running build jobs, reporting back the status code and output log of the job, and uploading the job's artifacts.
 
 Full documentation is available at
 [buildkite.com/docs/agent](https://buildkite.com/docs/agent).
@@ -127,11 +123,7 @@ our Go dependencies. Dependencies are not
 [vendored](https://go.dev/ref/mod#go-mod-vendor) into the repository unless
 necessary.
 
-The Go module published by this repo (i.e. the one you could use by adding
-`import "github.com/buildkite/agent/v4"` to your code) is **not considered to be
-versioned using semantic versioning**. Breaking changes may be introduced in
-minor releases. Use the agent as a runtime depedency of your Go app at your own
-risk.
+The Go module published by this repo (i.e. the one you could use by adding `import "github.com/buildkite/agent/v4"` to your code) is **not considered to be versioned using semantic versioning**. Breaking changes may be introduced in minor releases. Use the agent as a runtime dependency of your Go app at your own risk.
 
 ## Platform Support
 

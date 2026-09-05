@@ -6361,7 +6361,7 @@ type Pipeline implements Node {
 
   """
   Limit which branches build cancelling applies to, for example `!main` will
-  ensure that the main branch won't have it's builds automatically cancelled.
+  ensure that the main branch won't have its builds automatically cancelled.
   """
   cancelIntermediateBuildsBranchFilter: String
   cluster: Cluster
@@ -6497,7 +6497,7 @@ type Pipeline implements Node {
 
   """
   Limit which branches build skipping applies to, for example `!main` will
-  ensure that the main branch won't have it's builds automatically skipped.
+  ensure that the main branch won't have its builds automatically skipped.
   """
   skipIntermediateBuildsBranchFilter: String
 
@@ -6960,11 +6960,11 @@ type PipelineRotateWebhookURLPayload {
 }
 
 """
-A schedule of when a build should automatically triggered for a Pipeline
+A schedule of when a build should be automatically triggered for a Pipeline
 """
 type PipelineSchedule implements Node {
   """
-  The branch to use for builds that this schedule triggers. Defaults to to the default branch in the Pipeline
+  The branch to use for builds that this schedule triggers. Defaults to the default branch in the Pipeline
   """
   branch: String
 
@@ -7772,7 +7772,7 @@ type Query {
   ): PipelineTemplate
 
   """
-  Find an sso provider either using it's slug, or UUID
+  Find an SSO provider using either its slug or UUID
   """
   ssoProvider(
     """

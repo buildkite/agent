@@ -94,7 +94,7 @@ func TestArtifactUploadFollowSymlinks(t *testing.T) {
 	}
 }
 
-// Test that we can upload/downdload artifact using a custom Azure Blob storage
+// Test that we can upload/download artifacts using a custom Azure Blob storage
 // container.
 // Everything that gets uploaded here gets auto removed in 30 days.
 func TestArtifactUploadDownload_Azure(t *testing.T) {

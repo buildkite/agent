@@ -282,7 +282,7 @@ func NewJobRunner(ctx context.Context, l logger.Logger, apiClient *api.Client, c
 	// The writer that output from the process goes into
 	r.jobLogs = io.MultiWriter(allWriters...)
 
-	// Copy the current processes ENV and merge in the new ones. We do this
+	// Copy the current process's ENV and merge in the new ones. We do this
 	// so the sub process gets PATH and stuff. We merge our path in over
 	// the top of the current one so the ENV from Buildkite and the agent
 	// take precedence over the agent

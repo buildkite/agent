@@ -149,7 +149,7 @@ var ArtifactUploadCommand = &cli.Command{
 		// Create the API client
 		client := api.NewClient(l, loadAPIClientConfig(cfg, "AgentAccessToken"))
 
-		// Setup the uploader
+		// Set up the uploader
 		uploader := artifact.NewUploader(l, client, artifact.UploaderConfig{
 			JobID:             cfg.Job,
 			Paths:             cfg.UploadPaths,

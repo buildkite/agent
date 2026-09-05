@@ -282,7 +282,7 @@ func (s *Shell) Command(command string, args ...string) Command {
 }
 
 // Script returns a command that runs a script in the shell. The path is either
-// executed directly, or some kind of intepreter is executed in order to
+// executed directly, or some kind of interpreter is executed in order to
 // interpret it (loosely: powershell.exe for .ps1 files, bash(.exe) for shell
 // scripts without shebang lines).
 func (s *Shell) Script(path, commandOverride string) (Command, error) {
@@ -617,7 +617,7 @@ func (s *Shell) executeCommand(ctx context.Context, cmdCfg process.Config, stdou
 	processLogger = logger.Discard
 
 	if s.debug {
-		// Display normally-hidden output streams using log streamer.
+		// Display normally hidden output streams using log streamer.
 		if cmdCfg.Stdout == io.Discard {
 			stdOutStreamer := NewLoggerStreamer(s.Logger)
 			defer stdOutStreamer.Close() //nolint:errcheck // If this fails, YOLO?

@@ -176,7 +176,7 @@ func (e *errUnrecoverable) Error() string {
 		status = e.response.Status
 	}
 
-	return fmt.Sprintf("%s failed with unrecoverable status: %s, mesage: %q", e.action, status, e.err)
+	return fmt.Sprintf("%s failed with unrecoverable status: %s, message: %q", e.action, status, e.err)
 }
 
 // See https://connectrpc.com/docs/protocol/#error-codes
@@ -474,7 +474,7 @@ func (a *AgentWorker) Connect(ctx context.Context) error {
 	return a.client.Connect(ctx)
 }
 
-// Performs a heatbeat
+// Performs a heartbeat
 func (a *AgentWorker) Heartbeat(ctx context.Context) error {
 	// Retry the heartbeat a few times
 	r := roko.NewRetrier(

@@ -59,7 +59,7 @@ This command may be used to parse a file for values to redact from a
 running job's log output. If you dynamically fetch secrets during a job,
 it is recommended that you use this command to ensure they will be
 redacted from subsequent logs. Secrets fetched with the builtin
-′secret get′ command do not require the use of this command, they will
+′secret get′ command do not require the use of this command; they will
 be redacted automatically.
 
 Examples:

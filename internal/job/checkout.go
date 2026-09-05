@@ -255,7 +255,7 @@ func (e *Executor) checkout(ctx context.Context) error {
 						e.shell.Warningf("Failed to remove checkout dir while cleaning up after a checkout error: %v", err)
 					}
 
-					// Now make sure the build directory exists again before we try to checkout again, or proceed and run hooks
+					// Now make sure the build directory exists again before we try to check out again, or proceed and run hooks
 					// which presume the checkout dir exists
 					if err := e.createCheckoutDir(); err != nil {
 						return err
@@ -274,7 +274,7 @@ func (e *Executor) checkout(ctx context.Context) error {
 					e.shell.Warningf("Failed to remove checkout dir while cleaning up after a checkout error: %v", err)
 				}
 
-				// Now make sure the build directory exists again before we try to checkout again, or proceed and run hooks
+				// Now make sure the build directory exists again before we try to check out again, or proceed and run hooks
 				// which presume the checkout dir exists
 				if err := e.createCheckoutDir(); err != nil {
 					return err

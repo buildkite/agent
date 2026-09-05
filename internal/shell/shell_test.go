@@ -36,7 +36,7 @@ func TestRunAndCaptureWithTTY(t *testing.T) {
 		}
 	}()
 
-	// WithPTY(true) should be overriden by RunAndCapture.
+	// WithPTY(true) should be overridden by RunAndCapture.
 	sh := newShellForTest(t, shell.WithPTY(true))
 
 	go func() {

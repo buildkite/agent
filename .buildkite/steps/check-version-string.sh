@@ -20,7 +20,7 @@ chmod +x "pkg/buildkite-agent-linux-$ARCH"
 
 echo ~~~ Testing version string is clean
 VERSION=$("pkg/buildkite-agent-linux-$ARCH" --version)
-echo $ buildkite-agent --verison
+echo $ buildkite-agent --version
 echo "$VERSION"
 if [[ $VERSION =~ dirty ]]; then
   echo ^^^ +++

@@ -161,7 +161,7 @@ func (l *Loader) Load() (warnings []string, err error) {
 				}
 			}
 
-			// Validate the fieid, and if it fails, return its
+			// Validate the field, and if it fails, return its
 			// error.
 			err := l.validateField(fieldName, label, validationRules)
 			if err != nil {
@@ -224,7 +224,7 @@ func (l Loader) setFieldValueFromCLI(fieldName, cliName string) (finalErr error)
 		// If the cli name didn't have the special format, then we need to
 		// either load from the context's flags, or from a config file.
 
-		// We start by defaulting the value to what ever was provided
+		// We start by defaulting the value to whatever was provided
 		// by the configuration file
 		if l.File != nil {
 			if configFileValue, ok := l.File.Config[cliName]; ok {

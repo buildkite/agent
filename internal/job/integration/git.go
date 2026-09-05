@@ -23,7 +23,7 @@ var testGitRepositoryTemplate = sync.OnceValues(func() (string, error) {
 	return repo.Path, nil
 })
 
-func createTestGitRespository() (*gitRepository, error) {
+func createTestGitRepository() (*gitRepository, error) {
 	templatePath, err := testGitRepositoryTemplate()
 	if err != nil {
 		return nil, err

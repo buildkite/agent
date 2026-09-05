@@ -36,7 +36,7 @@ type LockReleaseConfig struct {
 
 var LockReleaseCommand = &cli.Command{
 	Name:        "release",
-	Usage:       "Releases a previously-acquired lock",
+	Usage:       "Releases a previously acquired lock",
 	Description: lockReleaseHelpDescription,
 	Flags:       lockCommonFlags(),
 	Action:      lockReleaseAction,

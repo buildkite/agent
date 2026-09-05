@@ -14,7 +14,7 @@ import (
 const stderrFd = 2
 
 var (
-	ErrFileNotOpen = errors.New("file not open, or the procces that opened it can't be found")
+	ErrFileNotOpen = errors.New("file not open, or the process that opened it can't be found")
 	numeric        = regexp.MustCompile("^[0-9]+$")
 )
 

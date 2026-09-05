@@ -421,7 +421,7 @@ var AgentStartCommand = &cli.Command{
 		},
 		&cli.StringFlag{
 			Name:    "job-log-path",
-			Usage:   "Location to store job logs created by configuring ′enable-job-log-tmpfile`, by default job log will be stored in TempDir",
+			Usage:   "Location to store job logs created by configuring ′enable-job-log-tmpfile′. By default, job logs will be stored in TempDir",
 			Sources: cli.EnvVars("BUILDKITE_JOB_LOG_PATH"),
 		},
 		&cli.BoolFlag{
@@ -442,7 +442,7 @@ var AgentStartCommand = &cli.Command{
 		},
 		&cli.StringFlag{
 			Name:    "hooks-shell",
-			Usage:   "The shell command used to interpret hooks commands, e.g pwsh -Command",
+			Usage:   "The shell command used to interpret hook commands, e.g. pwsh -Command",
 			Sources: cli.EnvVars("BUILDKITE_HOOKS_SHELL"),
 		},
 		&cli.StringFlag{
@@ -605,7 +605,7 @@ var AgentStartCommand = &cli.Command{
 		},
 		&cli.BoolFlag{ // git-submodules in bootstrap
 			Name:    "no-git-submodules",
-			Usage:   "Don't automatically checkout git submodules (default: false)",
+			Usage:   "Don't automatically check out git submodules (default: false)",
 			Sources: cli.EnvVars("BUILDKITE_NO_GIT_SUBMODULES", "BUILDKITE_DISABLE_GIT_SUBMODULES"),
 		},
 		&cli.BoolFlag{
@@ -697,7 +697,7 @@ var AgentStartCommand = &cli.Command{
 		},
 		&cli.StringFlag{
 			Name:    "signing-aws-kms-key",
-			Usage:   "The KMS KMS key ID, or key alias used when signing and verifying the pipeline.",
+			Usage:   "The KMS key ID or key alias used when signing and verifying the pipeline.",
 			Sources: cli.EnvVars("BUILDKITE_AGENT_SIGNING_AWS_KMS_KEY"),
 		},
 		&cli.StringFlag{
@@ -1315,7 +1315,7 @@ var AgentStartCommand = &cli.Command{
 			return err
 		}
 
-		// Setup the agent pool that spawns agent workers
+		// Set up the agent pool that spawns agent workers
 		pool, err := agent.NewAgentPool(workers, &agentConf)
 		if err != nil {
 			return err
@@ -1324,7 +1324,7 @@ var AgentStartCommand = &cli.Command{
 		// Agent-wide shutdown hook. Once per agent, for all workers on the agent.
 		defer agentShutdownHook(l, cfg, workers)
 
-		// Once the shutdown hook has been setup, trigger the startup hook.
+		// Once the shutdown hook has been set up, trigger the startup hook.
 		if err := agentStartupHook(l, cfg, workers); err != nil {
 			return fmt.Errorf("failed to run startup hook: %w", err)
 		}

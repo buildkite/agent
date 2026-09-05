@@ -65,7 +65,7 @@ func (f File) AbsolutePath() (string, error) {
 
 func (f File) Exists() bool {
 	// If getting the absolute path fails, we can just assume it doesn't
-	// exit...probably...
+	// exist...probably...
 	absolutePath, err := f.AbsolutePath()
 	if err != nil {
 		return false

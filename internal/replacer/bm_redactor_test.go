@@ -232,7 +232,7 @@ func (redactor *BoyerMooreRedactor) Write(input []byte) (int, error) {
 	// The \r case should help to handle progress bars/spinners that use \r to
 	// overwrite the current line.
 	// Technically this means that passwords containing newlines aren't
-	// guarateed to get redacted, but who does that anyway?
+	// guaranteed to get redacted, but who does that anyway?
 	for i := doneTo; i < len(input); i++ {
 		if input[i] == byte('\r') || input[i] == byte('\n') {
 			redactor.outbuf = append(redactor.outbuf, input[doneTo:i+1]...)

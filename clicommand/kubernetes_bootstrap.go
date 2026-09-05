@@ -183,7 +183,7 @@ var KubernetesBootstrapCommand = &cli.Command{
 			// for different workloads.
 			// The path can gets really long because Agent name contain auto generated uuid, it might break some customers'
 			// use case.
-			// The k8s agent runs emphemerally, there is no need to carefully craft a checkout path.
+			// The k8s agent runs ephemerally, so there is no need to carefully craft a checkout path.
 			environ.Set("BUILDKITE_BUILD_CHECKOUT_PATH", filepath.Join(buildPath, "buildkite"))
 		}
 

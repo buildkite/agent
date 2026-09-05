@@ -214,7 +214,7 @@ func TestOIDCTokenError(t *testing.T) {
 		OIDCTokenRequest *api.OIDCTokenRequest
 		AccessToken      string
 		ExpectedStatus   int
-		// TODO: make api.ErrorReponse a serializable type and populate this field
+		// TODO: make api.ErrorResponse a serializable type and populate this field
 		// ExpectedErr error
 	}{
 		{
@@ -261,7 +261,7 @@ func TestOIDCTokenError(t *testing.T) {
 			})
 
 			_, resp, err := client.OIDCToken(ctx, test.OIDCTokenRequest)
-			// TODO: make api.ErrorReponse a serializable type and test that the right error type is returned here
+			// TODO: make api.ErrorResponse a serializable type and test that the right error type is returned here
 			if err == nil {
 				t.Errorf("OIDCToken(%v) did not return an error as expected", test.OIDCTokenRequest)
 			}

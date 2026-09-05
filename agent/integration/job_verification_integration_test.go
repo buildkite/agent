@@ -618,7 +618,7 @@ func TestJobVerification(t *testing.T) {
 			},
 		},
 		{
-			name:                     "when job has pipeline invariants and the sigature is valid, it runs the job",
+			name:                     "when job has pipeline invariants and the signature is valid, it runs the job",
 			agentConf:                agent.AgentConfiguration{VerificationFailureBehaviour: agent.VerificationBehaviourBlock},
 			job:                      jobWithPipelineInvariantsInEnv,
 			repositoryURL:            defaultRepositoryURL,

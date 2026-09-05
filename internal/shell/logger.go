@@ -24,7 +24,7 @@ type Logger interface {
 	// Commentf prints a comment line, e.g `# my comment goes here`
 	Commentf(format string, v ...any)
 
-	// Errorf shows a Buildkite formatted error expands the previous group
+	// Errorf shows a Buildkite formatted error and expands the previous group
 	Errorf(format string, v ...any)
 
 	// Warningf shows a buildkite bootstrap warning

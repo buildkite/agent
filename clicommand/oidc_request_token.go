@@ -80,7 +80,7 @@ Exit statuses:
 
 var OIDCRequestTokenCommand = &cli.Command{
 	Name:        "request-token",
-	Usage:       "Requests and prints an OIDC token from Buildkite with the specified audience,",
+	Usage:       "Requests and prints an OIDC token from Buildkite with the specified audience",
 	Description: oidcTokenDescription,
 	Flags: slices.Concat(globalFlags(), apiFlags(), []cli.Flag{
 		&cli.StringFlag{

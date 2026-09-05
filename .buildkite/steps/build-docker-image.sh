@@ -68,7 +68,7 @@ echo "--- Building :docker: $image_tag for all architectures"
 docker buildx build --progress plain --builder "$builder_name" --platform linux/amd64,linux/arm64 "$packaging_dir"
 
 # Tag images for just the native architecture. There is a limitation in docker that prevents this
-# from being done in one command. Luckliy the second build will be quick because of docker layer caching
+# from being done in one command. Luckily the second build will be quick because of docker layer caching
 # As this is just a native build, we don't need the lock.
 docker buildx build --progress plain --builder "$builder_name" --tag "$image_tag" --load "$packaging_dir"
 

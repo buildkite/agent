@@ -36,7 +36,7 @@ This command generates a new JWS key pair, used for signing and verifying jobs
 in Buildkite.
 
 The pair is written as a JSON Web Key Set (JWKS) to two files, a private JWKS
-file and a public JWKS file. The private JWKS should be used as for signing,
+file and a public JWKS file. The private JWKS should be used for signing,
 and the public JWKS for verification.
 
 For more information about JWS, see https://tools.ietf.org/html/rfc7515 and

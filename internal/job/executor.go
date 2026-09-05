@@ -82,8 +82,8 @@ type Executor struct {
 	cancelCh  chan struct{}
 	cancelled bool
 
-	// redactors for the job logs. The will be populated with values both from environment variable and through the Job API.
-	// In order for the latter to happen, a reference is passed into the the Job API server as well
+	// redactors for the job logs. These will be populated with values both from environment variables and through the Job API.
+	// In order for the latter to happen, a reference is passed into the Job API server as well
 	redactors *replacer.Mux
 
 	// otlpJobLogger exports job log output as OTLP log records while job log
@@ -144,7 +144,7 @@ func (e *Executor) Run(ctx context.Context) (exitCode int) {
 	// Be careful not to log customer secrets here!
 	tempLog := shell.NewWriterLogger(stderr, true, e.DisabledWarnings)
 
-	// setup the redactors here once and for the life of the executor
+	// set up the redactors here once and for the life of the executor
 	// they will be flushed at the end of each hook
 	preRedactedStdout, preRedactedLogger := e.setupRedactors(tempLog, environ, stdout, stderr)
 
@@ -800,7 +800,7 @@ func (e *Executor) addOutputRedactors() {
 
 	// This should probably be a reset rather than a mutate.
 	// But does a particular string stop being a secret if we learn new secret strings?
-	// For produence, we use Add.
+	// For prudence, we use Add.
 	for _, pair := range toRedact {
 		e.redactors.Add(pair.Value, redact.GoEscaped(pair.Value))
 	}
@@ -1447,7 +1447,7 @@ func (e *Executor) writeBatchScript(cmd string) (string, error) {
 // set up as a secret redactor. References to the redactors are retained in
 // e.redactors so they can be updated with new secrets.
 //
-// Pictorally:
+// Pictorially:
 //
 //	(returned io.Writer) == redactor 1 -> stdout
 //

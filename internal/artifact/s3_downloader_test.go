@@ -22,7 +22,7 @@ import (
 	"github.com/buildkite/agent/v4/logger"
 )
 
-func TestS3DowloaderBucketPath(t *testing.T) {
+func TestS3DownloaderBucketPath(t *testing.T) {
 	t.Parallel()
 
 	s3Downloader := NewS3Downloader(logger.Discard, S3DownloaderConfig{
@@ -40,7 +40,7 @@ func TestS3DowloaderBucketPath(t *testing.T) {
 	}
 }
 
-func TestS3DowloaderBucketName(t *testing.T) {
+func TestS3DownloaderBucketName(t *testing.T) {
 	t.Parallel()
 
 	s3Downloader := NewS3Downloader(logger.Discard, S3DownloaderConfig{
@@ -58,7 +58,7 @@ func TestS3DowloaderBucketName(t *testing.T) {
 	}
 }
 
-func TestS3DowloaderBucketFileLocation(t *testing.T) {
+func TestS3DownloaderBucketFileLocation(t *testing.T) {
 	t.Parallel()
 
 	s3Downloader := NewS3Downloader(logger.Discard, S3DownloaderConfig{

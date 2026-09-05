@@ -71,7 +71,7 @@ dry_run bundle exec deb-s3 upload "${deb_s3_args[@]}" "$PACKAGE"
 
 echo "✅ All done! To install this package:"
 echo ""
-echo "    # Login as root"
+echo "    # Log in as root"
 echo "    $ sudo su"
 echo ""
 echo "    # Add the repository to your APT sources"

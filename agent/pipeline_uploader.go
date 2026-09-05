@@ -94,7 +94,7 @@ func (u *PipelineUploader) Upload(ctx context.Context, l logger.Logger) error {
 		)
 	}
 
-	if err := u.pollForPiplineUploadStatus(ctx, l); err != nil {
+	if err := u.pollForPipelineUploadStatus(ctx, l); err != nil {
 		return fmt.Errorf("failed to upload and process pipeline: %w", err)
 	}
 
@@ -167,7 +167,7 @@ func (u *PipelineUploader) pipelineUploadAsyncWithRetry(
 	})
 }
 
-func (u *PipelineUploader) pollForPiplineUploadStatus(ctx context.Context, l logger.Logger) error {
+func (u *PipelineUploader) pollForPipelineUploadStatus(ctx context.Context, l logger.Logger) error {
 	return roko.NewRetrier(
 		roko.WithMaxAttempts(defaultAttempts),
 		roko.WithStrategy(roko.Constant(defaultSleepDuration)),

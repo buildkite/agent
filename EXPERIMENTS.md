@@ -1,6 +1,6 @@
 # Experiments
 
-We frequently introduce new experimental features to the agent. You can use the `--experiment` flag to opt-in to them and test them out:
+We frequently introduce new experimental features to the agent. You can use the `--experiment` flag to opt in to them and test them out:
 
 ```bash
 buildkite-agent start --experiment experiment1 --experiment experiment2
@@ -23,7 +23,7 @@ If an experiment doesn't exist, no error will be raised.
 This exposes a local API for interacting with the agent process.
 ...with primitives that can be used to solve local concurrency problems (such as multiple agents handling some shared local resource).
 
-The API is exposed via a Unix Domain Socket. The path to the socket is not available via a environment variable - rather, there is a single (configurable) path on the system.
+The API is exposed via a Unix Domain Socket. The path to the socket is not available via an environment variable – rather, there is a single (configurable) path on the system.
 
 **Status:** Experimental while we iron out the API and test it out in the wild. We'll probably promote this to non-experiment soon™.
 

@@ -196,7 +196,7 @@ func (a *Uploader) Upload(ctx context.Context) error {
 
 	// Batch-create artifact records on Buildkite and upload each batch
 	// immediately. This keeps presigned upload URLs fresh — if all
-	// artifacts were were created upfront in a single batch, URLs for artifacts near the
+	// artifacts were created upfront in a single batch, URLs for artifacts near the
 	// end of the queue could expire before the agent gets to them.
 	batchCreator := NewArtifactBatchCreator(a.logger, a.apiClient, BatchCreatorConfig{
 		JobID:                  a.conf.JobID,
@@ -462,7 +462,7 @@ func (a *Uploader) build(path, absolutePath string) (*api.Artifact, error) {
 	}
 	defer file.Close() //nolint:errcheck // File is only open for read.
 
-	// Generate a SHA-1 and SHA-256 checksums for the file.
+	// Generate SHA-1 and SHA-256 checksums for the file.
 	hash1, hash256 := sha1.New(), sha256.New()
 	size, err := io.Copy(io.MultiWriter(hash1, hash256), file)
 	if err != nil {
@@ -550,11 +550,11 @@ func (a *Uploader) createUploader(ctx context.Context) (_ workCreator, err error
 
 // workCreator implementations convert artifacts into units of work for uploading.
 type workCreator interface {
-	// The Artifact.URL property is populated with what ever is returned
+	// The Artifact.URL property is populated with whatever is returned
 	// from this method prior to uploading.
 	URL(*api.Artifact) string
 
-	// CreateWork provide units of work for uploading an artifact.
+	// CreateWork provides units of work for uploading an artifact.
 	CreateWork(*api.Artifact) ([]workUnit, error)
 }
 

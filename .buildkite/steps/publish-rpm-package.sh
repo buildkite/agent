@@ -22,7 +22,7 @@ createrepo() {
 }
 
 updaterepo() {
-  # Reuses the old package metadata, and add new packages with --pkglist.
+  # Reuses the old package metadata and adds new packages with --pkglist.
   # createrepo_c tests that pkglist is a _regular_ file, so we can't use
   # a Bash process substitution i.e. <(find ...)
   # --skip-stat prevents createrepo_c from trying to stat all the RPMs that
