@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+step() {
+	local label=$1
+	shift
+	local started=$SECONDS
+
+	printf '\n==> %s\n' "$label"
+	"$@"
+	printf '==> %s completed in %ss\n' "$label" "$((SECONDS - started))"
+}
+
+mise_bin="$HOME/.local/bin/mise"
+export PATH="$HOME/.local/bin:$PATH"
+if [[ ! -x "$mise_bin" ]]; then
+	printf '\n==> Install mise\n'
+	started=$SECONDS
+	curl --fail --silent --show-error https://mise.run | sh
+	printf '==> Install mise completed in %ss\n' "$((SECONDS - started))"
+else
+	printf '==> mise is already installed\n'
+fi
+
+profile_marker='# Buildkite Agent toolchain managed by mise'
+if ! grep -Fqx "$profile_marker" "$HOME/.bash_profile" 2>/dev/null; then
+	cat >>"$HOME/.bash_profile" <<'EOF'
+
+# Buildkite Agent toolchain managed by mise
+eval "$("$HOME/.local/bin/mise" activate bash)"
+EOF
+fi
+
+step "Trust repository tool configuration" "$mise_bin" trust --yes "$PWD/mise.toml"
+step "Install system dependencies" "$mise_bin" bootstrap packages apply --yes
+step "Install pinned toolchain" "$mise_bin" install --yes
+
+step "Download Go dependencies" "$mise_bin" exec -- go mod download
+step "Install Ruby dependencies" "$mise_bin" exec -- bundle install --jobs 4 --retry 3
