@@ -43,7 +43,9 @@ scripts are unsupported because JobRunner must recognize the subcommand to
 allocate private job context and enforce image rejection. The Docker
 CLI defaults to `/usr/bin/docker`; override it with `--docker-path` inside the
 bootstrap-script argument if needed. Other prototype arguments are `--image`,
-`--cleanup-margin`, `--operation-timeout`, and `--pull-timeout`. None read policy
+`--cleanup-margin`, `--operation-timeout`, `--pull-timeout`, `--pull-policy`,
+`--docker-config`, `--docker-helper-path`, `--docker-helper-env-file`, and `--user`.
+None read policy
 from job environment variables or inherited agent configuration files.
 
 Current implementation details and limits:
@@ -52,18 +54,17 @@ Current implementation details and limits:
   wait in one CLI invocation. Separate CLI processes cannot guarantee that
   ordering for fast-exiting auto-removed containers.
 - The local endpoint is fixed to `unix:///var/run/docker.sock`. Docker uses an
-  empty private configuration directory; public images and images already in
-  the daemon's cache are supported. Private registry authentication is deferred.
+  empty private configuration for container operations. Pulls can use
+  operator-provided registry credentials; see "Registry authentication".
 - Job-defined `DOCKER_*` variables are rejected because name-only environment
   transport would also apply them to the host Docker client. This includes common
   pipeline settings such as `DOCKER_BUILDKIT` and `DOCKER_DEFAULT_PLATFORM`; remove
   these from prototype jobs. Narrower compatibility needs separate environment
   transport or a verified exception list.
-- The image's configured user is used. The default image runs as root; UID/GID
-  mapping is deferred. Bind-mounted build outputs can therefore be root-owned.
-  The private context directory is mode 0700 and env files are mode 0600, owned
-  by the host agent. A different non-root image UID may not read them. Phase 2
-  must test access with matching UIDs and rootless user namespace mappings.
+- Containers default to the host agent's numeric UID:GID. `--user=UID:GID`
+  overrides it; `--user=0:0` explicitly runs as root. Private context remains
+  mode 0700 with mode 0600 env files. Rootless/user-namespace mappings are not
+  supported by this ownership contract yet; see "File ownership".
 - Job API sockets use a container-private tmpfs. Only existing agent API socket
   files are mounted for agent-level lock commands.
 - Wrapper scripts around `docker-bootstrap` are not supported: JobRunner must
@@ -514,16 +515,31 @@ container so ANSI output matches the non-Docker path.
 
 ### File ownership
 
-A container running as root can leave root-owned files in the host build path.
-The design must make this behavior explicit.
+The default UID:GID matches the host agent. The image's `USER` is overridden.
+Operators can select a numeric identity with `--user=UID:GID`; names are not
+accepted. A root host agent defaults to root, and `--user=0:0` is an explicit
+compatibility option that can produce root-owned workspace files.
 
-Support an agent-controlled container user. Test both:
+Each job receives a private tmpfs home owned by that UID:GID. Minimal read-only
+`/etc/passwd` and `/etc/group` files provide root and the selected identity
+(`buildkite` for a non-root UID). Image-specific accounts and supplementary host
+groups are not preserved. This deliberately avoids inheriting the host Docker
+group; images requiring their original account database need separate support.
 
-- Running as the image's configured user for image compatibility.
-- Running as the host agent UID and GID for bind-mount ownership compatibility.
+A root host agent can grant the selected UID ownership of the private job context
+and coordination files. An unprivileged host agent can select its own UID or
+explicit root; selecting another non-root UID fails before Docker starts.
+Generated identity files are removed during supervisor cleanup.
 
-Neither behavior works universally, so the selected policy must be configurable
-and validated during container startup.
+Before bootstrap, the entrypoint checks context readability and write/search
+access to home, build, plugin, mirror, and existing checkout directories. Existing
+workspaces are never recursively chowned. Operators must provision compatible
+ownership or new directories when migrating from root execution. Nested files
+with incompatible ownership can still fail during checkout or plugin reuse.
+
+The mounted binary must be executable by the selected identity. Rootless Docker
+and daemon user-namespace remapping require additional ownership mapping and
+remain outside the validated support boundary.
 
 ## Job API
 
@@ -723,17 +739,38 @@ improves job cleanup, but it is not a virtual-machine security boundary.
 
 ## Registry authentication
 
-Registry credentials are host-side configuration and must not become part of the
-job environment.
+Image policy is operator-only: `--pull-policy=missing` is the default, `always`
+pulls before every job, and `never` requires a cached image. `always` fails on
+pull failure even when cached. Every successful resolution pins the container to
+the inspected immutable image ID. No policy is accepted from job environment.
 
-For the CLI prototype, use a private temporary Docker configuration directory or
-an existing agent-owned credential helper. Remove temporary authentication data
-after pull. Do not mount the host's general Docker configuration into the job
-container unless explicitly required.
+`--docker-config=/absolute/directory` reads a Docker `config.json` provisioned
+using `docker login --password-stdin`. The file must be accessible only to its
+owner (normally mode 0600). Without this option no host credentials are loaded.
+Only `auths`, `credsStore`, and `credHelpers` are copied into a temporary private
+configuration. Proxy injection, custom headers, and CLI plugin settings are not
+copied. The temporary configuration is removed when the supervisor exits.
 
-Credentials are resolved per registry from the resolved image reference. The
-allowlist in "Image selection" bounds which registries a pipeline can reach, so
-operators only need to configure credentials for registries they have allowed.
+Only pull commands receive the authentication configuration. Other Docker
+operations use an empty configuration. Neither configuration is mounted into the
+job. Mounts overlapping the source credential directory or helper environment
+file, including through symlinks, are rejected.
+
+Credential helper executables run on the host. `--docker-helper-path` supplies an
+absolute search path; otherwise the fixed system search path is used.
+`--docker-helper-env-file=/absolute/file.json` supplies a mode 0600 JSON object of
+string environment values, such as a helper's HOME or cloud credentials. These
+values are supplied only during pulls. No job environment is inherited by helpers;
+Docker control variables and PATH cannot be set through this file. Provision
+helper programs and their credential files outside job-mounted directories.
+
+Static registry secrets and helper environment values are included in diagnostic
+redaction. Helpers must not print dynamically retrieved credentials in failure
+messages. TLS trust is configured on the Docker daemon; remote Docker endpoints
+and arbitrary inherited Docker client settings remain unsupported.
+
+Step-selected images remain deferred. When introduced, agent image policy must
+bound the registries reachable using these credentials.
 
 ## Cleanup and reconciliation
 
@@ -888,10 +925,10 @@ These results are live validation, not an automated Docker integration suite.
 ### Phase 2: supported MVP
 
 - Add complete configuration validation.
-- Add pull policies and per-registry authentication.
+- [x] Operator pull policies and per-registry authentication, including helpers.
 - Add step-level `image` support: typed field in go-pipeline, `image` in the
   signed fields, `BUILDKITE_JOB_IMAGE` plumbing, and the policy and allowlist.
-- Add UID/GID handling.
+- [x] Host UID:GID default, numeric overrides, private home, and access checks.
 - Add resource limits and baseline security options.
 - Add per-job networks.
 - Add labels and stale-resource reconciliation.
@@ -932,7 +969,8 @@ Resolve these before declaring the feature supported:
    self-hosted agents and the go-pipeline signing change.
 2. **Docker socket:** whether host-daemon compatibility is allowed and how it is
    visibly marked as unsafe.
-3. **File ownership:** image user versus host UID/GID behavior.
+3. **File ownership:** migration of existing root-owned paths and support for
+   rootless/user-namespace mappings.
 4. **Workspace storage:** host bind mount versus ephemeral Docker volume.
 5. **Agent binary:** baked-in version versus a read-only host binary mount.
 6. **Environment transport:** Docker CLI inheritance versus Engine API.

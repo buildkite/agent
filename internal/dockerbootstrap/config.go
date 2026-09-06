@@ -22,6 +22,11 @@ const (
 )
 
 type Config struct {
+	PullPolicy       string
+	DockerConfig     string
+	HelperEnvFile    string
+	User             string
+	RedactedValues   []string
 	Image            string
 	Binary           string
 	Environment      []string
@@ -31,9 +36,10 @@ type Config struct {
 }
 
 type jobConfig struct {
-	env   map[string]string
-	args  []string
-	grace time.Duration
+	env           map[string]string
+	args          []string
+	grace         time.Duration
+	userDirectory string
 }
 
 var envName = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
@@ -42,6 +48,14 @@ func prepare(cfg Config) (jobConfig, error) {
 	var job jobConfig
 	if cfg.Image == "" || strings.HasPrefix(cfg.Image, "-") || strings.ContainsAny(cfg.Image, " \t\r\n") {
 		return job, fmt.Errorf("invalid Docker bootstrap image")
+	}
+	if _, _, err := containerUser(cfg.User); err != nil {
+		return job, err
+	}
+	switch cfg.PullPolicy {
+	case "", "missing", "always", "never":
+	default:
+		return job, fmt.Errorf("pull-policy must be always, missing, or never")
 	}
 	if cfg.CleanupMargin <= 0 || cfg.OperationTimeout <= 0 || cfg.PullTimeout <= 0 {
 		return job, fmt.Errorf("docker bootstrap timeouts must be positive")
@@ -125,6 +139,9 @@ func prepare(cfg Config) (jobConfig, error) {
 		if _, err := os.Stat(source); err != nil {
 			return fmt.Errorf("docker mount source unavailable: %w", err)
 		}
+		if err := rejectCredentialMount(source, cfg); err != nil {
+			return err
+		}
 		arg := "type=bind,src=" + source + ",dst=" + target
 		if readonly {
 			arg += ",readonly"
@@ -177,7 +194,7 @@ func prepare(cfg Config) (jobConfig, error) {
 	if all["BUILDKITE_BUILD_PATH"] == "" {
 		return job, fmt.Errorf("BUILDKITE_BUILD_PATH is required")
 	}
-	job.args = append(job.args, "--workdir", all["BUILDKITE_BUILD_PATH"])
+	job.args = append(job.args, "--workdir", containerRoot+"/home")
 	// Mounting the shared directory would expose other jobs' sockets.
 	if base := all["BUILDKITE_SOCKETS_PATH"]; base != "" {
 		for _, name := range []string{"agent-" + all["BUILDKITE_AGENT_PID"], "agent-leader"} {
@@ -188,6 +205,25 @@ func prepare(cfg Config) (jobConfig, error) {
 				}
 			}
 		}
+	}
+	userDir, uid, gid, err := prepareUser(cfg.User, contextDir)
+	if err != nil {
+		return job, err
+	}
+	job.userDirectory = userDir
+	for _, name := range []string{"passwd", "group"} {
+		if err := addMount(filepath.Join(userDir, name), "/etc/"+name, true); err != nil {
+			_ = os.RemoveAll(userDir)
+			return job, err
+		}
+	}
+	job.args = append(job.args, "--user", fmt.Sprintf("%d:%d", uid, gid), "--tmpfs", fmt.Sprintf("%s/home:rw,nosuid,nodev,mode=0700,uid=%d,gid=%d", containerRoot, uid, gid))
+	job.env["HOME"] = containerRoot + "/home"
+	job.env["USER"] = "buildkite"
+	job.env["LOGNAME"] = "buildkite"
+	if uid == 0 {
+		job.env["USER"] = "root"
+		job.env["LOGNAME"] = "root"
 	}
 	keys := make([]string, 0, len(mounts))
 	for target := range mounts {
