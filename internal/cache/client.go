@@ -60,18 +60,15 @@ type client struct {
 	onProgress ProgressCallback
 }
 
-// newClient builds a client from apiClient and cfg: loads and expands the
-// cache configuration file, validates every cache definition, and returns the
+// newClient builds a client from apiClient and cfg: expands and validates every
+// cache definition, and returns the
 // client together with the cache names to operate on (filtered by cfg.Names if
 // non-empty).
 //
-// Returns (nil, nil, nil) when the configuration file has no caches.
+// Returns (nil, nil, nil) when the configuration has no caches.
 // Returns ErrInvalidConfiguration (wrapped) on expansion or validation failure.
 func newClient(l logger.Logger, apiClient cacheAPI, cfg Config) (*client, []string, error) {
-	caches, err := configuration.LoadFile(cfg.CacheConfigFile)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to load cache configuration: %w", err)
-	}
+	caches := cfg.Caches
 	if len(caches) == 0 {
 		return nil, nil, nil
 	}

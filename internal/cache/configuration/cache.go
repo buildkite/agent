@@ -2,6 +2,7 @@ package configuration
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -77,16 +78,27 @@ func (c Cache) Validate() error {
 // which refuses to clean those directories (see cleanPath's protectedDirs), so
 // it is rejected up front.
 func isWholeAnchorTarget(p string) bool {
-	switch filepath.Clean(p) {
+	clean := filepath.Clean(p)
+	switch clean {
 	case "~", ".", string(filepath.Separator):
 		return true
 	}
 	if filepath.IsAbs(p) {
-		c := filepath.Clean(p)
-		vol := filepath.VolumeName(c) // a bare volume root such as "C:\" on Windows
-		if c == vol+string(filepath.Separator) || c == vol {
+		vol := filepath.VolumeName(clean) // a bare volume root such as "C:\" on Windows
+		if clean == vol+string(filepath.Separator) || clean == vol {
 			return true
 		}
+	}
+
+	resolved, err := filepath.Abs(p)
+	if err != nil {
+		return false
+	}
+	if home, err := os.UserHomeDir(); err == nil && resolved == filepath.Clean(home) {
+		return true
+	}
+	if cwd, err := os.Getwd(); err == nil && resolved == filepath.Clean(cwd) {
+		return true
 	}
 	return false
 }
@@ -94,7 +106,7 @@ func isWholeAnchorTarget(p string) bool {
 // isValidPath checks if a path is valid (doesn't contain null bytes or other invalid characters).
 func isValidPath(path string) bool {
 	// Check for invalid characters (null bytes, etc.)
-	if strings.ContainsRune(path, 0) {
+	if strings.ContainsRune(path, 0) || strings.ContainsAny(path, "\r\n") {
 		return false
 	}
 

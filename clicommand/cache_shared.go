@@ -3,10 +3,17 @@ package clicommand
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 
+	"github.com/buildkite/agent/v4/internal/cache/configuration"
 	"github.com/urfave/cli/v3"
+)
+
+const (
+	pathCacheName          = "path_cache"
+	pathCacheFormatVersion = "path-cache-v1"
 )
 
 // CacheConfig includes cache-related shared options for easy inclusion across
@@ -16,6 +23,7 @@ type CacheConfig struct {
 	Registry        string   `cli:"registry"`
 	BucketURL       string   `cli:"cache-store-url"`
 	CacheConfigFile string   `cli:"cache-config-file"`
+	Path            string   `cli:"path"`
 	Concurrency     int      `cli:"concurrency"`
 }
 
@@ -45,6 +53,11 @@ func cacheFlags() []cli.Flag {
 			Usage:   "Path to the cache configuration YAML file (defaults to .buildkite/cache.yml or .buildkite/cache.yaml)",
 			Sources: cli.EnvVars("BUILDKITE_CACHE_CONFIG_FILE"),
 		},
+		&cli.StringFlag{
+			Name:  "path",
+			Value: "",
+			Usage: "File or directory to cache using the agent's built-in cache configuration",
+		},
 		&cli.IntFlag{
 			Name:    "concurrency",
 			Value:   2,
@@ -52,6 +65,67 @@ func cacheFlags() []cli.Flag {
 			Sources: cli.EnvVars("BUILDKITE_CACHE_CONCURRENCY"),
 		},
 	}
+}
+
+// resolveCacheConfiguration selects one configuration source. Path mode builds
+// a single cache definition in memory and deliberately skips default config file
+// discovery. File mode preserves the existing explicit/default file behaviour.
+func resolveCacheConfiguration(cfg CacheConfig) ([]configuration.Cache, error) {
+	if cfg.Path != "" {
+		if cfg.CacheConfigFile != "" {
+			return nil, fmt.Errorf("--path and --cache-config-file are mutually exclusive")
+		}
+		if len(cfg.Names) != 0 {
+			return nil, fmt.Errorf("--path and --name are mutually exclusive")
+		}
+
+		generation, err := resolvePathCacheGeneration(os.Getenv("BUILDKITE_COMMIT"), func() (string, error) {
+			output, err := exec.Command("git", "rev-parse", "--verify", "HEAD").Output()
+			return string(output), err
+		})
+		if err != nil {
+			return nil, err
+		}
+
+		return []configuration.Cache{{
+			Name: pathCacheName,
+			CacheKey: []configuration.KeyPart{
+				{Source: configuration.SourceLiteral, Arg: pathCacheFormatVersion},
+				{Source: configuration.SourceAgent, Arg: "os"},
+				{Source: configuration.SourceAgent, Arg: "arch", FallbackLimit: true},
+				{Source: configuration.SourceLiteral, Arg: generation},
+			},
+			TargetPaths: []string{cfg.Path},
+		}}, nil
+	}
+
+	configFile, err := resolveCacheConfigFile(cfg.CacheConfigFile)
+	if err != nil {
+		return nil, err
+	}
+	caches, err := configuration.LoadFile(configFile)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load cache configuration: %w", err)
+	}
+	return caches, nil
+}
+
+// resolvePathCacheGeneration returns a stable generation for the checked-out
+// source. Buildkite normally provides the concrete commit; builds configured
+// with HEAD and local invocations fall back to the repository's checked-out HEAD.
+func resolvePathCacheGeneration(buildkiteCommit string, gitHead func() (string, error)) (string, error) {
+	if commit := strings.TrimSpace(buildkiteCommit); commit != "" && commit != "HEAD" {
+		return commit, nil
+	}
+
+	commit, err := gitHead()
+	if err != nil {
+		return "", fmt.Errorf("could not determine the checked-out commit for --path cache generation: %w", err)
+	}
+	if commit = strings.TrimSpace(commit); commit == "" {
+		return "", fmt.Errorf("could not determine the checked-out commit for --path cache generation")
+	}
+	return commit, nil
 }
 
 // defaultCacheConfigPaths lists the candidate cache configuration files, in

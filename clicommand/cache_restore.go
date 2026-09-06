@@ -17,9 +17,9 @@ const cacheRestoreHelpDescription = `Usage:
 
 Description:
 
-Restores files from the cache for the current job based on the cache configuration
-defined in your cache config file (defaults to .buildkite/cache.yml or
-.buildkite/cache.yaml).
+Restores files from the cache for the current job. Provide --path to use the
+agent's built-in cache configuration, or define caches in a cache config file
+(defaults to .buildkite/cache.yml or .buildkite/cache.yaml).
 
 The cache configuration file defines which files or directories should be restored
 and their associated cache key. An entry is restored when its target_paths
@@ -31,6 +31,14 @@ Note: This feature is currently in development and subject to change. It is not
 yet available to all customers.
 
 Example:
+
+    $ buildkite-agent cache restore --path ~/.npm
+
+This restores one path using an OS- and architecture-compatible cache. The
+checked-out commit is preferred; on a miss, the newest compatible generation is
+restored. The target path is part of the cache address.
+
+For custom keys or multiple caches, use a cache configuration file:
 
     $ buildkite-agent cache restore
 
@@ -98,17 +106,20 @@ var CacheRestoreCommand = &cli.Command{
 		apiCfg := loadAPIClientConfig(cfg, "AgentAccessToken")
 		apiClient := api.NewClient(l, apiCfg)
 
-		cacheConfigFile, err := resolveCacheConfigFile(cfg.CacheConfigFile)
+		caches, err := resolveCacheConfiguration(cfg.CacheConfig)
 		if err != nil {
 			return err
+		}
+		if cfg.Path != "" {
+			fmt.Printf("Path: %q\n", cfg.Path)
 		}
 
 		// Build cache configuration
 		cacheCfg := cache.Config{
-			Registry:        cfg.Registry,
-			BucketURL:       cfg.BucketURL,
-			CacheConfigFile: cacheConfigFile,
-			Names:           cfg.Names,
+			Registry:  cfg.Registry,
+			BucketURL: cfg.BucketURL,
+			Caches:    caches,
+			Names:     cfg.Names,
 		}
 
 		// Perform cache restore (logging happens inside)

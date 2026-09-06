@@ -17,9 +17,9 @@ const cacheSaveHelpDescription = `Usage:
 
 Description:
 
-Saves files to the cache for the current build based on the cache configuration
-defined in your cache config file (defaults to .buildkite/cache.yml or
-.buildkite/cache.yaml).
+Saves files to the cache for the current build. Provide --path to use the agent's
+built-in cache configuration, or define caches in a cache config file (defaults
+to .buildkite/cache.yml or .buildkite/cache.yaml).
 
 The cache configuration file defines which files or directories should be cached
 and their associated cache key.
@@ -28,6 +28,13 @@ Note: This feature is currently in development and subject to change. It is not
 yet available to all customers.
 
 Example:
+
+    $ buildkite-agent cache save --path ~/.npm
+
+This saves one path using an OS- and architecture-compatible cache keyed by the
+checked-out commit. The target path is part of the cache address.
+
+For custom keys or multiple caches, use a cache configuration file:
 
     $ buildkite-agent cache save
 
@@ -88,18 +95,21 @@ var CacheSaveCommand = &cli.Command{
 
 		apiClient := api.NewClient(l, apiCfg)
 
-		cacheConfigFile, err := resolveCacheConfigFile(cfg.CacheConfigFile)
+		caches, err := resolveCacheConfiguration(cfg.CacheConfig)
 		if err != nil {
 			return err
+		}
+		if cfg.Path != "" {
+			fmt.Printf("Path: %q\n", cfg.Path)
 		}
 
 		// Build cache configuration
 		cacheCfg := cache.Config{
-			Registry:        cfg.Registry,
-			BucketURL:       cfg.BucketURL,
-			CacheConfigFile: cacheConfigFile,
-			Names:           cfg.Names,
-			Concurrency:     cfg.Concurrency,
+			Registry:    cfg.Registry,
+			BucketURL:   cfg.BucketURL,
+			Caches:      caches,
+			Names:       cfg.Names,
+			Concurrency: cfg.Concurrency,
 		}
 
 		// Perform cache save (logging happens inside)

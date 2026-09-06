@@ -4,8 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
-	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -41,19 +39,6 @@ func (m *mockCacheClient) ListCaches() []configuration.Cache {
 		return m.listFunc()
 	}
 	return nil
-}
-
-// Test helpers
-
-func createTempCacheConfig(t *testing.T, content string) string {
-	t.Helper()
-	tmpDir := t.TempDir()
-	configFile := filepath.Join(tmpDir, "cache.yml")
-	err := os.WriteFile(configFile, []byte(content), 0o600)
-	if err != nil {
-		t.Fatalf("os.WriteFile(%q, []byte(content), %d) error = %v, want nil", configFile, 0o600, err)
-	}
-	return configFile
 }
 
 // Tests for saveWithClient
@@ -331,24 +316,13 @@ func TestRestoreWithClient_EmptyCacheIDs(t *testing.T) {
 func TestNewClient_InvalidCacheIDs(t *testing.T) {
 	t.Parallel()
 
-	config := `caches:
-  - name: cache1
-    cache_key:
-      - test-key-1
-    target_paths:
-      - path1
-  - name: cache2
-    cache_key:
-      - test-key-2
-    target_paths:
-      - path2
-`
-	configFile := createTempCacheConfig(t, config)
-
 	cfg := Config{
-		CacheConfigFile: configFile,
-		Names:           []string{"cache1", "invalid1", "cache2", "invalid2"},
-		BucketURL:       "s3://test-bucket",
+		Caches: []configuration.Cache{
+			{Name: "cache1", CacheKey: []configuration.KeyPart{{Source: configuration.SourceLiteral, Arg: "test-key-1"}}, TargetPaths: []string{"path1"}},
+			{Name: "cache2", CacheKey: []configuration.KeyPart{{Source: configuration.SourceLiteral, Arg: "test-key-2"}}, TargetPaths: []string{"path2"}},
+		},
+		Names:     []string{"cache1", "invalid1", "cache2", "invalid2"},
+		BucketURL: "s3://test-bucket",
 	}
 
 	_, _, err := newClient(logger.Discard, nil, cfg)
@@ -369,24 +343,13 @@ func TestNewClient_InvalidCacheIDs(t *testing.T) {
 func TestNewClient_ValidCacheIDs(t *testing.T) {
 	t.Parallel()
 
-	config := `caches:
-  - name: cache1
-    cache_key:
-      - test-key-1
-    target_paths:
-      - path1
-  - name: cache2
-    cache_key:
-      - test-key-2
-    target_paths:
-      - path2
-`
-	configFile := createTempCacheConfig(t, config)
-
 	cfg := Config{
-		CacheConfigFile: configFile,
-		Names:           []string{"cache1", "cache2"},
-		BucketURL:       "s3://test-bucket",
+		Caches: []configuration.Cache{
+			{Name: "cache1", CacheKey: []configuration.KeyPart{{Source: configuration.SourceLiteral, Arg: "test-key-1"}}, TargetPaths: []string{"path1"}},
+			{Name: "cache2", CacheKey: []configuration.KeyPart{{Source: configuration.SourceLiteral, Arg: "test-key-2"}}, TargetPaths: []string{"path2"}},
+		},
+		Names:     []string{"cache1", "cache2"},
+		BucketURL: "s3://test-bucket",
 	}
 
 	client, cacheIDs, err := newClient(logger.Discard, nil, cfg)
@@ -404,24 +367,13 @@ func TestNewClient_ValidCacheIDs(t *testing.T) {
 func TestNewClient_AllCaches(t *testing.T) {
 	t.Parallel()
 
-	config := `caches:
-  - name: cache1
-    cache_key:
-      - test-key-1
-    target_paths:
-      - path1
-  - name: cache2
-    cache_key:
-      - test-key-2
-    target_paths:
-      - path2
-`
-	configFile := createTempCacheConfig(t, config)
-
 	cfg := Config{
-		CacheConfigFile: configFile,
-		Names:           []string{},
-		BucketURL:       "s3://test-bucket",
+		Caches: []configuration.Cache{
+			{Name: "cache1", CacheKey: []configuration.KeyPart{{Source: configuration.SourceLiteral, Arg: "test-key-1"}}, TargetPaths: []string{"path1"}},
+			{Name: "cache2", CacheKey: []configuration.KeyPart{{Source: configuration.SourceLiteral, Arg: "test-key-2"}}, TargetPaths: []string{"path2"}},
+		},
+		Names:     []string{},
+		BucketURL: "s3://test-bucket",
 	}
 
 	client, cacheIDs, err := newClient(logger.Discard, nil, cfg)

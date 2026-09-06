@@ -1,6 +1,8 @@
 package configuration
 
 import (
+	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
@@ -225,6 +227,11 @@ func TestIsValidPath(t *testing.T) {
 			path: "invalid\x00path",
 			want: false,
 		},
+		{
+			name: "path with newline",
+			path: "invalid\npath",
+			want: false,
+		},
 	}
 
 	for _, tt := range tests {
@@ -232,6 +239,32 @@ func TestIsValidPath(t *testing.T) {
 			got := isValidPath(tt.path)
 			if got != tt.want {
 				t.Errorf("isValidPath() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestCacheValidateRejectsResolvedProtectedDirectories(t *testing.T) {
+	parent := t.TempDir()
+	home := filepath.Join(parent, "home")
+	cwd := filepath.Join(parent, "work")
+	for _, dir := range []string{home, cwd} {
+		if err := os.Mkdir(dir, 0o755); err != nil {
+			t.Fatalf("os.Mkdir(%q) error = %v", dir, err)
+		}
+	}
+	t.Setenv("HOME", home)
+	t.Chdir(cwd)
+
+	for _, target := range []string{home, cwd, filepath.Join(cwd, "subdir", "..")} {
+		t.Run(target, func(t *testing.T) {
+			cache := Cache{
+				Name:        "path_cache",
+				CacheKey:    []KeyPart{{Source: SourceLiteral, Arg: "path-cache-v1"}},
+				TargetPaths: []string{target},
+			}
+			if err := cache.Validate(); err == nil {
+				t.Fatalf("Cache.Validate() error = nil for protected target %q", target)
 			}
 		})
 	}

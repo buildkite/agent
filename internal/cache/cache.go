@@ -18,8 +18,8 @@ type Config struct {
 	Registry string
 	// BucketURL is the URL of the bucket (e.g., s3://bucket-name)
 	BucketURL string
-	// CacheConfigFile is the path to the cache configuration YAML file
-	CacheConfigFile string
+	// Caches contains the cache definitions to process.
+	Caches []configuration.Cache
 	// Names is a list of cache names (if empty, processes all caches)
 	Names []string
 	// Concurrency is the number of concurrent cache operations
@@ -42,7 +42,7 @@ func RunSave(ctx context.Context, l logger.Logger, apiClient *api.Client, cfg Co
 		return err
 	}
 	if c == nil {
-		l.Infof("No caches defined in the cache configuration file, nothing to save")
+		l.Infof("No caches defined, nothing to save")
 		return nil
 	}
 	return saveWithClient(ctx, l, c, cacheIDs, cfg.Concurrency)
@@ -56,7 +56,7 @@ func RunRestore(ctx context.Context, l logger.Logger, apiClient *api.Client, cfg
 		return err
 	}
 	if c == nil {
-		l.Infof("No caches defined in the cache configuration file, nothing to restore")
+		l.Infof("No caches defined, nothing to restore")
 		return nil
 	}
 	return restoreWithClient(ctx, l, c, cacheIDs, cfg.Concurrency)
