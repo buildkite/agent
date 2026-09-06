@@ -435,3 +435,30 @@ func TestNewClient_AllCaches(t *testing.T) {
 		t.Fatalf("newClient(logger.Discard, nil, cfg) sorted diff (-got +want):\n%s", diff)
 	}
 }
+
+func TestNewClient_CachePath(t *testing.T) {
+	t.Parallel()
+
+	c, cacheIDs, err := newClient(logger.Discard, nil, Config{Path: "~/.npm"})
+	if err != nil {
+		t.Fatalf("newClient() error = %v, want nil", err)
+	}
+	if diff := cmp.Diff([]string{"~/.npm"}, cacheIDs); diff != "" {
+		t.Fatalf("newClient() cache IDs mismatch (-want +got):\n%s", diff)
+	}
+	if diff := cmp.Diff([]configuration.Cache{configuration.CacheForPath("~/.npm")}, c.caches); diff != "" {
+		t.Fatalf("newClient() caches mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestNewClient_CachePathAndConfigFileAreMutuallyExclusive(t *testing.T) {
+	t.Parallel()
+
+	_, _, err := newClient(logger.Discard, nil, Config{
+		Path:            "~/.npm",
+		CacheConfigFile: "cache.yml",
+	})
+	if !errors.Is(err, ErrInvalidConfiguration) {
+		t.Fatalf("newClient() error = %v, want ErrInvalidConfiguration", err)
+	}
+}

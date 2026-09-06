@@ -20,6 +20,8 @@ type Config struct {
 	BucketURL string
 	// CacheConfigFile is the path to the cache configuration YAML file
 	CacheConfigFile string
+	// Path is a cache target configured directly on the command line.
+	Path string
 	// Names is a list of cache names (if empty, processes all caches)
 	Names []string
 	// Concurrency is the number of concurrent cache operations

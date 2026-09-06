@@ -34,24 +34,22 @@ func TestCacheValidate(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "invalid name with hyphen",
+			name: "valid name with hyphen",
 			cache: Cache{
 				Name:        "node-modules",
 				CacheKey:    literalKey,
 				TargetPaths: []string{"node_modules"},
 			},
-			wantErr: true,
-			errMsg:  "can only contain letters, numbers, and underscores",
+			wantErr: false,
 		},
 		{
-			name: "invalid name with space",
+			name: "valid name matching a path",
 			cache: Cache{
-				Name:        "node modules",
+				Name:        "~/.npm",
 				CacheKey:    literalKey,
-				TargetPaths: []string{"node_modules"},
+				TargetPaths: []string{"~/.npm"},
 			},
-			wantErr: true,
-			errMsg:  "can only contain letters, numbers, and underscores",
+			wantErr: false,
 		},
 		{
 			name: "empty Name",

@@ -17,9 +17,9 @@ const cacheSaveHelpDescription = `Usage:
 
 Description:
 
-Saves files to the cache for the current build based on the cache configuration
-defined in your cache config file (defaults to .buildkite/cache.yml or
-.buildkite/cache.yaml).
+Saves files to the cache for the current build. Use --path to cache one path
+with a default cache key, or define caches in a cache config file (defaults to
+.buildkite/cache.yml or .buildkite/cache.yaml).
 
 The cache configuration file defines which files or directories should be cached
 and their associated cache key.
@@ -28,6 +28,11 @@ Note: This feature is currently in development and subject to change. It is not
 yet available to all customers.
 
 Example:
+
+    $ buildkite-agent cache save --path ~/.npm
+
+This saves ~/.npm using a default key containing the path, agent OS, agent
+architecture, and branch. The architecture is the fallback limit.
 
     $ buildkite-agent cache save
 
@@ -88,18 +93,9 @@ var CacheSaveCommand = &cli.Command{
 
 		apiClient := api.NewClient(l, apiCfg)
 
-		cacheConfigFile, err := resolveCacheConfigFile(cfg.CacheConfigFile)
+		cacheCfg, err := resolveCacheConfig(cfg.CacheConfig)
 		if err != nil {
 			return err
-		}
-
-		// Build cache configuration
-		cacheCfg := cache.Config{
-			Registry:        cfg.Registry,
-			BucketURL:       cfg.BucketURL,
-			CacheConfigFile: cacheConfigFile,
-			Names:           cfg.Names,
-			Concurrency:     cfg.Concurrency,
 		}
 
 		// Perform cache save (logging happens inside)

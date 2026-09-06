@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/buildkite/agent/v4/internal/cache"
 	"github.com/urfave/cli/v3"
 )
 
@@ -13,6 +14,7 @@ import (
 // cache command config structs (via embedding).
 type CacheConfig struct {
 	Names           []string `cli:"name"`
+	Path            string   `cli:"path"`
 	Registry        string   `cli:"registry"`
 	BucketURL       string   `cli:"cache-store-url"`
 	CacheConfigFile string   `cli:"cache-config-file"`
@@ -26,6 +28,11 @@ func cacheFlags() []cli.Flag {
 			Value:   []string{},
 			Usage:   "Cache name to process (can be specified multiple times; if empty, processes all caches)",
 			Sources: cli.EnvVars("BUILDKITE_CACHE_NAMES"),
+		},
+		&cli.StringFlag{
+			Name:  "path",
+			Value: "",
+			Usage: "Path to cache using the default cache key; cannot be combined with --cache-config-file",
 		},
 		&cli.StringFlag{
 			Name:    "registry",
@@ -52,6 +59,34 @@ func cacheFlags() []cli.Flag {
 			Sources: cli.EnvVars("BUILDKITE_CACHE_CONCURRENCY"),
 		},
 	}
+}
+
+// resolveCacheConfig builds the cache package configuration for a CLI cache
+// command. A directly supplied path takes precedence over default-file
+// discovery, while an explicitly supplied configuration file is mutually
+// exclusive with the path shorthand.
+func resolveCacheConfig(cfg CacheConfig) (cache.Config, error) {
+	if cfg.Path != "" && cfg.CacheConfigFile != "" {
+		return cache.Config{}, fmt.Errorf("--path cannot be combined with --cache-config-file")
+	}
+
+	cacheConfigFile := ""
+	if cfg.Path == "" {
+		var err error
+		cacheConfigFile, err = resolveCacheConfigFile(cfg.CacheConfigFile)
+		if err != nil {
+			return cache.Config{}, err
+		}
+	}
+
+	return cache.Config{
+		Registry:        cfg.Registry,
+		BucketURL:       cfg.BucketURL,
+		CacheConfigFile: cacheConfigFile,
+		Path:            cfg.Path,
+		Names:           cfg.Names,
+		Concurrency:     cfg.Concurrency,
+	}, nil
 }
 
 // defaultCacheConfigPaths lists the candidate cache configuration files, in
