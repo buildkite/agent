@@ -6,10 +6,12 @@ Implementation plan with an agreed first-milestone scope. An initial CLI prototy
 is implemented; a real pipeline smoke test has passed on an OrbStack Linux
 machine, including the container marker and absence of the host Docker socket.
 Manual validation has also confirmed exit-code preservation, graceful
-cancellation, supervisor-forced removal, and subsequent agent recovery. See the
-[validation runbook and results](docker-validation.md). Broader lifecycle
-validation remains pending. Later phases describe the intended supported feature,
-not requirements for the first milestone.
+cancellation, supervisor-forced removal, and subsequent agent recovery. Live
+pipeline validation has also confirmed checkout, artifact upload/download, and
+plugin hook ordering and failure propagation inside Docker. See the Phase 1
+validation checklist below and the [validation runbook and results](docker-validation.md).
+Broader compatibility validation remains pending. Later phases describe the
+intended supported feature, not requirements for the first milestone.
 
 First-milestone decisions:
 
@@ -63,10 +65,10 @@ Current implementation details and limits:
   Once auto-removal has discarded that state, the CLI exit code is retained;
   some Docker client failures can therefore remain indistinguishable from a
   bootstrap exit. Exact signal reporting and reliable OOM reporting are deferred.
-- Real pipeline smoke, exit-code, cancellation, cleanup, and recovery tests have
-  passed on OrbStack Linux. Setup failure handling, hooks, artifacts, and lock
-  compatibility still require validation before treating this as an end-to-end
-  validated milestone.
+- Real pipeline smoke, exit-code, cancellation, cleanup, recovery, checkout,
+  artifact, and plugin hook tests have passed on OrbStack Linux. Host-configured
+  and repository hooks, broader setup failure handling, hook and artifact behavior
+  during cancellation, and lock compatibility still require validation.
 
 ## Objective
 
@@ -836,6 +838,26 @@ harness. Cover:
 Success criteria: a local job completes plugin, checkout, command, hook, and
 artifact behavior inside the container, and cancellation leaves no running
 container.
+
+Live validation on ARM64 Ubuntu Noble under OrbStack:
+
+- [x] Checkout and command execution inside Docker.
+- [x] Automatic artifact upload, followed by download and content verification
+  in a second Docker job.
+- [x] Plugin loading and hook execution using `improbable-eng/metahook#v0.4.1`.
+  Assertions verified `pre-checkout`, `post-checkout`, `pre-command`, command,
+  `post-command`, `pre-artifact`, `post-artifact`, and `pre-exit` in order, all
+  within the same container. Artifact hooks created and verified an uploaded file.
+- [x] A `pre-command` hook exiting 42 prevented command execution, preserved the
+  failure status, and still ran `pre-exit` successfully.
+- [x] Exit-code preservation, graceful and forced cancellation, and agent recovery.
+- [x] No running or stopped bootstrap containers remained after the tested jobs.
+- [ ] Host-configured and repository hook compatibility.
+- [ ] Hook environment mutation coverage beyond the plugin's own setup.
+- [ ] Hook and artifact behavior during cancellation.
+
+Plugin tests require an explicit `--plugins-path` in the host agent configuration.
+These results are live validation, not an automated Docker integration suite.
 
 ### Phase 2: supported MVP
 
