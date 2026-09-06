@@ -14,9 +14,7 @@ import (
 
 const SetupFailure = 125
 
-// Runner owns one container, including cleanup after partially completed create
-// operations. Cancellation of ctx initiates graceful container cancellation;
-// cleanup uses a separate bounded context.
+// Runner gives cancellation a grace period and reserves a separate cleanup budget.
 type Runner struct {
 	Client Clienter
 	Stdout io.Writer
@@ -35,9 +33,8 @@ func (r Runner) Run(ctx context.Context, cfg Config) (code int, err error) {
 		r.Stderr = io.Discard
 	}
 	r.Client = withDiagnostics(r.Client, cfg.Environment)
-	// All cancellation cleanup shares one outer budget, including time spent
-	// waiting for a killed Docker client. Leave a little scheduling headroom
-	// before JobRunner SIGKILLs this supervisor.
+	// Cleanup and client shutdown must finish before JobRunner's SIGKILL deadline.
+	// Reserve 10% of the cleanup margin for scheduling delays.
 	shutdownCtx, shutdownCancel := context.WithCancel(context.Background())
 	defer shutdownCancel()
 	go func() {
@@ -76,7 +73,7 @@ func (r Runner) Run(ctx context.Context, cfg Config) (code int, err error) {
 			return SetupFailure, err
 		}
 	}
-	// Inspect only safe image identity fields, not image configuration or env.
+	// Full inspection output could disclose image environment secrets in job logs.
 	var identity bytes.Buffer
 	inspectCtx, inspectCancel := context.WithTimeout(ctx, cfg.OperationTimeout)
 	_, inspectErr := r.Client.Run(inspectCtx, []string{"image", "inspect", "--format", "{{.Id}} {{json .RepoDigests}}", cfg.Image}, nil, &identity, io.Discard)
@@ -91,8 +88,8 @@ func (r Runner) Run(ctx context.Context, cfg Config) (code int, err error) {
 	imageID := fields[0]
 	_, _ = fmt.Fprintf(r.Stdout, "Docker bootstrap image: %s (%s)\n", cfg.Image, strings.TrimSpace(identity.String()))
 
-	// Register cleanup before create: Docker may create the container but lose
-	// the response, leaving us with only its preallocated unique name.
+	// Docker may create the container but lose the response; its name still
+	// allows cleanup after an apparently failed create.
 	defer func() {
 		cleanupCtx, cancel := context.WithTimeout(shutdownCtx, cfg.CleanupMargin)
 		defer cancel()
@@ -100,8 +97,7 @@ func (r Runner) Run(ctx context.Context, cfg Config) (code int, err error) {
 		if removeErr == nil && status == 0 {
 			return
 		}
-		// Auto-remove commonly wins the race. A successful list with no matching
-		// resource distinguishes an already-removed container from daemon loss.
+		// A failed remove can mean either auto-removal or daemon loss.
 		var found bytes.Buffer
 		status, listErr := r.Client.Run(cleanupCtx, []string{"ps", "--all", "--quiet", "--filter", "name=^/" + name + "$"}, nil, &found, io.Discard)
 		if listErr == nil && status == 0 && strings.TrimSpace(found.String()) == "" {
@@ -116,9 +112,19 @@ func (r Runner) Run(ctx context.Context, cfg Config) (code int, err error) {
 		}
 	}()
 	args := append([]string{"create", "--pull", "never", "--name", name, "--label", "com.buildkite.bootstrap=docker", "--label", "com.buildkite.agent=true"}, job.args...)
-	// Override the image entrypoint, validate the minimum image contract, and
-	// exec bootstrap so Docker's init forwards signals directly to it.
+	for _, label := range []struct{ key, variable string }{
+		{"com.buildkite.job-id", "BUILDKITE_JOB_ID"},
+		{"com.buildkite.agent-id", "BUILDKITE_AGENT_ID"},
+		{"com.buildkite.agent-name", "BUILDKITE_AGENT_NAME"},
+	} {
+		if value := job.env[label.variable]; value != "" {
+			args = append(args, "--label", label.key+"="+value)
+		}
+	}
+	// The mounted agent must take precedence over image binaries. exec lets
+	// Docker's init deliver signals directly to bootstrap.
 	const script = `set -e
+export PATH="/buildkite-docker/bin:$PATH"
 if ! test -x /buildkite-docker/bin/buildkite-agent || ! command -v git >/dev/null || ! command -v ssh >/dev/null; then
   echo 'Docker bootstrap image contract requires an executable agent binary, git, and ssh' >&2
   exit 125
@@ -128,12 +134,11 @@ if ! /buildkite-docker/bin/buildkite-agent --version >/dev/null; then
   exit 125
 fi
 exec /buildkite-docker/bin/buildkite-agent bootstrap`
-	// Use the inspected immutable ID so a concurrent tag update cannot change
-	// which image runs after we have logged its identity.
+	// A concurrent tag refresh must not change the image after inspection.
 	args = append(args, imageID, "-c", script)
 	createCtx, createCancel := context.WithTimeout(ctx, cfg.OperationTimeout)
-	// Keep stdout connected to the supervisor PTY so Docker records its initial
-	// console size. The only create output is the new container ID.
+	// Docker create reads console dimensions from stdout; capturing the ID
+	// through a pipe would lose the supervisor's PTY dimensions.
 	_, createErr := r.Client.Run(createCtx, args, job.env, r.Stdout, io.Discard)
 	createCancel()
 	if createErr != nil {
@@ -143,9 +148,8 @@ exec /buildkite-docker/bin/buildkite-agent bootstrap`
 		return SetupFailure, ctx.Err()
 	}
 
-	// Docker start --attach performs attach, wait registration, and start in
-	// that order. Launching separate attach/wait CLI processes cannot establish
-	// that ordering and loses fast exits when --rm is enabled.
+	// start --attach registers the exit observer before starting the container.
+	// Separate attach/wait processes can lose fast exits with --rm.
 	attachCtx, attachCancel := context.WithCancel(context.Background())
 	defer attachCancel()
 	type result struct {
@@ -157,7 +161,7 @@ exec /buildkite-docker/bin/buildkite-agent bootstrap`
 		code, err := r.Client.Run(attachCtx, []string{"start", "--attach", name}, nil, r.Stdout, r.Stderr)
 		done <- result{code, err}
 	}()
-	// Bound start/attach without imposing a wall-clock limit on a running job.
+	// The operation timeout must not limit a running job's duration.
 	startup := time.NewTimer(cfg.OperationTimeout)
 	defer startup.Stop()
 	startupDeadline := startup.C
@@ -190,7 +194,7 @@ waiting:
 				break waiting
 			}
 			if probeErr == nil && strings.TrimSpace(state.String()) == "created" {
-				// Prefer a concurrently completed attachment, including fast exits.
+				// Inspection may be stale by the time attachment completes.
 				select {
 				case result := <-done:
 					if result.err != nil || result.code < 0 {
@@ -207,23 +211,22 @@ waiting:
 				startupDeadline = nil
 				continue
 			}
-			// An exited or auto-removed container can still have logs and exit
-			// status draining through start --attach. Even a failed inspection
-			// may race auto-removal; give attachment a bounded chance to finish.
+			// Logs and exit status may still be draining after exit or auto-removal,
+			// including when inspection fails because the container is already gone.
 			draining, drainProbeErr = true, probeErr
 			startup.Reset(cfg.OperationTimeout)
 			startupDeadline = startup.C
 		}
 	}
 
-	// Signal delivery may race with container startup. Retry until Docker
-	// accepts the signal, attachment finishes, or the inner grace expires.
+	// Docker cannot signal a container that has not started yet.
 	graceCtx, graceCancel := context.WithTimeout(context.Background(), job.grace)
 	defer graceCancel()
 	signal := job.env["BUILDKITE_CANCEL_SIGNAL"]
 	if signal == "" || signal == "SIGKILL" {
 		signal = "SIGTERM"
 	}
+	retryDelay := 50 * time.Millisecond
 	for {
 		if err := operation(graceCtx, cfg.OperationTimeout, "kill", "--signal", signal, name); err == nil {
 			break
@@ -236,7 +239,8 @@ waiting:
 			return r.completed(shutdownCtx, cfg.CleanupMargin/4, name, result.code)
 		case <-graceCtx.Done():
 			goto force
-		case <-time.After(50 * time.Millisecond):
+		case <-time.After(retryDelay):
+			retryDelay = min(2*retryDelay, time.Second)
 		}
 	}
 	select {
@@ -249,15 +253,15 @@ waiting:
 	}
 force:
 	_, _ = fmt.Fprintln(r.Stderr, "Docker bootstrap cancellation grace expired; forcing container removal")
-	// Deferred force-remove kills the container as well as removing it. Stop
-	// the attached CLI now so it cannot outlive the supervisor.
+	// The deferred force-remove kills the container; the separate CLI process
+	// also needs cancellation to avoid outliving the supervisor.
 	attachCancel()
 	<-done
 	return 137, nil
 }
 
-// completed distinguishes known runtime/client failures from bootstrap exits.
-// Auto-remove can win the race, so a missing state preserves the CLI exit code.
+// Auto-removal can erase the evidence needed to distinguish a Docker failure
+// from a job exit; preserve the CLI status when inspection is unavailable.
 func (r Runner) completed(ctx context.Context, timeout time.Duration, name string, code int) (int, error) {
 	if code == 0 {
 		return 0, nil

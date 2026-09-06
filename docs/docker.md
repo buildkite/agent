@@ -23,9 +23,8 @@ First-milestone decisions:
   selection, resource controls, and per-job networks are deferred.
 - Preserve container exit codes without inferring signals; retain JobRunner's
   cancellation reason. OOM diagnostics are best-effort.
-- Defer local Linux/OrbStack setup and live Docker validation initially. Start
-  with unit tests and Linux builds; live validation remains required to complete
-  the executable prototype.
+- Initial unit tests and Linux builds have been supplemented by live OrbStack
+  validation; the Phase 1 checklist records completed and remaining coverage.
 
 ### Running the initial prototype
 
@@ -38,7 +37,10 @@ buildkite-agent start \
 ```
 
 The agent executable in `--bootstrap-script` must be the development binary.
-An agent token and the normal agent configuration are still required. The Docker
+An agent token and the normal agent configuration are still required. Invoke
+`buildkite-agent docker-bootstrap` directly in `--bootstrap-script`; wrapper
+scripts are unsupported because JobRunner must recognize the subcommand to
+allocate private job context and enforce image rejection. The Docker
 CLI defaults to `/usr/bin/docker`; override it with `--docker-path` inside the
 bootstrap-script argument if needed. Other prototype arguments are `--image`,
 `--cleanup-margin`, `--operation-timeout`, and `--pull-timeout`. None read policy
@@ -53,9 +55,15 @@ Current implementation details and limits:
   empty private configuration directory; public images and images already in
   the daemon's cache are supported. Private registry authentication is deferred.
 - Job-defined `DOCKER_*` variables are rejected because name-only environment
-  transport would also apply them to the host Docker client.
+  transport would also apply them to the host Docker client. This includes common
+  pipeline settings such as `DOCKER_BUILDKIT` and `DOCKER_DEFAULT_PLATFORM`; remove
+  these from prototype jobs. Narrower compatibility needs separate environment
+  transport or a verified exception list.
 - The image's configured user is used. The default image runs as root; UID/GID
   mapping is deferred. Bind-mounted build outputs can therefore be root-owned.
+  The private context directory is mode 0700 and env files are mode 0600, owned
+  by the host agent. A different non-root image UID may not read them. Phase 2
+  must test access with matching UIDs and rootless user namespace mappings.
 - Job API sockets use a container-private tmpfs. Only existing agent API socket
   files are mounted for agent-level lock commands.
 - Wrapper scripts around `docker-bootstrap` are not supported: JobRunner must
@@ -242,6 +250,10 @@ The policy, allowlist, plumbing, and signing requirements are covered in "Image
 selection" below.
 
 ## Image selection
+
+This section describes Phase 2. Phase 1 instead rejects the presence of any step
+`image` in JobRunner, before starting the supervisor; it does not consume
+`BUILDKITE_JOB_IMAGE` or evaluate the future image policy.
 
 The pipeline YAML already supports a step-level `image` attribute, currently
 honoured only on hosted agents where it sets the container image for the whole
@@ -473,6 +485,11 @@ container. This avoids path translation throughout the existing bootstrap.
 | Job log tempfile | read-only, optional | Only when `--enable-job-log-tmpfile` is set |
 | SSH agent socket | optional | SSH authentication |
 | CA and credential paths | optional, read-only | Enterprise trust and repository access |
+
+The Docker entrypoint prepends the mounted binary directory to the image PATH
+before bootstrap starts. This ensures ordinary hook and plugin invocations use
+the mounted agent even if the image contains another agent binary. Hooks that
+explicitly change PATH or invoke an absolute image binary can still override it.
 
 Override container-specific values such as `BUILDKITE_BIN_PATH`, `PATH`, `HOME`,
 and the sockets path when their inherited host values are not valid inside the
@@ -719,6 +736,15 @@ allowlist in "Image selection" bounds which registries a pipeline can reach, so
 operators only need to configure credentials for registries they have allowed.
 
 ## Cleanup and reconciliation
+
+The prototype labels containers with job ID, agent ID, and agent name when
+available, in addition to the static bootstrap labels. These aid diagnosis;
+automatic reconciliation and a stable owner key are still Phase 2 work.
+
+A supervisor killed with SIGKILL cannot run deferred cleanup. Docker CLI children
+are in separate process groups and may survive along with the running container.
+`--rm` only helps once the container exits; it does not stop an orphaned running
+job. Abrupt agent/host termination therefore requires operator cleanup today.
 
 Label every resource with stable ownership metadata:
 

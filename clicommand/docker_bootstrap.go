@@ -15,6 +15,7 @@ import (
 	"github.com/urfave/cli/v3"
 )
 
+// DockerBootstrapConfig retains cli tags for config completeness checks only.
 type DockerBootstrapConfig struct {
 	Image            string        `cli:"image"`
 	DockerPath       string        `cli:"docker-path"`
@@ -36,7 +37,7 @@ start with --bootstrap-script="/usr/bin/buildkite-agent docker-bootstrap" and a
 dedicated --job-context-dir. Policy flags are accepted only as command arguments.
 The default image is public; private registry authentication is not yet supported.`,
 	Flags: []cli.Flag{
-		// No environment sources: these are operator policy, not job inputs.
+		// Job environment must not select operator policy.
 		&cli.StringFlag{Name: "image", Value: dockerbootstrap.DefaultImage, Usage: "Agent-controlled bootstrap image"},
 		&cli.StringFlag{Name: "docker-path", Value: "/usr/bin/docker", Usage: "Absolute path to the Docker CLI"},
 		&cli.DurationFlag{Name: "cleanup-margin", Value: 5 * time.Second, Usage: "Time reserved within the agent cancellation timeout for removal"},
@@ -44,8 +45,7 @@ The default image is public; private registry authentication is not yet supporte
 		&cli.DurationFlag{Name: "pull-timeout", Value: 10 * time.Minute, Usage: "Timeout for pulling the bootstrap image"},
 	},
 	Action: func(ctx context.Context, c *cli.Command) error {
-		// Read flags directly: the general config loader also reads inherited
-		// config-file settings, which are not trusted Docker policy inputs.
+		// The general config loader would also trust inherited config-file settings.
 		cfg := DockerBootstrapConfig{
 			Image: c.String("image"), DockerPath: c.String("docker-path"),
 			CleanupMargin: c.Duration("cleanup-margin"), OperationTimeout: c.Duration("operation-timeout"), PullTimeout: c.Duration("pull-timeout"),
@@ -63,8 +63,7 @@ The default image is public; private registry authentication is not yet supporte
 		}
 		ctx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM, syscall.SIGHUP, syscall.SIGQUIT, syscall.Signal(parsed))
 		defer stop()
-		// The public default image needs no registry credentials. Private
-		// registry authentication is deliberately deferred to the MVP.
+		// An empty config prevents use of host registry credentials.
 		configDir, err := os.MkdirTemp("", "buildkite-docker-config-")
 		if err != nil {
 			return cli.Exit(err, dockerbootstrap.SetupFailure)
