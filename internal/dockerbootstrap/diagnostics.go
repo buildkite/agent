@@ -12,9 +12,8 @@ import (
 
 const diagnosticLimit = 16 * 1024
 
-// Diagnostics are deliberately limited to stderr, never Docker's stdout (which
-// can contain inspection data). Redact before truncating, so a secret spanning
-// the capture limit cannot leak a prefix.
+// Docker stdout may contain sensitive inspection data. Capture only stderr,
+// redacting before truncation to avoid leaking partial secrets.
 type diagnosticClient struct {
 	Clienter
 	needles []string
@@ -34,8 +33,7 @@ func withDiagnostics(client Clienter, environment []string) Clienter {
 			continue
 		}
 		matched, err := redact.MatchAny(patterns, name)
-		// Fail closed on invalid redaction patterns. Unlike job log redaction,
-		// diagnostics also mask short secrets.
+		// Invalid patterns must not leave potential secrets unmasked.
 		if matched || err != nil {
 			needles = append(needles, value)
 		}
@@ -44,8 +42,7 @@ func withDiagnostics(client Clienter, environment []string) Clienter {
 }
 
 func (c diagnosticClient) Run(ctx context.Context, args []string, env map[string]string, stdout, stderr io.Writer) (int, error) {
-	// Attached stderr is job output, already streamed through JobRunner. Its
-	// nonzero exit is the bootstrap result, not necessarily a Docker failure.
+	// JobRunner handles attached logs; a nonzero job exit is not a CLI error.
 	if args[0] == "start" {
 		return c.Clienter.Run(ctx, args, env, stdout, stderr)
 	}
@@ -97,8 +94,7 @@ func (b *diagnosticBuffer) Write(p []byte) (int, error) {
 func (b *diagnosticBuffer) String() string {
 	s := string(b.data)
 	if b.truncated {
-		// Drop the last partial line: it might contain truncated URL credentials
-		// or an authorization header that the sanitizer cannot recognize.
+		// Truncated credentials may be unrecognizable to the sanitizer.
 		if end := strings.LastIndexByte(s, '\n'); end >= 0 {
 			s = s[:end]
 		} else {

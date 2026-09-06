@@ -10,8 +10,9 @@ import (
 )
 
 func isolateProcess(cmd *exec.Cmd) {
-	// JobRunner signals the supervisor's entire process group. Keep Docker
-	// clients outside it so only the supervisor forwards cancellation, once.
+	// A separate group prevents duplicate cancellation from JobRunner's group
+	// signal and the supervisor. Supervisor SIGKILL can orphan both the client
+	// and container; recovery requires reconciliation.
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	cmd.Cancel = func() error {
 		err := syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)

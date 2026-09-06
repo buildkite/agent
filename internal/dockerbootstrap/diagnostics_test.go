@@ -45,7 +45,7 @@ func TestSetupFailureIncludesDockerDiagnostic(t *testing.T) {
 
 func TestDiagnosticRedaction(t *testing.T) {
 	f := &fakeClient{run: func(_ context.Context, _ []string, _ map[string]string, _, stderr io.Writer) (int, error) {
-		// Write across chunks as os/exec can do; include a quoted multiline value.
+		// os/exec may split a secret across writes or report its escaped form.
 		for _, part := range []string{"private-", "token custom-value short-key https://user:unknown-password@registry.test/v2/ Authorization: Bearer unknown-token ", `"line-one\nline-two"`} {
 			_, _ = io.WriteString(stderr, part)
 		}

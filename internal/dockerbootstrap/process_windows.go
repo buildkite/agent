@@ -2,5 +2,5 @@ package dockerbootstrap
 
 import "os/exec"
 
-// The command rejects non-Linux hosts. This stub keeps the agent portable.
+// Windows builds include this package, but the command rejects non-Linux hosts.
 func isolateProcess(cmd *exec.Cmd) {}

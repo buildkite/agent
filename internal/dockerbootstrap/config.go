@@ -82,8 +82,7 @@ func prepare(cfg Config) (jobConfig, error) {
 	for name, value := range all {
 		_, fromJob := names[name]
 		if fromJob || strings.HasPrefix(name, "BUILDKITE_") || strings.HasPrefix(name, "OTEL_EXPORTER_OTLP_") {
-			// --env NAME uses the Docker client's own environment. Reject its
-			// control variables rather than allowing jobs to configure the client.
+			// --env NAME also exposes these values to the host Docker client.
 			if strings.HasPrefix(name, "DOCKER_") {
 				return job, fmt.Errorf("docker CLI control variables cannot be forwarded in the prototype")
 			}
@@ -94,7 +93,12 @@ func prepare(cfg Config) (jobConfig, error) {
 		}
 	}
 	for _, name := range []string{"BUILDKITE_AGENT_ENDPOINT", "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "all_proxy"} {
-		u, err := url.Parse(job.env[name])
+		value := job.env[name]
+		// Proxy clients also accept host:port without a URL scheme.
+		if value != "" && !strings.Contains(value, "://") && !strings.HasPrefix(value, "//") {
+			value = "//" + value
+		}
+		u, err := url.Parse(value)
 		if err == nil && (strings.EqualFold(u.Hostname(), "localhost") || net.ParseIP(u.Hostname()).IsLoopback()) {
 			return job, fmt.Errorf("%s uses a loopback address unreachable from the job container", name)
 		}
@@ -146,8 +150,7 @@ func prepare(cfg Config) (jobConfig, error) {
 			if path == "" {
 				continue
 			}
-			// Validate before cleaning or creating directories. Only additional
-			// hooks are a list; a comma in a scalar path must never add a mount.
+			// Splitting scalar paths on commas could expose unintended host directories.
 			if !filepath.IsAbs(path) || strings.ContainsAny(path, ",\r\n") {
 				return job, fmt.Errorf("%s requires absolute paths without commas or newlines", name)
 			}
@@ -175,7 +178,7 @@ func prepare(cfg Config) (jobConfig, error) {
 		return job, fmt.Errorf("BUILDKITE_BUILD_PATH is required")
 	}
 	job.args = append(job.args, "--workdir", all["BUILDKITE_BUILD_PATH"])
-	// Expose only the agent socket, never the shared sockets directory.
+	// Mounting the shared directory would expose other jobs' sockets.
 	if base := all["BUILDKITE_SOCKETS_PATH"]; base != "" {
 		for _, name := range []string{"agent-" + all["BUILDKITE_AGENT_PID"], "agent-leader"} {
 			source := filepath.Join(base, name)

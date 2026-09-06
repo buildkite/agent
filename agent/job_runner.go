@@ -150,7 +150,7 @@ type JobRunner struct {
 	// to the bootstrap subprocess via BUILDKITE_AGENT_JOB_TIMEOUT_FILE.
 	jobTimeoutFilePath string
 
-	// Set only for the Docker bootstrap; removed after coordination files.
+	// Must remain until all coordination files have been removed.
 	dockerContextDir string
 
 	// droppedRemoteMirrorURL records a backend-provided mirror removed from the
@@ -991,9 +991,8 @@ func jobContextDir(conf JobRunnerConfig) string {
 	return os.TempDir()
 }
 
-// The prototype integrates through the existing bootstrap-script seam. Wrapper
-// scripts are not supported: JobRunner must recognize the command to allocate
-// private coordination files and enforce the step-image policy.
+// Wrapper scripts cannot be recognized here, so they bypass Docker context
+// allocation and image rejection and are unsupported.
 func usesDockerBootstrap(conf JobRunnerConfig) bool {
 	args, err := shellwords.Split(conf.AgentConfiguration.BootstrapScript)
 	return !conf.KubernetesExec && err == nil && len(args) >= 2 && args[1] == "docker-bootstrap"

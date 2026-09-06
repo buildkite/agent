@@ -7,7 +7,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"slices"
@@ -310,8 +312,7 @@ func TestStartupProbePreservesDrainingCompletion(t *testing.T) {
 					case <-ctx.Done():
 						return 0, ctx.Err()
 					}
-					// Inspection finishes before attachment returns its final logs
-					// and status. Running jobs must outlive the drain timeout too.
+					// Simulate buffered output arriving after inspection completes.
 					delay := 20 * time.Millisecond
 					if state == "running" {
 						delay = 2 * cfg.OperationTimeout
@@ -436,5 +437,116 @@ func TestRuntimeFailureAndOOMDiagnostics(t *testing.T) {
 				t.Fatal("missing OOM diagnostic")
 			}
 		})
+	}
+}
+
+func TestProxyLoopbackWithoutScheme(t *testing.T) {
+	for _, value := range []string{"localhost:3128", "127.0.0.1:3128", "[::1]:3128", "//localhost:3128", "http://localhost:3128", "proxy.example:3128"} {
+		t.Run(value, func(t *testing.T) {
+			cfg := testConfig(t)
+			cfg.Environment = append(cfg.Environment, "HTTP_PROXY="+value)
+			for _, entry := range cfg.Environment {
+				if filename, ok := strings.CutPrefix(entry, "BUILDKITE_ENV_JSON_FILE="); ok {
+					if err := os.WriteFile(filename, []byte(`{"HTTP_PROXY":""}`), 0o600); err != nil {
+						t.Fatal(err)
+					}
+				}
+			}
+			_, err := prepare(cfg)
+			if (err != nil) != !strings.HasPrefix(value, "proxy.example") {
+				t.Fatalf("prepare: %v", err)
+			}
+		})
+	}
+}
+
+func TestNonPTY(t *testing.T) {
+	cfg := testConfig(t)
+	cfg.Environment = append(cfg.Environment, "BUILDKITE_PTY=false", "TERM=host-terminal")
+	job, err := prepare(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if slices.Contains(job.args, "--tty") {
+		t.Fatal("non-PTY job requests a tty")
+	}
+	if _, ok := job.env["TERM"]; ok {
+		t.Fatal("inherited host TERM for non-PTY job")
+	}
+}
+
+func TestAgentSocketMounts(t *testing.T) {
+	cfg := testConfig(t)
+	// Keep Unix socket paths below the macOS length limit.
+	base, err := os.MkdirTemp("/tmp", "bk-sockets-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := os.RemoveAll(base); err != nil {
+			t.Error(err)
+		}
+	})
+	for _, name := range []string{"agent-123", "agent-leader", "agent-456"} {
+		listener, err := net.Listen("unix", filepath.Join(base, name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() {
+			if err := listener.Close(); err != nil {
+				t.Error(err)
+			}
+		})
+	}
+	cfg.Environment = append(cfg.Environment, "BUILDKITE_SOCKETS_PATH="+base, "BUILDKITE_AGENT_PID=123")
+	job, err := prepare(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"agent-123", "agent-leader"} {
+		want := "type=bind,src=" + filepath.Join(base, name) + ",dst=" + containerRoot + "/sockets/" + name
+		if !slices.Contains(job.args, want) {
+			t.Errorf("missing mount %s", name)
+		}
+	}
+	if strings.Contains(strings.Join(job.args, " "), "agent-456") {
+		t.Fatal("mounted another agent's socket")
+	}
+}
+
+func TestContainerLabelsAndBinaryPrecedence(t *testing.T) {
+	cfg := testConfig(t)
+	cfg.Environment = append(cfg.Environment, "BUILDKITE_JOB_ID=test-job", "BUILDKITE_AGENT_ID=test-agent", "BUILDKITE_AGENT_NAME=test-worker")
+	f := &fakeClient{run: func(_ context.Context, args []string, _ map[string]string, _, _ io.Writer) (int, error) {
+		if args[0] == "create" {
+			for _, label := range []string{"com.buildkite.job-id=test-job", "com.buildkite.agent-id=test-agent", "com.buildkite.agent-name=test-worker"} {
+				if !slices.Contains(args, label) {
+					t.Errorf("missing label %s", label)
+				}
+			}
+			script := args[len(args)-1]
+			mountedDir, imageDir := t.TempDir(), t.TempDir()
+			mounted := filepath.Join(mountedDir, "buildkite-agent")
+			for path, content := range map[string]string{
+				mounted: "#!/bin/sh\nif [ \"$1\" = --version ]; then exit 0; fi\ncommand -v buildkite-agent\n",
+				filepath.Join(imageDir, "buildkite-agent"): "#!/bin/sh\nexit 99\n",
+			} {
+				if err := os.WriteFile(path, []byte(content), 0o755); err != nil {
+					t.Fatal(err)
+				}
+			}
+			// An image-provided agent must not shadow the mounted binary.
+			script = strings.ReplaceAll(script, filepath.Dir(containerBinary), mountedDir)
+			cmd := exec.CommandContext(t.Context(), "/bin/sh", "-c", script)
+			cmd.Env = []string{"PATH=" + imageDir + ":/usr/bin:/bin"}
+			output, err := cmd.CombinedOutput()
+			if err != nil || strings.TrimSpace(string(output)) != mounted {
+				t.Fatalf("agent resolution: %q, %v", output, err)
+			}
+		}
+		return 0, nil
+	}}
+	if _, err := (Runner{Client: f, Stdout: io.Discard, Stderr: io.Discard}).Run(t.Context(), cfg); err != nil {
+		t.Fatal(err)
 	}
 }

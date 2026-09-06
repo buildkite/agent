@@ -187,3 +187,22 @@ cancellation.
 References: [Buildkite conditionals](https://buildkite.com/docs/pipelines/configure/conditionals),
 [soft failures](https://buildkite.com/docs/pipelines/configure/soft-fail), and
 [canceling jobs](https://buildkite.com/docs/pipelines/configure/canceling-builds).
+
+## Prototype image refresh and crash recovery
+
+The prototype pulls an image only when it is missing locally. A cached mutable
+tag is reused until the operator refreshes it; there is no pull-policy flag yet.
+Between jobs, refresh the default image on the Docker host with:
+
+```sh
+docker pull buildkite/agent-base:ubuntu-noble-hosted
+```
+
+The next job resolves the refreshed tag to an immutable image ID. Existing jobs
+continue using their already-selected image.
+
+SIGKILL of the supervisor bypasses cleanup. Its separate Docker CLI process group
+and running container may survive. Automatic reconciliation is deferred. Inspect
+leftovers using `docker ps -a --filter label=com.buildkite.bootstrap=docker` and
+the job/agent labels; confirm the job is no longer active before removing its
+specific container with `docker rm --force CONTAINER_ID`.

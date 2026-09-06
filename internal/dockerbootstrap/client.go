@@ -10,16 +10,15 @@ import (
 	"time"
 )
 
-// Clienter separates lifecycle decisions from Docker subprocess execution.
-// Run returns a process exit code; errors indicate failure to execute or a
-// cancelled operation. Callers decide which commands return container status.
+// Clienter allows lifecycle tests to inject Docker failures.
+// Run reports nonzero exits as codes; errors indicate execution or cancellation
+// failures. The caller interprets whether the code belongs to Docker or the job.
 type Clienter interface {
 	Run(context.Context, []string, map[string]string, io.Writer, io.Writer) (int, error)
 }
 
-// CLI deliberately ignores inherited Docker configuration and environment.
-// The supervisor inherits job variables, including potentially DOCKER_HOST and
-// DOCKER_CONFIG. Only operator-supplied arguments may select these settings.
+// CLI excludes inherited configuration because the supervisor receives untrusted
+// job variables that could redirect Docker or select host credentials.
 type CLI struct {
 	Path      string
 	ConfigDir string
@@ -31,8 +30,8 @@ func (c CLI) Run(ctx context.Context, args []string, env map[string]string, stdo
 	}
 	argv := append([]string{"--host", "unix:///var/run/docker.sock", "--config", c.ConfigDir}, args...)
 	cmd := exec.CommandContext(ctx, c.Path, argv...)
-	// A minimal environment also avoids loading host credentials or job-selected
-	// Docker helpers. --env NAME reads the selected container values from here.
+	// --env NAME requires container values in the client environment; prepare
+	// rejects Docker control variables before they reach this boundary.
 	cmd.Env = []string{"PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"}
 	for name, value := range env {
 		cmd.Env = append(cmd.Env, name+"="+value)
