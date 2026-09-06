@@ -11,39 +11,6 @@ step() {
 	printf '==> %s completed in %ss\n' "$label" "$((SECONDS - started))"
 }
 
-packages=(
-	autoconf
-	bison
-	build-essential
-	ca-certificates
-	curl
-	git
-	libdb-dev
-	libffi-dev
-	libgdbm-dev
-	libgmp-dev
-	libncurses-dev
-	libreadline-dev
-	libssl-dev
-	libyaml-dev
-	patch
-	uuid-dev
-	zlib1g-dev
-)
-missing_packages=()
-for package in "${packages[@]}"; do
-	if ! dpkg-query -W -f='${Status}' "$package" 2>/dev/null | grep -q 'install ok installed'; then
-		missing_packages+=("$package")
-	fi
-done
-
-if ((${#missing_packages[@]})); then
-	step "Update apt metadata" sudo apt-get update
-	step "Install system dependencies" sudo apt-get install -y --no-install-recommends "${missing_packages[@]}"
-else
-	printf '==> System dependencies are already installed\n'
-fi
-
 mise_bin="$HOME/.local/bin/mise"
 if [[ ! -x "$mise_bin" ]]; then
 	printf '\n==> Install mise\n'
@@ -64,13 +31,8 @@ EOF
 fi
 
 step "Trust repository tool configuration" "$mise_bin" trust --yes "$PWD/mise.toml"
+step "Install system dependencies" "$mise_bin" bootstrap packages apply --yes
 step "Install pinned toolchain" "$mise_bin" install --yes
 
-if ! "$mise_bin" exec -- gem list --installed --exact bundler --version 2.6.9 >/dev/null; then
-	step "Install locked Bundler version" "$mise_bin" exec -- gem install bundler --version 2.6.9 --no-document
-else
-	printf '==> Bundler 2.6.9 is already installed\n'
-fi
-
 step "Download Go dependencies" "$mise_bin" exec -- go mod download
-step "Install Ruby dependencies" "$mise_bin" exec -- bundle _2.6.9_ install --jobs 4 --retry 3
+step "Install Ruby dependencies" "$mise_bin" exec -- bundle install --jobs 4 --retry 3
