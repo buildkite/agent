@@ -42,7 +42,7 @@ func portableHomePath(path string) string {
 	if rel == "." {
 		return "~"
 	}
-	return filepath.Join("~", rel)
+	return "~/" + filepath.ToSlash(rel)
 }
 
 // ExpandCacheConfiguration returns the cache definitions unchanged. Cache keys

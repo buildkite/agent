@@ -40,7 +40,7 @@ func TestCacheForPathNormalizesShellExpandedHomePath(t *testing.T) {
 	}
 
 	got := CacheForPath(filepath.Join(home, ".npm"))
-	want := filepath.Join("~", ".npm")
+	want := "~/.npm"
 	if got.Name != want {
 		t.Errorf("CacheForPath().Name = %q, want %q", got.Name, want)
 	}
