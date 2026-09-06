@@ -191,7 +191,9 @@ References: [Buildkite conditionals](https://buildkite.com/docs/pipelines/config
 ## Prototype image refresh and crash recovery
 
 The prototype pulls an image only when it is missing locally. A cached mutable
-tag is reused until the operator refreshes it; there is no pull-policy flag yet.
+tag is reused until the operator refreshes it. Set `--pull-policy=always` in the
+bootstrap-script to refresh before each job, or `--pull-policy=never` to prohibit
+pulls. A failed `always` pull fails the job even when the image is cached.
 Between jobs, refresh the default image on the Docker host with:
 
 ```sh
@@ -206,3 +208,79 @@ and running container may survive. Automatic reconciliation is deferred. Inspect
 leftovers using `docker ps -a --filter label=com.buildkite.bootstrap=docker` and
 the job/agent labels; confirm the job is no longer active before removing its
 specific container with `docker rm --force CONTAINER_ID`.
+
+## Pull policy, registry credentials, and container user
+
+Configure operator flags in the bootstrap-script, for example:
+
+```sh
+buildkite-agent start \
+  --build-path=/var/lib/buildkite-agent/builds \
+  --plugins-path=/var/lib/buildkite-agent/plugins \
+  --job-context-dir=/var/lib/buildkite-agent/docker-context \
+  --bootstrap-script='/usr/bin/buildkite-agent docker-bootstrap --pull-policy=always --docker-config=/var/lib/buildkite-agent/registry'
+```
+
+Provision the dedicated registry directory with mode 0700 and use
+`docker --config /var/lib/buildkite-agent/registry login REGISTRY --username USER --password-stdin`
+to supply credentials through stdin. Keep `config.json` mode 0600, outside all
+job-mounted paths. Container operations cannot access this configuration.
+
+For credential helpers, install the helper on the host and configure `credHelpers`
+or `credsStore` in that file. If needed, add `--docker-helper-path` with absolute
+PATH entries and `--docker-helper-env-file` pointing to a mode 0600 JSON object:
+
+```json
+{"HOME":"/var/lib/buildkite-agent/registry-helper","AWS_PROFILE":"buildkite-pull"}
+```
+
+These values go only to pull helpers. Provision referenced credential files on
+the host outside job mounts. Helpers must not include credentials in error text.
+
+The default container identity now matches the host agent UID:GID. Use fresh
+build/plugin directories when validating migration from root execution; the
+supervisor does not repair existing file ownership. `--user=0:0` opts into root.
+A different non-root UID requires a root host agent and pre-provisioned writable
+build/plugin paths. Each container receives a private writable home and minimal
+user/group lookup files; arbitrary image accounts and supplementary groups are
+not preserved.
+
+Linux-only integration tests are opt-in and require the local Docker socket:
+
+```sh
+CGO_ENABLED=0 go build -o /tmp/buildkite-agent-test .
+DOCKER_BOOTSTRAP_TEST_BINARY=/tmp/buildkite-agent-test \
+  go test ./internal/dockerbootstrap -run TestDockerUserIntegration -v
+```
+
+The hosted image must already be cached for the user test. It checks non-root
+and explicit root execution, repository hook environment propagation, writable
+home, user/group lookup, repeated workspace use, file ownership, and cleanup.
+Run as an unprivileged agent user to exercise the non-root default.
+
+Private-registry integration tests also accept `DOCKER_BOOTSTRAP_TEST_IMAGE` and
+`DOCKER_BOOTSTRAP_TEST_AUTH` (a private Docker config directory). Use a disposable
+registry requiring basic authentication and seed the hosted image under a unique
+test tag. These tests remove that tag from the local image cache to exercise
+missing-image behavior; do not point them at an image used by other workloads.
+The helper test requires the fixture's inline basic-auth credentials.
+
+```sh
+DOCKER_BOOTSTRAP_TEST_BINARY=/tmp/buildkite-agent-test \
+DOCKER_BOOTSTRAP_TEST_IMAGE=127.0.0.1:5000/bootstrap:validation \
+DOCKER_BOOTSTRAP_TEST_AUTH=/private/test-registry-config \
+  go test ./internal/dockerbootstrap -run 'TestDocker(Registry|CredentialHelper)Integration' -v
+```
+
+Live ARM64 OrbStack validation confirmed authenticated pulls, cached policies,
+credential rejection, host credential helper execution, and cancellation during
+helper resolution. Default non-root execution also passed the real pipeline's
+checkout/artifact round trip and metahook ordering/failure tests. Build and plugin
+files belonged to the host agent UID:GID. Graceful cancellation completed with
+exit 143; forced cancellation logged supervisor-forced removal. No bootstrap
+containers remained. The source and generated credential
+configurations were not mounted into jobs. Rootless/user-namespace mappings and
+migration of existing root-owned workspaces remain outside this validation.
+A root-host test also verified a distinct non-root UID:GID with pre-provisioned
+workspace ownership, including private-context access and cleanup. An unwritable
+workspace failed with a user-permission diagnostic before bootstrap started.

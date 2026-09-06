@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"os"
 	"strings"
 	"time"
 )
@@ -26,13 +27,14 @@ func (r Runner) Run(ctx context.Context, cfg Config) (code int, err error) {
 	if err != nil {
 		return SetupFailure, err
 	}
+	defer func() { _ = os.RemoveAll(job.userDirectory) }()
 	if r.Stdout == nil {
 		r.Stdout = io.Discard
 	}
 	if r.Stderr == nil {
 		r.Stderr = io.Discard
 	}
-	r.Client = withDiagnostics(r.Client, cfg.Environment)
+	r.Client = withDiagnostics(r.Client, cfg.Environment, cfg.RedactedValues...)
 	// Cleanup and client shutdown must finish before JobRunner's SIGKILL deadline.
 	// Reserve 10% of the cleanup margin for scheduling delays.
 	shutdownCtx, shutdownCancel := context.WithCancel(context.Background())
@@ -65,14 +67,22 @@ func (r Runner) Run(ctx context.Context, cfg Config) (code int, err error) {
 	if err := operation(ctx, cfg.OperationTimeout, "info"); err != nil {
 		return SetupFailure, err
 	}
-	if err := operation(ctx, cfg.OperationTimeout, "image", "inspect", cfg.Image); err != nil {
+	if cfg.PullPolicy == "always" {
+		if err := operation(ctx, cfg.PullTimeout, "pull", cfg.Image); err != nil {
+			return SetupFailure, err
+		}
+	} else if err := operation(ctx, cfg.OperationTimeout, "image", "inspect", cfg.Image); err != nil {
 		if ctx.Err() != nil {
 			return SetupFailure, ctx.Err()
+		}
+		if cfg.PullPolicy == "never" {
+			return SetupFailure, fmt.Errorf("pull-policy never requires a cached image: %w", err)
 		}
 		if err := operation(ctx, cfg.PullTimeout, "pull", cfg.Image); err != nil {
 			return SetupFailure, err
 		}
 	}
+
 	// Full inspection output could disclose image environment secrets in job logs.
 	var identity bytes.Buffer
 	inspectCtx, inspectCancel := context.WithTimeout(ctx, cfg.OperationTimeout)
@@ -125,6 +135,19 @@ func (r Runner) Run(ctx context.Context, cfg Config) (code int, err error) {
 	// Docker's init deliver signals directly to bootstrap.
 	const script = `set -e
 export PATH="/buildkite-docker/bin:$PATH"
+for path in "$BUILDKITE_ENV_FILE" "$BUILDKITE_ENV_JSON_FILE"; do
+  if ! test -r "$path"; then
+    echo "Docker bootstrap user cannot read private job context: $path" >&2
+    exit 125
+  fi
+done
+for path in "$HOME" "$BUILDKITE_BUILD_PATH" "${BUILDKITE_PLUGINS_PATH:-}" "${BUILDKITE_GIT_MIRRORS_PATH:-}" "${BUILDKITE_BUILD_CHECKOUT_PATH:-}"; do
+  if test -n "$path" && test -e "$path" && { ! test -w "$path" || ! test -x "$path"; }; then
+    echo "Docker bootstrap user cannot write directory: $path; provision permissions for the configured UID:GID" >&2
+    exit 125
+  fi
+done
+cd "$BUILDKITE_BUILD_PATH"
 if ! test -x /buildkite-docker/bin/buildkite-agent || ! command -v git >/dev/null || ! command -v ssh >/dev/null; then
   echo 'Docker bootstrap image contract requires an executable agent binary, git, and ssh' >&2
   exit 125

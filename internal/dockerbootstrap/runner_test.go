@@ -47,6 +47,9 @@ func testConfig(t *testing.T) Config {
 	if err := os.WriteFile(values["BUILDKITE_ENV_JSON_FILE"], data, 0o600); err != nil {
 		t.Fatal(err)
 	}
+	if err := os.WriteFile(values["BUILDKITE_ENV_FILE"], nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
 	binary := filepath.Join(base, "buildkite-agent")
 	if err := os.WriteFile(binary, []byte("test binary"), 0o755); err != nil {
 		t.Fatal(err)
@@ -100,7 +103,7 @@ func TestEnvironmentAndMounts(t *testing.T) {
 	if job.env["BUILDKITE_AGENT_ACCESS_TOKEN"] != "private-token" {
 		t.Fatal("missing token")
 	}
-	for _, name := range []string{"HOST_SECRET", "HOME", "PATH", ContextEnv} {
+	for _, name := range []string{"HOST_SECRET", "PATH", ContextEnv} {
 		if _, ok := job.env[name]; ok {
 			t.Errorf("forwarded host variable %s", name)
 		}
@@ -538,7 +541,7 @@ func TestContainerLabelsAndBinaryPrecedence(t *testing.T) {
 			// An image-provided agent must not shadow the mounted binary.
 			script = strings.ReplaceAll(script, filepath.Dir(containerBinary), mountedDir)
 			cmd := exec.CommandContext(t.Context(), "/bin/sh", "-c", script)
-			cmd.Env = []string{"PATH=" + imageDir + ":/usr/bin:/bin"}
+			cmd.Env = append(append([]string(nil), cfg.Environment...), "HOME="+mountedDir, "PATH="+imageDir+":/usr/bin:/bin")
 			output, err := cmd.CombinedOutput()
 			if err != nil || strings.TrimSpace(string(output)) != mounted {
 				t.Fatalf("agent resolution: %q, %v", output, err)

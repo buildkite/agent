@@ -19,14 +19,14 @@ type diagnosticClient struct {
 	needles []string
 }
 
-func withDiagnostics(client Clienter, environment []string) Clienter {
+func withDiagnostics(client Clienter, environment []string, secrets ...string) Clienter {
 	patterns := []string{"*_TOKEN", "*_PASSWORD", "*_SECRET", "*_KEY", "*HEADERS*", "BUILDKITE_SECRETS_CONFIG"}
 	for _, pair := range environment {
 		if value, ok := strings.CutPrefix(pair, "BUILDKITE_REDACTED_VARS="); ok {
 			patterns = append(patterns, strings.Split(value, ",")...)
 		}
 	}
-	var needles []string
+	needles := append([]string(nil), secrets...)
 	for _, pair := range environment {
 		name, value, ok := strings.Cut(pair, "=")
 		if !ok || value == "" {

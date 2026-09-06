@@ -7,6 +7,7 @@ import (
 	"io"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -20,19 +21,43 @@ type Clienter interface {
 // CLI excludes inherited configuration because the supervisor receives untrusted
 // job variables that could redirect Docker or select host credentials.
 type CLI struct {
-	Path      string
-	ConfigDir string
+	Path              string
+	ConfigDir         string
+	AuthConfigDir     string
+	HelperPath        string
+	HelperEnvironment map[string]string
 }
 
 func (c CLI) Run(ctx context.Context, args []string, env map[string]string, stdout, stderr io.Writer) (int, error) {
 	if !filepath.IsAbs(c.Path) || !filepath.IsAbs(c.ConfigDir) {
 		return 0, fmt.Errorf("docker executable and configuration paths must be absolute")
 	}
-	argv := append([]string{"--host", "unix:///var/run/docker.sock", "--config", c.ConfigDir}, args...)
+	configDir := c.ConfigDir
+	path := "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+	isPull := len(args) > 0 && args[0] == "pull"
+	if isPull && c.AuthConfigDir != "" {
+		if !filepath.IsAbs(c.AuthConfigDir) {
+			return 0, fmt.Errorf("docker authentication directory must be absolute")
+		}
+		configDir = c.AuthConfigDir
+		if c.HelperPath != "" {
+			path = c.HelperPath
+		}
+	}
+	argv := append([]string{"--host", "unix:///var/run/docker.sock", "--config", configDir}, args...)
 	cmd := exec.CommandContext(ctx, c.Path, argv...)
 	// --env NAME requires container values in the client environment; prepare
 	// rejects Docker control variables before they reach this boundary.
-	cmd.Env = []string{"PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"}
+	cmd.Env = []string{"PATH=" + path}
+	// Registry helpers receive operator credentials only during pulls, never jobs.
+	if isPull && c.AuthConfigDir != "" {
+		for name, value := range c.HelperEnvironment {
+			if strings.HasPrefix(name, "DOCKER_") || name == "PATH" {
+				return 0, fmt.Errorf("helper environment cannot override Docker settings or PATH")
+			}
+			cmd.Env = append(cmd.Env, name+"="+value)
+		}
+	}
 	for name, value := range env {
 		cmd.Env = append(cmd.Env, name+"="+value)
 	}
