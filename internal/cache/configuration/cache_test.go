@@ -254,6 +254,7 @@ func TestCacheValidateRejectsResolvedProtectedDirectories(t *testing.T) {
 		}
 	}
 	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
 	t.Chdir(cwd)
 
 	for _, target := range []string{home, cwd, filepath.Join(cwd, "subdir", "..")} {
