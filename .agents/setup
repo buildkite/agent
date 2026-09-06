@@ -12,6 +12,7 @@ step() {
 }
 
 mise_bin="$HOME/.local/bin/mise"
+export PATH="$HOME/.local/bin:$PATH"
 if [[ ! -x "$mise_bin" ]]; then
 	printf '\n==> Install mise\n'
 	started=$SECONDS
