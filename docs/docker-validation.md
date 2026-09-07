@@ -284,3 +284,42 @@ migration of existing root-owned workspaces remain outside this validation.
 A root-host test also verified a distinct non-root UID:GID with pre-provisioned
 workspace ownership, including private-context access and cleanup. An unwritable
 workspace failed with a user-permission diagnostic before bootstrap started.
+
+## Per-job networks
+
+Each execution creates `buildkite_job_<random-id>` and
+`buildkite_network_<random-id>` with the same suffix. The job log includes the
+network name. Inspect resources on the agent's Docker host:
+
+```sh
+docker ps -a --filter label=com.buildkite.bootstrap=docker
+docker network ls --filter label=com.buildkite.bootstrap=docker
+```
+
+After all test jobs finish, both lists should be empty. While jobs are running,
+each container should belong to exactly one dedicated bridge, with no published
+ports.
+
+With the hosted image cached, run the opt-in Linux integration test:
+
+```sh
+CGO_ENABLED=0 go build -o /tmp/buildkite-agent-test .
+DOCKER_BOOTSTRAP_TEST_BINARY=/tmp/buildkite-agent-test \
+  go test ./internal/dockerbootstrap -run 'TestDocker(Network|User)Integration' -v
+```
+
+The network test starts two concurrent jobs and requires outbound HTTPS access
+to `https://example.com`. Both jobs start TCP listeners. The test confirms that
+each listener is reachable locally, but connections to the other job's container
+IP fail in both directions. It then cancels one job gracefully and forces the
+other to stop, checking that both containers and networks disappear. The user
+test also exercises successful exits and permission failures with network cleanup.
+
+Live ARM64 OrbStack validation passed these checks. Unit tests cover partial
+network creation, cancellation during creation, missing resources, cleanup
+failures, and reserved time for network removal.
+
+These checks do not establish isolation from host services, cloud metadata, or
+internal networks. DNS/proxy overrides, custom CAs, VPN routes, IPv6, and MTU
+compatibility remain unvalidated. Abrupt supervisor termination can leave networks
+behind; stale-resource reconciliation remains deferred.
