@@ -17,9 +17,9 @@ const cacheRestoreHelpDescription = `Usage:
 
 Description:
 
-Restores files from the cache for the current job based on the cache configuration
-defined in your cache config file (defaults to .buildkite/cache.yml or
-.buildkite/cache.yaml).
+Restores files from the cache for the current job. Use --path to restore one path
+with a default cache key, or define caches in a cache config file (defaults to
+.buildkite/cache.yml or .buildkite/cache.yaml).
 
 The cache configuration file defines which files or directories should be restored
 and their associated cache key. An entry is restored when its target_paths
@@ -31,6 +31,12 @@ Note: This feature is currently in development and subject to change. It is not
 yet available to all customers.
 
 Example:
+
+    $ buildkite-agent cache restore --path ~/.npm
+
+This restores ~/.npm using a default key containing an automatic-cache marker,
+agent OS, agent architecture, branch, and commit. The architecture is the
+fallback limit, and the target path is part of the cache address.
 
     $ buildkite-agent cache restore
 
@@ -47,15 +53,15 @@ cluster default.
 Configuration File Format:
 
 The cache configuration file should be in YAML format. cache_key is an ordered
-list of parts; each part is a literal string or one of { agent: os },
-{ agent: arch }, { checksum: <file> }, or { env: <VAR> }. A checksum part also
-accepts an array of file paths and glob patterns (*, **, ?), expanded relative
-to the working directory and hashed together into one digest. Any one part may
-also set fallback_limit: true to make every part after it optional for fallback
-matching (the marked part itself stays mandatory). In the example below an exact
-match is preferred, but if the lockfile changed, an entry matching node + os + arch
-is still restored, as the fallback is specified on arch, making node + os + arch mandatory, 
-but making checksum optional:
+list of parts; each part is a literal string, an agent fact (os, arch, branch,
+commit, pipeline, or step), { checksum: <file> }, or { env: <VAR> }. A checksum
+part also accepts an array of file paths and glob patterns (*, **, ?), expanded
+relative to the working directory and hashed together into one digest. Any one
+part may also set fallback_limit: true to make every part after it optional for
+fallback matching (the marked part itself stays mandatory). In the example
+below an exact match is preferred, but if the lockfile changed, an entry matching
+node + os + arch is still restored, as the fallback is specified on arch, making
+node + os + arch mandatory, but making checksum optional:
 
     caches:
       - name: node
@@ -98,17 +104,9 @@ var CacheRestoreCommand = &cli.Command{
 		apiCfg := loadAPIClientConfig(cfg, "AgentAccessToken")
 		apiClient := api.NewClient(l, apiCfg)
 
-		cacheConfigFile, err := resolveCacheConfigFile(cfg.CacheConfigFile)
+		cacheCfg, err := resolveCacheConfig(cfg.CacheConfig)
 		if err != nil {
 			return err
-		}
-
-		// Build cache configuration
-		cacheCfg := cache.Config{
-			Registry:        cfg.Registry,
-			BucketURL:       cfg.BucketURL,
-			CacheConfigFile: cacheConfigFile,
-			Names:           cfg.Names,
 		}
 
 		// Perform cache restore (logging happens inside)

@@ -126,6 +126,18 @@ func TestBuildArchive(t *testing.T) {
 	}
 }
 
+func TestBuildArchiveAllowsPathAsCacheName(t *testing.T) {
+	archiveInfo, err := BuildArchive(t.Context(), []string{"testdata"}, "~/.npm")
+	if err != nil {
+		t.Fatalf("BuildArchive() error = %v, want nil", err)
+	}
+	t.Cleanup(func() { _ = os.Remove(archiveInfo.ArchivePath) })
+
+	if got := filepath.Base(archiveInfo.ArchivePath); !strings.HasPrefix(got, ".npm-") {
+		t.Errorf("archive filename = %q, want prefix %q", got, ".npm-")
+	}
+}
+
 func TestBuildAndExtractArchive_MultipleHomeDirPaths(t *testing.T) {
 	_, err := trace.NewProvider(t.Context(), "noop", "test", "0.0.1")
 	if err != nil {

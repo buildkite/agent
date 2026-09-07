@@ -17,9 +17,9 @@ const cacheSaveHelpDescription = `Usage:
 
 Description:
 
-Saves files to the cache for the current build based on the cache configuration
-defined in your cache config file (defaults to .buildkite/cache.yml or
-.buildkite/cache.yaml).
+Saves files to the cache for the current build. Use --path to cache one path
+with a default cache key, or define caches in a cache config file (defaults to
+.buildkite/cache.yml or .buildkite/cache.yaml).
 
 The cache configuration file defines which files or directories should be cached
 and their associated cache key.
@@ -28,6 +28,12 @@ Note: This feature is currently in development and subject to change. It is not
 yet available to all customers.
 
 Example:
+
+    $ buildkite-agent cache save --path ~/.npm
+
+This saves ~/.npm using a default key containing an automatic-cache marker,
+agent OS, agent architecture, branch, and commit. The architecture is the
+fallback limit, and the target path is part of the cache address.
 
     $ buildkite-agent cache save
 
@@ -44,10 +50,10 @@ address it is not overwritten.
 Configuration File Format:
 
 The cache configuration file should be in YAML format. cache_key is an ordered
-list of parts; each part is a literal string or one of { agent: os },
-{ agent: arch }, { checksum: <file> }, or { env: <VAR> }. A checksum part also
-accepts an array of file paths and glob patterns (*, **, ?), expanded relative
-to the working directory and hashed together into one digest:
+list of parts; each part is a literal string, an agent fact (os, arch, branch,
+commit, pipeline, or step), { checksum: <file> }, or { env: <VAR> }. A checksum
+part also accepts an array of file paths and glob patterns (*, **, ?), expanded
+relative to the working directory and hashed together into one digest:
 
     caches:
       - name: node
@@ -88,18 +94,9 @@ var CacheSaveCommand = &cli.Command{
 
 		apiClient := api.NewClient(l, apiCfg)
 
-		cacheConfigFile, err := resolveCacheConfigFile(cfg.CacheConfigFile)
+		cacheCfg, err := resolveCacheConfig(cfg.CacheConfig)
 		if err != nil {
 			return err
-		}
-
-		// Build cache configuration
-		cacheCfg := cache.Config{
-			Registry:        cfg.Registry,
-			BucketURL:       cfg.BucketURL,
-			CacheConfigFile: cacheConfigFile,
-			Names:           cfg.Names,
-			Concurrency:     cfg.Concurrency,
 		}
 
 		// Perform cache save (logging happens inside)

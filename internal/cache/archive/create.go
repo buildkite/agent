@@ -30,7 +30,8 @@ func BuildArchive(ctx context.Context, paths []string, key string) (*ArchiveInfo
 		return nil, fmt.Errorf("failed to parse modified epoch: %w", err)
 	}
 
-	archiveFile, err := os.CreateTemp("", fmt.Sprintf("%s-*.zip", key))
+	// Use only the final path element because cache names may contain path separators.
+	archiveFile, err := os.CreateTemp("", fmt.Sprintf("%s-*.zip", filepath.Base(key)))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create archive file: %w", err)
 	}

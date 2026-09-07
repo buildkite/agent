@@ -3,7 +3,6 @@ package configuration
 import (
 	"fmt"
 	"path/filepath"
-	"regexp"
 	"strings"
 )
 
@@ -20,11 +19,10 @@ type Cache struct {
 func (c Cache) Validate() error {
 	var errors []string
 
-	// Name validation: alphanumeric and underscore only
+	// Names are local identifiers and may also be cache paths when the cache is
+	// configured with the CLI path shorthand.
 	if strings.TrimSpace(c.Name) == "" {
 		errors = append(errors, "name cannot be empty")
-	} else if !regexp.MustCompile(`^[a-zA-Z0-9_]+$`).MatchString(c.Name) {
-		errors = append(errors, fmt.Sprintf("name '%s' can only contain letters, numbers, and underscores", c.Name))
 	}
 
 	// Cache Key validation: non-empty
