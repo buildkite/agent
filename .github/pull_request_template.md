@@ -19,28 +19,11 @@ List of what the PR changes. If the PR changes the CLI arguments, consider addin
 Can skip if changes are simple or clear from the commit messages.
 -->
 
-## Documentation and publication
-
-<!--
-The following details help our docs writer bot decide whether and how to draft docs for this change.
--->
-
-**Does this change need public documentation?**
-
-- [ ] Yes
-- [ ] No
-- [ ] Unsure
-
-**Is this change safe to document publicly when this PR merges?**
-
-- [ ] Yes
-- [ ] No, the documentation must be held
-- [ ] It can be documented as a limited-availability or preview feature
-- [ ] Not applicable (docs not needed)
-
-**Publication notes:**
-
-<!-- If documentation must be held or needs availability language, explain what reviewers should know and when it can be published. -->
+### Public documentation
+<!-- The docs bot will act according to the following -->
+- [ ] Ready for public documentation - document and publish
+- [ ] Not ready for public docs - document and hold
+- [ ] Not applicable - docs not needed
 
 ## Testing
 - [ ] Tests have run locally (with `go test ./...`). Buildkite employees may check this if the pipeline has run automatically.
