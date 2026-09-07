@@ -37,6 +37,7 @@ var supportedAgentArgs = map[string]struct{}{
 	"os":       {},
 	"arch":     {},
 	"branch":   {},
+	"commit":   {},
 	"step":     {},
 	"pipeline": {},
 }
@@ -193,6 +194,8 @@ func (k KeyPart) Resolve(env map[string]string) (string, error) {
 			v = runtime.GOARCH
 		case "branch":
 			v = lookupEnv(env, "BUILDKITE_BRANCH")
+		case "commit":
+			v = lookupEnv(env, "BUILDKITE_COMMIT")
 		case "pipeline":
 			v = lookupEnv(env, "BUILDKITE_PIPELINE_SLUG")
 		case "step":

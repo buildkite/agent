@@ -31,8 +31,9 @@ Example:
 
     $ buildkite-agent cache save --path ~/.npm
 
-This saves ~/.npm using a default key containing the path, agent OS, agent
-architecture, and branch. The architecture is the fallback limit.
+This saves ~/.npm using a default key containing an automatic-cache marker,
+agent OS, agent architecture, branch, and commit. The architecture is the
+fallback limit, and the target path is part of the cache address.
 
     $ buildkite-agent cache save
 
@@ -49,10 +50,10 @@ address it is not overwritten.
 Configuration File Format:
 
 The cache configuration file should be in YAML format. cache_key is an ordered
-list of parts; each part is a literal string or one of { agent: os },
-{ agent: arch }, { checksum: <file> }, or { env: <VAR> }. A checksum part also
-accepts an array of file paths and glob patterns (*, **, ?), expanded relative
-to the working directory and hashed together into one digest:
+list of parts; each part is a literal string, an agent fact (os, arch, branch,
+commit, pipeline, or step), { checksum: <file> }, or { env: <VAR> }. A checksum
+part also accepts an array of file paths and glob patterns (*, **, ?), expanded
+relative to the working directory and hashed together into one digest:
 
     caches:
       - name: node

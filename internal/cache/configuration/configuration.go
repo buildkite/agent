@@ -14,10 +14,12 @@ func CacheForPath(path string) Cache {
 	return Cache{
 		Name: path,
 		CacheKey: []KeyPart{
-			{Source: SourceLiteral, Arg: path},
+			// Mark automatically configured caches without repeating the target path.
+			{Source: SourceLiteral, Arg: ".auto"},
 			{Source: SourceAgent, Arg: "os"},
 			{Source: SourceAgent, Arg: "arch", FallbackLimit: true},
 			{Source: SourceAgent, Arg: "branch"},
+			{Source: SourceAgent, Arg: "commit"},
 		},
 		TargetPaths: []string{path},
 	}
