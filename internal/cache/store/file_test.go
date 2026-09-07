@@ -169,7 +169,7 @@ func TestLocalFileBlobUpload(t *testing.T) {
 
 	key := "test/cache/artifact.txt"
 
-	info, err := blob.Upload(ctx, srcFile, key)
+	info, err := blob.Upload(ctx, srcFile, key, 0)
 	if err != nil {
 		t.Fatalf("Upload: %v", err)
 	}
@@ -231,7 +231,7 @@ func TestLocalFileBlobDownload(t *testing.T) {
 	key := "test/cache/artifact.txt"
 
 	// Upload first
-	_, err = blob.Upload(ctx, srcFile, key)
+	_, err = blob.Upload(ctx, srcFile, key, 0)
 	if err != nil {
 		t.Fatalf("Upload: %v", err)
 	}
@@ -285,7 +285,7 @@ func TestLocalFileBlobUploadOverwrite(t *testing.T) {
 	if err := os.WriteFile(srcFile1, content1, 0o600); err != nil {
 		t.Fatalf("WriteFile: %v", err)
 	}
-	_, err = blob.Upload(ctx, srcFile1, key)
+	_, err = blob.Upload(ctx, srcFile1, key, 0)
 	if err != nil {
 		t.Fatalf("Upload: %v", err)
 	}
@@ -297,7 +297,7 @@ func TestLocalFileBlobUploadOverwrite(t *testing.T) {
 		t.Fatalf("WriteFile: %v", err)
 	}
 
-	info, err := blob.Upload(ctx, srcFile2, key)
+	info, err := blob.Upload(ctx, srcFile2, key, 0)
 	if err != nil {
 		t.Fatalf("Upload: %v", err)
 	}
@@ -363,7 +363,7 @@ func TestLocalFileBlobUploadInvalidKey(t *testing.T) {
 		t.Fatalf("WriteFile: %v", err)
 	}
 
-	_, err = blob.Upload(ctx, srcFile, "../../../etc/passwd")
+	_, err = blob.Upload(ctx, srcFile, "../../../etc/passwd", 0)
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -518,12 +518,12 @@ func TestLocalFileBlobConcurrentUpload(t *testing.T) {
 	done := make(chan error, 2)
 
 	go func() {
-		_, err := blob.Upload(ctx, srcFile1, key)
+		_, err := blob.Upload(ctx, srcFile1, key, 0)
 		done <- err
 	}()
 
 	go func() {
-		_, err := blob.Upload(ctx, srcFile2, key)
+		_, err := blob.Upload(ctx, srcFile2, key, 0)
 		done <- err
 	}()
 

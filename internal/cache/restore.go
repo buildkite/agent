@@ -537,7 +537,7 @@ func (c *client) downloadCache(ctx context.Context, retrieveResp api.CacheEntryR
 	}
 
 	// Extend the blob's retention now that it's confirmed good.
-	maybeRefreshRetention(ctx, blobStore, retrieveResp.Fallback, storeObjectName)
+	maybeRefreshRetention(ctx, blobStore, retrieveResp.Fallback, storeObjectName, time.Duration(retrieveResp.RetentionSeconds)*time.Second)
 
 	span.SetStatus(codes.Ok, "download completed")
 
@@ -549,12 +549,12 @@ func (c *client) downloadCache(ctx context.Context, retrieveResp api.CacheEntryR
 // shorter key sequence, and refreshing it would reset the clock on a blob
 // the caller didn't explicitly target (mirrors the backend's
 // `unless entry_result.fallback_used?` TTL-bump guard).
-func maybeRefreshRetention(ctx context.Context, blobStore store.Blob, fallback bool, key string) {
+func maybeRefreshRetention(ctx context.Context, blobStore store.Blob, fallback bool, key string, retention time.Duration) {
 	refresher, ok := blobStore.(store.RetentionRefresher)
 	if !ok || fallback {
 		return
 	}
-	refresher.RefreshRetention(ctx, key)
+	refresher.RefreshRetention(ctx, key, retention)
 }
 
 // extractCache extracts files from a cache archive

@@ -448,10 +448,11 @@ func TestCleanPathWindowsUNCShareRoot(t *testing.T) {
 // fakeRefreshingBlob is a minimal store.Blob that also implements
 // store.RetentionRefresher, mirroring NscStore/S3Blob.
 type fakeRefreshingBlob struct {
-	refreshCalls []string
+	refreshCalls      []string
+	refreshRetentions []time.Duration
 }
 
-func (f *fakeRefreshingBlob) Upload(_ context.Context, _, _ string) (*store.TransferInfo, error) {
+func (f *fakeRefreshingBlob) Upload(_ context.Context, _, _ string, _ time.Duration) (*store.TransferInfo, error) {
 	return nil, nil
 }
 
@@ -459,15 +460,16 @@ func (f *fakeRefreshingBlob) Download(_ context.Context, _, _ string) (*store.Tr
 	return nil, nil
 }
 
-func (f *fakeRefreshingBlob) RefreshRetention(_ context.Context, key string) {
+func (f *fakeRefreshingBlob) RefreshRetention(_ context.Context, key string, retention time.Duration) {
 	f.refreshCalls = append(f.refreshCalls, key)
+	f.refreshRetentions = append(f.refreshRetentions, retention)
 }
 
 // fakeNonRefreshingBlob is a store.Blob with no RefreshRetention method,
 // mirroring LocalFileBlob (no retention concept to refresh).
 type fakeNonRefreshingBlob struct{}
 
-func (f *fakeNonRefreshingBlob) Upload(_ context.Context, _, _ string) (*store.TransferInfo, error) {
+func (f *fakeNonRefreshingBlob) Upload(_ context.Context, _, _ string, _ time.Duration) (*store.TransferInfo, error) {
 	return nil, nil
 }
 
@@ -476,13 +478,16 @@ func (f *fakeNonRefreshingBlob) Download(_ context.Context, _, _ string) (*store
 }
 
 func TestMaybeRefreshRetention(t *testing.T) {
-	t.Run("refreshes on an exact match", func(t *testing.T) {
+	t.Run("refreshes on an exact match with the given retention", func(t *testing.T) {
 		blob := &fakeRefreshingBlob{}
 
-		maybeRefreshRetention(t.Context(), blob, false, "key")
+		maybeRefreshRetention(t.Context(), blob, false, "key", 48*time.Hour)
 
 		if len(blob.refreshCalls) != 1 {
 			t.Errorf("refresh calls = %d, want 1", len(blob.refreshCalls))
+		}
+		if len(blob.refreshRetentions) != 1 || blob.refreshRetentions[0] != 48*time.Hour {
+			t.Errorf("refresh retentions = %v, want [48h]", blob.refreshRetentions)
 		}
 	})
 
@@ -491,7 +496,7 @@ func TestMaybeRefreshRetention(t *testing.T) {
 	t.Run("skips the refresh on a fallback match", func(t *testing.T) {
 		blob := &fakeRefreshingBlob{}
 
-		maybeRefreshRetention(t.Context(), blob, true, "key")
+		maybeRefreshRetention(t.Context(), blob, true, "key", 48*time.Hour)
 
 		if len(blob.refreshCalls) != 0 {
 			t.Errorf("refresh calls = %d, want 0 for a fallback match", len(blob.refreshCalls))
@@ -501,6 +506,6 @@ func TestMaybeRefreshRetention(t *testing.T) {
 	t.Run("does nothing for a store with no retention concept", func(t *testing.T) {
 		blob := &fakeNonRefreshingBlob{}
 
-		maybeRefreshRetention(t.Context(), blob, false, "key") // must not panic
+		maybeRefreshRetention(t.Context(), blob, false, "key", 48*time.Hour) // must not panic
 	})
 }

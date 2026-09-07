@@ -639,7 +639,7 @@ func TestS3Blob_RefreshRetention(t *testing.T) {
 	copier := &fakeCopier{}
 	b := &S3Blob{client: copier, bucketName: "my-bucket", prefix: "prefix"}
 
-	b.RefreshRetention(t.Context(), "key")
+	b.RefreshRetention(t.Context(), "key", 0)
 
 	if len(copier.calls) != 1 {
 		t.Fatalf("CopyObject calls = %d, want 1", len(copier.calls))

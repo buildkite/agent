@@ -300,8 +300,10 @@ func resolveTransferSettings(opts *Options) transferSettings {
 	}
 }
 
-// Upload uploads a file to S3 using multipart upload for parallel transfers
-func (b *S3Blob) Upload(ctx context.Context, filePath, key string) (*TransferInfo, error) {
+// Upload uploads a file to S3 using multipart upload for parallel transfers.
+// retention is ignored: S3 object lifetime is governed by the bucket's
+// lifecycle policy, which the agent does not set per object.
+func (b *S3Blob) Upload(ctx context.Context, filePath, key string, _ time.Duration) (*TransferInfo, error) {
 	ctx, span := trace.Start(ctx, "S3Blob.Upload")
 	defer span.End()
 
@@ -487,7 +489,11 @@ func (b *S3Blob) Download(ctx context.Context, key, destPath string) (*TransferI
 //
 // This refresh is best-effort only: any failure (incl. objects exceeding
 // S3's 5GB CopyObject limit) must not cause the overall restore operation to fail.
-func (b *S3Blob) RefreshRetention(ctx context.Context, key string) {
+//
+// retention is ignored: the self-copy only refreshes LastModified, and the
+// effective lifetime is whatever window the bucket's lifecycle policy applies
+// from that timestamp — the agent cannot lengthen it per object.
+func (b *S3Blob) RefreshRetention(ctx context.Context, key string, _ time.Duration) {
 	fullKey := b.getFullKey(key)
 	refreshObjectExpiry(ctx, b.client, b.bucketName, fullKey)
 }
