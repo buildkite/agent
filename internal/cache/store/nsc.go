@@ -21,20 +21,20 @@ import (
 // nscScheme is the URL scheme that routes an agent-managed cache store to NSC.
 const nscScheme = "nsc"
 
-// nscDefaultExpiry is the fallback artifact lifetime used for --expires_in
+// nscDefaultRetention is the fallback artifact lifetime used for --expires_in
 // (upload) and --ensure_minimum (refresh on access) when the server does not
 // supply a retention (older server). Normally the retention comes from the
-// cache registry's configured TTL, sent per request; see nscExpiry.
+// cache registry's configured TTL, sent per request; see nscRetentionArg.
 // Cache entries are content-addressed and short-lived, so we cap storage growth
 // rather than relying on NSC's no-expiry default.
-const nscDefaultExpiry = "72h"
+const nscDefaultRetention = "72h"
 
-// nscExpiry formats a retention duration for nsc's --expires_in / --ensure_minimum
+// nscRetentionArg formats a retention duration for nsc's --expires_in / --ensure_minimum
 // flags, rounding up to whole hours. A zero or negative duration (the server did
-// not specify one) falls back to nscDefaultExpiry.
-func nscExpiry(retention time.Duration) string {
+// not specify one) falls back to nscDefaultRetention.
+func nscRetentionArg(retention time.Duration) string {
 	if retention <= 0 {
-		return nscDefaultExpiry
+		return nscDefaultRetention
 	}
 	hours := int64((retention + time.Hour - 1) / time.Hour)
 	return fmt.Sprintf("%dh", hours)
@@ -159,7 +159,7 @@ func (n *NscStore) Upload(ctx context.Context, filePath, key string, retention t
 	start := time.Now()
 
 	// Execute nsc artifact upload command
-	result, err := n.run(ctx, "", n.artifactArgs("upload", filePath, key, "--expires_in", nscExpiry(retention))...)
+	result, err := n.run(ctx, "", n.artifactArgs("upload", filePath, key, "--expires_in", nscRetentionArg(retention))...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute nsc upload command: %w", err)
 	}
@@ -248,7 +248,7 @@ func (n *NscStore) Download(ctx context.Context, key, filePath string) (*Transfe
 }
 
 // RefreshRetention pushes the artifact's expiry out to at least retention from
-// now (falling back to nscDefaultExpiry when unset) via `nsc artifact extend
+// now (falling back to nscDefaultRetention when unset) via `nsc artifact extend
 // --ensure_minimum`. Using --ensure_minimum (rather than the additive --by)
 // makes the refresh idempotent, so calling it on every restore keeps a hot
 // cache alive without growing its expiry unbounded.
@@ -269,7 +269,7 @@ func (n *NscStore) RefreshRetention(ctx context.Context, key string, retention t
 		}
 	}
 
-	result, err := n.run(ctx, "", n.artifactArgs("extend", key, "--ensure_minimum", nscExpiry(retention))...)
+	result, err := n.run(ctx, "", n.artifactArgs("extend", key, "--ensure_minimum", nscRetentionArg(retention))...)
 	switch {
 	case err != nil:
 		slog.Warn("failed to refresh cache TTL, continuing (non-fatal)", "key", key, "error", err)

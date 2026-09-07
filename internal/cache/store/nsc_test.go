@@ -12,14 +12,14 @@ import (
 	"github.com/google/go-cmp/cmp"
 )
 
-func TestNscExpiry(t *testing.T) {
+func TestNscRetentionArg(t *testing.T) {
 	tests := []struct {
 		name      string
 		retention time.Duration
 		want      string
 	}{
-		{name: "zero falls back to default", retention: 0, want: nscDefaultExpiry},
-		{name: "negative falls back to default", retention: -time.Hour, want: nscDefaultExpiry},
+		{name: "zero falls back to default", retention: 0, want: nscDefaultRetention},
+		{name: "negative falls back to default", retention: -time.Hour, want: nscDefaultRetention},
 		{name: "whole hours", retention: 72 * time.Hour, want: "72h"},
 		{name: "multi-day", retention: 7 * 24 * time.Hour, want: "168h"},
 		{name: "rounds partial hours up", retention: 90 * time.Minute, want: "2h"},
@@ -27,8 +27,8 @@ func TestNscExpiry(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := nscExpiry(tt.retention); got != tt.want {
-				t.Errorf("nscExpiry(%v) = %q, want %q", tt.retention, got, tt.want)
+			if got := nscRetentionArg(tt.retention); got != tt.want {
+				t.Errorf("nscRetentionArg(%v) = %q, want %q", tt.retention, got, tt.want)
 			}
 		})
 	}
