@@ -400,7 +400,10 @@ func (c *client) invalidateStaleEntry(ctx context.Context, retrieveResp api.Cach
 // Confirmation is best-effort and non-essential to a successful restore, so it
 // must not be allowed to hold up job startup for anywhere near the API
 // client's per-attempt timeout multiplied by roko's max attempts.
-const confirmRestoreTimeout = 5 * time.Second
+//
+// A var, not a const, so tests can shrink it to exercise deadline behaviour
+// without waiting out the real timeout.
+var confirmRestoreTimeout = 5 * time.Second
 
 // confirmRestoreSucceeded tells the server this restore's blob was verified,
 // so the registry can safely refresh the entry's retention now rather than

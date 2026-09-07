@@ -9,6 +9,7 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/buildkite/agent/v4/api"
 	"github.com/buildkite/agent/v4/internal/cache/store"
@@ -113,6 +114,45 @@ func TestConfirmRestoreSucceeded_SkipsFallbackMatch(t *testing.T) {
 	}
 	if len(mockClient.confirmCalls) != 0 {
 		t.Errorf("confirm calls = %d, want 0 for a fallback match", len(mockClient.confirmCalls))
+	}
+}
+
+// TestConfirmRestoreSucceeded_DeadlineBoundsEntireOperation guards against a
+// regression where the timeout resets on every retry attempt instead of
+// bounding the whole confirmRestoreSucceeded call. A confirmation request that
+// hangs (network partition, blocked connection) must be cut off by
+// confirmRestoreTimeout once, not retried up to roko's max attempts with a
+// fresh timeout budget handed to each one.
+func TestConfirmRestoreSucceeded_DeadlineBoundsEntireOperation(t *testing.T) {
+	origTimeout := confirmRestoreTimeout
+	confirmRestoreTimeout = 100 * time.Millisecond
+	t.Cleanup(func() { confirmRestoreTimeout = origTimeout })
+
+	mockClient := newMockAPIClient("s3")
+	mockClient.confirmBlock = true
+	c := &client{api: mockClient, registry: "~"}
+
+	retrieveResp := api.CacheEntryRetrieveResp{
+		TargetPaths: []string{"node_modules"},
+		CacheKey:    []api.CacheKeyPart{{Value: "v1-test-key", Mandatory: true}},
+	}
+
+	start := time.Now()
+	confirmed := c.confirmRestoreSucceeded(t.Context(), retrieveResp)
+	elapsed := time.Since(start)
+
+	if confirmed {
+		t.Error("confirmRestoreSucceeded() = true, want false for a request that never returns")
+	}
+
+	// A single blocked request should be cut off at roughly the deadline. If the
+	// deadline instead reset per attempt, up to 5 attempts would each hang for
+	// the full timeout, taking several times as long.
+	if elapsed > confirmRestoreTimeout*2 {
+		t.Errorf("confirmRestoreSucceeded() took %v, want close to the %v deadline (retries must not each get their own timeout)", elapsed, confirmRestoreTimeout)
+	}
+	if len(mockClient.confirmCalls) != 1 {
+		t.Errorf("confirm calls = %d, want exactly 1 -- the deadline should expire before any retry is attempted", len(mockClient.confirmCalls))
 	}
 }
 

@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"context"
 	"crypto/rand"
+	"errors"
 	"fmt"
 	"math"
 	"net/http"
@@ -27,6 +28,13 @@ type mockAPIClient struct {
 	expireCalls []api.CacheEntryExpireReq
 	// confirmCalls records the addresses passed to CacheEntryConfirm
 	confirmCalls []api.CacheEntryConfirmReq
+	// confirmErr and confirmResp, if confirmErr is set, are returned by every
+	// CacheEntryConfirm call instead of succeeding.
+	confirmErr  error
+	confirmResp *api.Response
+	// confirmBlock, if true, makes CacheEntryConfirm hang until ctx is done
+	// instead of returning, simulating a blocked/slow confirmation request.
+	confirmBlock bool
 }
 
 type mockRegistry struct {
@@ -199,6 +207,15 @@ func (m *mockAPIClient) CacheEntryExpire(ctx context.Context, registry string, r
 
 func (m *mockAPIClient) CacheEntryConfirm(ctx context.Context, registry string, req api.CacheEntryConfirmReq) (api.CacheEntryConfirmResp, *api.Response, error) {
 	m.confirmCalls = append(m.confirmCalls, req)
+
+	if m.confirmBlock {
+		<-ctx.Done()
+		return api.CacheEntryConfirmResp{}, nil, ctx.Err()
+	}
+
+	if m.confirmErr != nil {
+		return api.CacheEntryConfirmResp{}, m.confirmResp, m.confirmErr
+	}
 
 	reg, ok := m.registries[registry]
 	if !ok {
@@ -573,6 +590,48 @@ func TestCacheIntegration_RestoreConfirmsSuccessfulExactMatch(t *testing.T) {
 	got := mockClient.confirmCalls[0]
 	if len(got.CacheKey) != 1 || got.CacheKey[0].Value != "v1-test-key" {
 		t.Errorf("confirm targeted cache_key %+v, want single part v1-test-key", got.CacheKey)
+	}
+}
+
+// TestCacheIntegration_RestoreSucceedsWhenConfirmFails covers confirmation's
+// best-effort contract through the real public Restore path: by the time
+// confirmRestoreSucceeded runs, the blob has already been downloaded,
+// digest-verified, and extracted, so a failing confirm call is cosmetic (a
+// missed retention refresh) and must not turn an otherwise-successful restore
+// into a failure.
+func TestCacheIntegration_RestoreSucceedsWhenConfirmFails(t *testing.T) {
+	ctx := t.Context()
+
+	cacheClient, cacheDir, _ := setupTestCache(t, "local_file")
+	mockClient := cacheClient.api.(*mockAPIClient)
+
+	saveResult, err := cacheClient.Save(ctx, "test-cache")
+	if err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	if !saveResult.CacheEntryCreated {
+		t.Fatal("expected save to create an entry")
+	}
+
+	// Simulate a fresh checkout so restore actually has something to do.
+	if err := os.RemoveAll(cacheDir); err != nil {
+		t.Fatalf("RemoveAll: %v", err)
+	}
+
+	// Non-retryable status so the confirm attempt fails on its first try,
+	// keeping the test fast while still exercising the failure path.
+	mockClient.confirmErr = errors.New("confirm unavailable")
+	mockClient.confirmResp = &api.Response{Response: &http.Response{StatusCode: http.StatusForbidden}}
+
+	restoreResult, err := cacheClient.Restore(ctx, "test-cache")
+	if err != nil {
+		t.Fatalf("Restore should not fail when confirmation fails, got: %v", err)
+	}
+	if !restoreResult.CacheRestored {
+		t.Error("CacheRestored = false, want true even though confirmation failed")
+	}
+	if len(mockClient.confirmCalls) != 1 {
+		t.Fatalf("confirm calls = %d, want 1", len(mockClient.confirmCalls))
 	}
 }
 
