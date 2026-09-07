@@ -20,7 +20,7 @@ First-milestone decisions:
   <https://github.com/buildkite/agent-base-images>.
 - Always mount the host agent binary read-only.
 - Reject steps that specify `image` as a setup failure (exit 125). Pipeline image
-  selection, resource controls, and per-job networks are deferred.
+  selection and resource controls remain deferred. Phase 2 adds per-job networks.
 - Preserve container exit codes without inferring signals; retain JobRunner's
   cancellation reason. OOM diagnostics are best-effort.
 - Initial unit tests and Linux builds have been supplemented by live OrbStack
@@ -692,12 +692,17 @@ resource accounting, and nested-container cleanup concerns.
 
 ## Networking
 
-Create a uniquely named Docker network per job, even before service containers
-are supported. This provides a clean future path for job-scoped services and
-avoids coupling jobs through the default bridge.
+Each job uses a dedicated Docker bridge network. The container name
+`buildkite_job_<random-id>` and network name `buildkite_network_<random-id>`
+share a cryptographically random 24-character hexadecimal suffix, generated for
+each execution attempt. Both resources carry the bootstrap, job, and agent labels.
+Service containers remain deferred.
 
-The initial network policy should provide outbound connectivity and no published
-host ports. Evaluate controls for access to:
+The network permits outbound connectivity and publishes no host ports. Separate
+bridges isolate direct container traffic between jobs under Docker's normal
+firewall configuration. They do not block access to host services, cloud metadata,
+or reachable internal networks. Host firewall and egress policy remain operator
+responsibilities. Evaluate additional controls for access to:
 
 - Host management endpoints.
 - Cloud instance metadata services.
@@ -794,8 +799,17 @@ com.buildkite.job-id=<job-id>
 com.buildkite.bootstrap=docker
 ```
 
-Normal cleanup should remove the container and per-job network regardless of job
-success or failure.
+Normal cleanup removes the container first, then its network, on success,
+failure, or cancellation. Cleanup is registered before network creation so an
+ambiguous creation failure still triggers removal. Container removal gets at most
+half of the cleanup margin, reserving time for network removal within the same
+overall deadline. Failed removal is checked against an exact-name resource list;
+unconfirmed cleanup is logged and turns an otherwise successful job into a setup
+failure.
+
+Networks have no automatic removal option. A killed supervisor can leave an
+empty network even when its container is auto-removed; until reconciliation lands,
+operators must remove these stale resources.
 
 Agent or host crashes can bypass deferred cleanup. Before starting a new Docker
 job, reconcile stale resources owned by the same agent.
@@ -930,7 +944,7 @@ These results are live validation, not an automated Docker integration suite.
   signed fields, `BUILDKITE_JOB_IMAGE` plumbing, and the policy and allowlist.
 - [x] Host UID:GID default, numeric overrides, private home, and access checks.
 - Add resource limits and baseline security options.
-- Add per-job networks.
+- [x] Per-job bridge networks with labelled ownership and bounded cleanup.
 - Add labels and stale-resource reconciliation.
 - Add Docker-gated end-to-end tests.
 - Document compatibility differences and operating requirements.

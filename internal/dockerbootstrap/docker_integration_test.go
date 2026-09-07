@@ -106,9 +106,14 @@ echo workspace-ok > ownership-test
 					t.Fatalf("fixture cleanup: %v %s", err, out)
 				}
 			}
-			var remaining bytes.Buffer
-			if _, err := client.Run(t.Context(), []string{"ps", "-a", "-q", "--filter", "label=com.buildkite.job-id=user-integration"}, nil, &remaining, &remaining); err != nil || remaining.Len() != 0 {
-				t.Fatalf("containers remain: %v %s", err, remaining.String())
+			for _, args := range [][]string{
+				{"ps", "-a", "-q", "--filter", "label=com.buildkite.job-id=user-integration"},
+				{"network", "ls", "-q", "--filter", "label=com.buildkite.job-id=user-integration"},
+			} {
+				var remaining bytes.Buffer
+				if status, err := client.Run(t.Context(), args, nil, &remaining, &remaining); err != nil || status != 0 || remaining.Len() != 0 {
+					t.Fatalf("resources remain (%v): %v %s", args, err, remaining.String())
+				}
 			}
 		})
 	}

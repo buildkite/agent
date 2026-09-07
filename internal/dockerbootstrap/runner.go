@@ -57,7 +57,8 @@ func (r Runner) Run(ctx context.Context, cfg Config) (code int, err error) {
 	if _, err := rand.Read(suffix[:]); err != nil {
 		return SetupFailure, err
 	}
-	name := "buildkite-bootstrap-" + hex.EncodeToString(suffix[:])
+	id := hex.EncodeToString(suffix[:])
+	name, network := "buildkite_job_"+id, "buildkite_network_"+id
 	operation := func(parent context.Context, timeout time.Duration, args ...string) error {
 		callCtx, cancel := context.WithTimeout(parent, timeout)
 		defer cancel()
@@ -98,39 +99,32 @@ func (r Runner) Run(ctx context.Context, cfg Config) (code int, err error) {
 	imageID := fields[0]
 	_, _ = fmt.Fprintf(r.Stdout, "Docker bootstrap image: %s (%s)\n", cfg.Image, strings.TrimSpace(identity.String()))
 
-	// Docker may create the container but lose the response; its name still
-	// allows cleanup after an apparently failed create.
+	// Register cleanup before creation: Docker may succeed but lose the response.
+	containerAttempted := false
 	defer func() {
 		cleanupCtx, cancel := context.WithTimeout(shutdownCtx, cfg.CleanupMargin)
 		defer cancel()
-		status, removeErr := r.Client.Run(cleanupCtx, []string{"rm", "--force", name}, nil, io.Discard, io.Discard)
-		if removeErr == nil && status == 0 {
-			return
+		if containerAttempted {
+			containerCtx, containerCancel := context.WithTimeout(cleanupCtx, cfg.CleanupMargin/2)
+			cleanupErr := r.removeResource(containerCtx, "container", name)
+			containerCancel()
+			if cleanupErr != nil && err == nil && code == 0 {
+				code, err = SetupFailure, cleanupErr
+			}
 		}
-		// A failed remove can mean either auto-removal or daemon loss.
-		var found bytes.Buffer
-		status, listErr := r.Client.Run(cleanupCtx, []string{"ps", "--all", "--quiet", "--filter", "name=^/" + name + "$"}, nil, &found, io.Discard)
-		if listErr == nil && status == 0 && strings.TrimSpace(found.String()) == "" {
-			return
-		}
-		_, _ = fmt.Fprintf(r.Stderr, "Docker bootstrap cleanup failed; container may remain: %s: %v\n", name, removeErr)
-		if listErr != nil {
-			_, _ = fmt.Fprintf(r.Stderr, "Could not verify container removal: %v\n", listErr)
-		}
-		if err == nil && code == 0 {
-			code, err = SetupFailure, fmt.Errorf("docker container cleanup failed: %w", removeErr)
+		if cleanupErr := r.removeResource(cleanupCtx, "network", network); cleanupErr != nil && err == nil && code == 0 {
+			code, err = SetupFailure, cleanupErr
 		}
 	}()
-	args := append([]string{"create", "--pull", "never", "--name", name, "--label", "com.buildkite.bootstrap=docker", "--label", "com.buildkite.agent=true"}, job.args...)
-	for _, label := range []struct{ key, variable string }{
-		{"com.buildkite.job-id", "BUILDKITE_JOB_ID"},
-		{"com.buildkite.agent-id", "BUILDKITE_AGENT_ID"},
-		{"com.buildkite.agent-name", "BUILDKITE_AGENT_NAME"},
-	} {
-		if value := job.env[label.variable]; value != "" {
-			args = append(args, "--label", label.key+"="+value)
-		}
+	labels := resourceLabels(job.env)
+	networkArgs := append([]string{"network", "create", "--driver", "bridge"}, labels...)
+	networkArgs = append(networkArgs, network)
+	if err := operation(ctx, cfg.OperationTimeout, networkArgs...); err != nil {
+		return SetupFailure, err
 	}
+	_, _ = fmt.Fprintf(r.Stdout, "Docker bootstrap network: %s\n", network)
+	args := append([]string{"create", "--pull", "never", "--name", name, "--network", network}, labels...)
+	args = append(args, job.args...)
 	// The mounted agent must take precedence over image binaries. exec lets
 	// Docker's init deliver signals directly to bootstrap.
 	const script = `set -e
@@ -162,6 +156,7 @@ exec /buildkite-docker/bin/buildkite-agent bootstrap`
 	createCtx, createCancel := context.WithTimeout(ctx, cfg.OperationTimeout)
 	// Docker create reads console dimensions from stdout; capturing the ID
 	// through a pipe would lose the supervisor's PTY dimensions.
+	containerAttempted = true
 	_, createErr := r.Client.Run(createCtx, args, job.env, r.Stdout, io.Discard)
 	createCancel()
 	if createErr != nil {

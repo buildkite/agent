@@ -165,6 +165,9 @@ func TestExitStatusAndOutput(t *testing.T) {
 			if !f.called("rm") {
 				t.Fatal("container not removed")
 			}
+			if last := f.calls[len(f.calls)-1]; !slices.Equal(last[:2], []string{"network", "rm"}) {
+				t.Fatal("network not removed")
+			}
 		})
 	}
 }
@@ -226,6 +229,9 @@ func TestCancellation(t *testing.T) {
 			}
 			if !f.called("rm") {
 				t.Fatal("container not removed")
+			}
+			if last := f.calls[len(f.calls)-1]; !slices.Equal(last[:2], []string{"network", "rm"}) {
+				t.Fatal("network not removed")
 			}
 		})
 	}
@@ -350,6 +356,9 @@ func TestStartupProbePreservesDrainingCompletion(t *testing.T) {
 			}
 			if !f.called("rm") {
 				t.Fatal("container not removed")
+			}
+			if last := f.calls[len(f.calls)-1]; !slices.Equal(last[:2], []string{"network", "rm"}) {
+				t.Fatal("network not removed")
 			}
 		})
 	}

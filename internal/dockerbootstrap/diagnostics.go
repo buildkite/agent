@@ -54,7 +54,7 @@ func (c diagnosticClient) Run(ctx context.Context, args []string, env map[string
 		return code, nil
 	}
 	action := args[0]
-	if action == "image" && len(args) > 1 {
+	if (action == "image" || action == "network") && len(args) > 1 {
 		action += " " + args[1]
 	}
 	message := fmt.Sprintf("docker %s failed (exit %d)", action, code)
