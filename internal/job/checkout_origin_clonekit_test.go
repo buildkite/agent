@@ -88,10 +88,14 @@ func TestOriginCloneKitSource(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		return &Executor{ExecutorConfig: ExecutorConfig{Repository: canonical, GitMirrorsPath: t.TempDir()}, canonicalRepository: canonical, shell: sh}
+		return &Executor{ExecutorConfig: ExecutorConfig{Repository: canonical, GitMirrorsPath: t.TempDir(), GitCloneMirrorFlags: "-v"}, canonicalRepository: canonical, shell: sh}
 	}
-	if got := newExecutor().originCloneKitSource(ctx, 0); got != canonical {
-		t.Fatalf("eligible source = %q, want %q", got, canonical)
+	for _, flags := range []string{"", "-v"} {
+		e := newExecutor()
+		e.GitCloneMirrorFlags = flags
+		if got := e.originCloneKitSource(ctx, 0); got != canonical {
+			t.Fatalf("eligible source with flags %q = %q, want %q", flags, got, canonical)
+		}
 	}
 
 	tests := map[string]func(*Executor) (context.Context, int){
@@ -100,6 +104,7 @@ func TestOriginCloneKitSource(t *testing.T) {
 		"no mirrors":        func(e *Executor) (context.Context, int) { e.GitMirrorsPath = ""; return ctx, 0 },
 		"skip update":       func(e *Executor) (context.Context, int) { e.GitMirrorsSkipUpdate = true; return ctx, 0 },
 		"clone flags":       func(e *Executor) (context.Context, int) { e.GitCloneMirrorFlags = "--depth=1"; return ctx, 0 },
+		"additional flags":  func(e *Executor) (context.Context, int) { e.GitCloneMirrorFlags = "-v --depth=1"; return ctx, 0 },
 		"canonical changed": func(e *Executor) (context.Context, int) { e.Repository += "?changed"; return ctx, 0 },
 		"wrong host": func(e *Executor) (context.Context, int) {
 			e.Repository = "https://evil.example/acme/repo.git"
@@ -137,9 +142,26 @@ func TestOriginCloneKitSource(t *testing.T) {
 
 	e := newExecutor()
 	e.Repository, e.canonicalRepository = "git@github.com:acme/repo.git", "git@github.com:acme/repo.git"
-	e.GitRemoteMirrorURL = canonical
-	if got := e.originCloneKitSource(ctx, 0); got != canonical {
-		t.Errorf("SSH canonical with HTTPS mirror = %q, want %q", got, canonical)
+	for _, path := range []string{"acme/repo.git", "git/acme/repo.git"} {
+		e.GitRemoteMirrorURL = "https://origin.cursor.com/" + path
+		if got := e.originCloneKitSource(ctx, 0); got != e.GitRemoteMirrorURL {
+			t.Errorf("SSH canonical with HTTPS mirror = %q, want unchanged %q", got, e.GitRemoteMirrorURL)
+		}
+	}
+	for _, source := range []string{
+		"https://origin.cursor.com/other/acme/repo.git",
+		"https://origin.cursor.com/git/git/acme/repo.git",
+		"https://origin.cursor.com/git/../repo.git",
+		"https://origin.cursor.com/%67it/acme/repo.git",
+		"https://origin.cursor.com/git/acme/repo.git?token=secret",
+		"https://origin.cursor.com/git/acme/repo.git#fragment",
+		"https://user@origin.cursor.com/git/acme/repo.git",
+		"https://origin.cursor.com:443/git/acme/repo.git",
+	} {
+		e.GitRemoteMirrorURL = source
+		if got := e.originCloneKitSource(ctx, 0); got != "" {
+			t.Errorf("source %q admitted as %q", source, got)
+		}
 	}
 }
 

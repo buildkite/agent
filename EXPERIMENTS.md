@@ -22,14 +22,23 @@ If an experiment doesn't exist, no error will be raised.
 
 Seeds a missing on-host Git mirror using Cursor Origin's CloneKit pack data.
 Requires `BUILDKITE_GIT_MIRRORS_PATH` and a repository URL of the form
-`https://origin.cursor.com/owner/repo.git`. The backend-provided remote mirror
-URL takes precedence over the canonical repository URL. Credentials come only
-from the agent's repository credential helper; SSH authentication is not supported.
+`https://origin.cursor.com/git/owner/repo.git` or
+`https://origin.cursor.com/owner/repo.git`. The URL is preserved for credential
+lookup and manifest requests; use the backend-provided form for managed credentials.
+The backend-provided remote mirror URL takes precedence over the canonical
+repository URL. Manifest credentials come only from the agent's repository
+credential helper; SSH authentication is not supported.
+
+The experiment does not configure credentials for the subsequent canonical Git
+checkout. Self-hosted Origin jobs must retain working operator-provided Git auth
+or explicitly opt into `BUILDKITE_USE_REPOSITORY_PROVIDER_GIT_CREDENTIALS=true`,
+with repository access enabled in the backend.
 
 Only the first checkout attempt of a fresh checkout is eligible. Existing mirrors,
 submodule mirrors, skipped mirror updates, hook-rewritten repositories and custom
-mirror clone flags retain their normal behavior. Downloads and verification have
-a 30-second budget; failures fall back directly to canonical Git in the same
+mirror clone flags retain their normal behavior (the default `-v` and empty mirror
+flags are eligible). Downloads and verification have a 30-second budget;
+failures fall back directly to canonical Git in the same
 attempt. Cancellation does not start fallback. Canonical Git remains authoritative
 for the build commit. Disable the experiment to restore normal mirror creation;
 already-created mirrors remain usable.

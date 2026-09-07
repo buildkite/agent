@@ -29,15 +29,20 @@ import (
 const cloneKitAnchor = "refs/buildkite-agent/origin-clonekit/anchor"
 
 var (
-	cloneKitRepoPath = regexp.MustCompile(`^/[A-Za-z0-9_][A-Za-z0-9_.-]*/[A-Za-z0-9_][A-Za-z0-9_.-]*\.git$`)
+	cloneKitRepoPath = regexp.MustCompile(`^/(git/)?[A-Za-z0-9_][A-Za-z0-9_.-]*/[A-Za-z0-9_][A-Za-z0-9_.-]*\.git$`)
 	cloneKitPackPath = regexp.MustCompile(`^objects/pack/pack-([0-9a-f]{40})\.(pack|idx|rev)$`)
 	errCloneKitMiss  = errors.New("clonekit manifest unavailable")
 )
 
 func (e *Executor) originCloneKitSource(ctx context.Context, previousAttempts int) string {
 	if !experiments.IsEnabled(ctx, experiments.OriginCloneKit) || previousAttempts != 0 ||
-		e.GitMirrorsPath == "" || e.GitMirrorsSkipUpdate || e.GitCloneMirrorFlags != "" ||
+		e.GitMirrorsPath == "" || e.GitMirrorsSkipUpdate ||
 		e.Repository != e.canonicalRepository || e.checkoutAlreadyExists() {
+		return ""
+	}
+	// The CLI defaults to -v; it changes output, not the mirror's contents.
+	// Other custom flags may change repository semantics and remain ineligible.
+	if e.GitCloneMirrorFlags != "" && e.GitCloneMirrorFlags != "-v" {
 		return ""
 	}
 	source := e.GitRemoteMirrorURL
