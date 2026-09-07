@@ -26,9 +26,8 @@ const artifactPathVariable = "${artifact:path}"
 
 const (
 	// BKUploader uploads to S3 either as:
-	// - a single signed POST, which has a hard limit of 5GB, or
-	// - as a signed multipart, which has a limit of 5GB per _part_, but we
-	//   aren't supporting larger artifacts yet.
+	// - a single signed POST, which has a hard limit of 5 GiB, or
+	// - as a signed multipart, which has a limit of 5 GiB per part.
 	// Note that multipart parts have a minimum size of 5MB.
 	maxFormUploadedArtifactSize = int64(5 * 1024 * 1024 * 1024)
 )
@@ -61,9 +60,10 @@ func NewBKUploader(l logger.Logger, c BKUploaderConfig) *BKUploader {
 // it is provided by Buildkite after uploading.
 func (u *BKUploader) URL(*api.Artifact) string { return "" }
 
-// CreateWork checks the artifact size, then creates one worker.
+// CreateWork creates workers for the artifact's upload instructions.
 func (u *BKUploader) CreateWork(artifact *api.Artifact) ([]workUnit, error) {
-	if artifact.FileSize > maxFormUploadedArtifactSize {
+	if artifact.FileSize > maxFormUploadedArtifactSize &&
+		(artifact.UploadInstructions == nil || len(artifact.UploadInstructions.Actions) == 0) {
 		return nil, errArtifactTooLarge{Size: artifact.FileSize}
 	}
 	actions := artifact.UploadInstructions.Actions
@@ -383,5 +383,5 @@ type errArtifactTooLarge struct {
 func (e errArtifactTooLarge) Error() string {
 	// TODO: Clean up error strings
 	// https://github.com/golang/go/wiki/CodeReviewComments#error-strings
-	return fmt.Sprintf("File size (%d bytes) exceeds the maximum supported by Buildkite's default artifact storage (5Gb). Alternative artifact storage options may support larger files.", e.Size)
+	return fmt.Sprintf("File size (%d bytes) exceeds the 5 GiB limit for a single upload to Buildkite artifact storage. Multipart upload instructions are required for larger files.", e.Size)
 }
