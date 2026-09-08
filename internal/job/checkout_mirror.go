@@ -159,6 +159,20 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string, attem
 			return nil
 		}
 
+		if attempt != nil && attempt.cloneKitURL != "" && stagingCleanupErr == nil {
+			// Only one speculative accelerator: a failed CloneKit attempt goes
+			// straight to canonical Git, not a second remote-mirror clone.
+			attempt.outcome = remoteMirrorOutcomeSkipped
+			attempt.skipReason = remoteMirrorSkipCloneKit
+			hit, err := e.tryOriginCloneKit(ctx, attempt.cloneKitURL, repository, stagingDir, mirrorDir)
+			if err != nil {
+				return "", err
+			}
+			if hit {
+				return e.snapshotMirror(ctx, repository, mirrorDir)
+			}
+		}
+
 		if isOnHostRemoteMirrorAttempt(attempt) {
 			started := time.Now()
 			tempMirrorDir := stagingDir

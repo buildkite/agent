@@ -336,6 +336,7 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context, previousAttempts in
 	defer func() { tracetools.FinishWithError(span, retErr) }()
 
 	attempt := e.resolveRemoteMirrorAttempt(previousAttempts)
+	attempt.cloneKitURL = e.originCloneKitSource(ctx, previousAttempts)
 	defer func() { e.emitRemoteMirrorTelemetry(span, attempt) }()
 
 	// Adopt the repo-checkout child ctx so git.* spans nest under it.
