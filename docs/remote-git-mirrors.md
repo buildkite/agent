@@ -20,6 +20,12 @@ happens to share the word "mirror". This document uses:
 | **on-host mirror** | `--git-mirrors-path/<dir>` — the local bare clone shared between jobs on a host |
 | **checkout** | the working directory the job runs in |
 
+Throughout this document, statements that sparse checkout automatically adds
+`--filter=blob:none` apply only outside Kubernetes execution. Kubernetes
+checkout still uses `--sparse`, but does not add a filter unless the user
+supplies one, because later command containers may not have the credentials
+needed for lazy fetches.
+
 §§1–5 and §10 are durable: they describe the feature and the decisions behind
 it. §§6–9 and §11 are delivery-time content — once the stack has landed, fold
 anything still true into the durable sections and delete the rest rather than
@@ -1009,12 +1015,10 @@ as described below.
 
 **Use the flag list the canonical fetch would have used, not `e.GitFetchFlags`.**
 `fetchSource` receives `addBloblessFilter` and prepends `--filter=blob:none`
-itself, so for a non-Kubernetes sparse pipeline that did not supply its own
-filter — precisely the configuration the agent auto-adds the filter for —
-reading the raw config field would send an *unfiltered* mirror fetch and, on a
-hit, leave the checkout with every blob present. That is R3 violated, not merely
-slower. Kubernetes checkout deliberately skips the automatic filter because
-later command containers may not have the credentials needed for lazy fetches.
+itself, so for a sparse pipeline that did not supply its own filter — precisely
+the configuration the agent auto-adds the filter for — reading the raw config
+field would send an *unfiltered* mirror fetch and, on a hit, leave the checkout
+with every blob present. That is R3 violated, not merely slower.
 
 An existing partial clone has a second source of effective fetch behavior:
 `remote.origin.partialclonefilter`. Named-remote fetches inherit it implicitly,
@@ -1098,8 +1102,8 @@ mirror promisor section exists; it exits 128 when the section is absent.
 **Tests:** existing checkout advances via a mirror hit with canonical
 unreachable; unfiltered miss falls back with refs, worktree and config
 unchanged; filtered miss/error/timeout/cancel all remove mirror ownership and
-leave canonical promisor ownership; a non-Kubernetes sparse pipeline's mirror
-fetch carries `--filter=blob:none`; an existing origin filter is inherited unless
+leave canonical promisor ownership; a sparse pipeline's mirror fetch carries
+`--filter=blob:none`; an existing origin filter is inherited unless
 `--no-filter` (including accepted abbreviations) is explicit; cleanup failure
 cleans and retries canonically; no `remote.<mirrorURL>.*` survives any successful
 cleanup; marker write failure falls back canonically; marker-only interruption
@@ -1368,13 +1372,13 @@ objects are unreferenced and eligible for `gc` — and the default
 **C3 — A mirror that cannot serve `--filter` silently transfers everything.**
 `git clone --filter=…` against a server without `uploadpack.allowFilter` warns,
 exits 0, transfers the full object set, and still writes the promisor keys
-(G10). A non-Kubernetes sparse pipeline — where the agent adds
-`--filter=blob:none` itself — is both the most likely configuration and the one
-with the most to lose, and R2 is violated on a *hit*. `--depth` fails loudly in
-the same situation; `--filter` does not. The general rule this instance of:
-**the mirror must support at least the capabilities canonical does**, and where
-it does not, the degradation is silent. Detection after the fact does not
-recover the job's bytes, so the mitigation is telemetry plus §11.2 Q3, and a test
+(G10). A sparse pipeline — where the agent adds `--filter=blob:none` itself — is
+both the most likely configuration and the one with the most to lose, and R2 is
+violated on a *hit*. `--depth` fails loudly in the same situation; `--filter`
+does not. The general rule this instance of: **the mirror must support at least
+the capabilities canonical does**, and where it does not, the degradation is
+silent. Detection after the fact does not recover the job's bytes, so the
+mitigation is telemetry plus §11.2 Q3, and a test
 fixture that deliberately lacks the capability. *Comment: beside the mirror
 clone in `checkout_workdir.go`.*
 
