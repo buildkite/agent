@@ -20,6 +20,12 @@ happens to share the word "mirror". This document uses:
 | **on-host mirror** | `--git-mirrors-path/<dir>` — the local bare clone shared between jobs on a host |
 | **checkout** | the working directory the job runs in |
 
+Throughout this document, statements that sparse checkout automatically adds
+`--filter=blob:none` apply only outside Kubernetes execution. Kubernetes
+checkout still uses `--sparse`, but does not add a filter unless the user
+supplies one, because later command containers may not have the credentials
+needed for lazy fetches.
+
 §§1–5 and §10 are durable: they describe the feature and the decisions behind
 it. §§6–9 and §11 are delivery-time content — once the stack has landed, fold
 anything still true into the durable sections and delete the rest rather than
