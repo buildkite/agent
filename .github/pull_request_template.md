@@ -19,11 +19,12 @@ List of what the PR changes. If the PR changes the CLI arguments, consider addin
 Can skip if changes are simple or clear from the commit messages.
 -->
 
-### Public documentation
-<!-- The docs bot will act according to the following -->
-- [ ] Ready for public documentation - document and publish
-- [ ] Not ready for public docs - document and hold
-- [ ] Not applicable - docs not needed
+## Public documentation
+<!-- Replace CHOOSE ONE with one of:
+- publish: Document and publish
+- hold: Document, but do not publish yet
+- not needed: Do not document -->
+**Status:** CHOOSE ONE
 
 ## Testing
 - [ ] Tests have run locally (with `go test ./...`). Buildkite employees may check this if the pipeline has run automatically.
