@@ -537,7 +537,7 @@ func (c *client) downloadCache(ctx context.Context, retrieveResp api.CacheEntryR
 	}
 
 	// Extend the blob's retention now that it's confirmed good.
-	maybeRefreshRetention(ctx, blobStore, retrieveResp.Fallback, storeObjectName, time.Duration(retrieveResp.RetentionSeconds)*time.Second)
+	maybeRefreshRetention(ctx, blobStore, retrieveResp.Fallback, storeObjectName, time.Duration(retrieveResp.RetentionDays)*24*time.Hour)
 
 	span.SetStatus(codes.Ok, "download completed")
 

@@ -23,15 +23,11 @@ const nscScheme = "nsc"
 
 // nscDefaultRetention is the fallback artifact lifetime used for --expires_in
 // (upload) and --ensure_minimum (refresh on access) when the server does not
-// supply a retention (older server). Normally the retention comes from the
-// cache registry's configured TTL, sent per request; see nscRetentionArg.
-// Cache entries are content-addressed and short-lived, so we cap storage growth
-// rather than relying on NSC's no-expiry default.
+// supply a retention (older server).
 const nscDefaultRetention = "72h"
 
 // nscRetentionArg formats a retention duration for nsc's --expires_in / --ensure_minimum
-// flags, rounding up to whole hours. A zero or negative duration (the server did
-// not specify one) falls back to nscDefaultRetention.
+// flags, rounding up to whole hours. A zero or negative duration falls back to nscDefaultRetention.
 func nscRetentionArg(retention time.Duration) string {
 	if retention <= 0 {
 		return nscDefaultRetention
@@ -249,9 +245,8 @@ func (n *NscStore) Download(ctx context.Context, key, filePath string) (*Transfe
 
 // RefreshRetention pushes the artifact's expiry out to at least retention from
 // now (falling back to nscDefaultRetention when unset) via `nsc artifact extend
-// --ensure_minimum`. Using --ensure_minimum (rather than the additive --by)
-// makes the refresh idempotent, so calling it on every restore keeps a hot
-// cache alive without growing its expiry unbounded.
+// --ensure_minimum`. Using --ensure_minimum  makes the refresh idempotent,
+// so calling it on every restore keeps a hot cache alive without growing its expiry unbounded.
 //
 // This is best-effort: any failure is logged and swallowed so a restore never
 // fails because its TTL could not be refreshed. Whether to call this at all

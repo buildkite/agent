@@ -69,10 +69,9 @@ type CacheEntryCreateResp struct {
 	Multipart          bool     `json:"multipart"`
 	UploadInstructions []string `json:"upload_instructions"`
 	Message            string   `json:"message"`
-	// RetentionSeconds is how long the backing blob should be kept, matching the
-	// registry entry's TTL. Zero when the server does not send it (older server),
-	// in which case the store falls back to its own default.
-	RetentionSeconds int64 `json:"retention_seconds"`
+	// RetentionDays is how long the backing blob should be kept, matching the
+	// registry entry's TTL.
+	RetentionDays int64 `json:"retention_days"`
 }
 
 // CacheEntryRetrieveReq is the request body for retrieving a cache entry.
@@ -83,20 +82,16 @@ type CacheEntryRetrieveReq struct {
 
 // CacheEntryRetrieveResp describes the cache entry to download.
 type CacheEntryRetrieveResp struct {
-	TargetPaths []string       `json:"target_paths"`
-	CacheKey    []CacheKeyPart `json:"cache_key"`
-	Blobs       []CacheBlob    `json:"blobs"`
-	ExpiresAt   time.Time      `json:"expires_at"`
-	// RetentionSeconds is how far to push the backing blob's expiry on an
-	// exact-hit refresh, matching the registry entry's TTL. Zero when the server
-	// does not send it (older server), in which case the store falls back to its
-	// own default.
-	RetentionSeconds     int64    `json:"retention_seconds"`
-	Store                string   `json:"store"`
-	Fallback             bool     `json:"fallback"`
-	Multipart            bool     `json:"multipart"`
-	DownloadInstructions []string `json:"download_instructions"`
-	Message              string   `json:"message"`
+	TargetPaths          []string       `json:"target_paths"`
+	CacheKey             []CacheKeyPart `json:"cache_key"`
+	Blobs                []CacheBlob    `json:"blobs"`
+	ExpiresAt            time.Time      `json:"expires_at"`
+	RetentionDays        int64          `json:"retention_days"`
+	Store                string         `json:"store"`
+	Fallback             bool           `json:"fallback"`
+	Multipart            bool           `json:"multipart"`
+	DownloadInstructions []string       `json:"download_instructions"`
+	Message              string         `json:"message"`
 	// Scopes are the resolved entry's own scope labels (nil when unscoped),
 	// e.g. {"branch": "main"}. Echo these back on CacheEntryExpireReq to
 	// invalidate this exact entry — its scope may no longer match what the
