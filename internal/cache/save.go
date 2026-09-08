@@ -19,17 +19,6 @@ import (
 
 // Save saves a cache to storage by ID.
 //
-// The function performs the following workflow:
-//  1. Validates the cache configuration and paths exist
-//  2. Checks if the cache already exists (early return if yes)
-//  3. Builds an archive of the cache paths
-//  4. Creates a cache entry in the Buildkite API
-//  5. Uploads the archive to cloud storage
-//  6. Commits the cache entry
-//
-// If the cache already exists, no upload is performed and the function returns
-// early with CacheEntryCreated=false and Transfer=nil.
-//
 // The operation respects context cancellation and will stop immediately when
 // ctx is cancelled, cleaning up any temporary resources.
 //
@@ -102,51 +91,53 @@ func (c *client) Save(ctx context.Context, cacheID string) (SaveResult, error) {
 		return result, fmt.Errorf("invalid cache paths: %w", err)
 	}
 
-	c.callProgress(cacheID, "checking_exists", "Checking if cache already exists", 0, 0)
+	if !c.force {
+		c.callProgress(cacheID, "checking_exists", "Checking if cache already exists", 0, 0)
 
-	// Check if cache already exists
-	var (
-		peekApiResp *api.Response
-		exists      bool
-	)
-
-	err = roko.NewRetrier(
-		roko.WithMaxAttempts(5),
-		roko.WithStrategy(roko.ExponentialSubsecond(500*time.Millisecond)),
-		roko.WithJitter(),
-	).DoWithContext(ctx, func(r *roko.Retrier) error {
-		var err error
-		_, exists, peekApiResp, err = c.api.CacheEntryPeekExists(ctx, c.registry, api.CacheEntryPeekReq{
-			TargetPaths: cacheConfig.TargetPaths,
-			CacheKey:    cacheKey,
-		})
-		if api.BreakOnNonRetryable(r, peekApiResp, err) {
-			return err
-		}
-		if err != nil {
-			slog.Warn("cache peek failed, retrying", "err", err, "retrier", r.String())
-			return err
-		}
-		return nil
-	})
-	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "failed to check cache existence")
-		return result, fmt.Errorf("failed to check cache existence: %w", err)
-	}
-
-	if exists {
-		// Cache already exists, no need to upload
-		result.CacheEntryCreated = false
-		result.TotalDuration = time.Since(startTime)
-		span.SetAttributes(
-			attribute.Bool("cache.created", false),
-			attribute.Bool("cache.already_exists", true),
-			attribute.Int64("cache.duration_ms", result.TotalDuration.Milliseconds()),
+		// Check if cache already exists
+		var (
+			peekApiResp *api.Response
+			exists      bool
 		)
-		span.SetStatus(codes.Ok, "cache already exists")
-		c.callProgress(cacheID, "complete", "Cache already exists", 0, 0)
-		return result, nil
+
+		err = roko.NewRetrier(
+			roko.WithMaxAttempts(5),
+			roko.WithStrategy(roko.ExponentialSubsecond(500*time.Millisecond)),
+			roko.WithJitter(),
+		).DoWithContext(ctx, func(r *roko.Retrier) error {
+			var err error
+			_, exists, peekApiResp, err = c.api.CacheEntryPeekExists(ctx, c.registry, api.CacheEntryPeekReq{
+				TargetPaths: cacheConfig.TargetPaths,
+				CacheKey:    cacheKey,
+			})
+			if api.BreakOnNonRetryable(r, peekApiResp, err) {
+				return err
+			}
+			if err != nil {
+				slog.Warn("cache peek failed, retrying", "err", err, "retrier", r.String())
+				return err
+			}
+			return nil
+		})
+		if err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, "failed to check cache existence")
+			return result, fmt.Errorf("failed to check cache existence: %w", err)
+		}
+
+		if exists {
+			// Cache already exists, no need to upload
+			result.CacheEntryCreated = false
+			result.TotalDuration = time.Since(startTime)
+			span.SetAttributes(
+				attribute.Bool("cache.created", false),
+				attribute.Bool("cache.already_exists", true),
+				attribute.Int64("cache.duration_ms", result.TotalDuration.Milliseconds()),
+			)
+			span.SetStatus(codes.Ok, "cache already exists")
+			c.callProgress(cacheID, "complete", "Cache already exists", 0, 0)
+			return result, nil
+		}
 	}
 
 	c.callProgress(cacheID, "fetching_registry", "Looking up cache registry", 0, 0)

@@ -57,6 +57,7 @@ type client struct {
 	format     string
 	platform   string
 	registry   string
+	force      bool
 	caches     []configuration.Cache
 	onProgress ProgressCallback
 }
@@ -100,6 +101,7 @@ func newClient(l logger.Logger, apiClient cacheAPI, cfg Config) (*client, []stri
 		format:    "zip",
 		platform:  fmt.Sprintf("%s/%s", runtime.GOOS, runtime.GOARCH),
 		registry:  registry,
+		force:     cfg.Force,
 		caches:    expanded,
 		onProgress: func(cacheID, stage, message string, _, _ int) {
 			l.WithFields(
