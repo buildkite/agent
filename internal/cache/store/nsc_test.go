@@ -7,9 +7,32 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 )
+
+func TestNscRetentionArg(t *testing.T) {
+	tests := []struct {
+		name      string
+		retention time.Duration
+		want      string
+	}{
+		{name: "zero falls back to default", retention: 0, want: nscDefaultRetention},
+		{name: "negative falls back to default", retention: -time.Hour, want: nscDefaultRetention},
+		{name: "whole hours", retention: 72 * time.Hour, want: "72h"},
+		{name: "multi-day", retention: 7 * 24 * time.Hour, want: "168h"},
+		{name: "rounds partial hours up", retention: 90 * time.Minute, want: "2h"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := nscRetentionArg(tt.retention); got != tt.want {
+				t.Errorf("nscRetentionArg(%v) = %q, want %q", tt.retention, got, tt.want)
+			}
+		})
+	}
+}
 
 func TestNscStore_Interface(t *testing.T) {
 	// This test ensures that NscStore properly implements the Blob interface
@@ -261,11 +284,11 @@ func TestNscStore_PassesNamespace(t *testing.T) {
 	var captured []string
 	store := &NscStore{namespace: "my-namespace", run: fakeRunner(&captured)}
 
-	if _, err := store.Upload(ctx, testFile, "key"); err != nil {
+	if _, err := store.Upload(ctx, testFile, "key", 7*24*time.Hour); err != nil {
 		t.Fatalf("Upload: %v", err)
 	}
 
-	wantArgs := []string{"nsc", "artifact", "upload", testFile, "key", "--expires_in", "72h", "--namespace", "my-namespace"}
+	wantArgs := []string{"nsc", "artifact", "upload", testFile, "key", "--expires_in", "168h", "--namespace", "my-namespace"}
 	if diff := cmp.Diff(wantArgs, captured); diff != "" {
 		t.Errorf("upload args mismatch (-want +got):\n%s", diff)
 	}
@@ -333,9 +356,9 @@ func TestNscStore_RefreshRetention(t *testing.T) {
 	var calls [][]string
 	store := &NscStore{namespace: "my-namespace", run: recordingRunner(&calls, nil)}
 
-	store.RefreshRetention(ctx, "key")
+	store.RefreshRetention(ctx, "key", 7*24*time.Hour)
 
-	wantExtend := []string{"nsc", "artifact", "extend", "key", "--ensure_minimum", "72h", "--namespace", "my-namespace"}
+	wantExtend := []string{"nsc", "artifact", "extend", "key", "--ensure_minimum", "168h", "--namespace", "my-namespace"}
 	var gotExtend []string
 	for _, c := range calls {
 		if isCommand(c, "nsc", "artifact", "extend") && !isCommand(c, "nsc", "artifact", "extend", "--help") {
@@ -360,7 +383,7 @@ func TestNscStore_RefreshRetention_UpdatesCLIWhenExtendUnsupported(t *testing.T)
 	}
 	store := &NscStore{namespace: "ns", run: recordingRunner(&calls, respond)}
 
-	store.RefreshRetention(ctx, "key")
+	store.RefreshRetention(ctx, "key", 0)
 
 	var updated, extended bool
 	for _, c := range calls {
@@ -398,7 +421,7 @@ func TestNscStore_RefreshRetention_UpdatesCLIWhenExtendHelpLacksEnsureMinimum(t 
 	}
 	store := &NscStore{namespace: "ns", run: recordingRunner(&calls, respond)}
 
-	store.RefreshRetention(ctx, "key")
+	store.RefreshRetention(ctx, "key", 0)
 
 	var updated, extended bool
 	for _, c := range calls {
@@ -432,7 +455,7 @@ func TestNscStore_RefreshRetention_SwallowsFailure(t *testing.T) {
 	var calls [][]string
 	store := &NscStore{namespace: "ns", run: recordingRunner(&calls, respond)}
 
-	store.RefreshRetention(ctx, "key") // must not panic
+	store.RefreshRetention(ctx, "key", 0) // must not panic
 }
 
 func TestNewNscStore_RequiresNamespace(t *testing.T) {
@@ -451,7 +474,7 @@ func TestNscStore_ValidationShortCircuits(t *testing.T) {
 		return &CommandResult{}, nil
 	}}
 
-	if _, err := store.Upload(ctx, "invalid;path", "valid-key"); err == nil {
+	if _, err := store.Upload(ctx, "invalid;path", "valid-key", 0); err == nil {
 		t.Error("Upload with unsafe path: expected error, got nil")
 	}
 	if _, err := store.Download(ctx, "invalid key with spaces", "dest.txt"); err == nil {
@@ -509,7 +532,7 @@ func TestNscStore_Integration(t *testing.T) {
 
 	// Test upload
 	key := "integration-test/test-file.txt"
-	transferInfo, err := store.Upload(ctx, testFile, key)
+	transferInfo, err := store.Upload(ctx, testFile, key, 0)
 	if err != nil {
 		t.Fatalf("Upload should succeed with valid NSC setup: %v", err)
 	}

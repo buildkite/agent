@@ -275,7 +275,7 @@ func (c *client) Save(ctx context.Context, cacheID string) (SaveResult, error) {
 		return result, fmt.Errorf("failed to create blob store: %w", err)
 	}
 
-	transferInfo, err := blobStore.Upload(ctx, archiveInfo.ArchivePath, storeObjectName)
+	transferInfo, err := blobStore.Upload(ctx, archiveInfo.ArchivePath, storeObjectName, time.Duration(createResp.RetentionDays)*24*time.Hour)
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, "failed to upload cache")

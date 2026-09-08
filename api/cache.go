@@ -69,6 +69,9 @@ type CacheEntryCreateResp struct {
 	Multipart          bool     `json:"multipart"`
 	UploadInstructions []string `json:"upload_instructions"`
 	Message            string   `json:"message"`
+	// RetentionDays is how long the backing blob should be kept, matching the
+	// registry entry's TTL.
+	RetentionDays int64 `json:"retention_days"`
 }
 
 // CacheEntryRetrieveReq is the request body for retrieving a cache entry.
@@ -83,6 +86,7 @@ type CacheEntryRetrieveResp struct {
 	CacheKey             []CacheKeyPart `json:"cache_key"`
 	Blobs                []CacheBlob    `json:"blobs"`
 	ExpiresAt            time.Time      `json:"expires_at"`
+	RetentionDays        int64          `json:"retention_days"`
 	Store                string         `json:"store"`
 	Fallback             bool           `json:"fallback"`
 	Multipart            bool           `json:"multipart"`

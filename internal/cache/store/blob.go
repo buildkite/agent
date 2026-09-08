@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 )
 
 // ErrBlobNotFound is returned by a Blob's Download when the requested object
@@ -13,8 +14,9 @@ var ErrBlobNotFound = errors.New("blob not found")
 
 // Blob interface defines the operations for blob storage
 type Blob interface {
-	// Upload uploads a file to blob storage
-	Upload(ctx context.Context, filePath, key string) (*TransferInfo, error)
+	// Upload uploads a file to blob storage. retention is how long the blob
+	// should be kept.
+	Upload(ctx context.Context, filePath, key string, retention time.Duration) (*TransferInfo, error)
 
 	// Download downloads a file from blob storage
 	Download(ctx context.Context, key, destPath string) (*TransferInfo, error)
@@ -25,7 +27,7 @@ type Blob interface {
 // because not every store has a retention concept to refresh (LocalFileBlob
 // does not implement it).
 type RetentionRefresher interface {
-	RefreshRetention(ctx context.Context, key string)
+	RefreshRetention(ctx context.Context, key string, retention time.Duration)
 }
 
 func NewBlobStore(ctx context.Context, store, bucketURL string) (Blob, error) {

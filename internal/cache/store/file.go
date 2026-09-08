@@ -127,7 +127,7 @@ func NewLocalFileBlob(ctx context.Context, fileURL string) (*LocalFileBlob, erro
 // semantics for concurrent uploads to the same key.
 //
 // Returns TransferInfo with bytes transferred, transfer speed, and duration.
-func (b *LocalFileBlob) Upload(ctx context.Context, srcPath, key string) (*TransferInfo, error) {
+func (b *LocalFileBlob) Upload(ctx context.Context, srcPath, key string, _ time.Duration) (*TransferInfo, error) {
 	_, span := trace.Start(ctx, "LocalFileBlob.Upload")
 	defer span.End()
 

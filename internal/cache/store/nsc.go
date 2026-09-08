@@ -21,15 +21,20 @@ import (
 // nscScheme is the URL scheme that routes an agent-managed cache store to NSC.
 const nscScheme = "nsc"
 
-// nscDefaultExpiry is the artifact lifetime used both when uploading a cache
-// entry (--expires_in) and when refreshing it on access (--ensure_minimum).
-// Keep this aligned with CacheRegistry::Entry::DEFAULT_EXPIRES in the Buildkite
-// backend.
-// Cache entries are content-addressed and short-lived, so we cap storage growth
-// rather than relying on NSC's no-expiry default. Every restore pushes the
-// expiry back out to this duration from now, keeping hot caches alive while
-// letting cold ones expire.
-const nscDefaultExpiry = "72h"
+// nscDefaultRetention is the fallback artifact lifetime used for --expires_in
+// (upload) and --ensure_minimum (refresh on access) when the server does not
+// supply a retention (older server).
+const nscDefaultRetention = "72h"
+
+// nscRetentionArg formats a retention duration for nsc's --expires_in / --ensure_minimum
+// flags, rounding up to whole hours. A zero or negative duration falls back to nscDefaultRetention.
+func nscRetentionArg(retention time.Duration) string {
+	if retention <= 0 {
+		return nscDefaultRetention
+	}
+	hours := int64((retention + time.Hour - 1) / time.Hour)
+	return fmt.Sprintf("%dh", hours)
+}
 
 // commandRunner executes an external command. It is a seam so tests can assert
 // the arguments passed to the nsc CLI without invoking the real binary.
@@ -135,7 +140,7 @@ func validateKey(key string) error {
 	return nil
 }
 
-func (n *NscStore) Upload(ctx context.Context, filePath, key string) (*TransferInfo, error) {
+func (n *NscStore) Upload(ctx context.Context, filePath, key string, retention time.Duration) (*TransferInfo, error) {
 	_, span := trace.Start(ctx, "NscStore.Upload")
 	defer span.End()
 
@@ -150,7 +155,7 @@ func (n *NscStore) Upload(ctx context.Context, filePath, key string) (*TransferI
 	start := time.Now()
 
 	// Execute nsc artifact upload command
-	result, err := n.run(ctx, "", n.artifactArgs("upload", filePath, key, "--expires_in", nscDefaultExpiry)...)
+	result, err := n.run(ctx, "", n.artifactArgs("upload", filePath, key, "--expires_in", nscRetentionArg(retention))...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute nsc upload command: %w", err)
 	}
@@ -238,17 +243,16 @@ func (n *NscStore) Download(ctx context.Context, key, filePath string) (*Transfe
 	}, nil
 }
 
-// RefreshRetention pushes the artifact's expiry out to at least
-// nscDefaultExpiry from now via `nsc artifact extend --ensure_minimum`. Using
-// --ensure_minimum (rather than the additive --by) makes the refresh
-// idempotent, so calling it on every restore keeps a hot cache alive without
-// growing its expiry unbounded.
+// RefreshRetention pushes the artifact's expiry out to at least retention from
+// now (falling back to nscDefaultRetention when unset) via `nsc artifact extend
+// --ensure_minimum`. Using --ensure_minimum  makes the refresh idempotent,
+// so calling it on every restore keeps a hot cache alive without growing its expiry unbounded.
 //
 // This is best-effort: any failure is logged and swallowed so a restore never
 // fails because its TTL could not be refreshed. Whether to call this at all
 // (e.g. skipping it on a fallback match) is the restore flow's decision, not
 // this store's — see store.RetentionRefresher.
-func (n *NscStore) RefreshRetention(ctx context.Context, key string) {
+func (n *NscStore) RefreshRetention(ctx context.Context, key string, retention time.Duration) {
 	if !n.extendSupported(ctx) {
 		// `nsc artifact extend` is still being rolled out by Namespace. Update
 		// the nsc CLI as a contingency so the command becomes available.
@@ -260,7 +264,7 @@ func (n *NscStore) RefreshRetention(ctx context.Context, key string) {
 		}
 	}
 
-	result, err := n.run(ctx, "", n.artifactArgs("extend", key, "--ensure_minimum", nscDefaultExpiry)...)
+	result, err := n.run(ctx, "", n.artifactArgs("extend", key, "--ensure_minimum", nscRetentionArg(retention))...)
 	switch {
 	case err != nil:
 		slog.Warn("failed to refresh cache TTL, continuing (non-fatal)", "key", key, "error", err)
