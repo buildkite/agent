@@ -104,7 +104,7 @@ func TestCheckingOutLocalGitProject_WithGitMirrors(t *testing.T) {
 	tester.RunAndCheck(t, env...)
 }
 
-func TestCheckingOutLocalGitProjectWithSparseCheckout_WithGitMirrors(t *testing.T) {
+func TestCheckingOutLocalGitProjectWithSparseCheckoutInKubernetesWithGitMirrors(t *testing.T) {
 	t.Parallel()
 	skipIfGitSparseCheckoutUnsupported(t)
 
@@ -120,11 +120,12 @@ func TestCheckingOutLocalGitProjectWithSparseCheckout_WithGitMirrors(t *testing.
 	}
 
 	env := []string{
-		"BUILDKITE_GIT_CLONE_FLAGS=-v --filter=blob:none --sparse",
+		"BUILDKITE_GIT_CLONE_FLAGS=-v",
 		"BUILDKITE_GIT_CLONE_MIRROR_FLAGS=--bare",
 		"BUILDKITE_GIT_CLEAN_FLAGS=-fdq",
-		"BUILDKITE_GIT_FETCH_FLAGS=-v --filter=blob:none",
+		"BUILDKITE_GIT_FETCH_FLAGS=-v",
 		"BUILDKITE_GIT_SPARSE_CHECKOUT_PATHS=.buildkite/,src/",
+		"BUILDKITE_KUBERNETES_EXEC=true",
 	}
 
 	git := tester.
@@ -134,9 +135,9 @@ func TestCheckingOutLocalGitProjectWithSparseCheckout_WithGitMirrors(t *testing.
 	git.ExpectAll([][]any{
 		{"clone", "--mirror", "--bare", "--", tester.Repo.Path, matchSubDir(tester.GitMirrorsDir)},
 		{"--version"},
-		{"clone", "-v", "--filter=blob:none", "--sparse", "--reference", matchSubDir(tester.GitMirrorsDir), "--", tester.Repo.Path, "."},
+		{"clone", "-v", "--reference", matchSubDir(tester.GitMirrorsDir), "--sparse", "--", tester.Repo.Path, "."},
 		{"clean", "-fdq"},
-		{"fetch", "-v", "--filter=blob:none", "--", "origin", "main"},
+		{"fetch", "-v", "--", "origin", "main"},
 		{"sparse-checkout", "set", "--cone", "--", ".buildkite/", "src/"},
 		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
 		{"clean", "-fdq"},
@@ -152,6 +153,8 @@ func TestCheckingOutLocalGitProjectWithSparseCheckout_WithGitMirrors(t *testing.
 	requireCheckoutPath(t, tester.CheckoutDir(), ".buildkite/pipeline.yml", true)
 	requireCheckoutPath(t, tester.CheckoutDir(), "src/main.txt", true)
 	requireCheckoutPath(t, tester.CheckoutDir(), "docs/readme.md", false)
+	requireGitConfigAbsent(t, tester.CheckoutDir(), "remote.origin.promisor")
+	requireGitConfigAbsent(t, tester.CheckoutDir(), "remote.origin.partialclonefilter")
 }
 
 func TestCheckingOutLocalGitProjectWithSparseCheckoutNoCone_WithGitMirrors(t *testing.T) {

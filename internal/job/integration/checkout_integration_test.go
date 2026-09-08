@@ -119,6 +119,17 @@ func requireCheckoutPath(t *testing.T, checkoutDir, name string, exists bool) {
 	}
 }
 
+func requireGitConfigAbsent(t *testing.T, checkoutDir, key string) {
+	t.Helper()
+
+	repo := &gitRepository{Path: checkoutDir}
+	output, err := repo.Execute("config", "--get", key)
+	var exitErr *exec.ExitError
+	if !errors.As(err, &exitErr) || exitErr.ExitCode() != 1 {
+		t.Errorf("git config --get %s = %q, %v; want key absent", key, strings.TrimSpace(output), err)
+	}
+}
+
 func TestCheckingOutLocalGitProject(t *testing.T) {
 	t.Parallel()
 
@@ -377,13 +388,62 @@ func TestCheckingOutLocalGitProjectWithSparseCheckoutAutoAddsBlobNoneFilter(t *t
 	requireCheckoutPath(t, tester.CheckoutDir(), "docs/readme.md", false)
 }
 
-// TestCheckingOutLocalGitProjectWithSparseCheckoutPreservesUserFilter asserts
-// that when the user supplies their own --filter in BUILDKITE_GIT_CLONE_FLAGS,
-// sparse checkout preserves it on clone and does NOT prepend --filter=blob:none
-// to fetch. git clone --filter=X writes remote.origin.partialclonefilter=X into
-// the repo config, and subsequent fetches inherit it automatically — so
-// re-passing a filter on fetch would silently override the user's choice.
-func TestCheckingOutLocalGitProjectWithSparseCheckoutPreservesUserFilter(t *testing.T) {
+func TestCheckingOutLocalGitProjectWithSparseCheckoutInKubernetesDoesNotAddBlobNoneFilter(t *testing.T) {
+	t.Parallel()
+	skipIfGitSparseCheckoutUnsupported(t)
+
+	tester, err := NewExecutorTester(mainCtx)
+	if err != nil {
+		t.Fatalf("NewExecutorTester() error = %v", err)
+	}
+	defer tester.Close()
+	addSparseCheckoutFixture(t, tester.Repo)
+
+	env := []string{
+		"BUILDKITE_GIT_CLONE_FLAGS=-v",
+		"BUILDKITE_GIT_CLEAN_FLAGS=-fdq",
+		"BUILDKITE_GIT_FETCH_FLAGS=-v",
+		"BUILDKITE_GIT_SPARSE_CHECKOUT_PATHS=.buildkite/,src/",
+		"BUILDKITE_KUBERNETES_EXEC=true",
+	}
+
+	git := tester.
+		MustMock(t, "git").
+		PassthroughToLocalCommand()
+
+	git.ExpectAll([][]any{
+		{"--version"},
+		{"clone", "-v", "--sparse", "--", tester.Repo.Path, "."},
+		{"clean", "-fdq"},
+		{"fetch", "-v", "--", "origin", "main"},
+		{"sparse-checkout", "set", "--cone", "--", ".buildkite/", "src/"},
+		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
+		{"clean", "-fdq"},
+		{"rev-parse", "HEAD"},
+		{"--no-pager", "log", "-1", "HEAD", "-s", "--no-color", gitShowFormatArg},
+	})
+
+	agent := tester.MockAgent(t)
+	agent.Expect("meta-data", "exists", job.CommitMetadataKey).AndExitWith(1)
+	agent.Expect("meta-data", "set", job.CommitMetadataKey).WithStdin(commitPattern)
+
+	tester.RunAndCheck(t, env...)
+
+	requireCheckoutPath(t, tester.CheckoutDir(), ".buildkite/pipeline.yml", true)
+	requireCheckoutPath(t, tester.CheckoutDir(), "src/main.txt", true)
+	requireCheckoutPath(t, tester.CheckoutDir(), "docs/readme.md", false)
+	requireGitConfigAbsent(t, tester.CheckoutDir(), "remote.origin.promisor")
+	requireGitConfigAbsent(t, tester.CheckoutDir(), "remote.origin.partialclonefilter")
+}
+
+// TestCheckingOutLocalGitProjectWithSparseCheckoutInKubernetesPreservesUserFilter
+// asserts that when the user supplies their own --filter in
+// BUILDKITE_GIT_CLONE_FLAGS, sparse checkout preserves it on clone and does NOT
+// prepend --filter=blob:none to fetch. git clone --filter=X writes
+// remote.origin.partialclonefilter=X into the repo config, and subsequent
+// fetches inherit it automatically — so re-passing our own filter would
+// override the user's choice for that fetch.
+func TestCheckingOutLocalGitProjectWithSparseCheckoutInKubernetesPreservesUserFilter(t *testing.T) {
 	t.Parallel()
 	skipIfGitSparseCheckoutUnsupported(t)
 
@@ -399,6 +459,7 @@ func TestCheckingOutLocalGitProjectWithSparseCheckoutPreservesUserFilter(t *test
 		"BUILDKITE_GIT_CLEAN_FLAGS=-fdq",
 		"BUILDKITE_GIT_FETCH_FLAGS=-v",
 		"BUILDKITE_GIT_SPARSE_CHECKOUT_PATHS=.buildkite/,src/",
+		"BUILDKITE_KUBERNETES_EXEC=true",
 	}
 
 	git := tester.

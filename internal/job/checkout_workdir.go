@@ -86,7 +86,11 @@ func (e *Executor) prepareCheckoutWorkdir(
 		}
 		if userSuppliedCloneFilter {
 			e.shell.Commentf("Sparse checkout is configured and BUILDKITE_GIT_CLONE_FLAGS already contains a --filter (preserving user-supplied filter).")
-		} else {
+		} else if e.shell.Env.GetString("BUILDKITE_KUBERNETES_EXEC", "") != "true" {
+			// Kubernetes checkout and command phases can run in separate
+			// containers, with Git credentials available only during checkout.
+			// Avoid creating a promisor clone that may try to fetch missing
+			// objects after the checkout container has exited.
 			gitCloneFlags = append(gitCloneFlags, "--filter=blob:none")
 		}
 	}
