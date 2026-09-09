@@ -166,8 +166,14 @@ Rules:
   `bootstrap-script` was set explicitly, log a warning and ignore it.
 - `executor-docker-arg` may not override what the executor owns. Reject
   `--rm` (defeats `inspect`), `--restart` other than `no` (defeats "one
-  ephemeral execution"), `--name`, `--user`, `--env BUILDKITE_BOOTSTRAP_ENV_JSON_FILE`,
-  and mounts targeting the job context directory.
+  ephemeral execution"), and every singleton flag the executor sets itself:
+  `--name`, `--user`/`-u`, `--workdir`/`-w`, `--init`, `--tty`/`-t`, plus
+  `--env BUILDKITE_BOOTSTRAP_ENV_JSON_FILE` and mounts targeting the job
+  context directory. Match all spellings
+  (`--workdir=/x`, `--workdir /x`, `-w /x`). Docker's parser is last-value-wins
+  for singletons, so as a second line of defence the executor's own flags are
+  appended after the user's args; the reject list exists because relying on
+  ordering alone leaves `--rm`-style flags with no safe later value.
 - `$HOME` in the container is fixed at `/tmp/buildkite-home` for the MVP (see
   the user model below). A setting can follow if anyone needs to move it.
 - The image is an agent-pool decision. Users who need different images run
@@ -197,13 +203,17 @@ Run():        write the env file (below); close Started()
                 <flags> <image> bootstrap          (cancellable: Interrupt/Terminate abort it)
               -> record the container ID printed by create; every later call uses the ID
               spawn docker start --attach <id>   (stdout/stderr -> jobLogs)
-              poll docker inspect <id> until State.Status is running or a terminal state;
-              deliver any pending signal
-              wait for docker start to exit, then docker inspect <id> -> State
+              poll docker inspect <id> until State.Status is running or exited,
+              State.Error is set, or docker start has exited
+              -> running: deliver any pending signal, then wait for docker start to exit
+              -> exited (fast job): fall through to the final inspect
+              -> still created (start failed / State.Error): launch failed; return error
+              docker inspect <id> -> State
               -> if State is terminal: WaitStatus = State.ExitCode
               -> if the container is still running: attach was lost; docker kill, return error
 Interrupt():  record "interrupt"; docker kill --signal <cancel-signal> <id> if running
-Terminate():  record "terminate";  docker kill <id> if running
+Terminate():  record "terminate";  docker kill <id> if running;
+              if that fails, kill the docker start subprocess so Run returns
 Cleanup():    docker rm --force --volumes <id>   (ignore "no such container")
               remove the env file
 ```
@@ -225,6 +235,15 @@ Cleanup():    docker rm --force --volumes <id>   (ignore "no such container")
   CLI's exit code. `WaitStatus` comes only from a container in a terminal
   state. A still-running container after `start` returns is an executor
   failure: kill it and return an error from `Run`.
+- The readiness poll must not wait only for `running` or a terminal state. A
+  `docker start` that fails in OCI/runtime setup (bad `--user`, missing mount
+  source, seccomp error) leaves the container in `created` with `State.Error`
+  set, and the CLI exits non-zero; neither is `running` or `exited`. The poll
+  therefore also ends when `State.Error` is non-empty or when the `start`
+  subprocess has exited, and a container still in `created` at that point is
+  a launch failure: `Run` returns an error carrying `State.Error` and the
+  CLI's stderr. A container observed already `exited` is a fast job, not a
+  failure, and falls through to the normal exit mapping.
 - Do not surface the docker CLI's own 125/126/127 exit codes as the job exit
   status: 125 collides with `job.ExitCodeSetupFailure`, which `runJob` already
   rewrites to -1, and 126/127 would look like the user's command failing. A
@@ -262,6 +281,18 @@ Cleanup():    docker rm --force --volumes <id>   (ignore "no such container")
   that `JobRunner.Cancel` already enforces before calling `Terminate`. The
   agent, not Docker, owns the timing. Run `docker kill` with a short timeout
   so a hung daemon cannot wedge `Cancel`.
+- A failed `docker kill` in `Interrupt` must not abort cancellation.
+  `JobRunner.Cancel` returns as soon as `Interrupt` returns an error and never
+  reaches the grace period or `Terminate`, so a timed-out or refused kill
+  would leave the container running with nothing left to escalate. `Interrupt`
+  logs the failure at error level and returns nil; the pending state is
+  already recorded, so `Cancel` proceeds to the grace period and `Terminate`
+  retries with `docker kill` (SIGKILL), and `Cleanup` finishes with
+  `rm --force --volumes` regardless. If `Terminate`'s `docker kill` also
+  fails, `Terminate` kills the `docker start --attach` subprocess directly so
+  `Run` returns an error instead of waiting on a daemon that is not
+  responding; the container may be leaked at that point and `Cleanup` reports
+  it if `rm --force` fails too (see Risks).
 - Apply the same SIGKILL→SIGTERM downgrade as `exec`. A SIGKILL to bootstrap
   skips pre-exit hooks and loses the command's exit status.
 - Pass `--init` so something reaps orphaned grandchildren left behind by
@@ -556,7 +587,9 @@ and exits with a scripted status, in the style of the existing
 - `docker create` argv construction from `AgentConfiguration`: the single
   `--env`, mount table, `--user`, `--group-add`, `--workdir`, `--tty` when
   `run-in-pty` is on, `--init`, `--tmpfs` for `HOME`; rejection of reserved
-  `executor-docker-arg` flags.
+  `executor-docker-arg` flags in every spelling (`--workdir=/x`,
+  `--workdir /x`, `-w /x`); accepted user args appear before the executor's
+  own flags in argv.
 - The control process env passed to the fake `docker` is exactly the agent's
   environment: a job env `DOCKER_HOST` must not appear in it, and must appear
   in the env file.
@@ -567,10 +600,16 @@ and exits with a scripted status, in the style of the existing
   error, `Started()` is closed before `create` is invoked, and an interrupt
   recorded before the container is running is delivered once the readiness
   poll sees it.
+- A failing `docker kill` (fake exits non-zero or hangs past the timeout)
+  makes `Interrupt` return nil, and a subsequent `Terminate` kills the fake
+  `docker start` so `Run` returns an error rather than blocking.
 - With `enable-job-log-tmpfile`, `BUILDKITE_JOB_LOG_TMPFILE` is in the env
   file and the file is in the mount list.
 - Exit mapping: a `docker create` or `docker start` failure yields a `Run`
-  error; a terminal `State.ExitCode` from `inspect` becomes `WaitStatus`;
+  error, including a `start` that exits while `inspect` still reports
+  `created` with `State.Error` set (the poll must not wait forever); a
+  container already `exited` at the first poll is mapped normally; a
+  terminal `State.ExitCode` from `inspect` becomes `WaitStatus`;
   `docker`'s own 125 is never reported as the job exit status; `start`
   returning while `inspect` still shows `running` yields a `Run` error and a
   `docker kill`.
@@ -600,5 +639,10 @@ with `VOLUME`.
 - A bad `executor-docker-image` (missing tools, entrypoint failing under the
   agent uid) fails every job on the agent. The version check catches only an
   agent that is too old.
+- An unresponsive Docker daemon can leak a container. `kill` and `rm` are
+  bounded by short timeouts and `Terminate` can always unblock `Run` by
+  killing the `docker start` client, so the agent slot is freed, but the
+  container itself may keep running until the daemon recovers. The labels
+  exist so an operator can sweep these; `exec` has no equivalent failure mode.
 - Naming: `internal/job.Executor` already exists and means "bootstrap runtime".
   Use `JobExecutor`/`JobExecution` at the agent layer and do not shorten them.
