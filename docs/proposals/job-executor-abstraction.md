@@ -104,6 +104,10 @@ type JobExecution interface {
   `processEnv := append(os.Environ(), env...)` and hands it to both the exec
   and Kubernetes branches; those two executions keep doing that prepend
   themselves. Docker does not.
+- the names of env entries that must not be persisted: today only the
+  control-plane OTLP exporter variables, when `createEnvironment` delivered
+  them. `exec` and Kubernetes ignore the set; Docker uses it to decide what
+  stays out of the env file (see Environment).
 - the job context directory (`jobContextDir(conf)`), which holds
   `BUILDKITE_ENV_FILE`, `BUILDKITE_ENV_JSON_FILE`, and the job-timeout marker
 - the stdout/stderr writer (`r.jobLogs`)
@@ -253,8 +257,9 @@ Cleanup():    docker rm --force --volumes <id>   (ignore "no such container")
   container is observed running. It means "the launch attempt has begun".
   `jobCancellationChecker` and the log processor in `JobRunner` both block on
   `Started()`, so if it closed any later a server-side cancel or job timeout
-  arriving during an image pull would go unnoticed until the pull finished.
-  Container readiness is tracked privately for signal delivery.
+  arriving while `create` was slow (a busy daemon, or the image ID gone
+  after a prune) would go unnoticed until `create` returned. Container
+  readiness is tracked privately for signal delivery.
 - `Interrupt` and `Terminate` can be called at any point: `JobRunner.Cancel`
   calls them whenever it runs, including while `Run` is mid-`docker create`
   or before the container is running. `docker kill` on a container that is
@@ -262,8 +267,8 @@ Cleanup():    docker rm --force --volumes <id>   (ignore "no such container")
   `Interrupt` error without ever reaching `Terminate`. So the execution keeps
   a mutex-protected pending state (`none → interrupt → terminate`,
   monotonic) and records the request first. Then:
-  - If `docker create` is in flight, cancel its context so the CLI exits
-    (aborting the pull), `docker rm --force --volumes` by the execution's
+  - If `docker create` is in flight, cancel its context so the CLI exits,
+    `docker rm --force --volumes` by the execution's
     unique name in case the daemon created the container before the CLI
     died (no ID was returned), and return an error from `Run`. A cancelled
     create is never followed by a start.
@@ -336,7 +341,9 @@ Two environments are in play and they must not mix:
   `os.Environ()`, unmodified. Job env never enters it. A job that sets
   `DOCKER_HOST`, `DOCKER_CONTEXT`, `DOCKER_CONFIG`, or `HOME` must not be able
   to redirect the executor to another daemon or hide the agent user's
-  registry credentials.
+  registry credentials. The one addition is agent-owned, not job-owned: the
+  control-plane OTLP exporter variables, for the `create` call only (see
+  below).
 - The **container** environment: the resolved job env slice from
   `createEnvironment` (job env plus the agent's `BUILDKITE_*` additions), with
   the adjustments below. It deliberately excludes the host's `os.Environ()`:
@@ -399,6 +406,22 @@ Adjust these before writing the file:
 - `BUILDKITE_AGENT_PID`: omit. Nothing in the job uses it; `buildkite-agent
   lock` talks to the leader socket, not the PID.
 - `BUILDKITE_CONFIG_PATH`: omit. The agent config file is not mounted (below).
+- `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT`/`_PROTOCOL`/`_HEADERS` when they came
+  from the control-plane exporter: omit from the file. `api.TracingExporter`
+  requires that these (the headers can carry vendor credentials) never reach
+  a persisted env file, which is why `createEnvironment` adds them only after
+  writing today's env files. The runner tells the execution which keys are
+  exporter-supplied (`controlPlaneOTLPEnv` produces them, so the set is
+  known). The docker execution passes each as a name-only `--env KEY` and puts
+  the values in the environment of the `docker create` subprocess only: the
+  CLI reads a name-only `--env` from its own environment, so the values cross
+  the daemon socket without touching the agent's disk or `create`'s argv.
+  They are then held in the daemon's container config until `Cleanup`
+  removes the container, root-readable only, which is the same exposure any
+  `--env` gives. A job that set its own `OTEL_EXPORTER_OTLP_*` destination
+  is unaffected: `createEnvironment` does not deliver the control-plane
+  exporter in that case, and the job's own values are job env and go in the
+  file as usual.
 - `BUILDKITE_JOB_LOG_TMPFILE`: add it when `enable-job-log-tmpfile` is on.
   `NewJobRunner` sets it with `os.Setenv` after `createEnvironment` returns,
   so today it reaches bootstrap only via the host-env prepend that Docker
@@ -503,9 +526,17 @@ them under that path via `executor-docker-arg`.
 - `buildkite-agent` on `PATH`, at a version that understands
   `BUILDKITE_BOOTSTRAP_ENV_JSON_FILE`. A major-version match is not enough:
   an older image of the same major would ignore the variable and run
-  bootstrap with no job configuration. Enforce a minimum version by running
-  `docker run --rm --entrypoint buildkite-agent <image> --version` before the
-  first job; caching the result per image per agent process is a follow-up.
+  bootstrap with no job configuration. `agent start` enforces this once,
+  after config validation and before registering: `docker pull <image>`, then
+  `docker run --rm --entrypoint buildkite-agent <image> --version`, under a
+  single bounded context (2 minutes; `docker pull` dominates), failing agent
+  start on a version below the minimum, a non-zero exit, or timeout. It then
+  records the image ID (`docker image inspect --format '{{.Id}}'`) and every
+  `docker create` uses that ID rather than the tag, so a tag moving under a
+  running agent cannot swap in an unchecked image. This keeps Docker calls
+  out of `New` (which would orphan work if `StartJob` failed) and out of
+  `Run`'s cancellation path, and means the pull that would otherwise happen
+  on the first job happens before the agent accepts one.
 - The image entrypoint accepts `bootstrap` as its arguments and ends up
   running `buildkite-agent bootstrap`. The official `buildkite/agent` image
   does: `buildkite-agent-entrypoint` runs `/docker-entrypoint.d`, then
@@ -554,15 +585,17 @@ separate top-level executors per runtime.
    anyone wrapping bootstrap.
 3. **Docker, minimum viable.** `executor` with strict value validation,
    `executor-docker-image`, `executor-docker-arg` with the reserved-flag
-   check, minimum-image-version check. `create`/`start`/`inspect` lifecycle
-   inside `Run` with the pending-signal state and readiness poll, env file
-   transport, mount table and source provisioning, explicit `--user` with
+   check, start-time pull + version check recording the image ID.
+   `create`/`start`/`inspect` lifecycle inside `Run` with the pending-signal
+   state and readiness poll, env file transport with the OTLP exporter
+   carried via name-only `--env`, mount table and source provisioning,
+   explicit `--user` with
    `--group-add`, fixed `HOME` on a tmpfs, `--workdir`, `--tty`, `--init`,
    `no-new-privileges`, `rm --force --volumes`. Linux only; error out on other
    platforms.
 4. **Follow-ups if needed.** `executor-docker-expose-socket`,
-   `executor-docker-user`, `executor-docker-home`, version check caching,
-   `executor=kubernetes-exec` alias.
+   `executor-docker-user`, `executor-docker-home`, `executor=kubernetes-exec`
+   alias.
 
 ## Testing
 
@@ -593,6 +626,15 @@ and exits with a scripted status, in the style of the existing
 - The control process env passed to the fake `docker` is exactly the agent's
   environment: a job env `DOCKER_HOST` must not appear in it, and must appear
   in the env file.
+- With a control-plane exporter configured, the `OTEL_EXPORTER_OTLP_TRACES_*`
+  values are absent from the env file and from `create`'s argv, appear as
+  name-only `--env` flags, and are present in the fake `docker create`'s
+  environment but not in `start`/`kill`/`rm`/`inspect`'s. With a job-supplied
+  OTLP destination they are in the env file and not in the control env.
+- `agent start` with `executor=docker` runs `pull`, `run --version`, and
+  `image inspect` against the fake, fails start on a too-old version, a
+  non-zero exit, or a fake that sleeps past the timeout, and the recorded
+  image ID (not the tag) is what `docker create` receives.
 - `Interrupt`/`Terminate`/`Cleanup` issue the expected `docker kill`/`docker
   rm --force --volumes` invocations against the container ID, the SIGKILL
   downgrade is applied, an interrupt during a (fake, slow) `docker create`
@@ -637,8 +679,11 @@ with `VOLUME`.
   the `128+n` code. Anything keying on the signal name will not see it for
   Docker jobs.
 - A bad `executor-docker-image` (missing tools, entrypoint failing under the
-  agent uid) fails every job on the agent. The version check catches only an
-  agent that is too old.
+  agent uid) fails every job on the agent. The start-time version check
+  catches only an image that is too old. Because `create` runs by image ID,
+  a `docker image prune` while the agent is running also fails every job
+  ("No such image") until the agent is restarted; the error message names
+  the fix.
 - An unresponsive Docker daemon can leak a container. `kill` and `rm` are
   bounded by short timeouts and `Terminate` can always unblock `Run` by
   killing the `docker start` client, so the agent slot is freed, but the
