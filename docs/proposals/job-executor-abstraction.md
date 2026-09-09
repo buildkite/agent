@@ -191,12 +191,12 @@ so launch failures are separable from bootstrap exit codes.
 
 ```text
 New():        validate config; no docker calls
-Run():        write the env file (below)
+Run():        write the env file (below); close Started()
               docker create --name buildkite-job-<jobid>-<random> \
                 --label com.buildkite.job-id=<jobid> --label com.buildkite.agent-run=<run-id> \
-                <flags> <image> bootstrap
+                <flags> <image> bootstrap          (cancellable: Interrupt/Terminate abort it)
               -> record the container ID printed by create; every later call uses the ID
-              spawn docker start --attach <id>   (stdout/stderr -> jobLogs); close Started()
+              spawn docker start --attach <id>   (stdout/stderr -> jobLogs)
               poll docker inspect <id> until State.Status is running or a terminal state;
               deliver any pending signal
               wait for docker start to exit, then docker inspect <id> -> State
@@ -230,25 +230,33 @@ Cleanup():    docker rm --force --volumes <id>   (ignore "no such container")
   rewrites to -1, and 126/127 would look like the user's command failing. A
   bootstrap that itself exits 125 inside the container still reaches `runJob`
   via `inspect` and is mapped to -1 as today.
-- `Started()` closes as soon as `docker start` has been spawned, not when the
-  container is observed running. Log streaming and the cancellation poller in
-  `JobRunner` wait on `Started()`, and a slow image pull or a hung daemon must
-  stay cancellable. Container readiness is tracked privately for signal
-  delivery.
+- `Started()` closes at the top of `Run`, before `docker create`, not when the
+  container is observed running. It means "the launch attempt has begun".
+  `jobCancellationChecker` and the log processor in `JobRunner` both block on
+  `Started()`, so if it closed any later a server-side cancel or job timeout
+  arriving during an image pull would go unnoticed until the pull finished.
+  Container readiness is tracked privately for signal delivery.
 - `Interrupt` and `Terminate` can be called at any point: `JobRunner.Cancel`
   calls them whenever it runs, including while `Run` is mid-`docker create`
   or before the container is running. `docker kill` on a container that is
   created but not yet running fails, and `Cancel` returns early on an
   `Interrupt` error without ever reaching `Terminate`. So the execution keeps
   a mutex-protected pending state (`none → interrupt → terminate`,
-  monotonic), records the request first, and only issues `docker kill` once
-  it has observed the container running. `Run` checks the state after
-  `docker create` (remove the container, return an error) and again once the
-  readiness poll sees `running` (deliver the recorded signal). Interrupt must
-  succeed at most once per container: bootstrap removes its signal handler
-  after the first signal, so a repeated SIGTERM would bypass its cleanup.
-  Cancel before `Run` is already handled by `JobRunner.Run` returning "job
-  already cancelled before running".
+  monotonic) and records the request first. Then:
+  - If `docker create` is in flight, cancel its context so the CLI exits
+    (aborting the pull), `docker rm --force --volumes` by the execution's
+    unique name in case the daemon created the container before the CLI
+    died (no ID was returned), and return an error from `Run`. A cancelled
+    create is never followed by a start.
+  - If the container exists but is not yet observed running, do nothing more;
+    `Run` re-checks the state once the readiness poll sees `running` and
+    delivers the recorded signal (or, if `create` returned after the request
+    was recorded, removes the container and returns an error).
+  - If the container is running, `docker kill` it with the recorded signal.
+  Interrupt must succeed at most once per container: bootstrap removes its
+  signal handler after the first signal, so a repeated SIGTERM would bypass
+  its cleanup. Cancel before `Run` is already handled by `JobRunner.Run`
+  returning "job already cancelled before running".
 - `Interrupt` must return promptly. `docker stop --time N` is wrong here: it
   blocks for up to N seconds and then SIGKILLs, duplicating the grace period
   that `JobRunner.Cancel` already enforces before calling `Terminate`. The
@@ -360,6 +368,12 @@ Adjust these before writing the file:
 - `BUILDKITE_AGENT_PID`: omit. Nothing in the job uses it; `buildkite-agent
   lock` talks to the leader socket, not the PID.
 - `BUILDKITE_CONFIG_PATH`: omit. The agent config file is not mounted (below).
+- `BUILDKITE_JOB_LOG_TMPFILE`: add it when `enable-job-log-tmpfile` is on.
+  `NewJobRunner` sets it with `os.Setenv` after `createEnvironment` returns,
+  so today it reaches bootstrap only via the host-env prepend that Docker
+  drops. The executor takes the path from the runner, puts it in the env
+  file, and bind-mounts the log file itself read-only (below); the agent
+  appends to the same inode on the host, so the container sees the live log.
 - `HOME`: set to `/tmp/buildkite-home`. See the user model below.
 
 ### Mounts
@@ -376,6 +390,7 @@ or plugins needs to learn a new filesystem layout:
 | job context dir (`--job-context-dir`, default `os.TempDir()`) | rw |
 | `hooks-path`, each `additional-hooks-paths` entry | ro |
 | `signing-jwks-file` (when set) | ro |
+| the job log tmpfile (when `enable-job-log-tmpfile`) | ro |
 | `/etc/passwd`, `/etc/group` | ro |
 | `/var/run/docker.sock` (only when `executor-docker-expose-socket`) | rw |
 
@@ -547,9 +562,13 @@ and exits with a scripted status, in the style of the existing
   in the env file.
 - `Interrupt`/`Terminate`/`Cleanup` issue the expected `docker kill`/`docker
   rm --force --volumes` invocations against the container ID, the SIGKILL
-  downgrade is applied, an interrupt during `docker create` removes the
-  container and makes `Run` return an error, and an interrupt recorded before
-  the container is running is delivered once the readiness poll sees it.
+  downgrade is applied, an interrupt during a (fake, slow) `docker create`
+  kills the CLI, removes the container by name and makes `Run` return an
+  error, `Started()` is closed before `create` is invoked, and an interrupt
+  recorded before the container is running is delivered once the readiness
+  poll sees it.
+- With `enable-job-log-tmpfile`, `BUILDKITE_JOB_LOG_TMPFILE` is in the env
+  file and the file is in the mount list.
 - Exit mapping: a `docker create` or `docker start` failure yields a `Run`
   error; a terminal `State.ExitCode` from `inspect` becomes `WaitStatus`;
   `docker`'s own 125 is never reported as the job exit status; `start`
