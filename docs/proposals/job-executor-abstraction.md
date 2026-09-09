@@ -65,7 +65,8 @@ the command phase and is not related to this proposal.
 
 ## Non-goals
 
-- Changing bootstrap phases in `internal/job`.
+- Changing bootstrap phases in `internal/job`. The only bootstrap change is
+  a new way to receive its environment (`BUILDKITE_BOOTSTRAP_ENV_JSON_FILE`).
 - Removing `bootstrap-script`.
 - Full hostile-build isolation. Docker still shares the kernel and, by default,
   the host network.
@@ -121,8 +122,14 @@ bootstrap is launched; bootstrap only exists after that decision.
 ```text
 if --kubernetes-exec      -> kubernetes execution (wraps kubernetes.Runner)
 else if executor=docker   -> docker execution
-else                      -> exec execution
+else if executor=exec     -> exec execution
+else if executor unset    -> exec execution
+else                      -> agent start fails: unknown executor
 ```
+
+An unset `executor` means `exec`. Any other explicit value is rejected at
+startup, so a typo such as `executor=dokcer` cannot fail open to running jobs
+on the host.
 
 `--kubernetes-exec` stays authoritative so `agent-stack-k8s` users see no
 change. Folding it into `executor=kubernetes-exec` as an alias is a later,
@@ -161,26 +168,40 @@ no-op. This must be behaviour-preserving and lands first.
 ### Lifecycle
 
 Use `docker create` + `docker start --attach` rather than a single
-`docker run`, so the container has a name before anything can go wrong and so
-launch failures are separable from bootstrap exit codes.
+`docker run`, so the container has a known name from the moment it exists and
+so launch failures are separable from bootstrap exit codes.
 
 ```text
-New():        docker create --name buildkite-job-<jobid> <flags> <image> bootstrap
-Run():        docker start --attach buildkite-job-<jobid>   (stdout/stderr -> jobLogs)
+New():        validate config, compute the container name; no docker calls
+Run():        write the env file (below)
+              docker create --name buildkite-job-<jobid> <flags> <image> bootstrap
+              docker start --attach buildkite-job-<jobid>   (stdout/stderr -> jobLogs)
               on exit: docker inspect --format '{{.State.ExitCode}}' -> WaitStatus
 Interrupt():  docker kill --signal <cancel-signal> buildkite-job-<jobid>
 Terminate():  docker kill buildkite-job-<jobid>
 Cleanup():    docker rm --force buildkite-job-<jobid>   (ignore "no such container")
+              remove the env file
 ```
 
-- If `docker create` or `docker start` fails before the container runs, `Run`
-  returns an error. Do not surface the docker CLI's own 125/126/127 exit codes
-  as the job exit status: 125 collides with `job.ExitCodeSetupFailure`, which
-  `runJob` already rewrites to -1, and 126/127 would look like the user's
-  command failing.
+- `New` makes no docker calls. `NewJobRunner` calls it before `StartJob`, and
+  if `StartJob` fails the runner returns without running `cleanup`, so
+  anything created in `New` would be orphaned. Both `docker create` and
+  `docker start` happen inside `Run`, where `runJob` maps an error to exit -1
+  with `SignalReasonProcessRunError` and `cleanup` always runs afterwards.
+- Do not surface the docker CLI's own 125/126/127 exit codes as the job exit
+  status: 125 collides with `job.ExitCodeSetupFailure`, which `runJob` already
+  rewrites to -1, and 126/127 would look like the user's command failing.
+  `WaitStatus` comes only from `inspect` on a container that ran.
 - `Started()` closes when `docker start` has been spawned. That is early by a
   few hundred milliseconds, which only affects when log streaming and the
   cancellation poller begin; both tolerate that.
+- `Interrupt` and `Terminate` can be called before the container exists:
+  `JobRunner.Cancel` calls them whenever it runs, and the agent may be stopping
+  while `Run` is mid-`docker create`. Both record the request in the execution
+  and return nil if there is no container yet. `Run` checks the flag after
+  `docker create` returns; if set, it removes the container and returns an
+  error instead of starting it. Cancel before `Run` is already handled by
+  `JobRunner.Run` returning "job already cancelled before running".
 - `Interrupt` must be non-blocking. `docker stop --time N` is wrong here: it
   blocks for up to N seconds and then SIGKILLs, duplicating the grace period
   that `JobRunner.Cancel` already enforces before calling `Terminate`. The
@@ -196,17 +217,49 @@ Cleanup():    docker rm --force buildkite-job-<jobid>   (ignore "no such contain
 
 ### Environment
 
-Pass the resolved job env as `--env KEY` (name only) for every entry in the
-env slice. The `docker` CLI process inherits `os.Environ() + env` exactly as
-the `exec` bootstrap does today, so Docker reads the values from there. This
-avoids quoting problems with multi-line values and keeps values out of the
-`docker create` argv.
+Two environments are in play and they must not mix:
 
-`docker --env-file` is not an option: `BUILDKITE_ENV_FILE` is written with Go
-`%q` quoting for the pre-bootstrap hook to validate, and Docker's env-file
-parser does not unquote.
+- The **control process** environment: what the `docker create`, `start`,
+  `kill`, `rm`, and `inspect` subprocesses run with. This is the agent's own
+  `os.Environ()`, unmodified. Job env never enters it. A job that sets
+  `DOCKER_HOST`, `DOCKER_CONTEXT`, `DOCKER_CONFIG`, or `HOME` must not be able
+  to redirect the executor to another daemon or hide the agent user's
+  registry credentials.
+- The **container** environment: the resolved job env slice from
+  `createEnvironment` (job env plus the agent's `BUILDKITE_*` additions), with
+  the adjustments below. It deliberately excludes the host's `os.Environ()`:
+  `PATH`, `HOME`, and the like come from the image, not the host.
 
-Override or omit host-specific values before passing them through:
+Transport the container environment through a file, not through `docker`'s
+env flags:
+
+- `Run` writes `<job-context-dir>/job-exec-env-<jobid>.json` (mode 0600, a
+  single JSON object) before `docker create`, and `Cleanup` removes it. The
+  job context dir is already bind-mounted, so the path is the same on both
+  sides.
+- `docker create` passes exactly one env var:
+  `--env BUILDKITE_BOOTSTRAP_ENV_JSON_FILE=<path>`.
+- `buildkite-agent bootstrap` gains support for that variable: when set, it
+  loads the file's variables into its own environment before resolving the
+  rest of its configuration. This is the one bootstrap change in the
+  proposal. It mirrors `kubernetes-bootstrap`, which receives the env over
+  the socket and launches `bootstrap` with it.
+
+Why not the docker flags:
+
+- `--env KEY` (name only) makes Docker read values from the client process,
+  which means the job env would have to be in the control process
+  environment. That is the leak above.
+- `--env KEY=VALUE` puts every value, including
+  `BUILDKITE_AGENT_ACCESS_TOKEN`, in `docker create`'s argv, which is
+  world-readable via `/proc/<pid>/cmdline` for the life of the call.
+- `--env-file` cannot carry multi-line values, and `BUILDKITE_COMMAND` is
+  routinely multi-line. Reusing `BUILDKITE_ENV_FILE` is also out: it is
+  `%q`-quoted for the pre-bootstrap hook, Docker's parser does not unquote,
+  and it intentionally omits agent-added variables such as the access token
+  and the OTLP exporter credentials.
+
+Adjust these before writing the file:
 
 - `BUILDKITE_BIN_PATH`: set to empty. Bootstrap appends it to `PATH`; the
   host path is meaningless in the container and the image must already have
@@ -259,6 +312,13 @@ one agent.
 - On Linux, when the agent is not running as root, run the container with
   `--user <uid>:<gid>` matching the agent process and mount `/etc/passwd` and
   `/etc/group` read-only so the uid resolves to a name.
+- Pass `--group-add <gid>` for every supplementary group of the agent process
+  (`os.Getgroups()`). `--user` sets only the primary group, and mounting
+  `/etc/group` provides names, not memberships. Without this, anything the
+  agent reaches through a supplementary group breaks in the container: most
+  visibly `/var/run/docker.sock` via the `docker` group when
+  `executor-docker-expose-socket` is on, and any group-writable build, plugin,
+  or mirror directory.
 - Always set `--security-opt no-new-privileges`.
 - Do not mount the Docker socket by default.
 
@@ -321,11 +381,15 @@ separate top-level executors per runtime.
    the branch in `NewJobRunner` with a selector, move the `*kubernetes.Runner`
    assertion behind an optional interface. No config changes; existing tests
    pass unchanged; add a selection test.
-2. **Docker, minimum viable.** `executor`, `executor-docker-image`,
-   `executor-docker-arg`, `executor-docker-home`. `create`/`start`/`inspect`
-   lifecycle, `--env KEY`, the mount table above, uid inheritance, `--init`,
+2. **Bootstrap env file.** `buildkite-agent bootstrap` honours
+   `BUILDKITE_BOOTSTRAP_ENV_JSON_FILE`. Small, independently testable, and
+   useful on its own for anyone wrapping bootstrap.
+3. **Docker, minimum viable.** `executor` with strict value validation,
+   `executor-docker-image`, `executor-docker-arg`, `executor-docker-home`.
+   `create`/`start`/`inspect` lifecycle inside `Run`, env file transport, the
+   mount table above, uid inheritance with `--group-add`, `--init`,
    `no-new-privileges`. Linux only; error out on other platforms.
-3. **Follow-ups if needed.** `executor-docker-expose-socket`,
+4. **Follow-ups if needed.** `executor-docker-expose-socket`,
    `executor-docker-user`, version check caching, `executor=kubernetes-exec`
    alias.
 
@@ -333,20 +397,29 @@ separate top-level executors per runtime.
 
 Slice 1:
 
-- Table test for executor selection.
+- Table test for executor selection, including rejection of unknown values.
 - Parity test: `execExecution` produces the same `process.Config` as the
   current code for a fixed `JobRunnerConfig`.
 
 Slice 2:
 
+- Bootstrap loads a JSON env file with multi-line values and a value
+  containing `=`; a missing or unreadable file is a setup failure.
+
+Slice 3:
+
 - Unit tests for `docker create` argv construction from `AgentConfiguration`:
-  env names, mount table, uid flags, `--init`, `HOME`.
+  the single `--env`, mount table, `--user` and `--group-add` flags, `--init`.
+- The control process env passed to the fake `docker` is exactly the agent's
+  environment: a job env `DOCKER_HOST` must not appear in it, and must appear
+  in the env file.
 - Unit tests that `Interrupt`/`Terminate`/`Cleanup` issue the expected
-  `docker kill`/`docker rm` invocations, and that the SIGKILL downgrade is
-  applied.
-- Exit mapping tests: a `docker start` failure yields `Run` error; a
-  container exit code from `inspect` becomes `WaitStatus`; `docker`'s own 125
-  is never reported as the job exit status.
+  `docker kill`/`docker rm` invocations, that the SIGKILL downgrade is
+  applied, and that an interrupt during `docker create` removes the container
+  and makes `Run` return an error.
+- Exit mapping tests: a `docker create` or `docker start` failure yields
+  `Run` error; a container exit code from `inspect` becomes `WaitStatus`;
+  `docker`'s own 125 is never reported as the job exit status.
 - An integration test with a fake `docker` binary on `PATH` that records its
   argv and exits with a scripted status, in the style of the existing
   `internal/job/integration` fakes.
