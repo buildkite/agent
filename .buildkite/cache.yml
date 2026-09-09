@@ -109,3 +109,18 @@ caches:
       - ~/.protobuf-tools/bin
       - ~/.protobuf-tools/gocache
       - ~/.protobuf-tools/gomodcache
+
+  # Temporary: manual --force testing (A-1895). Isolated from real build
+  # caches above. Safe to delete once this branch is done.
+  - name: force_test_static
+    cache_key:
+      - force-test-static-v1
+    target_paths:
+      - force-test-static-data
+
+  - name: force_test_checksum
+    cache_key:
+      - force-test-checksum-v1
+      - { checksum: force-test-checksum-data/payload.txt }
+    target_paths:
+      - force-test-checksum-data

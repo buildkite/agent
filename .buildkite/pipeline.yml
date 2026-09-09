@@ -108,6 +108,27 @@ steps:
           mount-buildkite-agent: true
           run: agent
 
+  # Temporary: manual --force testing (A-1895). Safe to delete once this
+  # branch is done -- see .buildkite/steps/force-test.sh for the scenarios.
+  - name: ":test_tube: Manual cache --force test"
+    key: force-test
+    command: .buildkite/steps/force-test.sh
+    soft_fail: true
+    plugins:
+      - *assume_cache_role
+      - docker-compose#v4.14.0:
+          config: .buildkite/docker-compose.yml
+          cli-version: 2
+          propagate-environment: true
+          mount-buildkite-agent: true
+          run: agent
+          env:
+            - BUILDKITE_AGENT_CACHE_REGISTRY
+            - BUILDKITE_AGENT_CACHE_STORE_URL
+            - AWS_ACCESS_KEY_ID
+            - AWS_SECRET_ACCESS_KEY
+            - AWS_SESSION_TOKEN
+
   - group: ":go::scientist: Tests and Coverage"
     if_changed:
       - go.{mod,sum}
