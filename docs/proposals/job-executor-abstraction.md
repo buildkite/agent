@@ -1,77 +1,89 @@
 # Job Executor Abstraction
 
-> Drafted with GPT-5.4, with human input and review.
-
-> Note: this proposal is not about reviving or extending the deprecated `BUILDKITE_DOCKER*` / `BUILDKITE_DOCKER_COMPOSE_*` job behavior. That legacy command-phase integration is separate, deprecated, and not the basis for the proposed executor model.
+> Drafted with GPT-5.4 and revised with Amp, with human input and review.
 
 ## Summary
 
-Introduce an agent-side executor abstraction for the job-level bootstrap process.
+Give the agent a typed, tested abstraction for *how the job-level bootstrap
+process is launched*, and add Docker as the first non-local backend.
 
-The first two executors would be:
+- `exec` (default): today's behaviour. The agent starts `bootstrap-script` as a
+  local subprocess.
+- `docker`: the agent runs `buildkite-agent bootstrap` inside an ephemeral
+  container on the same host.
+- `kubernetes-exec`: today's Kubernetes stack support, unchanged in behaviour
+  but expressed as one more implementation of the same interface.
 
-- `exec`: the current behavior, and the default. The agent starts the configured `bootstrap-script` as a local subprocess.
-- `docker`: the agent runs `buildkite-agent bootstrap` inside an ephemeral Docker container, following the same overall pattern as [buildkite/docker-bootstrap-example](https://github.com/buildkite/docker-bootstrap-example).
-
-This creates a stable seam for future sandbox backends such as Firecracker, gVisor, or remote worker APIs without changing the bootstrap itself.
-
-It also leaves room for a Kubernetes-native execution path, where the transport is "run this job in a Pod" and the isolation choice is expressed via `runtimeClassName`, user namespaces, and other Pod-level features rather than by inventing a separate top-level executor for each sandbox runtime.
+The seam is the whole bootstrap process, not the command phase. That is what
+makes it reusable for stronger sandboxes later (Firecracker, gVisor, remote
+workers) without touching `internal/job`.
 
 ## Why
 
-Today there are three different concepts in the repo that are close to "how a job runs", but none of them is a clean abstraction:
+The agent already has the interface this proposal wants. `agent/job_runner.go`
+declares:
 
-- The agent starts one job-level subprocess from `agent/job_runner.go`.
-- The bootstrap runtime lives in `internal/job/executor.go`.
-- Kubernetes is already a special execution mode with its own transport in `kubernetes/runner.go` and `clicommand/kubernetes_bootstrap.go`.
+```go
+// jobProcess is either a *process.Process, or a *kubernetes.Runner.
+type jobProcess interface {
+	Done() <-chan struct{}
+	Started() <-chan struct{}
+	Interrupt() error
+	Terminate() error
+	Run(ctx context.Context) error
+	WaitStatus() process.WaitStatus
+}
+```
 
-That leaves us with two problems:
+and `NewJobRunner` picks an implementation with
+`if conf.KubernetesExec { kubernetes.NewRunner(...) } else { process.New(...) }`.
+Everything downstream (`JobRunner.Run`, log streaming, cancellation polling,
+`FinishJob`) already works against `jobProcess`.
 
-1. `bootstrap-script` is a powerful escape hatch, but it is just a command string. It is not a typed backend with a lifecycle, cleanup, or tests for backend-specific behavior.
-2. The deprecated Docker logic in `internal/job/docker.go` only wraps the command phase inside bootstrap. It does not execute the full job lifecycle in Docker, which is why it is not a substitute for an agent-level executor.
+Two things are missing:
 
-If we want sandboxing to be a first-class capability, the seam should be around the whole bootstrap process, not just the final command phase.
+1. The choice is an `if` on one bool, so there is no room for a third backend
+   and no unit test of selection.
+2. `bootstrap-script` is the only way to run bootstrap somewhere else. It is a
+   command string with no lifecycle: no way to name the thing that was
+   launched, cancel it directly, map its exit status, or clean it up. The
+   [docker-bootstrap-example](https://github.com/buildkite/docker-bootstrap-example)
+   shows both the idea and the limits of a shell-script-only approach: no
+   container name, no signal handling, no cleanup.
 
-The proposed Docker executor should therefore be treated as a new agent-level execution backend, not an evolution of the deprecated command-phase Docker integration.
+The deprecated in-bootstrap Docker integration (`BUILDKITE_DOCKER*`,
+`BUILDKITE_DOCKER_COMPOSE_*`) was removed in
+[17f5fb47](https://github.com/buildkite/agent/commit/17f5fb47). It only wrapped
+the command phase and is not related to this proposal.
 
 ## Goals
 
-- Preserve current behavior by default.
-- Keep `buildkite-agent bootstrap` as the unit that executes job phases.
-- Make the agent choose a job executor in a structured, testable way.
-- Allow each executor to own setup, cancellation, exit status mapping, and cleanup.
-- Make Docker an opt-in backend now, while keeping the design broad enough for Firecracker and other providers later.
+- Preserve current behaviour by default.
+- Keep `buildkite-agent bootstrap` as the unit that runs job phases.
+- Let each backend own launch, cancellation, exit-status mapping, and cleanup.
+- Land Docker as an opt-in Linux backend.
 
 ## Non-goals
 
-- Rewriting bootstrap phases in `internal/job`.
-- Replacing the existing `bootstrap-script` escape hatch in this change.
-- Extending or modernizing the deprecated `BUILDKITE_DOCKER*` / `BUILDKITE_DOCKER_COMPOSE_*` behavior.
-- Solving full hostile-build isolation. Docker still has well-known gaps around network access and Docker socket exposure.
-- Collapsing Kubernetes into the new config surface immediately.
-
-## Current Architecture
-
-The current execution chain is:
-
-1. `clicommand/agent_start.go` builds `AgentConfiguration`.
-2. `agent/job_runner.go` creates job env files, log streaming, and a `jobProcess`.
-3. `jobProcess` is either:
-   - a local `process.Process` running `bootstrap-script`, or
-   - a `kubernetes.Runner`.
-4. The subprocess runs `clicommand/bootstrap.go`, which then executes `internal/job.Executor`.
-
-This is already close to the right seam. The missing piece is replacing the `if kubernetes { ... } else { ... }` branch in `NewJobRunner` with a real executor interface.
+- Changing bootstrap phases in `internal/job`.
+- Removing `bootstrap-script`.
+- Full hostile-build isolation. Docker still shares the kernel and, by default,
+  the host network.
+- Changing `--kubernetes-exec` config or the `kubernetes-bootstrap` protocol.
 
 ## Proposal
 
-Add an agent-side executor interface that owns how the bootstrap is launched.
+### Interface
+
+Rename `jobProcess` to `JobExecution`, add `Cleanup`, and add a factory:
 
 ```go
+// JobExecutor chooses where and how bootstrap runs.
 type JobExecutor interface {
 	New(ctx context.Context, req JobExecutionRequest) (JobExecution, error)
 }
 
+// JobExecution is one running job. It is the existing jobProcess plus Cleanup.
 type JobExecution interface {
 	Started() <-chan struct{}
 	Done() <-chan struct{}
@@ -79,316 +91,273 @@ type JobExecution interface {
 	Interrupt() error
 	Terminate() error
 	WaitStatus() process.WaitStatus
-	Cleanup(context.Context) error
+	Cleanup(ctx context.Context) error
 }
 ```
 
-`JobExecution` intentionally looks like the existing `jobProcess` plus explicit cleanup. That keeps `JobRunner.Run`, log streaming, cancellation polling, and finish-job behavior largely unchanged.
+`JobExecutionRequest` carries what `NewJobRunner` already computes:
 
-`JobExecutionRequest` should include:
+- `Job` and `AgentConfiguration`
+- the resolved job env slice (the output of `createEnvironment`)
+- the job context directory (`jobContextDir(conf)`), which holds
+  `BUILDKITE_ENV_FILE`, `BUILDKITE_ENV_JSON_FILE`, and the job-timeout marker
+- the stdout/stderr writer (`r.jobLogs`)
+- `CancelSignal` and `CancelSignalTimeout`
 
-- the job and agent configuration
-- the full resolved environment slice
-- paths to `BUILDKITE_ENV_FILE` and `BUILDKITE_ENV_JSON_FILE`
-- stdout and stderr writers
-- build path and other filesystem paths from agent config
-- cancel signal and signal grace period
+`Run` returning an error means "the job never started"; `runJob` already maps
+that to exit -1 with `SignalReasonProcessRunError`. Backends must use that
+channel for launch failures rather than inventing an exit code.
 
-This interface should be implemented at the `agent` layer, not in `internal/job`, because it chooses how bootstrap itself is launched.
+`runJob` currently type-asserts `r.process.(*kubernetes.Runner)` to print
+"unknown container exit status" diagnostics. Move that behind an optional
+interface (`ExplainExit(w io.Writer)` or similar) implemented by the
+Kubernetes execution so `JobRunner` stops naming a concrete backend.
 
-## Reconciling Current Kubernetes Support
+The interface lives in `agent/`, not `internal/job`, because it decides how
+bootstrap is launched; bootstrap only exists after that decision.
 
-The current Kubernetes path should be treated as one driver implementation, not as a special case outside the model.
-
-Today, `JobRunner` already chooses between two execution mechanisms in `agent/job_runner.go`:
-
-- local `process.Process`
-- `kubernetes.Runner`
-
-So the simplest reconciliation is to replace that branch with a driver factory, while keeping the current Kubernetes transport intact.
-
-A useful mental model is:
-
-- `ExecutionDriver`: agent-side choice of where and how bootstrap runs
-- `Execution`: the running job lifecycle handle
-- bootstrap transport/protocol: backend-specific coordination details used by some drivers
-
-Under that model:
-
-- `exec` wraps the current local subprocess behavior
-- `docker` wraps a local Docker-launched bootstrap
-- current Kubernetes support becomes a `kubernetes-stack` driver that wraps `kubernetes.Runner` on the agent side and keeps `kubernetes-bootstrap` as the container-side protocol
-
-This is important because the existing Kubernetes code is not generic sandbox launch logic. It is pod coordination logic for the Buildkite Kubernetes stack:
-
-- the pod shape and container layout are created outside the agent
-- the agent distributes environment and execution state across containers
-- checkout and command containers run `kubernetes-bootstrap`
-- the runner aggregates logs, cancellation, and exit status back into one job result
-
-That means current Kubernetes support maps cleanly onto the proposed driver abstraction, but it should not be confused with a generic "sandbox runtime" driver.
-
-### Compatibility path
-
-The existing `--kubernetes-exec` behavior should remain supported.
-
-Internally, resolution would become:
-
-- if `--kubernetes-exec`, select the current Kubernetes-backed driver
-- else if `executor=docker`, select Docker
-- else select `exec`
-
-This keeps existing `agent-stack-k8s` users unchanged while allowing the rest of the execution model to become structured.
-
-## Config Surface
-
-Add a new agent config option:
-
-- `executor` with values `exec` or `docker`
-
-MVP Docker-specific config:
-
-- `executor-docker-image`
-- `executor-docker-arg` as a repeated escape hatch for extra `docker run` flags
-- `executor-docker-expose-socket` default `false`
-
-These should be normal agent configuration settings, defined the same way as existing `buildkite-agent start` options:
-
-- CLI flags on `buildkite-agent start`
-- environment variables
-- `buildkite-agent.cfg`
-
-In practice, the primary configuration point should be `buildkite-agent.cfg`, because the Docker executor is an agent-level execution choice, not a per-step toggle.
-
-Behavior:
-
-- Default `executor` is `exec`.
-- `executor-docker-image` is required when `executor=docker`.
-- `bootstrap-script` remains supported and is used only by `exec`.
-- If `executor=docker`, `bootstrap-script` is ignored and the agent logs a warning if it was explicitly set.
-- `kubernetes-exec` keeps its current behavior for now and remains authoritative when enabled.
-
-The reason to keep `bootstrap-script` as an `exec`-only mechanism is that it is already the compatibility surface. We should not overload it further and then try to infer typed Docker behavior from an arbitrary shell string.
-
-For example:
-
-```cfg
-executor="docker"
-executor-docker-image="ghcr.io/example/buildkite-agent-executor:2026-03-08"
-```
-
-The image should be selected per agent or per agent pool, not inferred from each job. If users need different executor images, they should generally run separate agent pools or queues with different agent configuration.
-
-## Exec Executor
-
-The `exec` executor is a straight extraction of current behavior:
-
-- parse `AgentConfiguration.BootstrapScript`
-- create a `process.Process`
-- wire stdout, stderr, PTY, working dir, env, signals, and grace period exactly as today
-
-This change should be behavior-preserving and land first.
-
-## Docker Executor
-
-The Docker executor should run the full bootstrap in a container, not just the command phase.
-
-Conceptually:
+### Selection
 
 ```text
-agent -> docker run ... <image> bootstrap
+if --kubernetes-exec      -> kubernetes execution (wraps kubernetes.Runner)
+else if executor=docker   -> docker execution
+else                      -> exec execution
 ```
 
-This is the same pattern as the docker bootstrap example, but implemented in Go inside the agent rather than as an external shell script.
+`--kubernetes-exec` stays authoritative so `agent-stack-k8s` users see no
+change. Folding it into `executor=kubernetes-exec` as an alias is a later,
+optional step.
 
-### Docker execution contract
+### Config surface
 
-The Docker executor should:
+New `buildkite-agent start` settings, available as flags, env vars, and
+`buildkite-agent.cfg` entries like every other agent option:
 
-- run an attached container so stdout and stderr continue to flow through the existing job log pipeline
-- pass the resolved job environment into Docker with `--env KEY` entries, using the generated env from `JobRunner`
-- make `BUILDKITE_ENV_FILE` and `BUILDKITE_ENV_JSON_FILE` available inside the container
-- run `bootstrap` inside the container image
-- use a stable container name derived from the job ID so cancellation and cleanup can address it directly
-- remove transient resources on normal exit and on agent-side interruption
+| Setting | Values | Notes |
+|---|---|---|
+| `executor` | `exec` (default), `docker` | |
+| `executor-docker-image` | image ref | required when `executor=docker` |
+| `executor-docker-arg` | repeatable | extra `docker run`/`docker create` flags; escape hatch |
+| `executor-docker-expose-socket` | bool, default `false` | mounts `/var/run/docker.sock` |
+| `executor-docker-home` | path, default `/tmp/buildkite-home` | `$HOME` inside the container; see below |
 
-The executor image contract should be explicit:
+Rules:
 
-- Linux image
-- contains a compatible `buildkite-agent` binary
-- can run `buildkite-agent bootstrap`
-- contains the tooling needed for full bootstrap execution inside the container, not just the user command
+- `bootstrap-script` is used only by `exec`. If `executor=docker` and
+  `bootstrap-script` was set explicitly, log a warning and ignore it.
+- The image is an agent-pool decision. Users who need different images run
+  different queues.
 
-### Mounting strategy
+## `exec` execution
 
-The MVP should preserve path semantics rather than invent a new filesystem model.
+A straight extraction of the current `else` branch: `shellwords.Split` the
+bootstrap script, build `process.Config` with the same `Dir`, `Env`, `PTY`,
+`Stdout`, `Stderr`, `InterruptSignal`, and `SignalGracePeriod` as today,
+including the SIGKILL→SIGTERM downgrade of the interrupt signal. `Cleanup` is a
+no-op. This must be behaviour-preserving and lands first.
 
-Auto-mount these configured paths at the same path inside the container when set:
+## `docker` execution
 
-- build path: read-write
-- plugins path: read-write
-- sockets path: read-write
-- git mirrors path: read-write
-- hooks path and additional hooks paths: read-only
-- signing key files, config files, or similar explicit file paths: read-only
+### Lifecycle
 
-Generated env files need special handling:
+Use `docker create` + `docker start --attach` rather than a single
+`docker run`, so the container has a name before anything can go wrong and so
+launch failures are separable from bootstrap exit codes.
 
-- `BUILDKITE_ENV_FILE` and `BUILDKITE_ENV_JSON_FILE` must be visible inside the container
-- the safest compatibility path is to create them under a mounted writable path rather than host-only `/tmp`
-- `BUILDKITE_ENV_FILE` in particular may need to remain writable for compatibility with hooks or plugins that append to it
+```text
+New():        docker create --name buildkite-job-<jobid> <flags> <image> bootstrap
+Run():        docker start --attach buildkite-job-<jobid>   (stdout/stderr -> jobLogs)
+              on exit: docker inspect --format '{{.State.ExitCode}}' -> WaitStatus
+Interrupt():  docker kill --signal <cancel-signal> buildkite-job-<jobid>
+Terminate():  docker kill buildkite-job-<jobid>
+Cleanup():    docker rm --force buildkite-job-<jobid>   (ignore "no such container")
+```
 
-This is less isolated than a pure named-volume approach, but it is much simpler and preserves current agent behavior for hooks, plugin cache, mirrors, and sockets.
+- If `docker create` or `docker start` fails before the container runs, `Run`
+  returns an error. Do not surface the docker CLI's own 125/126/127 exit codes
+  as the job exit status: 125 collides with `job.ExitCodeSetupFailure`, which
+  `runJob` already rewrites to -1, and 126/127 would look like the user's
+  command failing.
+- `Started()` closes when `docker start` has been spawned. That is early by a
+  few hundred milliseconds, which only affects when log streaming and the
+  cancellation poller begin; both tolerate that.
+- `Interrupt` must be non-blocking. `docker stop --time N` is wrong here: it
+  blocks for up to N seconds and then SIGKILLs, duplicating the grace period
+  that `JobRunner.Cancel` already enforces before calling `Terminate`. The
+  agent, not Docker, owns the timing.
+- Apply the same SIGKILL→SIGTERM downgrade as `exec`. A SIGKILL to bootstrap
+  skips pre-exit hooks and loses the command's exit status.
+- Pass `--init`. Bootstrap is PID 1 in the container and Go does not reap
+  orphaned grandchildren left behind by hooks and shells.
+- Job-level timeouts work unchanged: `Cancel` writes the marker file into the
+  job context directory before signalling, and bootstrap reads it via
+  `BUILDKITE_AGENT_JOB_TIMEOUT_FILE`. This requires the context directory to
+  be a live bind mount (below), not a copy taken at `docker create` time.
+
+### Environment
+
+Pass the resolved job env as `--env KEY` (name only) for every entry in the
+env slice. The `docker` CLI process inherits `os.Environ() + env` exactly as
+the `exec` bootstrap does today, so Docker reads the values from there. This
+avoids quoting problems with multi-line values and keeps values out of the
+`docker create` argv.
+
+`docker --env-file` is not an option: `BUILDKITE_ENV_FILE` is written with Go
+`%q` quoting for the pre-bootstrap hook to validate, and Docker's env-file
+parser does not unquote.
+
+Override or omit host-specific values before passing them through:
+
+- `BUILDKITE_BIN_PATH`: set to empty. Bootstrap appends it to `PATH`; the
+  host path is meaningless in the container and the image must already have
+  `buildkite-agent` on `PATH`. (`kubernetes-bootstrap` resolves the same
+  problem by recomputing it from `os.Executable`.)
+- `BUILDKITE_AGENT_PID`: omit.
+- `HOME`: set to `executor-docker-home`. See the user model below.
+
+### Mounts
+
+Preserve host paths inside the container so that nothing in bootstrap, hooks,
+or plugins needs to learn a new filesystem layout:
+
+| Host path (from `AgentConfiguration`) | Mode |
+|---|---|
+| `build-path` | rw |
+| `plugins-path` | rw |
+| `git-mirrors-path` (when set) | rw |
+| `sockets-path` | rw |
+| job context dir (`--job-context-dir`, default `os.TempDir()`) | rw |
+| `hooks-path`, each `additional-hooks-paths` entry | ro |
+| `config-path`, `signing-jwks-file` (when set) | ro |
+| `/etc/passwd`, `/etc/group` (when not running as root) | ro |
+| `/var/run/docker.sock` (only when `executor-docker-expose-socket`) | rw |
+
+The job context directory already exists as a concept:
+`--job-context-dir` / `BUILDKITE_JOB_CONTEXT_DIR` (added for the Kubernetes
+stack in [535aeaf2](https://github.com/buildkite/agent/commit/535aeaf2)) is
+where the agent puts `BUILDKITE_ENV_FILE`, `BUILDKITE_ENV_JSON_FILE`, and the
+job-timeout marker. Bind-mounting that directory at the same path makes all
+three visible in the container with no path rewriting. Mounting the default
+`os.TempDir()` (usually `/tmp`) into the container is more than we want, so
+when `executor=docker` and the operator has not set `job-context-dir`, agent
+start should default it to a dedicated directory such as
+`/var/lib/buildkite-agent/job-context`. This has to happen at config
+resolution time, before `NewJobRunner` creates the env files there.
+
+`sockets-path` is mounted because the host agent's local API socket lives
+there (`agentapi.DefaultSocketPath`), and `buildkite-agent lock` inside the
+container needs to reach it. Its default is under the host `$HOME`
+(`~/.buildkite-agent/sockets`), which is fine: the path is passed explicitly
+via `BUILDKITE_SOCKETS_PATH` and does not depend on `$HOME` in the container.
+
+Mirror locking uses `gofrs/flock`, which works across bind mounts on the same
+kernel, so `git-mirrors-path` can be shared between host and container jobs on
+one agent.
 
 ### User and privilege model
 
-Follow the same ideas as the example where possible:
+- On Linux, when the agent is not running as root, run the container with
+  `--user <uid>:<gid>` matching the agent process and mount `/etc/passwd` and
+  `/etc/group` read-only so the uid resolves to a name.
+- Always set `--security-opt no-new-privileges`.
+- Do not mount the Docker socket by default.
 
-- if the agent is not running as root on Linux, run the container as the same uid:gid
-- mount `/etc/passwd` and `/etc/group` read-only when needed for name resolution
-- set `no-new-privileges`
-- do not mount the Docker socket by default
+Running as root inside a bind-mounted build path creates root-owned files on
+the host that break later cleanup, checkout reuse, and mixed host/container
+agents. Inheriting the agent uid is the default; an explicit
+`executor-docker-user` override can come later.
 
-File ownership on host-mounted paths is a real concern:
+Mounting the host `/etc/passwd` has a side effect the docker-bootstrap-example
+ignores: `$HOME` resolves to the host user's home directory, which does not
+exist in the image. The agent itself depends on a usable `$HOME`: the cache
+feature reads `os.UserHomeDir()` for its default store and for `~` expansion
+in cache paths, and git and ssh want somewhere writable. So the executor sets
+`HOME=<executor-docker-home>` and mounts a per-job tmpfs or empty directory
+there. Users who need ssh keys or git config inside the container mount them
+via `executor-docker-arg`.
 
-- if the container runs as `root` and writes into bind-mounted host paths, those files will typically be owned by `root` on the host
-- that can break later cleanup, checkout reuse, plugin reuse, or mixed host/container execution on the same agent
+### Image contract
 
-So for the MVP, Linux Docker execution should default to inheriting the agent process uid:gid when writing to mounted host paths.
+- Linux image.
+- `buildkite-agent` on `PATH`, of a version compatible with the host agent.
+  Enforce at least a major-version match by running
+  `docker run --rm --entrypoint buildkite-agent <image> --version` once per
+  image per agent process and caching the result.
+- The image entrypoint accepts `bootstrap` as its arguments and ends up
+  running `buildkite-agent bootstrap`. The official `buildkite/agent` image
+  does: `buildkite-agent-entrypoint` runs `/docker-entrypoint.d`, then
+  `exec tini -- ssh-env-config.sh buildkite-agent "$@"`. The executor does not
+  override the entrypoint for the job container, so those wrappers keep
+  working. (`--init` is redundant when the image already runs tini, and
+  harmless.)
+- Contains everything bootstrap needs for the whole job: git, bash (or the
+  configured `shell`), ssh if repositories use it, plus whatever hooks and
+  plugins call.
 
-Some images will assume `root` or expect a named user and writable home directory, so the design should allow a future explicit override such as `executor-docker-user`, but root should not be the default.
+### Relationship to the docker-buildkite-plugin
 
-### Cancellation and cleanup
+The plugin runs one step's command in a container chosen in pipeline YAML;
+checkout, hooks, and plugin setup still run on the host. The executor is agent
+configuration and runs all of bootstrap in the container. They compose: a step
+may still use the plugin inside an agent that uses the Docker executor,
+provided the socket is exposed.
 
-Do not rely on signal proxying from the `docker run` CLI alone.
+## Kubernetes
 
-The Docker executor should own container lifecycle explicitly:
+`kubernetes.Runner` already implements the interface. Wrapping it changes no
+behaviour. The Kubernetes stack is not a generic sandbox launcher: the pod
+shape is created outside the agent, the agent coordinates several containers
+over a socket, and `kubernetes-bootstrap` is the container-side protocol. Keep
+calling it what it is.
 
-- `Interrupt()` should call `docker stop --signal <cancel-signal> --time <grace-seconds> <name>`
-- `Terminate()` should call `docker kill <name>` followed by forced removal if needed
-- `Cleanup()` should remove any named container still present
+If Kubernetes later becomes a first-class executor that the agent drives
+itself, sandbox choice belongs in `runtimeClassName` and pod settings, not in
+separate top-level executors per runtime.
 
-The attached `docker run` process can still be used for log streaming and exit status, but container lifecycle should be controlled directly by the executor.
+## Delivery slices
 
-### How this differs from the Docker Buildkite Plugin
-
-This proposal is also distinct from the `docker-buildkite-plugin`.
-
-That plugin runs a pipeline step command in Docker and provides step-level controls such as:
-
-- required `image`
-- environment propagation
-- volume mounts
-- optional checkout mounting behavior
-
-By contrast, the proposed Docker executor is an agent-level execution backend.
-
-Key differences:
-
-- the plugin is configured in pipeline YAML per step; the executor is configured on the agent in `buildkite-agent.cfg` or equivalent agent config
-- the plugin wraps the step command; the executor runs the full `buildkite-agent bootstrap` lifecycle in Docker
-- with the plugin, checkout, hooks, plugin setup, and artifact handling still fundamentally belong to the host-side bootstrap flow; with the executor, those phases run inside the selected execution backend
-- the plugin is a build-step tool; the executor is part of the agent’s job runtime model
-
-The two solve different problems:
-
-- the plugin is primarily for step-level toolchain and environment control
-- the executor is for choosing where a job runs and establishing a future path to broader sandbox providers
-
-## Kubernetes Direction
-
-Keep this brief in the initial proposal:
-
-- current `kubernetes-exec` support already maps naturally to a driver implementation
-- if Kubernetes becomes a first-class executor later, it should be modeled as `executor=kubernetes`
-- sandbox choice on Kubernetes should usually be expressed through runtime and Pod settings such as `runtimeClassName`, not separate top-level executors for each sandbox runtime
-
-In practice:
-
-- local Docker on a host is a distinct execution backend
-- Firecracker or Kata on Kubernetes is usually a Kubernetes backend plus a runtime profile
-
-## Why this belongs in the agent, not inside bootstrap
-
-The bootstrap only knows how to run job phases after it has already started.
-
-The choice between:
-
-- run locally
-- run in Docker
-- run in Firecracker
-- run via a remote provider
-
-has to happen before bootstrap starts, because it changes:
-
-- where stdout and stderr come from
-- how signals are delivered
-- how filesystem paths are mounted or mapped
-- how cleanup is performed
-- which process or sandbox exit status we report upstream
-
-That makes `agent/job_runner.go` the correct layer for the abstraction.
-
-## Simplest Path There
-
-### Phase 1: Extract the current behavior behind an interface
-
-- Add the new executor interface in the agent layer.
-- Implement `execExecutor`.
-- Replace the local `process.New(...)` branch in `NewJobRunner` with the executor.
-- Keep Kubernetes behavior as-is or wrap it behind the same interface without changing config semantics.
-
-This is mostly refactoring and should not change behavior.
-
-### Phase 2: Add opt-in Docker support
-
-- Add `executor=docker` and the small Docker config surface.
-- Implement `dockerExecutor`.
-- Keep `buildkite-agent bootstrap` unchanged.
-- Start Linux-only.
-
-This delivers the user-visible feature while keeping the blast radius small.
-
-### Phase 3: Broaden the interface if needed
-
-After `exec` and `docker` exist, decide whether to:
-
-- move `kubernetes-exec` behind the same driver factory while keeping the old flag as a compatibility alias
-- add a Kubernetes executor with runtime-class-driven sandbox selection
-- add a Firecracker executor only for non-Kubernetes environments where the agent provisions the VM directly
-- add a generic provider registry or plugin model
-
-The important point is that phase 1 and phase 2 should not wait on phase 3.
+1. **Extract the interface.** Introduce `JobExecutor`/`JobExecution` in
+   `agent/`, implement `execExecution` and wrap `kubernetes.Runner`, replace
+   the branch in `NewJobRunner` with a selector, move the `*kubernetes.Runner`
+   assertion behind an optional interface. No config changes; existing tests
+   pass unchanged; add a selection test.
+2. **Docker, minimum viable.** `executor`, `executor-docker-image`,
+   `executor-docker-arg`, `executor-docker-home`. `create`/`start`/`inspect`
+   lifecycle, `--env KEY`, the mount table above, uid inheritance, `--init`,
+   `no-new-privileges`. Linux only; error out on other platforms.
+3. **Follow-ups if needed.** `executor-docker-expose-socket`,
+   `executor-docker-user`, version check caching, `executor=kubernetes-exec`
+   alias.
 
 ## Testing
 
-### Phase 1
+Slice 1:
 
-- unit tests for executor selection
-- parity tests showing `exec` builds the same process config as today
-- existing `agent` and bootstrap tests should continue to pass unchanged
+- Table test for executor selection.
+- Parity test: `execExecution` produces the same `process.Config` as the
+  current code for a fixed `JobRunnerConfig`.
 
-### Phase 2
+Slice 2:
 
-- unit tests for Docker CLI argument construction
-- unit tests for mount generation from `AgentConfiguration`
-- tests for cancellation mapping to `docker stop` and `docker kill`
-- integration-style tests using mocked `docker` binaries, similar to existing command-phase Docker tests in `internal/job/integration/docker_integration_test.go`
+- Unit tests for `docker create` argv construction from `AgentConfiguration`:
+  env names, mount table, uid flags, `--init`, `HOME`.
+- Unit tests that `Interrupt`/`Terminate`/`Cleanup` issue the expected
+  `docker kill`/`docker rm` invocations, and that the SIGKILL downgrade is
+  applied.
+- Exit mapping tests: a `docker start` failure yields `Run` error; a
+  container exit code from `inspect` becomes `WaitStatus`; `docker`'s own 125
+  is never reported as the job exit status.
+- An integration test with a fake `docker` binary on `PATH` that records its
+  argv and exits with a scripted status, in the style of the existing
+  `internal/job/integration` fakes.
 
-## Risks and tradeoffs
+## Risks
 
-- Docker isolation is incomplete. This should be presented as a better boundary than host `exec`, not as a complete hostile-build solution.
-- Path-preserving bind mounts are pragmatic, but they leak more host structure into the container than a stricter sandbox would.
-- Requiring an explicit Docker image in the MVP is slightly less convenient, but it avoids hidden version drift rules.
-- There is naming collision with `internal/job.Executor`. Internally we should prefer names like `JobExecutor`, `ExecutionBackend`, or `JobExecution` at the agent layer.
-
-## Recommendation
-
-Land this as an agent-side abstraction in two changes:
-
-1. Refactor the current local subprocess path into `execExecutor` with no behavior change.
-2. Add an opt-in `dockerExecutor` that runs the full bootstrap inside a container.
-
-Then evaluate Kubernetes as the next top-level executor, with sandbox flavor controlled by runtime and Pod settings.
-
-That gives us a clean, minimal abstraction now, solves the concrete Docker use case, and creates a real extension point for Firecracker and other sandbox providers later without forcing Kubernetes-specific runtime choices into the wrong layer.
+- Docker is a weaker boundary than a VM. Present it as better than host
+  `exec`, not as safe for untrusted builds.
+- Path-preserving bind mounts leak host layout into the container. Accepted
+  for compatibility with existing hooks and plugin caches.
+- A bad `executor-docker-image` (missing tools, wrong agent version) fails
+  every job on the agent. The version check catches only the second case.
+- Naming: `internal/job.Executor` already exists and means "bootstrap runtime".
+  Use `JobExecutor`/`JobExecution` at the agent layer and do not shorten them.
