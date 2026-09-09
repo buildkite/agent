@@ -102,6 +102,12 @@ func TestResolveGitSubmoduleURL(t *testing.T) {
 			want:         "https://gerrit.googlesource.com/java-prettify",
 		},
 		{
+			name:         "relative https sibling preserves escaped slash",
+			superproject: "https://host/team%2Frepos/main.git",
+			submodule:    "../child",
+			want:         "https://host/team%2Frepos/child",
+		},
+		{
 			name:         "relative https child",
 			superproject: "https://gerrit.googlesource.com/gerrit.git",
 			submodule:    "./modules/java-prettify",
@@ -166,11 +172,104 @@ func TestResolveGitSubmoduleURL(t *testing.T) {
 	}
 }
 
-func TestResolveGitSubmoduleURLReturnsParseError(t *testing.T) {
+func TestResolveGitSubmoduleURLDoesNotParseURL(t *testing.T) {
 	t.Parallel()
 
-	if _, err := resolveGitSubmoduleURL("https://example.com/%zz", "../module.git"); err == nil {
-		t.Fatal(`resolveGitSubmoduleURL("https://example.com/%zz", "../module.git") error = nil, want non-nil`)
+	got, err := resolveGitSubmoduleURL("https://example.com/%zz", "./module.git")
+	if err != nil {
+		t.Fatalf(`resolveGitSubmoduleURL("https://example.com/%%zz", "./module.git") error = %v`, err)
+	}
+	if want := "https://example.com/%zz/module.git"; got != want {
+		t.Errorf(`resolveGitSubmoduleURL("https://example.com/%%zz", "./module.git") = %q, want %q`, got, want)
+	}
+}
+
+func TestGitRelativeURLInterleavesDotSlashAndDotDotSlash(t *testing.T) {
+	t.Parallel()
+
+	got, err := gitRelativeURL("https://host/team/main.git", "./../child", "")
+	if err != nil {
+		t.Fatalf("gitRelativeURL() error = %v", err)
+	}
+	if want := "https://host/team/child"; got != want {
+		t.Errorf("gitRelativeURL() = %q, want %q", got, want)
+	}
+}
+
+// These cases match Git core's t/t0060-path-utils.sh.
+func TestGitRelativeURLMatchesGitCorePathUtilsCases(t *testing.T) {
+	t.Parallel()
+
+	pwd := "/tmp/git-t0060"
+	tests := []struct {
+		upPath      string
+		remoteURL   string
+		relativeURL string
+		want        string
+	}{
+		{upPath: "../", remoteURL: "../foo", relativeURL: "../submodule", want: "../../submodule"},
+		{upPath: "../", remoteURL: "../foo/bar", relativeURL: "../submodule", want: "../../foo/submodule"},
+		{upPath: "../", remoteURL: "../foo/submodule", relativeURL: "../submodule", want: "../../foo/submodule"},
+		{upPath: "../", remoteURL: "./foo", relativeURL: "../submodule", want: "../submodule"},
+		{upPath: "../", remoteURL: "./foo/bar", relativeURL: "../submodule", want: "../foo/submodule"},
+		{upPath: "../../../", remoteURL: "../foo/bar", relativeURL: "../sub/a/b/c", want: "../../../../foo/sub/a/b/c"},
+		{upPath: "../", remoteURL: pwd + "/addtest", relativeURL: "../repo", want: pwd + "/repo"},
+		{upPath: "../", remoteURL: "foo/bar", relativeURL: "../submodule", want: "../foo/submodule"},
+		{upPath: "../", remoteURL: "foo", relativeURL: "../submodule", want: "../submodule"},
+		{remoteURL: "../foo/bar", relativeURL: "../sub/a/b/c", want: "../foo/sub/a/b/c"},
+		{remoteURL: "../foo/bar", relativeURL: "../sub/a/b/c/", want: "../foo/sub/a/b/c"},
+		{remoteURL: "../foo/bar/", relativeURL: "../sub/a/b/c", want: "../foo/sub/a/b/c"},
+		{remoteURL: "../foo/bar", relativeURL: "../submodule", want: "../foo/submodule"},
+		{remoteURL: "../foo/submodule", relativeURL: "../submodule", want: "../foo/submodule"},
+		{remoteURL: "../foo", relativeURL: "../submodule", want: "../submodule"},
+		{remoteURL: "./foo/bar", relativeURL: "../submodule", want: "foo/submodule"},
+		{remoteURL: "./foo", relativeURL: "../submodule", want: "submodule"},
+		{remoteURL: "//somewhere else/repo", relativeURL: "../subrepo", want: "//somewhere else/subrepo"},
+		{remoteURL: "//somewhere else/repo", relativeURL: "../../subrepo", want: "//subrepo"},
+		{remoteURL: "//somewhere else/repo", relativeURL: "../../../subrepo", want: "/subrepo"},
+		{remoteURL: "//somewhere else/repo", relativeURL: "../../../../subrepo", want: "subrepo"},
+		{remoteURL: pwd + "/subsuper_update_r", relativeURL: "../subsubsuper_update_r", want: pwd + "/subsubsuper_update_r"},
+		{remoteURL: pwd + "/super_update_r2", relativeURL: "../subsuper_update_r", want: pwd + "/subsuper_update_r"},
+		{remoteURL: pwd + "/.", relativeURL: "../.", want: pwd + "/."},
+		{remoteURL: pwd, relativeURL: "./.", want: pwd + "/."},
+		{remoteURL: pwd + "/addtest", relativeURL: "../repo", want: pwd + "/repo"},
+		{remoteURL: pwd, relativeURL: "./å äö", want: pwd + "/å äö"},
+		{remoteURL: pwd + "/.", relativeURL: "../submodule", want: pwd + "/submodule"},
+		{remoteURL: pwd + "/submodule", relativeURL: "../submodule", want: pwd + "/submodule"},
+		{remoteURL: pwd + "/home2/../remote", relativeURL: "../bundle1", want: pwd + "/home2/../bundle1"},
+		{remoteURL: pwd + "/submodule_update_repo", relativeURL: "./.", want: pwd + "/submodule_update_repo/."},
+		{remoteURL: "file:///tmp/repo", relativeURL: "../subrepo", want: "file:///tmp/subrepo"},
+		{remoteURL: "foo/bar", relativeURL: "../submodule", want: "foo/submodule"},
+		{remoteURL: "foo", relativeURL: "../submodule", want: "submodule"},
+		{remoteURL: "helper:://hostname/repo", relativeURL: "../subrepo", want: "helper:://hostname/subrepo"},
+		{remoteURL: "helper:://hostname/repo", relativeURL: "../../subrepo", want: "helper:://subrepo"},
+		{remoteURL: "helper:://hostname/repo", relativeURL: "../../../subrepo", want: "helper::/subrepo"},
+		{remoteURL: "helper:://hostname/repo", relativeURL: "../../../../subrepo", want: "helper::subrepo"},
+		{remoteURL: "helper:://hostname/repo", relativeURL: "../../../../../subrepo", want: "helper:subrepo"},
+		{remoteURL: "helper:://hostname/repo", relativeURL: "../../../../../../subrepo", want: ".:subrepo"},
+		{remoteURL: "ssh://hostname/repo", relativeURL: "../subrepo", want: "ssh://hostname/subrepo"},
+		{remoteURL: "ssh://hostname/repo", relativeURL: "../../subrepo", want: "ssh://subrepo"},
+		{remoteURL: "ssh://hostname/repo", relativeURL: "../../../subrepo", want: "ssh:/subrepo"},
+		{remoteURL: "ssh://hostname/repo", relativeURL: "../../../../subrepo", want: "ssh:subrepo"},
+		{remoteURL: "ssh://hostname/repo", relativeURL: "../../../../../subrepo", want: ".:subrepo"},
+		{remoteURL: "ssh://hostname:22/repo", relativeURL: "../subrepo", want: "ssh://hostname:22/subrepo"},
+		{remoteURL: "user@host:path/to/repo", relativeURL: "../subrepo", want: "user@host:path/to/subrepo"},
+		{remoteURL: "user@host:repo", relativeURL: "../subrepo", want: "user@host:subrepo"},
+		{remoteURL: "user@host:repo", relativeURL: "../../subrepo", want: ".:subrepo"},
+	}
+
+	for _, tt := range tests {
+		t.Run(fmt.Sprintf("%q %q %q", tt.upPath, tt.remoteURL, tt.relativeURL), func(t *testing.T) {
+			t.Parallel()
+
+			got, err := gitRelativeURL(tt.remoteURL, tt.relativeURL, tt.upPath)
+			if err != nil {
+				t.Fatalf("gitRelativeURL(%q, %q, %q) error = %v", tt.remoteURL, tt.relativeURL, tt.upPath, err)
+			}
+			if got != tt.want {
+				t.Errorf("gitRelativeURL(%q, %q, %q) = %q, want %q", tt.remoteURL, tt.relativeURL, tt.upPath, got, tt.want)
+			}
+		})
 	}
 }
 
