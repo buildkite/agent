@@ -217,7 +217,9 @@ Run():        write the env file (below); close Started()
               -> if the container is still running: attach was lost; docker kill, return error
 Interrupt():  record "interrupt"; docker kill --signal <cancel-signal> <id> if running
 Terminate():  record "terminate";  docker kill <id> if running;
-              if that fails, kill the docker start subprocess so Run returns
+              if that fails, cancel Run's subprocess context (start + any inspect)
+              so Run returns
+(every inspect/kill/rm call has its own 10 s timeout; start --attach does not)
 Cleanup():    docker rm --force --volumes <id>   (ignore "no such container")
               remove the env file
 ```
@@ -294,10 +296,18 @@ Cleanup():    docker rm --force --volumes <id>   (ignore "no such container")
   already recorded, so `Cancel` proceeds to the grace period and `Terminate`
   retries with `docker kill` (SIGKILL), and `Cleanup` finishes with
   `rm --force --volumes` regardless. If `Terminate`'s `docker kill` also
-  fails, `Terminate` kills the `docker start --attach` subprocess directly so
-  `Run` returns an error instead of waiting on a daemon that is not
+  fails, `Terminate` cancels the context that `Run` derives for all of its
+  subprocesses, so `docker start --attach` and any in-flight `inspect` exit
+  and `Run` returns an error instead of waiting on a daemon that is not
   responding; the container may be leaked at that point and `Cleanup` reports
   it if `rm --force` fails too (see Risks).
+- Every control command other than `start --attach` runs under its own short
+  timeout (10 s) in addition to `Run`'s context: the readiness-poll
+  `inspect`s, the final `inspect`, `kill`, and `rm`. Only `start --attach` is
+  unbounded, because it lives as long as the job. An `inspect` that times out
+  is an executor failure: `Run` attempts `docker kill`, then returns an error.
+  Without this, a daemon that stops answering mid-poll would leave `Run`
+  blocked in `inspect` where killing `start` alone would not free it.
 - Apply the same SIGKILL→SIGTERM downgrade as `exec`. A SIGKILL to bootstrap
   skips pre-exit hooks and loses the command's exit status.
 - Pass `--init` so something reaps orphaned grandchildren left behind by
@@ -527,13 +537,15 @@ them under that path via `executor-docker-arg`.
   `BUILDKITE_BOOTSTRAP_ENV_JSON_FILE`. A major-version match is not enough:
   an older image of the same major would ignore the variable and run
   bootstrap with no job configuration. `agent start` enforces this once,
-  after config validation and before registering: `docker pull <image>`, then
-  `docker run --rm --entrypoint buildkite-agent <image> --version`, under a
-  single bounded context (2 minutes; `docker pull` dominates), failing agent
-  start on a version below the minimum, a non-zero exit, or timeout. It then
-  records the image ID (`docker image inspect --format '{{.Id}}'`) and every
-  `docker create` uses that ID rather than the tag, so a tag moving under a
-  running agent cannot swap in an unchecked image. This keeps Docker calls
+  after config validation and before registering, under a single bounded
+  context (2 minutes; `docker pull` dominates): `docker pull <image>`, then
+  `docker image inspect --format '{{.Id}}' <image>` to resolve the tag to an
+  ID exactly once, then `docker run --rm --entrypoint buildkite-agent <id>
+  --version` against that ID. Agent start fails on a version below the
+  minimum, a non-zero exit, or timeout. The checked ID is retained and every
+  `docker create` uses it rather than the tag, so a tag moving under a
+  running agent, or between the check and the first job, cannot swap in an
+  unchecked image. This keeps Docker calls
   out of `New` (which would orphan work if `StartJob` failed) and out of
   `Run`'s cancellation path, and means the pull that would otherwise happen
   on the first job happens before the agent accepts one.
@@ -631,10 +643,14 @@ and exits with a scripted status, in the style of the existing
   name-only `--env` flags, and are present in the fake `docker create`'s
   environment but not in `start`/`kill`/`rm`/`inspect`'s. With a job-supplied
   OTLP destination they are in the env file and not in the control env.
-- `agent start` with `executor=docker` runs `pull`, `run --version`, and
-  `image inspect` against the fake, fails start on a too-old version, a
-  non-zero exit, or a fake that sleeps past the timeout, and the recorded
-  image ID (not the tag) is what `docker create` receives.
+- `agent start` with `executor=docker` runs `pull`, then `image inspect`,
+  then `run --version` against the fake, in that order; the ID from `image
+  inspect` is what `run --version` and later `docker create` receive, not the
+  tag. Start fails on a too-old version, a non-zero exit, or a fake that
+  sleeps past the timeout.
+- A fake `docker inspect` that hangs makes `Run` return an error within the
+  per-call timeout (after a `docker kill` attempt); `Terminate` during a
+  hanging `inspect` or `start` makes `Run` return promptly.
 - `Interrupt`/`Terminate`/`Cleanup` issue the expected `docker kill`/`docker
   rm --force --volumes` invocations against the container ID, the SIGKILL
   downgrade is applied, an interrupt during a (fake, slow) `docker create`
@@ -684,10 +700,11 @@ with `VOLUME`.
   a `docker image prune` while the agent is running also fails every job
   ("No such image") until the agent is restarted; the error message names
   the fix.
-- An unresponsive Docker daemon can leak a container. `kill` and `rm` are
-  bounded by short timeouts and `Terminate` can always unblock `Run` by
-  killing the `docker start` client, so the agent slot is freed, but the
-  container itself may keep running until the daemon recovers. The labels
-  exist so an operator can sweep these; `exec` has no equivalent failure mode.
+- An unresponsive Docker daemon can leak a container. Every control command
+  except `start --attach` has a short timeout, and `Terminate` can cancel
+  `Run`'s subprocess context, so `Run` always returns and the agent slot is
+  freed, but the container itself may keep running until the daemon recovers.
+  The labels exist so an operator can sweep these; `exec` has no equivalent
+  failure mode.
 - Naming: `internal/job.Executor` already exists and means "bootstrap runtime".
   Use `JobExecutor`/`JobExecution` at the agent layer and do not shorten them.
