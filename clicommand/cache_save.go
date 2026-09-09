@@ -39,7 +39,12 @@ You can also save specific caches by providing their names:
 The cache is stored at BUILDKITE_AGENT_CACHE_STORE_URL (or --cache-store-url).
 The registry is selected by BUILDKITE_AGENT_CACHE_REGISTRY (or --registry); '~'
 selects the cluster's default registry. If an entry already exists at the same
-address it is not overwritten.
+address it is not overwritten unless --force is specified:
+
+    $ buildkite-agent cache save --name "node" --force
+
+Force replaces the entire cache at the same save address, without merging files
+or bypassing registry access policies. Concurrent saves are last-write-wins.
 
 Configuration File Format:
 
@@ -63,13 +68,19 @@ type CacheSaveConfig struct {
 	GlobalConfig
 	APIConfig
 	CacheConfig
+	Force bool `cli:"force"`
 }
 
 var CacheSaveCommand = cli.Command{
 	Name:        "save",
 	Usage:       "Saves files to the cache",
 	Description: cacheSaveHelpDescription,
-	Flags:       slices.Concat(globalFlags(), apiFlags(), cacheFlags()),
+	Flags: slices.Concat(globalFlags(), apiFlags(), cacheFlags(), []cli.Flag{
+		cli.BoolFlag{
+			Name:  "force",
+			Usage: "Save even when an entry already exists at the same address",
+		},
+	}),
 	Action: func(c *cli.Context) error {
 		ctx := context.Background()
 		ctx, cfg, l, _, done := setupLoggerAndConfig[CacheSaveConfig](ctx, c)
@@ -101,6 +112,7 @@ var CacheSaveCommand = cli.Command{
 			CacheConfigFile: cacheConfigFile,
 			Names:           cfg.Names,
 			Concurrency:     cfg.Concurrency,
+			Force:           cfg.Force,
 		}
 
 		// Perform cache save (logging happens inside)

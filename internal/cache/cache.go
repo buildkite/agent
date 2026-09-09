@@ -24,6 +24,7 @@ type Config struct {
 	Names []string
 	// Concurrency is the number of concurrent cache operations
 	Concurrency int
+	Force       bool
 }
 
 // cacheOps is the subset of *client used by saveWithClient and restoreWithClient.
@@ -184,7 +185,7 @@ func saveWithClient(ctx context.Context, l logger.Logger, c cacheOps, cacheIDs [
 							logger.StringField("transfer_speed", fmt.Sprintf("%.2fMB/s", result.Transfer.TransferSpeed)),
 							logger.IntField("part_count", result.Transfer.PartCount),
 							logger.IntField("concurrency", result.Transfer.Concurrency),
-						).Infof("Cache created")
+						).Infof("Cache saved")
 					default:
 						l.WithFields(
 							logger.StringField("cache_id", cacheID),
