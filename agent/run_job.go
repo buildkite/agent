@@ -212,6 +212,13 @@ func (r *JobRunner) Run(ctx context.Context, ignoreAgentInDispatches *bool) (err
 		}
 	}
 
+	if err := validateDockerBootstrapStep(r.conf); err != nil {
+		_, _ = fmt.Fprintln(r.jobLogs, err)
+		exit.Status = -1 // Same mapping as bootstrap setup failure (125).
+		exit.SignalReason = SignalReasonProcessRunError
+		return nil
+	}
+
 	// Kick off log streaming and job status checking when the process starts.
 	wg.Go(func() { r.streamJobLogsAfterProcessStart(cctx) })
 	wg.Go(func() { r.jobCancellationChecker(cctx) })
@@ -436,6 +443,12 @@ func (r *JobRunner) cleanup(ctx context.Context, wg *sync.WaitGroup, exit core.P
 	if r.jobTimeoutFilePath != "" {
 		if err := os.Remove(r.jobTimeoutFilePath); err != nil && !os.IsNotExist(err) {
 			r.agentLogger.Warnf("[JobRunner] Error cleaning up job timeout file: %s", err)
+		}
+	}
+
+	if r.dockerContextDir != "" {
+		if err := os.Remove(r.dockerContextDir); err != nil && !os.IsNotExist(err) {
+			r.agentLogger.Warnf("[JobRunner] Error cleaning up Docker job context: %s", err)
 		}
 	}
 

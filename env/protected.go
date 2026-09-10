@@ -60,6 +60,7 @@ type protection struct {
 // protected reconfigurable vars set mutableFromWithinJob here, and checkout-
 // scoped vars are added to checkoutOverrideScope below.
 var protectedEnv = map[string]protection{
+	"BUILDKITE_DOCKER_BOOTSTRAP_CONTEXT":    {},
 	"BUILDKITE_AGENT_ACCESS_TOKEN":          {},
 	"BUILDKITE_AGENT_DEBUG":                 {},
 	"BUILDKITE_AGENT_ENDPOINT":              {},

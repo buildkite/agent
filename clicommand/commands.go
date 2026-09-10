@@ -11,6 +11,7 @@ var BuildkiteAgentCommands = []*cli.Command{
 	// These commands are special. The have a different lifecycle to the others
 	AgentStartCommand,
 	BootstrapCommand,
+	DockerBootstrapCommand,
 	KubernetesBootstrapCommand,
 
 	// These are in alphabetical order
