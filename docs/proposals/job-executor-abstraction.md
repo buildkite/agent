@@ -11,8 +11,9 @@ process is launched*, and add Docker as the first non-local backend.
   local subprocess.
 - `docker`: the agent runs `buildkite-agent bootstrap` inside an ephemeral
   container on the same host.
-- `kubernetes-exec`: today's Kubernetes stack support, unchanged in behaviour
-  but expressed as one more implementation of the same interface.
+- `kubernetes`: today's Kubernetes stack support, unchanged in behaviour but
+  expressed as one more implementation of the same interface. `--kubernetes-exec`
+  remains as an alias for `executor=kubernetes`.
 
 The seam is the whole bootstrap process, not the command phase. That is what
 makes it reusable for stronger sandboxes later (Firecracker, gVisor, remote
@@ -137,20 +138,21 @@ Validate the resolved configuration (flags, env vars, and `buildkite-agent.cfg`
 combined) at agent start, then select:
 
 ```text
-executor not in {unset, exec, docker}       -> agent start fails: unknown executor
---kubernetes-exec and executor=docker        -> agent start fails: conflicting executors
---kubernetes-exec                            -> kubernetes execution (wraps kubernetes.Runner)
+--kubernetes-exec and executor unset         -> executor = kubernetes
+--kubernetes-exec and executor != kubernetes -> agent start fails: conflicting executors
+executor not in {exec, docker, kubernetes}   -> agent start fails: unknown executor
+executor=kubernetes                          -> kubernetes execution (wraps kubernetes.Runner)
 executor=docker                              -> docker execution
-otherwise                                    -> exec execution
+executor=exec (or unset)                     -> exec execution
 ```
 
-An unset `executor` means `exec`. Any other value is rejected before anything
-else is considered, so a typo such as `executor=dokcer` cannot fail open to
-running jobs on the host, with or without `--kubernetes-exec`.
-
-`--kubernetes-exec` stays a separate flag so `agent-stack-k8s` users see no
-change. Folding it into `executor=kubernetes-exec` as an alias is a later,
-optional step.
+`executor` is the single canonical value. `--kubernetes-exec` is kept so
+`agent-stack-k8s` users see no change, but it is normalised into
+`executor=kubernetes` while the configuration is resolved, the same way
+`--debug` is folded into the log level in `HandleGlobalFlags`; nothing after
+the selection step looks at the boolean. Unknown values are rejected before
+anything else is considered, so a typo such as `executor=dokcer` cannot fail
+open to running jobs on the host.
 
 ### Config surface
 
@@ -159,7 +161,7 @@ New `buildkite-agent start` settings, available as flags, env vars, and
 
 | Setting | Values | Notes |
 |---|---|---|
-| `executor` | `exec` (default), `docker` | |
+| `executor` | `exec` (default), `docker`, `kubernetes` | `--kubernetes-exec` is an alias for `kubernetes` |
 | `executor-docker-image` | image ref | required when `executor=docker` |
 | `executor-docker-arg` | repeatable | extra `docker create` flags; escape hatch |
 | `executor-docker-expose-socket` | bool, default `false` | mounts `/var/run/docker.sock`; follow-up, not MVP |
@@ -172,8 +174,8 @@ Rules:
   `--rm` (defeats `inspect`), `--restart` other than `no` (defeats "one
   ephemeral execution"), and every singleton flag the executor sets itself:
   `--name`, `--user`/`-u`, `--workdir`/`-w`, `--init`, `--tty`/`-t`, plus
-  `--env BUILDKITE_BOOTSTRAP_ENV_JSON_FILE` and mounts targeting the job
-  context directory. Match all spellings
+  `--env BUILDKITE_BOOTSTRAP_ENV_JSON_FILE`, `--env HOME`, and mounts
+  targeting the job context directory. Match all spellings
   (`--workdir=/x`, `--workdir /x`, `-w /x`). Docker's parser is last-value-wins
   for singletons, so as a second line of defence the executor's own flags are
   appended after the user's args; the reject list exists because relying on
@@ -181,7 +183,20 @@ Rules:
 - `$HOME` in the container is fixed at `/tmp/buildkite-home` for the MVP (see
   the user model below). A setting can follow if anyone needs to move it.
 - The image is an agent-pool decision. Users who need different images run
-  different queues.
+  different queues. Two reasons, one hard and one soft. Hard: the image runs
+  *all* of bootstrap (checkout, hooks, plugins), so it must contain a
+  compatible `buildkite-agent`; a step-level `image: ruby:4.0.3` cannot do
+  that as designed, and per-step images for just the command phase are what
+  the docker-buildkite-plugin already provides (they compose, see below).
+  Soft: the executor is an operator control; the container holds the job
+  token and the operator's chosen mounts, so a pipeline-chosen image would
+  need an operator allowlist. Both are relaxable later: the agent is built
+  with `CGO_ENABLED=0`, so the host's own binary could be bind-mounted
+  read-only into any same-arch Linux image and prepended to `PATH`, which is
+  how agent-stack-k8s gets the agent into user images. That would remove the
+  image version check and most of the image contract and make a per-step
+  `image:` behind an allowlist a natural follow-up. It is not in the MVP, and
+  whether it should replace the image contract is an open question.
 
 ## `exec` execution
 
@@ -219,7 +234,7 @@ Interrupt():  record "interrupt"; docker kill --signal <cancel-signal> <id> if r
 Terminate():  record "terminate";  docker kill <id> if running;
               if that fails, cancel Run's subprocess context (start + any inspect)
               so Run returns
-(every inspect/kill/rm call has its own 10 s timeout; start --attach does not)
+(create has a 60 s timeout, inspect/kill/rm 10 s each; start --attach has none)
 Cleanup():    docker rm --force --volumes <id>   (ignore "no such container")
               remove the env file
 ```
@@ -301,11 +316,14 @@ Cleanup():    docker rm --force --volumes <id>   (ignore "no such container")
   and `Run` returns an error instead of waiting on a daemon that is not
   responding; the container may be leaked at that point and `Cleanup` reports
   it if `rm --force` fails too (see Risks).
-- Every control command other than `start --attach` runs under its own short
-  timeout (10 s) in addition to `Run`'s context: the readiness-poll
-  `inspect`s, the final `inspect`, `kill`, and `rm`. Only `start --attach` is
-  unbounded, because it lives as long as the job. An `inspect` that times out
-  is an executor failure: `Run` attempts `docker kill`, then returns an error.
+- Every control command other than `start --attach` runs under its own
+  timeout in addition to `Run`'s context: `create` gets 60 s (the image is
+  already local by ID, so this covers only daemon latency), and the
+  readiness-poll `inspect`s, the final `inspect`, `kill`, and `rm` get 10 s.
+  Only `start --attach` is unbounded, because it lives as long as the job. A
+  `create` that times out is handled like a cancelled create (`rm --force`
+  by name, return an error); an `inspect` that times out is an executor
+  failure: `Run` attempts `docker kill`, then returns an error.
   Without this, a daemon that stops answering mid-poll would leave `Run`
   blocked in `inspect` where killing `start` alone would not free it.
 - Apply the same SIGKILL→SIGTERM downgrade as `exec`. A SIGKILL to bootstrap
@@ -356,10 +374,12 @@ Two environments are in play and they must not mix:
   below).
 - The **container** environment: the resolved job env slice from
   `createEnvironment` (job env plus the agent's `BUILDKITE_*` additions), with
-  the adjustments below. It deliberately excludes the host's `os.Environ()`:
-  `PATH`, `HOME`, and the like come from the image, not the host. So do proxy
-  settings: an operator whose host agent relies on `HTTP_PROXY` passes it via
-  `executor-docker-arg --env HTTP_PROXY=...`.
+  the adjustments below. It deliberately excludes the host's `os.Environ()`.
+  The rule is simple: nothing from the agent's process environment reaches
+  the container. `PATH`, `HOME`, and the like come from the image, and
+  anything an operator wants in the container beyond the job env goes via
+  `executor-docker-arg --env ...`. Proxy settings are the common example: an
+  operator whose host agent relies on `HTTP_PROXY` has to pass it explicitly.
 
 Transport the container environment through a file, not through `docker`'s
 env flags:
@@ -369,8 +389,10 @@ env flags:
   it with `O_CREATE|O_EXCL` (or `os.CreateTemp`, as `createJobEnvFiles`
   already does) so a pre-existing path or symlink is never followed. The job
   context dir is already bind-mounted, so the path is the same on both sides.
-- `docker create` passes exactly one env var:
-  `--env BUILDKITE_BOOTSTRAP_ENV_JSON_FILE=<path>`.
+- `docker create` passes two env vars with values:
+  `--env BUILDKITE_BOOTSTRAP_ENV_JSON_FILE=<path>` and
+  `--env HOME=/tmp/buildkite-home` (plus the name-only OTLP exporter
+  variables described below). Everything else goes through the file.
 - `buildkite-agent bootstrap` honours that variable. The loading has to
   happen before urfave/cli parses flags: `cli.EnvVars` sources are read
   during parsing, ahead of any `Before` hook or the `Action`, so nothing
@@ -438,7 +460,12 @@ Adjust these before writing the file:
   drops. The executor takes the path from the runner, puts it in the env
   file, and bind-mounts the log file itself read-only (below); the agent
   appends to the same inode on the host, so the container sees the live log.
-- `HOME`: set to `/tmp/buildkite-home`. See the user model below.
+- `HOME`: set to `/tmp/buildkite-home`, and *also* passed as
+  `--env HOME=/tmp/buildkite-home` on `docker create` (it is not secret). The
+  env file is only read once bootstrap starts, but the image entrypoint runs
+  first: the official image's `ssh-env-config.sh` writes under `~/.ssh`, and
+  with a non-root `--user` and the image's `HOME=/root` it would fail before
+  bootstrap ever ran. See the user model below.
 
 ### Mounts
 
@@ -538,14 +565,19 @@ them under that path via `executor-docker-arg`.
   an older image of the same major would ignore the variable and run
   bootstrap with no job configuration. `agent start` enforces this once,
   after config validation and before registering, under a single bounded
-  context (2 minutes; `docker pull` dominates): `docker pull <image>`, then
+  context (2 minutes; `docker pull` dominates): `docker version --format
+  '{{.Server.APIVersion}}'` against a stated minimum, then `docker pull <image>`, then
   `docker image inspect --format '{{.Id}}' <image>` to resolve the tag to an
   ID exactly once, then `docker run --rm --entrypoint buildkite-agent <id>
   --version` against that ID. Agent start fails on a version below the
   minimum, a non-zero exit, or timeout. The checked ID is retained and every
   `docker create` uses it rather than the tag, so a tag moving under a
   running agent, or between the check and the first job, cannot swap in an
-  unchecked image. This keeps Docker calls
+  unchecked image. The Docker minimum exists because shelling out to the CLI
+  is a soft version coupling: every flag and subcommand used here has been
+  stable since the 1.13 CLI reorganisation (2017), so the risk is low, but a
+  too-old daemon should fail at start with a clear message rather than at the
+  first job. This keeps Docker calls
   out of `New` (which would orphan work if `StartJob` failed) and out of
   `Run`'s cancellation path, and means the pull that would otherwise happen
   on the first job happens before the agent accepts one.
@@ -590,8 +622,10 @@ separate top-level executors per runtime.
    `agent/`, implement `execExecution` and wrap `kubernetes.Runner`, replace
    the branch in `NewJobRunner` with a selector, add the `Cleanup` call to
    `JobRunner.cleanup`. Both existing executions keep prepending
-   `os.Environ()` exactly as today. No config changes; existing tests pass
-   unchanged; add a selection test.
+   `os.Environ()` exactly as today. Add the `executor` setting with values
+   `exec` and `kubernetes` only, and normalise `--kubernetes-exec` into it;
+   `docker` is rejected until slice 3. Existing tests pass unchanged; add a
+   selection test.
 2. **Bootstrap env file.** `main` loads `BUILDKITE_BOOTSTRAP_ENV_JSON_FILE`
    before `app.Run`. Small, independently testable, and useful on its own for
    anyone wrapping bootstrap.
@@ -606,15 +640,15 @@ separate top-level executors per runtime.
    `no-new-privileges`, `rm --force --volumes`. Linux only; error out on other
    platforms.
 4. **Follow-ups if needed.** `executor-docker-expose-socket`,
-   `executor-docker-user`, `executor-docker-home`, `executor=kubernetes-exec`
-   alias.
+   `executor-docker-user`, `executor-docker-home`.
 
 ## Testing
 
 Slice 1:
 
-- Table test for executor selection, including rejection of unknown values
-  and of `--kubernetes-exec` combined with `executor=docker`.
+- Table test for executor selection, including rejection of unknown values,
+  `--kubernetes-exec` normalising to `executor=kubernetes`, and rejection of
+  `--kubernetes-exec` combined with `executor=docker` or `executor=exec`.
 - Parity test: `execExecution` produces the same `process.Config` as the
   current code for a fixed `JobRunnerConfig`, including the host env prepend.
 
@@ -629,8 +663,9 @@ Slice 3, with a fake `docker` binary on `PATH` that records its argv and env
 and exits with a scripted status, in the style of the existing
 `internal/job/integration` fakes:
 
-- `docker create` argv construction from `AgentConfiguration`: the single
-  `--env`, mount table, `--user`, `--group-add`, `--workdir`, `--tty` when
+- `docker create` argv construction from `AgentConfiguration`: the two
+  `--env KEY=VALUE` flags (env file path, `HOME`) and nothing else with a
+  value, mount table, `--user`, `--group-add`, `--workdir`, `--tty` when
   `run-in-pty` is on, `--init`, `--tmpfs` for `HOME`; rejection of reserved
   `executor-docker-arg` flags in every spelling (`--workdir=/x`,
   `--workdir /x`, `-w /x`); accepted user args appear before the executor's
