@@ -3,6 +3,8 @@ package cache
 import (
 	"context"
 	"errors"
+	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -12,6 +14,7 @@ import (
 	"time"
 
 	"github.com/buildkite/agent/v4/api"
+	"github.com/buildkite/agent/v4/internal/cache/configuration"
 	"github.com/buildkite/agent/v4/internal/cache/store"
 )
 
@@ -178,6 +181,70 @@ func TestMissCompleteMessage(t *testing.T) {
 	}
 	if got, want := missCompleteMessage("missing blob", false), "Cache miss (missing blob, stale entry could not be invalidated)"; got != want {
 		t.Errorf("missCompleteMessage(invalidated=false) = %q, want %q", got, want)
+	}
+}
+
+type retrieveAPI struct {
+	cacheAPI
+	retrieveFn func(context.Context) (api.CacheEntryRetrieveResp, bool, *api.Response, error)
+}
+
+func (a retrieveAPI) CacheEntryRetrieve(ctx context.Context, _ string, _ api.CacheEntryRetrieveReq) (api.CacheEntryRetrieveResp, bool, *api.Response, error) {
+	return a.retrieveFn(ctx)
+}
+
+func restoreTestClient(apiClient cacheAPI, timeout time.Duration) *client {
+	return &client{
+		api:             apiClient,
+		registry:        "~",
+		retrieveTimeout: timeout,
+		caches: []configuration.Cache{{
+			Name:        "test-cache",
+			CacheKey:    []configuration.KeyPart{{Source: configuration.SourceLiteral, Arg: "v1"}},
+			TargetPaths: []string{"cache"},
+		}},
+	}
+}
+
+func TestRestoreBoundsAllRetrieveAttemptsWithOneDeadline(t *testing.T) {
+	var attempts int
+	apiClient := retrieveAPI{retrieveFn: func(ctx context.Context) (api.CacheEntryRetrieveResp, bool, *api.Response, error) {
+		attempts++
+		<-ctx.Done()
+		return api.CacheEntryRetrieveResp{}, false, nil, ctx.Err()
+	}}
+	c := restoreTestClient(apiClient, 20*time.Millisecond)
+
+	_, err := c.Restore(t.Context(), "test-cache")
+
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("Restore error = %v, want context deadline exceeded", err)
+	}
+	if attempts != 1 {
+		t.Errorf("CacheEntryRetrieve attempts = %d, want 1", attempts)
+	}
+}
+
+func TestRestoreRetriesAQuickTransientRetrieveFailureWithinDeadline(t *testing.T) {
+	var attempts int
+	apiClient := retrieveAPI{retrieveFn: func(context.Context) (api.CacheEntryRetrieveResp, bool, *api.Response, error) {
+		attempts++
+		if attempts == 1 {
+			return api.CacheEntryRetrieveResp{}, false, &api.Response{Response: &http.Response{StatusCode: http.StatusServiceUnavailable}}, fmt.Errorf("transient failure")
+		}
+		return api.CacheEntryRetrieveResp{Message: api.CacheEntryNotFound}, false, nil, nil
+	}}
+	c := restoreTestClient(apiClient, 3*time.Second)
+
+	result, err := c.Restore(t.Context(), "test-cache")
+	if err != nil {
+		t.Fatalf("Restore error = %v, want nil", err)
+	}
+	if result.CacheRestored {
+		t.Error("Restore CacheRestored = true, want false")
+	}
+	if attempts != 2 {
+		t.Errorf("CacheEntryRetrieve attempts = %d, want 2", attempts)
 	}
 }
 

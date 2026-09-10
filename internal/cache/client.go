@@ -52,14 +52,15 @@ var (
 // bucket and the expanded, validated cache definitions used by every call.
 // Safe for concurrent use; honours context cancellation.
 type client struct {
-	api        cacheAPI
-	bucketURL  string
-	format     string
-	platform   string
-	registry   string
-	force      bool
-	caches     []configuration.Cache
-	onProgress ProgressCallback
+	api             cacheAPI
+	bucketURL       string
+	format          string
+	platform        string
+	registry        string
+	force           bool
+	caches          []configuration.Cache
+	onProgress      ProgressCallback
+	retrieveTimeout time.Duration
 }
 
 // newClient builds a client from apiClient and cfg: loads and expands the
@@ -96,13 +97,14 @@ func newClient(l logger.Logger, apiClient cacheAPI, cfg Config) (*client, []stri
 	}
 
 	c := &client{
-		api:       apiClient,
-		bucketURL: cfg.BucketURL,
-		format:    "zip",
-		platform:  fmt.Sprintf("%s/%s", runtime.GOOS, runtime.GOARCH),
-		registry:  registry,
-		force:     cfg.Force,
-		caches:    expanded,
+		api:             apiClient,
+		bucketURL:       cfg.BucketURL,
+		format:          "zip",
+		platform:        fmt.Sprintf("%s/%s", runtime.GOOS, runtime.GOARCH),
+		registry:        registry,
+		force:           cfg.Force,
+		caches:          expanded,
+		retrieveTimeout: cacheRetrieveTimeout,
 		onProgress: func(cacheID, stage, message string, _, _ int) {
 			l.WithFields(
 				logger.StringField("cache_id", cacheID),
