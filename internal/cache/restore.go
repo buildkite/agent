@@ -20,7 +20,7 @@ import (
 	"go.opentelemetry.io/otel/codes"
 )
 
-const cacheRetrieveTimeout = 15 * time.Second
+const cacheRetrieveTimeout = 60 * time.Second
 
 // Restore restores a cache from storage by ID.
 //
