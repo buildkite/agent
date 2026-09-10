@@ -20,6 +20,8 @@ import (
 	"go.opentelemetry.io/otel/codes"
 )
 
+const cacheRetrieveTimeout = 15 * time.Second
+
 // Restore restores a cache from storage by ID.
 //
 // The function performs the following workflow:
@@ -107,19 +109,26 @@ func (c *client) Restore(ctx context.Context, cacheID string) (RestoreResult, er
 		apiResp      *api.Response
 		retrieveResp api.CacheEntryRetrieveResp
 		exists       bool
+		attempts     int
 	)
 
 	// Cache restore is latency-sensitive: it runs at the start of a job and
-	// blocks forward progress, so transient failures should retry quickly
-	// After ~5 attempts (~3.4s wall-clock with this curve),
-	// treat repeated failures as a cache miss.
+	// blocks forward progress. Share one deadline across all attempts so slow
+	// requests cannot multiply the API client's per-request timeout.
+	retrieveTimeout := c.retrieveTimeout
+	if retrieveTimeout == 0 {
+		retrieveTimeout = cacheRetrieveTimeout
+	}
+	retrieveCtx, cancelRetrieve := context.WithTimeout(ctx, retrieveTimeout)
+
 	err = roko.NewRetrier(
 		roko.WithMaxAttempts(5),
 		roko.WithStrategy(roko.ExponentialSubsecond(500*time.Millisecond)),
 		roko.WithJitter(),
-	).DoWithContext(ctx, func(r *roko.Retrier) error {
+	).DoWithContext(retrieveCtx, func(r *roko.Retrier) error {
+		attempts++
 		var err error
-		retrieveResp, exists, apiResp, err = c.api.CacheEntryRetrieve(ctx, c.registry, api.CacheEntryRetrieveReq{
+		retrieveResp, exists, apiResp, err = c.api.CacheEntryRetrieve(retrieveCtx, c.registry, api.CacheEntryRetrieveReq{
 			TargetPaths: cacheConfig.TargetPaths,
 			CacheKey:    cacheKey,
 		})
@@ -132,9 +141,19 @@ func (c *client) Restore(ctx context.Context, cacheID string) (RestoreResult, er
 		}
 		return nil
 	})
+	retrieveCtxErr := retrieveCtx.Err()
+	cancelRetrieve()
+
+	span.SetAttributes(attribute.Int("cache.retrieve_attempts", attempts))
 	if err != nil {
 		span.RecordError(err)
-		span.SetStatus(codes.Error, "failed to retrieve cache")
+		if ctx.Err() != nil {
+			span.SetStatus(codes.Error, "cache retrieval canceled")
+		} else if errors.Is(retrieveCtxErr, context.DeadlineExceeded) {
+			span.SetStatus(codes.Error, "cache retrieval timed out")
+		} else {
+			span.SetStatus(codes.Error, "failed to retrieve cache")
+		}
 		return result, fmt.Errorf("failed to retrieve cache: %w", err)
 	}
 
