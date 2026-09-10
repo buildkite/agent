@@ -66,6 +66,8 @@ Example:
 
 const pingModePingOnly = "ping-only"
 
+const acquisitionFailedExitCode = 27 // chosen by fair dice roll
+
 var (
 	verificationFailureBehaviors = []string{agent.VerificationBehaviourBlock, agent.VerificationBehaviourWarn}
 
@@ -1311,6 +1313,9 @@ var AgentStartCommand = &cli.Command{
 				},
 			), nil
 		})
+		if errors.Is(err, core.ErrJobAcquisitionRejected) {
+			return cli.Exit(err, acquisitionFailedExitCode)
+		}
 		if err != nil {
 			return err
 		}
@@ -1355,7 +1360,6 @@ var AgentStartCommand = &cli.Command{
 			// If the agent tried to acquire a job, but it couldn't because the job was already taken, we should exit with a
 			// specific exit code so that the caller can know that this job can't be acquired.
 
-			const acquisitionFailedExitCode = 27 // chosen by fair dice roll
 			return cli.Exit(err, acquisitionFailedExitCode)
 
 		case errors.Is(err, core.ErrJobLocked):
