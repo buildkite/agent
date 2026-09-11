@@ -103,8 +103,7 @@ steps:
           config: .buildkite/docker-compose.yml
           cli-version: 2
           propagate-environment: true
-          # Mount the agent binary so the step can stash the xgboost plan
-          # identifier via `buildkite-agent meta-data set`. See TE-6071.
+          # bktec requests an OIDC token via the agent when no API token is set.
           mount-buildkite-agent: true
           run: agent
 
