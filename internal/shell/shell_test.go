@@ -757,6 +757,8 @@ func TestRunDoesNotReportCleanHookAsFailedWhenChildLeaksStdout(t *testing.T) {
 	sh, err := shell.New(
 		shell.WithStdout(w),
 		shell.WithLogger(shell.DiscardLogger),
+		// Shorten the post-exit I/O bound (default 30s) so the test stays fast.
+		shell.WithProcessWaitDelay(time.Second),
 	)
 	if err != nil {
 		t.Fatalf("shell.New() error = %v", err)
