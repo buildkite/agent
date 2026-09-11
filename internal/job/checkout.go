@@ -439,6 +439,7 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context, previousAttempts in
 
 	addBloblessFilter := sparse.active() &&
 		e.shell.Env.GetString("BUILDKITE_KUBERNETES_EXEC", "") != "true" &&
+		!e.usesOnHostReferenceMirror(mirrorDir) &&
 		!userSuppliedCloneFilter &&
 		!hasPartialFilterFlags(gitFetchFlags)
 	if err := e.fetchSource(ctx, addBloblessFilter, &attempt); err != nil {
