@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"maps"
@@ -22,6 +23,7 @@ import (
 	"github.com/buildkite/agent/v4/internal/experiments"
 	"github.com/buildkite/agent/v4/internal/process"
 	"github.com/buildkite/agent/v4/internal/shell"
+	"github.com/buildkite/agent/v4/internal/vmsandbox"
 	"github.com/buildkite/agent/v4/kubernetes"
 	"github.com/buildkite/agent/v4/logger"
 	"github.com/buildkite/agent/v4/metrics"
@@ -88,6 +90,12 @@ type JobRunnerConfig struct {
 	// containers in a Kubernetes pod to connect before the job is considered failed.
 	// It's useful to be configured in situations like huge container image cold download.
 	KubernetesContainerStartTimeout time.Duration
+
+	// VMSandbox, when non-nil, enables VM sandbox execution mode: the job
+	// runner boots a fresh Firecracker microVM per job and runs bootstrap
+	// inside it via `vm-guest-bootstrap`, rather than spawning a local
+	// bootstrap subprocess. Mutually exclusive with KubernetesExec.
+	VMSandbox *vmsandbox.Sandbox
 
 	// JobContextDir is the directory for files the agent uses to coordinate
 	// with the processes running the job: the job env files, the job timeout
@@ -289,7 +297,25 @@ func NewJobRunner(ctx context.Context, l logger.Logger, apiClient *api.Client, c
 	processEnv := append(os.Environ(), env...)
 
 	// The process that will run the bootstrap script
-	if conf.KubernetesExec {
+	switch {
+	case conf.VMSandbox != nil:
+		// The bootstrap runs inside a fresh microVM. The guest gets only the
+		// env computed above (not os.Environ()), rewritten to guest paths by
+		// the sandbox, and never the agent's registration token: the token
+		// in `env` is the job-scoped one only if the backend supplied it.
+		if conf.Job.Token == "" {
+			return nil, errors.New("vm sandbox mode requires a job-scoped token from the backend, but the accepted job has none; refusing to send the agent's registration token into the guest")
+		}
+		r.process = conf.VMSandbox.NewRunner(vmsandbox.RunnerConfig{
+			JobID:             conf.Job.ID,
+			Env:               env,
+			EnvFile:           r.envShellFile.Name(),
+			EnvJSONFile:       r.envJSONFile.Name(),
+			JobTimeoutFile:    r.jobTimeoutFilePath,
+			Stdout:            r.jobLogs,
+			SignalGracePeriod: conf.AgentConfiguration.CancelSignalTimeout + conf.AgentConfiguration.CancelCleanupTimeout,
+		})
+	case conf.KubernetesExec:
 		// Thank you Mario, but our bootstrap is in another container
 		containerCount, err := strconv.Atoi(os.Getenv("BUILDKITE_CONTAINER_COUNT"))
 		if err != nil {
@@ -304,7 +330,7 @@ func NewJobRunner(ctx context.Context, l logger.Logger, apiClient *api.Client, c
 			ClientStartTimeout: conf.KubernetesContainerStartTimeout,
 			ClientLostTimeout:  30 * time.Second,
 		})
-	} else { // not Kubernetes
+	default: // local subprocess
 		// The bootstrap-script gets parsed based on the operating system
 		cmd, err := shellwords.Split(conf.AgentConfiguration.BootstrapScript)
 		if err != nil {

@@ -12,6 +12,7 @@ var BuildkiteAgentCommands = []*cli.Command{
 	AgentStartCommand,
 	BootstrapCommand,
 	KubernetesBootstrapCommand,
+	VMGuestBootstrapCommand,
 
 	// These are in alphabetical order
 	AcknowledgementsCommand,

@@ -577,6 +577,7 @@ func (a *AgentWorker) RunJob(ctx context.Context, acceptResponse *api.Job, ignor
 		AgentStdout:                     a.agentStdout,
 		KubernetesExec:                  a.agentConfiguration.KubernetesExec,
 		KubernetesContainerStartTimeout: a.agentConfiguration.KubernetesContainerStartTimeout,
+		VMSandbox:                       a.agentConfiguration.VMSandbox,
 		JobContextDir:                   a.agentConfiguration.JobContextDir,
 	})
 	if err != nil {

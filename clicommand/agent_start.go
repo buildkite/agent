@@ -38,6 +38,7 @@ import (
 	"github.com/buildkite/agent/v4/internal/process"
 	"github.com/buildkite/agent/v4/internal/redact"
 	"github.com/buildkite/agent/v4/internal/shell"
+	"github.com/buildkite/agent/v4/internal/vmsandbox"
 	"github.com/buildkite/agent/v4/logger"
 	"github.com/buildkite/agent/v4/metrics"
 	"github.com/buildkite/agent/v4/status"
@@ -206,6 +207,14 @@ type AgentStartConfig struct {
 	KubernetesExec                  bool          `cli:"kubernetes-exec"`
 	KubernetesContainerStartTimeout time.Duration `cli:"kubernetes-container-start-timeout"`
 	JobContextDir                   string        `cli:"job-context-dir" normalize:"filepath"`
+	VMSandbox                       bool          `cli:"vm-sandbox"`
+	VMSandboxDir                    string        `cli:"vm-sandbox-dir" normalize:"filepath"`
+	VMSandboxVCPUs                  int           `cli:"vm-sandbox-vcpus"`
+	VMSandboxMemoryMiB              int           `cli:"vm-sandbox-memory-mib"`
+	VMSandboxTap                    string        `cli:"vm-sandbox-tap"`
+	VMSandboxDNS                    []string      `cli:"vm-sandbox-dns" normalize:"list"`
+	VMSandboxBootTimeout            time.Duration `cli:"vm-sandbox-boot-timeout"`
+	VMSandboxShutdownTimeout        time.Duration `cli:"vm-sandbox-shutdown-timeout"`
 	NoMultipartArtifactUpload       bool          `cli:"no-multipart-artifact-upload"`
 	ArtifactUploadConcurrency       int           `cli:"artifact-upload-concurrency"`
 
@@ -755,6 +764,59 @@ var AgentStartCommand = &cli.Command{
 		},
 		JobContextDirFlag,
 
+		// VM sandbox (experimental prototype)
+		&cli.BoolFlag{
+			Name: "vm-sandbox",
+			Usage: "Experimental: run each job's bootstrap inside a fresh, disposable Firecracker microVM " +
+				"instead of a local subprocess. Requires Linux with KVM and a prepared sandbox directory " +
+				"(see internal/vmsandbox/guest/README.md). Fails at startup if the sandbox is unavailable " +
+				"rather than falling back to local execution (default: false)",
+			Sources: cli.EnvVars("BUILDKITE_VM_SANDBOX"),
+		},
+		&cli.StringFlag{
+			Name:    "vm-sandbox-dir",
+			Usage:   "Directory holding the sandbox installation: bin/firecracker, images/vmlinux, images/rootfs.ext4 and per-job state",
+			Value:   "/opt/bko-sandbox",
+			Sources: cli.EnvVars("BUILDKITE_VM_SANDBOX_DIR"),
+		},
+		&cli.IntFlag{
+			Name:    "vm-sandbox-vcpus",
+			Usage:   "Number of vCPUs given to each sandbox guest",
+			Value:   2,
+			Sources: cli.EnvVars("BUILDKITE_VM_SANDBOX_VCPUS"),
+		},
+		&cli.IntFlag{
+			Name:    "vm-sandbox-memory-mib",
+			Usage:   "Memory in MiB given to each sandbox guest",
+			Value:   2048,
+			Sources: cli.EnvVars("BUILDKITE_VM_SANDBOX_MEMORY_MIB"),
+		},
+		&cli.StringFlag{
+			Name: "vm-sandbox-tap",
+			Usage: "Pre-created tap device and addressing for the guest's network, as device:host-ip/prefix-len:guest-ip " +
+				"(see internal/vmsandbox/guest/setup-network.sh)",
+			Value:   "bko-tap0:172.16.0.1/30:172.16.0.2",
+			Sources: cli.EnvVars("BUILDKITE_VM_SANDBOX_TAP"),
+		},
+		&cli.StringSliceFlag{
+			Name:    "vm-sandbox-dns",
+			Usage:   "DNS servers for the sandbox guest",
+			Value:   []string{"1.1.1.1", "8.8.8.8"},
+			Sources: cli.EnvVars("BUILDKITE_VM_SANDBOX_DNS"),
+		},
+		&cli.DurationFlag{
+			Name:    "vm-sandbox-boot-timeout",
+			Usage:   "How long to wait for a sandbox guest to boot and report ready",
+			Value:   120 * time.Second,
+			Sources: cli.EnvVars("BUILDKITE_VM_SANDBOX_BOOT_TIMEOUT"),
+		},
+		&cli.DurationFlag{
+			Name:    "vm-sandbox-shutdown-timeout",
+			Usage:   "How long to wait for a sandbox guest to power off cooperatively before killing it",
+			Value:   10 * time.Second,
+			Sources: cli.EnvVars("BUILDKITE_VM_SANDBOX_SHUTDOWN_TIMEOUT"),
+		},
+
 		// Other shared flags
 		RedactedVars,
 		StrictSingleHooksFlag,
@@ -860,6 +922,39 @@ var AgentStartCommand = &cli.Command{
 				return errors.New("unable to find executable path for bootstrap")
 			}
 			cfg.BootstrapScript = fmt.Sprintf("%s bootstrap", shellwords.Quote(exePath))
+		}
+
+		// VM sandbox mode is validated and prepared up front: if it's asked
+		// for and can't work, the agent must not start and quietly run jobs
+		// outside a sandbox.
+		var vmSandbox *vmsandbox.Sandbox
+		if cfg.VMSandbox {
+			if cfg.KubernetesExec {
+				return errors.New("--vm-sandbox and --kubernetes-exec can't be used together")
+			}
+			if cfg.Spawn != 1 || cfg.SpawnPerCPU != 0 {
+				return errors.New("--vm-sandbox requires exactly one agent per process (--spawn 1)")
+			}
+			if c.IsSet("bootstrap-script") {
+				return errors.New("--vm-sandbox runs the guest's own `buildkite-agent bootstrap`; --bootstrap-script isn't supported")
+			}
+			tap, err := vmsandbox.ParseTap(cfg.VMSandboxTap)
+			if err != nil {
+				return fmt.Errorf("--vm-sandbox-tap: %w", err)
+			}
+			vmSandbox, err = vmsandbox.New(l, vmsandbox.Config{
+				Dir:             cfg.VMSandboxDir,
+				VCPUs:           cfg.VMSandboxVCPUs,
+				MemoryMiB:       cfg.VMSandboxMemoryMiB,
+				Tap:             tap,
+				DNS:             cfg.VMSandboxDNS,
+				BootTimeout:     cfg.VMSandboxBootTimeout,
+				ShutdownTimeout: cfg.VMSandboxShutdownTimeout,
+			})
+			if err != nil {
+				return fmt.Errorf("vm sandbox unavailable: %w", err)
+			}
+			l.Infof("VM sandbox mode enabled: each job's bootstrap will run in a fresh Firecracker microVM")
 		}
 
 		isSetNoPlugins := c.IsSet("no-plugins")
@@ -1039,6 +1134,7 @@ var AgentStartCommand = &cli.Command{
 			ArtifactUploadConcurrency:       cfg.ArtifactUploadConcurrency,
 			KubernetesExec:                  cfg.KubernetesExec,
 			KubernetesContainerStartTimeout: cfg.KubernetesContainerStartTimeout,
+			VMSandbox:                       vmSandbox,
 			JobContextDir:                   cfg.JobContextDir,
 			PingMode:                        cfg.PingMode,
 

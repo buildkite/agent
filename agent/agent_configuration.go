@@ -7,6 +7,7 @@ import (
 	"github.com/buildkite/agent/v4/api"
 	"github.com/buildkite/agent/v4/env"
 	"github.com/buildkite/agent/v4/internal/job"
+	"github.com/buildkite/agent/v4/internal/vmsandbox"
 )
 
 // AgentConfiguration is the run-time configuration for an agent that
@@ -51,6 +52,7 @@ type AgentConfiguration struct {
 	RunInPty                        bool
 	KubernetesExec                  bool
 	KubernetesContainerStartTimeout time.Duration
+	VMSandbox                       *vmsandbox.Sandbox // non-nil enables VM sandbox execution mode
 	JobContextDir                   string
 
 	SigningJWKSFile  string // Where to find the key to sign pipeline uploads with (passed through to jobs, they might be uploading pipelines)

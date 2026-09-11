@@ -56,6 +56,7 @@ var commandConfigPairs = []configCommandPair{
 	{Config: StepUpdateConfig{}, Command: StepUpdateCommand},
 	{Config: ToolKeygenConfig{}, Command: ToolKeygenCommand},
 	{Config: ToolSignConfig{}, Command: ToolSignCommand},
+	{Config: VMGuestBootstrapConfig{}, Command: VMGuestBootstrapCommand},
 }
 
 func TestAllCommandConfigStructsHaveCorrespondingCLIFlags(t *testing.T) {
