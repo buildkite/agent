@@ -1,5 +1,6 @@
 module github.com/buildkite/agent/v4
 
+
 go 1.26.5
 
 require (
