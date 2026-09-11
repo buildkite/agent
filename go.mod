@@ -1,9 +1,9 @@
 module github.com/buildkite/agent/v4
 
-
 go 1.26.5
 
 require (
+	// some comment
 	cloud.google.com/go/compute/metadata v0.9.0
 	cloud.google.com/go/kms v1.33.0
 	connectrpc.com/connect v1.20.0
