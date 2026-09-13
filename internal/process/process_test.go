@@ -460,6 +460,8 @@ func TestProcessRunDoesNotHangWhenChildLeaksStdout(t *testing.T) {
 		Env:    []string{"TEST_MAIN=leak-stdout"},
 		Stdout: w,
 		Stderr: w,
+		// Shorten the post-exit I/O bound (default 30s) so the test stays fast.
+		WaitDelay: time.Second,
 	})
 
 	// Ensure the leaked grandchild is cleaned up regardless of outcome.
