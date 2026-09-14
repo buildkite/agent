@@ -36,5 +36,11 @@ rm -rf pkg
 
 ./scripts/build-binary.sh "${1}" "${2}" "${BUILDKITE_BUILD_NUMBER}"
 
+if [[ "$1" == linux && ( "$2" == amd64 || "$2" == arm64 ) ]]; then
+  CGO_ENABLED=0 GOOS=linux GOARCH="$2" go test -c \
+    -o "container-image-test-linux-$2" ./internal/containerimage
+  buildkite-agent artifact upload "container-image-test-linux-$2"
+fi
+
 echo --- :outbox_tray: Saving Go caches
 buildkite-agent cache save --name target_gocache --name acknowledgements

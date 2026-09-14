@@ -149,6 +149,9 @@ func TestAllCommandsAreTestedForConfigCompleteness(t *testing.T) {
 	}
 
 	for _, command := range allCommands {
+		if command.SkipFlagParsing {
+			continue
+		}
 		found := slices.ContainsFunc(commandConfigPairs, func(pair configCommandPair) bool {
 			return pair.Command.FullName() == command.FullName()
 		})

@@ -77,6 +77,26 @@ test_tini_old_path() {
   docker run --rm --platform "$platform" --entrypoint sh "$image_tag" -c '[ -x /sbin/tini ]'
 }
 
+test_registration_token() (
+  echo "--- Testing $image_tag registration token handoff"
+  case "$expected_platform_uname" in
+    x86_64) arch=amd64 ;;
+    aarch64) arch=arm64 ;;
+    *) exit 1 ;;
+  esac
+  export BUILDKITE_TEST_CONTAINER_IMAGE="$image_tag"
+  export BUILDKITE_TEST_CONTAINER_ARCH="$arch"
+  if [[ "${BUILDKITE:-}" == true ]]; then
+    dir=$(mktemp -d)
+    trap 'rm -rf "$dir"' EXIT
+    buildkite-agent artifact download "container-image-test-linux-$arch" "$dir"
+    chmod +x "$dir/container-image-test-linux-$arch"
+    "$dir/container-image-test-linux-$arch" -test.v -test.run '^TestContainerRegistrationToken$'
+  else
+    go test -v ./internal/containerimage -run '^TestContainerRegistrationToken$' -count=1
+  fi
+)
+
 
 # Test Cases
 
@@ -85,6 +105,7 @@ test_platform
 case $variant in
   alpine | alpine-k8s | ubuntu-*)
     test_buildkite_agent
+    test_registration_token
     test_docker_socket
     test_docker_compose
     test_docker_compose_v2

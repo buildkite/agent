@@ -1,11 +1,15 @@
 package clicommand
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
+
+	"github.com/urfave/cli/v3"
 )
 
 // The agent registration token is a long-lived secret, so we try to avoid
@@ -81,43 +85,132 @@ func resolveRegistrationToken(token string) (string, error) {
 // If the flag appears multiple times, the last value wins, matching flag
 // parsing behaviour.
 func registrationTokenFromArgs(args []string) (token string, found bool) {
-	for i := 0; i < len(args); i++ {
-		switch arg := args[i]; {
-		case arg == "-token" || arg == "--token":
-			if i+1 < len(args) {
-				token, found = args[i+1], true
-				i++
-			}
-		case strings.HasPrefix(arg, "-token="):
-			token, found = strings.TrimPrefix(arg, "-token="), true
-		case strings.HasPrefix(arg, "--token="):
-			token, found = strings.TrimPrefix(arg, "--token="), true
-		}
+	if len(args) == 0 {
+		return "", false
 	}
-	return token, found
+	return parseRegistrationTokenArgs(args[1:]).token()
 }
 
 // replaceTokenInArgs returns a copy of args with the value of every
 // registration token flag replaced with the given replacement.
 func replaceTokenInArgs(args []string, replacement string) []string {
-	out := make([]string, 0, len(args))
-	for i := 0; i < len(args); i++ {
-		switch arg := args[i]; {
-		case arg == "-token" || arg == "--token":
-			out = append(out, arg)
-			if i+1 < len(args) {
-				out = append(out, replacement)
-				i++
-			}
-		case strings.HasPrefix(arg, "-token="):
-			out = append(out, "-token="+replacement)
-		case strings.HasPrefix(arg, "--token="):
-			out = append(out, "--token="+replacement)
-		default:
-			out = append(out, arg)
-		}
+	if len(args) == 0 {
+		return slices.Clone(args)
+	}
+	return append([]string{args[0]}, parseRegistrationTokenArgs(args[1:]).replace(args[1:], replacement)...)
+}
+
+var registrationStartFlags []cli.Flag
+
+func init() {
+	registrationStartFlags = append(slices.Clone(AgentStartCommand.Flags), cli.HelpFlag)
+}
+
+type registrationArgumentFlag struct {
+	cli.Flag
+	takesValue bool
+	record     func(string, string, bool)
+}
+
+func (f *registrationArgumentFlag) IsBoolFlag() bool { return !f.takesValue }
+
+func (f *registrationArgumentFlag) Set(name, value string) error {
+	if err := f.Flag.Set(name, value); err != nil {
+		return err
+	}
+	f.record(name, value, f.takesValue)
+	return nil
+}
+
+type registrationTokenOption struct {
+	index  int
+	prefix string
+	value  string
+}
+
+type registrationTokenArgs struct {
+	start   bool
+	help    bool
+	options []registrationTokenOption
+}
+
+func (a registrationTokenArgs) token() (string, bool) {
+	if len(a.options) == 0 {
+		return "", false
+	}
+	return a.options[len(a.options)-1].value, true
+}
+
+func (a registrationTokenArgs) replace(args []string, replacement string) []string {
+	out := slices.Clone(args)
+	for _, option := range a.options {
+		out[option.index] = option.prefix + replacement
 	}
 	return out
+}
+
+func parseRegistrationTokenArgs(args []string) registrationTokenArgs {
+	start := -1
+	root := &cli.Command{
+		Name: "buildkite-agent", Version: "internal", Writer: io.Discard, ErrWriter: io.Discard,
+		Action: func(context.Context, *cli.Command) error { return nil },
+		Commands: []*cli.Command{{
+			Name: "start", SkipFlagParsing: true,
+			Action: func(_ context.Context, c *cli.Command) error {
+				start = len(args) - c.Args().Len() - 1
+				return nil
+			},
+		}},
+	}
+	if err := root.Run(context.Background(), append([]string{"buildkite-agent"}, args...)); err != nil || start < 0 {
+		return registrationTokenArgs{}
+	}
+	parsed := registrationTokenArgs{}
+	cursor := start + 1
+	record := func(name, value string, takesValue bool) {
+		for cursor < len(args) {
+			index := cursor
+			cursor++
+			arg := strings.TrimSpace(args[index])
+			flagName, _, equal := strings.Cut(strings.TrimLeft(arg, "-"), "=")
+			if !strings.HasPrefix(arg, "-") || flagName != name {
+				continue
+			}
+			prefix := ""
+			if takesValue {
+				if equal {
+					prefix = args[index][:strings.Index(args[index], "=")+1]
+				} else {
+					index = cursor
+					cursor++
+				}
+			}
+			if name == "token" {
+				parsed.options = append(parsed.options, registrationTokenOption{index: index, prefix: prefix, value: value})
+			}
+			return
+		}
+	}
+	command := &cli.Command{
+		Name: "start", HideVersion: true, Writer: io.Discard, ErrWriter: io.Discard,
+		Action: func(context.Context, *cli.Command) error {
+			parsed.start = true
+			return nil
+		},
+	}
+	for _, definition := range registrationStartFlags {
+		names := definition.Names()
+		takesValue := definition.(interface{ TakesValue() bool }).TakesValue()
+		var flag cli.Flag = &cli.StringFlag{Name: names[0], Aliases: names[1:]}
+		if !takesValue {
+			flag = &cli.BoolFlag{Name: names[0], Aliases: names[1:]}
+		}
+		command.Flags = append(command.Flags, &registrationArgumentFlag{Flag: flag, takesValue: takesValue, record: record})
+	}
+	_ = command.Run(context.Background(), args[start:])
+	parsed.help = command.Bool("help")
+	parsed.start = parsed.start || parsed.help
+	return parsed
 }
 
 // scrubTokenFromEnviron returns a copy of environ (in "KEY=value" form) with

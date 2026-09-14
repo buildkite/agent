@@ -48,6 +48,7 @@ func reexecToScrubRegistrationToken() error {
 	}
 
 	args := os.Args
+	environ := scrubTokenFromEnviron(os.Environ())
 	var tokenPipe *os.File
 
 	if secret != "" {
@@ -77,7 +78,7 @@ func reexecToScrubRegistrationToken() error {
 		if argFound {
 			args = replaceTokenInArgs(args, ref)
 		} else {
-			args = append(append([]string{}, args...), "--token", ref)
+			environ = append(environ, registrationTokenEnvVar+"="+ref)
 		}
 	}
 
@@ -86,7 +87,7 @@ func reexecToScrubRegistrationToken() error {
 		return fmt.Errorf("finding executable: %w", err)
 	}
 
-	err = syscall.Exec(exe, args, scrubTokenFromEnviron(os.Environ()))
+	err = syscall.Exec(exe, args, environ)
 	if err != nil {
 		// This block will always execute, because syscall.Exec doesn't return if there's no error
 		tokenPipe.Close() //nolint:errcheck // best-effort cleanup

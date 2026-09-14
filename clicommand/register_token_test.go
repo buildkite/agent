@@ -3,6 +3,7 @@ package clicommand
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"testing"
 
@@ -156,6 +157,75 @@ func TestScrubTokenFromEnviron(t *testing.T) {
 	}
 	if diff := cmp.Diff(scrubTokenFromEnviron(environ), want); diff != "" {
 		t.Errorf("scrubTokenFromEnviron diff (-got +want):\n%s", diff)
+	}
+}
+
+func TestRegistrationTokenArgumentInterpretation(t *testing.T) {
+	for _, test := range []struct {
+		name   string
+		args   []string
+		start  bool
+		help   bool
+		values []string
+		want   []string
+	}{
+		{"root help false", []string{"--help=false", "start", "--token=secret"}, true, false, []string{"secret"}, []string{"--help=false", "start", "--token=REPLACED"}},
+		{"root terminator", []string{"--", "start", "--token", "secret"}, true, false, []string{"secret"}, []string{"--", "start", "--token", "REPLACED"}},
+		{"terminator", []string{"start", "--token=file:///managed-token", "--", "--token=fd://99"}, true, false, []string{"file:///managed-token"}, []string{"start", "--token=REPLACED", "--", "--token=fd://99"}},
+		{"flag value", []string{"start", "--token=first", "--name", "--token=fd://99", "--token", "last"}, true, false, []string{"first", "last"}, []string{"start", "--token=REPLACED", "--name", "--token=fd://99", "--token", "REPLACED"}},
+		{"token name as value", []string{"start", "--name", "--token", "fd://99", "--token=secret"}, true, false, []string{"secret"}, []string{"start", "--name", "--token", "fd://99", "--token=REPLACED"}},
+		{"positional then flag", []string{"start", "positional", "--token=secret"}, true, false, []string{"secret"}, []string{"start", "positional", "--token=REPLACED"}},
+		{"help", []string{"start", "--help", "--token=fd://99"}, true, true, []string{"fd://99"}, nil},
+		{"empty help", []string{"start", "--help="}, true, true, nil, nil},
+		{"help false", []string{"start", "--help=false"}, true, false, nil, nil},
+		{"help alias false", []string{"start", "--help", "-h=0"}, true, false, nil, nil},
+		{"help alias true", []string{"start", "--help=false", "-h=1"}, true, true, nil, nil},
+		{"help as value", []string{"start", "--name", "--help", "--token=secret"}, true, false, []string{"secret"}, []string{"start", "--name", "--help", "--token=REPLACED"}},
+		{"help after terminator", []string{"start", "--", "--help"}, true, false, nil, nil},
+		{"root help", []string{"--help", "start", "--token=fd://99"}, false, false, nil, nil},
+		{"root version false", []string{"--version=false", "start"}, false, false, nil, nil},
+		{"other command", []string{"bootstrap", "start", "--token=secret"}, false, false, nil, nil},
+		{"help command", []string{"start", "help", "--token=fd://99"}, false, false, nil, nil},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			parsed := parseRegistrationTokenArgs(test.args)
+			if parsed.start != test.start || parsed.help != test.help {
+				t.Fatalf("start/help = %t/%t, want %t/%t", parsed.start, parsed.help, test.start, test.help)
+			}
+			var values []string
+			for _, option := range parsed.options {
+				values = append(values, option.value)
+			}
+			if !slices.Equal(values, test.values) {
+				t.Fatalf("token inventory = %q, want %q", values, test.values)
+			}
+			if test.want != nil {
+				if diff := cmp.Diff(test.want, parsed.replace(test.args, "REPLACED")); diff != "" {
+					t.Fatalf("replacement (-want +got):\n%s", diff)
+				}
+			}
+		})
+	}
+}
+
+func TestRegistrationTokenIgnoresOtherFlagValues(t *testing.T) {
+	for _, definition := range registrationStartFlags {
+		if !definition.(interface{ TakesValue() bool }).TakesValue() || slices.Contains(definition.Names(), "token") {
+			continue
+		}
+		for _, name := range definition.Names() {
+			t.Run(name, func(t *testing.T) {
+				args := []string{"start", "--" + name, "--token=fd://99", "--token", "secret"}
+				parsed := parseRegistrationTokenArgs(args)
+				if !parsed.start || parsed.help || len(parsed.options) != 1 || parsed.options[0].value != "secret" {
+					t.Fatalf("unexpected interpretation: %+v", parsed)
+				}
+				want := []string{"start", "--" + name, "--token=fd://99", "--token", "REPLACED"}
+				if diff := cmp.Diff(want, parsed.replace(args, "REPLACED")); diff != "" {
+					t.Fatalf("replacement (-want +got):\n%s", diff)
+				}
+			})
+		}
 	}
 }
 
