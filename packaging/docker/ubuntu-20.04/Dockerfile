@@ -13,6 +13,7 @@ RUN mkdir -p /buildkite/builds /buildkite/hooks /buildkite/plugins \
 
 COPY ./buildkite-agent.cfg /buildkite/buildkite-agent.cfg
 COPY ./buildkite-agent-$TARGETOS-$TARGETARCH /usr/local/bin/buildkite-agent
+COPY ./buildkite-container-launch-$TARGETOS-$TARGETARCH /usr/local/bin/buildkite-container-launch
 COPY ./entrypoint.sh /usr/local/bin/buildkite-agent-entrypoint
 
 VOLUME /buildkite

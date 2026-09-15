@@ -5,7 +5,6 @@ set -Eeufo pipefail
 ## This script can be run locally like this:
 ##
 ## .buildkite/steps/build-docker-image.sh (alpine|alpine-k8s|ubuntu-20.04|ubuntu-22.04|ubuntu-24.04|ubuntu-26.04|sidecar) (image tag) (codename) (version)
-## e.g: .buildkite/steps/build-docker-image.sh alpine buildkiteci/agent:lox-manual-build stable 3.1.1
 ##
 ## You can then publish that image with
 ##
@@ -23,6 +22,11 @@ push="${PUSH_IMAGE:-true}"
 
 if [[ ! "$variant" =~ ^(alpine|alpine-k8s|ubuntu-20\.04|ubuntu-22\.04|ubuntu-24\.04|ubuntu-26\.04|sidecar)$ ]]; then
   echo "Unknown docker variant $variant"
+  exit 1
+fi
+
+if [[ "$variant" != sidecar && -n "$version" ]]; then
+  printf '%s\n' 'Downloaded-version builds are unsupported for agent images: the agent, environment handoff, and argv helper require matching source. Use paired artifacts from the same CI build without a version argument.' >&2
   exit 1
 fi
 
@@ -48,6 +52,12 @@ for arch in amd64 arm64; do
       "https://download.buildkite.com/agent/${codename}/${version}/buildkite-agent-linux-$arch"
   fi
   chmod +x "pkg/buildkite-agent-linux-$arch"
+  if [[ "$variant" != sidecar ]]; then
+    helper="buildkite-container-launch-linux-$arch"
+    buildkite-agent artifact download "tmp/$helper" .
+    cp "tmp/$helper" "$packaging_dir/$helper"
+    chmod +x "$packaging_dir/$helper"
+  fi
 done
 
 if [[ -z "$image_tag" ]]; then

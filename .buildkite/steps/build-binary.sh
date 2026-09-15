@@ -38,6 +38,7 @@ rm -rf pkg
 
 if [[ "$1" == linux && ( "$2" == amd64 || "$2" == arm64 ) ]]; then
   mkdir -p tmp
+  bash ./scripts/build-container-launch.sh "$2" "tmp/buildkite-container-launch-linux-$2"
   GOOS=linux GOARCH="$2" CGO_ENABLED=0 go test -c -o "tmp/containerimage-test-linux-$2" ./internal/containerimage
 fi
 

@@ -5,6 +5,7 @@ package containerimage
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"net"
 	"net/http"
@@ -13,6 +14,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -20,6 +22,7 @@ import (
 const (
 	envSecret      = "dummy-container-environment-secret"
 	overrideSecret = "dummy-container-override-secret"
+	firstSecret    = "dummy-container-first-secret"
 )
 
 func TestEntrypointsMatch(t *testing.T) {
@@ -74,7 +77,7 @@ func TestContainerEnvironment(t *testing.T) {
 	script := `#!/bin/sh
 set -eu
 if [ "$TOKEN_CASE" = startup-failure ]; then exit 42; fi
-if [ "$TOKEN_CASE" = generated-file ]; then printf '%s' dummy-container-override-secret > /tmp/managed-token; fi
+if [ "$TOKEN_CASE" = generated-file ]; then /fixture -test.run '^TestContainerManagedFile$'; fi
 buildkite-agent --version
 /fixture -test.run '^TestContainerFixture$' &
 while [ ! -f /tmp/listening ]; do sleep 0.05; done
@@ -82,7 +85,7 @@ while [ ! -f /tmp/listening ]; do sleep 0.05; done
 	if err := os.WriteFile(filepath.Join(startup, "fixture"), []byte(script), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	for _, name := range []string{"environment", "override", "file", "fd", "env-fd", "generated-file", "boundary", "oversized", "unicode-oversized", "empty", "bad-fd", "missing-file", "startup-failure", "rejected", "help", "help-bad-fd", "root-help", "version", "unknown", "invalid", "bootstrap"} {
+	for _, name := range []string{"environment", "override", "file", "fd", "env-fd", "generated-file", "boundary", "oversized", "unicode-oversized", "empty", "bad-fd", "missing-file", "startup-failure", "rejected", "help", "help-bad-fd", "root-help", "version", "unknown", "invalid", "bootstrap", "space", "equals", "duplicates", "overridden-fd", "overridden-arg-fd", "root-help-false", "root-terminator", "root-version-false", "root-aliases", "root-version-alias", "root-help-overridden", "start-help-false", "file-terminator", "plain-terminator", "token-like-value", "help-like-value", "help-pending", "shared-env-fd", "overridden-shared-env-fd", "error-pending", "int-error-pending", "cli-oversized", "fd-oversized"} {
 		t.Run(name, func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(t.Context(), 40*time.Second)
 			defer cancel()
@@ -101,7 +104,7 @@ while [ ! -f /tmp/listening ]; do sleep 0.05; done
 				"-e", "SSH_CONFIG=Host example.invalid", "-e", "BUILDKITE_AGENT_ENDPOINT=http://127.0.0.1:18080",
 				"-e", "BUILDKITE_AGENT_PING_MODE=poll-only", "-e", "BUILDKITE_AGENT_NO_HTTP2=true",
 			}
-			for key, target := range map[string]string{"BINARY": "buildkite-agent", "ENTRYPOINT": "buildkite-agent-entrypoint"} {
+			for key, target := range map[string]string{"BINARY": "buildkite-agent", "ENTRYPOINT": "buildkite-agent-entrypoint", "HELPER": "buildkite-container-launch"} {
 				if source := os.Getenv("BUILDKITE_TEST_CONTAINER_" + key); source != "" {
 					source, err = filepath.EvalSymlinks(source)
 					if err != nil {
@@ -113,22 +116,66 @@ while [ ! -f /tmp/listening ]; do sleep 0.05; done
 			command := []string{"start", "--name=container-test", "--no-color"}
 			success, zero := true, true
 			switch name {
+			case "space":
+				command = append(command, "--token", overrideSecret)
+			case "equals":
+				command = append(command, "--token="+overrideSecret)
+			case "duplicates":
+				command = append(command, "--token="+firstSecret, "-token="+overrideSecret)
+			case "root-help-false", "root-terminator", "root-aliases", "root-help-overridden":
+				prefix := map[string][]string{"root-help-false": {"--help=false"}, "root-terminator": {"--"}, "root-aliases": {"-h=false"}, "root-help-overridden": {"--help=true", "-h=false"}}[name]
+				command = append(prefix, append(command, "--token="+overrideSecret)...)
+			case "root-version-false", "root-version-alias":
+				command = append([]string{map[string]string{"root-version-false": "--version=false", "root-version-alias": "-v=false"}[name]}, command...)
+				success = false
+			case "start-help-false":
+				command = append(command, "--token="+overrideSecret, "--help=true", "-h=false")
+			case "plain-terminator":
+				command = append(command, "--token="+overrideSecret, "--", "--token=fd://99")
+			case "help-like-value":
+				command = append(command, "--token="+overrideSecret, "--name", "--help")
+			case "token-like-value":
+				args = append(args, "--entrypoint=/bin/bash")
+				command = append(command, "--token="+overrideSecret, "--name", "--token=fd://9")
+				command = append([]string{"-c", "printf ordinary-descriptor > /tmp/ordinary; exec 9</tmp/ordinary; rm /tmp/ordinary; exec /usr/local/bin/buildkite-agent-entrypoint \"$@\"", "input"}, command...)
+			case "shared-env-fd", "overridden-shared-env-fd":
+				args = append(args, "--entrypoint=/bin/bash")
+				command = append(command, "--token=fd://9")
+				if name == "overridden-shared-env-fd" {
+					command = append(command, "--token="+overrideSecret)
+				}
+				setup := "exec 9< <(printf '%s' \"$BUILDKITE_AGENT_TOKEN\"); wait $!; export BUILDKITE_AGENT_TOKEN=fd://9 BUILDKITE_AGENT_CONTAINER_TOKEN_FD=9; exec /usr/local/bin/buildkite-agent-entrypoint \"$@\""
+				command = append([]string{"-c", setup, "input"}, command...)
+			case "help-pending", "error-pending", "int-error-pending", "fd-oversized":
+				args = append(args, "--entrypoint=/fixture")
+				command = []string{"-test.run", "^TestContainerPendingToken$"}
+				success, zero = false, name == "help-pending"
+			case "cli-oversized":
+				command = append(command, "--token="+overrideSecret+strings.Repeat("x", 4097))
+				success, zero = false, false
 			case "bootstrap":
 				command = []string{"bootstrap", "--phases=command", "--job=example", "--build-path=/tmp/builds", "--repository=.", "--commit=HEAD", "--branch=main", "--pipeline-provider=custom", "--agent=test", "--organization=test", "--pipeline=test", "--command=/fixture -test.run '^TestBootstrapEnvironment$'"}
 				success = false
 			case "override":
 				command = append(command, "--token="+overrideSecret)
-			case "file", "fd", "env-fd":
+			case "file", "file-terminator", "fd", "env-fd", "overridden-fd", "overridden-arg-fd":
 				args = append(args, "--entrypoint=/bin/bash")
 				setup := "printf '%s' " + overrideSecret + " > /tmp/managed-token; "
-				if name == "file" {
-					command = append(command, "--token=file:///tmp/managed-token")
+				if name == "file" || name == "file-terminator" {
+					command = append(command, "--token="+firstSecret, "--token=file:///tmp/managed-token")
+					if name == "file-terminator" {
+						command = append(command, "--", "--token=fd://99")
+					}
 				} else {
-					setup = "exec 9< <(printf '%s' " + overrideSecret + "); wait $!; "
+					setup += "exec 9</tmp/managed-token; rm /tmp/managed-token; "
 					if name == "env-fd" {
+						setup = "exec 9< <(printf '%s' " + overrideSecret + "); wait $!; "
 						setup += "export BUILDKITE_AGENT_TOKEN=fd://9; "
 					} else {
 						command = append(command, "--token=fd://9")
+						if name == "overridden-fd" || name == "overridden-arg-fd" {
+							command = append(command, "--token="+firstSecret, "--token="+overrideSecret)
+						}
 					}
 				}
 				command = append([]string{"-c", setup + "exec /usr/local/bin/buildkite-agent-entrypoint \"$@\"", "input"}, command...)
@@ -146,12 +193,13 @@ while [ ! -f /tmp/listening ]; do sleep 0.05; done
 				success, zero = name == "boundary", name == "boundary"
 			case "empty", "bad-fd", "missing-file", "invalid":
 				flag := map[string]string{"empty": "--token=", "bad-fd": "--token=fd://99", "missing-file": "--token=file:///missing", "invalid": "--not-an-agent-flag"}[name]
+				command = append(command, "--token="+firstSecret)
 				command = append(command, flag)
 				success, zero = false, false
 			case "startup-failure", "rejected":
 				success, zero = false, false
 			case "help", "help-bad-fd":
-				command = []string{"start", "--help"}
+				command = []string{"start", "--token=" + firstSecret, "--help"}
 				if name == "help-bad-fd" {
 					command = append(command, "--token=fd://99")
 				}
@@ -214,13 +262,22 @@ func TestBootstrapEnvironment(t *testing.T) {
 	fmt.Println("fixture: bootstrap checked")
 }
 
+func TestContainerManagedFile(t *testing.T) {
+	if os.Getenv("TOKEN_CASE") != "generated-file" {
+		t.Skip("container-only fixture")
+	}
+	if err := os.WriteFile("/tmp/managed-token", []byte(overrideSecret), 0o600); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestContainerFixture(t *testing.T) {
 	name := os.Getenv("TOKEN_CASE")
 	if name == "" {
 		t.Skip("container-only fixture")
 	}
 	want := envSecret
-	if name == "override" || name == "file" || name == "fd" || name == "env-fd" || name == "generated-file" {
+	if name != "environment" && name != "boundary" && name != "rejected" && name != "shared-env-fd" {
 		want = overrideSecret
 	}
 	if name == "boundary" {
@@ -245,13 +302,26 @@ func TestContainerFixture(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		switch r.URL.Path {
 		case "/register":
+			if name == "token-like-value" || name == "help-like-value" {
+				var body struct{ Name string }
+				if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+					fatal(err)
+				}
+				wantName := "--token=fd://9"
+				if name == "help-like-value" {
+					wantName = "--help"
+				}
+				if body.Name != wantName {
+					fatal("non-token flag value changed")
+				}
+			}
 			if r.Header.Get("Authorization") != "Token "+want {
 				fatal("registration precedence mismatch")
 			}
+			if err := inspectEnvironment(true, name); err != nil {
+				fatal(err)
+			}
 			if name == "rejected" {
-				if err := inspectEnvironment(true, name); err != nil {
-					fatal(err)
-				}
 				fmt.Println("fixture: rejected cleanly")
 				w.WriteHeader(http.StatusUnauthorized)
 				return
@@ -291,16 +361,16 @@ func inspectEnvironment(ready bool, name string) error {
 		if err != nil || !bytes.Contains(ssh, []byte("Host example.invalid")) {
 			return fmt.Errorf("SSH setup did not run: %v", err)
 		}
-		if name == "file" || name == "generated-file" {
+		if name == "file" || name == "file-terminator" || name == "generated-file" {
 			b, err := os.ReadFile("/tmp/managed-token")
 			if err != nil || string(b) != overrideSecret {
 				return fmt.Errorf("operator token file changed: %v", err)
 			}
 		}
-		if name == "override" {
-			b, err := os.ReadFile("/proc/1/cmdline")
-			if err != nil || !bytes.Contains(b, []byte("--token="+overrideSecret)) {
-				return fmt.Errorf("raw CLI token unexpectedly changed: %v", err)
+		if name == "token-like-value" {
+			b, err := os.ReadFile("/proc/1/fd/9")
+			if err != nil || string(b) != "ordinary-descriptor" {
+				return fmt.Errorf("unrelated descriptor changed: %v", err)
 			}
 		}
 	}
@@ -311,8 +381,8 @@ func inspectEnvironment(ready bool, name string) error {
 			if os.IsNotExist(err) {
 				continue
 			}
-			if err != nil || bytes.Contains(b, []byte(envSecret)) {
-				return fmt.Errorf("environment token exposed in %s/%s: %v", process, field, err)
+			if err != nil || bytes.Contains(b, []byte(envSecret)) || bytes.Contains(b, []byte(overrideSecret)) || bytes.Contains(b, []byte(firstSecret)) {
+				return fmt.Errorf("registration token exposed in %s/%s: %v", process, field, err)
 			}
 		}
 		fds, _ := filepath.Glob(process + "/fd/*")
@@ -327,8 +397,8 @@ func inspectEnvironment(ready bool, name string) error {
 				if err != nil && !os.IsNotExist(err) {
 					return err
 				}
-				if bytes.Contains(b, []byte(envSecret)) {
-					return fmt.Errorf("environment token recoverable in %s", fd)
+				if bytes.Contains(b, []byte(envSecret)) || bytes.Contains(b, []byte(overrideSecret)) || bytes.Contains(b, []byte(firstSecret)) {
+					return fmt.Errorf("registration token recoverable in %s", fd)
 				}
 			}
 		}
@@ -337,4 +407,32 @@ func inspectEnvironment(ready bool, name string) error {
 		return inspectHandoff()
 	}
 	return nil
+}
+
+func TestContainerPendingToken(t *testing.T) {
+	name := os.Getenv("TOKEN_CASE")
+	if name != "help-pending" && name != "error-pending" && name != "int-error-pending" && name != "fd-oversized" {
+		t.Skip("container-only fixture")
+	}
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = r.Close() }()
+	defer func() { _ = w.Close() }()
+	if name == "fd-oversized" {
+		if _, err := w.WriteString(strings.Repeat("x", 4097)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, file := range []*os.File{r, w} {
+		if _, _, err := syscall.Syscall(syscall.SYS_FCNTL, file.Fd(), syscall.F_SETFD, 0); err != 0 {
+			t.Fatal(err)
+		}
+	}
+	entrypoint := "/usr/local/bin/buildkite-agent-entrypoint"
+	flag := map[string]string{"help-pending": "--help", "error-pending": "--unknown", "int-error-pending": "--spawn=invalid", "fd-oversized": "--no-color"}[name]
+	if err := syscall.Exec(entrypoint, []string{entrypoint, "start", fmt.Sprintf("--token=fd://%d", r.Fd()), flag}, os.Environ()); err != nil {
+		t.Fatal(err)
+	}
 }

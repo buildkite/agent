@@ -15,6 +15,12 @@ case "${BUILDKITE_AGENT_TOKEN:-}" in
     ;;
 esac
 
+if [[ "${1:-}" == --buildkite-container-argv-ready ]]; then
+  shift
+else
+  exec /usr/local/bin/buildkite-container-launch "$@"
+fi
+
 DIR=/docker-entrypoint.d
 
 if [[ -d "$DIR" ]] ; then

@@ -4,8 +4,12 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
+
+	"github.com/buildkite/agent/v4/internal/registrationtoken"
+	"github.com/urfave/cli/v3"
 )
 
 // The agent registration token is a long-lived secret, so we try to avoid
@@ -29,6 +33,12 @@ import (
 const registrationTokenEnvVar = "BUILDKITE_AGENT_TOKEN"
 
 var containerTokenRef, containerTokenValue string
+
+var registrationStartFlags []cli.Flag
+
+func init() {
+	registrationStartFlags = append(slices.Clone(AgentStartCommand.Flags), cli.HelpFlag)
+}
 
 func ConsumeContainerToken() error {
 	const key = "BUILDKITE_AGENT_CONTAINER_TOKEN_FD"
@@ -104,43 +114,20 @@ func resolveRegistrationToken(token string) (string, error) {
 // If the flag appears multiple times, the last value wins, matching flag
 // parsing behaviour.
 func registrationTokenFromArgs(args []string) (token string, found bool) {
-	for i := 0; i < len(args); i++ {
-		switch arg := args[i]; {
-		case arg == "-token" || arg == "--token":
-			if i+1 < len(args) {
-				token, found = args[i+1], true
-				i++
-			}
-		case strings.HasPrefix(arg, "-token="):
-			token, found = strings.TrimPrefix(arg, "-token="), true
-		case strings.HasPrefix(arg, "--token="):
-			token, found = strings.TrimPrefix(arg, "--token="), true
-		}
+	if len(args) == 0 {
+		return "", false
 	}
-	return token, found
+	return registrationtoken.ParseArgs(args[1:], registrationStartFlags).Token()
 }
 
 // replaceTokenInArgs returns a copy of args with the value of every
 // registration token flag replaced with the given replacement.
 func replaceTokenInArgs(args []string, replacement string) []string {
-	out := make([]string, 0, len(args))
-	for i := 0; i < len(args); i++ {
-		switch arg := args[i]; {
-		case arg == "-token" || arg == "--token":
-			out = append(out, arg)
-			if i+1 < len(args) {
-				out = append(out, replacement)
-				i++
-			}
-		case strings.HasPrefix(arg, "-token="):
-			out = append(out, "-token="+replacement)
-		case strings.HasPrefix(arg, "--token="):
-			out = append(out, "--token="+replacement)
-		default:
-			out = append(out, arg)
-		}
+	if len(args) == 0 {
+		return slices.Clone(args)
 	}
-	return out
+	parsed := registrationtoken.ParseArgs(args[1:], registrationStartFlags)
+	return append([]string{args[0]}, parsed.Replace(args[1:], replacement)...)
 }
 
 // scrubTokenFromEnviron returns a copy of environ (in "KEY=value" form) with

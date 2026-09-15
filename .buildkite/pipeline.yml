@@ -345,6 +345,7 @@ steps:
         artifact_paths:
           - "pkg/*"
           - "tmp/containerimage-test-*"
+          - "tmp/buildkite-container-launch-*"
         plugins:
           - *assume_cache_role
           - docker-compose#v4.14.0:

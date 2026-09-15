@@ -7,6 +7,7 @@ import (
 	"os"
 	"syscall"
 
+	"github.com/buildkite/agent/v4/internal/registrationtoken"
 	"golang.org/x/sys/unix"
 )
 
@@ -29,9 +30,15 @@ func reexecToScrubRegistrationToken() error {
 	envToken := os.Getenv(registrationTokenEnvVar)
 
 	argPlain := argFound && argToken != "" && !isIndirectToken(argToken)
+	argvPlain := false
+	if len(os.Args) > 0 {
+		for _, option := range registrationtoken.ParseArgs(os.Args[1:], registrationStartFlags).Options {
+			argvPlain = argvPlain || (option.Value != "" && !isIndirectToken(option.Value))
+		}
+	}
 	envPlain := envToken != "" && !isIndirectToken(envToken)
 
-	if !argPlain && !envPlain {
+	if !argvPlain && !envPlain {
 		// Nothing secret in the command line or environment.
 		return nil
 	}
@@ -48,6 +55,10 @@ func reexecToScrubRegistrationToken() error {
 	}
 
 	args := os.Args
+	environ := scrubTokenFromEnviron(os.Environ())
+	if argFound {
+		args = replaceTokenInArgs(args, argToken)
+	}
 	var tokenPipe *os.File
 
 	if secret != "" {
@@ -56,10 +67,19 @@ func reexecToScrubRegistrationToken() error {
 			return fmt.Errorf("creating token pipe: %w", err)
 		}
 		tokenPipe = r
+		defer func() { _ = r.Close() }()
+		defer func() { _ = w.Close() }()
 
 		// The token is far smaller than the pipe buffer, so this write
 		// completes without a reader.
-		if _, err := w.WriteString(secret); err != nil {
+		wfd := int(w.Fd())
+		if err := unix.SetNonblock(wfd, true); err != nil {
+			return fmt.Errorf("making token pipe nonblocking: %w", err)
+		}
+		if n, err := unix.Write(wfd, []byte(secret)); err != nil || n != len(secret) {
+			if err == nil {
+				err = fmt.Errorf("token exceeds pipe capacity")
+			}
 			return fmt.Errorf("writing token to pipe: %w", err)
 		}
 		if err := w.Close(); err != nil {
@@ -77,7 +97,7 @@ func reexecToScrubRegistrationToken() error {
 		if argFound {
 			args = replaceTokenInArgs(args, ref)
 		} else {
-			args = append(append([]string{}, args...), "--token", ref)
+			environ = append(environ, registrationTokenEnvVar+"="+ref)
 		}
 	}
 
@@ -86,10 +106,12 @@ func reexecToScrubRegistrationToken() error {
 		return fmt.Errorf("finding executable: %w", err)
 	}
 
-	err = syscall.Exec(exe, args, scrubTokenFromEnviron(os.Environ()))
+	err = syscall.Exec(exe, args, environ)
 	if err != nil {
 		// This block will always execute, because syscall.Exec doesn't return if there's no error
-		tokenPipe.Close() //nolint:errcheck // best-effort cleanup
+		if tokenPipe != nil {
+			_ = tokenPipe.Close()
+		}
 		return fmt.Errorf("re-exec %q: %w", exe, err)
 	}
 
