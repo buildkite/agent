@@ -16,6 +16,7 @@
 /.vagrant
 packaging/docker/*/buildkite-agent
 packaging/docker/*/hooks/
+packaging/docker/*/buildkite-container-launch-linux-*
 
 # Generated at build time by scripts/generate-acknowledgements.sh
 /clicommand/ACKNOWLEDGEMENTS.md.gz

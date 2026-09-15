@@ -83,6 +83,38 @@ func TestRegistrationTokenFromArgs(t *testing.T) {
 			wantToken: "",
 			wantFound: true,
 		},
+		{
+			name: "token-looking name value",
+			args: []string{"buildkite-agent", "start", "--name", "--token=fd://9"},
+		},
+		{
+			name:      "help-looking name value",
+			args:      []string{"buildkite-agent", "start", "--name", "--help", "--token=llamas"},
+			wantToken: "llamas",
+			wantFound: true,
+		},
+		{
+			name:      "root false help",
+			args:      []string{"buildkite-agent", "--help=false", "start", "--token=llamas"},
+			wantToken: "llamas",
+			wantFound: true,
+		},
+		{
+			name:      "root terminator",
+			args:      []string{"buildkite-agent", "--", "start", "--token=llamas"},
+			wantToken: "llamas",
+			wantFound: true,
+		},
+		{
+			name:      "start terminator",
+			args:      []string{"buildkite-agent", "start", "--token=llamas", "--", "--token=fd://9"},
+			wantToken: "llamas",
+			wantFound: true,
+		},
+		{
+			name: "other command",
+			args: []string{"buildkite-agent", "bootstrap", "--token=llamas"},
+		},
 	}
 
 	for _, test := range tests {
