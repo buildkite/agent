@@ -492,6 +492,7 @@ BUILDKITE_TRACING_TRACESTATE
 BUILDKITE_AGENT_AWS_KMS_KEY
 BUILDKITE_AGENT_GCP_KMS_KEY
 BUILDKITE_AGENT_JWKS_FILE
+BUILDKITE_AGENT_JWKS_GCP_SECRET_NAME
 BUILDKITE_AGENT_JWKS_KEY_ID`
 		if _, err := fmt.Fprintln(r.envShellFile, agentCfgVars); err != nil {
 			return nil, err
@@ -704,6 +705,11 @@ BUILDKITE_AGENT_JWKS_KEY_ID`
 	// Pass signing details through to the executor - any pipelines uploaded by this agent will be signed
 	if r.conf.AgentConfiguration.SigningJWKSFile != "" {
 		setEnv("BUILDKITE_AGENT_JWKS_FILE", r.conf.AgentConfiguration.SigningJWKSFile)
+	}
+
+	// pass through the Google Secret Manager secret name for signing
+	if r.conf.AgentConfiguration.SigningJWKSGCPSecretName != "" {
+		setEnv("BUILDKITE_AGENT_JWKS_GCP_SECRET_NAME", r.conf.AgentConfiguration.SigningJWKSGCPSecretName)
 	}
 
 	if r.conf.AgentConfiguration.SigningJWKSKeyID != "" {
