@@ -14,7 +14,8 @@ type RepositoryAccessTokenRequest struct {
 }
 
 type RepositoryAccessTokenResponse struct {
-	Token string `json:"token,omitempty"`
+	Token    string `json:"token,omitempty"`
+	Username string `json:"username,omitempty"`
 }
 
 // Deprecated: use RepositoryAccessTokenRequest.
@@ -24,11 +25,20 @@ type GithubCodeAccessTokenRequest = RepositoryAccessTokenRequest
 type GithubCodeAccessTokenResponse = RepositoryAccessTokenResponse
 
 func (c *Client) GenerateRepositoryAccessToken(ctx context.Context, repoURL, jobID string) (string, *Response, error) {
+	credentials, response, err := c.GenerateRepositoryCredentials(ctx, repoURL, jobID)
+	if err != nil {
+		return "", response, err
+	}
+	return credentials.Token, response, nil
+}
+
+// GenerateRepositoryCredentials includes the Git username when supplied by the provider.
+func (c *Client) GenerateRepositoryCredentials(ctx context.Context, repoURL, jobID string) (*RepositoryAccessTokenResponse, *Response, error) {
 	u := fmt.Sprintf("jobs/%s/repository_access_token", railsPathEscape(jobID))
 
 	req, err := c.newRequest(ctx, http.MethodPost, u, RepositoryAccessTokenRequest{RepoURL: repoURL})
 	if err != nil {
-		return "", nil, err
+		return nil, nil, err
 	}
 
 	r := roko.NewRetrier(
@@ -61,10 +71,10 @@ func (c *Client) GenerateRepositoryAccessToken(ctx context.Context, repoURL, job
 		return resp, err
 	})
 	if err != nil {
-		return "", resp, err
+		return nil, resp, err
 	}
 
-	return tokenResponse.Token, resp, nil
+	return &tokenResponse, resp, nil
 }
 
 // GenerateGithubCodeAccessToken is retained for compatibility.

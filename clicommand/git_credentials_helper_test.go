@@ -90,6 +90,7 @@ func TestGitCredentialsHelperCommand(t *testing.T) {
 		input      string
 		status     int
 		token      string
+		username   string
 		wantRepo   string
 		wantOutput string
 		wantError  bool
@@ -111,6 +112,27 @@ func TestGitCredentialsHelperCommand(t *testing.T) {
 			token:      "provider-token",
 			wantRepo:   "https://git.example.com/acme/widgets.git",
 			wantOutput: "username=token\npassword=provider-token\n\n",
+		},
+		{
+			name:       "Code Storage username",
+			action:     "get",
+			input:      "protocol=https\nhost=acme.code.storage\npath=team/widgets.git\n",
+			status:     http.StatusOK,
+			token:      "pierre-jwt",
+			username:   "t",
+			wantRepo:   "https://acme.code.storage/team/widgets.git",
+			wantOutput: "username=t\npassword=pierre-jwt\n\n",
+		},
+		{
+			name:       "credential line injection",
+			action:     "get",
+			input:      "protocol=https\nhost=acme.code.storage\npath=team/widgets.git\n",
+			status:     http.StatusOK,
+			token:      "pierre-jwt",
+			username:   "t\npassword=injected",
+			wantRepo:   "https://acme.code.storage/team/widgets.git",
+			wantOutput: "username=fail\npassword=fail\n\n",
+			wantError:  true,
 		},
 		{
 			name:       "malformed input",
@@ -161,7 +183,7 @@ func TestGitCredentialsHelperCommand(t *testing.T) {
 					rw.WriteHeader(test.status)
 				}
 				if test.status == http.StatusOK {
-					_, _ = fmt.Fprintf(rw, `{"token":%q}`, test.token)
+					_, _ = fmt.Fprintf(rw, `{"token":%q,"username":%q}`, test.token, test.username)
 				}
 			}))
 			t.Cleanup(server.Close)
