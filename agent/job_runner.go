@@ -339,6 +339,9 @@ func NewJobRunner(ctx context.Context, l logger.Logger, apiClient *api.Client, c
 	go func() {
 		<-r.process.Done()
 		if tmpFile != nil {
+			if err := tmpFile.Close(); err != nil {
+				r.agentLogger.Errorf("Couldn't close job log temp file: %v", err)
+			}
 			if err := os.Remove(tmpFile.Name()); err != nil {
 				r.agentLogger.Errorf("Couldn't remove job log temp file: %v", err)
 			}
