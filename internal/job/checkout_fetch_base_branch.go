@@ -29,13 +29,21 @@ const (
 	GitFetchBaseBranchStrict = "strict"
 )
 
-// baseBranchFetchAttempts is the retry budget for the base branch fetch: the same
-// count the job's own fetch gets, with the same subsecond exponential backoff,
-// which spends about a minute and a half waiting if every attempt fails. An outage
-// at the remote is the usual reason a fetch fails in CI, and under optimistic a
-// single attempt would leave a stale ref behind with nothing but a warning to show
-// for it.
-const baseBranchFetchAttempts = 10
+// Retry budgets for the base branch fetch, in attempts of the subsecond
+// exponential backoff below. An outage at the remote is the usual reason a fetch
+// fails in CI, so both modes ride out a blip rather than leaving a stale ref
+// behind — under optimistic that ref would be a silently wider diff, reported as
+// nothing but a warning.
+//
+// They differ in how long that is worth. strict gets the same count as the job's
+// own fetch, about a minute and a half of waiting, because the alternative is
+// failing the job. optimistic has already decided the job proceeds either way, so
+// it spends a couple of seconds covering the blip it can and then gets out of the
+// way.
+const (
+	baseBranchFetchAttemptsOptimistic = 3
+	baseBranchFetchAttemptsStrict     = 10
+)
 
 // errNoBaseBranchToFetch is the strict-mode failure for a job that names no base
 // branch at all. Retrying the checkout cannot conjure one, so the checkout breaks
@@ -101,11 +109,12 @@ func (e *Executor) baseBranchToFetch() (base string, buildingBase bool) {
 // The mode is the one fetchSource parsed, so an invalid value has already failed
 // the checkout by the time this runs.
 //
-// A transient failure is retried in both modes, and a remote that answers "no such
-// ref" ends the retries at once, so a deleted base branch costs one fetch rather
-// than the whole budget (see baseBranchFetchIsRetryable). Under strict the
-// exhausted error is returned and the checkout's own retrier gets a further go at
-// it, classifying it exactly as it does a failure to fetch the job's own source.
+// A transient failure is retried in both modes, on the budgets above, and a remote
+// that answers "no such ref" ends the retries at once, so a deleted base branch
+// costs one fetch rather than the whole budget (see baseBranchFetchIsRetryable).
+// Under strict the exhausted error is returned and the checkout's own retrier gets
+// a further go at it, classifying it exactly as it does a failure to fetch the
+// job's own source.
 func (e *Executor) fetchBaseBranch(ctx context.Context, mode, gitFetchFlags string) error {
 	if mode == GitFetchBaseBranchOff {
 		return nil
@@ -131,9 +140,14 @@ func (e *Executor) fetchBaseBranch(ctx context.Context, mode, gitFetchFlags stri
 
 	e.shell.Commentf("Fetch base branch %q", base)
 
+	attempts := baseBranchFetchAttemptsOptimistic
+	if strict {
+		attempts = baseBranchFetchAttemptsStrict
+	}
+
 	refspec := fmt.Sprintf("+refs/heads/%s:refs/remotes/origin/%s", base, base)
 	err := roko.NewRetrier(
-		roko.WithMaxAttempts(baseBranchFetchAttempts),
+		roko.WithMaxAttempts(attempts),
 		roko.WithStrategy(roko.ExponentialSubsecond(time.Second)),
 		roko.WithJitter(),
 	).DoWithContext(ctx, func(r *roko.Retrier) error {
