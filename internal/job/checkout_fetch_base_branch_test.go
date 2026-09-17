@@ -175,12 +175,45 @@ func TestFetchSourceBaseBranchStrictFailures(t *testing.T) {
 				e.shell.Env.Set(k, v)
 			}
 
+			start := time.Now()
 			err := e.fetchSource(t.Context(), false, nil)
 			if err == nil {
 				t.Fatal("e.fetchSource(ctx, false, nil) error = nil, want an error")
 			}
 			if tt.wantIs != nil && !errors.Is(err, tt.wantIs) {
 				t.Errorf("e.fetchSource(ctx, false, nil) error = %v, want it to wrap %v", err, tt.wantIs)
+			}
+			// Neither failure is worth retrying, and both are reached on every job
+			// once configured, so both must be quick: retrying the missing ref
+			// through the whole budget takes about a minute and a half.
+			if elapsed := time.Since(start); elapsed > 30*time.Second {
+				t.Errorf("e.fetchSource(ctx, false, nil) took %s, want it to fail without exhausting the retry budget", elapsed)
+			}
+		})
+	}
+}
+
+// The reason to retry at all: an outage at the remote is the usual way this fetch
+// fails in CI, and a single attempt would leave a stale ref behind — silently under
+// optimistic, and as a failed job under strict.
+func TestFetchSourceBaseBranchRetriesWhileTheRemoteIsUnavailable(t *testing.T) {
+	for _, mode := range []string{GitFetchBaseBranchOptimistic, GitFetchBaseBranchStrict} {
+		t.Run(mode, func(t *testing.T) {
+			f := newBaseBranchFixture(t)
+
+			e := newBaseBranchFetchExecutor(t, f)
+			e.Branch = "feature-branch"
+			e.GitFetchBaseBranch = mode
+			e.shell.Env.Set("BUILDKITE_PULL_REQUEST_BASE_BRANCH", "main")
+
+			// Enough to lose the first fetch's ref advertisement and its retry.
+			f.server.FailNextRequests(2)
+
+			if err := e.fetchSource(t.Context(), false, nil); err != nil {
+				t.Fatalf("e.fetchSource(ctx, false, nil) error = %v, want nil", err)
+			}
+			if got := gitRevParseForBaseBranchTest(t, f.checkout, "refs/remotes/origin/main"); got != f.currentMain {
+				t.Errorf("origin/main = %q, want %q (stale = %q)", got, f.currentMain, f.staleMain)
 			}
 		})
 	}

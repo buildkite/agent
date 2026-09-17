@@ -5,6 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
+
+	"github.com/buildkite/roko"
 )
 
 // How hard the checkout tries to bring refs/remotes/origin/<base> up to date.
@@ -25,6 +28,14 @@ const (
 	// than merely wide. Freshness cannot be guaranteed without failing closed.
 	GitFetchBaseBranchStrict = "strict"
 )
+
+// baseBranchFetchAttempts is the retry budget for the base branch fetch: the same
+// count the job's own fetch gets, with the same subsecond exponential backoff,
+// which spends about a minute and a half waiting if every attempt fails. An outage
+// at the remote is the usual reason a fetch fails in CI, and under optimistic a
+// single attempt would leave a stale ref behind with nothing but a warning to show
+// for it.
+const baseBranchFetchAttempts = 10
 
 // errNoBaseBranchToFetch is the strict-mode failure for a job that names no base
 // branch at all. Retrying the checkout cannot conjure one, so the checkout breaks
@@ -90,12 +101,11 @@ func (e *Executor) baseBranchToFetch() (base string, buildingBase bool) {
 // The mode is the one fetchSource parsed, so an invalid value has already failed
 // the checkout by the time this runs.
 //
-// Not retried here in either mode: the retry on the job's own fetch waits out
-// asynchronous creation of the ref being built, which a deleted base branch never
-// gets, so inheriting it would spend ~2m17s of every job discovering that. Under
-// strict the failure is returned instead, and the checkout's own retrier covers a
-// transient one, classifying it exactly as it does a failure to fetch the job's own
-// source.
+// A transient failure is retried in both modes, and a remote that answers "no such
+// ref" ends the retries at once, so a deleted base branch costs one fetch rather
+// than the whole budget (see baseBranchFetchIsRetryable). Under strict the
+// exhausted error is returned and the checkout's own retrier gets a further go at
+// it, classifying it exactly as it does a failure to fetch the job's own source.
 func (e *Executor) fetchBaseBranch(ctx context.Context, mode, gitFetchFlags string) error {
 	if mode == GitFetchBaseBranchOff {
 		return nil
@@ -122,12 +132,28 @@ func (e *Executor) fetchBaseBranch(ctx context.Context, mode, gitFetchFlags stri
 	e.shell.Commentf("Fetch base branch %q", base)
 
 	refspec := fmt.Sprintf("+refs/heads/%s:refs/remotes/origin/%s", base, base)
-	if err := gitFetch(ctx, gitFetchArgs{
-		Shell:         e.shell,
-		GitFetchFlags: gitFetchFlags,
-		Repository:    "origin",
-		RefSpecs:      []string{refspec},
-	}); err != nil {
+	err := roko.NewRetrier(
+		roko.WithMaxAttempts(baseBranchFetchAttempts),
+		roko.WithStrategy(roko.ExponentialSubsecond(time.Second)),
+		roko.WithJitter(),
+	).DoWithContext(ctx, func(r *roko.Retrier) error {
+		err := gitFetch(ctx, gitFetchArgs{
+			Shell:         e.shell,
+			GitFetchFlags: gitFetchFlags,
+			Repository:    "origin",
+			RefSpecs:      []string{refspec},
+		})
+		if err == nil {
+			return nil
+		}
+		if !baseBranchFetchIsRetryable(err) {
+			r.Break()
+			return err
+		}
+		e.shell.Commentf("Couldn't fetch base branch %q (%s)", base, r)
+		return err
+	})
+	if err != nil {
 		if !strict {
 			e.shell.Warningf("Couldn't fetch base branch %q, continuing: %v", base, err)
 			return nil
@@ -135,4 +161,30 @@ func (e *Executor) fetchBaseBranch(ctx context.Context, mode, gitFetchFlags stri
 		return fmt.Errorf("fetching base branch %q: %w", base, err)
 	}
 	return nil
+}
+
+// baseBranchFetchIsRetryable reports whether a failed base branch fetch is worth
+// another attempt. A remote that answers "that ref does not exist", or a local
+// object store that is corrupt, has given a real answer, and retrying only delays
+// it by the whole budget. Everything else — transport errors, and git's broad exit
+// 128, which is what an outage at the remote looks like — may well succeed next
+// time.
+//
+// This is also why the fetch cannot just pass Retry to gitFetch: that retrier
+// deliberately keeps retrying a missing ref, to wait out GitHub creating a pull
+// request's refs/pull/N/head asynchronously. A base branch is either already there
+// or gone for good.
+func baseBranchFetchIsRetryable(err error) bool {
+	var gitErr *gitError
+	if !errors.As(err, &gitErr) {
+		// gitFetch's only non-gitError failures are flag and refspec parse errors,
+		// which the next attempt would hit identically.
+		return false
+	}
+	switch gitErr.Type {
+	case gitErrorFetchBadReference, gitErrorFetchRefNotOnRemote, gitErrorFetchBadObject:
+		return false
+	default:
+		return true
+	}
 }
