@@ -86,11 +86,16 @@ func (e *Executor) prepareCheckoutWorkdir(
 		}
 		if userSuppliedCloneFilter {
 			e.shell.Commentf("Sparse checkout is configured and BUILDKITE_GIT_CLONE_FLAGS already contains a --filter (preserving user-supplied filter).")
-		} else if e.shell.Env.GetString("BUILDKITE_KUBERNETES_EXEC", "") != "true" {
+		} else if e.shell.Env.GetString("BUILDKITE_KUBERNETES_EXEC", "") != "true" &&
+			!e.usesOnHostReferenceMirror(mirrorDir) {
 			// Kubernetes checkout and command phases can run in separate
 			// containers, with Git credentials available only during checkout.
 			// Avoid creating a promisor clone that may try to fetch missing
 			// objects after the checkout container has exited.
+			//
+			// A reference clone already reads objects from the on-host mirror
+			// through alternates. Combining --filter with --reference provides
+			// no transfer savings and can make Git repack referenced objects.
 			gitCloneFlags = append(gitCloneFlags, "--filter=blob:none")
 		}
 	}
@@ -206,6 +211,10 @@ func (e *Executor) prepareCheckoutWorkdir(
 		return fmt.Errorf("cloning git repository: %w", err)
 	}
 	return nil
+}
+
+func (e *Executor) usesOnHostReferenceMirror(mirrorDir string) bool {
+	return mirrorDir != "" && e.GitMirrorCheckoutMode == "reference"
 }
 
 func isFreshCloneRemoteMirrorAttempt(attempt *remoteMirrorAttempt) bool {
