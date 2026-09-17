@@ -104,9 +104,9 @@ type ExecutorConfig struct {
 	// Skip git fetch if the commit already exists locally
 	GitSkipFetchExistingCommits bool `env:"BUILDKITE_GIT_SKIP_FETCH_EXISTING_COMMITS"`
 
-	// Whether to fetch the base branch during checkout, so later commands can diff
-	// against its current tip
-	GitFetchBaseBranch bool `env:"BUILDKITE_GIT_FETCH_BASE_BRANCH"`
+	// Whether, and how strictly, to fetch the base branch during checkout so later
+	// commands can diff against its current tip: "off", "optimistic" or "strict"
+	GitFetchBaseBranch string `env:"BUILDKITE_GIT_FETCH_BASE_BRANCH"`
 
 	// Controls which sources may override the agent's checkout settings.
 	// Intentionally has no env tag so hooks cannot relax it at runtime.

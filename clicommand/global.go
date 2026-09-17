@@ -6,6 +6,7 @@ import (
 	"iter"
 	"os"
 	"reflect"
+	"slices"
 	"strconv"
 	"time"
 
@@ -198,6 +199,25 @@ var (
 	}
 )
 
+// gitFetchBaseBranchModes are the accepted --git-fetch-base-branch values,
+// strictest first.
+var gitFetchBaseBranchModes = []string{
+	job.GitFetchBaseBranchStrict,
+	job.GitFetchBaseBranchOptimistic,
+	job.GitFetchBaseBranchOff,
+}
+
+func validateGitFetchBaseBranch(value string) error {
+	if !slices.Contains(gitFetchBaseBranchModes, value) {
+		return fmt.Errorf(
+			"invalid value for --git-fetch-base-branch: %q (must be one of %v)",
+			value,
+			gitFetchBaseBranchModes,
+		)
+	}
+	return nil
+}
+
 func validateGitCommitVerification(value string) error {
 	if value != job.GitCommitVerificationStrict && value != job.GitCommitVerificationOff {
 		return fmt.Errorf(
@@ -334,10 +354,13 @@ var (
 		Sources: cli.EnvVars("BUILDKITE_GIT_SKIP_FETCH_EXISTING_COMMITS"),
 	}
 
-	GitFetchBaseBranchFlag = &cli.BoolFlag{
-		Name:    "git-fetch-base-branch",
-		Usage:   "Also fetch the base branch during checkout, so every command in the job can diff against its current tip. The base branch is the first non-empty value of {$BUILDKITE_PULL_REQUEST_BASE_BRANCH, $BUILDKITE_PIPELINE_DEFAULT_BRANCH}, and nothing is fetched when it is the branch being built (default: false)",
-		Sources: cli.EnvVars("BUILDKITE_GIT_FETCH_BASE_BRANCH"),
+	GitFetchBaseBranchFlag = &cli.StringFlag{
+		Name:             "git-fetch-base-branch",
+		Value:            job.GitFetchBaseBranchOff,
+		Usage:            fmt.Sprintf("Also fetch the base branch during checkout, so every command in the job can diff against its current tip; one of %v. ′optimistic′ warns and carries on when the fetch fails, ′strict′ fails the job, and ′off′ (default) skips the fetch. The base branch is the first non-empty value of {$BUILDKITE_PULL_REQUEST_BASE_BRANCH, $BUILDKITE_PIPELINE_DEFAULT_BRANCH}; nothing is fetched when it is the branch being built, and under ′strict′ a job with neither set fails", gitFetchBaseBranchModes),
+		Sources:          cli.EnvVars("BUILDKITE_GIT_FETCH_BASE_BRANCH"),
+		ValidateDefaults: true,
+		Validator:        validateGitFetchBaseBranch,
 	}
 
 	CheckoutAttemptsFlag = &cli.IntFlag{

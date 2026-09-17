@@ -17,39 +17,56 @@ import (
 // whatever an earlier build in the same directory left there.
 func TestFetchSourceBaseBranch(t *testing.T) {
 	tests := []struct {
-		name            string
-		fetchBaseBranch bool
-		branch          string
-		skipExisting    bool
-		env             map[string]string
+		name string
+		// mode is BUILDKITE_GIT_FETCH_BASE_BRANCH; "" pins that the zero value is off
+		// for programmatic ExecutorConfig consumers.
+		mode         string
+		branch       string
+		pullRequest  string
+		skipExisting bool
+		env          map[string]string
 		// Whether origin/main should have moved to the remote's new tip.
 		wantFetched bool
 	}{
 		{
-			name:            "fetches the pull request base branch",
-			fetchBaseBranch: true,
-			branch:          "feature-branch",
-			env:             map[string]string{"BUILDKITE_PULL_REQUEST_BASE_BRANCH": "main"},
-			wantFetched:     true,
+			name:        "fetches the pull request base branch",
+			mode:        GitFetchBaseBranchOptimistic,
+			branch:      "feature-branch",
+			env:         map[string]string{"BUILDKITE_PULL_REQUEST_BASE_BRANCH": "main"},
+			wantFetched: true,
 		},
 		{
-			name:            "does nothing when disabled",
-			fetchBaseBranch: false,
-			branch:          "feature-branch",
-			env:             map[string]string{"BUILDKITE_PULL_REQUEST_BASE_BRANCH": "main"},
-			wantFetched:     false,
+			name:        "fetches the pull request base branch under strict",
+			mode:        GitFetchBaseBranchStrict,
+			branch:      "feature-branch",
+			env:         map[string]string{"BUILDKITE_PULL_REQUEST_BASE_BRANCH": "main"},
+			wantFetched: true,
 		},
 		{
-			name:            "falls back to the pipeline default branch",
-			fetchBaseBranch: true,
-			branch:          "feature-branch",
-			env:             map[string]string{"BUILDKITE_PIPELINE_DEFAULT_BRANCH": "refs/heads/main"},
-			wantFetched:     true,
+			name:        "does nothing when off",
+			mode:        GitFetchBaseBranchOff,
+			branch:      "feature-branch",
+			env:         map[string]string{"BUILDKITE_PULL_REQUEST_BASE_BRANCH": "main"},
+			wantFetched: false,
 		},
 		{
-			name:            "prefers the pull request base over the default branch",
-			fetchBaseBranch: true,
-			branch:          "feature-branch",
+			name:        "does nothing when unset",
+			mode:        "",
+			branch:      "feature-branch",
+			env:         map[string]string{"BUILDKITE_PULL_REQUEST_BASE_BRANCH": "main"},
+			wantFetched: false,
+		},
+		{
+			name:        "falls back to the pipeline default branch",
+			mode:        GitFetchBaseBranchOptimistic,
+			branch:      "feature-branch",
+			env:         map[string]string{"BUILDKITE_PIPELINE_DEFAULT_BRANCH": "refs/heads/main"},
+			wantFetched: true,
+		},
+		{
+			name:   "prefers the pull request base over the default branch",
+			mode:   GitFetchBaseBranchOptimistic,
+			branch: "feature-branch",
 			env: map[string]string{
 				"BUILDKITE_PULL_REQUEST_BASE_BRANCH": "main",
 				"BUILDKITE_PIPELINE_DEFAULT_BRANCH":  "no-such-branch",
@@ -57,28 +74,39 @@ func TestFetchSourceBaseBranch(t *testing.T) {
 			wantFetched: true,
 		},
 		{
-			name:            "skips the branch being built",
-			fetchBaseBranch: true,
-			branch:          "main",
-			env:             map[string]string{"BUILDKITE_PULL_REQUEST_BASE_BRANCH": "main"},
-			wantFetched:     false,
+			name:        "skips the branch being built",
+			mode:        GitFetchBaseBranchOptimistic,
+			branch:      "main",
+			env:         map[string]string{"BUILDKITE_PULL_REQUEST_BASE_BRANCH": "main"},
+			wantFetched: false,
 		},
 		{
-			name:            "skips when no base branch is known",
-			fetchBaseBranch: true,
-			branch:          "feature-branch",
-			env:             map[string]string{},
-			wantFetched:     false,
+			// A branch build of the default branch: the build the merge queue runs, and
+			// the one a PR build's stale origin/main would otherwise be diffed against.
+			// There is nothing to prepare, in strict mode included.
+			name:        "skips a default branch build",
+			mode:        GitFetchBaseBranchStrict,
+			branch:      "main",
+			pullRequest: "false",
+			env:         map[string]string{"BUILDKITE_PIPELINE_DEFAULT_BRANCH": "main"},
+			wantFetched: false,
+		},
+		{
+			name:        "skips when no base branch is known",
+			mode:        GitFetchBaseBranchOptimistic,
+			branch:      "feature-branch",
+			env:         map[string]string{},
+			wantFetched: false,
 		},
 		{
 			// The job asked for the base branch, so it gets it whether or not its own
 			// commit still needs fetching.
-			name:            "fetches even when the job's own fetch is skipped",
-			fetchBaseBranch: true,
-			branch:          "feature-branch",
-			skipExisting:    true,
-			env:             map[string]string{"BUILDKITE_PULL_REQUEST_BASE_BRANCH": "main"},
-			wantFetched:     true,
+			name:         "fetches even when the job's own fetch is skipped",
+			mode:         GitFetchBaseBranchOptimistic,
+			branch:       "feature-branch",
+			skipExisting: true,
+			env:          map[string]string{"BUILDKITE_PULL_REQUEST_BASE_BRANCH": "main"},
+			wantFetched:  true,
 		},
 	}
 
@@ -88,7 +116,10 @@ func TestFetchSourceBaseBranch(t *testing.T) {
 
 			e := newBaseBranchFetchExecutor(t, f)
 			e.Branch = tt.branch
-			e.GitFetchBaseBranch = tt.fetchBaseBranch
+			if tt.pullRequest != "" {
+				e.PullRequest = tt.pullRequest
+			}
+			e.GitFetchBaseBranch = tt.mode
 			e.GitSkipFetchExistingCommits = tt.skipExisting
 			for k, v := range tt.env {
 				e.shell.Env.Set(k, v)
@@ -110,14 +141,76 @@ func TestFetchSourceBaseBranch(t *testing.T) {
 	}
 }
 
-// A base branch that no longer resolves must not fail the checkout: the job's own
-// source is already fetched by then, and only a diff taken later is affected.
-func TestFetchSourceBaseBranchMissingIsNotFatal(t *testing.T) {
+// Strict mode exists because a best-effort fetch cannot promise a current base
+// branch: the guarantee requires failing closed on every way the fetch can not
+// happen, both a base branch that no longer resolves and a job that names none.
+func TestFetchSourceBaseBranchStrictFailures(t *testing.T) {
+	tests := []struct {
+		name   string
+		env    map[string]string
+		wantIs error
+	}{
+		{
+			name: "a base branch that no longer resolves fails the checkout",
+			env:  map[string]string{"BUILDKITE_PULL_REQUEST_BASE_BRANCH": "deleted-branch"},
+		},
+		{
+			// Nothing names a base branch, so a diff taken later would read whatever
+			// origin/<something> an earlier build left in the checkout directory.
+			// Retrying can't discover a base branch, so the checkout fails fast on it.
+			name:   "no base branch at all fails the checkout",
+			env:    map[string]string{},
+			wantIs: errNoBaseBranchToFetch,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			f := newBaseBranchFixture(t)
+
+			e := newBaseBranchFetchExecutor(t, f)
+			e.Branch = "feature-branch"
+			e.GitFetchBaseBranch = GitFetchBaseBranchStrict
+			for k, v := range tt.env {
+				e.shell.Env.Set(k, v)
+			}
+
+			err := e.fetchSource(t.Context(), false, nil)
+			if err == nil {
+				t.Fatal("e.fetchSource(ctx, false, nil) error = nil, want an error")
+			}
+			if tt.wantIs != nil && !errors.Is(err, tt.wantIs) {
+				t.Errorf("e.fetchSource(ctx, false, nil) error = %v, want it to wrap %v", err, tt.wantIs)
+			}
+		})
+	}
+}
+
+// An invalid mode arriving from job env must not silently disable the fetch a job
+// asked for, so it fails the checkout rather than degrading to off.
+func TestFetchSourceBaseBranchRejectsInvalidMode(t *testing.T) {
 	f := newBaseBranchFixture(t)
 
 	e := newBaseBranchFetchExecutor(t, f)
 	e.Branch = "feature-branch"
-	e.GitFetchBaseBranch = true
+	e.GitFetchBaseBranch = "yes-please"
+	e.shell.Env.Set("BUILDKITE_PULL_REQUEST_BASE_BRANCH", "main")
+
+	err := e.fetchSource(t.Context(), false, nil)
+	if err == nil || !strings.Contains(err.Error(), "invalid git fetch base branch mode") {
+		t.Fatalf("e.fetchSource(ctx, false, nil) error = %v, want an invalid mode error", err)
+	}
+}
+
+// Under optimistic, a base branch that no longer resolves must not fail the
+// checkout: the job's own source is already fetched by then, and only a diff taken
+// later is affected.
+func TestFetchSourceBaseBranchMissingIsNotFatalWhenOptimistic(t *testing.T) {
+	f := newBaseBranchFixture(t)
+
+	e := newBaseBranchFetchExecutor(t, f)
+	e.Branch = "feature-branch"
+	e.GitFetchBaseBranch = GitFetchBaseBranchOptimistic
 	e.shell.Env.Set("BUILDKITE_PULL_REQUEST_BASE_BRANCH", "deleted-branch")
 
 	if err := e.fetchSource(t.Context(), false, nil); err != nil {
@@ -140,7 +233,7 @@ func TestFetchSourceBaseBranchUpdatesRefWithoutRefmapAndAfterForcePush(t *testin
 
 	e := newBaseBranchFetchExecutor(t, f)
 	e.Branch = "feature-branch"
-	e.GitFetchBaseBranch = true
+	e.GitFetchBaseBranch = GitFetchBaseBranchOptimistic
 	e.shell.Env.Set("BUILDKITE_PULL_REQUEST_BASE_BRANCH", "main")
 
 	if err := e.fetchSource(t.Context(), false, nil); err != nil {

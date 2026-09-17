@@ -154,10 +154,14 @@ func (e *Executor) checkout(ctx context.Context) error {
 			}
 		}
 
-		// Also fail fast on an unusable sparse checkout mode. resolveSparseCheckout
-		// rejects it again during the checkout, but it can arrive from job env, and
-		// retrying a typo for the whole attempt budget only delays the failure.
+		// Also fail fast on an unusable sparse checkout mode, or base branch fetch
+		// mode. fetchSource and resolveSparseCheckout reject either again during the
+		// checkout, but they can arrive from job env, and retrying a typo for the
+		// whole attempt budget only delays the failure.
 		if _, err := ParseSparseCheckoutMode(e.GitSparseCheckoutMode); err != nil {
+			return err
+		}
+		if _, err := parseGitFetchBaseBranchMode(e.GitFetchBaseBranch); err != nil {
 			return err
 		}
 
@@ -180,9 +184,10 @@ func (e *Executor) checkout(ctx context.Context) error {
 			var errGit *gitError
 
 			switch {
-			case errors.Is(err, ErrCommitVerificationFailed):
-				// A commit that is provably not on its branch won't become valid by
-				// retrying, so fail fast instead of re-cloning through the whole backoff.
+			case errors.Is(err, ErrCommitVerificationFailed), errors.Is(err, errNoBaseBranchToFetch):
+				// Neither a commit that is provably not on its branch nor a job that
+				// names no base branch to fetch becomes valid by retrying, so fail fast
+				// instead of re-cloning through the whole backoff.
 				e.shell.Warningf("Checkout failed! %s", err)
 				r.Break()
 

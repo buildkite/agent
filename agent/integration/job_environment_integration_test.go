@@ -794,6 +794,45 @@ func TestCheckoutScopedJobEnvOverrideHonorsCheckoutOverrideMode(t *testing.T) {
 			wantEnvValue:       "off",
 			wantIgnoredEnvVars: []string{"BUILDKITE_GIT_COMMIT_VERIFICATION"},
 		},
+		// The base branch fetch is an enum whose off side is silent: the agent emits
+		// it only when it has the fetch on, so a job may still opt in when the agent
+		// has not, and strict closes that side like the toggles above.
+		{
+			name:    "from_job_locks_fetch_base_branch_to_agent_config",
+			varName: "BUILDKITE_GIT_FETCH_BASE_BRANCH",
+			jobEnv: map[string]string{
+				"BUILDKITE_GIT_FETCH_BASE_BRANCH": "off",
+			},
+			agentCfg: agent.AgentConfiguration{
+				GitFetchBaseBranch:   "strict",
+				CheckoutOverrideMode: env.CheckoutOverrideFromJob,
+			},
+			wantEnvValue:       "strict",
+			wantIgnoredEnvVars: []string{"BUILDKITE_GIT_FETCH_BASE_BRANCH"},
+		},
+		{
+			name:    "from_job_allows_job_env_fetch_base_branch_when_agent_default_off",
+			varName: "BUILDKITE_GIT_FETCH_BASE_BRANCH",
+			jobEnv: map[string]string{
+				"BUILDKITE_GIT_FETCH_BASE_BRANCH": "optimistic",
+			},
+			agentCfg: agent.AgentConfiguration{
+				CheckoutOverrideMode: env.CheckoutOverrideFromJob,
+			},
+			wantEnvValue: "optimistic",
+		},
+		{
+			name:    "strict_locks_fetch_base_branch_off_to_agent_config",
+			varName: "BUILDKITE_GIT_FETCH_BASE_BRANCH",
+			jobEnv: map[string]string{
+				"BUILDKITE_GIT_FETCH_BASE_BRANCH": "strict",
+			},
+			agentCfg: agent.AgentConfiguration{
+				CheckoutOverrideMode: env.CheckoutOverrideStrict,
+			},
+			wantEnvValue:       "off",
+			wantIgnoredEnvVars: []string{"BUILDKITE_GIT_FETCH_BASE_BRANCH"},
+		},
 		{
 			// from-job (the default) keeps the agent authoritative over the backend
 			// job env, matching the other checkout vars: only none opens it up.
