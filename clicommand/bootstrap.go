@@ -75,7 +75,7 @@ type BootstrapConfig struct {
 	SkipCheckout                 bool          `cli:"skip-checkout"`
 	GitCheckoutTimeout           int           `cli:"git-checkout-timeout"`
 	GitSkipFetchExistingCommits  bool          `cli:"git-skip-fetch-existing-commits"`
-	GitFetchBaseBranch           bool          `cli:"git-fetch-base-branch"`
+	GitFetchBaseBranch           string        `cli:"git-fetch-base-branch"`
 	GitCheckoutFlags             string        `cli:"git-checkout-flags"`
 	GitCloneFlags                string        `cli:"git-clone-flags"`
 	GitFetchFlags                string        `cli:"git-fetch-flags"`

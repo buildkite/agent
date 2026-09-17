@@ -176,7 +176,7 @@ type AgentStartConfig struct {
 	GitSubmoduleCloneConfig     []string `cli:"git-submodule-clone-config"`
 	SkipCheckout                bool     `cli:"skip-checkout"`
 	GitSkipFetchExistingCommits bool     `cli:"git-skip-fetch-existing-commits"`
-	GitFetchBaseBranch          bool     `cli:"git-fetch-base-branch"`
+	GitFetchBaseBranch          string   `cli:"git-fetch-base-branch"`
 	CheckoutOverrideMode        string   `cli:"checkout-override-mode"`
 	CheckoutAttempts            int      `cli:"checkout-attempts"`
 
@@ -845,8 +845,11 @@ var AgentStartCommand = &cli.Command{
 		}
 
 		// The config file is loaded after CLI flag validation, so validate its
-		// commit verification value here as well.
+		// commit verification and base branch fetch values here as well.
 		if err := validateGitCommitVerification(cfg.GitCommitVerification); err != nil {
+			return err
+		}
+		if err := validateGitFetchBaseBranch(cfg.GitFetchBaseBranch); err != nil {
 			return err
 		}
 
