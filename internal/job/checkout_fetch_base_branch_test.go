@@ -197,17 +197,28 @@ func TestFetchSourceBaseBranchStrictFailures(t *testing.T) {
 // fails in CI, and a single attempt would leave a stale ref behind — silently under
 // optimistic, and as a failed job under strict.
 func TestFetchSourceBaseBranchRetriesWhileTheRemoteIsUnavailable(t *testing.T) {
-	for _, mode := range []string{GitFetchBaseBranchOptimistic, GitFetchBaseBranchStrict} {
-		t.Run(mode, func(t *testing.T) {
+	tests := []struct {
+		mode string
+		// failRequests rejects that many requests before the server serves git
+		// again. optimistic's budget is small by design, so it is given a blip it
+		// can cover; strict is given more than optimistic would survive, pinning
+		// that its budget really is the larger one.
+		failRequests int
+	}{
+		{mode: GitFetchBaseBranchOptimistic, failRequests: 1},
+		{mode: GitFetchBaseBranchStrict, failRequests: 3},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.mode, func(t *testing.T) {
 			f := newBaseBranchFixture(t)
 
 			e := newBaseBranchFetchExecutor(t, f)
 			e.Branch = "feature-branch"
-			e.GitFetchBaseBranch = mode
+			e.GitFetchBaseBranch = tt.mode
 			e.shell.Env.Set("BUILDKITE_PULL_REQUEST_BASE_BRANCH", "main")
 
-			// Enough to lose the first fetch's ref advertisement and its retry.
-			f.server.FailNextRequests(2)
+			f.server.FailNextRequests(tt.failRequests)
 
 			if err := e.fetchSource(t.Context(), false, nil); err != nil {
 				t.Fatalf("e.fetchSource(ctx, false, nil) error = %v, want nil", err)
@@ -216,6 +227,33 @@ func TestFetchSourceBaseBranchRetriesWhileTheRemoteIsUnavailable(t *testing.T) {
 				t.Errorf("origin/main = %q, want %q (stale = %q)", got, f.currentMain, f.staleMain)
 			}
 		})
+	}
+}
+
+// optimistic has already decided the job proceeds either way, so a remote that
+// stays down must not hold it up for anything like the time strict would spend.
+func TestFetchSourceBaseBranchOptimisticGivesUpQuickly(t *testing.T) {
+	f := newBaseBranchFixture(t)
+
+	e := newBaseBranchFetchExecutor(t, f)
+	e.Branch = "feature-branch"
+	e.GitFetchBaseBranch = GitFetchBaseBranchOptimistic
+	e.shell.Env.Set("BUILDKITE_PULL_REQUEST_BASE_BRANCH", "main")
+
+	// More than any budget here would survive. This calls fetchBaseBranch rather
+	// than fetchSource because a remote this far down also fails the job's own
+	// fetch, and the budget is what's under test.
+	f.server.FailNextRequests(100)
+
+	start := time.Now()
+	if err := e.fetchBaseBranch(t.Context(), GitFetchBaseBranchOptimistic, e.GitFetchFlags); err != nil {
+		t.Fatalf("e.fetchBaseBranch(ctx, optimistic, flags) error = %v, want nil", err)
+	}
+	if elapsed := time.Since(start); elapsed > 20*time.Second {
+		t.Errorf("e.fetchBaseBranch(ctx, optimistic, flags) took %s, want optimistic to give up promptly", elapsed)
+	}
+	if got := gitRevParseForBaseBranchTest(t, f.checkout, "refs/remotes/origin/main"); got != f.staleMain {
+		t.Errorf("origin/main = %q, want the stale %q left in place", got, f.staleMain)
 	}
 }
 
