@@ -25,6 +25,8 @@ import (
 	awssigner "github.com/buildkite/agent/v4/internal/cryptosigner/aws"
 	gcpsigner "github.com/buildkite/agent/v4/internal/cryptosigner/gcp"
 	"github.com/buildkite/agent/v4/internal/experiments"
+	"github.com/buildkite/agent/v4/internal/gcpsecrets"
+	"github.com/buildkite/agent/v4/internal/jwks"
 	"github.com/buildkite/agent/v4/internal/redact"
 	"github.com/buildkite/agent/v4/internal/replacer"
 	"github.com/buildkite/agent/v4/internal/stdin"
@@ -96,11 +98,12 @@ type PipelineUploadConfig struct {
 	ChangedFilesPath string `cli:"changed-files-path"`
 
 	// Used for signing
-	JWKSFile         string `cli:"jwks-file"`
-	JWKSKeyID        string `cli:"jwks-key-id"`
-	SigningAWSKMSKey string `cli:"signing-aws-kms-key"`
-	SigningGCPKMSKey string `cli:"signing-gcp-kms-key"`
-	DebugSigning     bool   `cli:"debug-signing"`
+	JWKSFile          string `cli:"jwks-file"`
+	JWKSGCPSecretName string `cli:"jwks-gcp-secret-name"`
+	JWKSKeyID         string `cli:"jwks-key-id"`
+	SigningAWSKMSKey  string `cli:"signing-aws-kms-key"`
+	SigningGCPKMSKey  string `cli:"signing-gcp-kms-key"`
+	DebugSigning      bool   `cli:"debug-signing"`
 }
 
 var PipelineUploadCommand = &cli.Command{
@@ -173,6 +176,13 @@ var PipelineUploadCommand = &cli.Command{
 			Name:    "jwks-file",
 			Usage:   "Path to a file containing a JWKS. Passing this flag enables pipeline signing",
 			Sources: cli.EnvVars("BUILDKITE_AGENT_JWKS_FILE"),
+		},
+		&cli.StringFlag{
+			Name: "jwks-gcp-secret-name",
+			Usage: "The full resource name of a Google Secret Manager secret version containing a JWKS " +
+				"(e.g. projects/*/secrets/*/versions/*). Passing this flag enables pipeline signing. " +
+				"The key is held in memory only and is never written to disk. Cannot be used together with jwks-file.",
+			Sources: cli.EnvVars("BUILDKITE_AGENT_JWKS_GCP_SECRET_NAME"),
 		},
 		&cli.StringFlag{
 			Name:    "jwks-key-id",
@@ -374,6 +384,21 @@ var PipelineUploadCommand = &cli.Command{
 					key, err = gcpsigner.NewKMS(ctx, cfg.SigningGCPKMSKey)
 					if err != nil {
 						return fmt.Errorf("couldn't create GCP KMS signer: %w", err)
+					}
+
+				case cfg.JWKSFile != "" && cfg.JWKSGCPSecretName != "":
+					return ErrJWKSSourceConflict
+
+				case cfg.JWKSGCPSecretName != "":
+					// retrieve the JWKS from Google Secret Manager, keeping the key material in memory only
+					jwksBytes, err := gcpsecrets.AccessSecretVersion(ctx, cfg.JWKSGCPSecretName)
+					if err != nil {
+						return fmt.Errorf("couldn't retrieve JWKS from Google Secret Manager: %w", err)
+					}
+
+					key, err = jwks.KeyFromBytes(jwksBytes, cfg.JWKSKeyID)
+					if err != nil {
+						return fmt.Errorf("couldn't read the signing key: %w", err)
 					}
 
 				case cfg.JWKSFile != "":
