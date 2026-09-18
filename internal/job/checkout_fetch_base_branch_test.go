@@ -465,3 +465,38 @@ func gitRevParseForBaseBranchTest(t *testing.T, dir, rev string) string {
 	}
 	return strings.TrimSpace(string(out))
 }
+
+// gitFetch word-splits every refspec, and quotes are legal in a git ref name, so
+// an unquoted refspec for release'candidate becomes one for releasecandidate: a
+// fetch that succeeds against a different branch and leaves the requested ref
+// untouched. Both branches exist here so that mangling is a wrong answer rather
+// than a failed fetch.
+func TestFetchSourceBaseBranchFetchesABranchNameNeedingQuoting(t *testing.T) {
+	f := newBaseBranchFixture(t)
+
+	const quoted, mangled = "release'candidate", "releasecandidate"
+
+	// Distinct tips, so a fetch that lands the wrong branch is visible in the ref
+	// it writes as well as in the one it leaves absent.
+	quotedTip, mangledTip := f.currentMain, f.staleMain
+	for branch, tip := range map[string]string{quoted: quotedTip, mangled: mangledTip} {
+		if out, err := f.server.CreateRef("base-branch", "refs/heads/"+branch, tip); err != nil {
+			t.Fatalf("s.CreateRef(refs/heads/%s) error = %v, output: %s", branch, err, string(out))
+		}
+	}
+
+	e := newBaseBranchFetchExecutor(t, f)
+	e.Branch = "feature-branch"
+	e.GitFetchBaseBranch = GitFetchBaseBranchStrict
+	e.shell.Env.Set("BUILDKITE_PULL_REQUEST_BASE_BRANCH", quoted)
+
+	if err := e.fetchSource(t.Context(), false, nil); err != nil {
+		t.Fatalf("e.fetchSource(ctx, false, nil) error = %v, want nil", err)
+	}
+	if got := gitRevParseForBaseBranchTest(t, f.checkout, "refs/remotes/origin/"+quoted); got != quotedTip {
+		t.Errorf("origin/%s = %q, want %q", quoted, got, quotedTip)
+	}
+	if got := gitRevParseForBaseBranchTest(t, f.checkout, "refs/remotes/origin/"+mangled); got != "" {
+		t.Errorf("origin/%s = %q, want it to be absent", mangled, got)
+	}
+}
