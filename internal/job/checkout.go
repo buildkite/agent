@@ -184,10 +184,12 @@ func (e *Executor) checkout(ctx context.Context) error {
 			var errGit *gitError
 
 			switch {
-			case errors.Is(err, ErrCommitVerificationFailed), errors.Is(err, errNoBaseBranchToFetch):
-				// Neither a commit that is provably not on its branch nor a job that
-				// names no base branch to fetch becomes valid by retrying, so fail fast
-				// instead of re-cloning through the whole backoff.
+			case errors.Is(err, ErrCommitVerificationFailed),
+				errors.Is(err, errNoBaseBranchToFetch),
+				errors.Is(err, errBaseBranchFetchWritesNoRef):
+				// A commit that is provably not on its branch, a job that names no base
+				// branch to fetch, and fetch flags that write no ref are all settled
+				// answers, so fail fast instead of re-cloning through the whole backoff.
 				e.shell.Warningf("Checkout failed! %s", err)
 				r.Break()
 
