@@ -11,7 +11,6 @@ import (
 	"io"
 	"os"
 	"os/exec"
-	"path"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -180,7 +179,7 @@ func (s *Shell) Chdir(path string) error {
 // PATHEXT of the Shell
 func (s *Shell) AbsolutePath(executable string) (string, error) {
 	// Is the path already absolute?
-	if path.IsAbs(executable) {
+	if filepath.IsAbs(executable) {
 		return executable, nil
 	}
 
