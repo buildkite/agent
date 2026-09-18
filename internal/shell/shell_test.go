@@ -380,6 +380,12 @@ func TestDefaultWorkingDirFromSystem(t *testing.T) {
 // relative, sending it through LookPath's os.Stat and failing because the
 // file doesn't exist. On Unix both packages agree, so this test can't catch
 // the regression there, but it still guards the fast path's behaviour.
+//
+// The filename carries a ".exe" extension: on Windows, AbsolutePath's fast
+// path only applies to an absolute path that already has an extension (an
+// extensionless one is routed through LookPath for PATHEXT resolution), so
+// an extensionless name here would deliberately miss the fast path and fail
+// because the file doesn't exist.
 func TestAbsolutePathReturnsAlreadyAbsolutePathUnchanged(t *testing.T) {
 	t.Parallel()
 
@@ -388,7 +394,7 @@ func TestAbsolutePathReturnsAlreadyAbsolutePathUnchanged(t *testing.T) {
 		t.Fatalf("shell.New() error = %v", err)
 	}
 
-	want := filepath.Join(t.TempDir(), "does-not-exist-and-does-not-need-to")
+	want := filepath.Join(t.TempDir(), "does-not-exist-and-does-not-need-to.exe")
 
 	got, err := sh.AbsolutePath(want)
 	if err != nil {
