@@ -435,3 +435,105 @@ func TestRunUnwrappedHookSetsLastHookExitStatus(t *testing.T) {
 		})
 	}
 }
+
+func TestLocalHookPathUsesWorkingDirectoryWithinCheckout(t *testing.T) {
+	t.Parallel()
+
+	checkout := t.TempDir()
+	rootHooks := filepath.Join(checkout, ".buildkite", "hooks")
+	serviceHooks := filepath.Join(checkout, "services", "api", ".buildkite", "hooks")
+	if err := os.MkdirAll(rootHooks, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(serviceHooks, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(rootHooks, "command"), []byte("root"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(serviceHooks, "command"), []byte("service"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	root, err := os.OpenRoot(checkout)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = root.Close() })
+
+	sh := shell.NewTestShell(t)
+	if err := sh.Chdir(filepath.Join(checkout, "services", "api")); err != nil {
+		t.Fatal(err)
+	}
+	e := &Executor{shell: sh, checkoutRoot: root}
+	got, err := e.localHookPath("command")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := filepath.Join(serviceHooks, "command"); got != want {
+		t.Fatalf("localHookPath(command) = %q, want %q", got, want)
+	}
+
+	if err := sh.Chdir(checkout); err != nil {
+		t.Fatal(err)
+	}
+	got, err = e.localHookPath("command")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := filepath.Join(rootHooks, "command"); got != want {
+		t.Fatalf("localHookPath(command) = %q, want %q", got, want)
+	}
+}
+
+func TestLocalHookPathRejectsWorkingDirectoryOutsideCheckout(t *testing.T) {
+	t.Parallel()
+
+	checkout := t.TempDir()
+	root, err := os.OpenRoot(checkout)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = root.Close() })
+
+	sh := shell.NewTestShell(t)
+	if err := sh.Chdir(t.TempDir()); err != nil {
+		t.Fatal(err)
+	}
+	e := &Executor{shell: sh, checkoutRoot: root}
+	if _, err := e.localHookPath("command"); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("localHookPath(command) error = %v, want os.ErrNotExist", err)
+	}
+}
+
+func TestLocalHookPathRejectsSymlinkEscape(t *testing.T) {
+	t.Parallel()
+
+	checkout := t.TempDir()
+	outside := t.TempDir()
+	outsideHooks := filepath.Join(outside, ".buildkite", "hooks")
+	if err := os.MkdirAll(outsideHooks, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(outsideHooks, "command"), []byte("outside"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(checkout, "service")
+	if err := os.Symlink(outside, link); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+	root, err := os.OpenRoot(checkout)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = root.Close() })
+
+	sh := shell.NewTestShell(t)
+	if err := sh.Chdir(link); err != nil {
+		t.Fatal(err)
+	}
+	e := &Executor{shell: sh, checkoutRoot: root}
+	if _, err := e.localHookPath("command"); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("localHookPath(command) error = %v, want os.ErrNotExist", err)
+	}
+}
