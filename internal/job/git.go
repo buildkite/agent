@@ -322,8 +322,17 @@ type gitFetchArgs struct {
 	GitFetchFlags string       // Flags to pass to the fetch command
 	Repository    string       // The remote to fetch from
 	Retry         bool         // Whether to retry the fetch on certain errors
-	RefSpecs      []string     // Refspecs to fetch
+	RefSpecs      []string     // Refspecs to fetch, word-split like a shell would
 	HidePrompt    bool         // Never log argv, including in shell debug mode
+
+	// LiteralRefSpecs are refspecs passed to git exactly as given, one argument
+	// each. RefSpecs is word-split because it carries operator-supplied strings
+	// that may hold several refspecs, but a refspec the agent builds from a ref
+	// name must not be: quotes are legal in a git ref name, and splitting a
+	// branch called release'candidate yields a refspec for releasecandidate
+	// instead. Quoting the refspec first is not a fix — shellwords.QuoteBatch
+	// escapes neither quote character, so the round trip loses them on Windows.
+	LiteralRefSpecs []string
 }
 
 func gitFetch(ctx context.Context, args gitFetchArgs) error {
@@ -352,6 +361,8 @@ func gitFetch(ctx context.Context, args gitFetchArgs) error {
 		}
 		commandArgs = append(commandArgs, individualRefSpecs...)
 	}
+
+	commandArgs = append(commandArgs, args.LiteralRefSpecs...)
 
 	smelt := map[string]bool{
 		gitErrStrBadObject:             false,

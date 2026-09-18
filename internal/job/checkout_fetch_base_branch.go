@@ -155,7 +155,11 @@ func (e *Executor) fetchBaseBranch(ctx context.Context, mode, gitFetchFlags stri
 			Shell:         e.shell,
 			GitFetchFlags: gitFetchFlags,
 			Repository:    "origin",
-			RefSpecs:      []string{refspec},
+			// LiteralRefSpecs, not RefSpecs: a quote is legal in a git ref name, and
+			// word-splitting this refspec would turn release'candidate into
+			// releasecandidate — a fetch that succeeds against the wrong branch
+			// wherever that one exists, leaving the intended ref stale.
+			LiteralRefSpecs: []string{refspec},
 		})
 		if err == nil {
 			return nil
