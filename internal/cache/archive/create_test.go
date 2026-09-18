@@ -1,6 +1,9 @@
 package archive
 
 import (
+	"bytes"
+	"encoding/binary"
+	"io"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -9,7 +12,215 @@ import (
 	"testing"
 
 	"github.com/buildkite/agent/v4/internal/cache/internal/trace"
+	"github.com/klauspost/compress/zip"
 )
+
+func TestRemoveZip64Extra(t *testing.T) {
+	field := func(tag uint16, data ...byte) []byte {
+		b := make([]byte, 4+len(data))
+		binary.LittleEndian.PutUint16(b, tag)
+		binary.LittleEndian.PutUint16(b[2:], uint16(len(data)))
+		copy(b[4:], data)
+		return b
+	}
+	zip64 := field(0x0001, make([]byte, 8)...)
+	other1 := field(0x1234, 1, 2, 3)
+	other2 := field(0x5678, 4, 5)
+	truncated := []byte{0x99, 0x99, 0x04, 0x00, 6, 7}
+
+	tests := []struct {
+		name  string
+		extra []byte
+		want  []byte
+	}{
+		{name: "ZIP64 only", extra: zip64},
+		{name: "mixed fields", extra: append(append(bytes.Clone(other1), zip64...), other2...), want: append(bytes.Clone(other1), other2...)},
+		{name: "multiple ZIP64 fields", extra: append(append(bytes.Clone(zip64), other1...), zip64...), want: other1},
+		{name: "malformed trailing field", extra: append(append(bytes.Clone(other1), zip64...), truncated...), want: append(bytes.Clone(other1), truncated...)},
+		{name: "short trailing bytes", extra: append(append(bytes.Clone(other1), zip64...), 0xaa, 0xbb), want: append(bytes.Clone(other1), 0xaa, 0xbb)},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			input := bytes.Clone(tt.extra)
+			got := removeZip64Extra(input)
+			if !bytes.Equal(got, tt.want) {
+				t.Errorf("removeZip64Extra(%x) = %x, want %x", tt.extra, got, tt.want)
+			}
+			if got == nil {
+				t.Fatal("removeZip64Extra returned nil for non-empty input")
+			}
+			if len(got) == 0 {
+				got = append(got, 0xff)
+				if got[0] != 0xff {
+					t.Fatal("failed to append to empty result")
+				}
+			} else {
+				got[0] ^= 0xff
+			}
+			if !bytes.Equal(input, tt.extra) {
+				t.Fatal("result shares its backing array with the input")
+			}
+		})
+	}
+}
+
+func TestCopyRawFileZip64Offsets(t *testing.T) {
+	const destinationOffset = int64(0x100003039)
+	payload := []byte("cache data")
+
+	tests := []struct {
+		name            string
+		sourceOffset    int64
+		wantSourceZip64 int
+	}{
+		{name: "below ZIP64 boundary", sourceOffset: 0xfffffffe, wantSourceZip64: 0},
+		{name: "at ZIP64 boundary", sourceOffset: 0xffffffff, wantSourceZip64: 1},
+		{name: "above ZIP64 boundary", sourceOffset: 0x100000000, wantSourceZip64: 1},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			source := writeVirtualOffsetArchive(t, tt.sourceOffset, payload)
+			sr, err := zip.NewReader(source, source.size())
+			if err != nil {
+				t.Fatalf("zip.NewReader(source): %v", err)
+			}
+			if got := zip64ExtraCount(sr.File[0].Extra); got != tt.wantSourceZip64 {
+				t.Fatalf("source ZIP64 extra count = %d, want %d", got, tt.wantSourceZip64)
+			}
+			sourceExtra := bytes.Clone(sr.File[0].Extra)
+
+			destination := &virtualOffsetBuffer{offset: destinationOffset}
+			dw := zip.NewWriter(destination)
+			dw.SetOffset(destinationOffset)
+			hdr := sr.File[0].FileHeader
+			hdr.Name = "copied"
+			if err := copyRawFile(dw, sr.File[0], hdr); err != nil {
+				t.Fatalf("copyRawFile: %v", err)
+			}
+			if err := dw.Close(); err != nil {
+				t.Fatalf("destination Close: %v", err)
+			}
+			if !bytes.Equal(sr.File[0].Extra, sourceExtra) {
+				t.Fatal("copyRawFile modified the source header Extra")
+			}
+
+			dr, err := zip.NewReader(destination, destination.size())
+			if err != nil {
+				t.Fatalf("zip.NewReader(destination): %v", err)
+			}
+			if got := zip64ExtraCount(dr.File[0].Extra); got != 1 {
+				t.Fatalf("destination ZIP64 extra count = %d, want 1", got)
+			}
+			if got := zip64Offset(dr.File[0].Extra); got != uint64(destinationOffset) {
+				t.Errorf("destination ZIP64 offset = %#x, want %#x", got, destinationOffset)
+			}
+
+			r, err := dr.File[0].Open()
+			if err != nil {
+				t.Fatalf("destination entry Open: %v", err)
+			}
+			got, err := io.ReadAll(r)
+			if err != nil {
+				t.Fatalf("destination entry ReadAll: %v", err)
+			}
+			if err := r.Close(); err != nil {
+				t.Fatalf("destination entry Close: %v", err)
+			}
+			if !bytes.Equal(got, payload) {
+				t.Errorf("destination content = %q, want %q", got, payload)
+			}
+		})
+	}
+}
+
+type virtualOffsetBuffer struct {
+	offset int64
+	data   []byte
+}
+
+func (b *virtualOffsetBuffer) Write(p []byte) (int, error) {
+	b.data = append(b.data, p...)
+	return len(p), nil
+}
+
+func (b *virtualOffsetBuffer) ReadAt(p []byte, off int64) (int, error) {
+	if off < 0 {
+		return 0, os.ErrInvalid
+	}
+	n := 0
+	if off < b.offset {
+		zeroes := len(p)
+		if gap := b.offset - off; gap < int64(zeroes) {
+			zeroes = int(gap)
+		}
+		clear(p[:zeroes])
+		n += zeroes
+		off += int64(zeroes)
+	}
+	if n < len(p) && off >= b.offset {
+		start := off - b.offset
+		if start < int64(len(b.data)) {
+			n += copy(p[n:], b.data[start:])
+		}
+	}
+	if n < len(p) {
+		return n, io.EOF
+	}
+	return n, nil
+}
+
+func (b *virtualOffsetBuffer) size() int64 {
+	return b.offset + int64(len(b.data))
+}
+
+func writeVirtualOffsetArchive(t *testing.T, offset int64, payload []byte) *virtualOffsetBuffer {
+	t.Helper()
+	b := &virtualOffsetBuffer{offset: offset}
+	zw := zip.NewWriter(b)
+	zw.SetOffset(offset)
+	w, err := zw.Create("source")
+	if err != nil {
+		t.Fatalf("source Create: %v", err)
+	}
+	if _, err := w.Write(payload); err != nil {
+		t.Fatalf("source Write: %v", err)
+	}
+	if err := zw.Close(); err != nil {
+		t.Fatalf("source Close: %v", err)
+	}
+	return b
+}
+
+func zip64ExtraCount(extra []byte) int {
+	count := 0
+	for len(extra) >= 4 {
+		tag := binary.LittleEndian.Uint16(extra)
+		size := int(binary.LittleEndian.Uint16(extra[2:]))
+		if size > len(extra)-4 {
+			break
+		}
+		if tag == 0x0001 {
+			count++
+		}
+		extra = extra[4+size:]
+	}
+	return count
+}
+
+func zip64Offset(extra []byte) uint64 {
+	for len(extra) >= 4 {
+		tag := binary.LittleEndian.Uint16(extra)
+		size := int(binary.LittleEndian.Uint16(extra[2:]))
+		if size > len(extra)-4 {
+			return 0
+		}
+		if tag == 0x0001 && size >= 24 {
+			return binary.LittleEndian.Uint64(extra[20:28])
+		}
+		extra = extra[4+size:]
+	}
+	return 0
+}
 
 func TestArchiveLayoutRootAnchor(t *testing.T) {
 	if runtime.GOOS == "windows" {
