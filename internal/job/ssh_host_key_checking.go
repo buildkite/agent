@@ -1,5 +1,10 @@
 package job
 
+import (
+	"errors"
+	"os/exec"
+)
+
 // configureSSHKeyChecking sets up GIT_SSH_COMMAND with host key checking options.
 // If GIT_SSH is set (a binary path), we skip configuration since we can't add flags.
 // If acceptNew is false, it uses StrictHostKeyChecking=yes to avoid prompting.
@@ -24,7 +29,11 @@ func (e *Executor) configureSSHKeyChecking(acceptNew bool) {
 			// SSH version couldn't be interrogated, but OpenSSH 7.6 has been
 			// around for a long time now, so assume support exists anyway.
 			// If SSH chokes on the option later on, that's too bad.
-			e.shell.Warningf("Failed to check SSH version for compatibility, needed for auto-accepting new host keys (no-ssh-keyscan=false). Continuing assuming that StrictHostKeyChecking=accept-new is supported. The error was: %v", err)
+			// Missing SSH is normal in command-only containers. Keep configuring
+			// host key checking for hooks and plugins, but don't warn about it.
+			if !errors.Is(err, exec.ErrNotFound) {
+				e.shell.Warningf("Failed to check SSH version for compatibility, needed for auto-accepting new host keys (no-ssh-keyscan=false). Continuing assuming that StrictHostKeyChecking=accept-new is supported. The error was: %v", err)
+			}
 			supports = true
 		}
 
