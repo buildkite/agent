@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/buildkite/roko"
+	"github.com/buildkite/shellwords"
 )
 
 // How hard the checkout tries to bring refs/remotes/origin/<base> up to date.
@@ -45,10 +46,14 @@ const (
 	baseBranchFetchAttemptsStrict     = 10
 )
 
-// errNoBaseBranchToFetch is the strict-mode failure for a job that names no base
-// branch at all. Retrying the checkout cannot conjure one, so the checkout breaks
-// its retrier on it rather than spending the whole attempt budget on it.
-var errNoBaseBranchToFetch = errors.New("no base branch to fetch")
+// The strict-mode failures the checkout does not retry: retrying can neither
+// conjure a base branch for a job that names none nor rewrite the operator's
+// fetch flags, so the checkout breaks its retrier on both rather than spending
+// the whole attempt budget on them.
+var (
+	errNoBaseBranchToFetch        = errors.New("no base branch to fetch")
+	errBaseBranchFetchWritesNoRef = errors.New("git fetch flags write no base branch ref")
+)
 
 // parseGitFetchBaseBranchMode maps a BUILDKITE_GIT_FETCH_BASE_BRANCH value to a
 // mode. The empty string selects off, for programmatic ExecutorConfig consumers;
@@ -136,6 +141,24 @@ func (e *Executor) fetchBaseBranch(ctx context.Context, mode, gitFetchFlags stri
 		}
 		e.shell.Commentf("Skipping base branch fetch: no base branch is known")
 		return nil
+	}
+
+	// git exits zero for a fetch that writes no ref, so under strict these flags
+	// would turn the promise of a current base branch into whatever the checkout
+	// directory already held. The flags are the operator's and the two requests
+	// cannot both be honoured, so report the conflict rather than stripping a
+	// --dry-run that explicitly asked for nothing to be written.
+	if strict {
+		flags, err := shellwords.Split(gitFetchFlags)
+		if err != nil {
+			return fmt.Errorf("parsing git fetch flags %q: %w", gitFetchFlags, err)
+		}
+		if writesNoRef := refSuppressingFetchFlags(flags); len(writesNoRef) > 0 {
+			return fmt.Errorf(
+				"%w: BUILDKITE_GIT_FETCH_BASE_BRANCH=%s cannot guarantee a current base branch while BUILDKITE_GIT_FETCH_FLAGS contains %s",
+				errBaseBranchFetchWritesNoRef, GitFetchBaseBranchStrict, strings.Join(writesNoRef, " "),
+			)
+		}
 	}
 
 	e.shell.Commentf("Fetch base branch %q", base)

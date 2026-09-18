@@ -466,6 +466,62 @@ func gitRevParseForBaseBranchTest(t *testing.T, dir, rev string) string {
 	return strings.TrimSpace(string(out))
 }
 
+// git reports success for a fetch that writes no ref, so BUILDKITE_GIT_FETCH_FLAGS
+// can leave origin/<base> exactly as stale as it was while the fetch "succeeds".
+// strict cannot honour both that flag and its own guarantee, so it refuses the
+// combination instead of quietly dropping either.
+func TestFetchSourceBaseBranchStrictRejectsFetchFlagsThatWriteNoRef(t *testing.T) {
+	// --dry is git's unambiguous abbreviation of --dry-run, and is matched for the
+	// same reason the spelled-out flags are.
+	for _, flags := range []string{"--dry-run", "--prefetch", "--negotiate-only", "-v --dry"} {
+		t.Run(flags, func(t *testing.T) {
+			f := newBaseBranchFixture(t)
+
+			e := newBaseBranchFetchExecutor(t, f)
+			e.Branch = "feature-branch"
+			e.GitFetchBaseBranch = GitFetchBaseBranchStrict
+			e.GitFetchFlags = flags
+			e.shell.Env.Set("BUILDKITE_PULL_REQUEST_BASE_BRANCH", "main")
+
+			err := e.fetchSource(t.Context(), false, nil)
+			if !errors.Is(err, errBaseBranchFetchWritesNoRef) {
+				t.Fatalf("e.fetchSource(ctx, false, nil) error = %v, want it to wrap %v", err, errBaseBranchFetchWritesNoRef)
+			}
+			if got := gitRevParseForBaseBranchTest(t, f.checkout, "refs/remotes/origin/main"); got != f.staleMain {
+				t.Errorf("origin/main = %q, want the stale %q left in place", got, f.staleMain)
+			}
+		})
+	}
+}
+
+// optimistic makes no promise about the ref, so the same flags are left alone
+// there: they are the operator's configuration for every fetch in the job, and a
+// stale base branch is the outcome optimistic already tolerates.
+func TestFetchSourceBaseBranchOptimisticKeepsFetchFlagsThatWriteNoRef(t *testing.T) {
+	f := newBaseBranchFixture(t)
+
+	e := newBaseBranchFetchExecutor(t, f)
+	e.Branch = "feature-branch"
+	e.GitFetchBaseBranch = GitFetchBaseBranchOptimistic
+	// --prefetch rather than --dry-run: it redirects the ref instead of writing
+	// none, so the ref it does land distinguishes "the flags reached git and the
+	// fetch ran" from an optimistic path that skipped the fetch altogether.
+	e.GitFetchFlags = "--prefetch"
+	e.shell.Env.Set("BUILDKITE_PULL_REQUEST_BASE_BRANCH", "main")
+
+	// fetchBaseBranch rather than fetchSource: these flags also stop the job's own
+	// fetch from bringing the commit, and this is about the base branch fetch.
+	if err := e.fetchBaseBranch(t.Context(), GitFetchBaseBranchOptimistic, e.GitFetchFlags); err != nil {
+		t.Fatalf("e.fetchBaseBranch(ctx, optimistic, %q) error = %v, want nil", e.GitFetchFlags, err)
+	}
+	if got := gitRevParseForBaseBranchTest(t, f.checkout, "refs/prefetch/remotes/origin/main"); got != f.currentMain {
+		t.Errorf("refs/prefetch/remotes/origin/main = %q, want %q: --prefetch did not reach git", got, f.currentMain)
+	}
+	if got := gitRevParseForBaseBranchTest(t, f.checkout, "refs/remotes/origin/main"); got != f.staleMain {
+		t.Errorf("origin/main = %q, want the stale %q left in place", got, f.staleMain)
+	}
+}
+
 // gitFetch word-splits every refspec, and quotes are legal in a git ref name, so
 // an unquoted refspec for release'candidate becomes one for releasecandidate: a
 // fetch that succeeds against a different branch and leaves the requested ref
