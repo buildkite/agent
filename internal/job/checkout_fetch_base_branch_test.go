@@ -387,6 +387,11 @@ func newBaseBranchFixture(t *testing.T) *baseBranchFixture {
 	if out, err := s.CreateRef(repoName, "refs/heads/main", advanced); err != nil {
 		t.Fatalf("s.CreateRef(%q, refs/heads/main) error = %v, output: %s", repoName, err, string(out))
 	}
+	// Equal to f.commit, and not usable as a value distinct from it: PushBranch
+	// commits the same file content on top of the same parent with the same
+	// message, so two of its commits made in the same author second hash
+	// identically. A test that needs a base branch tip telling it apart from the
+	// job's own commit must create its own ref.
 	f.currentMain = advanced
 
 	if f.staleMain == f.currentMain {
@@ -519,6 +524,42 @@ func TestFetchSourceBaseBranchOptimisticKeepsFetchFlagsThatWriteNoRef(t *testing
 	}
 	if got := gitRevParseForBaseBranchTest(t, f.checkout, "refs/remotes/origin/main"); got != f.staleMain {
 		t.Errorf("origin/main = %q, want the stale %q left in place", got, f.staleMain)
+	}
+}
+
+// The base branch is fetched separately from the job's own source, not as an extra
+// refspec on it, because rev-parse FETCH_HEAD resolves to the first ref fetched
+// and the checkout of the job's commit depends on that. Folding the base branch
+// into that fetch would point FETCH_HEAD at the base branch tip.
+func TestFetchSourceBaseBranchLeavesFetchHeadOnTheJobsOwnCommit(t *testing.T) {
+	f := newBaseBranchFixture(t)
+
+	// A base branch whose tip differs from the job's own commit. The fixture's
+	// feature-branch and advanced main share a sha — same tree, parent, message
+	// and author second — so neither can stand in for the other here.
+	if out, err := f.server.CreateRef("base-branch", "refs/heads/other-base", f.staleMain); err != nil {
+		t.Fatalf("s.CreateRef(refs/heads/other-base) error = %v, output: %s", err, string(out))
+	}
+	if f.staleMain == f.commit {
+		t.Fatal("the base branch tip equals the job's commit, so FETCH_HEAD cannot distinguish them")
+	}
+
+	e := newBaseBranchFetchExecutor(t, f)
+	e.Branch = "feature-branch"
+	e.GitFetchBaseBranch = GitFetchBaseBranchStrict
+	e.shell.Env.Set("BUILDKITE_PULL_REQUEST_BASE_BRANCH", "other-base")
+
+	if err := e.fetchSource(t.Context(), false, nil); err != nil {
+		t.Fatalf("e.fetchSource(ctx, false, nil) error = %v, want nil", err)
+	}
+	// The base branch really was fetched, so FETCH_HEAD had the chance to end up
+	// on it.
+	if got := gitRevParseForBaseBranchTest(t, f.checkout, "refs/remotes/origin/other-base"); got != f.staleMain {
+		t.Fatalf("origin/other-base = %q, want %q", got, f.staleMain)
+	}
+	if got := gitRevParseForBaseBranchTest(t, f.checkout, "FETCH_HEAD"); got != f.commit {
+		t.Errorf("FETCH_HEAD = %q, want the job's own commit %q (base branch tip = %q)",
+			got, f.commit, f.staleMain)
 	}
 }
 
