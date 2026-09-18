@@ -10,6 +10,41 @@ import (
 	"testing"
 )
 
+func TestValidateFilePath(t *testing.T) {
+	tests := []struct {
+		name      string
+		filePath  string
+		wantError string
+	}{
+		{name: "valid simple path", filePath: "test.txt"},
+		{name: "valid relative path", filePath: "dir/subdir/file.txt"},
+		{name: "valid absolute path", filePath: "/tmp/test.txt"},
+		{name: "empty path", wantError: "file path cannot be empty"},
+		{name: "path with semicolon", filePath: "file;rm -rf /", wantError: "file path contains potentially dangerous character: ;"},
+		{name: "path with ampersand", filePath: "file&malicious", wantError: "file path contains potentially dangerous character: &"},
+		{name: "path with pipe", filePath: "file|cat /etc/passwd", wantError: "file path contains potentially dangerous character: |"},
+		{name: "path with backtick", filePath: "file`whoami`", wantError: "file path contains potentially dangerous character: `"},
+		{name: "path with dollar sign", filePath: "file$(whoami)", wantError: "file path contains potentially dangerous character: $"},
+		{name: "path traversal attempt", filePath: "../../../etc/passwd", wantError: "file path contains path traversal sequence"},
+		{name: "path with quotes", filePath: `file"test"`, wantError: `file path contains potentially dangerous character: "`},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateFilePath(tt.filePath)
+			if tt.wantError == "" {
+				if err != nil {
+					t.Fatalf("validateFilePath: %v", err)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), tt.wantError) {
+				t.Fatalf("validateFilePath error = %v, want error containing %q", err, tt.wantError)
+			}
+		})
+	}
+}
+
 func TestNewLocalFileBlob(t *testing.T) {
 	ctx := t.Context()
 
@@ -560,7 +595,7 @@ func TestNewBlobStoreLocalFile(t *testing.T) {
 	ctx := t.Context()
 	tmpDir := t.TempDir()
 
-	blob, err := NewBlobStore(ctx, LocalFileStore, fileURL(tmpDir))
+	blob, err := NewBlobStore(ctx, LocalFileStore, fileURL(tmpDir), nil)
 	if err != nil {
 		t.Fatalf("NewBlobStore: %v", err)
 	}
@@ -576,7 +611,7 @@ func TestNewBlobStoreLocalFile(t *testing.T) {
 // file:// is accepted for agent_managed (local testing) and must reach the local
 // file store rather than the S3 store, matching validateCacheStore.
 func TestNewBlobStoreAgentManagedFile(t *testing.T) {
-	blob, err := NewBlobStore(t.Context(), AgentManaged, fileURL(t.TempDir()))
+	blob, err := NewBlobStore(t.Context(), AgentManaged, fileURL(t.TempDir()), nil)
 	if err != nil {
 		t.Fatalf("NewBlobStore: %v", err)
 	}

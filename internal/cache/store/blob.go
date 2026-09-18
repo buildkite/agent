@@ -30,13 +30,13 @@ type RetentionRefresher interface {
 	RefreshRetention(ctx context.Context, key string, retention time.Duration)
 }
 
-func NewBlobStore(ctx context.Context, store, bucketURL string) (Blob, error) {
+func NewBlobStore(ctx context.Context, store, bucketURL string, nscClient *NscClient) (Blob, error) {
 	switch store {
 	case AgentManaged:
 		scheme, _, _ := strings.Cut(bucketURL, "://")
 		switch scheme {
 		case nscScheme:
-			return NewNscStore(bucketURL)
+			return NewNscStore(bucketURL, nscClient)
 		case "file":
 			// Supported only for local testing, kept consistent with validateCacheStore.
 			return NewLocalFileBlob(ctx, bucketURL)
