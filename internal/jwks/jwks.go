@@ -12,7 +12,8 @@ import (
 // KeyFromBytes parses a JSON Web Key Set from data and returns the JSON Web Key
 // identified by keyID. If keyID is empty and the JSON Web Key Set is a singleton,
 // it returns the only key in the key set. This mirrors jwkutil.LoadKey, but
-// operates on in-memory data rather than a file path.
+// operates on in-memory data rather than a file path. The returned key must be
+// a private key, since it is intended for signing rather than verification.
 func KeyFromBytes(data []byte, keyID string) (jwk.Key, error) {
 	jwks, err := jwk.Parse(data)
 	if err != nil {
@@ -26,6 +27,14 @@ func KeyFromBytes(data []byte, keyID string) (jwk.Key, error) {
 
 	if err := jwkutil.Validate(key); err != nil {
 		return nil, fmt.Errorf("signing key ID %q is invalid: %w", foundKeyID, err)
+	}
+
+	isPrivate, err := jwk.IsPrivateKey(key)
+	if err != nil {
+		return nil, fmt.Errorf("determining if signing key ID %q is a private key: %w", foundKeyID, err)
+	}
+	if !isPrivate {
+		return nil, fmt.Errorf("signing key ID %q is a public key, but a private key is required for signing", foundKeyID)
 	}
 
 	return key, nil

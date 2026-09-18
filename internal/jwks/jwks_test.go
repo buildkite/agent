@@ -102,4 +102,23 @@ func TestKeyFromBytes(t *testing.T) {
 			t.Fatal("KeyFromBytes() error = nil, want an error")
 		}
 	})
+
+	t.Run("public key rejected", func(t *testing.T) {
+		t.Parallel()
+
+		_, pubSet, err := jwkutil.NewKeyPair("test-key", jwa.EdDSA())
+		if err != nil {
+			t.Fatalf("jwkutil.NewKeyPair() error = %v", err)
+		}
+
+		pubData, err := json.Marshal(pubSet)
+		if err != nil {
+			t.Fatalf("json.Marshal(pubSet) error = %v", err)
+		}
+
+		_, err = KeyFromBytes(pubData, "")
+		if err == nil {
+			t.Fatal("KeyFromBytes() error = nil, want an error for a public key")
+		}
+	})
 }
