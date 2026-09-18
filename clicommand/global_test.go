@@ -48,9 +48,6 @@ func TestGitFetchBaseBranchFlag(t *testing.T) {
 			want: "strict",
 		},
 		{
-			// A boolean is what the flag took before it grew modes, and what anyone
-			// would guess from its name, so the value must be rejected rather than
-			// quietly enabling or disabling the fetch.
 			name:    "rejects a boolean",
 			args:    []string{"--git-fetch-base-branch", "true"},
 			wantErr: true,
