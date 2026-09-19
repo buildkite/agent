@@ -542,7 +542,7 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context, previousAttempts in
 			e.shell.Commentf("Fetching all Git LFS objects; checking out %d path(s) present in the sparse working tree (%s mode)", len(paths), sparse.mode)
 		}
 		if err := e.traceOp(ctx, "git.lfs.fetch", func(ctx context.Context) error {
-			return gitLFSFetchCheckout(ctx, lfsArgs)
+			return e.fetchAndCheckoutLFS(ctx, mirrorDir, lfsArgs)
 		}); err != nil {
 			return err
 		}
