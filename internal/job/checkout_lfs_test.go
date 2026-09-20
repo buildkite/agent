@@ -34,7 +34,11 @@ func TestCheckoutLFSMirror(t *testing.T) {
 		mirrorStorage     bool
 		lfsConfig         bool
 		conditionalConfig bool
-		symbolicCommit    bool
+		commitRef         string
+		refSpec           string
+		prRef             string
+		existingMirror    bool
+		advanceBranch     bool
 		sparseMode        SparseCheckoutMode
 		paths             []string
 	}{
@@ -47,7 +51,17 @@ func TestCheckoutLFSMirror(t *testing.T) {
 		{name: "checkout LFS config", mode: "reference", lfsConfig: true},
 		{name: "sparse checkout LFS config", mode: "reference", lfsConfig: true, sparseMode: SparseCheckoutModeNoCone, paths: []string{"/included/", "!/included/excluded.bin"}},
 		{name: "workspace conditional LFS config", mode: "reference", conditionalConfig: true},
-		{name: "symbolic commit", mode: "reference", symbolicCommit: true},
+		{name: "HEAD fresh mirror", mode: "reference", commitRef: "HEAD"},
+		{name: "HEAD existing mirror", mode: "reference", commitRef: "HEAD", existingMirror: true},
+		{name: "HEAD custom refspec fresh mirror", mode: "reference", commitRef: "HEAD", refSpec: "+refs/heads/feature:refs/buildkite/job"},
+		{name: "HEAD custom refspec existing mirror", mode: "reference", commitRef: "HEAD", refSpec: "+refs/heads/feature:refs/buildkite/job", existingMirror: true},
+		{name: "HEAD PR fresh mirror", mode: "reference", commitRef: "HEAD", prRef: "head"},
+		{name: "HEAD PR existing mirror", mode: "reference", commitRef: "HEAD", prRef: "head", existingMirror: true},
+		{name: "HEAD PR merge fresh mirror", mode: "reference", commitRef: "HEAD", prRef: "merge"},
+		{name: "HEAD PR merge existing mirror", mode: "reference", commitRef: "HEAD", prRef: "merge", existingMirror: true},
+		{name: "named tag", mode: "reference", commitRef: "v1"},
+		{name: "pinned commit overrides refspec", mode: "reference", refSpec: "+refs/heads/main:refs/buildkite/job", existingMirror: true},
+		{name: "branch moves after prefetch", mode: "reference", commitRef: "HEAD", advanceBranch: true},
 		{name: "custom checkout storage", mode: "reference", customStorage: true},
 		{name: "custom mirror storage", mode: "reference", mirrorStorage: true},
 		{name: "cone", mode: "reference", sparseMode: SparseCheckoutModeCone, paths: []string{"included"}},
@@ -104,8 +118,22 @@ func TestCheckoutLFSMirror(t *testing.T) {
 			commit := gitOutputForRemoteCheckoutTest(t, source, "rev-parse", "HEAD")
 			e := newOnHostMirrorExecutor(t, canonical, commit)
 			e.Branch = "feature"
-			if test.symbolicCommit {
-				e.Commit = "HEAD"
+			if test.commitRef != "" {
+				e.Commit = test.commitRef
+			}
+			if test.commitRef == "v1" {
+				runGitForMirrorTest(t, canonical, "tag", "v1", commit)
+			}
+			if test.refSpec != "" {
+				e.RefSpec = test.refSpec
+				e.Branch = "main"
+			}
+			if test.prRef != "" {
+				e.PullRequest = "123"
+				e.PipelineProvider = "github"
+				e.PullRequestUsingMergeRefspec = test.prRef == "merge"
+				e.Branch = "main"
+				runGitForMirrorTest(t, canonical, "update-ref", "refs/pull/123/"+test.prRef, commit)
 			}
 			e.BuildPath = filepath.Join(root, "build")
 			e.GitLFSEnabled = true
@@ -122,8 +150,14 @@ func TestCheckoutLFSMirror(t *testing.T) {
 			mirror := expectedOnHostMirrorDir(e)
 			if test.noMirror {
 				e.GitMirrorsPath = ""
-			} else if (test.skipUpdate && !test.missing) || test.mirrorStorage || test.conditionalConfig {
+			} else if (test.skipUpdate && !test.missing) || test.mirrorStorage || test.conditionalConfig || test.existingMirror {
 				runGitForMirrorTest(t, "", "clone", "--mirror", canonical, mirror)
+			}
+			if test.existingMirror {
+				// Leave HEAD, the local branch, and FETCH_HEAD at the wrong
+				// commit; the update must use the job ref it actually fetches.
+				runGitForMirrorTest(t, mirror, "update-ref", "refs/heads/feature", "refs/heads/main")
+				runGitForMirrorTest(t, mirror, "fetch", "origin", "main")
 			}
 			if test.mirrorStorage {
 				runGitForMirrorTest(t, mirror, "config", "lfs.storage", "custom-lfs")
@@ -136,11 +170,12 @@ func TestCheckoutLFSMirror(t *testing.T) {
 				runGitForMirrorTest(t, "", "config", "--file", config, "lfs.url", canonical)
 				runGitForMirrorTest(t, "", "config", "--global", "includeIf.gitdir:"+filepath.ToSlash(root)+"/checkout-*/.git.path", config)
 			}
-			shared := !test.noMirror && !test.skipUpdate && !test.mirrorStorage && !test.conditionalConfig && !test.symbolicCommit
+			shared := !test.noMirror && !test.skipUpdate && !test.mirrorStorage && !test.conditionalConfig
 			objectPath := func(store string, data []byte) string {
 				oid := fmt.Sprintf("%x", sha256.Sum256(data))
 				return filepath.Join(store, "lfs", "objects", oid[:2], oid[2:4], oid)
 			}
+			cachedAsset := asset
 			if shared {
 				// Populate the cache during the initial mirror update, before
 				// any workspace exists. Neither later checkout can use remote LFS.
@@ -150,13 +185,22 @@ func TestCheckoutLFSMirror(t *testing.T) {
 				if got, err := os.ReadFile(objectPath(mirror, asset)); err != nil || !bytes.Equal(got, asset) {
 					t.Fatalf("initial mirror update asset = %q, %v; want %q", got, err, asset)
 				}
-				if err := os.RemoveAll(filepath.Join(canonical, "lfs")); err != nil {
+				if test.advanceBranch {
+					asset = []byte("LFS payload added after mirror prefetch")
+					write("included/asset.bin", asset)
+					runGitForMirrorTest(t, source, "add", ".")
+					runGitForMirrorTest(t, source, "commit", "-m", "Advance fixture\n\nCo-authored-by: Codex <noreply@openai.com>")
+					runGitForMirrorTest(t, source, "push", "origin", "feature")
+					// Keep the prefetched mirror at the old revision while the
+					// workspace resolves the branch again, as if it just moved.
+					e.GitMirrorsSkipUpdate = true
+				} else if err := os.RemoveAll(filepath.Join(canonical, "lfs")); err != nil {
 					t.Fatal(err)
 				}
 			}
 			for attempt := range 2 {
 				if attempt == 1 {
-					if !shared {
+					if !shared || test.advanceBranch {
 						break
 					}
 					// A fresh checkout must succeed using only cached LFS objects.
@@ -174,8 +218,13 @@ func TestCheckoutLFSMirror(t *testing.T) {
 					t.Fatalf("materialized asset = %q, %v; want %q", got, err, asset)
 				}
 				if shared {
-					if got, err := os.ReadFile(objectPath(mirror, asset)); err != nil || !bytes.Equal(got, asset) {
-						t.Fatalf("mirror asset = %q, %v; want %q", got, err, asset)
+					if got, err := os.ReadFile(objectPath(mirror, cachedAsset)); err != nil || !bytes.Equal(got, cachedAsset) {
+						t.Fatalf("mirror asset = %q, %v; want %q", got, err, cachedAsset)
+					}
+					if test.advanceBranch {
+						if _, err := os.Stat(objectPath(mirror, asset)); !os.IsNotExist(err) {
+							t.Fatalf("new payload unexpectedly present in mirror: %v", err)
+						}
 					}
 				} else if _, err := os.Stat(objectPath(mirror, asset)); !os.IsNotExist(err) {
 					t.Fatalf("fallback modified mirror LFS storage: %v", err)

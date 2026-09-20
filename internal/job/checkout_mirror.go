@@ -169,7 +169,7 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string, attem
 				return "", err
 			}
 			if hit {
-				return e.finishMirrorUpdate(ctx, repository, mirrorDir)
+				return e.finishMirrorUpdate(ctx, repository, mirrorDir, e.mirrorLFSRef())
 			}
 		}
 
@@ -222,7 +222,7 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string, attem
 					// --reference clone transfers only the missing delta.
 					attempt.outcome = remoteMirrorOutcomeMiss
 				}
-				return e.finishMirrorUpdate(ctx, repository, mirrorDir)
+				return e.finishMirrorUpdate(ctx, repository, mirrorDir, e.mirrorLFSRef())
 			}
 
 			if stagingCleanupErr == nil && tempMirrorDir != "" {
@@ -251,7 +251,7 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string, attem
 			}
 			return "", err
 		}
-		return e.finishMirrorUpdate(ctx, repository, mirrorDir)
+		return e.finishMirrorUpdate(ctx, repository, mirrorDir, e.mirrorLFSRef())
 	}
 
 	// If it exists, immediately release the clone lock.
@@ -286,6 +286,7 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string, attem
 		}
 	}()
 
+	lfsRef := e.mirrorLFSRef()
 	commitAlreadyPresent := false
 	if isMainRepository {
 		// Another process may have fetched the commit while we waited for the lock.
@@ -375,6 +376,11 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string, attem
 		}); err != nil {
 			return "", fmt.Errorf("%w%s", err, prMergeRefspecHint(isMergeRefspec))
 		}
+		if e.Commit == "HEAD" {
+			// Match the workspace checkout: use this fetch's resolved ref,
+			// even when a custom refspec did not update a local branch.
+			lfsRef = "FETCH_HEAD"
+		}
 	}
 	if !isMainRepository {
 		// This is a mirror of a submodule.
@@ -404,7 +410,7 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string, attem
 		}
 	}
 
-	return e.finishMirrorUpdate(ctx, repository, mirrorDir)
+	return e.finishMirrorUpdate(ctx, repository, mirrorDir, lfsRef)
 }
 
 // snapshotMirror creates a snapshot of the mirror. It returns the directory for
