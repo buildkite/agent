@@ -210,9 +210,9 @@ func gitCleanSubmodules(ctx context.Context, sh *shell.Shell, gitCleanFlags stri
 type gitLFSFetchCheckoutArgs struct {
 	Shell *shell.Shell
 	Retry bool // Whether to retry the fetch+checkout on failure
-	// MirrorDir, when set, receives fetched objects in its lfs directory.
-	// Checkout copies or links them into its own storage through LFS alternates.
-	MirrorDir string
+	// ReferenceDir supplies cached LFS objects, including for dissociated clones
+	// and clones referencing disposable Git mirror snapshots.
+	ReferenceDir string
 	// FetchInclude is passed as --include=<csv> to `git lfs fetch`. Empty means
 	// fetch all LFS objects.
 	FetchInclude []string
@@ -252,63 +252,24 @@ func gitLFSFetchCheckout(ctx context.Context, args gitLFSFetchCheckoutArgs) erro
 		)
 	}
 
-	fetchCmd := []string{"lfs", "fetch"}
-	var fetchOpts, checkoutOpts []shell.RunCommandOpt
-	var commit string
-	if args.MirrorDir != "" {
-		// The mirror's HEAD can differ from the job's commit, and its refs may
-		// lag behind a checkout fetched from the canonical remote.
-		var err error
-		commit, err = args.Shell.Command("git", "rev-parse", "HEAD").RunAndCaptureStdout(ctx)
-		if err != nil {
-			return fmt.Errorf("resolving LFS checkout commit: %w", err)
+	var runOpts []shell.RunCommandOpt
+	if args.ReferenceDir != "" {
+		objects := filepath.Join(args.ReferenceDir, "objects")
+		if existing, ok := args.Shell.Env.Get("GIT_ALTERNATE_OBJECT_DIRECTORIES"); ok && existing != "" {
+			objects += string(os.PathListSeparator) + existing
 		}
-		gitPath := func(name string) (string, error) {
-			path, err := args.Shell.Command("git", "rev-parse", "--git-path", name).RunAndCaptureStdout(ctx)
-			path = strings.TrimSpace(path)
-			if !filepath.IsAbs(path) {
-				path = filepath.Join(args.Shell.Getwd(), path)
-			}
-			return path, err
-		}
-		configPath, err := gitPath("config")
-		if err != nil {
-			return fmt.Errorf("resolving LFS checkout config: %w", err)
-		}
-		objectsPath, err := gitPath("objects")
-		if err != nil {
-			return fmt.Errorf("resolving LFS checkout objects: %w", err)
-		}
-		// Fetch into the bare mirror, retaining the job's .lfsconfig and
-		// repository configuration without modifying the shared mirror config.
-		fetchCmd = append([]string{
-			"--git-dir=" + args.MirrorDir,
-			"--work-tree=" + args.Shell.Getwd(),
-			"-c", "include.path=" + configPath,
-		}, fetchCmd...)
-		referenceEnv := func(objects string) shell.RunCommandOpt {
-			if existing, ok := args.Shell.Env.Get("GIT_ALTERNATE_OBJECT_DIRECTORIES"); ok && existing != "" {
-				objects += string(os.PathListSeparator) + existing
-			}
-			return shell.WithExtraEnv(env.FromSlice([]string{"GIT_ALTERNATE_OBJECT_DIRECTORIES=" + objects}))
-		}
-		fetchOpts = append(fetchOpts, referenceEnv(objectsPath))
-		// Explicit alternates work with dissociated clones and clean-checkout
-		// snapshots too. Each checkout retains its own independently prunable
-		// LFS store; no shared lfs.storage setting is persisted.
-		checkoutOpts = append(checkoutOpts, referenceEnv(filepath.Join(args.MirrorDir, "objects")))
+		runOpts = append(runOpts, shell.WithExtraEnv(env.FromSlice([]string{"GIT_ALTERNATE_OBJECT_DIRECTORIES=" + objects})))
 	}
+
+	fetchCmd := []string{"lfs", "fetch"}
 	if len(args.FetchInclude) > 0 {
 		fetchCmd = append(fetchCmd, "--include="+strings.Join(args.FetchInclude, ","))
-	}
-	if args.MirrorDir != "" {
-		fetchCmd = append(fetchCmd, "origin", strings.TrimSpace(commit))
 	}
 
 	checkoutPathspecs, checkoutScoped := args.checkoutPathspecs()
 
 	err := retrier.DoWithContext(ctx, func(retrier *roko.Retrier) error {
-		if err := args.Shell.Command("git", fetchCmd...).Run(ctx, fetchOpts...); err != nil {
+		if err := args.Shell.Command("git", fetchCmd...).Run(ctx, runOpts...); err != nil {
 			if args.Retry {
 				args.Shell.Commentf("%s", retrier)
 			}
@@ -318,7 +279,7 @@ func gitLFSFetchCheckout(ctx context.Context, args gitLFSFetchCheckoutArgs) erro
 			return nil
 		}
 		if !checkoutScoped {
-			if err := args.Shell.Command("git", "lfs", "checkout").Run(ctx, checkoutOpts...); err != nil {
+			if err := args.Shell.Command("git", "lfs", "checkout").Run(ctx, runOpts...); err != nil {
 				if args.Retry {
 					args.Shell.Commentf("%s", retrier)
 				}
@@ -328,7 +289,7 @@ func gitLFSFetchCheckout(ctx context.Context, args gitLFSFetchCheckoutArgs) erro
 		}
 		for batch := range slices.Chunk(checkoutPathspecs, gitLFSCheckoutPathBatchSize) {
 			checkoutCmd := append([]string{"lfs", "checkout"}, batch...)
-			if err := args.Shell.Command("git", checkoutCmd...).Run(ctx, checkoutOpts...); err != nil {
+			if err := args.Shell.Command("git", checkoutCmd...).Run(ctx, runOpts...); err != nil {
 				if args.Retry {
 					args.Shell.Commentf("%s", retrier)
 				}

@@ -169,7 +169,7 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string, attem
 				return "", err
 			}
 			if hit {
-				return e.snapshotMirror(ctx, repository, mirrorDir)
+				return e.finishMirrorUpdate(ctx, repository, mirrorDir)
 			}
 		}
 
@@ -222,7 +222,7 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string, attem
 					// --reference clone transfers only the missing delta.
 					attempt.outcome = remoteMirrorOutcomeMiss
 				}
-				return e.snapshotMirror(ctx, repository, mirrorDir)
+				return e.finishMirrorUpdate(ctx, repository, mirrorDir)
 			}
 
 			if stagingCleanupErr == nil && tempMirrorDir != "" {
@@ -251,7 +251,7 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string, attem
 			}
 			return "", err
 		}
-		return e.snapshotMirror(ctx, repository, mirrorDir)
+		return e.finishMirrorUpdate(ctx, repository, mirrorDir)
 	}
 
 	// If it exists, immediately release the clone lock.
@@ -404,7 +404,7 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string, attem
 		}
 	}
 
-	return e.snapshotMirror(ctx, repository, mirrorDir)
+	return e.finishMirrorUpdate(ctx, repository, mirrorDir)
 }
 
 // snapshotMirror creates a snapshot of the mirror. It returns the directory for

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"runtime"
 	"slices"
 	"time"
@@ -531,6 +532,10 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context, previousAttempts in
 			Retry:        true,
 			FetchInclude: sparse.lfsInclude(), // cone dirs; nil when inactive or no-cone
 		}
+		if mirrorDir != "" {
+			// Snapshots contain Git objects only; LFS objects live in the persistent mirror.
+			lfsArgs.ReferenceDir = filepath.Join(e.GitMirrorsPath, dirForRepository(e.Repository))
+		}
 		if sparse.noCone() {
 			// FetchInclude is empty on purpose (see table above). Scope checkout
 			// to LFS paths that are still in the sparse working tree.
@@ -542,7 +547,7 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context, previousAttempts in
 			e.shell.Commentf("Fetching all Git LFS objects; checking out %d path(s) present in the sparse working tree (%s mode)", len(paths), sparse.mode)
 		}
 		if err := e.traceOp(ctx, "git.lfs.fetch", func(ctx context.Context) error {
-			return e.fetchAndCheckoutLFS(ctx, mirrorDir, lfsArgs)
+			return gitLFSFetchCheckout(ctx, lfsArgs)
 		}); err != nil {
 			return err
 		}
