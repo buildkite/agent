@@ -32,6 +32,7 @@ import (
 	awssigner "github.com/buildkite/agent/v4/internal/cryptosigner/aws"
 	gcpsigner "github.com/buildkite/agent/v4/internal/cryptosigner/gcp"
 	"github.com/buildkite/agent/v4/internal/experiments"
+	"github.com/buildkite/agent/v4/internal/gcpsecrets"
 	"github.com/buildkite/agent/v4/internal/job"
 	"github.com/buildkite/agent/v4/internal/job/hook"
 	"github.com/buildkite/agent/v4/internal/osutil"
@@ -108,10 +109,11 @@ type AgentStartConfig struct {
 
 	SigningJWKSKeyID string `cli:"signing-jwks-key-id"`
 
-	SigningJWKSFile  string `cli:"signing-jwks-file" normalize:"filepath"`
-	SigningAWSKMSKey string `cli:"signing-aws-kms-key"`
-	SigningGCPKMSKey string `cli:"signing-gcp-kms-key"`
-	DebugSigning     bool   `cli:"debug-signing"`
+	SigningJWKSFile          string `cli:"signing-jwks-file" normalize:"filepath"`
+	SigningJWKSGCPSecretName string `cli:"signing-jwks-gcp-secret-name"`
+	SigningAWSKMSKey         string `cli:"signing-aws-kms-key"`
+	SigningGCPKMSKey         string `cli:"signing-gcp-kms-key"`
+	DebugSigning             bool   `cli:"debug-signing"`
 
 	VerificationJWKSFile        string `cli:"verification-jwks-file" normalize:"filepath"`
 	VerificationFailureBehavior string `cli:"verification-failure-behavior"`
@@ -688,9 +690,17 @@ var AgentStartCommand = &cli.Command{
 		},
 		&cli.StringFlag{
 			Name:      "signing-jwks-file",
-			Usage:     `Path to a file containing a signing key. Passing this flag enables pipeline signing for all pipelines uploaded by this agent. For hmac-sha256, the raw file content is used as the shared key. When using Docker containers to upload pipeline steps dynamically, use environment variable propagation (for example, "docker run -e BUILDKITE_AGENT_JWKS_FILE") to allow all steps within the pipeline to be signed.`,
+			Usage:     `Path to a file containing a signing key. Passing this flag enables pipeline signing for all pipelines uploaded by this agent. For hmac-sha256, the raw file content is used as the shared key. When using Docker containers to upload pipeline steps dynamically, use environment variable propagation (for example, "docker run -e BUILDKITE_AGENT_JWKS_FILE") to allow all steps within the pipeline to be signed. Cannot be used together with signing-jwks-gcp-secret-name.`,
 			Sources:   cli.EnvVars("BUILDKITE_AGENT_SIGNING_JWKS_FILE"),
 			TakesFile: true,
+		},
+		&cli.StringFlag{
+			Name: "signing-jwks-gcp-secret-name",
+			Usage: "The full resource name of a Google Secret Manager secret version containing a signing key " +
+				"(e.g. projects/*/secrets/*/versions/*). Passing this flag enables pipeline signing for all pipelines " +
+				"uploaded by this agent. The key is held in memory only and is never written to disk. " +
+				"Cannot be used together with signing-jwks-file.",
+			Sources: cli.EnvVars("BUILDKITE_AGENT_SIGNING_JWKS_GCP_SECRET_NAME"),
 		},
 		&cli.StringFlag{
 			Name:    "signing-jwks-key-id",
@@ -957,9 +967,26 @@ var AgentStartCommand = &cli.Command{
 			}
 		}
 
+		if cfg.SigningJWKSFile != "" && cfg.SigningJWKSGCPSecretName != "" {
+			l.Fatalf("Only one of signing-jwks-file or signing-jwks-gcp-secret-name may be provided")
+		}
+
 		if cfg.SigningJWKSFile != "" {
 			// The actual JWKS itself doesn't get used until `buildkite-agent pipeline upload` is called, but validate it here anyway
 			_, err := parseAndValidateJWKS(ctx, "signing", cfg.SigningJWKSFile)
+			if err != nil {
+				l.Fatalf("Signing JWKS failed validation: %v", err)
+			}
+		}
+
+		if cfg.SigningJWKSGCPSecretName != "" {
+			// The actual JWKS itself doesn't get used until `buildkite-agent pipeline upload` is called, but validate it here anyway
+			jwksBytes, err := gcpsecrets.AccessSecretVersion(ctx, cfg.SigningJWKSGCPSecretName)
+			if err != nil {
+				l.Fatalf("Couldn't retrieve signing JWKS from Google Secret Manager: %v", err)
+			}
+
+			_, err = parseAndValidateJWKSBytes("signing", jwksBytes)
 			if err != nil {
 				l.Fatalf("Signing JWKS failed validation: %v", err)
 			}
@@ -1042,11 +1069,12 @@ var AgentStartCommand = &cli.Command{
 			JobContextDir:                   cfg.JobContextDir,
 			PingMode:                        cfg.PingMode,
 
-			SigningJWKSFile:  cfg.SigningJWKSFile,
-			SigningJWKSKeyID: cfg.SigningJWKSKeyID,
-			SigningAWSKMSKey: cfg.SigningAWSKMSKey,
-			SigningGCPKMSKey: cfg.SigningGCPKMSKey,
-			DebugSigning:     cfg.DebugSigning,
+			SigningJWKSFile:          cfg.SigningJWKSFile,
+			SigningJWKSGCPSecretName: cfg.SigningJWKSGCPSecretName,
+			SigningJWKSKeyID:         cfg.SigningJWKSKeyID,
+			SigningAWSKMSKey:         cfg.SigningAWSKMSKey,
+			SigningGCPKMSKey:         cfg.SigningGCPKMSKey,
+			DebugSigning:             cfg.DebugSigning,
 
 			VerificationJWKS:             verificationJWKS,
 			VerificationFailureBehaviour: cfg.VerificationFailureBehavior,
@@ -1390,6 +1418,10 @@ func parseAndValidateJWKS(_ context.Context, keysetType, path string) (jwk.Set, 
 		return nil, fmt.Errorf("failed to read job %s keyset: %w", keysetType, err)
 	}
 
+	return parseAndValidateJWKSBytes(keysetType, jwksBytes)
+}
+
+func parseAndValidateJWKSBytes(keysetType string, jwksBytes []byte) (jwk.Set, error) {
 	jwks, err := jwk.Parse(jwksBytes)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse job %s keyset: %w", keysetType, err)

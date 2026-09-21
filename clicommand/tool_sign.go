@@ -14,6 +14,8 @@ import (
 	"github.com/buildkite/agent/v4/internal/bkgql"
 	awssigner "github.com/buildkite/agent/v4/internal/cryptosigner/aws"
 	gcpsigner "github.com/buildkite/agent/v4/internal/cryptosigner/gcp"
+	"github.com/buildkite/agent/v4/internal/gcpsecrets"
+	"github.com/buildkite/agent/v4/internal/jwks"
 	"github.com/buildkite/agent/v4/internal/stdin"
 	"github.com/buildkite/agent/v4/logger"
 	"github.com/buildkite/go-pipeline"
@@ -36,8 +38,9 @@ type ToolSignConfig struct {
 	NoConfirm    bool   `cli:"no-confirm"`
 
 	// Used for signing
-	JWKSFile  string `cli:"jwks-file"`
-	JWKSKeyID string `cli:"jwks-key-id"`
+	JWKSFile          string `cli:"jwks-file"`
+	JWKSGCPSecretName string `cli:"jwks-gcp-secret-name"`
+	JWKSKeyID         string `cli:"jwks-key-id"`
 
 	// AWS KMS key used for signing pipelines
 	AWSKMSKeyID string `cli:"signing-aws-kms-key"`
@@ -65,7 +68,8 @@ var (
 		"either provide the pipeline YAML, and the repository URL, " +
 			"or provide a GraphQL token to allow them to be retrieved from Buildkite",
 	)
-	ErrNotFound = errors.New("pipeline not found")
+	ErrNotFound           = errors.New("pipeline not found")
+	ErrJWKSSourceConflict = errors.New("only one of jwks-file or jwks-gcp-secret-name may be provided")
 )
 
 var ToolSignCommand = &cli.Command{
@@ -104,6 +108,12 @@ Signing a pipeline from a file:
     # or
     $ cat pipeline.yml | buildkite-agent tool sign \
         --jwks-file /path/to/private/key.json \
+        --repo <repo url for your pipeline>
+
+Signing a pipeline using a JWKS stored in Google Secret Manager:
+
+    $ buildkite-agent tool sign pipeline.yml \
+        --jwks-gcp-secret-name projects/my-project/secrets/my-secret/versions/latest \
         --repo <repo url for your pipeline>`,
 	Flags: append(globalFlags(),
 		&cli.StringFlag{
@@ -127,6 +137,13 @@ Signing a pipeline from a file:
 			Name:    "jwks-file",
 			Usage:   "Path to a file containing a JWKS.",
 			Sources: cli.EnvVars("BUILDKITE_AGENT_JWKS_FILE"),
+		},
+		&cli.StringFlag{
+			Name: "jwks-gcp-secret-name",
+			Usage: "The full resource name of a Google Secret Manager secret version containing a JWKS " +
+				"(e.g. projects/*/secrets/*/versions/*). The key is held in memory only and is never written to disk. " +
+				"Cannot be used together with jwks-file.",
+			Sources: cli.EnvVars("BUILDKITE_AGENT_JWKS_GCP_SECRET_NAME"),
 		},
 		&cli.StringFlag{
 			Name:    "jwks-key-id",
@@ -204,6 +221,21 @@ Signing a pipeline from a file:
 			key, err = gcpsigner.NewKMS(ctx, cfg.GCPKMSKeyID)
 			if err != nil {
 				return fmt.Errorf("couldn't create GCP KMS signer: %w", err)
+			}
+
+		case cfg.JWKSFile != "" && cfg.JWKSGCPSecretName != "":
+			return ErrJWKSSourceConflict
+
+		case cfg.JWKSGCPSecretName != "":
+			// retrieve the JWKS from Google Secret Manager, keeping the key material in memory only
+			jwksBytes, err := gcpsecrets.AccessSecretVersion(ctx, cfg.JWKSGCPSecretName)
+			if err != nil {
+				return fmt.Errorf("couldn't retrieve JWKS from Google Secret Manager: %w", err)
+			}
+
+			key, err = jwks.KeyFromBytes(jwksBytes, cfg.JWKSKeyID)
+			if err != nil {
+				return fmt.Errorf("couldn't read the signing key: %w", err)
 			}
 
 		default:
