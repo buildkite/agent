@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/buildkite/agent/v4/api"
+	"github.com/buildkite/agent/v4/internal/experiments"
 	"github.com/buildkite/agent/v4/internal/redact"
 	"github.com/buildkite/agent/v4/internal/socket"
 	"github.com/buildkite/agent/v4/jobapi"
@@ -15,7 +16,7 @@ import (
 // startJobAPI starts the job API server, iff the OS of the box supports it otherwise it returns a
 // noop cleanup function. It also sets the BUILDKITE_AGENT_JOB_API_SOCKET and
 // BUILDKITE_AGENT_JOB_API_TOKEN environment variables
-func (e *Executor) startJobAPI() (cleanup func(), err error) {
+func (e *Executor) startJobAPI(ctx context.Context) (cleanup func(), err error) {
 	cleanup = func() {}
 
 	if !socket.Available() {
@@ -32,6 +33,19 @@ We'll continue to run your job, but you won't be able to use the Job API`)
 
 	jobAPIOpts := []jobapi.ServerOpts{
 		jobapi.WithPromiseFailureDeclarer(e.declarePromiseFailure),
+	}
+	if experiments.IsEnabled(ctx, experiments.CaptureError) {
+		jobAPIOpts = append(jobAPIOpts, jobapi.WithCapturedErrorReporter(func(requestCtx context.Context, capturedError *jobapi.CapturedError) error {
+			// Reporting must not keep a cancelled job alive through its grace period.
+			reportCtx, cancel := context.WithCancel(requestCtx)
+			defer cancel()
+			stop := context.AfterFunc(ctx, cancel)
+			defer stop()
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+			return e.reportCapturedError(reportCtx, capturedError)
+		}))
 	}
 	if e.Debug {
 		jobAPIOpts = append(jobAPIOpts, jobapi.WithDebug())
@@ -75,6 +89,24 @@ We'll continue to run your job, but you won't be able to use the Job API`)
 			e.shell.Errorf("Error stopping Job API server: %v", err)
 		}
 	}, nil
+}
+
+func (e *Executor) reportCapturedError(ctx context.Context, capturedError *jobapi.CapturedError) error {
+	apiClient := api.NewClient(logger.Discard, api.Config{
+		Endpoint:     e.shell.Env.GetString("BUILDKITE_AGENT_ENDPOINT", ""),
+		Token:        e.shell.Env.GetString("BUILDKITE_AGENT_ACCESS_TOKEN", ""),
+		DisableHTTP2: e.shell.Env.GetBool("BUILDKITE_NO_HTTP2", false),
+		UserAgent:    version.UserAgent(),
+	})
+
+	_, err := apiClient.CaptureJobError(ctx, e.JobID, &api.JobCapturedError{
+		Code:           capturedError.Code,
+		Message:        capturedError.Message,
+		Timestamp:      *capturedError.Timestamp,
+		IdempotencyKey: capturedError.IdempotencyKey,
+		Context:        capturedError.Context,
+	})
+	return err
 }
 
 // declarePromiseFailure declares a promised failure for the current job to the

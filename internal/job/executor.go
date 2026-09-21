@@ -196,7 +196,7 @@ func (e *Executor) Run(ctx context.Context) (exitCode int) {
 
 	// Initialize the job API, iff the experiment is enabled. Noop otherwise
 	if e.JobAPI {
-		cleanup, err := e.startJobAPI()
+		cleanup, err := e.startJobAPI(ctx)
 		if err != nil {
 			e.shell.Errorf("Error setting up Job API: %v", err)
 			retErr = err

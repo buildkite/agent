@@ -20,6 +20,7 @@ import (
 type fakeServer struct {
 	env         map[string]string
 	promised    []PromiseFailureRequest
+	captured    []CapturedError
 	sock, token string
 	svr         *http.Server
 }
@@ -76,6 +77,22 @@ func (f *fakeServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if err := json.NewEncoder(w).Encode(&PromiseFailureResponse{Outcome: PromiseFailureDeclared, Accepted: true}); err != nil {
+			_ = socket.WriteError(w, fmt.Sprintf("encoding response: %v", err), http.StatusInternalServerError)
+		}
+		return
+	}
+	if r.URL.Path == "/api/current-job/v0/errors" {
+		var req CapturedError
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			_ = socket.WriteError(w, fmt.Sprintf("decoding request: %v", err), http.StatusBadRequest)
+			return
+		}
+		f.captured = append(f.captured, req)
+		now := time.Now().UTC()
+		req.Timestamp = &now
+		req.IdempotencyKey = "server-key"
+		w.WriteHeader(http.StatusCreated)
+		if err := json.NewEncoder(w).Encode(&req); err != nil {
 			_ = socket.WriteError(w, fmt.Sprintf("encoding response: %v", err), http.StatusInternalServerError)
 		}
 		return
@@ -149,6 +166,32 @@ func (f *fakeServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	default:
 		_ = socket.WriteError(w, fmt.Sprintf("unsupported method %q", r.Method), http.StatusBadRequest)
+	}
+}
+
+func TestClientCaptureErrorUsesAuthenticatedLocalTransport(t *testing.T) {
+	t.Parallel()
+
+	svr, err := runFakeServer()
+	if err != nil {
+		t.Fatalf("runFakeServer() = %v", err)
+	}
+	defer svr.Close()
+
+	cli, err := NewClient(t.Context(), svr.sock, svr.token)
+	if err != nil {
+		t.Fatalf("NewClient(%q, %q) error = %v", svr.sock, svr.token, err)
+	}
+	want := CapturedError{
+		Code:    "image_pull_failed",
+		Message: "registry denied access",
+		Context: map[string]any{"exit_status": json.Number("17"), "id": json.Number("9007199254740993")},
+	}
+	if err := cli.CaptureError(t.Context(), &want); err != nil {
+		t.Fatalf("CaptureError() error = %v", err)
+	}
+	if diff := cmp.Diff([]CapturedError{want}, svr.captured); diff != "" {
+		t.Errorf("captured requests diff (-want +got):\n%s", diff)
 	}
 }
 

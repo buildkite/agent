@@ -24,6 +24,7 @@ const (
 const (
 	// Available experiments
 	AgentAPI                       = "agent-api"
+	CaptureError                   = "capture-error"
 	InterpolationPrefersRuntimeEnv = "interpolation-prefers-runtime-env"
 	OriginCloneKit                 = "origin-clonekit"
 	PTYRaw                         = "pty-raw"
@@ -53,6 +54,7 @@ const (
 var (
 	Available = map[string]struct{}{
 		AgentAPI:                       {},
+		CaptureError:                   {},
 		InterpolationPrefersRuntimeEnv: {},
 		OriginCloneKit:                 {},
 		LegacyPostHookOrder:            {},

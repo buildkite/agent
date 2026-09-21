@@ -50,6 +50,7 @@ var BuildkiteAgentCommands = []*cli.Command{
 		Commands: []*cli.Command{
 			JobUpdateCommand,
 			JobPromiseFailureCommand,
+			JobCaptureErrorCommand,
 		},
 	},
 	{

@@ -14,6 +14,7 @@ const (
 	workdirURL        = "http://job/api/current-job/v0/workdir"
 	redactionsURL     = "http://job/api/current-job/v0/redactions"
 	promiseFailureURL = "http://job/api/current-job/v0/promise-failure"
+	capturedErrorsURL = "http://job/api/current-job/v0/errors"
 )
 
 var (
@@ -26,6 +27,12 @@ var (
 // Client connects to the Job API.
 type Client struct {
 	client *socket.Client
+}
+
+// CaptureError sends an error to the running parent agent. It never falls
+// back to sending the payload directly to Buildkite.
+func (c *Client) CaptureError(ctx context.Context, capturedError *CapturedError) error {
+	return c.client.Do(ctx, http.MethodPost, capturedErrorsURL, capturedError, nil)
 }
 
 // NewDefaultClient returns a new Job API Client with the default socket path
