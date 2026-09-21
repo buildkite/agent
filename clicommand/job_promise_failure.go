@@ -60,7 +60,6 @@ var JobPromiseFailureCommand = &cli.Command{
 	Name:        "promise-failure",
 	Usage:       "Promise a job will finish with a failing exit status",
 	Description: jobPromiseFailureHelpDescription,
-	Hidden:      true, // hidden until the early-failure feature is generally available
 	Flags: slices.Concat(globalFlags(), apiFlags(), []cli.Flag{
 		&cli.StringFlag{
 			Name:  "reason",
