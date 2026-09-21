@@ -111,6 +111,7 @@ var CacheSaveCommand = &cli.Command{
 			CacheConfigFile: cacheConfigFile,
 			Names:           cfg.Names,
 			Concurrency:     cfg.Concurrency,
+			FailOnError:     cfg.FailOnError,
 			Force:           cfg.Force,
 		}
 

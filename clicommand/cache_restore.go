@@ -109,6 +109,7 @@ var CacheRestoreCommand = &cli.Command{
 			BucketURL:       cfg.BucketURL,
 			CacheConfigFile: cacheConfigFile,
 			Names:           cfg.Names,
+			FailOnError:     cfg.FailOnError,
 		}
 
 		// Perform cache restore (logging happens inside)

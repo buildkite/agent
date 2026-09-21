@@ -20,6 +20,13 @@ import (
 	"go.opentelemetry.io/otel/codes"
 )
 
+// errRestoreMutatedTargets marks a restore failure that happened after the
+// target paths were cleaned or extraction had begun, leaving the workspace in a
+// partial state. Unlike a pre-mutation failure it is not equivalent to a cache
+// miss, so it stays fatal even when cache errors are otherwise fail-open —
+// continuing would run the build against half-restored targets.
+var errRestoreMutatedTargets = errors.New("cache restore failed after modifying target paths")
+
 // Restore restores a cache from storage by ID.
 //
 // The function performs the following workflow:
@@ -297,7 +304,7 @@ func (c *client) Restore(ctx context.Context, cacheID string) (RestoreResult, er
 		if err != nil {
 			span.RecordError(err)
 			span.SetStatus(codes.Error, "failed to resolve target path")
-			return result, fmt.Errorf("failed to resolve target path %q: %w", path, err)
+			return result, errors.Join(errRestoreMutatedTargets, fmt.Errorf("failed to resolve target path %q: %w", path, err))
 		}
 
 		slog.Debug("cleaning path", "path", path, "extractedPath", extractedPath)
@@ -305,7 +312,7 @@ func (c *client) Restore(ctx context.Context, cacheID string) (RestoreResult, er
 		if err := cleanPath(ctx, extractedPath); err != nil {
 			span.RecordError(err)
 			span.SetStatus(codes.Error, "failed to clean path")
-			return result, fmt.Errorf("failed to clean path %q: %w", extractedPath, err)
+			return result, errors.Join(errRestoreMutatedTargets, fmt.Errorf("failed to clean path %q: %w", extractedPath, err))
 		}
 	}
 
@@ -316,7 +323,7 @@ func (c *client) Restore(ctx context.Context, cacheID string) (RestoreResult, er
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, "failed to extract cache")
-		return result, fmt.Errorf("failed to extract cache: %w", err)
+		return result, errors.Join(errRestoreMutatedTargets, fmt.Errorf("failed to extract cache: %w", err))
 	}
 
 	// Populate archive metrics

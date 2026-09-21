@@ -381,6 +381,58 @@ func TestPrepareGitSSHKey(t *testing.T) {
 	})
 }
 
+func TestGitSSHCommandForKeyFile(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		path     string
+		previous string
+		want     string
+	}{
+		{
+			name: "posix path, no previous command",
+			path: "/home/buildkite-agent/builds/agent-1/.buildkite-ssh-key-1234/id",
+			want: "ssh -i '/home/buildkite-agent/builds/agent-1/.buildkite-ssh-key-1234/id' -o IdentitiesOnly=yes",
+		},
+		{
+			name:     "posix path, with previous command",
+			path:     "/home/buildkite-agent/builds/agent-1/.buildkite-ssh-key-1234/id",
+			previous: "ssh -F ~/.ssh/config",
+			want:     "ssh -F ~/.ssh/config -i '/home/buildkite-agent/builds/agent-1/.buildkite-ssh-key-1234/id' -o IdentitiesOnly=yes",
+		},
+		{
+			// GIT_SSH_COMMAND is parsed by git's bundled POSIX-style shell on
+			// every OS, including Windows (via MSYS2 sh.exe), not by cmd.exe.
+			// The backslashes in a Windows path must survive inside single
+			// quotes, or the identity file path is corrupted.
+			name: "windows path preserves backslashes",
+			path: `D:\buildkite-agent\builds\agent-1\.buildkite-ssh-key-1234\id`,
+			want: `ssh -i 'D:\buildkite-agent\builds\agent-1\.buildkite-ssh-key-1234\id' -o IdentitiesOnly=yes`,
+		},
+		{
+			name: "path with single quote is escaped",
+			path: "/home/o'brien/.buildkite-ssh-key/id",
+			want: `ssh -i '/home/o'\''brien/.buildkite-ssh-key/id' -o IdentitiesOnly=yes`,
+		},
+		{
+			name: "path with single quote is escaped - windows",
+			path: `C:\Users\o'brien\buildkite-agent\builds\agent-1\.buildkite-ssh-key-1234\id`,
+			want: `ssh -i 'C:\Users\o'\''brien\buildkite-agent\builds\agent-1\.buildkite-ssh-key-1234\id' -o IdentitiesOnly=yes`,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			if got := gitSSHCommandForKeyFile(tc.path, tc.previous); got != tc.want {
+				t.Fatalf("gitSSHCommandForKeyFile(%q, %q) = %q, want %q", tc.path, tc.previous, got, tc.want)
+			}
+		})
+	}
+}
+
 func TestDefaultCheckoutPhase_CleansUpGitSSHKeyOnError(t *testing.T) {
 	t.Parallel()
 

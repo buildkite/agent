@@ -17,6 +17,7 @@ type CacheConfig struct {
 	BucketURL       string   `cli:"cache-store-url"`
 	CacheConfigFile string   `cli:"cache-config-file"`
 	Concurrency     int      `cli:"concurrency"`
+	FailOnError     bool     `cli:"cache-fail-on-error"`
 }
 
 func cacheFlags() []cli.Flag {
@@ -50,6 +51,12 @@ func cacheFlags() []cli.Flag {
 			Value:   2,
 			Usage:   "Number of concurrent cache operations",
 			Sources: cli.EnvVars("BUILDKITE_CACHE_CONCURRENCY"),
+		},
+		&cli.BoolFlag{
+			Name:    "cache-fail-on-error",
+			Value:   false,
+			Usage:   "Fail the command (non-zero exit) when a cache save or restore fails. By default a cache is best-effort: failures are logged and skipped so they never fail the build",
+			Sources: cli.EnvVars("BUILDKITE_AGENT_CACHE_FAIL_ON_ERROR"),
 		},
 	}
 }

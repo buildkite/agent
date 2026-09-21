@@ -80,7 +80,7 @@ func TestSaveWithClient_CacheEntryCreated(t *testing.T) {
 		},
 	}
 
-	err := saveWithClient(ctx, logger.Discard, mock, []string{"cache1"}, 1)
+	err := saveWithClient(ctx, logger.Discard, mock, []string{"cache1"}, 1, false)
 	if err != nil {
 		t.Fatalf("saveWithClient(ctx, logger.Discard, mock, []string{\"cache1\"}, %d) error = %v, want nil", 1, err)
 	}
@@ -99,7 +99,7 @@ func TestSaveWithClient_CacheAlreadyExists(t *testing.T) {
 		},
 	}
 
-	err := saveWithClient(ctx, logger.Discard, mock, []string{"cache1"}, 1)
+	err := saveWithClient(ctx, logger.Discard, mock, []string{"cache1"}, 1, false)
 	if err != nil {
 		t.Fatalf("saveWithClient(ctx, logger.Discard, mock, []string{\"cache1\"}, %d) error = %v, want nil", 1, err)
 	}
@@ -129,7 +129,7 @@ func TestSaveWithClient_MultipleCaches(t *testing.T) {
 		},
 	}
 
-	err := saveWithClient(ctx, logger.Discard, mock, []string{"cache1", "cache2", "cache3"}, 1)
+	err := saveWithClient(ctx, logger.Discard, mock, []string{"cache1", "cache2", "cache3"}, 1, false)
 	if err != nil {
 		t.Fatalf("saveWithClient(ctx, logger.Discard, mock, []string{\"cache1\", \"cache2\", \"cache3\"}, %d) error = %v, want nil", 1, err)
 	}
@@ -149,7 +149,8 @@ func TestSaveWithClient_Error(t *testing.T) {
 		},
 	}
 
-	err := saveWithClient(ctx, logger.Discard, mock, []string{"cache1"}, 1)
+	// failOnError=true: a save failure is fatal and propagates.
+	err := saveWithClient(ctx, logger.Discard, mock, []string{"cache1"}, 1, true)
 	if err == nil {
 		t.Fatalf("saveWithClient(ctx, logger.Discard, mock, []string{\"cache1\"}, %d) error = %v, want non-nil error", 1, err)
 	}
@@ -172,7 +173,7 @@ func TestSaveWithClient_EmptyCacheIDs(t *testing.T) {
 		},
 	}
 
-	err := saveWithClient(ctx, logger.Discard, mock, []string{}, 1)
+	err := saveWithClient(ctx, logger.Discard, mock, []string{}, 1, false)
 	if err != nil {
 		t.Fatalf("saveWithClient(ctx, logger.Discard, mock, []string{}, %d) error = %v, want nil", 1, err)
 	}
@@ -204,7 +205,7 @@ func TestRestoreWithClient_CacheHit(t *testing.T) {
 		},
 	}
 
-	err := restoreWithClient(ctx, logger.Discard, mock, []string{"cache1"}, 1)
+	err := restoreWithClient(ctx, logger.Discard, mock, []string{"cache1"}, 1, false)
 	if err != nil {
 		t.Fatalf("restoreWithClient(ctx, logger.Discard, mock, []string{\"cache1\"}, %d) error = %v, want nil", 1, err)
 	}
@@ -234,7 +235,7 @@ func TestRestoreWithClient_FallbackUsed(t *testing.T) {
 		},
 	}
 
-	err := restoreWithClient(ctx, logger.Discard, mock, []string{"cache1"}, 1)
+	err := restoreWithClient(ctx, logger.Discard, mock, []string{"cache1"}, 1, false)
 	if err != nil {
 		t.Fatalf("restoreWithClient(ctx, logger.Discard, mock, []string{\"cache1\"}, %d) error = %v, want nil", 1, err)
 	}
@@ -255,7 +256,7 @@ func TestRestoreWithClient_CacheMiss(t *testing.T) {
 		},
 	}
 
-	err := restoreWithClient(ctx, logger.Discard, mock, []string{"cache1"}, 1)
+	err := restoreWithClient(ctx, logger.Discard, mock, []string{"cache1"}, 1, false)
 	if err != nil {
 		t.Fatalf("restoreWithClient(ctx, logger.Discard, mock, []string{\"cache1\"}, %d) error = %v, want nil", 1, err)
 	}
@@ -277,7 +278,7 @@ func TestRestoreWithClient_MultipleCaches(t *testing.T) {
 		},
 	}
 
-	err := restoreWithClient(ctx, logger.Discard, mock, []string{"cache1", "cache2", "cache3"}, 1)
+	err := restoreWithClient(ctx, logger.Discard, mock, []string{"cache1", "cache2", "cache3"}, 1, false)
 	if err != nil {
 		t.Fatalf("restoreWithClient(ctx, logger.Discard, mock, []string{\"cache1\", \"cache2\", \"cache3\"}, %d) error = %v, want nil", 1, err)
 	}
@@ -297,7 +298,8 @@ func TestRestoreWithClient_Error(t *testing.T) {
 		},
 	}
 
-	err := restoreWithClient(ctx, logger.Discard, mock, []string{"cache1"}, 1)
+	// failOnError=true: a restore failure is fatal and propagates.
+	err := restoreWithClient(ctx, logger.Discard, mock, []string{"cache1"}, 1, true)
 	if err == nil {
 		t.Fatalf("restoreWithClient(ctx, logger.Discard, mock, []string{\"cache1\"}, %d) error = %v, want non-nil error", 1, err)
 	}
@@ -320,9 +322,81 @@ func TestRestoreWithClient_EmptyCacheIDs(t *testing.T) {
 		},
 	}
 
-	err := restoreWithClient(ctx, logger.Discard, mock, []string{}, 1)
+	err := restoreWithClient(ctx, logger.Discard, mock, []string{}, 1, false)
 	if err != nil {
 		t.Fatalf("restoreWithClient(ctx, logger.Discard, mock, []string{}, %d) error = %v, want nil", 1, err)
+	}
+}
+
+// Fail-open behaviour (the default): a save/restore failure is logged and
+// skipped rather than failing the whole batch.
+
+func TestSaveWithClient_FailOpenSkipsError(t *testing.T) {
+	t.Parallel()
+	ctx := t.Context()
+
+	callCount := 0
+	mock := &mockCacheClient{
+		saveFunc: func(ctx context.Context, cacheID string) (SaveResult, error) {
+			callCount++
+			if cacheID == "cache2" {
+				return SaveResult{}, errors.New("save failed")
+			}
+			return SaveResult{CacheEntryCreated: false, Key: cacheID}, nil
+		},
+	}
+
+	err := saveWithClient(ctx, logger.Discard, mock, []string{"cache1", "cache2", "cache3"}, 1, false)
+	if err != nil {
+		t.Fatalf("saveWithClient(..., failOnError=false) error = %v, want nil (failure should be skipped)", err)
+	}
+	if got, want := callCount, 3; got != want {
+		t.Fatalf("Save call count = %d, want %d (all caches processed despite one failing)", got, want)
+	}
+}
+
+func TestRestoreWithClient_FailOpenSkipsError(t *testing.T) {
+	t.Parallel()
+	ctx := t.Context()
+
+	callCount := 0
+	mock := &mockCacheClient{
+		restoreFunc: func(ctx context.Context, cacheID string) (RestoreResult, error) {
+			callCount++
+			if cacheID == "cache2" {
+				return RestoreResult{}, errors.New("restore failed")
+			}
+			return RestoreResult{Key: cacheID}, nil
+		},
+	}
+
+	err := restoreWithClient(ctx, logger.Discard, mock, []string{"cache1", "cache2", "cache3"}, 1, false)
+	if err != nil {
+		t.Fatalf("restoreWithClient(..., failOnError=false) error = %v, want nil (failure should be skipped)", err)
+	}
+	if got, want := callCount, 3; got != want {
+		t.Fatalf("Restore call count = %d, want %d (all caches processed despite one failing)", got, want)
+	}
+}
+
+func TestRestoreWithClient_MutatedTargetsErrorIsFatal(t *testing.T) {
+	t.Parallel()
+	ctx := t.Context()
+
+	mock := &mockCacheClient{
+		restoreFunc: func(ctx context.Context, cacheID string) (RestoreResult, error) {
+			return RestoreResult{}, errors.Join(errRestoreMutatedTargets, errors.New("failed to extract cache"))
+		},
+	}
+
+	// Even fail-open, a restore that already mutated target paths must fail the
+	// build rather than run against a partial workspace.
+	err := restoreWithClient(ctx, logger.Discard, mock, []string{"cache1"}, 1, false)
+	if err == nil {
+		t.Fatalf("restoreWithClient(..., failOnError=false) with a mutated-targets error = nil, want non-nil (must stay fatal)")
+	}
+	if !errors.Is(err, errRestoreMutatedTargets) {
+		t.Fatalf("restoreWithClient error = %v, want wrapped errRestoreMutatedTargets", err)
 	}
 }
 

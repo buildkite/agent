@@ -449,6 +449,98 @@ func gitEnumerateSubmoduleURLs(ctx context.Context, sh *shell.Shell) ([]string, 
 	return urls, nil
 }
 
+func resolveGitSubmoduleURL(superprojectURL, submoduleURL string) (string, error) {
+	if !isRelativeSubmoduleURL(submoduleURL) {
+		return submoduleURL, nil
+	}
+
+	return gitRelativeURL(superprojectURL, submoduleURL, "")
+}
+
+// gitRelativeURL follows Git's relative_url() resolver in remote.c.
+func gitRelativeURL(remoteURL, relativeURL, upPath string) (string, error) {
+	if !gitURLIsLocalNotSSH(relativeURL) || gitIsAbsolutePath(relativeURL) {
+		return relativeURL, nil
+	}
+	if remoteURL == "" {
+		return "", errors.New("invalid empty remote URL")
+	}
+
+	remoteURL = strings.TrimSuffix(remoteURL, "/")
+
+	isRelative := gitURLIsLocalNotSSH(remoteURL) && !gitIsAbsolutePath(remoteURL)
+	if isRelative && !strings.HasPrefix(remoteURL, "./") && !strings.HasPrefix(remoteURL, "../") {
+		remoteURL = "./" + remoteURL
+	}
+
+	colonSep := false
+	for {
+		switch {
+		case strings.HasPrefix(relativeURL, "../"):
+			relativeURL = strings.TrimPrefix(relativeURL, "../")
+			var choppedColonSep bool
+			var err error
+			remoteURL, choppedColonSep, err = gitChopLastDir(remoteURL, isRelative)
+			if err != nil {
+				return "", err
+			}
+			colonSep = colonSep || choppedColonSep
+		case strings.HasPrefix(relativeURL, "./"):
+			relativeURL = strings.TrimPrefix(relativeURL, "./")
+		default:
+			separator := "/"
+			if colonSep {
+				separator = ":"
+			}
+			out := remoteURL + separator + relativeURL
+			if strings.HasSuffix(relativeURL, "/") {
+				out = strings.TrimSuffix(out, "/")
+			}
+			out = strings.TrimPrefix(out, "./")
+
+			if upPath == "" || !isRelative {
+				return out, nil
+			}
+			return upPath + out, nil
+		}
+	}
+}
+
+func isRelativeSubmoduleURL(repository string) bool {
+	return strings.HasPrefix(repository, "./") || strings.HasPrefix(repository, "../")
+}
+
+func gitChopLastDir(remoteURL string, isRelative bool) (string, bool, error) {
+	if i := strings.LastIndex(remoteURL, "/"); i >= 0 {
+		return remoteURL[:i], false, nil
+	}
+	if i := strings.LastIndex(remoteURL, ":"); i >= 0 {
+		return remoteURL[:i], true, nil
+	}
+	if isRelative || remoteURL == "." {
+		return "", false, fmt.Errorf("cannot strip one component off url %q", remoteURL)
+	}
+	return ".", false, nil
+}
+
+func gitURLIsLocalNotSSH(gitURL string) bool {
+	colon := strings.Index(gitURL, ":")
+	slash := strings.Index(gitURL, "/")
+
+	return colon < 0 || (slash >= 0 && slash < colon) || hasDOSDrivePrefix(gitURL)
+}
+
+func gitIsAbsolutePath(gitPath string) bool {
+	return strings.HasPrefix(gitPath, "/") || hasDOSDrivePrefix(gitPath)
+}
+
+func hasDOSDrivePrefix(gitPath string) bool {
+	if len(gitPath) < 2 || gitPath[1] != ':' {
+		return false
+	}
+	return ('A' <= gitPath[0] && gitPath[0] <= 'Z') || ('a' <= gitPath[0] && gitPath[0] <= 'z')
+}
+
 func gitRevParseInWorkingDirectory(ctx context.Context, sh *shell.Shell, workingDirectory string, extraRevParseArgs ...string) (string, error) {
 	gitDirectory := filepath.Join(workingDirectory, ".git")
 
@@ -459,8 +551,10 @@ func gitRevParseInWorkingDirectory(ctx context.Context, sh *shell.Shell, working
 }
 
 var (
-	hasSchemePattern  = regexp.MustCompile("^[^:]+://")
-	scpLikeURLPattern = regexp.MustCompile("^([^@]+@)?([^:]{2,}):/?(.+)$")
+	hasSchemePattern = regexp.MustCompile("^[^:]+://")
+	// Require at least two non-colon characters before ":" so Windows drive
+	// paths like C:\repo are handled as local filesystem paths, not scp-like URLs.
+	scpLikeURLPattern = regexp.MustCompile("^([^@]+@)?([^:]{2,}):(.+)$")
 )
 
 // parseGittableURL parses and converts a git repository url into a url.URL
@@ -470,8 +564,12 @@ func parseGittableURL(ref string) (*url.URL, error) {
 			matched := scpLikeURLPattern.FindStringSubmatch(ref)
 			user := matched[1]
 			host := matched[2]
-			path := matched[3]
-			ref = fmt.Sprintf("ssh://%s%s/%s", user, host, path)
+			repoPath := matched[3]
+			if strings.HasPrefix(repoPath, "/") {
+				ref = fmt.Sprintf("ssh://%s%s%s", user, host, repoPath)
+			} else {
+				ref = fmt.Sprintf("ssh://%s%s/%s", user, host, repoPath)
+			}
 		} else {
 			normalizedRef := strings.ReplaceAll(ref, "\\", "/")
 			ref = fmt.Sprintf("file:///%s", strings.TrimPrefix(normalizedRef, "/"))
