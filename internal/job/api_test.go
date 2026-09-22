@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -137,12 +138,17 @@ func TestCapturedErrorExperiment(t *testing.T) {
 			e.JobID = "test-job"
 			sh.Env.Set("BUILDKITE_AGENT_ENDPOINT", upstream.URL+"/v3")
 			sh.Env.Set("BUILDKITE_AGENT_ACCESS_TOKEN", "test-job-token")
+			sh.Env.Set("BUILDKITE_AGENT_JOB_API_CAPTURE_ERROR", "true")
 			e.SocketsPath = os.TempDir()
 			cleanup, err := e.startJobAPI(ctx)
 			if err != nil {
 				t.Fatal(err)
 			}
 			t.Cleanup(cleanup)
+			capability, present := sh.Env.Get("BUILDKITE_AGENT_JOB_API_CAPTURE_ERROR")
+			if present != enabled || (enabled && capability != "true") {
+				t.Errorf("capture capability = %q (present %v), experiment enabled = %v", capability, present, enabled)
+			}
 			transport := &http.Transport{DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
 				return (&net.Dialer{}).DialContext(ctx, "unix", e.jobAPI.SocketPath)
 			}}
@@ -165,5 +171,27 @@ func TestCapturedErrorExperiment(t *testing.T) {
 				t.Errorf("upstream calls = %d, experiment enabled = %v", calls, enabled)
 			}
 		})
+	}
+}
+
+func TestCapturedErrorCapabilityAbsentAfterStartupFailure(t *testing.T) {
+	sh, err := shell.New(shell.WithEnv(env.New()), shell.WithLogger(shell.TestingLogger{T: t}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	sh.Env.Set("BUILDKITE_AGENT_JOB_API_CAPTURE_ERROR", "true")
+	e := &Executor{shell: sh, redactors: replacer.NewMux()}
+	e.SocketsPath = filepath.Join(t.TempDir(), "not-a-directory")
+	if err := os.WriteFile(e.SocketsPath, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	ctx, _ := experiments.Enable(t.Context(), experiments.CaptureError)
+	cleanup, err := e.startJobAPI(ctx)
+	t.Cleanup(cleanup)
+	if socket.Available() && err == nil {
+		t.Fatal("startJobAPI succeeded with a file as its sockets directory")
+	}
+	if sh.Env.Exists("BUILDKITE_AGENT_JOB_API_CAPTURE_ERROR") {
+		t.Fatal("capture capability advertised without a running Job API")
 	}
 }

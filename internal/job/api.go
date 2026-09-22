@@ -18,6 +18,8 @@ import (
 // BUILDKITE_AGENT_JOB_API_TOKEN environment variables
 func (e *Executor) startJobAPI(ctx context.Context) (cleanup func(), err error) {
 	cleanup = func() {}
+	// Capabilities describe this executor, not an inherited job environment.
+	e.shell.Env.Remove("BUILDKITE_AGENT_JOB_API_CAPTURE_ERROR")
 
 	if !socket.Available() {
 		e.shell.OptionalWarningf("job-api-unavailable", `The Job API isn't available on this machine, as it's running an unsupported version of Windows.
@@ -81,6 +83,9 @@ We'll continue to run your job, but you won't be able to use the Job API`)
 
 	if err := srv.Start(); err != nil {
 		return cleanup, fmt.Errorf("starting Job API server: %w", err)
+	}
+	if experiments.IsEnabled(ctx, experiments.CaptureError) {
+		e.shell.Env.Set("BUILDKITE_AGENT_JOB_API_CAPTURE_ERROR", "true")
 	}
 
 	return func() {

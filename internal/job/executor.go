@@ -204,6 +204,7 @@ func (e *Executor) Run(ctx context.Context) (exitCode int) {
 		}
 		defer cleanup()
 	} else {
+		e.shell.Env.Remove("BUILDKITE_AGENT_JOB_API_CAPTURE_ERROR")
 		e.shell.OptionalWarningf("job-api-disabled", "The Job API has been disabled. Features like automatic redaction of secrets and polyglot hooks will either not work or have degraded functionality")
 	}
 
