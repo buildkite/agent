@@ -2,7 +2,9 @@ package clicommand
 
 import (
 	"context"
+	"encoding/json"
 	"os"
+	"slices"
 	"strings"
 	"testing"
 
@@ -12,6 +14,19 @@ import (
 	"github.com/buildkite/agent/v4/jobapi"
 	"github.com/urfave/cli/v3"
 )
+
+func captureErrorTestApp() *cli.Command {
+	cmd := *JobCaptureErrorCommand
+	cmd.Flags = slices.Clone(cmd.Flags)
+	// urfave flags retain parsing state, so each invocation needs fresh flags.
+	for i, flag := range cmd.Flags {
+		if flag, ok := flag.(*cli.StringFlag); ok {
+			copy := *flag
+			cmd.Flags[i] = &copy
+		}
+	}
+	return &cli.Command{Commands: []*cli.Command{&cmd}}
+}
 
 func TestJobCaptureErrorUsesLocalJobAPI(t *testing.T) {
 	socketPath, err := jobapi.NewSocketPath(os.TempDir())
@@ -33,32 +48,59 @@ func TestJobCaptureErrorUsesLocalJobAPI(t *testing.T) {
 	t.Setenv("BUILDKITE_AGENT_JOB_API_SOCKET", socketPath)
 	t.Setenv("BUILDKITE_AGENT_JOB_API_TOKEN", token)
 
-	cmd := *JobCaptureErrorCommand
-	app := &cli.Command{Commands: []*cli.Command{&cmd}}
-	err = app.Run(t.Context(), []string{"buildkite-agent", "capture-error", `{"code":"image_pull_failed","message":"denied"}`})
-	if err != nil {
-		t.Fatalf("capture-error command error = %v", err)
-	}
-	if reported == nil || reported.Code != "image_pull_failed" {
-		t.Errorf("reported = %+v, want image_pull_failed", reported)
+	for _, withContext := range []bool{false, true} {
+		app := captureErrorTestApp()
+		message := "Failed to pull \"image\"\nregistry denied access"
+		args := []string{"buildkite-agent", "capture-error", "block.image_pull_failed", "--message", message}
+		if withContext {
+			args = append(args, "--context", `{"id":9007199254740993,"image":"example:latest"}`)
+		}
+		if err := app.Run(t.Context(), args); err != nil {
+			t.Fatalf("capture-error command error = %v", err)
+		}
+		if reported == nil || reported.Code != "block.image_pull_failed" || reported.Message != message {
+			t.Fatalf("reported = %+v, want original code and message", reported)
+		}
+		if withContext {
+			if reported.Context["id"] != json.Number("9007199254740993") || reported.Context["image"] != "example:latest" {
+				t.Errorf("context = %v, want exact supplied values", reported.Context)
+			}
+		} else if reported.Context != nil {
+			t.Errorf("context = %v, want omitted", reported.Context)
+		}
 	}
 }
 
-func TestJobCaptureErrorRejectsMalformedPayloadBeforeTransport(t *testing.T) {
+func TestJobCaptureErrorRejectsInvalidArgumentsBeforeTransport(t *testing.T) {
 	t.Setenv("BUILDKITE_AGENT_JOB_API_SOCKET", "")
-	cmd := *JobCaptureErrorCommand
-	app := &cli.Command{Commands: []*cli.Command{&cmd}}
-	err := app.Run(t.Context(), []string{"buildkite-agent", "capture-error", "{"})
-	if err == nil || !strings.Contains(err.Error(), "invalid captured-error JSON") {
-		t.Fatalf("error = %v, want invalid captured-error JSON", err)
+	for _, test := range []struct {
+		args []string
+		want string
+	}{
+		{[]string{"--message", "failure"}, "error code is required"},
+		{[]string{"code", "extra", "--message", "failure"}, "error code is required"},
+		{[]string{"code"}, "message"},
+		{[]string{"code", "--message", " "}, "message must not be blank"},
+	} {
+		app := captureErrorTestApp()
+		err := app.Run(t.Context(), append([]string{"buildkite-agent", "capture-error"}, test.args...))
+		if err == nil || !strings.Contains(err.Error(), test.want) {
+			t.Errorf("args %v: error = %v, want %q", test.args, err, test.want)
+		}
+	}
+	for _, input := range []string{"{", "null", "[]", "{} {}", ""} {
+		app := captureErrorTestApp()
+		err := app.Run(t.Context(), []string{"buildkite-agent", "capture-error", "code", "--message", "failure", "--context", input})
+		if err == nil || !strings.Contains(err.Error(), "invalid context JSON") {
+			t.Errorf("context %q: error = %v, want invalid context JSON", input, err)
+		}
 	}
 }
 
 func TestJobCaptureErrorDoesNotFallbackWithoutLocalJobAPI(t *testing.T) {
 	t.Setenv("BUILDKITE_AGENT_JOB_API_SOCKET", "")
-	cmd := *JobCaptureErrorCommand
-	app := &cli.Command{Commands: []*cli.Command{&cmd}}
-	err := app.Run(t.Context(), []string{"buildkite-agent", "capture-error", `{"code":"x","message":"raw customer diagnostic"}`})
+	app := captureErrorTestApp()
+	err := app.Run(t.Context(), []string{"buildkite-agent", "capture-error", "x", "--message", "raw customer diagnostic"})
 	if err == nil || !strings.Contains(err.Error(), "Local Job API is required") {
 		t.Fatalf("error = %v, want Local Job API required error", err)
 	}
