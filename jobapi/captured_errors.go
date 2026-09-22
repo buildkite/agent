@@ -14,7 +14,9 @@ import (
 	"github.com/buildkite/agent/v4/internal/socket"
 )
 
-const maxCapturedErrorBody = 16 << 10
+// MaxCapturedErrorBody is the local request limit in bytes, before the parent
+// adds a timestamp and idempotency key. Truncation remains the backend's job.
+const MaxCapturedErrorBody = 32 << 10
 
 // UnmarshalJSON distinguishes omitted context from explicit null and preserves
 // JSON numbers on both the CLI and parent sides of the local transport.
@@ -44,9 +46,19 @@ func (e *CapturedError) UnmarshalJSON(data []byte) error {
 }
 
 func (s *Server) handleCapturedError(w http.ResponseWriter, r *http.Request) {
-	r.Body = http.MaxBytesReader(w, r.Body, maxCapturedErrorBody)
+	r.Body = http.MaxBytesReader(w, r.Body, MaxCapturedErrorBody)
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		status := http.StatusBadRequest
+		var tooLarge *http.MaxBytesError
+		if errors.As(err, &tooLarge) {
+			status = http.StatusRequestEntityTooLarge
+		}
+		s.writeCapturedError(w, fmt.Errorf("failed to read request body: %w", err), status)
+		return
+	}
 	payload := new(CapturedError)
-	dec := json.NewDecoder(r.Body)
+	dec := json.NewDecoder(bytes.NewReader(body))
 	dec.DisallowUnknownFields()
 	dec.UseNumber()
 	if err := dec.Decode(payload); err != nil {

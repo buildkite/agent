@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -192,6 +193,52 @@ func TestClientCaptureErrorUsesAuthenticatedLocalTransport(t *testing.T) {
 	}
 	if diff := cmp.Diff([]CapturedError{want}, svr.captured); diff != "" {
 		t.Errorf("captured requests diff (-want +got):\n%s", diff)
+	}
+}
+
+func TestClientCaptureErrorBodyLimit(t *testing.T) {
+	t.Parallel()
+
+	svr, err := runFakeServer()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer svr.Close()
+	cli, err := NewClient(t.Context(), svr.sock, svr.token)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Include the JSON envelope, not just message or context bytes.
+	message := strings.Repeat("x", (32<<10)-len(`{"code":"x","message":""}`))
+	for _, test := range []struct {
+		name    string
+		payload CapturedError
+		wantErr bool
+	}{
+		{"at limit", CapturedError{Code: "x", Message: message}, false},
+		{"one byte over", CapturedError{Code: "x", Message: message + "x"}, true},
+		{"escaping expands context", CapturedError{Code: "x", Message: "failure", Context: map[string]any{"log": strings.Repeat("<", 6<<10)}}, true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			before := len(svr.captured)
+			err := cli.CaptureError(t.Context(), &test.payload)
+			if test.wantErr {
+				if err == nil || !strings.Contains(err.Error(), "request exceeds 32768 bytes after JSON encoding") {
+					t.Fatalf("CaptureError() error = %v, want serialized request overflow", err)
+				}
+				if len(svr.captured) != before {
+					t.Error("oversized request was sent")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(svr.captured) != before+1 || svr.captured[before].Message != message {
+				t.Error("limit-sized request was not sent unchanged")
+			}
+		})
 	}
 }
 

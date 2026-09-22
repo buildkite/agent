@@ -1,6 +1,7 @@
 package clicommand
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -26,6 +27,10 @@ image_pull_failed, not an HTTP status or command exit code.
 
 Optionally include additional details as a JSON object using --context, or use
 --context - to read them from standard input.
+
+The complete JSON request and raw context input are each limited to 32 KiB.
+The request includes the code, message, context and JSON escaping. Oversized
+reports are rejected, not truncated; retention and truncation happen in Buildkite.
 
 Note: This feature is currently in development and subject to change. It is not
 yet available to all customers.`
@@ -68,7 +73,14 @@ var JobCaptureErrorCommand = &cli.Command{
 			if cfg.Context == "-" {
 				input = c.Root().Reader
 			}
-			dec := json.NewDecoder(input)
+			data, err := io.ReadAll(io.LimitReader(input, jobapi.MaxCapturedErrorBody+1))
+			if err != nil {
+				return fmt.Errorf("reading context JSON: %w", err)
+			}
+			if len(data) > jobapi.MaxCapturedErrorBody {
+				return fmt.Errorf("raw context JSON exceeds %d bytes", jobapi.MaxCapturedErrorBody)
+			}
+			dec := json.NewDecoder(bytes.NewReader(data))
 			dec.UseNumber()
 			if err := dec.Decode(&capturedError.Context); err != nil {
 				return fmt.Errorf("invalid context JSON: %w", err)

@@ -103,7 +103,7 @@ func TestCapturedErrorRejectsMalformedAndUnauthenticatedRequests(t *testing.T) {
 		{name: "future timestamp", body: `{"code":"x","message":"diagnostic","timestamp":"9999-12-31T23:59:59Z"}`, token: token, want: http.StatusCreated},
 		{name: "server truncates message", body: `{"code":"x","message":"` + strings.Repeat("x", 4097) + `"}`, token: token, want: http.StatusCreated},
 		{name: "non-object context", body: `{"code":"x","message":"diagnostic","context":[]}`, token: token, want: http.StatusBadRequest},
-		{name: "oversized body", body: `{"code":"x","message":"diagnostic","context":{"large":"` + strings.Repeat("x", 16<<10) + `"}}`, token: token, want: http.StatusBadRequest},
+		{name: "oversized body", body: `{"code":"x","message":"diagnostic","context":{"large":"` + strings.Repeat("x", 32<<10) + `"}}`, token: token, want: http.StatusRequestEntityTooLarge},
 		{name: "missing message", body: `{"code":"x"}`, token: token, want: http.StatusBadRequest},
 		{name: "NUL code", body: `{"code":"x\u0000","message":"diagnostic"}`, token: token, want: http.StatusBadRequest},
 		{name: "unknown field", body: `{"code":"x","message":"diagnostic","raw":"unsafe"}`, token: token, want: http.StatusBadRequest},
@@ -126,6 +126,71 @@ func TestCapturedErrorRejectsMalformedAndUnauthenticatedRequests(t *testing.T) {
 			defer func() { _ = resp.Body.Close() }()
 			if resp.StatusCode != test.want {
 				t.Errorf("status = %d, want %d", resp.StatusCode, test.want)
+			}
+		})
+	}
+}
+
+func TestCapturedErrorBodyLimit(t *testing.T) {
+	t.Parallel()
+
+	reported := make(chan *jobapi.CapturedError, 1)
+	srv, token, err := testServer(t, testEnviron(), replacer.NewMux(), jobapi.WithCapturedErrorReporter(func(_ context.Context, payload *jobapi.CapturedError) error {
+		reported <- payload
+		return nil
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := srv.Start(); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = srv.Stop() })
+
+	// A 20 KiB message must reach Rails unchanged, even though Rails retains
+	// only 4 KiB. Multibyte text makes the byte-versus-character limit observable.
+	message := strings.Repeat("é", 10<<10)
+	body := `{"code":"x","message":"` + message + `","context":{"detail":"kept"}}`
+	for _, test := range []struct {
+		name string
+		size int
+		want int
+	}{
+		{"at limit", 32 << 10, http.StatusCreated},
+		{"one byte over", (32 << 10) + 1, http.StatusRequestEntityTooLarge},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			// Padding exercises the body limit even after a complete JSON object.
+			input := body + strings.Repeat(" ", test.size-len(body))
+			req, err := http.NewRequest(http.MethodPost, "http://job/api/current-job/v0/errors", strings.NewReader(input))
+			if err != nil {
+				t.Fatal(err)
+			}
+			req.ContentLength = -1 // Direct callers need not declare a body length.
+			req.Header.Set("Authorization", "Bearer "+token)
+			resp, err := testSocketClient(srv.SocketPath).Do(req)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer func() { _ = resp.Body.Close() }()
+			if resp.StatusCode != test.want {
+				t.Fatalf("status = %d, want %d", resp.StatusCode, test.want)
+			}
+			select {
+			case payload := <-reported:
+				if test.want != http.StatusCreated {
+					t.Fatal("oversized request was forwarded")
+				}
+				if payload.Message != message || payload.Context["detail"] != "kept" {
+					t.Error("message or context was changed before forwarding")
+				}
+				if payload.Timestamp == nil || payload.IdempotencyKey == "" {
+					t.Error("parent metadata was not added to the limit-sized request")
+				}
+			default:
+				if test.want == http.StatusCreated {
+					t.Error("accepted request was not forwarded")
+				}
 			}
 		})
 	}

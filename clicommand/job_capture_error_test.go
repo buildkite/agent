@@ -48,7 +48,7 @@ func TestJobCaptureErrorUsesLocalJobAPI(t *testing.T) {
 	t.Setenv("BUILDKITE_AGENT_JOB_API_SOCKET", socketPath)
 	t.Setenv("BUILDKITE_AGENT_JOB_API_TOKEN", token)
 
-	for _, source := range []string{"omitted", "empty", "inline", "stdin", "env", "override"} {
+	for _, source := range []string{"omitted", "empty", "inline", "stdin", "stdin at limit", "env", "override"} {
 		t.Setenv("BUILDKITE_AGENT_JOB_CAPTURE_ERROR_MESSAGE", "")
 		t.Setenv("BUILDKITE_AGENT_JOB_CAPTURE_ERROR_CONTEXT", "")
 		app := captureErrorTestApp()
@@ -66,6 +66,9 @@ func TestJobCaptureErrorUsesLocalJobAPI(t *testing.T) {
 		case "stdin":
 			args = append(args, "--context", "-")
 			app.Reader = strings.NewReader(input)
+		case "stdin at limit":
+			args = append(args, "--context", "-")
+			app.Reader = strings.NewReader(input + strings.Repeat(" ", (32<<10)-len(input)))
 		case "env":
 			t.Setenv("BUILDKITE_AGENT_JOB_CAPTURE_ERROR_MESSAGE", message)
 			t.Setenv("BUILDKITE_AGENT_JOB_CAPTURE_ERROR_CONTEXT", input)
@@ -140,5 +143,38 @@ func TestJobCaptureErrorDoesNotFallbackWithoutLocalJobAPI(t *testing.T) {
 	err := app.Run(t.Context(), []string{"buildkite-agent", "capture-error", "x", "--message", "raw customer diagnostic"})
 	if err == nil || !strings.Contains(err.Error(), "Local Job API is required") {
 		t.Fatalf("error = %v, want Local Job API required error", err)
+	}
+}
+
+func TestJobCaptureErrorBoundsContextBeforeDecoding(t *testing.T) {
+	t.Setenv("BUILDKITE_AGENT_JOB_API_SOCKET", "")
+	t.Setenv("BUILDKITE_AGENT_JOB_CAPTURE_ERROR_CONTEXT", "")
+	for _, input := range []string{
+		`{}` + strings.Repeat(" ", (32<<10)-1), // A valid object followed by enough whitespace to exceed the limit by one.
+		`{"log":"` + strings.Repeat("x", 64<<10) + `"}`,
+		strings.Repeat("!", 64<<10), // Overflow is rejected before malformed JSON is decoded.
+	} {
+		for _, source := range []string{"stdin", "inline", "env"} {
+			app := captureErrorTestApp()
+			reader := strings.NewReader(input)
+			app.Reader = reader
+			args := []string{"buildkite-agent", "capture-error", "x", "--message", "failure", "--context", "-"}
+			switch source {
+			case "inline":
+				args[6] = input
+			case "env":
+				t.Setenv("BUILDKITE_AGENT_JOB_CAPTURE_ERROR_CONTEXT", input)
+				args = args[:5]
+			}
+			err := app.Run(t.Context(), args)
+			if err == nil || !strings.Contains(err.Error(), "raw context JSON exceeds 32768 bytes") {
+				t.Fatalf("%s: error = %v, want raw context overflow", source, err)
+			}
+			if read := len(input) - reader.Len(); source == "stdin" && read != (32<<10)+1 {
+				t.Errorf("stdin bytes read = %d, want 32769", read)
+			} else if source != "stdin" && read != 0 {
+				t.Errorf("%s consumed %d stdin bytes", source, read)
+			}
+		}
 	}
 }
