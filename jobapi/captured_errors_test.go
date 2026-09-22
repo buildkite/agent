@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/buildkite/agent/v4/internal/replacer"
+	"github.com/buildkite/agent/v4/internal/socket"
 	"github.com/buildkite/agent/v4/jobapi"
 	"github.com/google/go-cmp/cmp"
 )
@@ -175,6 +176,15 @@ func TestCapturedErrorBodyLimit(t *testing.T) {
 			defer func() { _ = resp.Body.Close() }()
 			if resp.StatusCode != test.want {
 				t.Fatalf("status = %d, want %d", resp.StatusCode, test.want)
+			}
+			if test.want == http.StatusRequestEntityTooLarge {
+				var response socket.ErrorResponse
+				if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
+					t.Fatal(err)
+				}
+				if response.Error != "captured error request exceeds 32768 bytes" {
+					t.Errorf("error = %q, want explicit request limit", response.Error)
+				}
 			}
 			select {
 			case payload := <-reported:

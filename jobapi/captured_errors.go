@@ -49,12 +49,12 @@ func (s *Server) handleCapturedError(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, MaxCapturedErrorBody)
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
-		status := http.StatusBadRequest
 		var tooLarge *http.MaxBytesError
 		if errors.As(err, &tooLarge) {
-			status = http.StatusRequestEntityTooLarge
+			s.writeCapturedError(w, fmt.Errorf("captured error request exceeds %d bytes", MaxCapturedErrorBody), http.StatusRequestEntityTooLarge)
+			return
 		}
-		s.writeCapturedError(w, fmt.Errorf("failed to read request body: %w", err), status)
+		s.writeCapturedError(w, fmt.Errorf("failed to read request body: %w", err), http.StatusBadRequest)
 		return
 	}
 	payload := new(CapturedError)
