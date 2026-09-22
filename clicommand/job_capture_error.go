@@ -22,6 +22,8 @@ Send a structured error to the running parent agent through the authenticated
 Local Job API. The parent validates and normalizes the error. There is no
 direct network fallback when the Local Job API is unavailable.
 
+Use --context - to read the context JSON object from standard input.
+
 Note: This feature is currently in development and subject to change. It is not
 yet available to all customers.`
 
@@ -39,7 +41,7 @@ var JobCaptureErrorCommand = &cli.Command{
 	Description: jobCaptureErrorHelpDescription,
 	Flags: append(globalFlags(),
 		&cli.StringFlag{Name: "message", Usage: "A human-readable description of the error", Required: true},
-		&cli.StringFlag{Name: "context", Usage: "Additional error context as a JSON object"},
+		&cli.StringFlag{Name: "context", Usage: "Additional error context as a JSON object, or - to read from standard input"},
 	),
 	Action: func(ctx context.Context, c *cli.Command) error {
 		ctx, cfg, _, _, done := setupLoggerAndConfig[JobCaptureErrorConfig](ctx, c)
@@ -53,7 +55,11 @@ var JobCaptureErrorCommand = &cli.Command{
 		}
 		capturedError := jobapi.CapturedError{Code: cfg.Code, Message: cfg.Message}
 		if c.IsSet("context") {
-			dec := json.NewDecoder(strings.NewReader(cfg.Context))
+			var input io.Reader = strings.NewReader(cfg.Context)
+			if cfg.Context == "-" {
+				input = c.Root().Reader
+			}
+			dec := json.NewDecoder(input)
 			dec.UseNumber()
 			if err := dec.Decode(&capturedError.Context); err != nil {
 				return fmt.Errorf("invalid context JSON: %w", err)

@@ -48,12 +48,19 @@ func TestJobCaptureErrorUsesLocalJobAPI(t *testing.T) {
 	t.Setenv("BUILDKITE_AGENT_JOB_API_SOCKET", socketPath)
 	t.Setenv("BUILDKITE_AGENT_JOB_API_TOKEN", token)
 
-	for _, withContext := range []bool{false, true} {
+	for _, source := range []string{"omitted", "inline", "stdin"} {
 		app := captureErrorTestApp()
+		// Unselected stdin must not be consumed, even if it contains invalid JSON.
+		app.Reader = strings.NewReader("not JSON")
 		message := "Failed to pull \"image\"\nregistry denied access"
 		args := []string{"buildkite-agent", "capture-error", "block.image_pull_failed", "--message", message}
-		if withContext {
-			args = append(args, "--context", `{"id":9007199254740993,"image":"example:latest"}`)
+		input := "{\n\"id\":9007199254740993,\n\"image\":\"example:latest\"\n}\n"
+		switch source {
+		case "inline":
+			args = append(args, "--context", input)
+		case "stdin":
+			args = append(args, "--context", "-")
+			app.Reader = strings.NewReader(input)
 		}
 		if err := app.Run(t.Context(), args); err != nil {
 			t.Fatalf("capture-error command error = %v", err)
@@ -61,7 +68,7 @@ func TestJobCaptureErrorUsesLocalJobAPI(t *testing.T) {
 		if reported == nil || reported.Code != "block.image_pull_failed" || reported.Message != message {
 			t.Fatalf("reported = %+v, want original code and message", reported)
 		}
-		if withContext {
+		if source != "omitted" {
 			if reported.Context["id"] != json.Number("9007199254740993") || reported.Context["image"] != "example:latest" {
 				t.Errorf("context = %v, want exact supplied values", reported.Context)
 			}
@@ -89,10 +96,17 @@ func TestJobCaptureErrorRejectsInvalidArgumentsBeforeTransport(t *testing.T) {
 		}
 	}
 	for _, input := range []string{"{", "null", "[]", "{} {}", ""} {
-		app := captureErrorTestApp()
-		err := app.Run(t.Context(), []string{"buildkite-agent", "capture-error", "code", "--message", "failure", "--context", input})
-		if err == nil || !strings.Contains(err.Error(), "invalid context JSON") {
-			t.Errorf("context %q: error = %v, want invalid context JSON", input, err)
+		for _, source := range []string{"inline", "stdin"} {
+			app := captureErrorTestApp()
+			arg := input
+			if source == "stdin" {
+				arg = "-"
+				app.Reader = strings.NewReader(input)
+			}
+			err := app.Run(t.Context(), []string{"buildkite-agent", "capture-error", "code", "--message", "failure", "--context", arg})
+			if err == nil || !strings.Contains(err.Error(), "invalid context JSON") {
+				t.Errorf("%s context %q: error = %v, want invalid context JSON", source, input, err)
+			}
 		}
 	}
 }
