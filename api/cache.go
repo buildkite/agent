@@ -96,7 +96,24 @@ type CacheEntryRetrieveResp struct {
 	// e.g. {"branch": "main"}. Echo these back on CacheEntryExpireReq to
 	// invalidate this exact entry — its scope may no longer match what the
 	// registry's current policy would resolve.
-	Scopes map[string]string `json:"scopes"`
+	Scopes             map[string]string        `json:"scopes"`
+	RestoreDiagnostics *CacheRestoreDiagnostics `json:"restore_diagnostics,omitempty"`
+}
+
+// CacheRestoreDiagnostics describes the actual registry search, including on a 404.
+type CacheRestoreDiagnostics struct {
+	CacheKey        []string              `json:"cache_key"`
+	ScopeCandidates []map[string]string   `json:"scope_candidates"`
+	Attempts        []CacheRestoreAttempt `json:"attempts"`
+	BudgetExhausted bool                  `json:"budget_exhausted"`
+}
+
+type CacheRestoreAttempt struct {
+	CacheKey []string          `json:"cache_key"`
+	Scopes   map[string]string `json:"scopes"`
+	Outcome  string            `json:"outcome"`
+	// An absent rule on a denied attempt means default deny.
+	Rule string `json:"rule,omitempty"`
 }
 
 // CacheEntryExpireReq is the request body for invalidating a cache entry.
