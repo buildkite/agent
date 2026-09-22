@@ -167,6 +167,16 @@ func TestCapturedErrorExperiment(t *testing.T) {
 			if resp.StatusCode != want {
 				t.Errorf("status = %d, want %d", resp.StatusCode, want)
 			}
+			if !enabled {
+				apiClient, err := jobapi.NewClient(ctx, e.jobAPI.SocketPath, sh.Env.GetString("BUILDKITE_AGENT_JOB_API_TOKEN", ""))
+				if err != nil {
+					t.Fatal(err)
+				}
+				err = apiClient.CaptureError(ctx, &jobapi.CapturedError{Code: "image_pull_failed", Message: "Failed to pull image"})
+				if err == nil || !strings.Contains(err.Error(), "enable the capture-error experiment on the parent agent") {
+					t.Fatalf("capture error = %v, want actionable disabled-experiment error", err)
+				}
+			}
 			if (calls == 1) != enabled {
 				t.Errorf("upstream calls = %d, experiment enabled = %v", calls, enabled)
 			}

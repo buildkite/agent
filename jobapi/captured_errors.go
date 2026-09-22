@@ -46,6 +46,11 @@ func (e *CapturedError) UnmarshalJSON(data []byte) error {
 }
 
 func (s *Server) handleCapturedError(w http.ResponseWriter, r *http.Request) {
+	if s.reportCapturedError == nil {
+		s.writeCapturedError(w, errors.New("error capture is unavailable: enable the capture-error experiment on the parent agent"), http.StatusNotFound)
+		return
+	}
+
 	r.Body = http.MaxBytesReader(w, r.Body, MaxCapturedErrorBody)
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
