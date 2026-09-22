@@ -48,7 +48,9 @@ func TestJobCaptureErrorUsesLocalJobAPI(t *testing.T) {
 	t.Setenv("BUILDKITE_AGENT_JOB_API_SOCKET", socketPath)
 	t.Setenv("BUILDKITE_AGENT_JOB_API_TOKEN", token)
 
-	for _, source := range []string{"omitted", "inline", "stdin"} {
+	for _, source := range []string{"omitted", "empty", "inline", "stdin", "env", "override"} {
+		t.Setenv("BUILDKITE_AGENT_JOB_CAPTURE_ERROR_MESSAGE", "")
+		t.Setenv("BUILDKITE_AGENT_JOB_CAPTURE_ERROR_CONTEXT", "")
 		app := captureErrorTestApp()
 		// Unselected stdin must not be consumed, even if it contains invalid JSON.
 		app.Reader = strings.NewReader("not JSON")
@@ -56,11 +58,22 @@ func TestJobCaptureErrorUsesLocalJobAPI(t *testing.T) {
 		args := []string{"buildkite-agent", "capture-error", "block.image_pull_failed", "--message", message}
 		input := "{\n\"id\":9007199254740993,\n\"image\":\"example:latest\"\n}\n"
 		switch source {
+		case "empty":
+			t.Setenv("BUILDKITE_AGENT_JOB_CAPTURE_ERROR_CONTEXT", input)
+			args = append(args, "--context", "")
 		case "inline":
 			args = append(args, "--context", input)
 		case "stdin":
 			args = append(args, "--context", "-")
 			app.Reader = strings.NewReader(input)
+		case "env":
+			t.Setenv("BUILDKITE_AGENT_JOB_CAPTURE_ERROR_MESSAGE", message)
+			t.Setenv("BUILDKITE_AGENT_JOB_CAPTURE_ERROR_CONTEXT", input)
+			args = args[:3]
+		case "override":
+			t.Setenv("BUILDKITE_AGENT_JOB_CAPTURE_ERROR_MESSAGE", "other message")
+			t.Setenv("BUILDKITE_AGENT_JOB_CAPTURE_ERROR_CONTEXT", "not JSON")
+			args = append(args, "--context", input)
 		}
 		if err := app.Run(t.Context(), args); err != nil {
 			t.Fatalf("capture-error command error = %v", err)
@@ -68,7 +81,7 @@ func TestJobCaptureErrorUsesLocalJobAPI(t *testing.T) {
 		if reported == nil || reported.Code != "block.image_pull_failed" || reported.Message != message {
 			t.Fatalf("reported = %+v, want original code and message", reported)
 		}
-		if source != "omitted" {
+		if source != "omitted" && source != "empty" {
 			if reported.Context["id"] != json.Number("9007199254740993") || reported.Context["image"] != "example:latest" {
 				t.Errorf("context = %v, want exact supplied values", reported.Context)
 			}
@@ -80,6 +93,8 @@ func TestJobCaptureErrorUsesLocalJobAPI(t *testing.T) {
 
 func TestJobCaptureErrorRejectsInvalidArgumentsBeforeTransport(t *testing.T) {
 	t.Setenv("BUILDKITE_AGENT_JOB_API_SOCKET", "")
+	t.Setenv("BUILDKITE_AGENT_JOB_CAPTURE_ERROR_MESSAGE", "")
+	t.Setenv("BUILDKITE_AGENT_JOB_CAPTURE_ERROR_CONTEXT", "")
 	for _, test := range []struct {
 		args []string
 		want string
@@ -96,14 +111,22 @@ func TestJobCaptureErrorRejectsInvalidArgumentsBeforeTransport(t *testing.T) {
 		}
 	}
 	for _, input := range []string{"{", "null", "[]", "{} {}", ""} {
-		for _, source := range []string{"inline", "stdin"} {
+		for _, source := range []string{"inline", "stdin", "env"} {
+			if input == "" && source != "stdin" {
+				continue // Empty optional context is allowed; explicitly selected stdin must contain JSON.
+			}
 			app := captureErrorTestApp()
 			arg := input
 			if source == "stdin" {
 				arg = "-"
 				app.Reader = strings.NewReader(input)
 			}
-			err := app.Run(t.Context(), []string{"buildkite-agent", "capture-error", "code", "--message", "failure", "--context", arg})
+			args := []string{"buildkite-agent", "capture-error", "code", "--message", "failure", "--context", arg}
+			if source == "env" {
+				t.Setenv("BUILDKITE_AGENT_JOB_CAPTURE_ERROR_CONTEXT", input)
+				args = args[:5]
+			}
+			err := app.Run(t.Context(), args)
 			if err == nil || !strings.Contains(err.Error(), "invalid context JSON") {
 				t.Errorf("%s context %q: error = %v, want invalid context JSON", source, input, err)
 			}

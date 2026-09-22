@@ -14,24 +14,27 @@ import (
 
 const jobCaptureErrorHelpDescription = `Usage:
 
-    buildkite-agent job capture-error <code> --message <message> [--context '<json>']
+    buildkite-agent job capture-error <error-code> --message <message> [--context '<json>']
 
 Description:
 
-Send a structured error to the running parent agent through the authenticated
-Local Job API. The parent validates and normalizes the error. There is no
-direct network fallback when the Local Job API is unavailable.
+Reports a structured error on the current job for display in the Buildkite UI
+and API. Requires the Local Job API.
 
-Use --context - to read the context JSON object from standard input.
+The error code is a string identifying the kind of error, such as
+image_pull_failed, not an HTTP status or command exit code.
+
+Optionally include additional details as a JSON object using --context, or use
+--context - to read them from standard input.
 
 Note: This feature is currently in development and subject to change. It is not
 yet available to all customers.`
 
 type JobCaptureErrorConfig struct {
 	GlobalConfig
-	Code    string `cli:"arg:0" label:"error code"`
-	Message string `cli:"message"`
-	Context string `cli:"context"`
+	ErrorCode string `cli:"arg:0" label:"error code"`
+	Message   string `cli:"message"`
+	Context   string `cli:"context"`
 }
 
 var JobCaptureErrorCommand = &cli.Command{
@@ -40,21 +43,27 @@ var JobCaptureErrorCommand = &cli.Command{
 	Hidden:      true,
 	Description: jobCaptureErrorHelpDescription,
 	Flags: append(globalFlags(),
-		&cli.StringFlag{Name: "message", Usage: "A human-readable description of the error", Required: true},
-		&cli.StringFlag{Name: "context", Usage: "Additional error context as a JSON object, or - to read from standard input"},
+		&cli.StringFlag{
+			Name: "message", Usage: "A human-readable description of the error", Required: true,
+			Sources: cli.EnvVars("BUILDKITE_AGENT_JOB_CAPTURE_ERROR_MESSAGE"),
+		},
+		&cli.StringFlag{
+			Name: "context", Usage: "Additional error context as a JSON object, or - to read from standard input",
+			Sources: cli.EnvVars("BUILDKITE_AGENT_JOB_CAPTURE_ERROR_CONTEXT"),
+		},
 	),
 	Action: func(ctx context.Context, c *cli.Command) error {
 		ctx, cfg, _, _, done := setupLoggerAndConfig[JobCaptureErrorConfig](ctx, c)
 		defer done()
 
-		if c.Args().Len() != 1 || strings.TrimSpace(cfg.Code) == "" {
+		if c.Args().Len() != 1 || strings.TrimSpace(cfg.ErrorCode) == "" {
 			return errors.New("exactly one error code is required")
 		}
 		if strings.TrimSpace(cfg.Message) == "" {
 			return errors.New("message must not be blank")
 		}
-		capturedError := jobapi.CapturedError{Code: cfg.Code, Message: cfg.Message}
-		if c.IsSet("context") {
+		capturedError := jobapi.CapturedError{Code: cfg.ErrorCode, Message: cfg.Message}
+		if cfg.Context != "" {
 			var input io.Reader = strings.NewReader(cfg.Context)
 			if cfg.Context == "-" {
 				input = c.Root().Reader
