@@ -32,7 +32,7 @@ const subcommandHelpTemplate = `Usage:
 
 Available commands are:
 
-  {{range .Commands}}{{.Name}}{{range .Aliases}}, {{.}}{{end}}{{ "\t" }}{{.Usage}}
+  {{range .VisibleCommands}}{{.Name}}{{range .Aliases}}, {{.}}{{end}}{{ "\t" }}{{.Usage}}
   {{end}}{{if .VisibleFlags}}
 
 Options:
