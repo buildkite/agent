@@ -117,9 +117,8 @@ func TestRedactString(t *testing.T) {
 	}
 }
 
-// TestURLCredentials asserts that an embedded password is masked while URLs
-// without a secret, ssh:// SSH remotes and relative submodule paths pass
-// through unchanged.
+// TestURLCredentials asserts that all URL userinfo is masked, while URLs
+// without userinfo, scp-style SSH remotes and relative paths pass through.
 func TestURLCredentials(t *testing.T) {
 	t.Parallel()
 
@@ -128,12 +127,17 @@ func TestURLCredentials(t *testing.T) {
 		in   string
 		want string
 	}{
-		{name: "https with creds", in: "https://x-access-token:ghs_secret@github.com/org/repo.git", want: "https://x-access-token:xxxxx@github.com/org/repo.git"},
-		{name: "https with creds but no user", in: "https://:ghs_secret@github.com/org/repo.git", want: "https://:xxxxx@github.com/org/repo.git"},
+		{name: "https with creds", in: "https://x-access-token:ghs_secret@github.com/org/repo.git", want: "https://xxxxx@github.com/org/repo.git"},
+		{name: "https with creds but no user", in: "https://:ghs_secret@github.com/org/repo.git", want: "https://xxxxx@github.com/org/repo.git"},
 		{name: "https no creds", in: "https://github.com/org/repo.git", want: "https://github.com/org/repo.git"},
-		{name: "https user only", in: "https://user@github.com/org/repo.git", want: "https://user@github.com/org/repo.git"},
+		{name: "https username token", in: "https://test-token@github.com/org/repo.git", want: "https://xxxxx@github.com/org/repo.git"},
+		{name: "username token with empty password", in: "https://test-token:@example.com/repo.git", want: "https://xxxxx@example.com/repo.git"},
+		{name: "tokens in both fields", in: "https://test-token:test-password@example.com/repo.git", want: "https://xxxxx@example.com/repo.git"},
+		{name: "encoded username", in: "https://test%40token%3Asecret@example.com:8443/org/repo%20name.git?ref=main#fragment", want: "https://xxxxx@example.com:8443/org/repo%20name.git?ref=main#fragment"},
+		{name: "http username token", in: "http://test-token@example.com/repo.git", want: "http://xxxxx@example.com/repo.git"},
+		{name: "scheme relative username token", in: "//test-token@example.com/repo.git", want: "//xxxxx@example.com/repo.git"},
 		{name: "scp-style ssh", in: "git@github.com:org/repo.git", want: "git@github.com:org/repo.git"},
-		{name: "ssh scheme", in: "ssh://git@github.com/org/repo.git", want: "ssh://git@github.com/org/repo.git"},
+		{name: "ssh scheme", in: "ssh://git@github.com/org/repo.git", want: "ssh://xxxxx@github.com/org/repo.git"},
 		{name: "relative submodule", in: "../relative/submodule", want: "../relative/submodule"},
 		{name: "empty", in: "", want: ""},
 		{name: "unparsable scheme url with creds", in: "https://x-access-token:ghs_secret@github.com/org/repo.git\x7f", want: "(invalid URL)"},

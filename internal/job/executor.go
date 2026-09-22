@@ -1019,7 +1019,7 @@ func formatDebugEnvironmentVariable(envar string) string {
 	switch name {
 	case "BUILDKITE_AGENT_ACCESS_TOKEN":
 		value = "******************"
-	case "BUILDKITE_GIT_REMOTE_MIRROR_URL":
+	case "BUILDKITE_REPO", "BUILDKITE_GIT_REMOTE_MIRROR_URL":
 		value = redact.URLCredentials(value)
 	}
 	return name + "=" + strings.ReplaceAll(value, "\n", "\\n")
