@@ -102,7 +102,7 @@ func TestCapturedErrorRejectsMalformedAndUnauthenticatedRequests(t *testing.T) {
 		{name: "UTC year underflow", body: `{"code":"x","message":"diagnostic","timestamp":"0001-01-01T00:00:00+01:00"}`, token: token, want: http.StatusBadRequest},
 		{name: "UTC year overflow", body: `{"code":"x","message":"diagnostic","timestamp":"9999-12-31T23:59:59-01:00"}`, token: token, want: http.StatusBadRequest},
 		{name: "future timestamp", body: `{"code":"x","message":"diagnostic","timestamp":"9999-12-31T23:59:59Z"}`, token: token, want: http.StatusCreated},
-		{name: "server truncates message", body: `{"code":"x","message":"` + strings.Repeat("x", 4097) + `"}`, token: token, want: http.StatusCreated},
+		{name: "long message", body: `{"code":"x","message":"` + strings.Repeat("x", 4097) + `"}`, token: token, want: http.StatusCreated},
 		{name: "non-object context", body: `{"code":"x","message":"diagnostic","context":[]}`, token: token, want: http.StatusBadRequest},
 		{name: "oversized body", body: `{"code":"x","message":"diagnostic","context":{"large":"` + strings.Repeat("x", 32<<10) + `"}}`, token: token, want: http.StatusRequestEntityTooLarge},
 		{name: "missing message", body: `{"code":"x"}`, token: token, want: http.StatusBadRequest},
@@ -148,8 +148,8 @@ func TestCapturedErrorBodyLimit(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = srv.Stop() })
 
-	// A 20 KiB message must reach Rails unchanged, even though Rails retains
-	// only 4 KiB. Multibyte text makes the byte-versus-character limit observable.
+	// A 20 KiB message must be forwarded unchanged. Multibyte text makes the
+	// byte-versus-character limit observable.
 	message := strings.Repeat("é", 10<<10)
 	body := `{"code":"x","message":"` + message + `","context":{"detail":"kept"}}`
 	for _, test := range []struct {

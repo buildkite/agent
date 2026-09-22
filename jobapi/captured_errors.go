@@ -15,7 +15,7 @@ import (
 )
 
 // MaxCapturedErrorBody is the local request limit in bytes, before the parent
-// adds a timestamp and idempotency key. Truncation remains the backend's job.
+// adds a timestamp and idempotency key.
 const MaxCapturedErrorBody = 32 << 10
 
 // UnmarshalJSON distinguishes omitted context from explicit null and preserves

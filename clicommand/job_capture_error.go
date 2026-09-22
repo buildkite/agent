@@ -30,7 +30,7 @@ Optionally include additional details as a JSON object using --context, or use
 
 The complete JSON request and raw context input are each limited to 32 KiB.
 The request includes the code, message, context and JSON escaping. Oversized
-reports are rejected, not truncated; retention and truncation happen in Buildkite.
+reports are rejected.
 
 Note: This feature is currently in development and subject to change. It is not
 yet available to all customers.`
