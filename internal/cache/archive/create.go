@@ -2,6 +2,7 @@ package archive
 
 import (
 	"context"
+	"encoding/binary"
 	"fmt"
 	"io"
 	"log/slog"
@@ -192,20 +193,48 @@ func archiveMapping(ctx context.Context, zw *zip.Writer, resolvedPath, chroot, p
 			hdr.Name = strings.TrimSuffix(prefix, "/")
 		}
 
-		w, err := zw.CreateRaw(&hdr)
-		if err != nil {
-			return 0, 0, fmt.Errorf("failed to create archive entry %q: %w", hdr.Name, err)
-		}
-
-		rc, err := f.OpenRaw()
-		if err != nil {
-			return 0, 0, fmt.Errorf("failed to open raw entry %q: %w", f.Name, err)
-		}
-
-		if _, err := io.Copy(w, rc); err != nil {
-			return 0, 0, fmt.Errorf("failed to copy entry %q: %w", f.Name, err)
+		if err := copyRawFile(zw, f, hdr); err != nil {
+			return 0, 0, err
 		}
 	}
 
 	return writtenBytes, writtenEntries, nil
+}
+
+func copyRawFile(zw *zip.Writer, f *zip.File, hdr zip.FileHeader) error {
+	hdr.Extra = removeZip64Extra(hdr.Extra)
+	w, err := zw.CreateRaw(&hdr)
+	if err != nil {
+		return fmt.Errorf("failed to create archive entry %q: %w", hdr.Name, err)
+	}
+
+	rc, err := f.OpenRaw()
+	if err != nil {
+		return fmt.Errorf("failed to open raw entry %q: %w", f.Name, err)
+	}
+
+	if _, err := io.Copy(w, rc); err != nil {
+		return fmt.Errorf("failed to copy entry %q: %w", f.Name, err)
+	}
+	return nil
+}
+
+func removeZip64Extra(extra []byte) []byte {
+	if len(extra) == 0 {
+		return nil
+	}
+	out := make([]byte, 0, len(extra))
+	for len(extra) >= 4 {
+		tag := binary.LittleEndian.Uint16(extra)
+		size := int(binary.LittleEndian.Uint16(extra[2:]))
+		if size > len(extra)-4 {
+			break
+		}
+		fieldLen := 4 + size
+		if tag != 0x0001 {
+			out = append(out, extra[:fieldLen]...)
+		}
+		extra = extra[fieldLen:]
+	}
+	return append(out, extra...)
 }
