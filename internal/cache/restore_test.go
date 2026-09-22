@@ -46,11 +46,12 @@ func TestRunRestore_Diagnostics(t *testing.T) {
 	}
 	configFile := createTempCacheConfig(t, "caches:\n  - name: npm\n    cache_key: [npm, v1, current]\n    target_paths: [cache]\n")
 	for _, test := range []struct {
-		name     string
-		status   int
-		attempts string
-		blobs    []api.CacheBlob
-		want     string
+		name             string
+		status           int
+		attempts         string
+		blobs            []api.CacheBlob
+		want             string
+		searchIncomplete bool
 	}{
 		{
 			name:     "fallback hit",
@@ -64,6 +65,13 @@ func TestRunRestore_Diagnostics(t *testing.T) {
 			status:   http.StatusNotFound,
 			attempts: `[{"cache_key":["npm","v1","current"],"scopes":{"pipeline":"ci"},"outcome":"denied","rule":"forks-read-only"}]`,
 			want:     "Restoring cache: npm\n  npm-v1-current · pipeline=ci → denied (rule: forks-read-only)\nCache not restored: no allowed entry found (registry policy denied matching entries)\n",
+		},
+		{
+			name:             "later candidates skipped",
+			status:           http.StatusNotFound,
+			attempts:         `[{"cache_key":["npm","v1","current"],"scopes":{},"outcome":"miss"}]`,
+			searchIncomplete: true,
+			want:             "Restoring cache: npm\n  npm-v1-current · any scope → miss\n  Registry search budget exhausted\nCache not restored: search incomplete\n",
 		},
 		{
 			name:     "hit without downloadable blob",
@@ -90,7 +98,8 @@ func TestRunRestore_Diagnostics(t *testing.T) {
 					"scopes":    map[string]string{"pipeline": "ci", "branch": "main"}, "blobs": test.blobs,
 					"restore_diagnostics": map[string]any{
 						"cache_key": []string{"npm", "v1", "current"}, "scope_candidates": []map[string]string{{"pipeline": "ci"}},
-						"attempts": json.RawMessage(test.attempts), "budget_exhausted": false,
+						"attempts": json.RawMessage(test.attempts), "budget_exhausted": test.searchIncomplete,
+						"search_incomplete": test.searchIncomplete,
 					},
 				})
 			}))

@@ -52,39 +52,63 @@ func TestRestoreReport(t *testing.T) {
 			want: "Restoring cache: npm\n  npm-v2 · pipeline=ci → hit\nCache restored using exact key npm-v2 from pipeline=ci, branch=main",
 		},
 		{
+			name: "unconstrained search selects a scoped entry",
+			result: RestoreResult{
+				CacheRestored: true, Key: "npm", Scopes: main,
+				Diagnostics: &api.CacheRestoreDiagnostics{Attempts: []api.CacheRestoreAttempt{
+					{CacheKey: []string{"npm"}, Outcome: "hit"},
+				}},
+			},
+			want: "Restoring cache: npm\n  npm · any scope → hit\nCache restored using exact key npm from pipeline=ci, branch=main",
+		},
+		{
+			name: "complete miss at budget threshold",
+			result: RestoreResult{Diagnostics: &api.CacheRestoreDiagnostics{BudgetExhausted: true, Attempts: []api.CacheRestoreAttempt{
+				{CacheKey: []string{"npm"}, Outcome: "miss"},
+			}}},
+			want: "Restoring cache: npm\n  npm · any scope → miss\n  Registry search budget exhausted\nCache miss",
+		},
+		{
+			name: "budget skips later candidates after a definite miss",
+			result: RestoreResult{Diagnostics: &api.CacheRestoreDiagnostics{BudgetExhausted: true, SearchIncomplete: true, Attempts: []api.CacheRestoreAttempt{
+				{CacheKey: []string{"npm"}, Outcome: "miss"},
+			}}},
+			want: "Restoring cache: npm\n  npm · any scope → miss\n  Registry search budget exhausted\nCache not restored: search incomplete",
+		},
+		{
 			name: "default denial is not a miss",
 			result: RestoreResult{Diagnostics: &api.CacheRestoreDiagnostics{Attempts: []api.CacheRestoreAttempt{
 				{CacheKey: []string{"npm"}, Outcome: "denied"},
 			}}},
-			want: "Restoring cache: npm\n  npm · unscoped → denied (no matching allow rule)\nCache not restored: no allowed entry found (registry policy denied matching entries)",
+			want: "Restoring cache: npm\n  npm · any scope → denied (no matching allow rule)\nCache not restored: no allowed entry found (registry policy denied matching entries)",
 		},
 		{
 			name: "ordinary miss",
 			result: RestoreResult{Diagnostics: &api.CacheRestoreDiagnostics{Attempts: []api.CacheRestoreAttempt{
 				{CacheKey: []string{"npm"}, Outcome: "miss"},
 			}}},
-			want: "Restoring cache: npm\n  npm · unscoped → miss\nCache miss",
+			want: "Restoring cache: npm\n  npm · any scope → miss\nCache miss",
 		},
 		{
 			name: "budget exhaustion is not a miss",
 			result: RestoreResult{Diagnostics: &api.CacheRestoreDiagnostics{BudgetExhausted: true, Attempts: []api.CacheRestoreAttempt{
 				{CacheKey: []string{"npm"}, Outcome: "incomplete"},
 			}}},
-			want: "Restoring cache: npm\n  npm · unscoped → incomplete\n  Registry search budget exhausted; some candidates may not have been fully searched\nCache not restored: search incomplete",
+			want: "Restoring cache: npm\n  npm · any scope → incomplete\n  Registry search budget exhausted\nCache not restored: search incomplete",
 		},
 		{
 			name: "budget exhausted before any lookup",
 			result: RestoreResult{Diagnostics: &api.CacheRestoreDiagnostics{
-				CacheKey: []string{"npm", "v1"}, ScopeCandidates: []map[string]string{feature, main}, BudgetExhausted: true,
+				CacheKey: []string{"npm", "v1"}, ScopeCandidates: []map[string]string{feature, main, {}}, BudgetExhausted: true, SearchIncomplete: true,
 			}},
-			want: "Restoring cache: npm\n  Key: npm-v1\n  pipeline=ci, branch=feat-123 → not searched\n  pipeline=ci, branch=main → not searched\n  Registry search budget exhausted; some candidates may not have been fully searched\nCache not restored: search incomplete",
+			want: "Restoring cache: npm\n  Key: npm-v1\n  pipeline=ci, branch=feat-123 → not searched\n  pipeline=ci, branch=main → not searched\n  any scope → not searched\n  Registry search budget exhausted\nCache not restored: search incomplete",
 		},
 		{
 			name: "best effort hit is still restored",
 			result: RestoreResult{CacheRestored: true, FallbackUsed: true, Key: "npm-old", Diagnostics: &api.CacheRestoreDiagnostics{
-				BudgetExhausted: true, Attempts: []api.CacheRestoreAttempt{{CacheKey: []string{"npm"}, Outcome: "hit"}},
+				BudgetExhausted: true, SearchIncomplete: true, Attempts: []api.CacheRestoreAttempt{{CacheKey: []string{"npm"}, Outcome: "hit"}},
 			}},
-			want: "Restoring cache: npm\n  npm · unscoped → hit\n  Registry search budget exhausted; some candidates may not have been fully searched\nCache restored using fallback key npm-old from unscoped",
+			want: "Restoring cache: npm\n  npm · any scope → hit\n  Registry search budget exhausted\nCache restored using fallback key npm-old from unscoped",
 		},
 		{
 			name:   "older server miss is unknown",
@@ -97,7 +121,7 @@ func TestRestoreReport(t *testing.T) {
 				{CacheKey: []string{"npm"}, Outcome: "hit"},
 			}}},
 			err:  errors.New("download failed"),
-			want: "Restoring cache: npm\n  npm · unscoped → hit\nFailed to restore cache: download failed",
+			want: "Restoring cache: npm\n  npm · any scope → hit\nFailed to restore cache: download failed",
 		},
 		{
 			name: "unusable archive is not a successful restore",
@@ -107,7 +131,7 @@ func TestRestoreReport(t *testing.T) {
 					{CacheKey: []string{"npm"}, Outcome: "hit"},
 				}},
 			},
-			want: "Restoring cache: npm\n  npm · unscoped → hit\nCache miss (missing blob, invalidated stale entry)",
+			want: "Restoring cache: npm\n  npm · any scope → hit\nCache miss (missing blob, invalidated stale entry)",
 		},
 		{
 			name: "escape values without injecting log lines",
@@ -153,7 +177,7 @@ func TestRestoreWithClient_ConcurrentReports(t *testing.T) {
 		t.Fatalf("got %d log messages, want one per cache: %v", len(log.Messages), log.Messages)
 	}
 	for _, name := range []string{"npm", "go"} {
-		want := "[info] Restoring cache: " + name + "\n  " + name + "-key · unscoped → denied (rule: #2)\nCache not restored: no allowed entry found (registry policy denied matching entries)"
+		want := "[info] Restoring cache: " + name + "\n  " + name + "-key · any scope → denied (rule: #2)\nCache not restored: no allowed entry found (registry policy denied matching entries)"
 		if !strings.Contains(strings.Join(log.Messages, "\n"), want) {
 			t.Errorf("missing intact report %q in %v", want, log.Messages)
 		}

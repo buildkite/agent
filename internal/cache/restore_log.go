@@ -13,10 +13,11 @@ func restoreReport(cacheID string, result RestoreResult, err error) string {
 	fmt.Fprintf(&report, "Restoring cache: %s\n", logValue(cacheID))
 	denied, incomplete := false, false
 	if diagnostics := result.Diagnostics; diagnostics != nil {
+		incomplete = diagnostics.SearchIncomplete
 		if len(diagnostics.Attempts) == 0 {
 			fmt.Fprintf(&report, "  Key: %s\n", logValue(strings.Join(diagnostics.CacheKey, "-")))
 			for _, scopes := range diagnostics.ScopeCandidates {
-				fmt.Fprintf(&report, "  %s → not searched\n", displayScopes(scopes))
+				fmt.Fprintf(&report, "  %s → not searched\n", displayScopes(scopes, "any scope"))
 			}
 		}
 		width := 0
@@ -25,7 +26,7 @@ func restoreReport(cacheID string, result RestoreResult, err error) string {
 		}
 		for _, attempt := range diagnostics.Attempts {
 			fmt.Fprintf(&report, "  %-*s · %s → %s", width,
-				logValue(strings.Join(attempt.CacheKey, "-")), displayScopes(attempt.Scopes), logValue(attempt.Outcome))
+				logValue(strings.Join(attempt.CacheKey, "-")), displayScopes(attempt.Scopes, "any scope"), logValue(attempt.Outcome))
 			switch attempt.Outcome {
 			case "denied":
 				denied = true
@@ -40,8 +41,7 @@ func restoreReport(cacheID string, result RestoreResult, err error) string {
 			report.WriteByte('\n')
 		}
 		if diagnostics.BudgetExhausted {
-			report.WriteString("  Registry search budget exhausted; some candidates may not have been fully searched\n")
-			incomplete = true
+			report.WriteString("  Registry search budget exhausted\n")
 		}
 	} else if result.Key != "" {
 		fmt.Fprintf(&report, "  Key: %s (search diagnostics unavailable)\n", logValue(result.Key))
@@ -55,7 +55,7 @@ func restoreReport(cacheID string, result RestoreResult, err error) string {
 		if result.FallbackUsed {
 			match = "fallback"
 		}
-		fmt.Fprintf(&report, "Cache restored using %s key %s from %s", match, logValue(result.Key), displayScopes(result.Scopes))
+		fmt.Fprintf(&report, "Cache restored using %s key %s from %s", match, logValue(result.Key), displayScopes(result.Scopes, "unscoped"))
 	case result.NotRestoredReason != "":
 		report.WriteString(logValue(result.NotRestoredReason))
 	case incomplete:
@@ -70,7 +70,7 @@ func restoreReport(cacheID string, result RestoreResult, err error) string {
 	return report.String()
 }
 
-func displayScopes(scopes map[string]string) string {
+func displayScopes(scopes map[string]string, emptyLabel string) string {
 	var parts []string
 	for _, name := range []string{"pipeline", "branch", "build"} {
 		if value, ok := scopes[name]; ok {
@@ -78,7 +78,7 @@ func displayScopes(scopes map[string]string) string {
 		}
 	}
 	if len(parts) == 0 {
-		return "unscoped"
+		return emptyLabel
 	}
 	return strings.Join(parts, ", ")
 }

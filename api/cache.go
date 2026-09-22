@@ -102,10 +102,11 @@ type CacheEntryRetrieveResp struct {
 
 // CacheRestoreDiagnostics describes the actual registry search, including on a 404.
 type CacheRestoreDiagnostics struct {
-	CacheKey        []string              `json:"cache_key"`
-	ScopeCandidates []map[string]string   `json:"scope_candidates"`
-	Attempts        []CacheRestoreAttempt `json:"attempts"`
-	BudgetExhausted bool                  `json:"budget_exhausted"`
+	CacheKey         []string              `json:"cache_key"`
+	ScopeCandidates  []map[string]string   `json:"scope_candidates"`
+	Attempts         []CacheRestoreAttempt `json:"attempts"`
+	BudgetExhausted  bool                  `json:"budget_exhausted"`
+	SearchIncomplete bool                  `json:"search_incomplete"`
 }
 
 type CacheRestoreAttempt struct {
