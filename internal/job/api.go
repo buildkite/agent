@@ -37,17 +37,21 @@ We'll continue to run your job, but you won't be able to use the Job API`)
 		jobapi.WithPromiseFailureDeclarer(e.declarePromiseFailure),
 	}
 	if experiments.IsEnabled(ctx, experiments.CaptureError) {
-		jobAPIOpts = append(jobAPIOpts, jobapi.WithCapturedErrorReporter(func(requestCtx context.Context, capturedError *jobapi.CapturedError) error {
+		reporter := func(requestCtx context.Context, capturedError *jobapi.CapturedError) error {
 			// Reporting must not keep a cancelled job alive through its grace period.
 			reportCtx, cancel := context.WithCancel(requestCtx)
 			defer cancel()
+
 			stop := context.AfterFunc(ctx, cancel)
 			defer stop()
+
 			if err := ctx.Err(); err != nil {
 				return err
 			}
 			return e.reportCapturedError(reportCtx, capturedError)
-		}))
+		}
+
+		jobAPIOpts = append(jobAPIOpts, jobapi.WithCapturedErrorReporter(reporter))
 	}
 	if e.Debug {
 		jobAPIOpts = append(jobAPIOpts, jobapi.WithDebug())
