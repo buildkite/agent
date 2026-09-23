@@ -18,6 +18,10 @@ If an experiment doesn't exist, no error will be raised.
 
 ## Available Experiments
 
+### `capture-error`
+
+Structured job error reporting. Not supported yet; for internal development only.
+
 ### `origin-clonekit`
 
 Seeds a missing on-host Git mirror using Cursor Origin's CloneKit pack data.
