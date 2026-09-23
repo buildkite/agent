@@ -323,6 +323,19 @@ func TestRemoteMirrorTelemetrySchema(t *testing.T) {
 			wantLogContains: []string{"outcome=notReached site=fresh-clone", "mirror.example"},
 		},
 		{
+			name: "username-only credential",
+			attempt: remoteMirrorAttempt{
+				site:    remoteMirrorSiteFreshClone,
+				url:     "https://test-secret@mirror.example/acme/widgets.git",
+				outcome: remoteMirrorOutcomeNotReached,
+			},
+			wantAttrs: map[string]string{
+				"git.remote_mirror.outcome": "notReached",
+				"git.remote_mirror.site":    "fresh-clone",
+			},
+			wantLogContains: []string{"url=https://xxxxx@mirror.example/acme/widgets.git"},
+		},
+		{
 			name: "skipped",
 			attempt: remoteMirrorAttempt{
 				outcome:    remoteMirrorOutcomeSkipped,
@@ -450,17 +463,18 @@ func TestGitCredentialHelperCommandQuotesExecutablePath(t *testing.T) {
 	}
 }
 
-func TestFormatDebugEnvironmentVariableRedactsRemoteMirrorCredentials(t *testing.T) {
+func TestFormatDebugEnvironmentVariableRedactsRepositoryCredentials(t *testing.T) {
 	t.Parallel()
 
-	got := formatDebugEnvironmentVariable(
-		"BUILDKITE_GIT_REMOTE_MIRROR_URL=https://token:secret@mirror.example/repo.git",
-	)
-	if strings.Contains(got, "secret") {
-		t.Errorf("formatDebugEnvironmentVariable() = %q, want URL credentials redacted", got)
-	}
-	if want := "BUILDKITE_GIT_REMOTE_MIRROR_URL=https://token:xxxxx@mirror.example/repo.git"; got != want {
-		t.Errorf("formatDebugEnvironmentVariable() = %q, want %q", got, want)
+	for _, name := range []string{"BUILDKITE_REPO", "BUILDKITE_GIT_REMOTE_MIRROR_URL"} {
+		for _, userinfo := range []string{"test-secret", "test-secret:", "token:secret"} {
+			t.Run(name+"/"+userinfo, func(t *testing.T) {
+				got := formatDebugEnvironmentVariable(name + "=https://" + userinfo + "@mirror.example/repo.git")
+				if want := name + "=https://xxxxx@mirror.example/repo.git"; got != want {
+					t.Errorf("formatDebugEnvironmentVariable() = %q, want %q", got, want)
+				}
+			})
+		}
 	}
 }
 
