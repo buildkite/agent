@@ -28,6 +28,14 @@ image_pull_failed, not necessarily an HTTP status or command exit code.
 Optionally include additional details as a JSON object using --context, or use
 --context - to read them from standard input.
 
+The parent agent redacts values registered for job-log redaction from the code,
+message, and context, including context keys. Register dynamically obtained
+secrets with buildkite-agent redactor add before reporting them. This does not
+automatically detect other sensitive information.
+
+Redacted numbers become strings. Reports are rejected if redaction causes
+duplicate context keys, an invalid error code, or an oversized payload.
+
 This command limits error reports to 32 KiB, including JSON encoding.
 If a report is too large, shorten the message or reduce the context.
 Context input is also limited to 32 KiB before parsing.
