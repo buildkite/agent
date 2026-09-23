@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"math"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -19,6 +20,7 @@ import (
 
 	"github.com/buildkite/agent/v4/api"
 	"github.com/buildkite/agent/v4/internal/cache/configuration"
+	"github.com/buildkite/agent/v4/logger"
 )
 
 // mockAPIClient implements api.CacheClient for integration testing
@@ -924,6 +926,56 @@ func TestCacheIntegration_RestoreOverlapAfterHomeChange(t *testing.T) {
 	// Soft-failed before cleanup, so the target's content is untouched.
 	if content, err := os.ReadFile(sentinel); err != nil || string(content) != "b" {
 		t.Errorf("target should be untouched, content=%q err=%v", content, err)
+	}
+}
+
+// A cleanup failure after an earlier target was removed must not extract a
+// partial cache or become a harmless miss. Use a protected target to force a
+// deterministic failure rather than racing filesystem operations in CI.
+func TestCacheIntegration_CleanupFailureStopsBeforeExtraction(t *testing.T) {
+	first := t.TempDir()
+	second := t.TempDir()
+	storagePath := filepath.ToSlash(t.TempDir())
+	if !strings.HasPrefix(storagePath, "/") {
+		storagePath = "/" + storagePath // file:///C:/... on Windows
+	}
+	c := &client{
+		api: newMockAPIClient("local_file"), registry: "~", format: "zip",
+		bucketURL: (&url.URL{Scheme: "file", Path: storagePath}).String(),
+		caches: []configuration.Cache{{
+			Name: "test-cache", TargetPaths: []string{first, second},
+			CacheKey: []configuration.KeyPart{{Source: configuration.SourceLiteral, Arg: "cleanup-failure"}},
+		}},
+	}
+	for _, dir := range []string{first, second} {
+		if err := os.WriteFile(filepath.Join(dir, "data"), []byte("saved"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := c.Save(t.Context(), "test-cache"); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(second, "data"), []byte("live"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	// The first target is removed; the second is now protected as cwd.
+	t.Chdir(second)
+	extracting := false
+	c.onProgress = func(_, stage, _ string, _, _ int) {
+		extracting = extracting || stage == "extracting"
+	}
+	err := restoreWithClient(t.Context(), logger.Discard, c, []string{"test-cache"}, 1, false)
+	if !errors.Is(err, errRestoreMutatedTargets) || !strings.Contains(err.Error(), "target paths may already have been modified") {
+		t.Fatalf("expected fatal partial-cleanup diagnostic: %v", err)
+	}
+	if extracting {
+		t.Error("extraction must not start after cleanup fails")
+	}
+	if _, err := os.Stat(first); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("first target should remain removed, not restored: %v", err)
+	}
+	if got, err := os.ReadFile(filepath.Join(second, "data")); err != nil || string(got) != "live" {
+		t.Fatalf("second target should not be overwritten from archive: %q, %v", got, err)
 	}
 }
 
