@@ -1,9 +1,14 @@
 package cache
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -14,6 +19,7 @@ import (
 	"time"
 
 	"github.com/buildkite/agent/v4/api"
+	"github.com/buildkite/agent/v4/internal/cache/configuration"
 	"github.com/buildkite/agent/v4/internal/cache/store"
 	"github.com/buildkite/agent/v4/logger"
 )
@@ -53,6 +59,113 @@ func TestRestoreCleanupError(t *testing.T) {
 			if got := restoreWithClient(t.Context(), logger.Discard, mock, []string{"cache"}, 1, false); !errors.Is(got, errRestoreMutatedTargets) {
 				t.Fatalf("cleanup failure must stay fatal when fail-open: %v", got)
 			}
+		})
+	}
+}
+
+func TestRunRestore_Diagnostics(t *testing.T) {
+	t.Chdir(t.TempDir())
+	if err := os.Mkdir("cache", 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile("cache/file", []byte("cached contents"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	storageURL := (&url.URL{Scheme: "file", Path: "/" + strings.TrimPrefix(filepath.ToSlash(t.TempDir()), "/")}).String()
+	mock := newMockAPIClient("local_file")
+	c := &client{api: mock, registry: "~", bucketURL: storageURL, caches: []configuration.Cache{{
+		Name: "npm", CacheKey: []configuration.KeyPart{{Source: configuration.SourceLiteral, Arg: "stored"}}, TargetPaths: []string{"cache"},
+	}}}
+	if _, err := c.Save(t.Context(), "npm"); err != nil {
+		t.Fatal(err)
+	}
+	entry, _, _, err := mock.CacheEntryRetrieve(t.Context(), "~", api.CacheEntryRetrieveReq{
+		TargetPaths: []string{"cache"}, CacheKey: []api.CacheKeyPart{{Value: "stored"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	configFile := createTempCacheConfig(t, "caches:\n  - name: npm\n    cache_key: [npm, v1, current]\n    target_paths: [cache]\n")
+	for _, test := range []struct {
+		name             string
+		status           int
+		attempts         string
+		blobs            []api.CacheBlob
+		want             string
+		searchIncomplete bool
+	}{
+		{
+			name:     "fallback hit",
+			status:   http.StatusOK,
+			attempts: `[{"cache_key":["npm","v1","current"],"scopes":{"pipeline":"ci"},"outcome":"miss"},{"cache_key":["npm","v1"],"scopes":{"pipeline":"ci"},"outcome":"hit"}]`,
+			blobs:    entry.Blobs,
+			want:     "Restoring cache: npm\n  npm-v1-current · pipeline=ci → miss\n  npm-v1         · pipeline=ci → hit\nCache restored using fallback key npm-v1-older from pipeline=ci, branch=main\n",
+		},
+		{
+			name:     "policy denied",
+			status:   http.StatusNotFound,
+			attempts: `[{"cache_key":["npm","v1","current"],"scopes":{"pipeline":"ci"},"outcome":"denied","rule":"forks-read-only"}]`,
+			want:     "Restoring cache: npm\n  npm-v1-current · pipeline=ci → denied (rule: forks-read-only)\nCache not restored: no allowed entry found (registry policy denied matching entries)\n",
+		},
+		{
+			name:             "later candidates skipped",
+			status:           http.StatusNotFound,
+			attempts:         `[{"cache_key":["npm","v1","current"],"scopes":{},"outcome":"miss"}]`,
+			searchIncomplete: true,
+			want:             "Restoring cache: npm\n  npm-v1-current · any scope → miss\n  Registry search budget exhausted\nCache not restored: search incomplete\n",
+		},
+		{
+			name:     "hit without downloadable blob",
+			status:   http.StatusOK,
+			attempts: `[{"cache_key":["npm","v1","current"],"scopes":{"pipeline":"ci"},"outcome":"hit"}]`,
+			want:     "Restoring cache: npm\n  npm-v1-current · pipeline=ci → hit\nFailed to restore cache: failed to download cache: cache entry has no blobs to download; continuing without failing the build\n",
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if err := os.WriteFile("cache/file", []byte("uncached contents"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path != "/cache_registries/~/retrieve" {
+					t.Errorf("unexpected API path: %s", r.URL.Path)
+					http.NotFound(w, r)
+					return
+				}
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(test.status)
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"message": "Cache entry not found", "store": "local_file", "fallback": true,
+					"cache_key": []map[string]any{{"value": "npm"}, {"value": "v1"}, {"value": "older"}},
+					"scopes":    map[string]string{"pipeline": "ci", "branch": "main"}, "blobs": test.blobs,
+					"restore_diagnostics": map[string]any{
+						"cache_key": []string{"npm", "v1", "current"}, "scope_candidates": []map[string]string{{"pipeline": "ci"}},
+						"attempts": json.RawMessage(test.attempts), "budget_exhausted": test.searchIncomplete,
+						"search_incomplete": test.searchIncomplete,
+					},
+				})
+			}))
+			defer server.Close()
+			var output bytes.Buffer
+			l := logger.NewConsoleLogger(logger.NewTextPrinter(&output), nil)
+			l.SetLevel(logger.INFO)
+			apiClient := api.NewClient(logger.Discard, api.Config{Endpoint: server.URL})
+			if err := RunRestore(t.Context(), l, apiClient, Config{CacheConfigFile: configFile, BucketURL: storageURL}); err != nil {
+				t.Fatal(err)
+			}
+			// Ignore only the timestamp/level prefix supplied by the console logger.
+			_, got, ok := strings.Cut(output.String(), "Restoring cache:")
+			if !ok || "Restoring cache:"+got != test.want || strings.Contains(output.String(), "Cache progress") {
+				t.Errorf("output = %q, want report %q without progress chatter", output.String(), test.want)
+			}
+			wantContents := "uncached contents"
+			if test.blobs != nil {
+				wantContents = "cached contents"
+			}
+			contents, err := os.ReadFile("cache/file")
+			if err != nil || string(contents) != wantContents {
+				t.Fatalf("restored file = %q, want %q, err = %v", contents, wantContents, err)
+			}
+			t.Logf("\n%s", output.String())
 		})
 	}
 }

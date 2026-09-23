@@ -35,6 +35,7 @@ func (s *Server) router() chi.Router {
 		r.Post("/redactions", s.createRedaction)
 
 		r.Post("/promise-failure", s.handlePromiseFailure)
+		r.Post("/errors", s.handleCapturedError)
 	})
 
 	return r

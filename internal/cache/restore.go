@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"syscall"
 	"time"
 
@@ -104,14 +105,13 @@ func (c *client) Restore(ctx context.Context, cacheID string) (RestoreResult, er
 		return result, err
 	}
 
-	result.Key = cacheID
-
 	cacheKey, err := c.resolveCacheKey(cacheConfig)
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, "failed to resolve cache key")
 		return result, fmt.Errorf("failed to resolve cache key: %w", err)
 	}
+	result.Key = displayCacheKey(cacheKey)
 
 	span.SetAttributes(
 		attribute.String("cache.id", cacheID),
@@ -158,6 +158,7 @@ func (c *client) Restore(ctx context.Context, cacheID string) (RestoreResult, er
 		span.SetStatus(codes.Error, "failed to retrieve cache")
 		return result, fmt.Errorf("failed to retrieve cache: %w", err)
 	}
+	result.Diagnostics = retrieveResp.RestoreDiagnostics
 
 	if !exists {
 		// Cache miss
@@ -170,7 +171,7 @@ func (c *client) Restore(ctx context.Context, cacheID string) (RestoreResult, er
 			attribute.Int64("cache.duration_ms", result.TotalDuration.Milliseconds()),
 		)
 		span.SetStatus(codes.Ok, "cache miss")
-		c.callProgress(cacheID, "complete", "Cache miss", 0, 0)
+		c.callProgress(cacheID, "complete", "Cache not restored", 0, 0)
 		return result, nil
 	}
 
@@ -178,6 +179,8 @@ func (c *client) Restore(ctx context.Context, cacheID string) (RestoreResult, er
 	result.FallbackUsed = retrieveResp.Fallback
 	result.CacheHit = !retrieveResp.Fallback
 	result.ExpiresAt = retrieveResp.ExpiresAt
+	result.Key = displayCacheKey(retrieveResp.CacheKey)
+	result.Scopes = retrieveResp.Scopes
 
 	span.SetAttributes(
 		attribute.Bool("cache.fallback_used", result.FallbackUsed),
@@ -213,7 +216,8 @@ func (c *client) Restore(ctx context.Context, cacheID string) (RestoreResult, er
 				attribute.Bool("cache.invalidated", invalidated),
 			)
 			span.SetStatus(codes.Ok, "cache miss (missing blob)")
-			c.callProgress(cacheID, "complete", missCompleteMessage("missing blob", invalidated), 0, 0)
+			result.NotRestoredReason = missCompleteMessage("missing blob", invalidated)
+			c.callProgress(cacheID, "complete", result.NotRestoredReason, 0, 0)
 			return result, nil
 		}
 		if errors.Is(err, ErrDigestMismatch) {
@@ -235,7 +239,8 @@ func (c *client) Restore(ctx context.Context, cacheID string) (RestoreResult, er
 				attribute.Bool("cache.invalidated", invalidated),
 			)
 			span.SetStatus(codes.Ok, "cache miss (digest mismatch)")
-			c.callProgress(cacheID, "complete", missCompleteMessage("blob digest mismatch", invalidated), 0, 0)
+			result.NotRestoredReason = missCompleteMessage("blob digest mismatch", invalidated)
+			c.callProgress(cacheID, "complete", result.NotRestoredReason, 0, 0)
 			return result, nil
 		}
 		span.RecordError(err)
@@ -276,7 +281,8 @@ func (c *client) Restore(ctx context.Context, cacheID string) (RestoreResult, er
 			attribute.Bool("cache.invalidated", invalidated),
 		)
 		span.SetStatus(codes.Ok, "cache miss (archive failed verification)")
-		c.callProgress(cacheID, "complete", missCompleteMessage("archive failed verification", invalidated), 0, 0)
+		result.NotRestoredReason = missCompleteMessage("archive failed verification", invalidated)
+		c.callProgress(cacheID, "complete", result.NotRestoredReason, 0, 0)
 		return result, nil
 	}
 
@@ -306,8 +312,18 @@ func (c *client) Restore(ctx context.Context, cacheID string) (RestoreResult, er
 			attribute.Bool("cache.targets_overlap", true),
 		)
 		span.SetStatus(codes.Ok, "cache miss (targets overlap at restore)")
-		c.callProgress(cacheID, "complete", "Cache miss (targets overlap at restore)", 0, 0)
+		result.NotRestoredReason = "Cache not restored (targets overlap at restore)"
+		c.callProgress(cacheID, "complete", result.NotRestoredReason, 0, 0)
 		return result, nil
+	}
+
+	// Reject unsafe mount layouts for every target before cleaning any of them.
+	for _, path := range resolvedTargets {
+		if _, err := cleanupMount(path); err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, "failed to inspect cache target")
+			return result, fmt.Errorf("failed to inspect cache target %q: %w", path, err)
+		}
 	}
 
 	c.callProgress(cacheID, "cleaning", "Cleaning paths", 0, 0)
@@ -376,6 +392,14 @@ func (c *client) Restore(ctx context.Context, cacheID string) (RestoreResult, er
 	c.callProgress(cacheID, "complete", "Cache restored successfully", 0, 0)
 
 	return result, nil
+}
+
+func displayCacheKey(key []api.CacheKeyPart) string {
+	parts := make([]string, len(key))
+	for i, part := range key {
+		parts[i] = part.Value
+	}
+	return strings.Join(parts, "-")
 }
 
 // invalidateStaleEntry uses the retrieve response to expire a cache entry whose
@@ -616,7 +640,8 @@ func (c *client) extractCache(ctx context.Context, archiveFile string, archiveSi
 	return archiveInfo, nil
 }
 
-// cleanPath removes a directory tree for a configured cache path.
+// cleanPath removes a directory tree for a configured cache path, preserving
+// Linux mount roots while removing their contents.
 // It handles Go module cache directories that have 0555 permissions by
 // making them writable before removal.
 func cleanPath(ctx context.Context, dir string) error {
@@ -641,6 +666,7 @@ func cleanPath(ctx context.Context, dir string) error {
 			return fmt.Errorf("cleanPath: refusing to remove volume root %q", clean)
 		}
 	}
+	mounted := false
 	// A final symlink is only unlinked by RemoveAll, so the guards below run only
 	// for a real (non-symlink) target; os.Lstat doesn't dereference it.
 	if lstat, err := os.Lstat(clean); err == nil && lstat.Mode()&os.ModeSymlink == 0 {
@@ -655,6 +681,11 @@ func cleanPath(ctx context.Context, dir string) error {
 
 		// Module cache has 0555 directories; make them writable before removal.
 		if lstat.IsDir() {
+			var err error
+			mounted, err = cleanupMount(clean)
+			if err != nil {
+				return err
+			}
 			if err := makeTreeWritable(ctx, clean); err != nil {
 				return err
 			}
@@ -664,6 +695,27 @@ func cleanPath(ctx context.Context, dir string) error {
 	// Check context again before potentially long RemoveAll
 	if ctx.Err() != nil {
 		return ctx.Err()
+	}
+
+	if mounted {
+		root, err := os.OpenRoot(clean)
+		if err != nil {
+			return fmt.Errorf("cleanPath: open mounted target %q: %w", clean, err)
+		}
+		defer func() { _ = root.Close() }()
+		entries, err := fs.ReadDir(root.FS(), ".")
+		if err != nil {
+			return fmt.Errorf("cleanPath: read mounted target %q: %w", clean, err)
+		}
+		for _, entry := range entries {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+			if err := root.RemoveAll(entry.Name()); err != nil {
+				return fmt.Errorf("cleanPath: remove contents of mounted target %q: %w", clean, err)
+			}
+		}
+		return nil
 	}
 
 	if err := os.RemoveAll(clean); err != nil {

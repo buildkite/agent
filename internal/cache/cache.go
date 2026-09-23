@@ -68,6 +68,13 @@ func RunRestore(ctx context.Context, l logger.Logger, apiClient *api.Client, cfg
 		l.Infof("No caches defined in the cache configuration file, nothing to restore")
 		return nil
 	}
+	c.onProgress = func(cacheID, stage, message string, _, _ int) {
+		l.WithFields(
+			logger.StringField("cache_id", cacheID),
+			logger.StringField("stage", stage),
+			logger.StringField("message", message),
+		).Debugf("Cache progress")
+	}
 	return restoreWithClient(ctx, l, c, cacheIDs, cfg.Concurrency, cfg.FailOnError)
 }
 
@@ -98,13 +105,13 @@ func restoreWithClient(ctx context.Context, l logger.Logger, c cacheOps, cacheID
 						return
 					}
 
-					l.Infof("Restoring cache: %s", cacheID)
 					result, err := c.Restore(wctx, cacheID)
 					if err != nil {
 						// A restore that failed after cleaning/extracting target paths
 						// leaves a partial workspace, which is not equivalent to a cache
 						// miss, so it stays fatal even when fail-open.
 						if failOnError || errors.Is(err, errRestoreMutatedTargets) {
+							l.Warnf("%s", restoreReport(cacheID, result, err))
 							cancel(fmt.Errorf("failed to restore cache %q: %w", cacheID, err))
 							return
 						}
@@ -115,15 +122,12 @@ func restoreWithClient(ctx context.Context, l logger.Logger, c cacheOps, cacheID
 						// Fail-open: a restore that failed before touching the target
 						// paths is equivalent to a cache miss, so warn and carry on
 						// rather than failing the build.
-						l.WithFields(
-							logger.StringField("cache_id", cacheID),
-							logger.StringField("error", err.Error()),
-						).Warnf("Failed to restore cache; continuing without failing the build")
+						l.Warnf("%s; continuing without failing the build", restoreReport(cacheID, result, err))
 						continue
 					}
 
-					switch {
-					case result.CacheHit, result.FallbackUsed:
+					l.Infof("%s", restoreReport(cacheID, result, nil))
+					if result.CacheRestored {
 						l.WithFields(
 							logger.StringField("cache_id", cacheID),
 							logger.StringField("cache_key", result.Key),
@@ -135,12 +139,7 @@ func restoreWithClient(ctx context.Context, l logger.Logger, c cacheOps, cacheID
 							logger.StringField("transfer_speed", fmt.Sprintf("%.2fMB/s", result.Transfer.TransferSpeed)),
 							logger.IntField("part_count", result.Transfer.PartCount),
 							logger.IntField("concurrency", result.Transfer.Concurrency),
-						).Infof("Cache restored")
-					default:
-						l.WithFields(
-							logger.StringField("cache_id", cacheID),
-							logger.StringField("cache_key", result.Key),
-						).Infof("Cache not restored (not found)")
+						).Debugf("Cache restored")
 					}
 
 				case <-wctx.Done():
