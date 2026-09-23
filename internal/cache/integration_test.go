@@ -442,8 +442,8 @@ func TestCacheIntegration_SaveAndRestore(t *testing.T) {
 		if result.FallbackUsed {
 			t.Error("should not use fallback")
 		}
-		if result.Key != "test-cache" {
-			t.Errorf("Key = %q, want %q", result.Key, "test-cache")
+		if result.Key != "v1-test-key" {
+			t.Errorf("Key = %q, want %q", result.Key, "v1-test-key")
 		}
 		if result.Archive.Size <= 0 {
 			t.Errorf("archive should have size, got %d", result.Archive.Size)
@@ -543,8 +543,8 @@ func TestCacheIntegration_RestoreCacheMiss(t *testing.T) {
 	if result.FallbackUsed {
 		t.Error("should not use fallback")
 	}
-	if result.Key != "test-cache" {
-		t.Errorf("should return requested key, Key = %q, want %q", result.Key, "test-cache")
+	if result.Key != "v1-test-key" {
+		t.Errorf("should return resolved key, Key = %q, want %q", result.Key, "v1-test-key")
 	}
 }
 
