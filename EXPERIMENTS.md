@@ -22,6 +22,17 @@ If an experiment doesn't exist, no error will be raised.
 
 Structured job error reporting. Not supported yet; for internal development only.
 
+The default checkout automatically reports classified Git failures through the
+Local Job API, including failed fetch attempts that later recover. LFS reports
+only after its fetch/checkout retry loop fails. Checkout attempt timeouts, invalid
+refs, commit verification failures, and other checkout preparation failures are
+also reported. Git commands in user hooks and commands are not instrumented.
+
+Reports contain fixed codes and messages, without Git output, repository URLs,
+paths, or refs. Delivery is best-effort: each submission makes one attempt with a
+two-second deadline (subject to the calling context's deadline), warns on failure,
+and does not replace the Git error. Cancellation does not submit a new report.
+
 ### `origin-clonekit`
 
 Seeds a missing on-host Git mirror using Cursor Origin's CloneKit pack data.

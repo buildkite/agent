@@ -175,6 +175,7 @@ func (e *Executor) checkout(ctx context.Context) error {
 			if err == nil {
 				return nil
 			}
+			captureCheckoutError(ctx, e.shell, err)
 
 			var errLockTimeout ErrTimedOutAcquiringLock
 			var errGit *gitError

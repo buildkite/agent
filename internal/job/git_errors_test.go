@@ -212,6 +212,28 @@ fi
 	}
 }
 
+func TestCheckoutErrorCaptureFromExecutor(t *testing.T) {
+	ctx, e, reports := gitErrorCaptureServer(t, true, http.StatusCreated)
+	e.Repository = "secret-url"
+	e.GitCloneFlags = "'"
+	e.CheckoutAttempts = 1
+	e.shell.Env.Set("BUILDKITE_BUILD_CHECKOUT_PATH", filepath.Join(t.TempDir(), "checkout"))
+	t.Cleanup(func() {
+		if e.checkoutRoot != nil {
+			_ = e.checkoutRoot.Close()
+		}
+	})
+	if err := e.checkout(ctx); err == nil || !strings.Contains(err.Error(), "splitting --git-clone-flags") {
+		t.Fatalf("checkout error = %v, want invalid clone flags", err)
+	}
+	if len(reports) != 1 {
+		t.Fatalf("reports = %d, want 1", len(reports))
+	}
+	if r := <-reports; r.Code != "git_checkout_failed" || r.Message != "Git checkout preparation failed." {
+		t.Fatalf("unexpected checkout report: %#v", r)
+	}
+}
+
 func TestCheckoutErrorCapture(t *testing.T) {
 	for _, tc := range []struct {
 		name, code string
