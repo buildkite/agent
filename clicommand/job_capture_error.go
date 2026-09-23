@@ -28,9 +28,9 @@ image_pull_failed, not necessarily an HTTP status or command exit code.
 Optionally include additional details as a JSON object using --context, or use
 --context - to read them from standard input.
 
-The complete JSON request and raw context input are each limited to 32 KiB.
-The request includes the code, message, context and JSON escaping. Oversized
-reports are rejected.
+This command limits error reports to 32 KiB, including JSON encoding.
+If a report is too large, shorten the message or reduce the context.
+Context input is also limited to 32 KiB before parsing.
 
 Note: This feature is currently in development and subject to change. It is not
 yet available to all customers.`
