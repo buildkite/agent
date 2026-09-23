@@ -26,6 +26,70 @@ func TestAllFlagEnvs(t *testing.T) {
 	}
 }
 
+func TestGitFetchBaseBranchFlag(t *testing.T) {
+	tests := []struct {
+		name    string
+		args    []string
+		want    string
+		wantErr bool
+	}{
+		{
+			name: "defaults to off",
+			want: "off",
+		},
+		{
+			name: "can be set to optimistic",
+			args: []string{"--git-fetch-base-branch", "optimistic"},
+			want: "optimistic",
+		},
+		{
+			name: "can be set to strict",
+			args: []string{"--git-fetch-base-branch", "strict"},
+			want: "strict",
+		},
+		{
+			name:    "rejects a boolean",
+			args:    []string{"--git-fetch-base-branch", "true"},
+			wantErr: true,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			flag := &cli.StringFlag{
+				Name:             GitFetchBaseBranchFlag.Name,
+				Value:            GitFetchBaseBranchFlag.Value,
+				ValidateDefaults: GitFetchBaseBranchFlag.ValidateDefaults,
+				Validator:        GitFetchBaseBranchFlag.Validator,
+			}
+
+			var got string
+			command := &cli.Command{
+				Name:  "test",
+				Flags: []cli.Flag{flag},
+				Action: func(_ context.Context, command *cli.Command) error {
+					got = command.String("git-fetch-base-branch")
+					return nil
+				},
+			}
+
+			err := command.Run(t.Context(), append([]string{"test"}, test.args...))
+			if test.wantErr {
+				if err == nil {
+					t.Fatalf("command.Run() error = nil, want an error")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("command.Run() error = %v", err)
+			}
+			if got != test.want {
+				t.Errorf("git-fetch-base-branch = %q, want %q", got, test.want)
+			}
+		})
+	}
+}
+
 func TestGitCommitVerificationFlag(t *testing.T) {
 	tests := []struct {
 		name string
