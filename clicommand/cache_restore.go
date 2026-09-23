@@ -27,6 +27,16 @@ and their associated cache key. An entry is restored when its target_paths
 default every key part is mandatory; mark a part with fallback_limit: true to make
 every part after it optional.
 
+Restore replaces the contents of target_paths; it does not merge with existing
+files. Use job-private target directories. Sharing a remote cache entry between
+jobs is fine, but restoring into a local directory that another job or process
+is using can delete its files. If a local target must be shared, coordinate
+exclusive access for the entire time the cache is in use, not only during restore.
+
+Cleanup is not transactional. If cleanup fails, extraction for that cache does
+not start, but target paths may already have been modified. These failures remain
+fatal even when --cache-fail-on-error is false.
+
 Note: This feature is currently in development and subject to change. It is not
 yet available to all customers.
 

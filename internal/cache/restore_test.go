@@ -3,17 +3,59 @@ package cache
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
 	"runtime"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
 	"github.com/buildkite/agent/v4/api"
 	"github.com/buildkite/agent/v4/internal/cache/store"
+	"github.com/buildkite/agent/v4/logger"
 )
+
+func TestRestoreCleanupError(t *testing.T) {
+	for _, tc := range []struct {
+		name           string
+		cause          error
+		wantWriterHint bool
+	}{
+		{"non-empty directory", syscall.ENOTEMPTY, true},
+		{"permission denied", os.ErrPermission, false},
+		{"canceled", context.Canceled, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			pathErr := &os.PathError{Op: "unlinkat", Path: "/shared/go-cache/76", Err: tc.cause}
+			// Match cleanPath's wrapping; detection must use errors.Is rather
+			// than a direct errno assertion or platform-dependent error text.
+			err := restoreCleanupError("~/go-cache", "/shared/go-cache", fmt.Errorf("cleanPath: %w", pathErr))
+			for _, text := range []string{"~/go-cache", "/shared/go-cache", pathErr.Error(), "extraction was not started", "may already have been modified"} {
+				if !strings.Contains(err.Error(), text) {
+					t.Errorf("error %q should contain %q", err, text)
+				}
+			}
+			for _, text := range []string{"possibly because another process", "job-private target", "exclusive access for the entire time"} {
+				if got := strings.Contains(err.Error(), text); got != tc.wantWriterHint {
+					t.Errorf("error contains %q = %v, want %v: %v", text, got, tc.wantWriterHint, err)
+				}
+			}
+			var gotPathErr *os.PathError
+			if !errors.Is(err, tc.cause) || !errors.As(err, &gotPathErr) || gotPathErr != pathErr {
+				t.Fatalf("filesystem cause was lost: %v", err)
+			}
+			mock := &mockCacheClient{restoreFunc: func(context.Context, string) (RestoreResult, error) {
+				return RestoreResult{}, err
+			}}
+			if got := restoreWithClient(t.Context(), logger.Discard, mock, []string{"cache"}, 1, false); !errors.Is(got, errRestoreMutatedTargets) {
+				t.Fatalf("cleanup failure must stay fatal when fail-open: %v", got)
+			}
+		})
+	}
+}
 
 func TestInvalidateStaleEntry_EchoesScopesFromRetrieve(t *testing.T) {
 	mockClient := newMockAPIClient("s3")

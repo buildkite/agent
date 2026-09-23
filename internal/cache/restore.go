@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"syscall"
 	"time"
 
 	"github.com/buildkite/agent/v4/api"
@@ -26,6 +27,19 @@ import (
 // miss, so it stays fatal even when cache errors are otherwise fail-open —
 // continuing would run the build against half-restored targets.
 var errRestoreMutatedTargets = errors.New("cache restore failed after modifying target paths")
+
+// restoreCleanupError preserves the filesystem cause and fatal mutation marker.
+// ENOTEMPTY is consistent with a concurrent writer, not proof of one: do not
+// retry destructive cleanup or tell the user their original files are intact.
+func restoreCleanupError(configured, resolved string, err error) error {
+	detail := ""
+	if errors.Is(err, syscall.ENOTEMPTY) {
+		detail = "; a directory remained non-empty during cleanup, possibly because another process is writing to the target; use a job-private target or ensure exclusive access for the entire time the cache is in use"
+	}
+	return errors.Join(errRestoreMutatedTargets, fmt.Errorf(
+		"failed to clean target_path %q (resolved to %q): %w%s; extraction was not started, but target paths may already have been modified",
+		configured, resolved, err, detail))
+}
 
 // Restore restores a cache from storage by ID.
 //
@@ -312,7 +326,7 @@ func (c *client) Restore(ctx context.Context, cacheID string) (RestoreResult, er
 		if err := cleanPath(ctx, extractedPath); err != nil {
 			span.RecordError(err)
 			span.SetStatus(codes.Error, "failed to clean path")
-			return result, errors.Join(errRestoreMutatedTargets, fmt.Errorf("failed to clean path %q: %w", extractedPath, err))
+			return result, restoreCleanupError(path, extractedPath, err)
 		}
 	}
 
