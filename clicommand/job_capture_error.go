@@ -23,7 +23,7 @@ Reports a structured error on the current job for display in the Buildkite UI
 and API. Requires the Local Job API.
 
 The error code is a string identifying the kind of error, such as
-image_pull_failed, not an HTTP status or command exit code.
+image_pull_failed, not necessarily an HTTP status or command exit code.
 
 Optionally include additional details as a JSON object using --context, or use
 --context - to read them from standard input.
@@ -67,6 +67,11 @@ var JobCaptureErrorCommand = &cli.Command{
 		if strings.TrimSpace(cfg.Message) == "" {
 			return errors.New("message must not be blank")
 		}
+		client, err := jobapi.NewDefaultClient(ctx)
+		if err != nil {
+			return fmt.Errorf("the Local Job API is required to safely capture diagnostics: %w", err)
+		}
+
 		capturedError := jobapi.CapturedError{Code: cfg.ErrorCode, Message: cfg.Message}
 		if cfg.Context != "" {
 			var input io.Reader = strings.NewReader(cfg.Context)
@@ -91,10 +96,6 @@ var JobCaptureErrorCommand = &cli.Command{
 			}
 		}
 
-		client, err := jobapi.NewDefaultClient(ctx)
-		if err != nil {
-			return fmt.Errorf("the Local Job API is required to safely capture diagnostics: %w", err)
-		}
 		if err := client.CaptureError(ctx, &capturedError); err != nil {
 			return fmt.Errorf("failed to capture error through the Local Job API: %w", err)
 		}

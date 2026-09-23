@@ -23,9 +23,6 @@ import (
 )
 
 func TestCapturedErrorJobCancellation(t *testing.T) {
-	if !socket.Available() {
-		t.Skip("Local Job API unavailable")
-	}
 	ctx, _ := experiments.Enable(t.Context(), experiments.CaptureError)
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -102,9 +99,6 @@ func TestCapturedErrorJobCancellation(t *testing.T) {
 }
 
 func TestCapturedErrorExperiment(t *testing.T) {
-	if !socket.Available() {
-		t.Skip("Local Job API unavailable")
-	}
 	for _, enabled := range []bool{false, true} {
 		name, want := "disabled", http.StatusNotFound
 		ctx := t.Context()

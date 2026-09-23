@@ -28,16 +28,13 @@ func captureErrorTestApp() *cli.Command {
 	return &cli.Command{Commands: []*cli.Command{&cmd}}
 }
 
-func TestJobCaptureErrorUsesLocalJobAPI(t *testing.T) {
+func startCaptureErrorTestServer(t *testing.T, report func(context.Context, *jobapi.CapturedError) error) {
+	t.Helper()
 	socketPath, err := jobapi.NewSocketPath(os.TempDir())
 	if err != nil {
 		t.Fatalf("NewSocketPath() error = %v", err)
 	}
-	var reported *jobapi.CapturedError
-	server, token, err := jobapi.NewServer(shell.TestingLogger{T: t}, socketPath, env.New(), replacer.NewMux(), jobapi.WithCapturedErrorReporter(func(_ context.Context, capturedError *jobapi.CapturedError) error {
-		reported = capturedError
-		return nil
-	}))
+	server, token, err := jobapi.NewServer(shell.TestingLogger{T: t}, socketPath, env.New(), replacer.NewMux(), jobapi.WithCapturedErrorReporter(report))
 	if err != nil {
 		t.Fatalf("NewServer() error = %v", err)
 	}
@@ -47,6 +44,14 @@ func TestJobCaptureErrorUsesLocalJobAPI(t *testing.T) {
 	t.Cleanup(func() { _ = server.Stop() })
 	t.Setenv("BUILDKITE_AGENT_JOB_API_SOCKET", socketPath)
 	t.Setenv("BUILDKITE_AGENT_JOB_API_TOKEN", token)
+}
+
+func TestJobCaptureErrorUsesLocalJobAPI(t *testing.T) {
+	var reported *jobapi.CapturedError
+	startCaptureErrorTestServer(t, func(_ context.Context, capturedError *jobapi.CapturedError) error {
+		reported = capturedError
+		return nil
+	})
 
 	for _, source := range []string{"omitted", "empty", "inline", "stdin", "stdin at limit", "env", "override"} {
 		t.Setenv("BUILDKITE_AGENT_JOB_CAPTURE_ERROR_MESSAGE", "")
@@ -113,6 +118,10 @@ func TestJobCaptureErrorRejectsInvalidArgumentsBeforeTransport(t *testing.T) {
 			t.Errorf("args %v: error = %v, want %q", test.args, err, test.want)
 		}
 	}
+	startCaptureErrorTestServer(t, func(context.Context, *jobapi.CapturedError) error {
+		t.Error("invalid context must not be reported")
+		return nil
+	})
 	for _, input := range []string{"{", "null", "[]", "{} {}", ""} {
 		for _, source := range []string{"inline", "stdin", "env"} {
 			if input == "" && source != "stdin" {
@@ -140,14 +149,23 @@ func TestJobCaptureErrorRejectsInvalidArgumentsBeforeTransport(t *testing.T) {
 func TestJobCaptureErrorDoesNotFallbackWithoutLocalJobAPI(t *testing.T) {
 	t.Setenv("BUILDKITE_AGENT_JOB_API_SOCKET", "")
 	app := captureErrorTestApp()
-	err := app.Run(t.Context(), []string{"buildkite-agent", "capture-error", "x", "--message", "raw customer diagnostic"})
+	input := strings.NewReader(`{"operation":"pull"}`)
+	app.Reader = input
+	wantUnread := input.Len()
+	err := app.Run(t.Context(), []string{"buildkite-agent", "capture-error", "x", "--message", "raw customer diagnostic", "--context", "-"})
 	if err == nil || !strings.Contains(err.Error(), "Local Job API is required") {
 		t.Fatalf("error = %v, want Local Job API required error", err)
+	}
+	if input.Len() != wantUnread {
+		t.Errorf("stdin bytes consumed = %d, want 0", wantUnread-input.Len())
 	}
 }
 
 func TestJobCaptureErrorBoundsContextBeforeDecoding(t *testing.T) {
-	t.Setenv("BUILDKITE_AGENT_JOB_API_SOCKET", "")
+	startCaptureErrorTestServer(t, func(context.Context, *jobapi.CapturedError) error {
+		t.Error("oversized context must not be reported")
+		return nil
+	})
 	t.Setenv("BUILDKITE_AGENT_JOB_CAPTURE_ERROR_CONTEXT", "")
 	for _, input := range []string{
 		`{}` + strings.Repeat(" ", (32<<10)-1), // A valid object followed by enough whitespace to exceed the limit by one.
