@@ -2,6 +2,7 @@ package jobapi
 
 import (
 	"sort"
+	"time"
 
 	"github.com/buildkite/agent/v4/internal/socket"
 )
@@ -99,4 +100,14 @@ type PromiseFailureResponse struct {
 
 	// Error is the Buildkite API declaration error, if Accepted is false.
 	Error string `json:"error,omitempty"`
+}
+
+// CapturedError is the request and response body for POST /errors. Timestamp
+// is optional; the parent assigns it and a delivery idempotency key.
+type CapturedError struct {
+	Code           string         `json:"code"`
+	Message        string         `json:"message"`
+	Timestamp      *time.Time     `json:"timestamp,omitempty"`
+	IdempotencyKey string         `json:"idempotency_key,omitempty"`
+	Context        map[string]any `json:"context,omitempty"`
 }
