@@ -213,8 +213,13 @@ type RestoreResult struct {
 	// CacheRestored indicates whether any cache was restored (including fallbacks).
 	CacheRestored bool
 
-	// Key is the actual cache key that was restored.
-	Key string
+	// Key is the resolved key, or the selected stored key when an entry matched.
+	// Parts are joined with hyphens for display; API addresses retain their parts.
+	Key         string
+	Scopes      map[string]string
+	Diagnostics *api.CacheRestoreDiagnostics
+	// NotRestoredReason explains a registry hit whose archive could not be restored.
+	NotRestoredReason string
 
 	// FallbackUsed indicates whether a fallback key was used.
 	FallbackUsed bool

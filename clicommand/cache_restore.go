@@ -69,10 +69,12 @@ but making checksum optional:
 
 Cache Restoration Results:
 
-The command will report one of three outcomes for each cache:
-  - Cache hit: Exact key match found and restored
-  - Fallback used: No exact match, but a fallback key was found and restored
-  - Cache miss: No matching cache found`
+The command groups restore results by cache, showing each attempted key and scope
+in registry search order, including misses, policy denials and the selected hit.
+Denied attempts include the matched rule name when available. Successful restores
+identify the selected key and scope and whether the match was exact or a fallback.
+An incomplete search is distinguished from a miss. Older registries may not
+provide search diagnostics.`
 
 type CacheRestoreConfig struct {
 	GlobalConfig
