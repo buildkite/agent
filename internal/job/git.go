@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net"
 	"net/url"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
@@ -209,6 +210,9 @@ func gitCleanSubmodules(ctx context.Context, sh *shell.Shell, gitCleanFlags stri
 type gitLFSFetchCheckoutArgs struct {
 	Shell *shell.Shell
 	Retry bool // Whether to retry the fetch+checkout on failure
+	// ReferenceDir supplies cached LFS objects, including for dissociated clones
+	// and clones referencing disposable Git mirror snapshots.
+	ReferenceDir string
 	// FetchInclude is passed as --include=<csv> to `git lfs fetch`. Empty means
 	// fetch all LFS objects.
 	FetchInclude []string
@@ -248,6 +252,15 @@ func gitLFSFetchCheckout(ctx context.Context, args gitLFSFetchCheckoutArgs) erro
 		)
 	}
 
+	var runOpts []shell.RunCommandOpt
+	if args.ReferenceDir != "" {
+		objects := filepath.Join(args.ReferenceDir, "objects")
+		if existing, ok := args.Shell.Env.Get("GIT_ALTERNATE_OBJECT_DIRECTORIES"); ok && existing != "" {
+			objects += string(os.PathListSeparator) + existing
+		}
+		runOpts = append(runOpts, shell.WithExtraEnv(env.FromSlice([]string{"GIT_ALTERNATE_OBJECT_DIRECTORIES=" + objects})))
+	}
+
 	fetchCmd := []string{"lfs", "fetch"}
 	if len(args.FetchInclude) > 0 {
 		fetchCmd = append(fetchCmd, "--include="+strings.Join(args.FetchInclude, ","))
@@ -256,7 +269,7 @@ func gitLFSFetchCheckout(ctx context.Context, args gitLFSFetchCheckoutArgs) erro
 	checkoutPathspecs, checkoutScoped := args.checkoutPathspecs()
 
 	err := retrier.DoWithContext(ctx, func(retrier *roko.Retrier) error {
-		if err := args.Shell.Command("git", fetchCmd...).Run(ctx); err != nil {
+		if err := args.Shell.Command("git", fetchCmd...).Run(ctx, runOpts...); err != nil {
 			if args.Retry {
 				args.Shell.Commentf("%s", retrier)
 			}
@@ -266,7 +279,7 @@ func gitLFSFetchCheckout(ctx context.Context, args gitLFSFetchCheckoutArgs) erro
 			return nil
 		}
 		if !checkoutScoped {
-			if err := args.Shell.Command("git", "lfs", "checkout").Run(ctx); err != nil {
+			if err := args.Shell.Command("git", "lfs", "checkout").Run(ctx, runOpts...); err != nil {
 				if args.Retry {
 					args.Shell.Commentf("%s", retrier)
 				}
@@ -276,7 +289,7 @@ func gitLFSFetchCheckout(ctx context.Context, args gitLFSFetchCheckoutArgs) erro
 		}
 		for batch := range slices.Chunk(checkoutPathspecs, gitLFSCheckoutPathBatchSize) {
 			checkoutCmd := append([]string{"lfs", "checkout"}, batch...)
-			if err := args.Shell.Command("git", checkoutCmd...).Run(ctx); err != nil {
+			if err := args.Shell.Command("git", checkoutCmd...).Run(ctx, runOpts...); err != nil {
 				if args.Retry {
 					args.Shell.Commentf("%s", retrier)
 				}
