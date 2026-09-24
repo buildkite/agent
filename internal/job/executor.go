@@ -868,8 +868,13 @@ func (e *Executor) executeGlobalHook(ctx context.Context, name string) error {
 
 // Returns the absolute path to a local hook, or os.ErrNotExist if none is found
 func (e *Executor) localHookPath(name string) (string, error) {
-	// The local hooks dir must exist within the checkout root.
-	dir := filepath.Join(".buildkite", "hooks")
+	// Resolve local hooks from the job's working directory while keeping all
+	// lookup beneath the checkout root. os.Root also rejects symlink escapes.
+	workingDir, err := filepath.Rel(e.checkoutRoot.Name(), e.shell.Getwd())
+	if err != nil || workingDir == ".." || strings.HasPrefix(workingDir, ".."+string(filepath.Separator)) {
+		return "", os.ErrNotExist
+	}
+	dir := filepath.Join(workingDir, ".buildkite", "hooks")
 	return hook.Find(e.checkoutRoot, dir, name)
 }
 
