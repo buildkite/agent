@@ -1635,6 +1635,20 @@ func runAgentAPI(ctx context.Context, l logger.Logger, socketsPath string) (func
 // leaderPinger pings the leader socket for liveness, and takes over if it
 // fails.
 func leaderPinger(ctx context.Context, l logger.Logger, path, leaderPath string) {
+	// Reuse one client (and its connection) while the leader stays the same.
+	// Creating a client on every tick leaks a connection each time.
+	var (
+		cl       *agentapi.Client
+		clTarget string
+	)
+	resetClient := func() {
+		if cl != nil {
+			cl.Close()
+		}
+		cl, clTarget = nil, ""
+	}
+	defer resetClient()
+
 	pingLeader := func() error {
 		d, err := os.Readlink(leaderPath)
 		if err != nil {
@@ -1643,17 +1657,32 @@ func leaderPinger(ctx context.Context, l logger.Logger, path, leaderPath string)
 		}
 		if d == path {
 			// It's me! Don't bother pinging.
+			resetClient()
 			return nil
 		}
 
 		ctx, canc := context.WithTimeout(ctx, 100*time.Millisecond)
 		defer canc()
 
-		cl, err := agentapi.NewClient(ctx, leaderPath)
-		if err != nil {
+		if cl == nil || clTarget != d {
+			resetClient()
+			// Dial the resolved target, so that a reused connection always
+			// belongs to the leader that the client was created for.
+			target := d
+			if !filepath.IsAbs(target) {
+				target = filepath.Join(filepath.Dir(leaderPath), target)
+			}
+			c, err := agentapi.NewClient(ctx, target)
+			if err != nil {
+				return err
+			}
+			cl, clTarget = c, d
+		}
+		if err := cl.Ping(ctx); err != nil {
+			resetClient()
 			return err
 		}
-		return cl.Ping(ctx)
+		return nil
 	}
 
 	ticker := time.NewTicker(100 * time.Millisecond)
