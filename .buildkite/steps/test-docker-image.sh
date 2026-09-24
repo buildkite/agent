@@ -91,6 +91,16 @@ case $variant in
     test_docker_buildx
     test_tini
     test_tini_old_path
+    arch=amd64
+    if [[ "$expected_platform_uname" == aarch64 ]]; then arch=arm64; fi
+    export BUILDKITE_TEST_CONTAINER_IMAGE="$image_tag" BUILDKITE_TEST_CONTAINER_ARCH="$arch"
+    if [[ "${BUILDKITE:-}" == true ]]; then
+      buildkite-agent artifact download "tmp/containerimage-test-linux-$arch" .
+      chmod +x "tmp/containerimage-test-linux-$arch"
+      "./tmp/containerimage-test-linux-$arch" -test.v -test.count=1
+    else
+      go test -count=1 -v ./internal/containerimage
+    fi
     ;;
   sidecar)
     test_buildkite_agent_sidecar

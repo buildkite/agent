@@ -342,7 +342,9 @@ steps:
           # don't wait for slower windows tests
           - test-linux-amd64
           - test-linux-arm64
-        artifact_paths: "pkg/*"
+        artifact_paths:
+          - "pkg/*"
+          - "tmp/containerimage-test-*"
         plugins:
           - *assume_cache_role
           - docker-compose#v4.14.0:

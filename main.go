@@ -60,6 +60,10 @@ func commandNotFound(ctx context.Context, c *cli.Command, command string) {
 }
 
 func main() {
+	if err := clicommand.ConsumeContainerToken(); err != nil {
+		os.Exit(clicommand.PrintMessageAndReturnExitCode(err))
+	}
+
 	cli.CommandHelpTemplate = commandHelpTemplate
 	cli.SubcommandHelpTemplate = subcommandHelpTemplate
 	cli.VersionPrinter = printVersion

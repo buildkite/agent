@@ -28,6 +28,26 @@ import (
 
 const registrationTokenEnvVar = "BUILDKITE_AGENT_TOKEN"
 
+var containerTokenRef, containerTokenValue string
+
+func ConsumeContainerToken() error {
+	const key = "BUILDKITE_AGENT_CONTAINER_TOKEN_FD"
+	fd, ok := os.LookupEnv(key)
+	if !ok {
+		return nil
+	}
+	if err := os.Unsetenv(key); err != nil {
+		return err
+	}
+	ref := "fd://" + fd
+	value, err := resolveRegistrationToken(ref)
+	if err != nil {
+		return fmt.Errorf("reading container environment token: %w", err)
+	}
+	containerTokenRef, containerTokenValue = ref, value
+	return nil
+}
+
 // maxTokenFileSize is a sanity limit when reading tokens from files or file
 // descriptors.
 const maxTokenFileSize = 64 * 1024
@@ -41,6 +61,9 @@ func isIndirectToken(token string) bool {
 // resolveRegistrationToken resolves fd:// and file:// token references into
 // the actual token. Plain token values are returned unchanged.
 func resolveRegistrationToken(token string) (string, error) {
+	if containerTokenRef != "" && token == containerTokenRef {
+		return containerTokenValue, nil
+	}
 	switch {
 	case strings.HasPrefix(token, "fd://"):
 		fd, err := strconv.ParseUint(strings.TrimPrefix(token, "fd://"), 10, 31)
