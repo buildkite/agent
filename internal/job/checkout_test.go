@@ -230,6 +230,73 @@ func TestDefaultCheckoutPhase(t *testing.T) {
 	}
 }
 
+func TestDefaultCheckoutPhaseWithSameNamedBranchAndTag(t *testing.T) {
+	ctx := t.Context()
+
+	sh, err := shell.New()
+	if err != nil {
+		t.Fatalf("shell.New() error = %v, want nil", err)
+	}
+
+	e := &Executor{
+		shell: sh,
+		ExecutorConfig: ExecutorConfig{
+			Commit:        "HEAD",
+			Branch:        "release",
+			CleanCheckout: false,
+			GitCleanFlags: "-f -d -x",
+		},
+	}
+	s, firstCommit := setupCheckoutTestRepo(t, e, "project-branch-tag-collision")
+
+	// Push a fresh commit to a "release" branch, then add a same-named tag
+	// pointing at an older commit. A bare-name fetch ("release") resolves the
+	// tag before the branch, so the checkout would build the tag tip instead
+	// of the branch head.
+	workDir := t.TempDir()
+	runGit := func(args ...string) string {
+		t.Helper()
+		cmd := exec.Command("git", args...)
+		cmd.Dir = workDir
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("git %v error = %v, output: %s", args, err, out)
+		}
+		return strings.TrimSpace(string(out))
+	}
+	runGit("clone", s.RepoURL("project-branch-tag-collision"), workDir)
+	runGit("checkout", "-b", "release")
+	if err := os.WriteFile(filepath.Join(workDir, "advance.txt"), []byte("advance release\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	runGit("add", "advance.txt")
+	runGit("commit", "-m", "advance release")
+	runGit("push", "origin", "release")
+	branchTip := runGit("rev-parse", "HEAD")
+
+	if out, err := s.CreateRef("project-branch-tag-collision", "refs/tags/release", firstCommit); err != nil {
+		t.Fatalf("s.CreateRef() error = %v, output: %s", err, out)
+	}
+
+	if err := e.defaultCheckoutPhase(ctx, 1); err != nil {
+		t.Fatalf("defaultCheckoutPhase() error = %v, want nil", err)
+	}
+
+	checkoutDir, ok := e.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH")
+	if !ok || checkoutDir == "" {
+		t.Fatal("BUILDKITE_BUILD_CHECKOUT_PATH not set on executor shell env")
+	}
+	headCmd := exec.Command("git", "rev-parse", "HEAD")
+	headCmd.Dir = checkoutDir
+	headOut, err := headCmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("git rev-parse HEAD error = %v, output: %s", err, headOut)
+	}
+	if got := strings.TrimSpace(string(headOut)); got != branchTip {
+		t.Errorf("checked out commit = %s, want branch tip %s (same-named tag at %s must not shadow the branch)", got, branchTip, firstCommit)
+	}
+}
+
 func TestCommitSecondParent(t *testing.T) {
 	t.Parallel()
 
