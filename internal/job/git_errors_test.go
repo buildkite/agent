@@ -234,6 +234,52 @@ func TestCheckoutErrorCaptureFromExecutor(t *testing.T) {
 	}
 }
 
+func TestCheckoutPreflightErrorCapture(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name, sparseMode, wantError string
+		lfsEnabled                  bool
+	}{
+		{
+			name:       "missing git-lfs",
+			lfsEnabled: true,
+			wantError:  "BUILDKITE_GIT_LFS_ENABLED=true but `git lfs version` failed; git-lfs may not be installed or not resolvable by git: exit status 1",
+		},
+		{
+			name:       "invalid sparse checkout mode",
+			sparseMode: "secret-mode",
+			wantError:  `invalid sparse checkout mode "secret-mode", must be one of [cone no-cone]`,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			if tc.lfsEnabled && runtime.GOOS == "windows" {
+				t.Skip("Git fixture uses a POSIX shell")
+			}
+			ctx, e, reports := gitErrorCaptureServer(t, true, http.StatusCreated)
+			e.Repository = "secret-url"
+			e.GitLFSEnabled = tc.lfsEnabled
+			e.GitSparseCheckoutMode = tc.sparseMode
+			if tc.lfsEnabled {
+				dir := t.TempDir()
+				if err := os.WriteFile(filepath.Join(dir, "git"), []byte("#!/bin/sh\necho 'git: lfs is not a git command' >&2\nexit 1\n"), 0o755); err != nil {
+					t.Fatal(err)
+				}
+				e.shell.Env.Set("PATH", dir)
+			}
+			if err := e.checkout(ctx); err == nil || err.Error() != tc.wantError {
+				t.Fatalf("checkout error = %v, want %q", err, tc.wantError)
+			}
+			if len(reports) != 1 {
+				t.Fatalf("reports = %d, want 1", len(reports))
+			}
+			if r := <-reports; r.Code != "git_checkout_failed" || r.Message != "Git checkout preparation failed." || len(r.Context) != 0 {
+				t.Fatalf("unexpected checkout report: %#v", r)
+			}
+		})
+	}
+}
+
 func TestCheckoutErrorCapture(t *testing.T) {
 	for _, tc := range []struct {
 		name, code string
