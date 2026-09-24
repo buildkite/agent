@@ -1656,8 +1656,19 @@ func leaderPinger(ctx context.Context, l logger.Logger, path, leaderPath string)
 		return cl.Ping(ctx)
 	}
 
-	for range time.Tick(100 * time.Millisecond) {
+	ticker := time.NewTicker(100 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+		}
 		if err := pingLeader(); err != nil {
+			if ctx.Err() != nil {
+				// The agent is shutting down, so the leader is not at fault.
+				return
+			}
 			l.Warnf("Agent API: Leader ping failed, staging coup: %v", err)
 			l.Warnf("Agent API: Leader state (locks) has been lost!")
 			_ = os.Remove(leaderPath)
