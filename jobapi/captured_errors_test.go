@@ -4,16 +4,111 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/buildkite/agent/v4/internal/redact"
 	"github.com/buildkite/agent/v4/internal/replacer"
 	"github.com/buildkite/agent/v4/internal/socket"
 	"github.com/buildkite/agent/v4/jobapi"
 	"github.com/google/go-cmp/cmp"
 )
+
+func TestCapturedErrorRedactionResponse(t *testing.T) {
+	t.Parallel()
+
+	var reported atomic.Int32
+	redactors := replacer.NewMux(redact.New(io.Discard, []string{"alpha-secret", "beta-secret", "q"}))
+	srv, token, err := testServer(t, testEnviron(), redactors, jobapi.WithCapturedErrorReporter(func(context.Context, *jobapi.CapturedError) error {
+		reported.Add(1)
+		return nil
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := srv.Start(); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = srv.Stop() })
+
+	for _, test := range []struct {
+		name, body, wantError string
+	}{
+		{
+			name: "response is also redacted",
+			body: `{"code":"x","message":"Failed alpha-secret","context":{"details":"beta-secret"}}`,
+		},
+		{
+			name:      "two secret keys collide",
+			body:      `{"code":"x","message":"Failed","context":{"nested":[{"alpha-secret":1,"beta-secret":2}]}}`,
+			wantError: "redacting captured error: context keys collide after redaction",
+		},
+		{
+			name:      "secret key collides with existing marker",
+			body:      `{"code":"x","message":"Failed","context":{"alpha-secret":1,"[REDACTED]":2}}`,
+			wantError: "redacting captured error: context keys collide after redaction",
+		},
+		{
+			name:      "redaction expands code beyond schema limit",
+			body:      `{"code":"` + strings.Repeat("q", 26) + `","message":"Failed"}`,
+			wantError: "redacting captured error: code must be a nonblank string of at most 255 bytes without NUL",
+		},
+		{
+			name:      "redaction expands report beyond body limit",
+			body:      `{"code":"x","message":"` + strings.Repeat("q", 3300) + `"}`,
+			wantError: "redacting captured error: captured error exceeds 32768 bytes after redaction",
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			before := reported.Load()
+			req, err := http.NewRequest(http.MethodPost, "http://job/api/current-job/v0/errors", strings.NewReader(test.body))
+			if err != nil {
+				t.Fatal(err)
+			}
+			req.Header.Set("Authorization", "Bearer "+token)
+			resp, err := testSocketClient(srv.SocketPath).Do(req)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer func() { _ = resp.Body.Close() }()
+			wantStatus := http.StatusCreated
+			if test.wantError != "" {
+				wantStatus = http.StatusUnprocessableEntity
+			}
+			if resp.StatusCode != wantStatus {
+				t.Fatalf("status = %d, want %d", resp.StatusCode, wantStatus)
+			}
+			if test.wantError != "" {
+				var response socket.ErrorResponse
+				if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
+					t.Fatal(err)
+				}
+				if response.Error != test.wantError {
+					t.Errorf("error = %q, want %q", response.Error, test.wantError)
+				}
+			} else {
+				var response jobapi.CapturedError
+				if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
+					t.Fatal(err)
+				}
+				if response.Message != "Failed [REDACTED]" || response.Context["details"] != "[REDACTED]" {
+					t.Errorf("response not redacted: %+v", response)
+				}
+			}
+			wantCalls := int32(1)
+			if test.wantError != "" {
+				wantCalls = 0
+			}
+			if got := reported.Load() - before; got != wantCalls {
+				t.Errorf("forwarded reports = %d, want %d", got, wantCalls)
+			}
+		})
+	}
+}
 
 func TestCapturedErrorIsAuthenticatedAndNormalized(t *testing.T) {
 	t.Parallel()

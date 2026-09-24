@@ -15,6 +15,33 @@ import (
 
 const lipsum = "Lorem ipsum dolor sit amet"
 
+func TestMuxNeedles(t *testing.T) {
+	t.Parallel()
+
+	var output strings.Builder
+	first := redact.New(&output, []string{"initial-secret"})
+	second := redact.New(io.Discard, []string{"initial-secret", "other-secret"})
+	mux := replacer.NewMux(first, second)
+	if _, err := first.Write([]byte("initial-")); err != nil {
+		t.Fatal(err)
+	}
+	mux.Add("runtime-secret")
+	got := mux.Needles()
+	slices.Sort(got)
+	if diff := cmp.Diff([]string{"initial-secret", "other-secret", "runtime-secret"}, got); diff != "" {
+		t.Errorf("Needles() diff (-want +got):\n%s", diff)
+	}
+	if _, err := first.Write([]byte("secret")); err != nil {
+		t.Fatal(err)
+	}
+	if err := mux.Flush(); err != nil {
+		t.Fatal(err)
+	}
+	if got := output.String(); got != "[REDACTED]" {
+		t.Errorf("output = %q, want [REDACTED]", got)
+	}
+}
+
 func TestReplacerLoremIpsum(t *testing.T) {
 	t.Parallel()
 
