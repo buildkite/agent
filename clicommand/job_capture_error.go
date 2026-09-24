@@ -28,10 +28,10 @@ image_pull_failed, not necessarily an HTTP status or command exit code.
 Optionally include additional details as a JSON object using --context, or use
 --context - to read them from standard input.
 
-The parent agent redacts values registered for job-log redaction from the code,
-message, and context, including context keys. Register dynamically obtained
-secrets with buildkite-agent redactor add before reporting them. This does not
-automatically detect other sensitive information.
+Values registered for job-log redaction are redacted from the code, message,
+and context, including context keys, before the report is sent to Buildkite.
+Register dynamically obtained secrets with buildkite-agent redactor add before
+reporting them. This does not automatically detect other sensitive information.
 
 Redacted numbers become strings. Reports are rejected if redaction causes
 duplicate context keys, an invalid error code, or an oversized payload.
