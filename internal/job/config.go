@@ -174,6 +174,11 @@ type ExecutorConfig struct {
 	// Skip updating the Git mirror before using it
 	GitMirrorsSkipUpdate bool `env:"BUILDKITE_GIT_MIRRORS_SKIP_UPDATE"`
 
+	// Cache Git LFS objects in the Git mirror and reuse them from checkouts.
+	// Opt-in; see checkout_mirror_lfs.go. Agent-only like GitMirrorsPath, so
+	// it has no env tag.
+	GitMirrorsLFSCache bool
+
 	// Path to the buildkite-agent binary
 	BinPath string
 

@@ -314,6 +314,12 @@ var (
 		Sources: cli.EnvVars("BUILDKITE_GIT_MIRRORS_SKIP_UPDATE"),
 	}
 
+	GitMirrorsLFSCacheFlag = &cli.BoolFlag{
+		Name:    "git-mirrors-lfs-cache",
+		Usage:   "Cache Git LFS objects in the Git mirror when Git LFS is enabled for the checkout. The job's LFS objects are fetched into the mirror while its update lock is held, and each checkout reuses them instead of downloading from the LFS server again. Opt-in because it grows the mirror on disk without pruning, extends the time the mirror lock is held, and may not be faster than downloading from the LFS server when the mirror is on a slow or shared network volume. Requires --git-mirrors-path (default: false)",
+		Sources: cli.EnvVars("BUILDKITE_GIT_MIRRORS_LFS_CACHE"),
+	}
+
 	GitSubmoduleCloneConfigFlag = &cli.StringSliceFlag{
 		Name:    "git-submodule-clone-config",
 		Value:   nil,

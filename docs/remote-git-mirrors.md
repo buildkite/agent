@@ -1423,7 +1423,10 @@ initialization.
 
 **C10 — Git LFS objects always come from canonical**, because `git lfs` resolves
 its endpoint from `remote.origin.url`. An LFS-heavy repository therefore gets no
-mirror benefit for its LFS objects. The one window where that reasoning inverts
+*remote* mirror benefit for its LFS objects. (The separate, opt-in
+`--git-mirrors-lfs-cache` caches LFS objects fetched from canonical in the
+*on-host* mirror; see [`git-mirror.md`](git-mirror.md). It does not change
+where LFS objects are downloaded from.) The one window where that reasoning inverts
 is PR 4's clone, where `origin` is still the mirror: an LFS repository whose
 mirror does not proxy LFS fails that clone and falls back to canonical, which is
 the correct outcome and is why PR 4 declines to suppress the smudge filter.
