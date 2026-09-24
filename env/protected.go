@@ -33,7 +33,7 @@ type protection struct {
 // it stays agent-authoritative rather than in checkoutOverrideScope.
 //
 // The mirror-infra vars (BUILDKITE_GIT_MIRRORS_PATH, _LOCK_TIMEOUT,
-// _SKIP_UPDATE, BUILDKITE_GIT_MIRROR_CHECKOUT_MODE, and
+// _SKIP_UPDATE, _LFS_CACHE, BUILDKITE_GIT_MIRROR_CHECKOUT_MODE, and
 // BUILDKITE_GIT_CLONE_MIRROR_FLAGS) are likewise agent-only: the mirror is shared
 // across jobs on the host and the backend has no concept of it. CLONE_MIRROR_FLAGS
 // in particular is applied to the shared `git clone --mirror`, so letting a job
@@ -76,6 +76,7 @@ var protectedEnv = map[string]protection{
 	"BUILDKITE_GIT_CLONE_MIRROR_FLAGS":      {},
 	"BUILDKITE_GIT_MIRRORS_LOCK_TIMEOUT":    {},
 	"BUILDKITE_GIT_MIRRORS_PATH":            {},
+	"BUILDKITE_GIT_MIRRORS_LFS_CACHE":       {},
 	"BUILDKITE_GIT_MIRRORS_SKIP_UPDATE":     {},
 	"BUILDKITE_GIT_MIRROR_CHECKOUT_MODE":    {},
 	"BUILDKITE_GIT_REMOTE_MIRROR_URL":       {},

@@ -11,12 +11,47 @@ import (
 	"github.com/buildkite/agent/v4/internal/shell"
 )
 
+// This file implements the opt-in Git LFS cache for on-host Git mirrors
+// (--git-mirrors-lfs-cache). With --git-lfs-enabled alone, every checkout
+// downloads its LFS objects from the LFS server into its own .git/lfs store,
+// even when checkouts on the host share a Git mirror. With the cache enabled,
+// the job's LFS objects are fetched once into the persistent mirror
+// (<mirror>/lfs/objects) while the mirror update lock is held, and each
+// checkout's `git lfs fetch`/`git lfs checkout` is pointed at the mirror as an
+// alternate object directory so git-lfs copies or hardlinks cached objects
+// instead of downloading them. Checkouts keep their own LFS store and their
+// normal fetch, so a cache miss (ref advanced, prefetch failed, object
+// missing) still works exactly as before.
+//
+// It is opt-in rather than automatic because the tradeoffs depend on the host:
+//   - The mirror grows by the size of every LFS object ever fetched. Nothing
+//     prunes <mirror>/lfs, so a persistent or shared mirror volume can fill up.
+//   - The prefetch runs under the mirror lock. Large LFS payloads extend how
+//     long other jobs on the host wait for the mirror, and can push a slow
+//     download past --git-mirrors-lock-timeout.
+//   - Mirrors are often on network or RWX volumes. Reading LFS objects from
+//     such a volume is not necessarily faster than downloading them from the
+//     LFS server's object store, so the cache can be a net loss.
+//
+// The prefetch is skipped, and the checkout falls back to its own fetch, when
+// the mirror sets a custom lfs.storage, because git-lfs only discovers
+// alternates under the default <git-dir>/lfs/objects layout. A checkout with
+// its own lfs.storage still reads from the cache; it just stores into its
+// configured location.
+
+// mirrorLFSCacheEnabled reports whether LFS objects should be cached in and
+// reused from the Git mirror. Both the LFS checkout and the mirror cache must
+// be enabled; the caller checks that a mirror is actually in use.
+func (e *Executor) mirrorLFSCacheEnabled() bool {
+	return e.GitLFSEnabled && e.GitMirrorsLFSCache
+}
+
 // finishMirrorUpdate runs while the caller holds the mirror's clone or update
 // lock, before creating a snapshot or cloning the workspace. LFS prefetching is
 // optional: the workspace still fetches with its own configuration and retries,
 // reusing cached objects where possible.
 func (e *Executor) finishMirrorUpdate(ctx context.Context, repository, mirrorDir, lfsRef string) (string, error) {
-	if e.GitLFSEnabled && repository == e.Repository {
+	if e.mirrorLFSCacheEnabled() && repository == e.Repository {
 		if err := e.prefetchMirrorLFS(ctx, mirrorDir, lfsRef); err != nil {
 			if ctx.Err() != nil {
 				return "", ctx.Err()

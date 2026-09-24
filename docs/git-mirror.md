@@ -70,6 +70,59 @@ decisions, see [`remote-git-mirrors.md`](remote-git-mirrors.md).
 Remote mirror optimization requires Git 2.45.0 or newer. Initial Windows support
 is best-effort and rough-edged; the canonical checkout path remains supported.
 
+## Caching Git LFS objects in the mirror (opt-in)
+
+By default the mirror caches Git objects only. With `--git-lfs-enabled`, every
+checkout runs `git lfs fetch` against the LFS server and stores the objects in
+its own `.git/lfs`, so jobs that share a mirror still download the same LFS
+payloads once per checkout.
+
+`--git-mirrors-lfs-cache` (`BUILDKITE_GIT_MIRRORS_LFS_CACHE`, default `false`)
+turns the mirror into an LFS cache as well:
+
+- While the agent holds the mirror's update lock, it runs `git lfs fetch` in
+  the bare mirror for the job's commit, storing objects under
+  `<mirror>/lfs/objects`. The fetch reads `.lfsconfig` from the job's commit,
+  not the mirror's `HEAD`, and honours cone-mode sparse checkout paths as an
+  `--include` filter.
+- Each checkout's `git lfs fetch` and `git lfs checkout` are pointed at the
+  mirror via `GIT_ALTERNATE_OBJECT_DIRECTORIES`, so git-lfs hardlinks or copies
+  cached objects into the checkout's own `.git/lfs` instead of downloading
+  them. This works in `reference` and `dissociate` mode and with clean-checkout
+  snapshots, because the alternate is the persistent mirror, not the snapshot.
+- Checkouts keep their normal fetch as a fallback. If the branch moved after
+  the prefetch, the prefetch failed, or an object is missing from the mirror,
+  the checkout downloads it from the LFS server as before. A failed prefetch is
+  logged as a warning and never fails the job.
+
+The cache is skipped when the mirror has a custom `lfs.storage` configured,
+because git-lfs only discovers alternates under the default `lfs/objects`
+layout. A checkout with its own `lfs.storage` still reads from the cache and
+stores into its configured location. Submodule mirrors are not LFS-cached.
+
+The flag is agent-only: like the other `--git-mirrors-*` settings it cannot be
+set from pipeline environment, hooks, or plugins.
+
+### Why it is opt-in
+
+Whether the cache helps depends on the host, so it is off unless you enable it:
+
+- **Disk growth.** The mirror grows by every LFS object it has ever fetched and
+  nothing prunes `<mirror>/lfs`. On a persistent or shared mirror volume this
+  can fill the disk over time. Budget for it, or prune the directory yourself.
+- **Lock duration.** The prefetch runs while the mirror lock is held, so other
+  jobs on the host that need the same mirror wait for it. Large LFS payloads
+  or a slow LFS server extend that wait and can push it past
+  `--git-mirrors-lock-timeout`.
+- **Mirror location.** Mirrors are often on network or RWX volumes. Reading a
+  large object from such a volume, then hardlinking or copying it into the
+  checkout, is not necessarily faster than downloading it from the LFS
+  server's object store. Measure before enabling it on shared volumes.
+
+It is most useful when many jobs on the same host check out the same LFS-heavy
+commits, the mirror is on fast local disk, and LFS downloads are a measurable
+part of checkout time.
+
 ## Mirrors? `--mirror`? 🪞
 
 You're probably familiar with `git clone`: this gives you a copy of a repo you

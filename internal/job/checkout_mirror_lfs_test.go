@@ -11,7 +11,14 @@ import (
 	"testing"
 )
 
-func TestCheckoutLFSMirror(t *testing.T) {
+// TestCheckoutMirrorLFSCache exercises the opt-in Git LFS mirror cache
+// (--git-mirrors-lfs-cache) end to end with real git and git-lfs. Cases where
+// the cache is expected to be populated remove the canonical repository's LFS
+// objects before a second fresh checkout, which then must succeed using only
+// the objects cached in the mirror. Cases where the cache is unavailable or
+// disabled must keep the mirror's LFS storage untouched and still produce a
+// correct checkout via the normal per-checkout fetch.
+func TestCheckoutMirrorLFSCache(t *testing.T) {
 	if err := exec.Command("git", "lfs", "version").Run(); err != nil {
 		t.Skip("git-lfs is not installed")
 	}
@@ -27,6 +34,7 @@ func TestCheckoutLFSMirror(t *testing.T) {
 		name              string
 		mode              string
 		clean             bool
+		cacheDisabled     bool // leave --git-mirrors-lfs-cache at its default (off)
 		noMirror          bool
 		skipUpdate        bool
 		missing           bool
@@ -45,6 +53,10 @@ func TestCheckoutLFSMirror(t *testing.T) {
 		{name: "reference", mode: "reference"},
 		{name: "dissociate", mode: "dissociate"},
 		{name: "snapshot", mode: "reference", clean: true},
+		{name: "cache disabled reference", mode: "reference", cacheDisabled: true},
+		{name: "cache disabled dissociate", mode: "dissociate", cacheDisabled: true},
+		{name: "cache disabled snapshot", mode: "reference", clean: true, cacheDisabled: true},
+		{name: "cache disabled cone", mode: "reference", cacheDisabled: true, sparseMode: SparseCheckoutModeCone, paths: []string{"included"}},
 		{name: "no mirror", noMirror: true},
 		{name: "skip update", mode: "reference", skipUpdate: true},
 		{name: "missing mirror", mode: "reference", skipUpdate: true, missing: true},
@@ -69,7 +81,7 @@ func TestCheckoutLFSMirror(t *testing.T) {
 		{name: "non-cone", mode: "reference", sparseMode: SparseCheckoutModeNoCone, paths: []string{"/included/", "!/included/excluded.bin"}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			root := t.TempDir()
+			root := shortTempDir(t)
 			canonical := filepath.Join(root, "canonical.git")
 			source := filepath.Join(root, "source")
 			runGitForMirrorTest(t, "", "init", "--bare", canonical)
@@ -117,6 +129,9 @@ func TestCheckoutLFSMirror(t *testing.T) {
 			runGitForMirrorTest(t, source, "push", "origin", "feature")
 			commit := gitOutputForRemoteCheckoutTest(t, source, "rev-parse", "HEAD")
 			e := newOnHostMirrorExecutor(t, canonical, commit)
+			// The mirror directory name embeds the whole canonical path, so
+			// keep the mirrors under the same short root (see shortTempDir).
+			e.GitMirrorsPath = filepath.Join(root, "mirrors")
 			e.Branch = "feature"
 			if test.commitRef != "" {
 				e.Commit = test.commitRef
@@ -137,6 +152,7 @@ func TestCheckoutLFSMirror(t *testing.T) {
 			}
 			e.BuildPath = filepath.Join(root, "build")
 			e.GitLFSEnabled = true
+			e.GitMirrorsLFSCache = !test.cacheDisabled
 			e.GitMirrorCheckoutMode = test.mode
 			e.GitCleanFlags = "-ffxdq"
 			if test.customStorage {
@@ -164,13 +180,24 @@ func TestCheckoutLFSMirror(t *testing.T) {
 			}
 			if test.conditionalConfig {
 				// The mirror cannot access LFS; only the future workspace's
-				// conditional include supplies the working endpoint.
-				runGitForMirrorTest(t, mirror, "config", "lfs.url", filepath.Join(root, "unavailable.git"))
+				// conditional include supplies the working endpoint. Use a
+				// file URL rather than a bare path: git-lfs turns a bare
+				// Windows path that does not exist into an SSH URL.
+				runGitForMirrorTest(t, mirror, "config", "lfs.url", "file:///unavailable-mirror-lfs-repository")
 				config := filepath.Join(root, "workspace-lfs.config")
 				runGitForMirrorTest(t, "", "config", "--file", config, "lfs.url", canonical)
-				runGitForMirrorTest(t, "", "config", "--global", "includeIf.gitdir:"+filepath.ToSlash(root)+"/checkout-*/.git.path", config)
+				// Git matches includeIf.gitdir against the checkout's resolved
+				// path (symlinks followed; on Windows 8.3 names like RUNNER~1
+				// expanded), so build the pattern from the resolved root.
+				// Only on Unix does the raw path also match, via $PWD. The /i
+				// variant keeps drive letter and component case out of it.
+				resolvedRoot, err := filepath.EvalSymlinks(root)
+				if err != nil {
+					t.Fatal(err)
+				}
+				runGitForMirrorTest(t, "", "config", "--global", "includeIf.gitdir/i:"+filepath.ToSlash(resolvedRoot)+"/checkout-*/.git.path", config)
 			}
-			shared := !test.noMirror && !test.skipUpdate && !test.mirrorStorage && !test.conditionalConfig
+			shared := !test.cacheDisabled && !test.noMirror && !test.skipUpdate && !test.mirrorStorage && !test.conditionalConfig
 			objectPath := func(store string, data []byte) string {
 				oid := fmt.Sprintf("%x", sha256.Sum256(data))
 				return filepath.Join(store, "lfs", "objects", oid[:2], oid[2:4], oid)
@@ -229,6 +256,13 @@ func TestCheckoutLFSMirror(t *testing.T) {
 				} else if _, err := os.Stat(objectPath(mirror, asset)); !os.IsNotExist(err) {
 					t.Fatalf("fallback modified mirror LFS storage: %v", err)
 				}
+				if test.cacheDisabled {
+					// Default-off must match the pre-cache behaviour exactly: the
+					// mirror update never creates an LFS store in the mirror.
+					if _, err := os.Stat(filepath.Join(mirror, "lfs")); !os.IsNotExist(err) {
+						t.Fatalf("mirror LFS storage created with cache disabled: %v", err)
+					}
+				}
 				if test.sparseMode == SparseCheckoutModeCone || test.lfsConfig {
 					if _, err := os.Stat(objectPath(mirror, outside)); !os.IsNotExist(err) {
 						t.Fatalf("fetch cached an out-of-scope object: %v", err)
@@ -249,10 +283,47 @@ func TestCheckoutLFSMirror(t *testing.T) {
 				if test.customStorage {
 					storage = "custom-lfs"
 				}
-				if !strings.Contains(lfsEnv, "LocalMediaDir="+filepath.Join(checkout, ".git", storage, "objects")) {
-					t.Fatalf("checkout no longer owns its LFS storage:\n%s", lfsEnv)
+				// git-lfs reports canonical paths (macOS /tmp -> /private/tmp,
+				// Windows 8.3 short names expanded), so resolve both sides
+				// before comparing rather than matching the raw string.
+				wantMediaDir, err := filepath.EvalSymlinks(filepath.Join(checkout, ".git", storage, "objects"))
+				if err != nil {
+					t.Fatalf("filepath.EvalSymlinks(checkout LFS objects dir) error = %v", err)
+				}
+				gotMediaDir, err := filepath.EvalSymlinks(lfsEnvValue(lfsEnv, "LocalMediaDir"))
+				if err != nil {
+					t.Fatalf("filepath.EvalSymlinks(LocalMediaDir) error = %v\n%s", err, lfsEnv)
+				}
+				if gotMediaDir != wantMediaDir {
+					t.Fatalf("checkout no longer owns its LFS storage: LocalMediaDir = %q, want %q\n%s", gotMediaDir, wantMediaDir, lfsEnv)
 				}
 			}
 		})
 	}
+}
+
+// shortTempDir returns a temporary directory whose path, unlike t.TempDir(),
+// does not embed the test name. The on-host mirror directory name is derived
+// from the canonical repository path (dirForRepository), so nesting one
+// t.TempDir() path inside another roughly doubles the path length and exceeds
+// Windows' 260-character limit ("Filename too long" from git).
+func shortTempDir(t *testing.T) string {
+	t.Helper()
+	dir, err := os.MkdirTemp("", "lfs")
+	if err != nil {
+		t.Fatalf("os.MkdirTemp error = %v", err)
+	}
+	t.Cleanup(func() { os.RemoveAll(dir) }) //nolint:errcheck // Best-effort cleanup.
+	return dir
+}
+
+// lfsEnvValue returns the value of a key=value line in `git lfs env` output,
+// or "" if the key is absent.
+func lfsEnvValue(lfsEnv, key string) string {
+	for line := range strings.SplitSeq(lfsEnv, "\n") {
+		if value, ok := strings.CutPrefix(strings.TrimSpace(line), key+"="); ok {
+			return value
+		}
+	}
+	return ""
 }
