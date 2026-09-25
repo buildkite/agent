@@ -27,6 +27,11 @@ func NewClient(ctx context.Context, path string) (*Client, error) {
 	return &Client{sc: sc}, nil
 }
 
+// Close closes any idle connections held by the client.
+func (c *Client) Close() {
+	c.sc.Close()
+}
+
 // Ping pings the server. It returns a non-nil error if the ping fails, or the
 // response timestamp is more than 100 milliseconds different to time.Now.
 func (c *Client) Ping(ctx context.Context) error {
