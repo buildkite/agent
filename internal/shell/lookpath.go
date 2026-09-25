@@ -51,3 +51,7 @@ func LookPath(file, path, fileExtensions string) (string, error) {
 	}
 	return "", &exec.Error{Name: file, Err: exec.ErrNotFound}
 }
+
+func systemCommandProcessor() (string, error) {
+	return "cmd.exe", nil
+}
