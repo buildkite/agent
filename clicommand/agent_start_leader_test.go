@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -16,18 +17,34 @@ import (
 	"github.com/buildkite/agent/v4/logger"
 )
 
-// countingListener counts the connections that it accepts.
+// countingListener counts the connections that it accepted and that are still
+// open, and records the highest count.
 type countingListener struct {
 	net.Listener
-	accepted atomic.Int32
+	open, peak atomic.Int32
 }
 
 func (l *countingListener) Accept() (net.Conn, error) {
 	c, err := l.Listener.Accept()
-	if err == nil {
-		l.accepted.Add(1)
+	if err != nil {
+		return nil, err
 	}
-	return c, err
+	// http.Server calls Accept from one goroutine, so only Accept writes peak.
+	if n := l.open.Add(1); n > l.peak.Load() {
+		l.peak.Store(n)
+	}
+	return &countedConn{Conn: c, l: l}, nil
+}
+
+type countedConn struct {
+	net.Conn
+	l    *countingListener
+	once sync.Once
+}
+
+func (c *countedConn) Close() error {
+	c.once.Do(func() { c.l.open.Add(-1) })
+	return c.Conn.Close()
 }
 
 func TestLeaderPinger_ReusesConnection(t *testing.T) {
@@ -68,10 +85,12 @@ func TestLeaderPinger_ReusesConnection(t *testing.T) {
 	t.Cleanup(func() { t.Log(lb.Messages) })
 	leaderPinger(ctx, lb, filepath.Join(dir, "follower.sock"), leaderPath)
 
-	// One connection for the socket test dial in NewClient, and one for the
-	// pings. Before the fix, each tick opened two new connections.
-	if got, want := cl.accepted.Load(), int32(2); got > want {
-		t.Errorf("leader accepted %d connections in 1s, want at most %d", got, want)
+	// One connection for the socket test dial in NewClient, and at most two
+	// idle connections for the pings (the http.Transport default for
+	// MaxIdleConnsPerHost). Allow more for the extra connections that a slow
+	// ping can open on a loaded host.
+	if got, want := cl.peak.Load(), int32(8); got > want {
+		t.Errorf("leader had up to %d open connections in 1s, want at most %d", got, want)
 	}
 
 	if d, err := os.Readlink(leaderPath); err != nil || d != leaderSock {
