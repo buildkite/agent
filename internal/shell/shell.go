@@ -13,6 +13,7 @@ import (
 	"os/exec"
 	"path"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"strings"
 	"sync/atomic"
@@ -471,7 +472,7 @@ func (c Command) Run(ctx context.Context, opts ...RunCommandOpt) error {
 	cmdCfg.Started = cfg.started
 	cmdCfg.Done = cfg.done
 
-	return c.shell.executeCommand(ctx, cmdCfg, stdout, stderr, pty)
+	return c.shell.executeCommand(ctx, cmdCfg, stdout, stderr, pty, cfg.teeOutput)
 }
 
 // RunAndCaptureStdout is Run, but automatically sets options:
@@ -488,6 +489,7 @@ func (c Command) RunAndCaptureStdout(ctx context.Context, opts ...RunCommandOpt)
 
 type runConfig struct {
 	captureStdout    *string
+	teeOutput        io.Writer
 	showPrompt       bool
 	alwaysHidePrompt bool
 	showStderr       bool
@@ -505,6 +507,11 @@ type RunCommandOpt = func(*runConfig)
 // shell's stdout. By default, it is not captured. The string pointer is
 // updated with the stdout of the process after it has exited.
 func CaptureStdout(s *string) RunCommandOpt { return func(c *runConfig) { c.captureStdout = s } }
+
+// TeeOutput copies command output to w without changing logging or PTY behavior.
+// It includes hidden output, but not prompts. The writer must be safe for
+// concurrent writes from stdout and stderr, and receives unredacted bytes.
+func TeeOutput(w io.Writer) RunCommandOpt { return func(c *runConfig) { c.teeOutput = w } }
 
 // ShowStderr can be used to hide stderr from the shell's stdout. By default,
 // it is enabled (the process stderr is directed to the shell's stdout).
@@ -583,13 +590,13 @@ func (s *Shell) buildCommand(name string, arg ...string) (process.Config, error)
 //
 // To ignore an output stream, you can use either nil or io.Discard:
 //
-//	s.executeCommand(ctx, cmd, nil, nil, pty)  // ignore both
-//	s.executeCommand(ctx, cmd, writer, nil, pty) // ignore stderr
-//	s.executeCommand(ctx, cmd, writer, writer, pty) // send both to same writer
-//	s.executeCommand(ctx, cmd, writer1, writer2, false)
+//	s.executeCommand(ctx, cmd, nil, nil, pty, nil)  // ignore both
+//	s.executeCommand(ctx, cmd, writer, nil, pty, nil) // ignore stderr
+//	s.executeCommand(ctx, cmd, writer, writer, pty, nil) // send both to same writer
+//	s.executeCommand(ctx, cmd, writer1, writer2, false, nil)
 //
 // Note that if pty = true, only the stdout writer will be used.
-func (s *Shell) executeCommand(ctx context.Context, cmdCfg process.Config, stdout, stderr io.Writer, pty bool) error {
+func (s *Shell) executeCommand(ctx context.Context, cmdCfg process.Config, stdout, stderr io.Writer, pty bool, teeOutput io.Writer) error {
 	// Combine the two slices of env, let the latter overwrite the former
 	tracedEnv := env.FromSlice(cmdCfg.Env)
 	s.injectTraceCtx(ctx, tracedEnv)
@@ -632,6 +639,17 @@ func (s *Shell) executeCommand(ctx context.Context, cmdCfg process.Config, stdou
 
 		// This should respect the log format we set for the agent
 		processLogger = logger.NewConsoleLogger(logger.NewTextPrinter(cmdCfg.Stderr), os.Exit)
+	}
+
+	if teeOutput != nil {
+		// Preserve a shared writer so os/exec can keep using one output pipe.
+		shared := reflect.TypeOf(cmdCfg.Stdout).Comparable() && cmdCfg.Stdout == cmdCfg.Stderr
+		cmdCfg.Stdout = io.MultiWriter(cmdCfg.Stdout, teeOutput)
+		if shared {
+			cmdCfg.Stderr = cmdCfg.Stdout
+		} else {
+			cmdCfg.Stderr = io.MultiWriter(cmdCfg.Stderr, teeOutput)
+		}
 	}
 
 	if s.commandLog != nil {
