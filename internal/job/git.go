@@ -67,6 +67,7 @@ type gitError struct {
 	error
 	Type       int
 	WasRetried bool
+	captured   bool
 }
 
 func (e *gitError) Unwrap() error {
@@ -104,7 +105,9 @@ func hasGitCommit(ctx context.Context, sh *shell.Shell, gitDir, commit string) b
 	return true
 }
 
-func gitCheckout(ctx context.Context, sh *shell.Shell, gitCheckoutFlags, reference string) error {
+func gitCheckout(ctx context.Context, sh *shell.Shell, gitCheckoutFlags, reference string) (retErr error) {
+	defer func() { captureGitError(ctx, sh, retErr) }()
+
 	individualCheckoutFlags, err := shellwords.Split(gitCheckoutFlags)
 	if err != nil {
 		return err
@@ -157,7 +160,9 @@ func gitClone(
 	gitFlags, gitCloneFlags []string,
 	repository, dir string,
 	runOpts ...shell.RunCommandOpt,
-) error {
+) (retErr error) {
+	defer func() { captureGitError(ctx, sh, retErr) }()
+
 	commandArgs := append([]string{}, gitFlags...)
 	commandArgs = append(commandArgs, "clone")
 	commandArgs = append(commandArgs, gitCloneFlags...)
@@ -175,7 +180,9 @@ func gitClone(
 	return nil
 }
 
-func gitClean(ctx context.Context, sh *shell.Shell, gitCleanFlags string) error {
+func gitClean(ctx context.Context, sh *shell.Shell, gitCleanFlags string) (retErr error) {
+	defer func() { captureGitError(ctx, sh, retErr) }()
+
 	individualCleanFlags, err := shellwords.Split(gitCleanFlags)
 	if err != nil {
 		return err
@@ -191,7 +198,9 @@ func gitClean(ctx context.Context, sh *shell.Shell, gitCleanFlags string) error 
 	return nil
 }
 
-func gitCleanSubmodules(ctx context.Context, sh *shell.Shell, gitCleanFlags string) error {
+func gitCleanSubmodules(ctx context.Context, sh *shell.Shell, gitCleanFlags string) (retErr error) {
+	defer func() { captureGitError(ctx, sh, retErr) }()
+
 	individualCleanFlags, err := shellwords.Split(gitCleanFlags)
 	if err != nil {
 		return err
@@ -299,10 +308,13 @@ func gitLFSFetchCheckout(ctx context.Context, args gitLFSFetchCheckoutArgs) erro
 		return nil
 	})
 
-	if err != nil && args.Retry {
-		return &gitError{error: err, Type: gitErrorLFS, WasRetried: args.Retry}
+	if err == nil {
+		return nil
 	}
-	return err
+	// Capture the terminal LFS failure, not every attempt in its internal retry loop.
+	gitErr := &gitError{error: err, Type: gitErrorLFS, WasRetried: args.Retry}
+	captureGitError(ctx, args.Shell, gitErr)
+	return gitErr
 }
 
 // checkoutPathspecs returns the pathspecs for `git lfs checkout` and whether
@@ -319,7 +331,9 @@ func (args gitLFSFetchCheckoutArgs) checkoutPathspecs() (paths []string, scoped 
 	return nil, false
 }
 
-func gitRepack(ctx context.Context, sh *shell.Shell, args ...string) error {
+func gitRepack(ctx context.Context, sh *shell.Shell, args ...string) (retErr error) {
+	defer func() { captureGitError(ctx, sh, retErr) }()
+
 	commandArgs := []string{"repack"}
 	commandArgs = append(commandArgs, args...)
 
@@ -402,7 +416,9 @@ func gitFetch(ctx context.Context, args gitFetchArgs) error {
 		)
 	}
 
-	return retrier.DoWithContext(ctx, func(retrier *roko.Retrier) error {
+	return retrier.DoWithContext(ctx, func(retrier *roko.Retrier) (retErr error) {
+		defer func() { captureGitError(ctx, args.Shell, retErr) }()
+
 		runOpts := []shell.RunCommandOpt{shell.WithStringSearch(smelt)}
 		if args.HidePrompt {
 			runOpts = append(runOpts, shell.AlwaysHidePrompt())
