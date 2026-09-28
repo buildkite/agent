@@ -10,9 +10,32 @@ import (
 )
 
 var (
-	errGitLFSPreflight           = errors.New("git lfs version failed")
-	errInvalidSparseCheckoutMode = errors.New("invalid sparse checkout mode")
+	errGitLFSPreflight             = errors.New("git lfs version failed")
+	errInvalidSparseCheckoutMode   = errors.New("invalid sparse checkout mode")
+	gitAuthenticationErrorPatterns = []string{
+		"fatal: Authentication failed",
+		"fatal: authentication failed",
+		"Permission denied (publickey",
+		"Permission denied (password",
+	}
+	gitNetworkErrorPatterns = []string{
+		"Could not resolve host:",
+		"Could not resolve proxy:",
+		"ssh: Could not resolve hostname",
+		"Failed to connect to",
+		"ssh: connect to host",
+	}
 )
+
+// addGitRemoteErrorPatterns adds reporting-only patterns to a command's search.
+func addGitRemoteErrorPatterns(smelt map[string]bool) {
+	for _, pattern := range gitAuthenticationErrorPatterns {
+		smelt[pattern] = false
+	}
+	for _, pattern := range gitNetworkErrorPatterns {
+		smelt[pattern] = false
+	}
+}
 
 func captureGitError(ctx context.Context, sh *shell.Shell, err error) {
 	if err == nil || ctx.Err() != nil || errors.Is(err, context.Canceled) || shell.ExitCode(err) == -1 {
@@ -53,6 +76,16 @@ func classifyGitError(err error) (string, string) {
 			return "git_checkout_lock_timeout", "Git checkout timed out waiting for a lock."
 		default:
 			return "git_checkout_phase_failed", "The default checkout phase failed."
+		}
+	}
+	for _, pattern := range gitAuthenticationErrorPatterns {
+		if gitErr.outputMatches[pattern] {
+			return "git_authentication_failed", "Git reported an authentication failure."
+		}
+	}
+	for _, pattern := range gitNetworkErrorPatterns {
+		if gitErr.outputMatches[pattern] {
+			return "git_network_failed", "Git reported a network connection failure."
 		}
 	}
 	var code, message string
