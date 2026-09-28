@@ -2,6 +2,8 @@ package replacer
 
 import (
 	"errors"
+	"maps"
+	"slices"
 )
 
 // Mux contains multiple replacers
@@ -30,6 +32,18 @@ func (m *Mux) Add(needles ...string) {
 	for _, r := range m.underlying {
 		r.Add(needles...)
 	}
+}
+
+// Needles returns the distinct strings currently matched by the replacers.
+// Reading them does not flush or otherwise change any in-flight output.
+func (m *Mux) Needles() []string {
+	needles := make(map[string]struct{})
+	for _, r := range m.underlying {
+		for _, needle := range r.Needles() {
+			needles[needle] = struct{}{}
+		}
+	}
+	return slices.Collect(maps.Keys(needles))
 }
 
 // Append adds a replacer to the Mux.

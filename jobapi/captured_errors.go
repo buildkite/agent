@@ -11,6 +11,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/buildkite/agent/v4/internal/redact"
+	"github.com/buildkite/agent/v4/internal/replacer"
 	"github.com/buildkite/agent/v4/internal/socket"
 )
 
@@ -79,6 +81,13 @@ func (s *Server) handleCapturedError(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Use the same registered values as job logs, including values added while
+	// the job is running. Redact before both forwarding and the local response.
+	if err := payload.redact(s.redactors.Needles()); err != nil {
+		s.writeCapturedError(w, fmt.Errorf("redacting captured error: %w", err), http.StatusUnprocessableEntity)
+		return
+	}
+
 	now := time.Now().UTC()
 	if payload.Timestamp == nil {
 		payload.Timestamp = &now
@@ -97,6 +106,92 @@ func (s *Server) handleCapturedError(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewEncoder(w).Encode(payload); err != nil {
 		s.Logger.Errorf("Job API: couldn't encode captured-error response: %v", err)
 	}
+}
+
+func (e *CapturedError) redact(needles []string) error {
+	if len(needles) == 0 {
+		return nil
+	}
+	// These needles already include the escaped forms registered for logs.
+	// Use a separate matcher so reports cannot flush or mix with log output.
+	var output strings.Builder
+	matcher := replacer.New(&output, needles, redact.Redacted)
+	changed := false
+	replace := func(s string) string {
+		output.Reset()
+		// Like redact.String, errors writing to a strings.Builder are bugs.
+		if _, err := matcher.Write([]byte(s)); err != nil {
+			panic(err)
+		}
+		if err := matcher.Flush(); err != nil {
+			panic(err)
+		}
+		result := output.String()
+		changed = changed || result != s
+		return result
+	}
+	e.Code = replace(e.Code)
+	e.Message = replace(e.Message)
+	if e.Context != nil {
+		context, err := redactCapturedErrorValue(e.Context, replace)
+		if err != nil {
+			return err
+		}
+		e.Context = context.(map[string]any)
+	}
+	if !changed {
+		return nil
+	}
+	// Replacements can be longer than the original secret. Do not forward a
+	// report that redaction made invalid or too large, or retry it unredacted.
+	if err := validateCapturedError(e); err != nil {
+		return err
+	}
+	body, err := json.Marshal(e)
+	if err != nil {
+		return err
+	}
+	if len(body) > MaxCapturedErrorBody {
+		return fmt.Errorf("captured error exceeds %d bytes after redaction", MaxCapturedErrorBody)
+	}
+	return nil
+}
+
+// Redact decoded data rather than JSON syntax: a secret can contain characters
+// escaped by JSON, and replacing serialized text can break keys or numbers.
+func redactCapturedErrorValue(value any, replace func(string) string) (any, error) {
+	switch v := value.(type) {
+	case string:
+		return replace(v), nil
+	case json.Number:
+		if redacted := replace(v.String()); redacted != v.String() {
+			// A numeric secret needs a string replacement to remain valid JSON.
+			return redacted, nil
+		}
+	case []any:
+		for i, item := range v {
+			redacted, err := redactCapturedErrorValue(item, replace)
+			if err != nil {
+				return nil, err
+			}
+			v[i] = redacted
+		}
+	case map[string]any:
+		redacted := make(map[string]any, len(v))
+		for key, item := range v {
+			key = replace(key)
+			if _, exists := redacted[key]; exists {
+				return nil, errors.New("context keys collide after redaction")
+			}
+			item, err := redactCapturedErrorValue(item, replace)
+			if err != nil {
+				return nil, err
+			}
+			redacted[key] = item
+		}
+		return redacted, nil
+	}
+	return value, nil
 }
 
 func requireJSONEOF(dec *json.Decoder) error {

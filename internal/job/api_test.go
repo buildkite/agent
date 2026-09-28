@@ -20,7 +20,104 @@ import (
 	"github.com/buildkite/agent/v4/internal/shell"
 	"github.com/buildkite/agent/v4/internal/socket"
 	"github.com/buildkite/agent/v4/jobapi"
+	"github.com/google/go-cmp/cmp"
 )
+
+func TestCapturedErrorRedactsJobSecrets(t *testing.T) {
+	t.Parallel()
+
+	reports := make(chan map[string]any, 1)
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v3/jobs/test-job/errors" {
+			t.Errorf("upstream path = %q", r.URL.Path)
+		}
+		var payload map[string]any
+		dec := json.NewDecoder(r.Body)
+		dec.UseNumber()
+		if err := dec.Decode(&payload); err != nil {
+			t.Error(err)
+		}
+		reports <- payload
+		w.WriteHeader(http.StatusCreated)
+	}))
+	defer upstream.Close()
+
+	environ := env.FromMap(map[string]string{
+		"BUILDKITE_AGENT_ENDPOINT": upstream.URL + "/v3",
+		"INITIAL_TOKEN":            "initial-secret",
+		"NUMERIC_TOKEN":            "314159",
+	})
+	e := New(ExecutorConfig{JobID: "test-job", SocketsPath: os.TempDir(), RedactedVars: []string{"*_TOKEN"}})
+	var output strings.Builder
+	stdout, log := e.setupRedactors(shell.TestingLogger{T: t}, environ, &output, io.Discard)
+	sh, err := shell.New(shell.WithEnv(environ), shell.WithLogger(log), shell.WithStdout(stdout))
+	if err != nil {
+		t.Fatal(err)
+	}
+	e.shell = sh
+	ctx, _ := experiments.Enable(t.Context(), experiments.CaptureError)
+	cleanup, err := e.startJobAPI(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+	client, err := jobapi.NewClient(ctx, e.jobAPI.SocketPath, sh.Env.GetString("BUILDKITE_AGENT_JOB_API_TOKEN", ""))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, secret := range []string{"initial-secret", "runtime\"secret\n<>&"} {
+		// Register a new value after the first report, without putting it in the
+		// environment. A startup snapshot or fresh env lookup would miss it.
+		if secret != "initial-secret" {
+			if _, err := client.RedactionCreate(ctx, secret); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if _, err := io.WriteString(stdout, "Log: "+secret+"\n"); err != nil {
+			t.Fatal(err)
+		}
+		if err := e.redactors.Flush(); err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(output.String(), secret) || !strings.Contains(output.String(), "Log: [REDACTED]") {
+			t.Fatalf("log was not redacted: %q", output.String())
+		}
+		output.Reset()
+
+		payload := &jobapi.CapturedError{
+			Code:    "failure." + secret,
+			Message: "Failed using " + secret,
+			Context: map[string]any{
+				"image": "registry/" + secret + ":tag", "service": "prefix-" + secret,
+				"nested": []any{map[string]any{"detail-" + secret: "initial-secret"}, true, nil},
+				"number": json.Number("9007199254740993"), "exit_status": json.Number("17"),
+				"numeric_secret": json.Number("314159"), "password": "unknown-value",
+			},
+		}
+		if err := client.CaptureError(ctx, payload); err != nil {
+			t.Fatal(err)
+		}
+		got := <-reports
+		if got["timestamp"] == nil || got["idempotency_key"] == nil {
+			t.Errorf("missing parent metadata: %v", got)
+		}
+		delete(got, "timestamp")
+		delete(got, "idempotency_key")
+		want := map[string]any{
+			"code": "failure.[REDACTED]", "message": "Failed using [REDACTED]",
+			"context": map[string]any{
+				"image": "registry/[REDACTED]:tag", "service": "prefix-[REDACTED]",
+				"nested": []any{map[string]any{"detail-[REDACTED]": "[REDACTED]"}, true, nil},
+				"number": json.Number("9007199254740993"), "exit_status": json.Number("17"),
+				"numeric_secret": "[REDACTED]", "password": "unknown-value",
+			},
+		}
+		if diff := cmp.Diff(want, got); diff != "" {
+			t.Errorf("upstream payload diff (-want +got):\n%s", diff)
+		}
+	}
+}
 
 func TestCapturedErrorJobCancellation(t *testing.T) {
 	ctx, _ := experiments.Enable(t.Context(), experiments.CaptureError)
