@@ -27,6 +27,18 @@ var (
 	}
 )
 
+type gitErrorReportsKey struct{}
+
+// gitErrorReports collects observations from the sequential Git operations in
+// one checkout attempt. Delivery waits until the attempt's result is settled.
+type gitErrorReports []jobapi.CapturedError
+
+func (reports gitErrorReports) deliver(ctx context.Context, sh *shell.Shell) {
+	for _, report := range reports {
+		deliverError(ctx, sh, report)
+	}
+}
+
 // addGitRemoteErrorPatterns adds reporting-only patterns to a command's search.
 func addGitRemoteErrorPatterns(smelt map[string]bool) {
 	for _, pattern := range gitAuthenticationErrorPatterns {
@@ -153,16 +165,29 @@ func captureError(ctx context.Context, sh *shell.Shell, code, message string) {
 	if sh.Env.GetString("BUILDKITE_AGENT_JOB_API_CAPTURE_ERROR", "") != "true" {
 		return
 	}
-	// Use fixed messages until the capture API supports payload redaction. Never
-	// include Git output, wrapped errors, repository URLs, paths, or refs here.
+	// Keep fixed summaries: registered-secret redaction does not cover arbitrary
+	// sensitive Git output, wrapped errors, repository URLs, paths, or refs.
+	now := time.Now()
+	report := jobapi.CapturedError{Code: code, Message: message, Timestamp: &now}
+	if reports, ok := ctx.Value(gitErrorReportsKey{}).(*gitErrorReports); ok {
+		*reports = append(*reports, report)
+		return
+	}
+	deliverError(ctx, sh, report)
+}
+
+func deliverError(ctx context.Context, sh *shell.Shell, report jobapi.CapturedError) {
+	if ctx.Err() != nil {
+		return
+	}
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
 	client, err := jobapi.NewClient(ctx, sh.Env.GetString("BUILDKITE_AGENT_JOB_API_SOCKET", ""), sh.Env.GetString("BUILDKITE_AGENT_JOB_API_TOKEN", ""))
 	if err == nil {
-		_, err = client.CaptureError(ctx, &jobapi.CapturedError{Code: code, Message: message})
+		_, err = client.CaptureError(ctx, &report)
 	}
 	if err != nil {
 		// Transport errors can contain upstream response bodies or socket paths.
-		sh.Warningf("Could not capture Git error %q", code)
+		sh.Warningf("Could not capture Git error %q", report.Code)
 	}
 }

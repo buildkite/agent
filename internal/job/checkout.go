@@ -151,6 +151,7 @@ func (e *Executor) checkout(ctx context.Context) error {
 			// a misconfigured agent environment, and git's specific message
 			// (e.g. "'lfs' is not a git command") is the fastest diagnostic.
 			if _, err := e.shell.Command("git", "lfs", "version").RunAndCaptureStdout(ctx, shell.ShowStderr(true)); err != nil {
+				captureCheckoutError(ctx, e.shell, errors.Join(errGitLFSPreflight, err))
 				return fmt.Errorf("BUILDKITE_GIT_LFS_ENABLED=true but `git lfs version` failed; git-lfs may not be installed or not resolvable by git: %w", err)
 			}
 		}
@@ -160,6 +161,7 @@ func (e *Executor) checkout(ctx context.Context) error {
 		// checkout, but they can arrive from job env, and retrying a typo for the
 		// whole attempt budget only delays the failure.
 		if _, err := ParseSparseCheckoutMode(e.GitSparseCheckoutMode); err != nil {
+			captureCheckoutError(ctx, e.shell, errors.Join(errInvalidSparseCheckoutMode, err))
 			return err
 		}
 		if _, err := parseGitFetchBaseBranchMode(e.GitFetchBaseBranch); err != nil {
@@ -180,6 +182,7 @@ func (e *Executor) checkout(ctx context.Context) error {
 			if err == nil {
 				return nil
 			}
+			captureCheckoutError(ctx, e.shell, err)
 
 			var errLockTimeout ErrTimedOutAcquiringLock
 			var errGit *gitError
@@ -315,12 +318,18 @@ var errCheckoutAttemptTimedOut = errors.New("checkout attempt timed out")
 // error is joined with errCheckoutAttemptTimedOut so the retry loop can
 // distinguish a timeout-kill from other signal-terminated processes.
 func (e *Executor) runDefaultCheckoutAttempt(ctx context.Context, previousAttempts int) error {
+	var reports gitErrorReports
+	// Settle the result and cancel the attempt timer before delivering
+	// observations under the parent job context. Reporting must not turn a
+	// completed Git failure into a timeout or affect mirror fallback decisions.
+	defer func() { reports.deliver(ctx, e.shell) }()
+	attemptCtx := context.WithValue(ctx, gitErrorReportsKey{}, &reports)
 	if e.GitCheckoutTimeout <= 0 {
-		return e.defaultCheckoutPhase(ctx, previousAttempts)
+		return e.defaultCheckoutPhase(attemptCtx, previousAttempts)
 	}
 
 	timeout := time.Duration(e.GitCheckoutTimeout) * time.Second
-	attemptCtx, cancel := context.WithTimeout(ctx, timeout)
+	attemptCtx, cancel := context.WithTimeout(attemptCtx, timeout)
 	defer cancel()
 
 	err := e.defaultCheckoutPhase(attemptCtx, previousAttempts)
