@@ -108,7 +108,8 @@ func hasGitCommit(ctx context.Context, sh *shell.Shell, gitDir, commit string) b
 }
 
 func gitCheckout(ctx context.Context, sh *shell.Shell, gitCheckoutFlags, reference string) (retErr error) {
-	defer func() { captureGitError(ctx, sh, retErr) }()
+	var output gitErrorOutput
+	defer func() { captureGitError(ctx, sh, retErr, output.String()) }()
 
 	individualCheckoutFlags, err := shellwords.Split(gitCheckoutFlags)
 	if err != nil {
@@ -125,7 +126,7 @@ func gitCheckout(ctx context.Context, sh *shell.Shell, gitCheckoutFlags, referen
 	const badReference = "fatal: reference is not a tree"
 	smelt := map[string]bool{badReference: false}
 
-	if err := sh.Command("git", commandArgs...).Run(ctx, shell.WithStringSearch(smelt)); err != nil {
+	if err := sh.Command("git", commandArgs...).Run(ctx, shell.WithStringSearch(smelt), output.tee(sh)); err != nil {
 		if smelt[badReference] {
 			return &gitError{error: err, Type: gitErrorCheckoutReferenceIsNotATree}
 		}
@@ -163,7 +164,8 @@ func gitClone(
 	repository, dir string,
 	runOpts ...shell.RunCommandOpt,
 ) (retErr error) {
-	defer func() { captureGitError(ctx, sh, retErr) }()
+	var output gitErrorOutput
+	defer func() { captureGitError(ctx, sh, retErr, output.String()) }()
 
 	commandArgs := append([]string{}, gitFlags...)
 	commandArgs = append(commandArgs, "clone")
@@ -172,7 +174,7 @@ func gitClone(
 
 	smelt := map[string]bool{gitErrStrOperationTooSlow: false}
 	addGitRemoteErrorPatterns(smelt)
-	runOpts = append(runOpts, shell.WithStringSearch(smelt))
+	runOpts = append(runOpts, shell.WithStringSearch(smelt), output.tee(sh))
 	if err := sh.Command("git", commandArgs...).Run(ctx, runOpts...); err != nil {
 		if smelt[gitErrStrOperationTooSlow] {
 			return &gitError{error: err, Type: gitErrorCloneTimeout, outputMatches: smelt}
@@ -184,7 +186,8 @@ func gitClone(
 }
 
 func gitClean(ctx context.Context, sh *shell.Shell, gitCleanFlags string) (retErr error) {
-	defer func() { captureGitError(ctx, sh, retErr) }()
+	var output gitErrorOutput
+	defer func() { captureGitError(ctx, sh, retErr, output.String()) }()
 
 	individualCleanFlags, err := shellwords.Split(gitCleanFlags)
 	if err != nil {
@@ -194,7 +197,7 @@ func gitClean(ctx context.Context, sh *shell.Shell, gitCleanFlags string) (retEr
 	commandArgs := []string{"clean"}
 	commandArgs = append(commandArgs, individualCleanFlags...)
 
-	if err := sh.Command("git", commandArgs...).Run(ctx); err != nil {
+	if err := sh.Command("git", commandArgs...).Run(ctx, output.tee(sh)); err != nil {
 		return &gitError{error: err, Type: gitErrorClean}
 	}
 
@@ -202,7 +205,8 @@ func gitClean(ctx context.Context, sh *shell.Shell, gitCleanFlags string) (retEr
 }
 
 func gitCleanSubmodules(ctx context.Context, sh *shell.Shell, gitCleanFlags string) (retErr error) {
-	defer func() { captureGitError(ctx, sh, retErr) }()
+	var output gitErrorOutput
+	defer func() { captureGitError(ctx, sh, retErr, output.String()) }()
 
 	individualCleanFlags, err := shellwords.Split(gitCleanFlags)
 	if err != nil {
@@ -212,7 +216,7 @@ func gitCleanSubmodules(ctx context.Context, sh *shell.Shell, gitCleanFlags stri
 	gitCleanCommand := strings.Join(append([]string{"git", "clean"}, individualCleanFlags...), " ")
 	commandArgs := append([]string{"submodule", "foreach", "--recursive"}, gitCleanCommand)
 
-	if err := sh.Command("git", commandArgs...).Run(ctx); err != nil {
+	if err := sh.Command("git", commandArgs...).Run(ctx, output.tee(sh)); err != nil {
 		return &gitError{error: err, Type: gitErrorCleanSubmodules}
 	}
 
@@ -280,7 +284,10 @@ func gitLFSFetchCheckout(ctx context.Context, args gitLFSFetchCheckoutArgs) erro
 
 	checkoutPathspecs, checkoutScoped := args.checkoutPathspecs()
 
+	var output gitErrorOutput
+	runOpts = append(runOpts, output.tee(args.Shell))
 	err := retrier.DoWithContext(ctx, func(retrier *roko.Retrier) error {
+		output.reset()
 		if err := args.Shell.Command("git", fetchCmd...).Run(ctx, runOpts...); err != nil {
 			if args.Retry {
 				args.Shell.Commentf("%s", retrier)
@@ -291,6 +298,7 @@ func gitLFSFetchCheckout(ctx context.Context, args gitLFSFetchCheckoutArgs) erro
 			return nil
 		}
 		if !checkoutScoped {
+			output.reset()
 			if err := args.Shell.Command("git", "lfs", "checkout").Run(ctx, runOpts...); err != nil {
 				if args.Retry {
 					args.Shell.Commentf("%s", retrier)
@@ -301,6 +309,7 @@ func gitLFSFetchCheckout(ctx context.Context, args gitLFSFetchCheckoutArgs) erro
 		}
 		for batch := range slices.Chunk(checkoutPathspecs, gitLFSCheckoutPathBatchSize) {
 			checkoutCmd := append([]string{"lfs", "checkout"}, batch...)
+			output.reset()
 			if err := args.Shell.Command("git", checkoutCmd...).Run(ctx, runOpts...); err != nil {
 				if args.Retry {
 					args.Shell.Commentf("%s", retrier)
@@ -316,7 +325,7 @@ func gitLFSFetchCheckout(ctx context.Context, args gitLFSFetchCheckoutArgs) erro
 	}
 	// Capture the terminal LFS failure, not every attempt in its internal retry loop.
 	gitErr := &gitError{error: err, Type: gitErrorLFS, WasRetried: args.Retry}
-	captureGitError(ctx, args.Shell, gitErr)
+	captureGitError(ctx, args.Shell, gitErr, output.String())
 	return gitErr
 }
 
@@ -335,12 +344,13 @@ func (args gitLFSFetchCheckoutArgs) checkoutPathspecs() (paths []string, scoped 
 }
 
 func gitRepack(ctx context.Context, sh *shell.Shell, args ...string) (retErr error) {
-	defer func() { captureGitError(ctx, sh, retErr) }()
+	var output gitErrorOutput
+	defer func() { captureGitError(ctx, sh, retErr, output.String()) }()
 
 	commandArgs := []string{"repack"}
 	commandArgs = append(commandArgs, args...)
 
-	if err := sh.Command("git", commandArgs...).Run(ctx); err != nil {
+	if err := sh.Command("git", commandArgs...).Run(ctx, output.tee(sh)); err != nil {
 		return &gitError{error: err, Type: gitErrorRepack}
 	}
 	return nil
@@ -412,7 +422,8 @@ func gitFetch(ctx context.Context, args gitFetchArgs) error {
 	}
 
 	return retrier.DoWithContext(ctx, func(retrier *roko.Retrier) (retErr error) {
-		defer func() { captureGitError(ctx, args.Shell, retErr) }()
+		var output gitErrorOutput
+		defer func() { captureGitError(ctx, args.Shell, retErr, output.String()) }()
 
 		// Both reporting and retry decisions must describe this attempt only.
 		smelt := map[string]bool{
@@ -423,7 +434,7 @@ func gitFetch(ctx context.Context, args gitFetchArgs) error {
 			gitErrStrUnadvertisedObject:    false,
 		}
 		addGitRemoteErrorPatterns(smelt)
-		runOpts := []shell.RunCommandOpt{shell.WithStringSearch(smelt)}
+		runOpts := []shell.RunCommandOpt{shell.WithStringSearch(smelt), output.tee(args.Shell)}
 		if args.HidePrompt {
 			runOpts = append(runOpts, shell.AlwaysHidePrompt())
 		}
