@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -16,6 +17,7 @@ import (
 
 	"github.com/buildkite/agent/v4/api"
 	"github.com/buildkite/agent/v4/internal/experiments"
+	"github.com/buildkite/agent/v4/internal/redact"
 	"github.com/buildkite/agent/v4/internal/replacer"
 	"github.com/buildkite/agent/v4/internal/shell"
 	"github.com/buildkite/agent/v4/internal/socket"
@@ -92,10 +94,12 @@ func TestGitErrorCapture(t *testing.T) {
 		{"fetch", "error: cannot open 'secret-path': Permission denied", "git_fetch_unclassified", 128, gitErrorFetchRetryClean},
 		{"fetch", "error: secret-url", "git_fetch_failed", 1, gitErrorFetch},
 		{"fetch", "fatal: secret-url", "git_fetch_unclassified", 128, gitErrorFetchRetryClean},
+		{"fetch", "fatal: unable to access 'secret-url': The requested URL returned error: 500", "git_fetch_unclassified", 128, gitErrorFetchRetryClean},
 		{"clean", "warning: secret-path", "git_clean_failed", 1, gitErrorClean},
 		{"submodules", "warning: secret-path", "git_submodule_clean_failed", 1, gitErrorCleanSubmodules},
 		{"repack", "fatal: secret-path", "git_repack_failed", 1, gitErrorRepack},
 		{"lfs", "error: secret-url", "git_lfs_failed", 2, gitErrorLFS},
+		{"lfs-checkout", "error: unable to write secret-path", "git_lfs_failed", 2, gitErrorLFS},
 		{"fetch", "Fetched successfully", "", 0, -1},
 		{"fetch", "fatal: bad object secret-ref", "", 0, -1},
 		{"fetch", "fatal: Authentication failed for 'secret-url'", "", 0, -1},
@@ -104,9 +108,15 @@ func TestGitErrorCapture(t *testing.T) {
 			t.Parallel()
 			for _, enabled := range []bool{false, true} {
 				ctx, e, reports := gitErrorCaptureServer(t, enabled, http.StatusCreated)
+				e.redactors.Append(redact.New(io.Discard, []string{"secret-ref", "secret-url", "secret-path", "secret-token", "secret-host", "secret-proxy", "secret-user"}))
 				sh := e.shell
 				dir := t.TempDir()
-				script := fmt.Sprintf("#!/bin/sh\nprintf '%%s\\n' %q >&2\nexit %d\n", tc.diagnostic, tc.exit)
+				script := "#!/bin/sh\n"
+				if tc.operation == "lfs-checkout" {
+					// Successful fetch output must not consume the failed checkout's budget.
+					script += fmt.Sprintf("if [ \"$2\" = fetch ]; then printf '%%s' %q; exit 0; fi\n", strings.Repeat("x", 4097))
+				}
+				script += fmt.Sprintf("printf '%%s\\n' %q >&2\nexit %d\n", tc.diagnostic, tc.exit)
 				if err := os.WriteFile(filepath.Join(dir, "git"), []byte(script), 0o755); err != nil {
 					t.Fatal(err)
 				}
@@ -125,7 +135,7 @@ func TestGitErrorCapture(t *testing.T) {
 					err = gitCleanSubmodules(ctx, sh, "-ffxd")
 				case "repack":
 					err = gitRepack(ctx, sh, "-a", "-d")
-				case "lfs":
+				case "lfs", "lfs-checkout":
 					err = gitLFSFetchCheckout(ctx, gitLFSFetchCheckoutArgs{Shell: sh})
 				}
 				if shell.ExitCode(err) != tc.exit {
@@ -151,19 +161,14 @@ func TestGitErrorCapture(t *testing.T) {
 					if r.Code != tc.code || r.Message == "" || r.Timestamp.IsZero() || r.IdempotencyKey == "" || len(r.Context) != 0 || strings.Contains(string(body), "secret-") {
 						t.Fatalf("unexpected or unsafe report: %s", body)
 					}
-					switch tc.code {
-					case "git_authentication_failed":
-						if r.Message != "Git reported an authentication failure." {
-							t.Fatalf("unexpected authentication message: %q", r.Message)
-						}
-					case "git_network_failed":
-						if r.Message != "Git reported a network connection failure." {
-							t.Fatalf("unexpected network message: %q", r.Message)
-						}
-					case "git_checkout_unclassified", "git_fetch_unclassified":
-						if r.Message != fmt.Sprintf("Git %s failed with an unclassified error.", tc.operation) {
-							t.Fatalf("unexpected unclassified message: %q", r.Message)
-						}
+					wantMessage := strings.NewReplacer(
+						"secret-ref", "[REDACTED]", "secret-url", "[REDACTED]",
+						"secret-path", "[REDACTED]", "secret-token", "[REDACTED]",
+						"secret-host", "[REDACTED]", "secret-proxy", "[REDACTED]",
+						"secret-user", "[REDACTED]",
+					).Replace(tc.diagnostic) + "\n"
+					if r.Message != wantMessage {
+						t.Fatalf("message = %q, want Git's redacted output %q", r.Message, wantMessage)
 					}
 				}
 			}
@@ -198,7 +203,7 @@ if [ -f "$ATTEMPTS_FILE" ]; then read -r attempt < "$ATTEMPTS_FILE"; fi
 attempt=$((attempt + 1))
 printf '%s\n' "$attempt" > "$ATTEMPTS_FILE"
 if [ "$attempt" -le "$FAIL_UNTIL" ]; then
-  echo "fatal: couldn't find remote ref secret-ref" >&2
+  echo "fatal: couldn't find remote ref attempt-$attempt" >&2
   exit 128
 fi
 `
@@ -233,10 +238,17 @@ fi
 				t.Fatalf("reports = %d, want %d", len(reports), tc.reportCount)
 			}
 			keys := make(map[string]bool)
-			for range tc.reportCount {
+			for i := range tc.reportCount {
 				r := <-reports
 				if r.Code != tc.code || r.IdempotencyKey == "" || keys[r.IdempotencyKey] {
 					t.Fatalf("unexpected or duplicate report: %#v", r)
+				}
+				attempt := i + 1
+				if tc.operation == "lfs" {
+					attempt = tc.attempts
+				}
+				if want := fmt.Sprintf("fatal: couldn't find remote ref attempt-%d\n", attempt); r.Message != want {
+					t.Fatalf("message = %q, want current attempt's output %q", r.Message, want)
 				}
 				if r.Timestamp.IsZero() || !r.Timestamp.Before(deliveryStarted) {
 					t.Fatalf("timestamp = %v, want observation time before delivery at %v", r.Timestamp, deliveryStarted)
@@ -288,9 +300,14 @@ esac
 	if len(reports) != 4 {
 		t.Fatalf("reports = %d, want 4", len(reports))
 	}
-	for _, code := range []string{"git_ref_not_found", "git_authentication_failed", "git_network_failed", "git_fetch_unclassified"} {
-		if report := <-reports; report.Code != code {
-			t.Fatalf("report code = %q, want %q", report.Code, code)
+	for _, want := range []struct{ code, message string }{
+		{"git_ref_not_found", "fatal: couldn't find remote ref secret-ref\n"},
+		{"git_authentication_failed", "fatal: Authentication failed for 'secret-url'\n"},
+		{"git_network_failed", "fatal: unable to access 'secret-url': Could not resolve host: secret-host\n"},
+		{"git_fetch_unclassified", "fatal: unable to access 'secret-url': The requested URL returned error: 500\n"},
+	} {
+		if report := <-reports; report.Code != want.code || report.Message != want.message {
+			t.Fatalf("report = %#v, want %q with message %q", report, want.code, want.message)
 		}
 	}
 }
@@ -305,6 +322,7 @@ func TestGitHTTPAuthenticationErrorCapture(t *testing.T) {
 	for _, operation := range []string{"clone", "fetch"} {
 		t.Run(operation, func(t *testing.T) {
 			ctx, e, reports := gitErrorCaptureServer(t, true, http.StatusCreated)
+			e.redactors.Append(redact.New(io.Discard, []string{"secret-user", "secret-token"}))
 			sh := e.shell
 			if err := sh.Chdir(t.TempDir()); err != nil {
 				t.Fatal(err)
@@ -329,7 +347,7 @@ func TestGitHTTPAuthenticationErrorCapture(t *testing.T) {
 			if len(reports) != 1 {
 				t.Fatalf("reports = %d, want 1", len(reports))
 			}
-			if report := <-reports; report.Code != "git_authentication_failed" || report.Message != "Git reported an authentication failure." {
+			if report := <-reports; report.Code != "git_authentication_failed" || !strings.Contains(report.Message, "fatal: Authentication failed for") || strings.Contains(report.Message, "secret-") {
 				t.Fatalf("unexpected authentication report: %#v", report)
 			}
 		})
@@ -508,7 +526,7 @@ func TestCheckoutErrorCapture(t *testing.T) {
 func TestGitCaptureDeliveryFailureAndCancellation(t *testing.T) {
 	ctx, e, reports := gitErrorCaptureServer(t, true, http.StatusServiceUnavailable)
 	gitErr := &gitError{error: &shell.ExitError{Code: 128}, Type: gitErrorClone}
-	captureGitError(ctx, e.shell, gitErr)
+	captureGitError(ctx, e.shell, gitErr, "")
 	captureCheckoutError(ctx, e.shell, gitErr)
 	if len(reports) != 1 || shell.ExitCode(gitErr) != 128 {
 		t.Fatal("failed delivery was retried or changed the Git result")
@@ -516,18 +534,18 @@ func TestGitCaptureDeliveryFailureAndCancellation(t *testing.T) {
 	cancelled, cancel := context.WithCancel(ctx)
 	var pending gitErrorReports
 	attemptCtx := context.WithValue(cancelled, gitErrorReportsKey{}, &pending)
-	captureGitError(attemptCtx, e.shell, &gitError{error: errors.New("failed"), Type: gitErrorFetch})
+	captureGitError(attemptCtx, e.shell, &gitError{error: errors.New("failed"), Type: gitErrorFetch}, "")
 	if len(pending) != 1 || len(reports) != 1 {
 		t.Fatal("error was not buffered before cancellation")
 	}
 	cancel()
 	pending.deliver(cancelled, e.shell)
-	captureGitError(cancelled, e.shell, &gitError{error: errors.New("failed"), Type: gitErrorFetch})
+	captureGitError(cancelled, e.shell, &gitError{error: errors.New("failed"), Type: gitErrorFetch}, "")
 	if len(reports) != 1 {
 		t.Fatal("cancelled job reported an error")
 	}
 	e.shell.Env.Remove("BUILDKITE_AGENT_JOB_API_CAPTURE_ERROR")
-	captureGitError(ctx, e.shell, &gitError{error: errors.New("failed"), Type: gitErrorFetch})
+	captureGitError(ctx, e.shell, &gitError{error: errors.New("failed"), Type: gitErrorFetch}, "")
 	if len(reports) != 1 {
 		t.Fatal("unavailable Job API was used")
 	}
@@ -536,7 +554,7 @@ func TestGitCaptureDeliveryFailureAndCancellation(t *testing.T) {
 func TestGitCaptureDeadline(t *testing.T) {
 	ctx, e, reports := gitErrorCaptureServer(t, true, 0)
 	start := time.Now()
-	captureGitError(ctx, e.shell, &gitError{error: errors.New("failed"), Type: gitErrorFetch})
+	captureGitError(ctx, e.shell, &gitError{error: errors.New("failed"), Type: gitErrorFetch}, "")
 	if took := time.Since(start); took < time.Second || took > 5*time.Second || len(reports) != 1 {
 		t.Fatalf("blocked delivery took %v with %d requests; want one attempt bounded to two seconds", took, len(reports))
 	}
@@ -606,5 +624,45 @@ func TestCheckoutErrorCaptureGenuineTimeout(t *testing.T) {
 	}
 	if report := <-reports; report.Code != "git_checkout_timeout" {
 		t.Fatalf("report code = %q, want git_checkout_timeout", report.Code)
+	}
+}
+
+func TestGitErrorOutputCapture(t *testing.T) {
+	t.Parallel()
+	const fallback = "Git fetch failed with an unclassified error."
+	for _, tc := range []struct {
+		name, want string
+		chunks     []string
+	}{
+		{"empty", fallback, nil},
+		{"whitespace", fallback, []string{" \n\t"}},
+		{"at limit", strings.Repeat("x", 4095) + "!", []string{strings.Repeat("x", 4095), "!"}},
+		{"over limit", fallback, []string{strings.Repeat("x", 4090), "secret", "-suffix", "fatal: later output"}},
+		{"nul", fallback, []string{"fatal: secret\x00-suffix"}},
+		{"invalid utf8", fallback, []string{"fatal: secret\xff-suffix"}},
+		{"split secret", "fatal: [REDACTED]\n", []string{"fatal: secret", "-suffix\n"}},
+		{"multiline secret", "fatal: \n[REDACTED]\n\n", []string{"fatal: \nsecret\n", "part\n\n"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx, e, reports := gitErrorCaptureServer(t, true, http.StatusCreated)
+			var output gitErrorOutput
+			for _, chunk := range tc.chunks {
+				if n, err := io.WriteString(&output, chunk); err != nil || n != len(chunk) {
+					t.Fatalf("Write = %d, %v; want %d, nil", n, err, len(chunk))
+				}
+			}
+			var pending gitErrorReports
+			attemptCtx := context.WithValue(ctx, gitErrorReportsKey{}, &pending)
+			captureGitError(attemptCtx, e.shell, &gitError{error: errors.New("exit status 128"), Type: gitErrorFetchRetryClean}, output.String())
+			// Secrets registered after observation must still be redacted at delivery.
+			e.redactors.Append(redact.New(io.Discard, []string{"secret-suffix", "secret\npart"}))
+			pending.deliver(ctx, e.shell)
+			if len(reports) != 1 {
+				t.Fatalf("reports = %d, want 1", len(reports))
+			}
+			if report := <-reports; report.Code != "git_fetch_unclassified" || report.Message != tc.want {
+				t.Fatalf("report = %#v, want unclassified code and message %q", report, tc.want)
+			}
+		})
 	}
 }

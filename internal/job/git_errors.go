@@ -3,7 +3,10 @@ package job
 import (
 	"context"
 	"errors"
+	"strings"
+	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/buildkite/agent/v4/internal/experiments"
 	"github.com/buildkite/agent/v4/internal/shell"
@@ -30,6 +33,50 @@ var (
 
 type gitErrorReportsKey struct{}
 
+// Keep complete output or none: truncating before Job API redaction could leave
+// part of a registered secret unmatched. 4 KiB also leaves room for JSON escaping
+// within the API's 32 KiB request limit.
+const maxGitErrorOutput = 4 << 10
+
+type gitErrorOutput struct {
+	mu       sync.Mutex
+	data     []byte
+	overflow bool
+}
+
+func (o *gitErrorOutput) tee(ctx context.Context, sh *shell.Shell) shell.RunCommandOpt {
+	if !experiments.IsEnabled(ctx, experiments.CaptureError) || sh.Env.GetString("BUILDKITE_AGENT_JOB_API_CAPTURE_ERROR", "") != "true" {
+		return shell.TeeOutput(nil)
+	}
+	return shell.TeeOutput(o)
+}
+
+func (o *gitErrorOutput) Write(p []byte) (int, error) {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	if len(o.data)+len(p) > maxGitErrorOutput {
+		o.overflow = true
+		o.data = nil
+	}
+	if !o.overflow {
+		o.data = append(o.data, p...)
+	}
+	return len(p), nil
+}
+
+func (o *gitErrorOutput) String() string {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	return string(o.data)
+}
+
+func (o *gitErrorOutput) reset() {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	o.data = nil
+	o.overflow = false
+}
+
 // gitErrorReports collects observations from the sequential Git operations in
 // one checkout attempt. Delivery waits until the attempt's result is settled.
 type gitErrorReports []jobapi.CapturedError
@@ -50,7 +97,7 @@ func addGitRemoteErrorPatterns(smelt map[string]bool) {
 	}
 }
 
-func captureGitError(ctx context.Context, sh *shell.Shell, err error) {
+func captureGitError(ctx context.Context, sh *shell.Shell, err error, output string) {
 	if err == nil || ctx.Err() != nil || errors.Is(err, context.Canceled) || shell.ExitCode(err) == -1 {
 		return
 	}
@@ -62,6 +109,11 @@ func captureGitError(ctx context.Context, sh *shell.Shell, err error) {
 	gitErr.captured = true
 	code, message := classifyGitError(err)
 	if code != "" {
+		if strings.TrimSpace(output) != "" && utf8.ValidString(output) && !strings.ContainsRune(output, 0) {
+			// Preserve complete output, including whitespace, so registered
+			// multi-line secrets can still be matched by the Job API.
+			message = output
+		}
 		captureError(ctx, sh, code, message)
 	}
 }
@@ -166,8 +218,7 @@ func captureError(ctx context.Context, sh *shell.Shell, code, message string) {
 	if !experiments.IsEnabled(ctx, experiments.CaptureError) || sh.Env.GetString("BUILDKITE_AGENT_JOB_API_CAPTURE_ERROR", "") != "true" {
 		return
 	}
-	// Keep fixed summaries: registered-secret redaction does not cover arbitrary
-	// sensitive Git output, wrapped errors, repository URLs, paths, or refs.
+	// The Local Job API redacts registered secrets before forwarding the report.
 	now := time.Now()
 	report := jobapi.CapturedError{Code: code, Message: message, Timestamp: &now}
 	if reports, ok := ctx.Value(gitErrorReportsKey{}).(*gitErrorReports); ok {
