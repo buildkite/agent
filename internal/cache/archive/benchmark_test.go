@@ -19,7 +19,8 @@ const (
 	benchmarkFileSize           = int64(4 << 20)
 )
 
-// BenchmarkCacheArchive compares the production Zstd entries with ZIP Store.
+// BenchmarkCacheArchive compares Zstd-compressed cache archives with
+// uncompressed cache archives.
 // It uses a deterministic fixture split evenly between compressible and
 // pseudo-random files. Transfer phases are local file copies, isolating their
 // byte and CPU costs rather than pretending to model a particular network.
