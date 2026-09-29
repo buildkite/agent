@@ -194,7 +194,7 @@ func (e *Executor) Run(ctx context.Context) (exitCode int) {
 		defer cleanup()
 	}
 
-	// Initialize the job API, iff the experiment is enabled. Noop otherwise
+	// Initialize the Job API when enabled.
 	if e.JobAPI {
 		cleanup, err := e.startJobAPI(ctx)
 		if err != nil {
