@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/buildkite/agent/v4/api"
-	"github.com/buildkite/agent/v4/internal/experiments"
 	"github.com/buildkite/agent/v4/internal/redact"
 	"github.com/buildkite/agent/v4/internal/socket"
 	"github.com/buildkite/agent/v4/jobapi"
@@ -36,23 +35,20 @@ We'll continue to run your job, but you won't be able to use the Job API`)
 	jobAPIOpts := []jobapi.ServerOpts{
 		jobapi.WithPromiseFailureDeclarer(e.declarePromiseFailure),
 	}
-	if experiments.IsEnabled(ctx, experiments.CaptureError) {
-		reporter := func(requestCtx context.Context, capturedError *jobapi.CapturedError) error {
-			// Reporting must not keep a cancelled job alive through its grace period.
-			reportCtx, cancel := context.WithCancel(requestCtx)
-			defer cancel()
+	reporter := func(requestCtx context.Context, capturedError *jobapi.CapturedError) error {
+		// Reporting must not keep a cancelled job alive through its grace period.
+		reportCtx, cancel := context.WithCancel(requestCtx)
+		defer cancel()
 
-			stop := context.AfterFunc(ctx, cancel)
-			defer stop()
+		stop := context.AfterFunc(ctx, cancel)
+		defer stop()
 
-			if err := ctx.Err(); err != nil {
-				return err
-			}
-			return e.reportCapturedError(reportCtx, capturedError)
+		if err := ctx.Err(); err != nil {
+			return err
 		}
-
-		jobAPIOpts = append(jobAPIOpts, jobapi.WithCapturedErrorReporter(reporter))
+		return e.reportCapturedError(reportCtx, capturedError)
 	}
+	jobAPIOpts = append(jobAPIOpts, jobapi.WithCapturedErrorReporter(reporter))
 	if e.Debug {
 		jobAPIOpts = append(jobAPIOpts, jobapi.WithDebug())
 	}
@@ -88,9 +84,7 @@ We'll continue to run your job, but you won't be able to use the Job API`)
 	if err := srv.Start(); err != nil {
 		return cleanup, fmt.Errorf("starting Job API server: %w", err)
 	}
-	if experiments.IsEnabled(ctx, experiments.CaptureError) {
-		e.shell.Env.Set("BUILDKITE_AGENT_JOB_API_CAPTURE_ERROR", "true")
-	}
+	e.shell.Env.Set("BUILDKITE_AGENT_JOB_API_CAPTURE_ERROR", "true")
 
 	return func() {
 		err = srv.Stop()

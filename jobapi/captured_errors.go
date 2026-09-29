@@ -49,7 +49,7 @@ func (e *CapturedError) UnmarshalJSON(data []byte) error {
 
 func (s *Server) handleCapturedError(w http.ResponseWriter, r *http.Request) {
 	if s.reportCapturedError == nil {
-		s.writeCapturedError(w, errors.New("error capture is unavailable: enable the capture-error experiment on the parent agent"), http.StatusNotFound)
+		s.writeCapturedError(w, errors.New("error capture is unavailable on the parent agent"), http.StatusNotFound)
 		return
 	}
 
