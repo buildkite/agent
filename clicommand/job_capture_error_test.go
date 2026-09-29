@@ -3,12 +3,14 @@ package clicommand
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"os"
 	"slices"
 	"strings"
 	"testing"
 
 	"github.com/buildkite/agent/v4/env"
+	"github.com/buildkite/agent/v4/internal/redact"
 	"github.com/buildkite/agent/v4/internal/replacer"
 	"github.com/buildkite/agent/v4/internal/shell"
 	"github.com/buildkite/agent/v4/jobapi"
@@ -34,7 +36,7 @@ func startCaptureErrorTestServer(t *testing.T, report func(context.Context, *job
 	if err != nil {
 		t.Fatalf("NewSocketPath() error = %v", err)
 	}
-	server, token, err := jobapi.NewServer(shell.TestingLogger{T: t}, socketPath, env.New(), replacer.NewMux(), jobapi.WithCapturedErrorReporter(report))
+	server, token, err := jobapi.NewServer(shell.TestingLogger{T: t}, socketPath, env.New(), replacer.NewMux(redact.New(io.Discard, nil)), jobapi.WithCapturedErrorReporter(report))
 	if err != nil {
 		t.Fatalf("NewServer() error = %v", err)
 	}

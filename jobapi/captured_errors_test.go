@@ -18,6 +18,63 @@ import (
 	"github.com/google/go-cmp/cmp"
 )
 
+func TestCapturedErrorURLCredentials(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name, message, want string
+		secrets             []string
+	}{
+		{
+			name:    "unregistered URL credentials",
+			message: "fatal: https://user:unregistered@example.com/repo and ssh://other-token@host/path\n",
+			want:    "fatal: https://xxxxx@example.com/repo and ssh://xxxxx@host/path\n",
+		},
+		{
+			name:    "registered multiline secret containing URL",
+			message: "fatal: https://user:password@example.com/repo\nprivate suffix\n",
+			secrets: []string{"https://user:password@example.com/repo\nprivate suffix"},
+			want:    "fatal: [REDACTED]\n",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var reported *jobapi.CapturedError
+			redactors := replacer.NewMux(redact.New(io.Discard, tc.secrets))
+			srv, token, err := testServer(t, testEnviron(), redactors, jobapi.WithCapturedErrorReporter(func(_ context.Context, report *jobapi.CapturedError) error {
+				reported = report
+				return nil
+			}))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := srv.Start(); err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { _ = srv.Stop() })
+			body, err := json.Marshal(jobapi.CapturedError{Code: "git_fetch_failed", Message: tc.message})
+			if err != nil {
+				t.Fatal(err)
+			}
+			req, err := http.NewRequestWithContext(t.Context(), http.MethodPost, "http://job/api/current-job/v0/errors", bytes.NewReader(body))
+			if err != nil {
+				t.Fatal(err)
+			}
+			req.Header.Set("Authorization", "Bearer "+token)
+			resp, err := testSocketClient(srv.SocketPath).Do(req)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer func() { _ = resp.Body.Close() }()
+			var response jobapi.CapturedError
+			if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
+				t.Fatal(err)
+			}
+			if resp.StatusCode != http.StatusCreated || reported == nil || reported.Message != tc.want || response.Message != tc.want {
+				t.Fatalf("status=%d, forwarded=%+v, response=%+v; want message %q in both", resp.StatusCode, reported, response, tc.want)
+			}
+		})
+	}
+}
+
 func TestCapturedErrorRedactionResponse(t *testing.T) {
 	t.Parallel()
 
@@ -60,6 +117,11 @@ func TestCapturedErrorRedactionResponse(t *testing.T) {
 		{
 			name:      "redaction expands report beyond body limit",
 			body:      `{"code":"x","message":"` + strings.Repeat("q", 3300) + `"}`,
+			wantError: "redacting captured error: captured error exceeds 32768 bytes after redaction",
+		},
+		{
+			name:      "URL masking expands report beyond body limit",
+			body:      `{"code":"x","message":"` + strings.Repeat("https://a@b ", 2600) + `"}`,
 			wantError: "redacting captured error: captured error exceeds 32768 bytes after redaction",
 		},
 	} {

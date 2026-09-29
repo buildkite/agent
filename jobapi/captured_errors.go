@@ -109,9 +109,6 @@ func (s *Server) handleCapturedError(w http.ResponseWriter, r *http.Request) {
 }
 
 func (e *CapturedError) redact(needles []string) error {
-	if len(needles) == 0 {
-		return nil
-	}
 	// These needles already include the escaped forms registered for logs.
 	// Use a separate matcher so reports cannot flush or mix with log output.
 	var output strings.Builder
@@ -132,6 +129,11 @@ func (e *CapturedError) redact(needles []string) error {
 	}
 	e.Code = replace(e.Code)
 	e.Message = replace(e.Message)
+	// Mask URL credentials even if they were never registered. Do this after
+	// matching complete secrets so URL rewriting cannot break a multi-line match.
+	masked := redact.URLCredentialsInText(e.Message)
+	changed = changed || masked != e.Message
+	e.Message = masked
 	if e.Context != nil {
 		context, err := redactCapturedErrorValue(e.Context, replace)
 		if err != nil {
