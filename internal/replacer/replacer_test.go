@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
@@ -391,6 +392,310 @@ func TestAddingNeedles(t *testing.T) {
 	}
 }
 
+// testPrefix is a small prefix pattern for exercising the prefix-matching
+// mode: "tok_" followed by 8 to 16 lowercase letters, digits, '.', '-' or '_'.
+var testPrefix = replacer.Prefix{
+	Prefix:  "tok_",
+	Body:    "abcdefghijklmnopqrstuvwxyz0123456789.-_",
+	MinBody: 8,
+	MaxBody: 16,
+}
+
+func TestReplacerPrefixes(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		desc    string
+		inputs  []string
+		needles []string
+		want    string
+	}{
+		{
+			desc:   "Token mid-line",
+			inputs: []string{"the token is tok_abcdefgh1234 ok\n"},
+			want:   "the token is [REDACTED] ok\n",
+		},
+		{
+			desc:   "Token with dots and dashes in body",
+			inputs: []string{"tok_ab.cd-ef.gh\n"},
+			want:   "[REDACTED]\n",
+		},
+		{
+			desc:   "Token split across writes inside the prefix",
+			inputs: []string{"the token is to", "k_abcdefgh1234 ok\n"},
+			want:   "the token is [REDACTED] ok\n",
+		},
+		{
+			desc:   "Token split across writes inside the body",
+			inputs: []string{"the token is tok_abcd", "efgh1234 ok\n"},
+			want:   "the token is [REDACTED] ok\n",
+		},
+		{
+			desc:   "Token split across writes before the terminator",
+			inputs: []string{"the token is tok_abcdefgh1234", " ok\n"},
+			want:   "the token is [REDACTED] ok\n",
+		},
+		{
+			desc:   "Token at EOF",
+			inputs: []string{"the token is tok_abcdefgh1234"},
+			want:   "the token is [REDACTED]",
+		},
+		{
+			desc:   "Token at EOF split across writes",
+			inputs: []string{"the token is tok_abc", "defgh1234"},
+			want:   "the token is [REDACTED]",
+		},
+		{
+			desc:   "Body exactly MinBody long",
+			inputs: []string{"tok_abcdefgh\n"},
+			want:   "[REDACTED]\n",
+		},
+		{
+			desc:   "Body exactly MinBody long at EOF",
+			inputs: []string{"tok_abcdefgh"},
+			want:   "[REDACTED]",
+		},
+		{
+			desc:   "Body one shorter than MinBody",
+			inputs: []string{"tok_abcdefg\n"},
+			want:   "tok_abcdefg\n",
+		},
+		{
+			desc:   "Body one shorter than MinBody at EOF",
+			inputs: []string{"tok_abcdefg"},
+			want:   "tok_abcdefg",
+		},
+		{
+			desc:   "Body one shorter than MinBody split across writes",
+			inputs: []string{"tok_abc", "defg\n"},
+			want:   "tok_abcdefg\n",
+		},
+		{
+			desc:   "Prefix with no body",
+			inputs: []string{"tok_ tok_\n"},
+			want:   "tok_ tok_\n",
+		},
+		{
+			desc:   "Prefix at EOF",
+			inputs: []string{"tok_"},
+			want:   "tok_",
+		},
+		{
+			desc:   "Body exactly MaxBody long",
+			inputs: []string{"tok_abcdefghijklmnop\n"},
+			want:   "[REDACTED]\n",
+		},
+		{
+			desc: "Body longer than MaxBody",
+			// The first 16 body bytes are the match; the rest is passed
+			// through.
+			inputs: []string{"tok_abcdefghijklmnopqrstuvwxyz\n"},
+			want:   "[REDACTED]qrstuvwxyz\n",
+		},
+		{
+			desc:   "Body longer than MaxBody at EOF",
+			inputs: []string{"tok_abcdefghijklmnopqrstuvwxyz"},
+			want:   "[REDACTED]qrstuvwxyz",
+		},
+		{
+			desc: "Truncated token",
+			// A token cut off by a line ending (like `ps` truncating a long
+			// command line) is still redacted if enough of it is present.
+			inputs: []string{"tini -- agent --acquire-job tok_abcdefgh12\nnext line\n"},
+			want:   "tini -- agent --acquire-job [REDACTED]\nnext line\n",
+		},
+		{
+			desc:   "Body terminated by non-body ASCII",
+			inputs: []string{"\"tok_abcdefgh1234\"\n"},
+			want:   "\"[REDACTED]\"\n",
+		},
+		{
+			desc:   "Body terminated by uppercase (not in body set)",
+			inputs: []string{"tok_abcdefgh1234XYZ\n"},
+			want:   "[REDACTED]XYZ\n",
+		},
+		{
+			desc:   "Two tokens on one line",
+			inputs: []string{"tok_abcdefgh1234 tok_zyxwvuts9876\n"},
+			want:   "[REDACTED] [REDACTED]\n",
+		},
+		{
+			desc: "Prefix inside a token body",
+			// "tok_" is made of body bytes, so a second candidate starts
+			// inside the first. Both end at the same place; redact once.
+			inputs: []string{"tok_abcdtok_efgh\n"},
+			want:   "[REDACTED]\n",
+		},
+		{
+			desc: "Prefix inside a too-short body",
+			// The outer candidate is long enough but the inner one isn't.
+			inputs: []string{"tok_abcdtok_ef\n"},
+			want:   "[REDACTED]\n",
+		},
+		{
+			desc:    "Needle overlapping a token",
+			inputs:  []string{"tok_abcdefgh1234 ok\n"},
+			needles: []string{"1234 ok"},
+			want:    "[REDACTED]\n",
+		},
+		{
+			desc:    "Needle inside a token",
+			inputs:  []string{"tok_abcdefgh1234 ok\n"},
+			needles: []string{"cdef"},
+			want:    "[REDACTED] ok\n",
+		},
+		{
+			desc:    "Needle inside a too-short token",
+			inputs:  []string{"tok_abcdef ok\n"},
+			needles: []string{"cdef"},
+			want:    "tok_ab[REDACTED] ok\n",
+		},
+		{
+			desc:    "Needle adjacent to a token",
+			inputs:  []string{"key=tok_abcdefgh1234\n"},
+			needles: []string{"key="},
+			want:    "[REDACTED][REDACTED]\n",
+		},
+		{
+			desc:    "Needle that is a token prefix",
+			inputs:  []string{"tok_abcdefgh1234\n"},
+			needles: []string{"tok_abcd"},
+			want:    "[REDACTED]\n",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run("Given writes;"+test.desc, func(t *testing.T) {
+			t.Parallel()
+
+			var buf strings.Builder
+			r := replacer.New(&buf, test.needles, redact.Redacted)
+			r.AddPrefixes(testPrefix)
+			for _, input := range test.inputs {
+				if _, err := fmt.Fprint(r, input); err != nil {
+					t.Errorf("fmt.Fprint(r, %q) error = %v", input, err)
+				}
+			}
+			if err := r.Flush(); err != nil {
+				t.Errorf("r.Flush() = %v", err)
+			}
+			if got, want := buf.String(), test.want; got != want {
+				t.Errorf("post-redaction(inputs = %q) buf.String() = %q, want %q", test.inputs, got, want)
+			}
+		})
+
+		// "Slow Loris": write one byte at a time
+		t.Run("Many writes;"+test.desc, func(t *testing.T) {
+			t.Parallel()
+
+			var buf strings.Builder
+			r := replacer.New(&buf, test.needles, redact.Redacted)
+			r.AddPrefixes(testPrefix)
+			for _, c := range []byte(strings.Join(test.inputs, "")) {
+				if _, err := r.Write([]byte{c}); err != nil {
+					t.Errorf("r.Write([]byte{%d}) error = %v", c, err)
+				}
+			}
+			if err := r.Flush(); err != nil {
+				t.Errorf("r.Flush() = %v", err)
+			}
+			if got, want := buf.String(), test.want; got != want {
+				t.Errorf("post-redaction(inputs = %q) buf.String() = %q, want %q", test.inputs, got, want)
+			}
+		})
+	}
+}
+
+func TestReplacerPrefixesHoldBackIsBounded(t *testing.T) {
+	t.Parallel()
+
+	// While a body is matching, output is held back. Once the body reaches
+	// MaxBody, the match completes and everything up to it is written, even
+	// without a Flush.
+	var buf strings.Builder
+	r := replacer.New(&buf, nil, redact.Redacted)
+	r.AddPrefixes(testPrefix)
+
+	if _, err := fmt.Fprint(r, "before tok_abcdefghijklmnop"); err != nil {
+		t.Fatalf("fmt.Fprint(r, ...) error = %v", err)
+	}
+	if got, want := buf.String(), "before [REDACTED]"; got != want {
+		t.Errorf("after writing MaxBody body bytes, buf.String() = %q, want %q", got, want)
+	}
+
+	// Anything less than MaxBody is held back until the match resolves.
+	buf.Reset()
+	if _, err := fmt.Fprint(r, " tok_abcdefghijklmno"); err != nil {
+		t.Fatalf("fmt.Fprint(r, ...) error = %v", err)
+	}
+	if got, want := buf.String(), " "; got != want {
+		t.Errorf("while body is matching, buf.String() = %q, want %q", got, want)
+	}
+	if err := r.Flush(); err != nil {
+		t.Fatalf("r.Flush() = %v", err)
+	}
+	if got, want := buf.String(), " [REDACTED]"; got != want {
+		t.Errorf("after Flush, buf.String() = %q, want %q", got, want)
+	}
+}
+
+func TestReplacerPrefixesSurviveReset(t *testing.T) {
+	t.Parallel()
+
+	var buf strings.Builder
+	r := replacer.New(&buf, []string{"secret1111"}, redact.Redacted)
+	r.AddPrefixes(testPrefix)
+	r.Reset([]string{"secret2222"})
+
+	if _, err := fmt.Fprint(r, "secret1111 secret2222 tok_abcdefgh1234\n"); err != nil {
+		t.Fatalf("fmt.Fprint(r, ...) error = %v", err)
+	}
+	if err := r.Flush(); err != nil {
+		t.Fatalf("r.Flush() = %v", err)
+	}
+	if got, want := buf.String(), "secret1111 [REDACTED] [REDACTED]\n"; got != want {
+		t.Errorf("buf.String() = %q, want %q", got, want)
+	}
+}
+
+func TestReplacerAddPrefixesPanicsOnInvalid(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		desc   string
+		prefix replacer.Prefix
+	}{
+		{desc: "empty prefix", prefix: replacer.Prefix{Body: "a", MinBody: 1, MaxBody: 2}},
+		{desc: "empty body", prefix: replacer.Prefix{Prefix: "p", MinBody: 1, MaxBody: 2}},
+		{desc: "zero MinBody", prefix: replacer.Prefix{Prefix: "p", Body: "a", MinBody: 0, MaxBody: 2}},
+		{desc: "MaxBody < MinBody", prefix: replacer.Prefix{Prefix: "p", Body: "a", MinBody: 3, MaxBody: 2}},
+	}
+	for _, test := range tests {
+		t.Run(test.desc, func(t *testing.T) {
+			t.Parallel()
+			defer func() {
+				if recover() == nil {
+					t.Errorf("AddPrefixes(%+v) did not panic", test.prefix)
+				}
+			}()
+			replacer.New(io.Discard, nil, redact.Redacted).AddPrefixes(test.prefix)
+		})
+	}
+}
+
+func BenchmarkReplacerWithTokenPrefixes(b *testing.B) {
+	r := replacer.New(io.Discard, bigLipsumSecrets, redact.Redacted)
+	r.AddPrefixes(redact.TokenPrefixes()...)
+	for b.Loop() {
+		if _, err := fmt.Fprintln(r, bigLipsum); err != nil {
+			b.Errorf("fmt.Fprintln(r, bigLipsum) error = %v", err)
+		}
+	}
+	if err := r.Flush(); err != nil {
+		b.Errorf("replacer.Flush() = %v", err)
+	}
+}
+
 func BenchmarkReplacer(b *testing.B) {
 	r := replacer.New(io.Discard, bigLipsumSecrets, redact.Redacted)
 	for b.Loop() {
@@ -402,6 +707,50 @@ func BenchmarkReplacer(b *testing.B) {
 		b.Errorf("replacer.Flush() = %v", err)
 	}
 }
+
+func FuzzReplacerPrefixes(f *testing.F) {
+	f.Add("the token is tok_abcdefgh1234 ok\n", 10)
+	f.Add("tok_abcdefgh", 4)
+	f.Add("tok_abcdefg\n", 6)
+	f.Add("tok_abcdefghijklmnopqrstuvwxyz\n", 20)
+	f.Add("tok_abcdtok_efgh\n", 9)
+	f.Add("tok_abcdefghijkltok_abcdefgh\n", 0)
+	f.Add("tok_ tok_ tok\n", -1)
+	f.Fuzz(func(t *testing.T, plaintext string, split int) {
+		var sb strings.Builder
+		r := replacer.New(&sb, nil, redact.Redacted)
+		r.AddPrefixes(testPrefix)
+
+		if split < 0 || split >= len(plaintext) {
+			if _, err := fmt.Fprint(r, plaintext); err != nil {
+				t.Errorf("fmt.Fprint(r, %q) error = %v", plaintext, err)
+			}
+		} else {
+			if _, err := fmt.Fprint(r, plaintext[:split]); err != nil {
+				t.Errorf("fmt.Fprint(r, %q) error = %v", plaintext[:split], err)
+			}
+			if _, err := fmt.Fprint(r, plaintext[split:]); err != nil {
+				t.Errorf("fmt.Fprint(r, %q) error = %v", plaintext[split:], err)
+			}
+		}
+		if err := r.Flush(); err != nil {
+			t.Errorf("r.Flush() = %v", err)
+		}
+		got := sb.String()
+
+		// Nothing that looks like a token should survive.
+		if loc := tokenLike.FindStringIndex(got); loc != nil {
+			t.Errorf("replacer output %q contains token-like %q", got, got[loc[0]:loc[1]])
+		}
+		// Nothing should be redacted if there was no prefix in the input.
+		if !strings.Contains(plaintext, testPrefix.Prefix) && got != plaintext {
+			t.Errorf("replacer output %q != input %q, but input has no prefix", got, plaintext)
+		}
+	})
+}
+
+// tokenLike matches testPrefix followed by at least MinBody body bytes.
+var tokenLike = regexp.MustCompile(`tok_[a-z0-9.\-_]{8,}`)
 
 func FuzzReplacer(f *testing.F) {
 	f.Add(lipsum, 10, "", "", "", "")

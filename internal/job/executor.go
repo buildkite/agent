@@ -1478,12 +1478,19 @@ func (e *Executor) setupRedactors(log shell.Logger, environ *env.Environment, st
 	}
 	needles = redact.AppendGoEscaped(needles)
 
+	// As well as the known values above, redact anything that looks like a
+	// Buildkite-issued token. Some tokens are never in the job environment
+	// (e.g. the job acquisition token, which is only in the agent's command
+	// line) but can still end up in the log, e.g. via `ps`.
+	tokenPrefixes := redact.TokenPrefixes()
+
 	// Child-process output writes through this redactor into stdoutTee, whose
 	// primary sink is stdout. When OTLP job logging is enabled, a secondary
 	// sink is attached so the same already-redacted output is mirrored into
 	// the OTLP exporter.
 	e.stdoutTee = &teeWriter{primary: stdout}
 	stdoutRedactor := replacer.New(e.stdoutTee, needles, redact.Redacted)
+	stdoutRedactor.AddPrefixes(tokenPrefixes...)
 	e.redactors.Append(stdoutRedactor)
 	// The shell logger writes through this redactor into stderrTee, whose
 	// primary sink is stderr. When OTLP job logging is enabled, a secondary
@@ -1491,6 +1498,7 @@ func (e *Executor) setupRedactors(log shell.Logger, environ *env.Environment, st
 	// into the OTLP exporter.
 	e.stderrTee = &teeWriter{primary: stderr}
 	loggerRedactor := replacer.New(e.stderrTee, needles, redact.Redacted)
+	loggerRedactor.AddPrefixes(tokenPrefixes...)
 	e.redactors.Append(loggerRedactor)
 
 	logger := shell.NewWriterLogger(loggerRedactor, true, e.DisabledWarnings)

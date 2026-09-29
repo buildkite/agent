@@ -27,6 +27,64 @@ const LengthMin = 6
 // Redacted ignores its input and returns "[REDACTED]".
 func Redacted([]byte) []byte { return []byte("[REDACTED]") }
 
+// tokenPrefixes are the prefixes of tokens issued by Buildkite. Keep in sync
+// with app/models/token_prefixes.rb in the Buildkite codebase.
+var tokenPrefixes = []string{
+	"bkaa_",  // agent access token
+	"bkjat_", // agent job acquisition token
+	"bkaj_",  // agent job token
+	"bkar_",  // agent registration token
+	"bkua_",  // API token
+	"bkur_",  // OAuth refresh token
+	"bktx_",  // token exchange
+	"bkcqt_", // cluster queue token
+	"bkct_",  // cluster token
+	"bkpt_",  // packages temporary token; also deprecated portal token
+	"bkrt_",  // packages registry token
+	"bktr_",  // pipeline trigger token
+	"bkat_",  // pipeline access token
+	"bkpat_", // portal token
+	"bkps_",  // portal secret
+}
+
+// tokenBody is the set of bytes that can appear in a Buildkite token after
+// its prefix: the base64url alphabet, plus '.', which separates the parts of
+// tokens that embed an organization ID or are JWTs.
+const tokenBody = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_."
+
+const (
+	// TokenBodyLengthMin is the shortest token body (the part after the
+	// prefix) that is redacted. The shortest tokens Buildkite issues have
+	// bodies of 38 bytes or more; this is lower to also catch tokens that have
+	// been truncated (e.g. by `ps` cutting off a long command line), while
+	// leaving short placeholders like "bkjat_encoded-token" alone.
+	TokenBodyLengthMin = 24
+
+	// TokenBodyLengthMax is the longest token body that is redacted as one
+	// match. It bounds how much output is held back while a possible token is
+	// being matched. Job acquisition tokens are JWTs and the longest tokens
+	// Buildkite issues, at several hundred bytes.
+	TokenBodyLengthMax = 2048
+)
+
+// TokenPrefixes returns replacer prefixes that match anything that looks like
+// a Buildkite-issued token: one of the known token prefixes followed by a
+// body of base64url characters (plus '.') that is at least TokenBodyLengthMin
+// long. Unlike needles, these match tokens whose values are not known in
+// advance, such as the job acquisition token in the agent's command line.
+func TokenPrefixes() []replacer.Prefix {
+	prefixes := make([]replacer.Prefix, 0, len(tokenPrefixes))
+	for _, p := range tokenPrefixes {
+		prefixes = append(prefixes, replacer.Prefix{
+			Prefix:  p,
+			Body:    tokenBody,
+			MinBody: TokenBodyLengthMin,
+			MaxBody: TokenBodyLengthMax,
+		})
+	}
+	return prefixes
+}
+
 // hasScheme matches URLs that begin with a "scheme://" prefix
 var hasScheme = regexp.MustCompile(`^[^:]+://`)
 
