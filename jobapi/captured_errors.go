@@ -119,6 +119,11 @@ func (e *CapturedError) redact(needles []string) error {
 	}
 	e.Code = replace(e.Code)
 	e.Message = replace(e.Message)
+	// Mask URL credentials even if they were never registered. Do this after
+	// matching complete secrets so URL rewriting cannot break a multi-line match.
+	masked := redact.URLCredentialsInText(e.Message)
+	changed = changed || masked != e.Message
+	e.Message = masked
 	if !changed {
 		return nil
 	}
