@@ -143,6 +143,13 @@ type JobRunner struct {
 	envShellFile *os.File
 	envJSONFile  *os.File
 
+	// jobLogTmpFile is the file that receives a copy of the job log when
+	// enable-job-log-tmpfile is set. It stays open for the life of the job
+	// because output can arrive after the bootstrap process exits (the PTY
+	// copy drains after Done() closes, and runJob writes notices after Run
+	// returns). cleanup closes and removes it once all writers are finished.
+	jobLogTmpFile *os.File
+
 	// jobTimeoutFilePath is the path to a marker file that, if present at
 	// post-command hook time, signals to the executor that the job was
 	// cancelled because of a Buildkite job-level timeout. The path is passed
@@ -246,27 +253,36 @@ func NewJobRunner(ctx context.Context, l logger.Logger, apiClient *api.Client, c
 	// if agent config "EnableJobLogTmpfile" is set, we extend the outputWriter to write to a temporary file.
 	// By default, the tmp file will be created on os.TempDir unless config "JobLogPath" is specified.
 	// BUILDKITE_JOB_LOG_TMPFILE is an environment variable that contains the full path to this temporary file.
-	var tmpFile *os.File
 	if conf.AgentConfiguration.EnableJobLogTmpfile {
 		jobLogDir := ""
 		if conf.AgentConfiguration.JobLogPath != "" {
 			jobLogDir = conf.AgentConfiguration.JobLogPath
 			r.agentLogger.Debugf("[JobRunner] Job Log Path: %s", jobLogDir)
 		}
-		tmpFile, err = os.CreateTemp(jobLogDir, "buildkite_job_log")
+		tmpFile, err := os.CreateTemp(jobLogDir, "buildkite_job_log")
 		if err != nil {
 			return nil, err
 		}
+		r.jobLogTmpFile = tmpFile
 
-		err := os.Chmod(tmpFile.Name(), 0o644) // Make it world-readable - useful for log collection etc
-		if err != nil {
+		if err := os.Chmod(tmpFile.Name(), 0o644); err != nil { // Make it world-readable - useful for log collection etc
+			r.removeJobLogTmpfile()
 			return nil, fmt.Errorf("failed to set permissions on job log tmpfile %s: %w", tmpFile.Name(), err)
 		}
 
 		if err := os.Setenv("BUILDKITE_JOB_LOG_TMPFILE", tmpFile.Name()); err != nil {
+			r.removeJobLogTmpfile()
 			return nil, fmt.Errorf("failed to set BUILDKITE_JOB_LOG_TMPFILE: %v", err)
 		}
-		outputWriter = io.MultiWriter(outputWriter, tmpFile)
+
+		// The tmpfile is a secondary copy of the log. Writing to it must never
+		// fail the write to r.output, otherwise a tmpfile error (disk full,
+		// file closed) would abort the copy that feeds the Buildkite job log.
+		outputWriter = io.MultiWriter(outputWriter, &bestEffortWriter{
+			w:      tmpFile,
+			logger: r.agentLogger,
+			desc:   "job log tmpfile " + tmpFile.Name(),
+		})
 	}
 
 	// processWriter -> timestamper -> outputWriter
@@ -335,17 +351,46 @@ func NewJobRunner(ctx context.Context, l logger.Logger, apiClient *api.Client, c
 		})
 	}
 
-	// Close the writer end of the pipe when the process finishes
-	go func() {
-		<-r.process.Done()
-		if tmpFile != nil {
-			if err := os.Remove(tmpFile.Name()); err != nil {
-				r.agentLogger.Errorf("Couldn't remove job log temp file: %v", err)
-			}
-		}
-	}()
-
 	return r, nil
+}
+
+// removeJobLogTmpfile closes and deletes the job log tmpfile, if there is one.
+// Closing before removing matters: on Windows, removing an open file fails,
+// and on Unix the descriptor would otherwise stay open (leaking one per job).
+// It must only be called once nothing else can write to the file.
+func (r *JobRunner) removeJobLogTmpfile() {
+	if r.jobLogTmpFile == nil {
+		return
+	}
+	if err := r.jobLogTmpFile.Close(); err != nil {
+		r.agentLogger.Warnf("[JobRunner] Error closing job log tmpfile: %s", err)
+	}
+	if err := os.Remove(r.jobLogTmpFile.Name()); err != nil {
+		r.agentLogger.Warnf("[JobRunner] Error cleaning up job log tmpfile: %s", err)
+	} else {
+		r.agentLogger.Debugf("[JobRunner] Deleted job log tmpfile: %s", r.jobLogTmpFile.Name())
+	}
+	r.jobLogTmpFile = nil
+}
+
+// bestEffortWriter forwards writes to w but always reports success. A failed
+// write is logged once, then further failures are silent. Use it for secondary
+// sinks (such as the job log tmpfile) that must not disturb the primary log.
+type bestEffortWriter struct {
+	w      io.Writer
+	logger logger.Logger
+	desc   string
+
+	warnOnce sync.Once
+}
+
+func (b *bestEffortWriter) Write(p []byte) (int, error) {
+	if _, err := b.w.Write(p); err != nil {
+		b.warnOnce.Do(func() {
+			b.logger.Warnf("[JobRunner] Couldn't write to %s, further errors will not be logged: %v", b.desc, err)
+		})
+	}
+	return len(p), nil
 }
 
 func (r *JobRunner) normalizeVerificationBehavior(behavior string) (string, error) {
