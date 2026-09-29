@@ -13,7 +13,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/buildkite/agent/v4/internal/experiments"
 	"github.com/buildkite/agent/v4/internal/process"
 	"github.com/buildkite/agent/v4/internal/self"
 	"github.com/buildkite/agent/v4/internal/shell"
@@ -588,9 +587,8 @@ func TestFetchCommitFromRemoteMirrorTimeout(t *testing.T) {
 			commit := strings.Repeat("a", 40)
 			e := newRemoteMirrorShimExecutor(t, commit, mode)
 			e.shell.Env.Set("BUILDKITE_AGENT_JOB_API_CAPTURE_ERROR", "true")
-			ctx, _ := experiments.Enable(t.Context(), experiments.CaptureError)
 			var reports gitErrorReports
-			ctx = context.WithValue(ctx, gitErrorReportsKey{}, &reports)
+			ctx := context.WithValue(t.Context(), gitErrorReportsKey{}, &reports)
 			attempt := remoteMirrorAttempt{
 				site: remoteMirrorSiteExistingCheckout,
 				url:  "https://mirror.example/acme/widgets.git",
@@ -632,9 +630,8 @@ func TestFetchCommitFromRemoteMirrorPropagatesCancellationDuringConfirmation(t *
 		site: remoteMirrorSiteExistingCheckout,
 		url:  "https://mirror.example/acme/widgets.git",
 	}
-	ctx, _ := experiments.Enable(t.Context(), experiments.CaptureError)
 	var reports gitErrorReports
-	ctx = context.WithValue(ctx, gitErrorReportsKey{}, &reports)
+	ctx := context.WithValue(t.Context(), gitErrorReportsKey{}, &reports)
 	ctx, cancel := context.WithCancel(ctx)
 	t.Cleanup(cancel)
 	go func() {

@@ -16,7 +16,6 @@ import (
 	"time"
 
 	"github.com/buildkite/agent/v4/api"
-	"github.com/buildkite/agent/v4/internal/experiments"
 	"github.com/buildkite/agent/v4/internal/redact"
 	"github.com/buildkite/agent/v4/internal/replacer"
 	"github.com/buildkite/agent/v4/internal/shell"
@@ -29,9 +28,6 @@ func gitErrorCaptureServer(t *testing.T, enabled bool, status int) (context.Cont
 		t.Skip("Local Job API unavailable")
 	}
 	ctx := t.Context()
-	if enabled {
-		ctx, _ = experiments.Enable(ctx, experiments.CaptureError)
-	}
 	reports := make(chan api.JobCapturedError, 20)
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost || r.URL.Path != "/jobs/git-job/errors" || r.Header.Get("Authorization") != "Token bkaj_git-token" {
@@ -60,6 +56,9 @@ func gitErrorCaptureServer(t *testing.T, enabled bool, status int) (context.Cont
 		t.Fatal(err)
 	}
 	t.Cleanup(cleanup)
+	if !enabled {
+		sh.Env.Remove("BUILDKITE_AGENT_JOB_API_CAPTURE_ERROR")
+	}
 	return ctx, e, reports
 }
 

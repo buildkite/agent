@@ -8,7 +8,6 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/buildkite/agent/v4/internal/experiments"
 	"github.com/buildkite/agent/v4/internal/shell"
 	"github.com/buildkite/agent/v4/jobapi"
 )
@@ -44,8 +43,8 @@ type gitErrorOutput struct {
 	overflow bool
 }
 
-func (o *gitErrorOutput) tee(ctx context.Context, sh *shell.Shell) shell.RunCommandOpt {
-	if !experiments.IsEnabled(ctx, experiments.CaptureError) || sh.Env.GetString("BUILDKITE_AGENT_JOB_API_CAPTURE_ERROR", "") != "true" {
+func (o *gitErrorOutput) tee(sh *shell.Shell) shell.RunCommandOpt {
+	if sh.Env.GetString("BUILDKITE_AGENT_JOB_API_CAPTURE_ERROR", "") != "true" {
 		return shell.TeeOutput(nil)
 	}
 	return shell.TeeOutput(o)
@@ -215,7 +214,7 @@ func captureCheckoutError(ctx context.Context, sh *shell.Shell, err error) {
 }
 
 func captureError(ctx context.Context, sh *shell.Shell, code, message string) {
-	if !experiments.IsEnabled(ctx, experiments.CaptureError) || sh.Env.GetString("BUILDKITE_AGENT_JOB_API_CAPTURE_ERROR", "") != "true" {
+	if sh.Env.GetString("BUILDKITE_AGENT_JOB_API_CAPTURE_ERROR", "") != "true" {
 		return
 	}
 	// The Local Job API redacts registered secrets before forwarding the report.

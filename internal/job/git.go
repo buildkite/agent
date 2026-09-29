@@ -125,7 +125,7 @@ func gitCheckout(ctx context.Context, sh *shell.Shell, gitCheckoutFlags, referen
 	const badReference = "fatal: reference is not a tree"
 	smelt := map[string]bool{badReference: false}
 
-	if err := sh.Command("git", commandArgs...).Run(ctx, shell.WithStringSearch(smelt), output.tee(ctx, sh)); err != nil {
+	if err := sh.Command("git", commandArgs...).Run(ctx, shell.WithStringSearch(smelt), output.tee(sh)); err != nil {
 		if smelt[badReference] {
 			return &gitError{error: err, Type: gitErrorCheckoutReferenceIsNotATree}
 		}
@@ -173,7 +173,7 @@ func gitClone(
 
 	smelt := map[string]bool{gitErrStrOperationTooSlow: false}
 	addGitRemoteErrorPatterns(smelt)
-	runOpts = append(runOpts, shell.WithStringSearch(smelt), output.tee(ctx, sh))
+	runOpts = append(runOpts, shell.WithStringSearch(smelt), output.tee(sh))
 	if err := sh.Command("git", commandArgs...).Run(ctx, runOpts...); err != nil {
 		if smelt[gitErrStrOperationTooSlow] {
 			return &gitError{error: err, Type: gitErrorCloneTimeout, outputMatches: smelt}
@@ -196,7 +196,7 @@ func gitClean(ctx context.Context, sh *shell.Shell, gitCleanFlags string) (retEr
 	commandArgs := []string{"clean"}
 	commandArgs = append(commandArgs, individualCleanFlags...)
 
-	if err := sh.Command("git", commandArgs...).Run(ctx, output.tee(ctx, sh)); err != nil {
+	if err := sh.Command("git", commandArgs...).Run(ctx, output.tee(sh)); err != nil {
 		return &gitError{error: err, Type: gitErrorClean}
 	}
 
@@ -215,7 +215,7 @@ func gitCleanSubmodules(ctx context.Context, sh *shell.Shell, gitCleanFlags stri
 	gitCleanCommand := strings.Join(append([]string{"git", "clean"}, individualCleanFlags...), " ")
 	commandArgs := append([]string{"submodule", "foreach", "--recursive"}, gitCleanCommand)
 
-	if err := sh.Command("git", commandArgs...).Run(ctx, output.tee(ctx, sh)); err != nil {
+	if err := sh.Command("git", commandArgs...).Run(ctx, output.tee(sh)); err != nil {
 		return &gitError{error: err, Type: gitErrorCleanSubmodules}
 	}
 
@@ -274,7 +274,7 @@ func gitLFSFetchCheckout(ctx context.Context, args gitLFSFetchCheckoutArgs) erro
 	var output gitErrorOutput
 	err := retrier.DoWithContext(ctx, func(retrier *roko.Retrier) error {
 		output.reset()
-		if err := args.Shell.Command("git", fetchCmd...).Run(ctx, output.tee(ctx, args.Shell)); err != nil {
+		if err := args.Shell.Command("git", fetchCmd...).Run(ctx, output.tee(args.Shell)); err != nil {
 			if args.Retry {
 				args.Shell.Commentf("%s", retrier)
 			}
@@ -285,7 +285,7 @@ func gitLFSFetchCheckout(ctx context.Context, args gitLFSFetchCheckoutArgs) erro
 		}
 		if !checkoutScoped {
 			output.reset()
-			if err := args.Shell.Command("git", "lfs", "checkout").Run(ctx, output.tee(ctx, args.Shell)); err != nil {
+			if err := args.Shell.Command("git", "lfs", "checkout").Run(ctx, output.tee(args.Shell)); err != nil {
 				if args.Retry {
 					args.Shell.Commentf("%s", retrier)
 				}
@@ -296,7 +296,7 @@ func gitLFSFetchCheckout(ctx context.Context, args gitLFSFetchCheckoutArgs) erro
 		for batch := range slices.Chunk(checkoutPathspecs, gitLFSCheckoutPathBatchSize) {
 			checkoutCmd := append([]string{"lfs", "checkout"}, batch...)
 			output.reset()
-			if err := args.Shell.Command("git", checkoutCmd...).Run(ctx, output.tee(ctx, args.Shell)); err != nil {
+			if err := args.Shell.Command("git", checkoutCmd...).Run(ctx, output.tee(args.Shell)); err != nil {
 				if args.Retry {
 					args.Shell.Commentf("%s", retrier)
 				}
@@ -336,7 +336,7 @@ func gitRepack(ctx context.Context, sh *shell.Shell, args ...string) (retErr err
 	commandArgs := []string{"repack"}
 	commandArgs = append(commandArgs, args...)
 
-	if err := sh.Command("git", commandArgs...).Run(ctx, output.tee(ctx, sh)); err != nil {
+	if err := sh.Command("git", commandArgs...).Run(ctx, output.tee(sh)); err != nil {
 		return &gitError{error: err, Type: gitErrorRepack}
 	}
 	return nil
@@ -409,7 +409,7 @@ func gitFetch(ctx context.Context, args gitFetchArgs) error {
 			gitErrStrUnadvertisedObject:    false,
 		}
 		addGitRemoteErrorPatterns(smelt)
-		runOpts := []shell.RunCommandOpt{shell.WithStringSearch(smelt), output.tee(ctx, args.Shell)}
+		runOpts := []shell.RunCommandOpt{shell.WithStringSearch(smelt), output.tee(args.Shell)}
 		if args.HidePrompt {
 			runOpts = append(runOpts, shell.AlwaysHidePrompt())
 		}
