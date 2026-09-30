@@ -276,6 +276,21 @@ func genericTracingExtras(v jobTracingValues, env *env.Environment) map[string]a
 		jobKey = "n/a"
 	}
 
+	commit, has := env.Get("BUILDKITE_COMMIT")
+	if !has || commit == "" {
+		commit = "n/a"
+	}
+
+	pullRequest, has := env.Get("BUILDKITE_PULL_REQUEST")
+	if !has || pullRequest == "" || pullRequest == "false" {
+		pullRequest = "n/a"
+	}
+
+	buildAuthor, has := env.Get("BUILDKITE_BUILD_AUTHOR")
+	if !has || buildAuthor == "" {
+		buildAuthor = "n/a"
+	}
+
 	result := map[string]any{
 		"buildkite.agent":             v.AgentName,
 		"buildkite.version":           version.Version(),
@@ -290,6 +305,9 @@ func genericTracingExtras(v jobTracingValues, env *env.Environment) map[string]a
 		"buildkite.build_id":          buildID,
 		"buildkite.build_number":      buildNumber,
 		"buildkite.build_url":         buildURL,
+		"buildkite.build_author":      buildAuthor,
+		"buildkite.commit":            commit,
+		"buildkite.pull_request":      pullRequest,
 		"buildkite.source":            source,
 		"buildkite.retry":             retry,
 		"buildkite.parallel":          parallel,
