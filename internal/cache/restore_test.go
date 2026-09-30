@@ -236,7 +236,7 @@ func TestConfirmRestoreSucceeded_EchoesScopesFromRetrieve(t *testing.T) {
 		Fallback:    false,
 	}
 
-	confirmed := c.confirmRestoreSucceeded(t.Context(), retrieveResp)
+	confirmed := c.confirmRestoreSucceeded(t.Context(), retrieveResp, nil)
 	if !confirmed {
 		t.Fatalf("confirmRestoreSucceeded() = false, want true")
 	}
@@ -263,7 +263,7 @@ func TestConfirmRestoreSucceeded_SkipsFallbackMatch(t *testing.T) {
 		Fallback:    true,
 	}
 
-	confirmed := c.confirmRestoreSucceeded(t.Context(), retrieveResp)
+	confirmed := c.confirmRestoreSucceeded(t.Context(), retrieveResp, nil)
 	if confirmed {
 		t.Error("confirmRestoreSucceeded() = true, want false for a fallback match")
 	}
@@ -293,7 +293,7 @@ func TestConfirmRestoreSucceeded_DeadlineBoundsEntireOperation(t *testing.T) {
 	}
 
 	start := time.Now()
-	confirmed := c.confirmRestoreSucceeded(t.Context(), retrieveResp)
+	confirmed := c.confirmRestoreSucceeded(t.Context(), retrieveResp, nil)
 	elapsed := time.Since(start)
 
 	if confirmed {
@@ -315,7 +315,7 @@ func TestConfirmRestoreSucceeded_MissingResolvedAddress(t *testing.T) {
 	mockClient := newMockAPIClient("s3")
 	c := &client{api: mockClient, registry: "~"}
 
-	confirmed := c.confirmRestoreSucceeded(t.Context(), api.CacheEntryRetrieveResp{})
+	confirmed := c.confirmRestoreSucceeded(t.Context(), api.CacheEntryRetrieveResp{}, nil)
 	if confirmed {
 		t.Error("confirmRestoreSucceeded() = true, want false when the retrieve response has no resolved address")
 	}

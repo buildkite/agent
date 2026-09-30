@@ -328,6 +328,8 @@ func (c *client) Restore(ctx context.Context, cacheID string) (RestoreResult, er
 
 	c.callProgress(cacheID, "cleaning", "Cleaning paths", 0, 0)
 
+	cleanupStart := time.Now()
+
 	for _, path := range cacheConfig.TargetPaths {
 		// Resolve exactly as save/restore matching does.
 		extractedPath, err := archive.ResolveConfigPath(path)
@@ -345,6 +347,8 @@ func (c *client) Restore(ctx context.Context, cacheID string) (RestoreResult, er
 			return result, restoreCleanupError(path, extractedPath, err)
 		}
 	}
+
+	cleanupMs := time.Since(cleanupStart).Milliseconds()
 
 	c.callProgress(cacheID, "extracting", "Extracting files from cache", 0, int(transferInfo.BytesTransferred))
 
@@ -371,7 +375,19 @@ func (c *client) Restore(ctx context.Context, cacheID string) (RestoreResult, er
 	// The restore is now fully verified (downloaded, digest-checked, and
 	// extracted) — confirm it with the server so retention refreshes off a
 	// restore that's actually known to be good.
-	confirmed := c.confirmRestoreSucceeded(ctx, retrieveResp)
+	stats := &api.CacheStats{
+		Backend:           store.BackendName(retrieveResp.Store, c.bucketURL),
+		TotalMs:           time.Since(startTime).Milliseconds(),
+		ArchiveMs:         archiveInfo.Duration.Milliseconds(),
+		TransferMs:        transferInfo.Duration.Milliseconds(),
+		CleanupMs:         &cleanupMs,
+		CompressedBytes:   archiveInfo.Size,
+		UncompressedBytes: archiveInfo.WrittenBytes,
+		EntryCount:        archiveInfo.WrittenEntries,
+		PartCount:         transferInfo.PartCount,
+		Concurrency:       transferInfo.Concurrency,
+	}
+	confirmed := c.confirmRestoreSucceeded(ctx, retrieveResp, stats)
 	result.TotalDuration = time.Since(startTime)
 
 	// Add result attributes to span
@@ -465,7 +481,7 @@ var confirmRestoreTimeout = 5 * time.Second
 // every cache hit, so a network partition here must not be able to stall an
 // otherwise-successful, latency-sensitive restore by using up 5 full client
 // timeouts.
-func (c *client) confirmRestoreSucceeded(ctx context.Context, retrieveResp api.CacheEntryRetrieveResp) bool {
+func (c *client) confirmRestoreSucceeded(ctx context.Context, retrieveResp api.CacheEntryRetrieveResp, stats *api.CacheStats) bool {
 	if retrieveResp.Fallback {
 		return false
 	}
@@ -481,6 +497,7 @@ func (c *client) confirmRestoreSucceeded(ctx context.Context, retrieveResp api.C
 		TargetPaths: retrieveResp.TargetPaths,
 		CacheKey:    retrieveResp.CacheKey,
 		Scopes:      retrieveResp.Scopes,
+		Stats:       stats,
 	}
 	err := roko.NewRetrier(
 		roko.WithMaxAttempts(5),

@@ -143,3 +143,20 @@ func BenchmarkCalculateTransferSpeedMBps(b *testing.B) {
 		_ = calculateTransferSpeedMBps(bytes, duration)
 	}
 }
+
+func TestBackendName(t *testing.T) {
+	tests := []struct {
+		store, bucketURL, want string
+	}{
+		{AgentManaged, "s3://bucket/prefix", "s3"},
+		{AgentManaged, "https://s3.example.com/bucket", "s3"},
+		{AgentManaged, "nsc://cache", "nsc"},
+		{AgentManaged, "file:///tmp/cache", "file"},
+		{LocalFileStore, "", "file"},
+	}
+	for _, tt := range tests {
+		if got := BackendName(tt.store, tt.bucketURL); got != tt.want {
+			t.Errorf("BackendName(%q, %q) = %q, want %q", tt.store, tt.bucketURL, got, tt.want)
+		}
+	}
+}

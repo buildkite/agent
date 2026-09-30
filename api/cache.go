@@ -147,6 +147,8 @@ type CacheEntryConfirmReq struct {
 	// resolved this entry, not recomputed — omit only when the entry was
 	// retrieved unscoped.
 	Scopes map[string]string `json:"scopes,omitempty"`
+	// Stats reports how the restore performed. Informational only.
+	Stats *CacheStats `json:"stats,omitempty"`
 }
 
 // CacheEntryConfirmResp acknowledges a confirm request.
@@ -181,6 +183,28 @@ type CacheRegistryResp struct {
 type CacheEntryCommitReq struct {
 	UploadID string   `json:"upload_id"`
 	ETags    []string `json:"e_tags,omitempty"`
+	// Stats reports how the save performed. Informational only.
+	Stats *CacheStats `json:"stats,omitempty"`
+}
+
+// CacheStats reports how a save or restore performed, sent on commit (save)
+// and confirm (restore). The server only logs it:
+// it never rejects a request over its stats.
+type CacheStats struct {
+	// Backend is the blob store the agent transferred with: "s3", "nsc" or "file".
+	Backend    string `json:"backend,omitempty"`
+	TotalMs    int64  `json:"total_ms"`
+	ArchiveMs  int64  `json:"archive_ms"`
+	TransferMs int64  `json:"transfer_ms"`
+	// CleanupMs is how long a restore spent clearing the target paths before
+	// extracting. Nil on save, which has no cleanup phase.
+	CleanupMs         *int64 `json:"cleanup_ms,omitempty"`
+	CompressedBytes   int64  `json:"compressed_bytes"`
+	UncompressedBytes int64  `json:"uncompressed_bytes"`
+	// EntryCount counts the files and directories in the archive.
+	EntryCount  int64 `json:"entry_count"`
+	PartCount   int   `json:"part_count"`
+	Concurrency int   `json:"concurrency"`
 }
 
 // CacheEntryCommitResp acknowledges a commit.

@@ -30,6 +30,20 @@ type RetentionRefresher interface {
 	RefreshRetention(ctx context.Context, key string, retention time.Duration)
 }
 
+// BackendName names the blob store NewBlobStore selects for store and
+// bucketURL: "nsc", "file" or "s3".
+func BackendName(store, bucketURL string) string {
+	if store == LocalFileStore {
+		return "file"
+	}
+	switch scheme, _, _ := strings.Cut(bucketURL, "://"); scheme {
+	case nscScheme, "file":
+		return scheme
+	default:
+		return "s3"
+	}
+}
+
 func NewBlobStore(ctx context.Context, store, bucketURL string) (Blob, error) {
 	switch store {
 	case AgentManaged:
