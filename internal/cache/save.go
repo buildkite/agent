@@ -300,6 +300,18 @@ func (c *client) Save(ctx context.Context, cacheID string) (SaveResult, error) {
 
 	c.callProgress(cacheID, "committing", "Committing cache entry", 0, 0)
 
+	stats := &api.CacheStats{
+		Backend:           store.BackendName(registryResp.Store, c.bucketURL),
+		TotalMs:           time.Since(startTime).Milliseconds(),
+		ArchiveMs:         archiveInfo.Duration.Milliseconds(),
+		TransferMs:        transferInfo.Duration.Milliseconds(),
+		CompressedBytes:   archiveInfo.Size,
+		UncompressedBytes: archiveInfo.WrittenBytes,
+		EntryCount:        archiveInfo.WrittenEntries,
+		PartCount:         transferInfo.PartCount,
+		Concurrency:       transferInfo.Concurrency,
+	}
+
 	// Commit cache.
 	// Retry-safe: server-side put_item is an unconditional overwrite with
 	// deterministic content.
@@ -316,6 +328,7 @@ func (c *client) Save(ctx context.Context, cacheID string) (SaveResult, error) {
 		// backend-managed multipart uploads, which land in a later milestone.
 		_, commitApiResp, err = c.api.CacheEntryCommit(ctx, c.registry, api.CacheEntryCommitReq{
 			UploadID: createResp.UploadID,
+			Stats:    stats,
 		})
 		if api.BreakOnNonRetryable(r, commitApiResp, err) {
 			return err

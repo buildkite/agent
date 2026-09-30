@@ -519,3 +519,31 @@ func TestCacheEntryConfirm_NonSuccessIsError(t *testing.T) {
 		t.Error("CacheEntryConfirm error = nil, want non-nil for non-2xx status")
 	}
 }
+
+// The backend allowlists these exact keys, so a rename here silently drops
+// the stat from its logs.
+func TestCacheStats_JSON(t *testing.T) {
+	cleanupMs := int64(7)
+	got, err := json.Marshal(api.CacheEntryCommitReq{
+		UploadID: "upload-123",
+		Stats: &api.CacheStats{
+			Backend: "s3", TotalMs: 1, ArchiveMs: 2, TransferMs: 3, CleanupMs: &cleanupMs,
+			CompressedBytes: 4, UncompressedBytes: 5, EntryCount: 6, PartCount: 8, Concurrency: 9,
+		},
+	})
+	if err != nil {
+		t.Fatalf("json.Marshal: %v", err)
+	}
+	want := `{"upload_id":"upload-123","stats":{"backend":"s3","total_ms":1,"archive_ms":2,"transfer_ms":3,"cleanup_ms":7,"compressed_bytes":4,"uncompressed_bytes":5,"entry_count":6,"part_count":8,"concurrency":9}}`
+	if string(got) != want {
+		t.Errorf("json.Marshal = %s\nwant %s", got, want)
+	}
+
+	got, err = json.Marshal(api.CacheEntryCommitReq{UploadID: "upload-123"})
+	if err != nil {
+		t.Fatalf("json.Marshal: %v", err)
+	}
+	if want := `{"upload_id":"upload-123"}`; string(got) != want {
+		t.Errorf("json.Marshal without stats = %s, want %s", got, want)
+	}
+}

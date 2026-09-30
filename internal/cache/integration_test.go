@@ -28,6 +28,8 @@ type mockAPIClient struct {
 	registries map[string]*mockRegistry
 	// expireCalls records the addresses passed to CacheEntryExpire
 	expireCalls []api.CacheEntryExpireReq
+	// commitCalls records the requests passed to CacheEntryCommit
+	commitCalls []api.CacheEntryCommitReq
 	// confirmCalls records the addresses passed to CacheEntryConfirm
 	confirmCalls []api.CacheEntryConfirmReq
 	// confirmErr and confirmResp, if confirmErr is set, are returned by every
@@ -153,6 +155,8 @@ func (m *mockAPIClient) CacheEntryCreate(ctx context.Context, registry string, r
 }
 
 func (m *mockAPIClient) CacheEntryCommit(ctx context.Context, registry string, req api.CacheEntryCommitReq) (api.CacheEntryCommitResp, *api.Response, error) {
+	m.commitCalls = append(m.commitCalls, req)
+
 	reg, ok := m.registries[registry]
 	if !ok {
 		return api.CacheEntryCommitResp{}, nil, fmt.Errorf("registry not found: %s", registry)
@@ -592,6 +596,80 @@ func TestCacheIntegration_RestoreConfirmsSuccessfulExactMatch(t *testing.T) {
 	got := mockClient.confirmCalls[0]
 	if len(got.CacheKey) != 1 || got.CacheKey[0].Value != "v1-test-key" {
 		t.Errorf("confirm targeted cache_key %+v, want single part v1-test-key", got.CacheKey)
+	}
+}
+
+// TestCacheIntegration_SaveAndRestoreReportStats checks that commit (save) and
+// confirm (restore) carry the metrics the operation measured, so the registry
+// can log them.
+func TestCacheIntegration_SaveAndRestoreReportStats(t *testing.T) {
+	ctx := t.Context()
+
+	cacheClient, cacheDir, _ := setupTestCache(t, "local_file")
+	mockClient := cacheClient.api.(*mockAPIClient)
+
+	saveResult, err := cacheClient.Save(ctx, "test-cache")
+	if err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	if len(mockClient.commitCalls) != 1 {
+		t.Fatalf("commit calls = %d, want 1", len(mockClient.commitCalls))
+	}
+	saveStats := mockClient.commitCalls[0].Stats
+	if saveStats == nil {
+		t.Fatal("commit Stats = nil, want the save's stats")
+	}
+	if got, want := saveStats.Backend, "file"; got != want {
+		t.Errorf("save Stats.Backend = %q, want %q", got, want)
+	}
+	if got, want := saveStats.CompressedBytes, saveResult.Archive.Size; got != want {
+		t.Errorf("save Stats.CompressedBytes = %d, want %d", got, want)
+	}
+	if got, want := saveStats.UncompressedBytes, saveResult.Archive.WrittenBytes; got != want {
+		t.Errorf("save Stats.UncompressedBytes = %d, want %d", got, want)
+	}
+	if got, want := saveStats.EntryCount, saveResult.Archive.WrittenEntries; got != want {
+		t.Errorf("save Stats.EntryCount = %d, want %d", got, want)
+	}
+	if got, want := saveStats.ArchiveMs, saveResult.Archive.Duration.Milliseconds(); got != want {
+		t.Errorf("save Stats.ArchiveMs = %d, want %d", got, want)
+	}
+	if saveStats.TotalMs < saveStats.ArchiveMs+saveStats.TransferMs {
+		t.Errorf("save Stats.TotalMs = %d, want at least archive + transfer (%d)", saveStats.TotalMs, saveStats.ArchiveMs+saveStats.TransferMs)
+	}
+	if saveStats.CleanupMs != nil {
+		t.Errorf("save Stats.CleanupMs = %d, want nil", *saveStats.CleanupMs)
+	}
+
+	if err := os.RemoveAll(cacheDir); err != nil {
+		t.Fatalf("RemoveAll: %v", err)
+	}
+
+	restoreResult, err := cacheClient.Restore(ctx, "test-cache")
+	if err != nil {
+		t.Fatalf("Restore: %v", err)
+	}
+	if len(mockClient.confirmCalls) != 1 {
+		t.Fatalf("confirm calls = %d, want 1", len(mockClient.confirmCalls))
+	}
+	restoreStats := mockClient.confirmCalls[0].Stats
+	if restoreStats == nil {
+		t.Fatal("confirm Stats = nil, want the restore's stats")
+	}
+	if got, want := restoreStats.Backend, "file"; got != want {
+		t.Errorf("restore Stats.Backend = %q, want %q", got, want)
+	}
+	if got, want := restoreStats.UncompressedBytes, restoreResult.Archive.WrittenBytes; got != want {
+		t.Errorf("restore Stats.UncompressedBytes = %d, want %d", got, want)
+	}
+	if got, want := restoreStats.EntryCount, restoreResult.Archive.WrittenEntries; got != want {
+		t.Errorf("restore Stats.EntryCount = %d, want %d", got, want)
+	}
+	if got, want := restoreStats.TransferMs, restoreResult.Transfer.Duration.Milliseconds(); got != want {
+		t.Errorf("restore Stats.TransferMs = %d, want %d", got, want)
+	}
+	if restoreStats.CleanupMs == nil {
+		t.Error("restore Stats.CleanupMs = nil, want the cleanup duration")
 	}
 }
 
