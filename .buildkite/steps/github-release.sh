@@ -68,8 +68,27 @@ release_args=(
   releases/*
   --repo buildkite/agent
   --target "$(git rev-parse HEAD)"
-  --generate-notes
 )
+
+echo '--- Finding release notes'
+
+# The release PR's body holds the editorially reviewed release notes. Use it if
+# this commit is the merge of a release PR, otherwise fall back to GitHub's
+# generated notes. A failed lookup fails the step (via set -e) rather than
+# silently publishing generated notes in place of the reviewed ones.
+release_pr_body="$(gh api "repos/buildkite/agent/commits/$(git rev-parse HEAD)/pulls" \
+  --jq "[.[] | select(.merge_commit_sha == \"$(git rev-parse HEAD)\" and any(.labels[]; .name == \"release\"))][0].body // empty")"
+release_pr_body="${release_pr_body//$'\r'/}"
+
+if [[ -n "${release_pr_body//[[:space:]]/}" ]]; then
+  echo "Using the release PR body as the release notes"
+  printf '%s\n' "${release_pr_body}" > release-notes.md
+  cat release-notes.md
+  release_args+=(--title "v${AGENT_VERSION}" --notes-file release-notes.md)
+else
+  echo "No release PR body found, using GitHub's generated notes"
+  release_args+=(--generate-notes)
+fi
 
 if [[ "${IS_PRERELEASE}" == "1" ]]; then
   echo "--- 🚀 ${AGENT_VERSION} (prerelease)"
