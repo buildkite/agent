@@ -118,10 +118,7 @@ Ask the user to review it and tell you what to change. It's fine for them to dro
     * Label: `release`. This is required so the PR-labels workflow passes, and so the release PR itself is excluded from its own auto-generated notes (configured in [.github/release.yml](../../../.github/release.yml)).
     * Example: `gh pr create --base main --title "release: v4.1.0" --body-file tmp/release-notes-edited.md --label release`.
 
-What happens to the PR body depends on the release line:
-
-* **v4:** the PR body is the release notes. When the release pipeline runs on the merge commit, [.buildkite/steps/github-release.sh](../../../.buildkite/steps/github-release.sh) publishes the release PR's body verbatim as the GitHub release notes, falling back to GitHub's generated notes only if there's no release PR for the commit or its body is empty. So edit the PR body (not just PR titles or labels) to change the notes, and update it before merging if more PRs land on `main`.
-* **v3:** the `v3` branch's release script still regenerates the notes from PR titles and labels with `gh release create --generate-notes`, so the PR body is for human review only. If the user did an editorial pass, remind them to replace the notes on the GitHub release once it's published: `gh release edit v3.138.1 --repo buildkite/agent --notes-file tmp/release-notes-edited.md`.
+The PR body is the release notes. When the release pipeline runs on the merge commit, [.buildkite/steps/github-release.sh](../../../.buildkite/steps/github-release.sh) publishes the release PR's body verbatim as the GitHub release notes, falling back to GitHub's generated notes only if there's no release PR for the commit or its body is empty. So edit the PR body (not just PR titles or labels) to change the notes, and update it before merging if more PRs land on the release branch.
 
 ### 9. Done
 
