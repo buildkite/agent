@@ -96,7 +96,15 @@ The generated notes are built from PR titles, which are written for reviewers ra
 * name the command, flag or setting involved, e.g. `buildkite-agent cache save --force`
 * start with a capitalised verb and don't end with a full stop
 
-Present the suggestions as a complete, copy-pasteable edited version of the release notes. Keep the generated format: the same headings, one bullet per PR, and the `by @author in <PR URL>` attribution. Write it to `tmp/release-notes-edited.md` and show it in a fenced `markdown` code block, so it's easy to copy.
+Collapse the Dependabot PRs (author `@dependabot[bot]`, usually titled `build(deps): bump ...`) into a single bullet in the section they appear in, linking each PR, e.g.:
+
+```markdown
+* Dependency updates by @dependabot[bot] in https://github.com/buildkite/agent/pull/4391, https://github.com/buildkite/agent/pull/4392 and https://github.com/buildkite/agent/pull/4393
+```
+
+Only group the Dependabot PRs. Keep dependency changes made by people as their own bullets, e.g. Go toolchain upgrades ("Upgrade to Go 1.26.5") and targeted bumps like "Bump go-pipeline to v0.18.1". If a Dependabot PR is labelled `security`, it stays as its own bullet under 🔒 Security.
+
+Present the suggestions as a complete, copy-pasteable edited version of the release notes. Keep the generated format: the same headings, one bullet per PR (apart from the grouped Dependabot line), and the `by @author in <PR URL>` attribution. Write it to `tmp/release-notes-edited.md` and show it in a fenced `markdown` code block, so it's easy to copy.
 
 Ask the user to review it and tell you what to change. It's fine for them to drop unimportant entries.
 
