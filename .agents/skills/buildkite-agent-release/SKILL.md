@@ -17,7 +17,7 @@ Use this skill when you need to:
 The repo has two active release lines:
 
 * **v4**: released from `main` (e.g. `4.1.0`).
-* **v3**: released from the `v3` branch (e.g. `3.138.0`).
+* **v3**: released from the `v3` branch (e.g. `3.138.1`). This is maintenance-only: 3.138 is intended to be the last minor version of v3, so v3 releases should be patches (see step 4).
 
 Ask the user to pick v4 or v3 before doing anything else. The chosen line determines the base branch for everything below: `main` for v4, `v3` for v3.
 
@@ -71,6 +71,12 @@ Don't just ask "minor or patch?". Present a recommendation and your reasoning, t
 Prompt the user to sanity-check with SemVer in mind: "Is there anything here someone could start depending on, or would notice has changed, after upgrading? If so, it's at least a minor." Wait for their answer before continuing.
 
 Only cut a pre-release (e.g. `4.1.0-beta.1`) if the user explicitly asks for one.
+
+#### v3 releases should be patches
+
+Minor releases of v3 are strongly discouraged. 3.138 is intended to be the last minor version of v3, which only gets security fixes and selected bug fixes from here on; new features go to v4.
+
+Classify v3 changes with the same rules as above. If anything on the `v3` branch would make the release a minor, don't quietly bump the minor version, and don't reclassify the change as a patch to dodge the rule. Instead, stop and flag it to the user: list the offending PRs and suggest reverting or dropping them from `v3` so the release can go out as a patch. Only cut a new v3 minor if the user explicitly confirms that's what they want after seeing this warning.
 
 ### 5. Update the agent version file
 
