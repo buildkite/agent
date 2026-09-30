@@ -586,6 +586,7 @@ func TestFetchCommitFromRemoteMirrorTimeout(t *testing.T) {
 		t.Run(mode, func(t *testing.T) {
 			commit := strings.Repeat("a", 40)
 			e := newRemoteMirrorShimExecutor(t, commit, mode)
+			e.shell.Env.Set("BUILDKITE_CAPTURE_GIT_ERRORS", "true")
 			e.shell.Env.Set("BUILDKITE_AGENT_JOB_API_CAPTURE_ERROR", "true")
 			var reports gitErrorReports
 			ctx := context.WithValue(t.Context(), gitErrorReportsKey{}, &reports)
@@ -624,6 +625,7 @@ func TestFetchCommitFromRemoteMirrorPropagatesCancellationDuringConfirmation(t *
 
 	commit := strings.Repeat("a", 40)
 	e := newRemoteMirrorShimExecutor(t, commit, "cancel-confirmation")
+	e.shell.Env.Set("BUILDKITE_CAPTURE_GIT_ERRORS", "true")
 	e.shell.Env.Set("BUILDKITE_AGENT_JOB_API_CAPTURE_ERROR", "true")
 	revStarted, _ := e.shell.Env.Get("REV_STARTED")
 	attempt := remoteMirrorAttempt{

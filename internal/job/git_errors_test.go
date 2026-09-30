@@ -1,6 +1,7 @@
 package job
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -56,10 +57,56 @@ func gitErrorCaptureServer(t *testing.T, enabled bool, status int) (context.Cont
 		t.Fatal(err)
 	}
 	t.Cleanup(cleanup)
-	if !enabled {
-		sh.Env.Remove("BUILDKITE_AGENT_JOB_API_CAPTURE_ERROR")
+	sh.Env.Remove("BUILDKITE_CAPTURE_GIT_ERRORS")
+	if enabled {
+		sh.Env.Set("BUILDKITE_CAPTURE_GIT_ERRORS", "true")
 	}
 	return ctx, e, reports
+}
+
+func TestGitErrorCaptureOptIn(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("fixture uses a POSIX shell")
+	}
+	t.Parallel()
+	for _, tc := range []struct {
+		name, optIn, capability string
+		want                    bool
+	}{
+		{"unset", "", "true", false},
+		{"disabled", "false", "true", false},
+		{"invalid", "yes", "true", false},
+		{"enabled", "true", "true", true},
+		{"API unavailable", "true", "", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var logs bytes.Buffer
+			sh := shell.NewTestShell(t, shell.WithStdout(&logs))
+			sh.Env.Remove("BUILDKITE_CAPTURE_GIT_ERRORS")
+			if tc.optIn != "" {
+				sh.Env.Set("BUILDKITE_CAPTURE_GIT_ERRORS", tc.optIn)
+			}
+			sh.Env.Set("BUILDKITE_AGENT_JOB_API_CAPTURE_ERROR", tc.capability)
+			var output gitErrorOutput
+			err := sh.Command("sh", "-c", "echo diagnostic; exit 7").Run(t.Context(), shell.ShowPrompt(false), output.tee(sh))
+			if shell.ExitCode(err) != 7 || logs.String() != "diagnostic\n" {
+				t.Fatalf("error = %v, logs = %q; want exit 7 and unchanged diagnostic", err, logs.String())
+			}
+			wantOutput, wantReports := "", 0
+			if tc.want {
+				wantOutput, wantReports = "diagnostic\n", 1
+			}
+			if got := output.String(); got != wantOutput {
+				t.Fatalf("buffered output = %q, want %q", got, wantOutput)
+			}
+			var pending gitErrorReports
+			ctx := context.WithValue(t.Context(), gitErrorReportsKey{}, &pending)
+			captureCheckoutError(ctx, sh, errors.New("checkout failed"))
+			if len(pending) != wantReports {
+				t.Fatalf("buffered reports = %d, want %d", len(pending), wantReports)
+			}
+		})
+	}
 }
 
 func TestGitErrorCapture(t *testing.T) {
