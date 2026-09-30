@@ -2,7 +2,8 @@ env:
   DRY_RUN: false # set to true to disable publishing releases
   AGENT_RUNNERS_LINUX_QUEUE: "${AGENT_RUNNERS_LINUX_QUEUE:-agent-runners-linux-amd64}"
   AGENT_RUNNERS_LINUX_ARM64_QUEUE: "${AGENT_RUNNERS_LINUX_ARM64_QUEUE:-agent-runners-linux-arm64}"
-  AGENT_RUNNERS_WINDOWS_QUEUE: "${AGENT_RUNNERS_WINDOWS_QUEUE:-agent-runners-windows-amd64}"
+  AGENT_RUNNERS_MACOS_QUEUE: "${AGENT_RUNNERS_MACOS_QUEUE:-agent-runners-hosted-macos}"
+  AGENT_RUNNERS_WINDOWS_QUEUE: "${AGENT_RUNNERS_WINDOWS_QUEUE:-agent-runners-hosted-windows}"
   AGENT_BUILDERS_QUEUE: "${AGENT_BUILDERS_QUEUE:-elastic-builders}"
   AGENT_BUILDERS_ARM64_QUEUE: "${AGENT_BUILDERS_QUEUE:-elastic-builders}"
 
@@ -18,6 +19,7 @@ steps:
       - "**.go"
       - .buildkite/Dockerfile-lint
       - .buildkite/steps/check-code-committed.sh
+      - .buildkite/pipeline.yml
     plugins:
       - docker-compose#v4.14.0:
           config: .buildkite/docker-compose.yml
@@ -31,6 +33,7 @@ steps:
     if_changed:
       - api/proto/**
       - .buildkite/steps/check-protobuf-generation.sh
+      - .buildkite/pipeline.yml
     plugins:
       - docker-compose#v4.14.0:
           config: .buildkite/docker-compose.yml
@@ -75,6 +78,7 @@ steps:
       - "**.go"
       - "**/fixtures/**"
       - .buildkite/steps/{tests,test-coverage-report}.sh
+      - .buildkite/pipeline.yml
     steps:
       - name: ":linux: Linux AMD64 Tests"
         key: test-linux-amd64
@@ -127,6 +131,28 @@ steps:
               cli-version: 2
               propagate-environment: true
               run: agent
+
+      - name: ":mac: macOS ARM64 Tests"
+        key: test-macos
+        command: ".buildkite/steps/tests.sh"
+        parallelism: 2
+        artifact_paths:
+          - junit-*.xml
+          - "coverage-*/**"
+        agents:
+          queue: $AGENT_RUNNERS_MACOS_QUEUE
+        plugins:
+          - tests#v1.0.0:
+              suite-slug: buildkite-agent
+              test-runner: gotest
+              result-path: junit.xml
+              install-client: false
+              upload-results: true
+              oidc-lifetime: 7200
+              tags:
+                - "os=darwin"
+                - "arch=arm64"
+                - "race=false"
 
       - name: ":windows: Windows AMD64 Tests"
         key: test-windows
@@ -231,6 +257,7 @@ steps:
           - test-linux-amd64
           - test-race-linux-arm64
           - test-linux-arm64
+          - test-macos
           - test-windows
         allow_dependency_failure: true
         plugins:
@@ -450,6 +477,7 @@ steps:
       - e2e-tests
       - test-docker-amd64
       - test-docker-arm64
+      - test-macos
       - test-windows
     command: ".buildkite/steps/upload-release-steps.sh"
     if: build.env("DRY_RUN") == "true" || build.branch =~ /^(main|.*-.*-stable|v\d+)$$/
