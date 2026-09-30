@@ -44,7 +44,8 @@ type gitErrorOutput struct {
 }
 
 func (o *gitErrorOutput) tee(sh *shell.Shell) shell.RunCommandOpt {
-	if sh.Env.GetString("BUILDKITE_AGENT_JOB_API_CAPTURE_ERROR", "") != "true" {
+	if sh.Env.GetString("BUILDKITE_CAPTURE_GIT_ERRORS", "") != "true" ||
+		sh.Env.GetString("BUILDKITE_AGENT_JOB_API_CAPTURE_ERROR", "") != "true" {
 		return shell.TeeOutput(nil)
 	}
 	return shell.TeeOutput(o)
@@ -214,7 +215,9 @@ func captureCheckoutError(ctx context.Context, sh *shell.Shell, err error) {
 }
 
 func captureError(ctx context.Context, sh *shell.Shell, code, message string) {
-	if sh.Env.GetString("BUILDKITE_AGENT_JOB_API_CAPTURE_ERROR", "") != "true" {
+	// Automatic Git reporting is opt-in independently of the general capture API.
+	if sh.Env.GetString("BUILDKITE_CAPTURE_GIT_ERRORS", "") != "true" ||
+		sh.Env.GetString("BUILDKITE_AGENT_JOB_API_CAPTURE_ERROR", "") != "true" {
 		return
 	}
 	// The Local Job API redacts registered secrets before forwarding the report.
