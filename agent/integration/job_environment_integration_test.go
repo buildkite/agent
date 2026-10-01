@@ -877,9 +877,9 @@ func TestCheckoutInfraVarsAreAgentAuthoritative(t *testing.T) {
 	t.Parallel()
 
 	// SSH_KEYSCAN, GIT_MIRRORS_PATH, GIT_MIRRORS_LOCK_TIMEOUT,
-	// GIT_MIRROR_CHECKOUT_MODE, GIT_CLONE_MIRROR_FLAGS and GIT_MIRRORS_SKIP_UPDATE
-	// are agent-only: job env cannot override them even under the most permissive
-	// checkout-override mode (none).
+	// GIT_MIRROR_CHECKOUT_MODE, GIT_CLONE_MIRROR_FLAGS, GIT_MIRRORS_SKIP_UPDATE
+	// and GIT_MIRRORS_LFS_CACHE are agent-only: job env cannot override them even
+	// under the most permissive checkout-override mode (none).
 	tests := []struct {
 		name         string
 		varName      string
@@ -927,6 +927,13 @@ func TestCheckoutInfraVarsAreAgentAuthoritative(t *testing.T) {
 			varName:      "BUILDKITE_GIT_MIRRORS_SKIP_UPDATE",
 			jobEnvValue:  "true",
 			agentCfg:     agent.AgentConfiguration{GitMirrorsSkipUpdate: false, CheckoutOverrideMode: env.CheckoutOverrideNone},
+			wantEnvValue: "false",
+		},
+		{
+			name:         "git_mirrors_lfs_cache",
+			varName:      "BUILDKITE_GIT_MIRRORS_LFS_CACHE",
+			jobEnvValue:  "true",
+			agentCfg:     agent.AgentConfiguration{GitMirrorsLFSCache: false, CheckoutOverrideMode: env.CheckoutOverrideNone},
 			wantEnvValue: "false",
 		},
 	}

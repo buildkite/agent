@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"runtime"
 	"slices"
 	"time"
@@ -530,6 +531,13 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context, previousAttempts in
 			Shell:        e.shell,
 			Retry:        true,
 			FetchInclude: sparse.lfsInclude(), // cone dirs; nil when inactive or no-cone
+		}
+		if mirrorDir != "" && e.mirrorLFSCacheEnabled() {
+			// Reuse LFS objects prefetched into the persistent mirror (see
+			// checkout_mirror_lfs.go). Point at the mirror itself rather than
+			// mirrorDir: snapshots and dissociated clones contain Git objects
+			// only, while the LFS objects live in the persistent mirror.
+			lfsArgs.ReferenceDir = filepath.Join(e.GitMirrorsPath, dirForRepository(e.Repository))
 		}
 		if sparse.noCone() {
 			// FetchInclude is empty on purpose (see table above). Scope checkout

@@ -22,6 +22,7 @@ type AgentConfiguration struct {
 	GitMirrorCheckoutMode           string
 	GitMirrorsLockTimeout           int
 	GitMirrorsSkipUpdate            bool
+	GitMirrorsLFSCache              bool
 	PluginsPath                     string
 	GitCheckoutFlags                string
 	GitCheckoutTimeout              int
