@@ -24,6 +24,20 @@ const remoteMirrorPromisorMarkerKey = "buildkite.remote-mirror-promisor"
 // refspecKind is the category of git refspec a fetch targets.
 type refspecKind string
 
+// qualifiedBranchRefspec qualifies a branch name for a fetch refspec. Git
+// resolves a bare name against refs/tags/ before refs/heads/, so a tag sharing
+// the branch's name would shadow the branch: the fetch would report success
+// while FETCH_HEAD (which the checkout then resolves) ends up at the tag tip
+// instead of the branch head. Pinning the source to refs/heads/ keeps the
+// fetch in the branch namespace; names that are already fully qualified pass
+// through unchanged.
+func qualifiedBranchRefspec(branch string) string {
+	if strings.HasPrefix(branch, "refs/") {
+		return branch
+	}
+	return "+refs/heads/" + branch
+}
+
 const (
 	// e.RefSpec is set, overriding all other fetch behaviour
 	refspecCustom refspecKind = "custom"
@@ -187,7 +201,7 @@ func (e *Executor) fetchSource(ctx context.Context, addBloblessFilter bool, atte
 			Shell:         e.shell,
 			GitFetchFlags: gitFetchFlags,
 			Repository:    "origin",
-			RefSpecs:      []string{e.Branch},
+			RefSpecs:      []string{qualifiedBranchRefspec(e.Branch)},
 		}); err != nil {
 			return fmt.Errorf("fetching branch %q: %w", e.Branch, err)
 		}
