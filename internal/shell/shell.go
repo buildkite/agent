@@ -11,7 +11,6 @@ import (
 	"io"
 	"os"
 	"os/exec"
-	"path"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -180,8 +179,16 @@ func (s *Shell) Chdir(path string) error {
 // PATHEXT of the Shell
 func (s *Shell) AbsolutePath(executable string) (string, error) {
 	// Is the path already absolute?
-	if path.IsAbs(executable) {
-		return executable, nil
+	if filepath.IsAbs(executable) {
+		// On Windows, an absolute path with no recognised extension (e.g.
+		// C:\tools\runner) still needs PATHEXT resolution. Fall through to
+		// LookPath below so s.Env's PATHEXT (which callers can override per
+		// job) is used, rather than returning it unresolved: exec.Command
+		// would then apply its own PATHEXT resolution reading the agent
+		// process's real OS environment, which can differ from s.Env.
+		if runtime.GOOS != "windows" || filepath.Ext(executable) != "" {
+			return executable, nil
+		}
 	}
 
 	envPath, _ := s.Env.Get("PATH")
