@@ -45,6 +45,12 @@ func (s *Server) RepoURL(repoName string) string {
 	return fmt.Sprintf("%s/%s.git", s.URL, repoName)
 }
 
+// RepositoriesDir returns the directory holding the served bare repositories.
+// Each repository lives at filepath.Join(RepositoriesDir(), repoName).
+func (s *Server) RepositoriesDir() string {
+	return s.repositories
+}
+
 func (s *Server) CreateRepository(repoName string) error {
 	repoPath := filepath.Join(s.repositories, repoName)
 
