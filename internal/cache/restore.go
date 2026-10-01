@@ -85,6 +85,11 @@ func restoreCleanupError(configured, resolved string, err error) error {
 //	    log.Printf("Cache hit: %s (%.2f MB)", result.Key, float64(result.Archive.Size)/(1024*1024))
 //	}
 func (c *client) Restore(ctx context.Context, cacheID string) (RestoreResult, error) {
+	return c.restore(ctx, cacheID, nil, nil)
+}
+
+// restore is Restore with an optional pre-resolved key and an optional accept check, run on the found entry before any download or target change.
+func (c *client) restore(ctx context.Context, cacheID string, cacheKey []api.CacheKeyPart, accept func(api.CacheEntryRetrieveResp) bool) (RestoreResult, error) {
 	tracer := otel.Tracer("github.com/buildkite/agent/v4/internal/cache")
 	ctx, span := tracer.Start(ctx, "Client.Restore")
 	defer span.End()
@@ -105,11 +110,13 @@ func (c *client) Restore(ctx context.Context, cacheID string) (RestoreResult, er
 		return result, err
 	}
 
-	cacheKey, err := c.resolveCacheKey(cacheConfig)
-	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "failed to resolve cache key")
-		return result, fmt.Errorf("failed to resolve cache key: %w", err)
+	if cacheKey == nil {
+		cacheKey, err = c.resolveCacheKey(cacheConfig)
+		if err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, "failed to resolve cache key")
+			return result, fmt.Errorf("failed to resolve cache key: %w", err)
+		}
 	}
 	result.Key = displayCacheKey(cacheKey)
 
@@ -124,35 +131,7 @@ func (c *client) Restore(ctx context.Context, cacheID string) (RestoreResult, er
 
 	c.callProgress(cacheID, "checking_exists", "Checking if cache exists", 0, 0)
 
-	var (
-		apiResp      *api.Response
-		retrieveResp api.CacheEntryRetrieveResp
-		exists       bool
-	)
-
-	// Cache restore is latency-sensitive: it runs at the start of a job and
-	// blocks forward progress, so transient failures should retry quickly
-	// After ~5 attempts (~3.4s wall-clock with this curve),
-	// treat repeated failures as a cache miss.
-	err = roko.NewRetrier(
-		roko.WithMaxAttempts(5),
-		roko.WithStrategy(roko.ExponentialSubsecond(500*time.Millisecond)),
-		roko.WithJitter(),
-	).DoWithContext(ctx, func(r *roko.Retrier) error {
-		var err error
-		retrieveResp, exists, apiResp, err = c.api.CacheEntryRetrieve(ctx, c.registry, api.CacheEntryRetrieveReq{
-			TargetPaths: cacheConfig.TargetPaths,
-			CacheKey:    cacheKey,
-		})
-		if api.BreakOnNonRetryable(r, apiResp, err) {
-			return err
-		}
-		if err != nil {
-			slog.Warn("cache retrieve failed, retrying", "err", err, "retrier", r.String())
-			return err
-		}
-		return nil
-	})
+	retrieveResp, exists, err := c.retrieveEntry(ctx, cacheConfig.TargetPaths, cacheKey)
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, "failed to retrieve cache")
@@ -186,6 +165,21 @@ func (c *client) Restore(ctx context.Context, cacheID string) (RestoreResult, er
 		attribute.Bool("cache.fallback_used", result.FallbackUsed),
 		attribute.String("cache.matched_key", result.Key),
 	)
+
+	if accept != nil && !accept(retrieveResp) {
+		result.CacheHit = false
+		result.FallbackUsed = false
+		result.CacheRestored = false
+		result.TotalDuration = time.Since(startTime)
+		span.SetAttributes(
+			attribute.Bool("cache.hit", false),
+			attribute.Bool("cache.restored", false),
+		)
+		span.SetStatus(codes.Ok, "cache entry not accepted")
+		result.NotRestoredReason = "Cache not restored: entry not accepted"
+		c.callProgress(cacheID, "complete", result.NotRestoredReason, 0, 0)
+		return result, nil
+	}
 
 	// Validate the cache store configuration (e.g. BUILDKITE_AGENT_CACHE_STORE_URL
 	// is set for the S3 store) before attempting a download.
@@ -408,6 +402,34 @@ func (c *client) Restore(ctx context.Context, cacheID string) (RestoreResult, er
 	c.callProgress(cacheID, "complete", "Cache restored successfully", 0, 0)
 
 	return result, nil
+}
+
+// retrieveEntry looks up the entry at targetPaths and cacheKey, retrying transient failures; exists is false on a miss.
+func (c *client) retrieveEntry(ctx context.Context, targetPaths []string, cacheKey []api.CacheKeyPart) (retrieveResp api.CacheEntryRetrieveResp, exists bool, err error) {
+	// Restore runs at job start and blocks progress, so retry quickly (~5 attempts, ~3.4s) and then treat failures as a miss.
+	err = roko.NewRetrier(
+		roko.WithMaxAttempts(5),
+		roko.WithStrategy(roko.ExponentialSubsecond(500*time.Millisecond)),
+		roko.WithJitter(),
+	).DoWithContext(ctx, func(r *roko.Retrier) error {
+		var (
+			apiResp *api.Response
+			err     error
+		)
+		retrieveResp, exists, apiResp, err = c.api.CacheEntryRetrieve(ctx, c.registry, api.CacheEntryRetrieveReq{
+			TargetPaths: targetPaths,
+			CacheKey:    cacheKey,
+		})
+		if api.BreakOnNonRetryable(r, apiResp, err) {
+			return err
+		}
+		if err != nil {
+			slog.Warn("cache retrieve failed, retrying", "err", err, "retrier", r.String())
+			return err
+		}
+		return nil
+	})
+	return retrieveResp, exists, err
 }
 
 func displayCacheKey(key []api.CacheKeyPart) string {

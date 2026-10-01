@@ -139,6 +139,15 @@ func (c *Client) RedactionCreate(ctx context.Context, text string) (string, erro
 	return resp.Redacted, nil
 }
 
+// RedactionList returns the values the job executor redacts from the job log.
+func (c *Client) RedactionList(ctx context.Context) ([]string, error) {
+	var resp RedactionListResponse
+	if err := c.client.Do(ctx, http.MethodGet, redactionsURL, nil, &resp); err != nil {
+		return nil, err
+	}
+	return resp.Redactions, nil
+}
+
 // DeclarePromiseFailure asks the Job API to declare a promised failure with the
 // given exit status and reason to the Buildkite API, blocking until it
 // completes. The server debounces repeated and concurrent calls for the same

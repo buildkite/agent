@@ -6,11 +6,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -757,6 +759,41 @@ func TestCreateRedaction(t *testing.T) {
 
 	if got, want := writeBuf.String(), "Go from [REDACTED], until you get to Quito.\nFrom [REDACTED], go back to [REDACTED].\n"; got != want {
 		t.Fatalf("writeBuf.String() = %q, want %q", got, want)
+	}
+}
+
+func TestListRedactions(t *testing.T) {
+	t.Parallel()
+
+	mux := replacer.NewMux(replacer.New(io.Discard, []string{"from-env-var"}, redact.Redacted))
+	srv, token, err := testServer(t, testEnviron(), mux)
+	if err != nil {
+		t.Fatalf("testServer() error = %v", err)
+	}
+	if err := srv.Start(); err != nil {
+		t.Fatalf("srv.Start() error = %v", err)
+	}
+	t.Cleanup(func() {
+		if err := srv.Stop(); err != nil {
+			t.Errorf("srv.Stop() error = %v", err)
+		}
+	})
+
+	client, err := jobapi.NewClient(t.Context(), srv.SocketPath, token)
+	if err != nil {
+		t.Fatalf("jobapi.NewClient() error = %v", err)
+	}
+	if _, err := client.RedactionCreate(t.Context(), "from-secret-get"); err != nil {
+		t.Fatalf("client.RedactionCreate() error = %v", err)
+	}
+
+	got, err := client.RedactionList(t.Context())
+	if err != nil {
+		t.Fatalf("client.RedactionList() error = %v", err)
+	}
+	slices.Sort(got)
+	if diff := cmp.Diff([]string{"from-env-var", "from-secret-get"}, got); diff != "" {
+		t.Errorf("client.RedactionList() diff (-want +got):\n%s", diff)
 	}
 }
 
