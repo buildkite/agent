@@ -21,26 +21,6 @@ import (
 
 const remoteMirrorPromisorMarkerKey = "buildkite.remote-mirror-promisor"
 
-// refspecKind is the category of git refspec a fetch targets.
-type refspecKind string
-
-const (
-	// e.RefSpec is set, overriding all other fetch behaviour
-	refspecCustom refspecKind = "custom"
-
-	// GitHub PR build using the speculative merge ref (refs/pull/N/merge)
-	refspecGithubPRMerge refspecKind = "github-pr-merge"
-
-	// GitHub PR build using the PR's head ref (refs/pull/N/head)
-	refspecGithubPRHead refspecKind = "github-pr-head"
-
-	// No specific commit is known (e.Commit == "HEAD"), so fetch the branch's remote HEAD
-	refspecBranch refspecKind = "branch"
-
-	// Default: a specific commit is known, so fetch and checkout it directly
-	refspecCommit refspecKind = "commit"
-)
-
 // fetchSource fetches the git source for the job. If GitSkipFetchExistingCommits is
 // enabled and the commit already exists locally, the fetch is skipped entirely.
 // When addBloblessFilter is true, --filter=blob:none is prepended to the fetch
@@ -52,24 +32,10 @@ func (e *Executor) fetchSource(ctx context.Context, addBloblessFilter bool, atte
 	span, ctx := e.traceOpSpan(ctx, "git.fetch")
 	defer func() { tracetools.FinishWithError(span, retErr) }()
 
-	// Classify the refspec kind once and dispatch on it in the switch below.
-	kind := refspecCommit
-	switch {
-	case e.RefSpec != "":
-		kind = refspecCustom
-	case e.PullRequest != "false" && strings.Contains(e.PipelineProvider, "github"):
-		if e.PullRequestUsingMergeRefspec {
-			kind = refspecGithubPRMerge
-		} else {
-			kind = refspecGithubPRHead
-		}
-	case e.Commit == "HEAD":
-		kind = refspecBranch
-	}
-
+	target := e.checkoutTarget()
 	span.SetAttributes(
-		attribute.Bool("git.pull_request", e.PullRequest != "false"),
-		attribute.String("git.refspec_kind", string(kind)),
+		attribute.Bool("git.pull_request", target.pullRequest != ""),
+		attribute.String("git.refspec_kind", string(target.kind)),
 	)
 
 	if err := e.repairInterruptedRemoteMirrorPromisors(ctx); err != nil {
@@ -83,13 +49,13 @@ func (e *Executor) fetchSource(ctx context.Context, addBloblessFilter bool, atte
 	// This is useful when a pre-populated git mirror is used with --reference,
 	// as the commit objects are already reachable and fetching is redundant.
 	mirrorHit := attempt != nil && attempt.hit()
-	skipFetch := (e.GitSkipFetchExistingCommits || mirrorHit) && e.Commit != "HEAD" &&
-		hasGitCommit(ctx, e.shell, ".git", e.Commit)
+	skipFetch := (e.GitSkipFetchExistingCommits || mirrorHit) && target.commitKnown() &&
+		hasGitCommit(ctx, e.shell, ".git", target.commit)
 
 	span.SetAttributes(attribute.Bool("git.skipped", skipFetch))
 
 	if skipFetch {
-		e.shell.Commentf("Commit %q already exists locally, skipping fetch", e.Commit)
+		e.shell.Commentf("Commit %q already exists locally, skipping fetch", target.commit)
 		return nil
 	}
 
@@ -98,8 +64,8 @@ func (e *Executor) fetchSource(ctx context.Context, addBloblessFilter bool, atte
 		gitFetchFlags = "--filter=blob:none " + gitFetchFlags
 	}
 
-	switch kind {
-	case refspecCustom:
+	switch target.kind {
+	case targetCustomRefspec:
 		// If a refspec is provided then use it instead.
 		// For example, `refs/not/a/head`
 		e.shell.Commentf("Fetch and checkout custom refspec")
@@ -107,32 +73,29 @@ func (e *Executor) fetchSource(ctx context.Context, addBloblessFilter bool, atte
 			Shell:         e.shell,
 			GitFetchFlags: gitFetchFlags,
 			Repository:    "origin",
-			RefSpecs:      []string{e.RefSpec},
+			RefSpecs:      []string{target.refspec},
 		}); err != nil {
-			return fmt.Errorf("fetching refspec %q: %w", e.RefSpec, err)
+			return fmt.Errorf("fetching refspec %q: %w", target.refspec, err)
 		}
 
-	case refspecGithubPRMerge, refspecGithubPRHead:
-		var refspec string
-
-		if kind == refspecGithubPRMerge {
+	case targetGithubPRMerge, targetGithubPRHead:
+		isMergeRefspec := target.kind == targetGithubPRMerge
+		if isMergeRefspec {
 			// Merge refspecs represents a speculative merge of the PR branch against the base branch.
 			// Checking out this refspec enables testing the result of the merge before it happens.
 			// If a merge conflict exists, this refspec won't be created and the fetch will fail. In this
 			// case we want the job to fail earlier, rather than retrying the fetch (which adds ~2-3 mins job run time before failing)
 			// Note: An outer retry loop will still retry the failed checkout 3 times before failing.
 			e.shell.Commentf("Fetch and checkout pull request merge commit from GitHub")
-			refspec = fmt.Sprintf("refs/pull/%s/merge", e.PullRequest)
 		} else {
 			// GitHub has a special ref which lets us fetch a pull request head, whether
 			// or not it's a current head in this repository or a fork. See:
 			// https://help.github.com/articles/checking-out-pull-requests-locally/#modifying-an-inactive-pull-request-locally
 			e.shell.Commentf("Fetch and checkout pull request head from GitHub")
-			refspec = fmt.Sprintf("refs/pull/%s/head", e.PullRequest)
 		}
-		refspecs := []string{refspec}
+		refspecs := []string{target.refspec}
 
-		if e.Commit == "HEAD" {
+		if !target.commitKnown() {
 			// If we don't know the commit, we don't want to fetch with a fallback (otherwise FETCH_HEAD
 			// will resolve during a fallback to the alphabetically earliest branch/tag - rather than the
 			// correct commit for this build)
@@ -140,15 +103,12 @@ func (e *Executor) fetchSource(ctx context.Context, addBloblessFilter bool, atte
 				Shell:         e.shell,
 				GitFetchFlags: gitFetchFlags,
 				Repository:    "origin",
-				// Retry:
-				// GithubPRHead failures are retriable as they are usually transient network errors
-				// GithubPRMmerge failures are not worth retrying as they are usually real merge conflicts
-				Retry:    kind == refspecGithubPRHead,
-				RefSpecs: refspecs,
+				Retry:         target.retryFetch,
+				RefSpecs:      refspecs,
 			}); err != nil {
-				return fmt.Errorf("fetching PR refspec %q: %w%s", refspecs, err, prMergeRefspecHint(kind == refspecGithubPRMerge))
+				return fmt.Errorf("fetching PR refspec %q: %w%s", refspecs, err, prMergeRefspecHint(isMergeRefspec))
 			}
-			if kind == refspecGithubPRMerge && e.PullRequestHeadCommit != "" {
+			if isMergeRefspec && e.PullRequestHeadCommit != "" {
 				if err := e.validateGithubPRMergeHead(ctx); err != nil {
 					return err
 				}
@@ -169,17 +129,17 @@ func (e *Executor) fetchSource(ctx context.Context, addBloblessFilter bool, atte
 			// If we know the commit, also fetch it directly. The commit might not be in the history of `refspec` if there
 			// have been force pushes to the pull request, so this ensures we have it.
 			// Note: this is the typical case e.Commit != HEAD.
-			refspecs = append(refspecs, e.Commit)
+			refspecs = append(refspecs, target.commit)
 			// We aim to eliminate network round-trip as much as possible so we use a single git fetch here.
 			if err := gitFetchWithFallback(ctx, e.shell, gitFetchFlags, refspecs...); err != nil {
-				return fmt.Errorf("fetching PR refspec %q: %w%s", refspecs, err, prMergeRefspecHint(kind == refspecGithubPRMerge))
+				return fmt.Errorf("fetching PR refspec %q: %w%s", refspecs, err, prMergeRefspecHint(isMergeRefspec))
 			}
 		}
 
 		gitFetchHead, _ := e.shell.Command("git", "rev-parse", "FETCH_HEAD").RunAndCaptureStdout(ctx)
 		e.shell.Commentf("FETCH_HEAD is now `%s`", gitFetchHead)
 
-	case refspecBranch:
+	case targetBranch:
 		// If the commit is "HEAD" then we can't do a commit-specific fetch and will
 		// need to fetch the remote head and checkout the fetched head explicitly.
 		e.shell.Commentf("Fetch and checkout remote branch HEAD commit")
@@ -187,12 +147,12 @@ func (e *Executor) fetchSource(ctx context.Context, addBloblessFilter bool, atte
 			Shell:         e.shell,
 			GitFetchFlags: gitFetchFlags,
 			Repository:    "origin",
-			RefSpecs:      []string{e.Branch},
+			RefSpecs:      []string{target.refspec},
 		}); err != nil {
-			return fmt.Errorf("fetching branch %q: %w", e.Branch, err)
+			return fmt.Errorf("fetching branch %q: %w", target.refspec, err)
 		}
 
-	default: // refspecCommit
+	default: // targetCommit
 		hit, err := e.tryExistingCheckoutRemoteMirror(ctx, attempt, gitFetchFlags)
 		if err != nil {
 			return err
@@ -203,8 +163,8 @@ func (e *Executor) fetchSource(ctx context.Context, addBloblessFilter bool, atte
 
 		// Otherwise fetch and checkout the commit directly.
 		e.shell.Commentf("Fetch and checkout commit")
-		if err := gitFetchWithFallback(ctx, e.shell, gitFetchFlags, e.Commit); err != nil {
-			return fmt.Errorf("fetching commit %q: %w", e.Commit, err)
+		if err := gitFetchWithFallback(ctx, e.shell, gitFetchFlags, target.commit); err != nil {
+			return fmt.Errorf("fetching commit %q: %w", target.commit, err)
 		}
 	}
 

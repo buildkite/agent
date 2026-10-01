@@ -264,8 +264,10 @@ func (e *Executor) verifyCommit(ctx context.Context) error {
 		)
 	}
 
+	target := e.checkoutTarget()
+
 	// Skip if commit is HEAD (nothing to verify)
-	if e.Commit == "HEAD" {
+	if !target.commitKnown() {
 		e.shell.Commentf("Skipping commit verification: commit is HEAD")
 		return nil
 	}
@@ -282,17 +284,17 @@ func (e *Executor) verifyCommit(ctx context.Context) error {
 		return nil
 	}
 
-	// Skip if this is a PR build: the commit may be on a merge ref, not the target
-	// branch. BUILDKITE_PULL_REQUEST is the string "false" (not empty) on non-PR builds.
-	if e.PullRequest != "" && e.PullRequest != "false" {
-		e.shell.Commentf("Skipping commit verification: pull request build (#%s)", e.PullRequest)
+	// Skip if this is a PR build from any provider: the commit may be on a
+	// merge ref, not the target branch.
+	if target.pullRequest != "" {
+		e.shell.Commentf("Skipping commit verification: pull request build (#%s)", target.pullRequest)
 		return nil
 	}
 
 	// Skip if a custom refspec is set — the fetch may not populate standard branch refs,
 	// making ancestry verification unreliable
-	if e.RefSpec != "" {
-		e.shell.Commentf("Skipping commit verification: custom refspec is set (%s)", e.RefSpec)
+	if target.kind == targetCustomRefspec {
+		e.shell.Commentf("Skipping commit verification: custom refspec is set (%s)", target.refspec)
 		return nil
 	}
 
