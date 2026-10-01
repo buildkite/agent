@@ -283,3 +283,32 @@ func TestURLCredentials(t *testing.T) {
 		})
 	}
 }
+
+func TestURLCredentialsInText(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct{ input, want string }{
+		{"fatal: unable to access 'https://user:password@example.com/repo.git/': denied\n", "fatal: unable to access 'https://xxxxx@example.com/repo.git/': denied\n"},
+		{"remote: https://token@example.com,ssh://other:pass@host/repo", "remote: https://xxxxx@example.com,ssh://xxxxx@host/repo"},
+		{"https://token@example.com/a,https://other:pass@host/b", "https://xxxxx@example.com/a,https://xxxxx@host/b"},
+		{"\"HTTPS://test%40token:p%3Ass@example.com:8443/repo%20name?ref=main#tip\"", "\"https://xxxxx@example.com:8443/repo%20name?ref=main#tip\""},
+		{"failed (https://token@example.com).", "failed (https://xxxxx@example.com)."},
+		{"https://user:p'ass@example.com/repo", "https://xxxxx@example.com/repo"},
+		{"https://user:p@ss@example.com/repo", "https://xxxxx@example.com/repo"},
+		{"https://bad%zz:password@example.com/repo", "(invalid URL)example.com/repo"},
+		{"https://user:bad#password@example.com/repo", "(invalid URL)example.com/repo"},
+		{"//token@example.com/repo", "//xxxxx@example.com/repo"},
+		{"//bad%zz:password@example.com/repo", "(invalid URL)example.com/repo"},
+		{"https://token@[::1]:8443/repo", "https://xxxxx@[::1]:8443/repo"},
+		{"https://example.com/repo git@host:repo ../relative/ref", "https://example.com/repo git@host:repo ../relative/ref"},
+		{"remote: plain-token is not a URL\n", "remote: plain-token is not a URL\n"},
+	} {
+		t.Run(tc.input, func(t *testing.T) {
+			if got := URLCredentialsInText(tc.input); got != tc.want {
+				t.Errorf("URLCredentialsInText() = %q, want %q", got, tc.want)
+			}
+			if got := URLCredentialsInText(tc.want); got != tc.want {
+				t.Errorf("URLCredentialsInText() is not idempotent: got %q, want %q", got, tc.want)
+			}
+		})
+	}
+}

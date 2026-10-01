@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/buildkite/agent/v4/jobapi"
 	"github.com/urfave/cli/v3"
 )
 
@@ -201,6 +202,54 @@ func TestGitCredentialsHelperCommand(t *testing.T) {
 			}
 			if requests != wantRequests {
 				t.Errorf("requests = %d, want %d", requests, wantRequests)
+			}
+		})
+	}
+}
+
+func TestGitCredentialsHelperRedaction(t *testing.T) {
+	const secret = `repository-token\with-escaped-form`
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = fmt.Fprintf(w, `{"token":%q}`, secret)
+	}))
+	t.Cleanup(upstream.Close)
+	for _, mode := range []string{"registered", "registration rejected", "socket missing"} {
+		t.Run(mode, func(t *testing.T) {
+			var reported *jobapi.CapturedError
+			startCaptureErrorTestServer(t, func(_ context.Context, report *jobapi.CapturedError) error {
+				reported = report
+				return nil
+			})
+			// Registration must work independently of error-capture capability.
+			t.Setenv("BUILDKITE_AGENT_JOB_API_CAPTURE_ERROR", "")
+			client, err := jobapi.NewDefaultClient(t.Context())
+			if err != nil {
+				t.Fatal(err)
+			}
+			switch mode {
+			case "registration rejected":
+				t.Setenv("BUILDKITE_AGENT_JOB_API_TOKEN", "wrong-token")
+			case "socket missing":
+				t.Setenv("BUILDKITE_AGENT_JOB_API_SOCKET", "")
+				t.Setenv("BUILDKITE_AGENT_JOB_API_CAPTURE_ERROR", "true")
+			}
+			output, err := runGitCredentialsHelperCommand(t, upstream.URL, "get", "protocol=https\nhost=example.com\npath=repo.git\n")
+			if mode != "registered" {
+				if err == nil || output != "username=fail\npassword=fail\n\n" {
+					t.Fatalf("output=%q, error=%v; want dummy credentials on registration failure", output, err)
+				}
+				return
+			}
+			if err != nil || output != "username=token\npassword="+secret+"\n\n" {
+				t.Fatalf("output=%q, error=%v; want repository credentials", output, err)
+			}
+			if err := client.CaptureError(t.Context(), &jobapi.CapturedError{
+				Code: "git_authentication_failed", Message: fmt.Sprintf("remote echoed %s and %q", secret, secret),
+			}); err != nil {
+				t.Fatal(err)
+			}
+			if reported == nil || reported.Message != `remote echoed [REDACTED] and "[REDACTED]"` {
+				t.Fatalf("reported=%+v, want raw and escaped token redacted", reported)
 			}
 		})
 	}

@@ -641,6 +641,49 @@ func TestRunWithOlfactor(t *testing.T) {
 	}
 }
 
+func TestTeeOutput(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("fixture uses a POSIX shell and PTY")
+	}
+	t.Parallel()
+	for _, tc := range []struct {
+		name         string
+		pty, capture bool
+	}{
+		{"pipes", false, false},
+		{"pty", true, false},
+		{"captured stdout and hidden stderr", false, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var logs bytes.Buffer
+			var output process.Buffer
+			sh := shell.NewTestShell(t, shell.WithStdout(&logs), shell.WithPTY(tc.pty))
+			opts := []shell.RunCommandOpt{shell.ShowPrompt(false), shell.TeeOutput(&output)}
+			var stdout string
+			if tc.capture {
+				opts = append(opts, shell.CaptureStdout(&stdout), shell.ShowStderr(false))
+			}
+			err := sh.Command("sh", "-c", "echo stdout-marker; echo stderr-marker >&2; exit 7").Run(t.Context(), opts...)
+			if shell.ExitCode(err) != 7 {
+				t.Fatalf("exit = %d, want 7: %v", shell.ExitCode(err), err)
+			}
+			got := string(output.ReadAndTruncate())
+			for _, marker := range []string{"stdout-marker", "stderr-marker"} {
+				if strings.Count(got, marker) != 1 {
+					t.Fatalf("tee output = %q, want each stream once", got)
+				}
+			}
+			if tc.capture {
+				if stdout != "stdout-marker" || logs.Len() != 0 {
+					t.Fatalf("stdout = %q, logs = %q; capture or hiding changed", stdout, logs.String())
+				}
+			} else if logs.String() != got {
+				t.Fatalf("logs = %q, want unchanged output %q", logs.String(), got)
+			}
+		})
+	}
+}
+
 func TestRunWithoutPrompt(t *testing.T) {
 	t.Parallel()
 

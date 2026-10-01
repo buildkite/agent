@@ -109,6 +109,26 @@ func URLCredentials(rawURL string) string {
 	return u.String()
 }
 
+// Match just the URL prefix through userinfo, leaving paths and surrounding
+// diagnostic punctuation untouched. Spaces in URL credentials must be escaped.
+var urlUserinfo = regexp.MustCompile(`(?i)(?:[a-z][a-z0-9+.-]*:)?//[^\s/<>]*@`)
+
+// URLCredentialsInText masks URL userinfo in diagnostic text, including tokens
+// used as usernames. It does not detect secrets in paths, queries or plain text.
+func URLCredentialsInText(text string) string {
+	return urlUserinfo.ReplaceAllStringFunc(text, func(prefix string) string {
+		masked := URLCredentials(prefix)
+		if masked == prefix {
+			// Malformed userinfo can be parsed as a query or fragment instead.
+			u, err := url.Parse(prefix)
+			if err != nil || u.User == nil {
+				return "(invalid URL)"
+			}
+		}
+		return masked
+	})
+}
+
 // String is a convenience wrapper for redacting small strings.
 // This is fine to call repeatedly with many separate strings, but avoid using
 // this to redact large streams - it requires buffering the whole input and
