@@ -1,0 +1,71 @@
+# Paste into a dedicated pipeline's YAML editor. Change the queue if needed.
+# Set BOOTSTRAP_TEST in New Build > Environment Variables:
+#   exits (default), graceful, or forced
+steps:
+  - group: "Docker exit codes"
+    if: 'build.env("BOOTSTRAP_TEST") == null || build.env("BOOTSTRAP_TEST") == "exits"'
+    steps:
+      - label: "Exit 0"
+        agents: { queue: docker-bootstrap-dev }
+        command: "test -f /.dockerenv && exit 0"
+      - label: "Exit 1"
+        agents: { queue: docker-bootstrap-dev }
+        command: "test -f /.dockerenv || exit 99; exit 1"
+        soft_fail: [{ exit_status: 1 }]
+      - label: "Exit 42"
+        agents: { queue: docker-bootstrap-dev }
+        command: "test -f /.dockerenv || exit 99; exit 42"
+        soft_fail: [{ exit_status: 42 }]
+      - label: "Explicit exit 137 (no signal)"
+        agents: { queue: docker-bootstrap-dev }
+        command: "test -f /.dockerenv || exit 99; exit 137"
+        soft_fail: [{ exit_status: 137 }]
+      - label: "Explicit exit 143 (no signal)"
+        agents: { queue: docker-bootstrap-dev }
+        command: "test -f /.dockerenv || exit 99; exit 143"
+        soft_fail: [{ exit_status: 143 }]
+      - label: "Exit 255"
+        agents: { queue: docker-bootstrap-dev }
+        command: "test -f /.dockerenv || exit 99; exit 255"
+        soft_fail: [{ exit_status: 255 }]
+
+  - label: "Cancel gracefully after READY"
+    if: 'build.env("BOOTSTRAP_TEST") == "graceful"'
+    agents: { queue: docker-bootstrap-dev }
+    timeout_in_minutes: 5
+    command: |
+      test -f /.dockerenv
+      exec python3 -u - <<'PY'
+      import signal
+      import sys
+      import time
+
+      def cancel(signum, frame):
+          print("GRACEFUL: received signal", signum, flush=True)
+          time.sleep(1)
+          print("GRACEFUL: cleanup complete", flush=True)
+          sys.exit(143)
+
+      signal.signal(signal.SIGTERM, cancel)
+      signal.signal(signal.SIGINT, cancel)
+      print("READY: cancel this job now", flush=True)
+      while True:
+          time.sleep(1)
+      PY
+
+  - label: "Cancel stubborn command after READY"
+    if: 'build.env("BOOTSTRAP_TEST") == "forced"'
+    agents: { queue: docker-bootstrap-dev }
+    timeout_in_minutes: 5
+    command: |
+      test -f /.dockerenv
+      exec python3 -u - <<'PY'
+      import signal
+      import time
+
+      signal.signal(signal.SIGTERM, signal.SIG_IGN)
+      signal.signal(signal.SIGINT, signal.SIG_IGN)
+      print("READY: ignoring SIGTERM and SIGINT; cancel this job now", flush=True)
+      while True:
+          time.sleep(1)
+      PY
