@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"log"
 	"os"
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
@@ -17,6 +18,7 @@ func TestEnvVarsAreMappedToConfig(t *testing.T) {
 
 	config := &ExecutorConfig{
 		Repository:                   "https://original.host/repo.git",
+		AllowedRepositories:          []*regexp.Regexp{regexp.MustCompile(`^https://original\.host/.*$`)},
 		AutomaticArtifactUploadPaths: "llamas/",
 		GitCloneFlags:                "--prune",
 		GitSparseCheckoutPaths:       []string{"old-path/"},
@@ -32,6 +34,7 @@ func TestEnvVarsAreMappedToConfig(t *testing.T) {
 	}
 
 	environ := env.FromSlice([]string{
+		"BUILDKITE_ALLOWED_REPOSITORIES=",
 		"BUILDKITE_ARTIFACT_PATHS=newpath",
 		"BUILDKITE_GIT_CLONE_FLAGS=-f",
 		"BUILDKITE_GIT_SPARSE_CHECKOUT_PATHS=.buildkite/,src/",
@@ -69,6 +72,9 @@ func TestEnvVarsAreMappedToConfig(t *testing.T) {
 
 	if got, want := config.Repository, "https://my.mirror/repo.git"; got != want {
 		t.Errorf("config.Repository = %q, want %q", got, want)
+	}
+	if got, want := config.AllowedRepositories[0].String(), `^https://original\.host/.*$`; got != want {
+		t.Errorf("config.AllowedRepositories = %q, want immutable %q", got, want)
 	}
 
 	if got, want := config.GitSSHKey, "new-key"; got != want {

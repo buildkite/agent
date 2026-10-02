@@ -34,6 +34,16 @@ func (e *Executor) CheckoutPhase(ctx context.Context) (retErr error) {
 		return err
 	}
 
+	if err := e.validateRepositoryAllowedForCheckout(e.Repository); err != nil {
+		return err
+	}
+	if e.GitRemoteMirrorURL != "" {
+		if err := e.validateRepositoryAllowedForCheckout(e.GitRemoteMirrorURL); err != nil {
+			e.shell.Commentf("Remote Git mirror is not permitted by --allowed-repositories; using canonical repository: %s", redact.URLCredentials(e.GitRemoteMirrorURL))
+			e.GitRemoteMirrorURL = ""
+		}
+	}
+
 	// Environment and pre-checkout hooks can change BUILDKITE_REPO. Refresh the
 	// provider-neutral rewrite and primary-repository keyscan decision using the
 	// repository that the checkout will actually use.
@@ -111,6 +121,13 @@ func (e *Executor) CheckoutPhase(ctx context.Context) (retErr error) {
 	}
 
 	return nil
+}
+
+func (e *Executor) validateRepositoryAllowedForCheckout(repository string) error {
+	if MatchesAllowedPatterns(e.AllowedRepositories, repository) {
+		return nil
+	}
+	return fmt.Errorf("repository %q is not permitted by --allowed-repositories", redact.URLCredentials(repository))
 }
 
 // checkout runs checkout hook or default checkout logic

@@ -8,6 +8,7 @@ import (
 func TestProtectedEnv(t *testing.T) {
 	// Test that ProtectedEnv contains the expected variables
 	expectedProtected := []string{
+		"BUILDKITE_ALLOWED_REPOSITORIES",
 		"BUILDKITE_AGENT_ACCESS_TOKEN",
 		"BUILDKITE_AGENT_DEBUG",
 		"BUILDKITE_AGENT_ENDPOINT",
@@ -104,6 +105,7 @@ func TestCheckoutOverrideScope(t *testing.T) {
 	// change the mirror checkout mode. Submodule clone config is likewise
 	// always protected (a `git -c` injection vector with no backend knob).
 	for _, envVar := range []string{
+		"BUILDKITE_ALLOWED_REPOSITORIES",
 		"BUILDKITE_GIT_MIRRORS_PATH",
 		"BUILDKITE_GIT_MIRRORS_LOCK_TIMEOUT",
 		"BUILDKITE_GIT_MIRRORS_SKIP_UPDATE",
@@ -116,6 +118,9 @@ func TestCheckoutOverrideScope(t *testing.T) {
 	} {
 		if got := IsProtected(envVar); !got {
 			t.Errorf("IsProtected(%q) = false, want true", envVar)
+		}
+		if got := IsProtectedFromWithinJob(envVar); !got {
+			t.Errorf("IsProtectedFromWithinJob(%q) = false, want true", envVar)
 		}
 		if got := IsCheckoutOverrideScoped(envVar); got {
 			t.Errorf("IsCheckoutOverrideScoped(%q) = true, want false", envVar)
