@@ -63,6 +63,9 @@ func TestRepositoryAllowlistRejectsCaseVariantWildcard(t *testing.T) {
 			"BUILDKITE_PIPELINE_PROVIDER":    "custom",
 			"buildkite_allowed_repositories": ".*",
 			"PATH":                           filepath.Dir(git.Path) + string(os.PathListSeparator) + os.Getenv("PATH"),
+			// Credential setup runs Git before checkout; keep it out of this test.
+			"BUILDKITE_USE_REPOSITORY_PROVIDER_GIT_CREDENTIALS": "false",
+			"BUILDKITE_USE_GITHUB_APP_GIT_CREDENTIALS":          "false",
 		},
 	}
 	if err := runJob(t, t.Context(), testRunJobConfig{
