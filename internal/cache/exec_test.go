@@ -520,7 +520,7 @@ func TestTimeSaved(t *testing.T) {
 		}
 	}
 
-	if got, want := replayHeader(103*time.Second), "+++ :zap: cache exec saved 1m43s"; got != want {
+	if got, want := replayHeader(103*time.Second), "+++ ⚡ \x1b[1;32mcache exec saved 1m43s\x1b[0m"; got != want {
 		t.Errorf("replayHeader(1m43s) = %q, want %q", got, want)
 	}
 	if got := replayHeader(-time.Second); !strings.HasPrefix(got, "+++ :package: Replaying output from cache") {

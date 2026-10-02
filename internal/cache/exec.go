@@ -182,12 +182,12 @@ func (c *client) execRestore(ctx context.Context, l logger.Logger, cacheConfig *
 	return true, nil
 }
 
-// replayHeader opens the replayed output's log group, showing in its title the time the hit is saving.
+// replayHeader opens the replayed output's log group, highlighting in its title the time the hit is saving (Buildkite renders ANSI colours in group titles).
 func replayHeader(saved time.Duration) string {
 	if saved <= 0 {
 		return "+++ :package: Replaying output from cache (command was not run)"
 	}
-	return fmt.Sprintf("+++ :zap: cache exec saved %s", roundDuration(saved))
+	return fmt.Sprintf("+++ ⚡ \x1b[1;32mcache exec saved %s\x1b[0m", roundDuration(saved))
 }
 
 // timeSaved summarises a hit, warning in yellow when restoring took longer than running the command.
