@@ -8,6 +8,10 @@
 # file store, and runs each case as a real `buildkite-agent bootstrap` job, so commands
 # get a real job log redactor and Job API.
 #
+# It starts with a showcase: a miss and a hit whose job output goes straight to the log,
+# so Buildkite shows cache exec's log groups and colours. Each later section's job
+# output follows its results in a collapsed group.
+#
 # Results:
 #   ok / FAIL   behaviour cache exec promises; any FAIL makes the script exit non-zero
 #   ISSUE       a known limitation that still happens
@@ -19,6 +23,7 @@ REPO=$(cd "$HERE/../.." && pwd)
 WORK=$(mktemp -d)
 PROJECT=$WORK/project
 LOG=$WORK/output.log            # output of the last in_job or outside_job
+SECTION_LOG=$WORK/section.log   # output of every job in the current section
 REQUESTS=$WORK/requests.log     # registry requests made by the last in_job or outside_job
 PASSED=0 FAILED=0 ISSUES=0
 
@@ -95,7 +100,15 @@ buildkite-agent redactor add key.pem 2>/dev/null
 cat key.pem
 mkdir -p dist
 EOF
-chmod +x build.sh redact.sh
+cat > slow-build.sh <<'EOF'
+#!/bin/bash
+# A stand-in for a slow build, for the showcase.
+echo "vite v5.4.0 building for production..."
+for step in "transforming (12 modules)" "rendering chunks" "computing gzip size"; do sleep 1; echo "  $step..."; done
+mkdir -p dist && cp src/* dist/
+echo "✓ built in 3.0s"
+EOF
+chmod +x build.sh redact.sh slow-build.sh
 
 # --- Helpers -------------------------------------------------------------------
 
@@ -105,6 +118,7 @@ in_job() {
   env "${AGENT_ENV[@]}" buildkite-agent bootstrap --phases command --command "$1" \
     --build-path "$WORK/builds" --job demo --repository "$PROJECT" --commit HEAD --branch main \
     --agent a --organization o --pipeline p --pipeline-provider custom > "$LOG" 2>&1
+  cat "$LOG" >> "$SECTION_LOG"
 }
 
 # outside_job [VAR=value...] <command...>: runs a command with no job and no Job API; sets $EXIT.
@@ -112,9 +126,19 @@ outside_job() {
   : > "$REQUESTS"
   env -u BUILDKITE_AGENT_JOB_API_SOCKET -u BUILDKITE_AGENT_JOB_API_TOKEN "${AGENT_ENV[@]}" "$@" > "$LOG" 2>&1
   EXIT=$?
+  { echo "\$ $* # outside a job, exit $EXIT"; cat "$LOG"; } >> "$SECTION_LOG"
 }
 
-section() { printf '\n== %s\n' "$1"; }
+# show_output: prints the current section's job output in a collapsed log group, indented so
+# cache exec's own group headers show as text.
+show_output() {
+  [[ -s $SECTION_LOG ]] || return 0
+  echo "~~~ :mag: Job output: $SECTION"
+  sed -e 's/\r$//' -e 's/^/    /' "$SECTION_LOG"
+  : > "$SECTION_LOG"
+}
+
+section() { show_output; SECTION=$1; printf '+++ %s\n' "$1"; }
 
 # expect <description> <check...>: reports ok or FAIL; on FAIL, shows the last output and registry requests.
 expect() {
@@ -142,6 +166,8 @@ has() { grep -qF -- "$1" "$LOG"; }                  # the last output contains t
 requested() { grep -qE -- "$1" "$REQUESTS"; }       # the registry got a request matching this regex
 file_has() { grep -qaF -- "$2" "$1"; }
 ran_twice() { test "$(grep -c 'No cached result, running command' "$LOG")" -eq 2; }
+ran_once() { test "$(grep -c 'No cached result, running command' "$LOG")" -eq 1; }
+hit() { has "Restored from cache"; }               # the last output includes a cache exec hit
 runs() { wc -l < "$WORK/runs"; }
 
 # new_key: changes the source files, so the build cache key has nothing saved yet.
@@ -155,17 +181,37 @@ decode_saved_output() {
   zstd -dcq "$1" | python3 -c '
 import sys
 data = sys.stdin.buffer.read()
-i = len(b"buildkite-agent cache exec output v1\n")
+i = len(b"buildkite-agent cache exec output v2\n")
 while i < len(data):
-    i += 1  # stream: 1 = stdout, 2 = stderr
+    stream = data[i]; i += 1  # 1 = stdout, 2 = stderr, 3 = how long the command ran
     size = shift = 0
     while True:  # uvarint length
         byte = data[i]; i += 1
         size |= (byte & 0x7F) << shift; shift += 7
         if byte < 0x80: break
-    sys.stdout.buffer.write(data[i:i + size]); i += size
+    if stream != 3:
+        sys.stdout.buffer.write(data[i:i + size])
+    i += size
 '
 }
+
+# --- Showcase ------------------------------------------------------------------
+
+# The job output goes straight to the log here, so the build log shows exactly what a
+# pipeline step running cache exec would.
+showcase() {
+  env "${AGENT_ENV[@]}" buildkite-agent bootstrap --phases command --command "$1" \
+    --build-path "$WORK/builds" --job demo --repository "$PROJECT" --commit HEAD --branch main \
+    --agent a --organization o --pipeline p --pipeline-provider custom 2>&1 |
+    sed 's/\r$//' | grep -v -e 'Running commands$' -e ' cd /' # bootstrap's own group would replace ours
+}
+new_key
+echo "+++ :one: Showcase, first run: a miss, so the build runs and is saved"
+showcase 'RUN_ID=showcase buildkite-agent cache exec --name by_run_id -- ./slow-build.sh'
+rm -rf dist
+echo "+++ :two: Showcase, second run: a hit, so the build is skipped and its output replayed"
+showcase 'RUN_ID=showcase buildkite-agent cache exec --name by_run_id -- ./slow-build.sh'
+rm -rf dist
 
 # --- Cases ---------------------------------------------------------------------
 
@@ -195,7 +241,7 @@ in_job 'buildkite-agent cache exec --name build -- ./build.sh'
 rm -rf dist
 in_job 'buildkite-agent cache restore --name build'
 expect "restores target_paths" test -f dist/input.txt
-expect "without replaying output" not has "Replaying output"
+expect "without replaying output" not hit
 expect "or asking the registry for it" not requested 'cache-exec-output'
 
 section "fallback_limit is ignored"
@@ -214,8 +260,8 @@ new_key
 in_job 'buildkite-agent cache save --name build
 buildkite-agent cache exec --name build -- ./build.sh
 buildkite-agent cache exec --name build -- ./build.sh'
-expect "the first exec saves output for them" has "already holds this run's files"
-expect "and the second is a hit" has "Replaying output from cache"
+expect "the first exec saves output for them" has "Saving command output for cache: build"
+expect "and the second is a hit" hit
 
 section "different files from a plain cache save"
 new_key
@@ -224,8 +270,9 @@ in_job 'buildkite-agent cache save --name build
 buildkite-agent cache exec --name build -- ./build.sh
 buildkite-agent cache exec --name build -- ./build.sh'
 expect "aren't paired with output" has "no recorded command output for these files"
-expect "and no output is replayed" not has "Replaying output"
-issue "the key never caches again until the plain-saved entry expires (both execs ran)" ran_twice
+expect "so the first exec runs the command" ran_once
+expect "and replaces them with its own, so the second is a hit" hit
+expect "which restores this run's files, not the plain-saved ones" not file_has dist/input.txt stale
 
 section "exec-saved files replaced by cache save --force"
 new_key
@@ -234,7 +281,7 @@ echo replaced > dist/input.txt
 buildkite-agent cache save --force --name build
 rm -rf dist
 buildkite-agent cache exec --name build -- ./build.sh'
-expect "the old output isn't replayed with the new files" not has "Replaying output"
+expect "the old output isn't replayed with the new files" not hit
 expect "the command runs" ran_twice
 
 section "corrupt saved output"
@@ -246,8 +293,8 @@ in_job 'buildkite-agent cache exec --name build -- ./build.sh
 buildkite-agent cache exec --name build -- ./build.sh'
 expect "is treated as a miss" has "missing or corrupt"
 expect "and expired" requested '^expire .*cache-exec-output'
-expect "the next run saves new output for the same files" has "already holds this run's files"
-expect "and the run after that is a hit" has "Replaying output from cache"
+expect "the next run saves new output for the same files" has "Saving command output for cache: build"
+expect "and the run after that is a hit" hit
 
 section "saved output is redacted"
 MY_TOKEN=SECRET-agent-env in_job 'echo SECRET-registered-before | buildkite-agent redactor add 2>/dev/null
@@ -273,7 +320,7 @@ expect "a miss runs the command" has "BUILD RAN"
 expect "and exits 0" test "$EXIT" -eq 0
 expect "but saves nothing" not requested '^(peek|store|commit) '
 outside_job RUN_ID=redact buildkite-agent cache exec --name by_run_id -- false
-expect "a saved result is still replayed" has "Replaying output from cache"
+expect "a saved result is still replayed" hit
 outside_job BUILDKITE_AGENT_JOB_API_SOCKET=/nonexistent.sock BUILDKITE_AGENT_JOB_API_TOKEN=x \
   buildkite-agent cache exec --cache-fail-on-error --name build -- ./build.sh
 expect "--cache-fail-on-error fails when the Job API socket is dead" test "$EXIT" -eq 1
@@ -302,5 +349,7 @@ expect "an unknown --name runs the command uncached" has "RAN-42"
 expect "a missing config file runs the command uncached" has "RAN-43"
 expect "--cache-fail-on-error fails instead" has "EXIT=1."
 
-printf '\npassed: %d  failed: %d  known issues: %d\n' "$PASSED" "$FAILED" "$ISSUES"
+show_output
+echo "+++ Summary"
+printf 'passed: %d  failed: %d  known issues: %d\n' "$PASSED" "$FAILED" "$ISSUES"
 [[ $FAILED -eq 0 ]]
