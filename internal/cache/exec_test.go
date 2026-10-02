@@ -55,11 +55,12 @@ func (f *fakeRegistry) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case "POST /cache_registries/test/peek":
 		var req api.CacheEntryPeekReq
 		_ = json.NewDecoder(r.Body).Decode(&req)
-		if _, ok := f.entries[fakeAddr(req.TargetPaths, req.CacheKey)]; !ok {
+		entry, ok := f.entries[fakeAddr(req.TargetPaths, req.CacheKey)]
+		if !ok {
 			notFound()
 			return
 		}
-		reply(api.CacheEntryPeekResp{})
+		reply(api.CacheEntryPeekResp{Blobs: entry.Blobs})
 	case "POST /cache_registries/test/retrieve":
 		var req api.CacheEntryRetrieveReq
 		_ = json.NewDecoder(r.Body).Decode(&req)
@@ -267,6 +268,36 @@ func TestRunExec_MainEntryFromPlainSaveIsNeverReplayed(t *testing.T) {
 	}
 	if got := len(reg.stores); got != 1 {
 		t.Errorf("got %d stores, want only the plain save", got)
+	}
+}
+
+func TestRunExec_MainEntryFromPlainSaveOfIdenticalFilesGetsOutput(t *testing.T) {
+	reg, apiClient, cfg := setupExecTest(t)
+	writeFile(t, filepath.Join("out", "result"), "built") // what build.run writes
+	if err := RunSave(t.Context(), logger.Discard, apiClient, cfg); err != nil {
+		t.Fatalf("plain save: %v", err)
+	}
+
+	// The first exec has no output to replay, but it produces the saved files, so it records output for them.
+	b := &build{}
+	writeFile(t, "input.txt", "v1")
+	if _, _, err := runExec(t, apiClient, cfg, b.run); err != nil {
+		t.Fatalf("first exec: %v", err)
+	}
+	if got := len(reg.stores); got != 2 {
+		t.Fatalf("got %d stores, want the plain save and the output sidecar", got)
+	}
+
+	writeFile(t, "input.txt", "v1")
+	stdout, _, err := runExec(t, apiClient, cfg, b.run)
+	if err != nil {
+		t.Fatalf("second exec: %v", err)
+	}
+	if b.runs != 1 {
+		t.Errorf("command ran %d times, want 1: the second exec should hit", b.runs)
+	}
+	if !strings.HasSuffix(stdout, "(command was not run)\ncompiling\ndone\n") {
+		t.Errorf("stdout = %q, want replayed output", stdout)
 	}
 }
 

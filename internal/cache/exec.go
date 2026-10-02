@@ -225,7 +225,7 @@ func (c *client) restoreOutput(ctx context.Context, cacheConfig *configuration.C
 	return file, cleanup, nil
 }
 
-// execSave saves the main entry then, only if this run created it, the output sidecar, so output is never paired with files from plain save or another job.
+// execSave saves the main entry then the output sidecar, but only if this run created the main entry or produced identical files, so output is never paired with different files from plain save or another job.
 func (c *client) execSave(ctx context.Context, l logger.Logger, cacheConfig *configuration.Cache, cacheKey []api.CacheKeyPart, failOnError bool, output *archive.ArchiveInfo, recordErr error) error {
 	cacheID := cacheConfig.Name
 	failed := func(what string, err error) error {
@@ -245,9 +245,19 @@ func (c *client) execSave(ctx context.Context, l logger.Logger, cacheConfig *con
 		return failed("cache", err)
 	}
 	logSaveResult(l, cacheID, result)
+	mainDigest := result.Archive.Sha256Sum
 	if !result.CacheEntryCreated {
-		l.Infof("Not saving command output for cache %q: its files were saved by another run, so this run's output may not match them", cacheID)
-		return nil
+		// Another run saved files at this key. This run's output describes them only if this run produced the same files.
+		matches, err := archiveMatches(ctx, cacheConfig, result.ExistingDigest)
+		if err != nil {
+			return failed("command output for cache", err)
+		}
+		if !matches {
+			l.Infof("Not saving command output for cache %q: its files were saved by another run and differ from this run's", cacheID)
+			return nil
+		}
+		l.Infof("Cache %q already holds this run's files", cacheID)
+		mainDigest = result.ExistingDigest
 	}
 
 	if recordErr != nil {
@@ -255,7 +265,7 @@ func (c *client) execSave(ctx context.Context, l logger.Logger, cacheConfig *con
 	}
 	l.Infof("Saving command output for cache: %s", cacheID)
 	outputCtx, span := otel.Tracer("github.com/buildkite/agent/v4/internal/cache").Start(ctx, "Client.saveOutput")
-	outputKey := outputCacheKey(cacheKey, result.Archive.Sha256Sum)
+	outputKey := outputCacheKey(cacheKey, mainDigest)
 	result, err = c.saveEntry(outputCtx, cacheID, outputTargetPaths(cacheConfig.TargetPaths), outputKey, "zstd", false, time.Now(), SaveResult{Key: cacheID},
 		func(context.Context) (*archive.ArchiveInfo, error) { return output, nil })
 	span.End()
@@ -264,6 +274,19 @@ func (c *client) execSave(ctx context.Context, l logger.Logger, cacheConfig *con
 	}
 	logSaveResult(l, cacheID, result)
 	return nil
+}
+
+// archiveMatches reports whether archiving target_paths now gives digest; archives are reproducible, so equal digests mean identical files.
+func archiveMatches(ctx context.Context, cacheConfig *configuration.Cache, digest string) (bool, error) {
+	if digest == "" {
+		return false, nil
+	}
+	info, err := archive.BuildArchive(ctx, cacheConfig.TargetPaths, cacheConfig.Name)
+	if err != nil {
+		return false, fmt.Errorf("failed to build archive to compare with the saved files: %w", err)
+	}
+	_ = os.Remove(info.ArchivePath)
+	return info.Sha256sum == digest, nil
 }
 
 // outputCacheKey returns the sidecar key: the main entry's key plus its archive digest, so a replaced or re-saved main entry never pairs with old output.
