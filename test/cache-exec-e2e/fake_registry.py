@@ -7,7 +7,8 @@ retrieve, expire, confirm) backed by an in-memory entry list with store
 
 Usage: fake_registry.py <port-file> <request-log>
 Binds an ephemeral port on 127.0.0.1 and writes it to <port-file>.
-GET /control/entries returns the committed entries as JSON.
+GET /control/latest-output returns the blob digest of the newest saved command
+output (the entry whose target_paths include "<cache-exec-output>").
 """
 import json
 import re
@@ -18,7 +19,7 @@ from urllib.parse import parse_qs, urlparse
 
 ENTRIES = []  # committed entries: {target_paths, cache_key, blobs}
 PENDING = {}  # upload_id -> entry awaiting commit
-SECRETS = {"MY_SECRET": "s3cr3t-from-secret-get-XYZ"}
+SECRETS = {"MY_SECRET": "SECRET-from-secret-get"}
 LOG = open(sys.argv[2], "a", buffering=1)
 
 
@@ -48,9 +49,14 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         u = urlparse(self.path)
+        if u.path == "/control/latest-output":
+            outputs = [e for e in ENTRIES if "<cache-exec-output>" in e["target_paths"]]
+            body = outputs[-1]["blobs"][0]["digest"]["value"].encode()
+            self.send_response(200)
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            return self.wfile.write(body)
         LOG.write(f"GET {u.path}\n")
-        if u.path == "/control/entries":
-            return self.send(200, ENTRIES)
         if re.fullmatch(r"/v3/jobs/[^/]+/secrets", u.path):
             key = parse_qs(u.query)["key"][0]
             if key in SECRETS:
