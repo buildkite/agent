@@ -1280,12 +1280,22 @@ var AgentStartCommand = &cli.Command{
 			OTLPDestinationSet:      agent.HasLocalOTLPDestination(),
 		}
 
+		// Spawned workers register separately but get the same warnings, so
+		// only log each one once.
+		var loggedWarnings sync.Map
+
 		// Send register requests.
 		workers, err := concurrently.Map(ctx, regReqs, func(ctx context.Context, i int, regReq api.AgentRegisterRequest) (*agent.AgentWorker, error) {
 			// Register the agent with the buildkite API
 			reg, err := client.Register(ctx, regReq)
 			if err != nil {
 				return nil, err
+			}
+
+			for _, w := range reg.Warnings {
+				if _, logged := loggedWarnings.LoadOrStore(w.Message, struct{}{}); !logged {
+					l.Warnf("%s", w.Message)
+				}
 			}
 
 			wl := l.WithFields(logger.StringField("agent", reg.Name))
