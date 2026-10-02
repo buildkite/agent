@@ -10,6 +10,7 @@ import (
 	"os/signal"
 	"slices"
 	"syscall"
+	"time"
 
 	"github.com/buildkite/agent/v4/api"
 	"github.com/buildkite/agent/v4/internal/cache"
@@ -69,15 +70,18 @@ var CacheExecCommand = &cli.Command{
 			return fmt.Errorf("cache exec needs exactly one --name, got %d", len(cfg.Names))
 		}
 
+		command := cacheExecCommand(args)
+
+		// Like any cache problem, missing configuration runs the command without the cache unless --cache-fail-on-error.
 		apiCfg := loadAPIClientConfig(cfg, "AgentAccessToken")
 		if apiCfg.Token == "" {
-			return errors.New("an API token must be provided to use the cache")
+			return cache.RunUncached(l, cfg.FailOnError, errors.New("an API token must be provided to use the cache"), os.Stdout, os.Stderr, command)
 		}
 		apiClient := api.NewClient(l, apiCfg)
 
 		cacheConfigFile, err := resolveCacheConfigFile(cfg.CacheConfigFile)
 		if err != nil {
-			return err
+			return cache.RunUncached(l, cfg.FailOnError, err, os.Stdout, os.Stderr, command)
 		}
 
 		// The saved output is replayed in jobs that may lack these secrets, so redact it before saving.
@@ -101,7 +105,7 @@ var CacheExecCommand = &cli.Command{
 				return append(slices.Clone(envNeedles), jobNeedles...), nil
 			},
 		}
-		return cache.RunExec(ctx, l, apiClient, cacheCfg, os.Stdout, os.Stderr, cacheExecCommand(args))
+		return cache.RunExec(ctx, l, apiClient, cacheCfg, os.Stdout, os.Stderr, command)
 	},
 }
 
@@ -114,13 +118,17 @@ func listJobRedactions(ctx context.Context) ([]string, error) {
 	return client.RedactionList(ctx)
 }
 
-// cacheExecCommand runs args on the given streams; a failure returns a SilentExitError with its exit status.
+// cacheExecWaitDelay is how long to wait, after the command exits, for processes it left running to close its output; a plain step doesn't wait for them at all.
+const cacheExecWaitDelay = time.Second
+
+// cacheExecCommand runs args on the given streams, failing with the exit status a shell would give: the command's own, 128+N if signal N killed it, or 127 if it can't be started.
 func cacheExecCommand(args []string) cache.Command {
 	return func(stdout, stderr io.Writer) error {
 		cmd := exec.Command(args[0], args[1:]...)
 		cmd.Stdin = os.Stdin
 		cmd.Stdout = stdout
 		cmd.Stderr = stderr
+		cmd.WaitDelay = cacheExecWaitDelay
 
 		// Cancellation signals reach the command via the job's process group; catch them so we outlive it and return its exit status.
 		signals := make(chan os.Signal, 1)
@@ -128,12 +136,17 @@ func cacheExecCommand(args []string) cache.Command {
 		defer signal.Stop(signals)
 
 		err := cmd.Run()
+		if errors.Is(err, exec.ErrWaitDelay) { // the command succeeded; only processes it left running still held its output
+			return nil
+		}
 		if exitErr := new(exec.ExitError); errors.As(err, &exitErr) {
-			code := exitErr.ExitCode()
-			if code < 0 { // terminated by a signal
-				code = 1
+			if status, ok := exitErr.Sys().(syscall.WaitStatus); ok && status.Signaled() {
+				return NewSilentExitError(128 + int(status.Signal()))
 			}
-			return NewSilentExitError(code)
+			return NewSilentExitError(exitErr.ExitCode())
+		}
+		if err != nil && cmd.Process == nil {
+			return NewExitError(127, err)
 		}
 		return err
 	}
