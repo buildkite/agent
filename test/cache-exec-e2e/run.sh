@@ -10,8 +10,8 @@
 #
 # Results:
 #   ok / FAIL   behaviour cache exec promises; any FAIL makes the script exit non-zero
-#   ISSUE       a known problem that still happens
-#   fixed?      a known problem that no longer happens
+#   ISSUE       a known limitation that still happens
+#   fixed?      a known limitation that no longer happens
 set -uo pipefail
 
 HERE=$(cd "$(dirname "$0")" && pwd)
@@ -208,6 +208,15 @@ expect "cache exec says it ignores fallback_limit" has "ignores fallback_limit"
 expect "and runs the command" has "No cached result, running command"
 expect "every key part is sent as mandatory" not requested '^retrieve .*[?]'
 
+section "identical files from a plain cache save"
+new_key
+./build.sh > /dev/null 2>&1
+in_job 'buildkite-agent cache save --name build
+buildkite-agent cache exec --name build -- ./build.sh
+buildkite-agent cache exec --name build -- ./build.sh'
+expect "the first exec saves output for them" has "already holds this run's files"
+expect "and the second is a hit" has "Replaying output from cache"
+
 section "different files from a plain cache save"
 new_key
 mkdir -p dist && echo stale > dist/input.txt
@@ -237,7 +246,8 @@ in_job 'buildkite-agent cache exec --name build -- ./build.sh
 buildkite-agent cache exec --name build -- ./build.sh'
 expect "is treated as a miss" has "missing or corrupt"
 expect "and expired" requested '^expire .*cache-exec-output'
-issue "the key never caches again until the main entry expires (both execs ran)" ran_twice
+expect "the next run saves new output for the same files" has "already holds this run's files"
+expect "and the run after that is a hit" has "Replaying output from cache"
 
 section "saved output is redacted"
 MY_TOKEN=SECRET-agent-env in_job 'echo SECRET-registered-before | buildkite-agent redactor add 2>/dev/null
@@ -259,27 +269,38 @@ expect "--cache-fail-on-error fails instead" has "EXIT=1"
 section "no Job API"
 new_key
 outside_job buildkite-agent cache exec --name build -- ./build.sh
-expect "runs the command uncached" has "running the command without caching"
+expect "a miss runs the command" has "BUILD RAN"
 expect "and exits 0" test "$EXIT" -eq 0
+expect "but saves nothing" not requested '^(peek|store|commit) '
+outside_job RUN_ID=redact buildkite-agent cache exec --name by_run_id -- false
+expect "a saved result is still replayed" has "Replaying output from cache"
 outside_job BUILDKITE_AGENT_JOB_API_SOCKET=/nonexistent.sock BUILDKITE_AGENT_JOB_API_TOKEN=x \
   buildkite-agent cache exec --cache-fail-on-error --name build -- ./build.sh
 expect "--cache-fail-on-error fails when the Job API socket is dead" test "$EXIT" -eq 1
-outside_job RUN_ID=redact buildkite-agent cache exec --name by_run_id -- true
-issue "an existing hit is ignored and the command runs" has "running the command without caching"
 
-section "other known issues"
-in_job 'mkdir -p dist; captured=$(RUN_ID=capture buildkite-agent cache exec --name by_run_id -- echo 1.2.3 2>/dev/null); echo "CAPTURED=[$captured]"'
-issue "stdout includes section headers, so \$(cache exec -- echo 1.2.3) captures them" has "CAPTURED=[--- :package:"
+section "output and exit status"
+in_job 'mkdir -p dist
+for run in miss hit; do echo "$run=[$(RUN_ID=capture buildkite-agent cache exec --name by_run_id -- echo 1.2.3 2>/dev/null)]"; done'
+expect "on a miss, \$(cache exec -- echo 1.2.3) captures only 1.2.3" has "miss=[1.2.3]"
+expect "and on a hit" has "hit=[1.2.3]"
 in_job 'RUN_ID=no_newline buildkite-agent cache exec --name by_run_id -- bash -c "mkdir -p dist; printf no-newline"'
-issue "the Saving header is glued to output without a trailing newline" has "no-newline--- :package: Saving cache..."
+expect "a header after output without a trailing newline starts on a new line" grep -q -- '^--- :package: Saving cache' "$LOG"
 start=$SECONDS
-in_job 'RUN_ID=background buildkite-agent cache exec --name by_run_id -- bash -c "mkdir -p dist; (sleep 3; echo late) & echo started"'
-issue "cache exec waits for a background child that holds stdout open" test $((SECONDS - start)) -ge 3
-in_job 'RUN_ID=sigkill buildkite-agent cache exec --name by_run_id -- bash -c "kill -9 \$\$" || echo "EXIT=$?"'
-issue "a command killed by SIGKILL makes cache exec exit 1, not 137" has "EXIT=1"
+in_job 'RUN_ID=background buildkite-agent cache exec --name by_run_id -- bash -c "mkdir -p dist; (sleep 5; echo late) & echo started"'
+expect "cache exec doesn't wait for a background process holding the output open" test $((SECONDS - start)) -lt 4
+in_job 'RUN_ID=sigkill buildkite-agent cache exec --name by_run_id -- bash -c "kill -9 \$\$" || echo "EXIT=$?."
+buildkite-agent cache exec --name by_run_id -- ./does-not-exist || echo "EXIT=$?."'
+expect "a command killed by SIGKILL exits 137" has "EXIT=137."
+expect "a command that can't be started exits 127" has "EXIT=127."
+
+section "missing cache configuration"
 # $((40 + 2)) so the job log's echo of the command line doesn't match "RAN-42".
-in_job 'buildkite-agent cache exec --name unknown -- echo "RAN-$((40 + 2))"'
-issue "an unknown --name fails without running the command" not has "RAN-42"
+in_job 'buildkite-agent cache exec --name unknown -- echo "RAN-$((40 + 2))"
+BUILDKITE_CACHE_CONFIG_FILE=missing.yml buildkite-agent cache exec --name build -- echo "RAN-$((40 + 3))"
+buildkite-agent cache exec --cache-fail-on-error --name unknown -- true || echo "EXIT=$?."'
+expect "an unknown --name runs the command uncached" has "RAN-42"
+expect "a missing config file runs the command uncached" has "RAN-43"
+expect "--cache-fail-on-error fails instead" has "EXIT=1."
 
 printf '\npassed: %d  failed: %d  known issues: %d\n' "$PASSED" "$FAILED" "$ISSUES"
 [[ $FAILED -eq 0 ]]
