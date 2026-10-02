@@ -462,6 +462,11 @@ func (r *JobRunner) createEnvironment(ctx context.Context) ([]string, error) {
 	for _, pattern := range r.conf.AgentConfiguration.AllowedRepositories {
 		allowedRepositories = append(allowedRepositories, pattern.String())
 	}
+	// Windows treats env names as case-insensitive, so remove job-supplied
+	// variants that could override the agent's policy when bootstrap starts.
+	maps.DeleteFunc(env, func(name, _ string) bool {
+		return strings.EqualFold(name, "BUILDKITE_ALLOWED_REPOSITORIES")
+	})
 	env["BUILDKITE_ALLOWED_REPOSITORIES"] = strings.Join(allowedRepositories, ",")
 
 	// When in KubernetesExec mode, filter out the Kubernetes plugin,

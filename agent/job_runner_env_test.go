@@ -25,6 +25,8 @@ func TestCreateEnvironmentRepositoryAllowlist(t *testing.T) {
 			}
 			r := controlPlaneTestRunner(t, map[string]string{
 				"BUILDKITE_ALLOWED_REPOSITORIES": "job-policy",
+				"buildkite_allowed_repositories": ".*",
+				"Buildkite_Allowed_Repositories": "job-policy-mixedcase",
 			}, conf)
 			got, err := r.createEnvironment(t.Context())
 			if err != nil {
@@ -34,14 +36,26 @@ func TestCreateEnvironmentRepositoryAllowlist(t *testing.T) {
 			if diff := cmp.Diff(strings.Join(patterns, ","), value); diff != "" {
 				t.Errorf("bootstrap policy (-want +got):\n%s", diff)
 			}
+			var policyEntries []string
+			for name, value := range envutil.SeqSlice(got) {
+				if strings.EqualFold(name, "BUILDKITE_ALLOWED_REPOSITORIES") {
+					policyEntries = append(policyEntries, name+"="+value)
+				}
+			}
+			wantPolicyEntries := []string{"BUILDKITE_ALLOWED_REPOSITORIES=" + strings.Join(patterns, ",")}
+			if diff := cmp.Diff(wantPolicyEntries, policyEntries); diff != "" {
+				t.Errorf("case-insensitive policy entries (-want +got):\n%s", diff)
+			}
 			// Container bootstraps must receive the same trusted policy.
 			for _, path := range []string{r.envShellFile.Name(), r.envJSONFile.Name()} {
 				data, err := os.ReadFile(path)
 				if err != nil {
 					t.Fatal(err)
 				}
-				if strings.Contains(string(data), "job-policy") || strings.Contains(string(data), "ambient-policy") {
-					t.Errorf("env file contains an untrusted policy: %s", data)
+				for _, untrusted := range []string{"job-policy", "ambient-policy", "buildkite_allowed_repositories"} {
+					if strings.Contains(string(data), untrusted) {
+						t.Errorf("env file contains an untrusted policy %q: %s", untrusted, data)
+					}
 				}
 				if !strings.Contains(string(data), "BUILDKITE_ALLOWED_REPOSITORIES") {
 					t.Errorf("env file is missing the policy: %s", data)

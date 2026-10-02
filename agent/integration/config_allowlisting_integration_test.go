@@ -1,15 +1,97 @@
 package integration
 
 import (
+	"fmt"
 	"maps"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
 	"testing"
 
 	"github.com/buildkite/agent/v4/agent"
 	"github.com/buildkite/agent/v4/api"
+	"github.com/buildkite/agent/v4/env"
 	"github.com/buildkite/bintest/v3"
 )
+
+func TestRepositoryAllowlistRejectsCaseVariantWildcard(t *testing.T) {
+	t.Parallel()
+
+	executable, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	hooksDir := t.TempDir()
+	hookPath := filepath.Join(hooksDir, "pre-checkout")
+	const disallowedRepository = "https://disallowed.example/repo.git"
+	hookBody := "#!/bin/sh\nexport BUILDKITE_REPO=" + disallowedRepository + "\n"
+	if runtime.GOOS == "windows" {
+		hookPath += ".bat"
+		hookBody = "@echo off\r\nset BUILDKITE_REPO=" + disallowedRepository + "\r\n"
+	}
+	writeHook := exec.Command(executable, "write-exec", hookPath)
+	writeHook.Stdin = strings.NewReader(hookBody)
+	if err := writeHook.Run(); err != nil {
+		t.Fatal(err)
+	}
+
+	git, err := bintest.NewMock(filepath.Join(t.TempDir(), "git"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	git.Expect().NotCalled()
+	t.Cleanup(func() { git.CheckAndClose(t) }) //nolint:errcheck // bintest logs to t
+
+	e := createTestAgentEndpoint()
+	server := e.server()
+	t.Cleanup(server.Close)
+	j := &api.Job{
+		ID:                 defaultJobID,
+		ChunksMaxSizeBytes: 1024,
+		Token:              "bkaj_job-token",
+		Env: map[string]string{
+			"BUILDKITE_JOB_ID":               defaultJobID,
+			"BUILDKITE_AGENT_NAME":           "test-agent",
+			"BUILDKITE_REPO":                 "https://github.com/buildkite/agent",
+			"BUILDKITE_COMMIT":               "HEAD",
+			"BUILDKITE_BRANCH":               "main",
+			"BUILDKITE_ORGANIZATION_SLUG":    "test",
+			"BUILDKITE_PIPELINE_SLUG":        "test",
+			"BUILDKITE_PIPELINE_PROVIDER":    "custom",
+			"buildkite_allowed_repositories": ".*",
+			"PATH":                           filepath.Dir(git.Path) + string(os.PathListSeparator) + os.Getenv("PATH"),
+		},
+	}
+	if err := runJob(t, t.Context(), testRunJobConfig{
+		job:    j,
+		server: server,
+		agentCfg: agent.AgentConfiguration{
+			BootstrapScript:       fmt.Sprintf("%q bootstrap --phases checkout --no-job-api --cancel-signal SIGTERM", executable),
+			BuildPath:             t.TempDir(),
+			HooksPath:             hooksDir,
+			GitCommitVerification: "strict",
+			GitMirrorCheckoutMode: "reference",
+			CommandEval:           true,
+			CheckoutOverrideMode:  env.CheckoutOverrideFromJob,
+			CheckoutAttempts:      1,
+			AllowedRepositories:   []*regexp.Regexp{regexp.MustCompile(`^https://github\.com/buildkite/.*$`)},
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	logs := e.logsFor(t, j.ID)
+	if got := e.finishesFor(t, j.ID)[0].ExitStatus; got != "1" {
+		t.Errorf("job.ExitStatus = %q, want 1\n%s", got, logs)
+	}
+	wantRejection := fmt.Sprintf("repository %q is not permitted by --allowed-repositories", disallowedRepository)
+	if !strings.Contains(logs, wantRejection) {
+		t.Errorf("missing checkout rejection %q:\n%s", wantRejection, logs)
+	}
+}
 
 func TestConfigAllowlisting(t *testing.T) {
 	t.Parallel()
