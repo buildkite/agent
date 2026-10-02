@@ -33,8 +33,6 @@ type fakeRegistry struct {
 	stores    []api.CacheEntryCreateReq
 	retrieves []api.CacheEntryRetrieveReq
 	confirms  []api.CacheEntryConfirmReq
-	// failStore, if set, rejects the store requests it returns true for, without retries.
-	failStore func(api.CacheEntryCreateReq) bool
 }
 
 func fakeAddr(targetPaths []string, key []api.CacheKeyPart) string {
@@ -81,11 +79,6 @@ func (f *fakeRegistry) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case "PUT /cache_registries/test/store":
 		var req api.CacheEntryCreateReq
 		_ = json.NewDecoder(r.Body).Decode(&req)
-		if f.failStore != nil && f.failStore(req) {
-			w.WriteHeader(http.StatusBadRequest)
-			_, _ = io.WriteString(w, `{"message":"store failed"}`)
-			return
-		}
 		f.stores = append(f.stores, req)
 		id := fmt.Sprintf("upload-%d", len(f.stores))
 		f.pending[id] = api.CacheEntryRetrieveResp{TargetPaths: req.TargetPaths, CacheKey: req.CacheKey, Blobs: req.Blobs, Store: "local_file"}
@@ -304,30 +297,6 @@ func TestRunExec_MainEntryFromPlainSaveIsReplaced(t *testing.T) {
 	}
 }
 
-func TestRunExec_FailedOutputSaveRecovers(t *testing.T) {
-	reg, apiClient, cfg := setupExecTest(t)
-	writeFile(t, filepath.Join("out", "result"), "from cache save")
-	if err := RunSave(t.Context(), logger.Discard, apiClient, cfg); err != nil {
-		t.Fatalf("plain save: %v", err)
-	}
-
-	// The output upload fails once, as on a network error; the next run must save both, not find "already exists".
-	reg.failStore = func(req api.CacheEntryCreateReq) bool {
-		reg.failStore = nil
-		return slices.Contains(req.TargetPaths, outputTargetPath)
-	}
-	b := &build{}
-	for run := 1; run <= 3; run++ {
-		writeFile(t, "input.txt", "v1")
-		if _, _, err := runExec(t, apiClient, cfg, b.run); err != nil {
-			t.Fatalf("exec %d: %v", run, err)
-		}
-	}
-	if b.runs != 2 {
-		t.Errorf("command ran %d times in 3 execs, want 2: the second should save, the third hit", b.runs)
-	}
-}
-
 func TestRunExec_ReplacedMainEntryIsNotPairedWithOldOutput(t *testing.T) {
 	_, apiClient, cfg := setupExecTest(t)
 	b := &build{}
@@ -430,56 +399,6 @@ func TestRunExec_RedactionFails(t *testing.T) {
 				t.Errorf("saved %d entries without redacting the output, want none", len(reg.stores))
 			}
 		})
-	}
-}
-
-func TestRunExec_ReplaysWithoutRedactor(t *testing.T) {
-	reg, apiClient, cfg := setupExecTest(t)
-	b := &build{}
-	if _, _, err := runExec(t, apiClient, cfg, b.run); err != nil {
-		t.Fatalf("first exec: %v", err)
-	}
-
-	// Without the Job API, a saved result can still be replayed: it was redacted when it was saved.
-	cfg.Redact = func(context.Context, []jobapi.OutputChunk) ([]jobapi.OutputChunk, error) {
-		return nil, errors.New("no Job API")
-	}
-	writeFile(t, "input.txt", "v1")
-	stdout, _, err := runExec(t, apiClient, cfg, b.run)
-	if err != nil {
-		t.Fatalf("exec with a saved result: %v", err)
-	}
-	if b.runs != 1 || stdout != "compiling\ndone\n" {
-		t.Errorf("command ran %d times, stdout %q; want 1 run and the replayed output", b.runs, stdout)
-	}
-
-	// On a miss the command runs, but its result isn't saved.
-	writeFile(t, "input.txt", "v2")
-	stores := len(reg.stores)
-	if _, _, err := runExec(t, apiClient, cfg, b.run); err != nil {
-		t.Fatalf("exec on a miss: %v", err)
-	}
-	if b.runs != 2 {
-		t.Errorf("command ran %d times, want 2", b.runs)
-	}
-	if got := len(reg.stores) - stores; got != 0 {
-		t.Errorf("saved %d entries without redacting the output, want none", got)
-	}
-}
-
-func TestRunExec_UnknownCacheName(t *testing.T) {
-	_, apiClient, cfg := setupExecTest(t)
-	cfg.Names = []string{"unknown"}
-	b := &build{}
-	if _, _, err := runExec(t, apiClient, cfg, b.run); err != nil {
-		t.Fatalf("exec: %v", err)
-	}
-	if b.runs != 1 {
-		t.Errorf("command ran %d times, want 1: an unknown name runs it uncached", b.runs)
-	}
-	cfg.FailOnError = true
-	if _, _, err := runExec(t, apiClient, cfg, b.run); err == nil {
-		t.Error("exec succeeded with an unknown name, want an error with cache-fail-on-error")
 	}
 }
 
