@@ -3,8 +3,7 @@
 #
 # Run from the repo root: ./test/cache-exec-e2e/run.sh
 #
-# Builds the agent from REPO (default: the git checkout containing this script;
-# check out the PR branch first), starts fake_registry.py, and runs each case as
+# Builds the agent from REPO (default: the repo containing this script), starts fake_registry.py, and runs each case as
 # a real `buildkite-agent bootstrap` job, so it has a job log redactor and Job API.
 #
 #   ok / FAIL   expected behaviour from the PR description
@@ -16,7 +15,7 @@
 set -uo pipefail
 
 HERE=$(cd "$(dirname "$0")" && pwd)
-REPO=${REPO:-$(git -C "$HERE" rev-parse --show-toplevel)}
+REPO=${REPO:-$(cd "$HERE/../.." && pwd)}
 WORK=$(mktemp -d)
 PROJ=$WORK/proj
 REG_LOG=$WORK/registry.log
@@ -31,8 +30,9 @@ trap cleanup EXIT
 
 # --- setup -------------------------------------------------------------------
 
-echo "Building agent from $REPO ($(git -C "$REPO" rev-parse --short HEAD))"
-(cd "$REPO" && go build -o "$WORK/bin/buildkite-agent" .) || exit 1
+echo "Building agent from $REPO ($(git -C "$REPO" rev-parse --short HEAD 2>/dev/null || echo unknown commit))"
+# -buildvcs=false: CI mounts the checkout into a container as a different user, where git refuses to read it.
+(cd "$REPO" && go build -buildvcs=false -o "$WORK/bin/buildkite-agent" .) || exit 1
 
 python3 "$HERE/fake_registry.py" "$WORK/port" "$REG_LOG" &
 REG_PID=$!
@@ -138,7 +138,12 @@ direct() {
 }
 
 section() { echo; echo "== $1"; }
-expect() { local d=$1; shift; if "$@"; then echo "  ok     $d"; PASS=$((PASS + 1)); else echo "  FAIL   $d   (log: step $STEP)"; FAILS=$((FAILS + 1)); fi; }
+expect() {
+  local d=$1; shift
+  if "$@"; then echo "  ok     $d"; PASS=$((PASS + 1)); return; fi
+  echo "  FAIL   $d   (log: step $STEP)"; FAILS=$((FAILS + 1))
+  tail -n 40 "$WORK/logs/$(printf %02d $STEP).log" | sed 's/^/         | /'
+}
 issue() { local d=$1; shift; if "$@"; then echo "  ISSUE  $d"; ISSUES=$((ISSUES + 1)); else echo "  fixed? $d (no longer reproduces)"; fi; }
 has() { grep -qF -- "$1" "$JOB_LOG"; }
 lacks() { ! has "$1"; }
