@@ -61,6 +61,7 @@ var BuildkiteAgentCommands = []*cli.Command{
 		Commands: []*cli.Command{
 			CacheSaveCommand,
 			CacheRestoreCommand,
+			CacheExecCommand,
 		},
 	},
 	{

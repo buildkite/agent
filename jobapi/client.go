@@ -15,6 +15,7 @@ const (
 	envURL            = "http://job/api/current-job/v0/env"
 	workdirURL        = "http://job/api/current-job/v0/workdir"
 	redactionsURL     = "http://job/api/current-job/v0/redactions"
+	redactURL         = "http://job/api/current-job/v0/redact"
 	promiseFailureURL = "http://job/api/current-job/v0/promise-failure"
 	capturedErrorsURL = "http://job/api/current-job/v0/errors"
 )
@@ -137,6 +138,15 @@ func (c *Client) RedactionCreate(ctx context.Context, text string) (string, erro
 		return "", err
 	}
 	return resp.Redacted, nil
+}
+
+// Redact returns chunks with the job log's secrets redacted by the job executor.
+func (c *Client) Redact(ctx context.Context, chunks []OutputChunk) ([]OutputChunk, error) {
+	var resp RedactResponse
+	if err := c.client.Do(ctx, http.MethodPost, redactURL, &RedactRequest{Chunks: chunks}, &resp); err != nil {
+		return nil, err
+	}
+	return resp.Chunks, nil
 }
 
 // DeclarePromiseFailure asks the Job API to declare a promised failure with the

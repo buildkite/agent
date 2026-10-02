@@ -33,6 +33,8 @@ type Config struct {
 	// merging files or bypassing registry access policies, even if an entry
 	// already exists there.
 	Force bool
+	// Redact strips secrets from the output cache exec saves, after the command runs; without it, exec doesn't save.
+	Redact Redactor
 }
 
 // cacheOps is the subset of *client used by saveWithClient and restoreWithClient.
@@ -211,25 +213,7 @@ func saveWithClient(ctx context.Context, l logger.Logger, c cacheOps, cacheIDs [
 						continue
 					}
 
-					switch {
-					case result.CacheEntryCreated:
-						l.WithFields(
-							logger.StringField("cache_id", cacheID),
-							logger.StringField("cache_key", result.Key),
-							logger.StringField("archive_size", humanize.Bytes(uint64(result.Archive.Size))),
-							logger.StringField("written_bytes", humanize.Bytes(uint64(result.Archive.WrittenBytes))),
-							logger.StringField("written_entries", fmt.Sprintf("%d", result.Archive.WrittenEntries)),
-							logger.StringField("compression_ratio", fmt.Sprintf("%.2f", result.Archive.CompressionRatio)),
-							logger.StringField("transfer_speed", fmt.Sprintf("%.2fMB/s", result.Transfer.TransferSpeed)),
-							logger.IntField("part_count", result.Transfer.PartCount),
-							logger.IntField("concurrency", result.Transfer.Concurrency),
-						).Infof("Cache saved")
-					default:
-						l.WithFields(
-							logger.StringField("cache_id", cacheID),
-							logger.StringField("cache_key", result.Key),
-						).Infof("Cache already exists, not saving")
-					}
+					logSaveResult(l, cacheID, result)
 
 				case <-wctx.Done():
 					return
@@ -255,4 +239,26 @@ sendLoop:
 	}
 
 	return nil
+}
+
+// logSaveResult logs the outcome of a successful Save.
+func logSaveResult(l logger.Logger, cacheID string, result SaveResult) {
+	if !result.CacheEntryCreated {
+		l.WithFields(
+			logger.StringField("cache_id", cacheID),
+			logger.StringField("cache_key", result.Key),
+		).Infof("Cache already exists, not saving")
+		return
+	}
+	l.WithFields(
+		logger.StringField("cache_id", cacheID),
+		logger.StringField("cache_key", result.Key),
+		logger.StringField("archive_size", humanize.Bytes(uint64(result.Archive.Size))),
+		logger.StringField("written_bytes", humanize.Bytes(uint64(result.Archive.WrittenBytes))),
+		logger.StringField("written_entries", fmt.Sprintf("%d", result.Archive.WrittenEntries)),
+		logger.StringField("compression_ratio", fmt.Sprintf("%.2f", result.Archive.CompressionRatio)),
+		logger.StringField("transfer_speed", fmt.Sprintf("%.2fMB/s", result.Transfer.TransferSpeed)),
+		logger.IntField("part_count", result.Transfer.PartCount),
+		logger.IntField("concurrency", result.Transfer.Concurrency),
+	).Infof("Cache saved")
 }
