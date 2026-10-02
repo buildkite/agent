@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"regexp"
 	"runtime"
 	"slices"
 	"sync"
@@ -52,6 +53,7 @@ type BootstrapConfig struct {
 	Command                      string        `cli:"command"`
 	JobID                        string        `cli:"job" validate:"required"`
 	Repository                   string        `cli:"repository" validate:"required"`
+	AllowedRepositories          []string      `cli:"allowed-repositories" normalize:"list"`
 	Commit                       string        `cli:"commit" validate:"required"`
 	Branch                       string        `cli:"branch" validate:"required"`
 	Tag                          string        `cli:"tag"`
@@ -154,6 +156,11 @@ var BootstrapCommand = &cli.Command{
 			Value:   "",
 			Usage:   "The repository to clone and run the job from",
 			Sources: cli.EnvVars("BUILDKITE_REPO"),
+		},
+		&cli.StringSliceFlag{
+			Name:    "allowed-repositories",
+			Usage:   "A comma-separated list of regular expressions representing repositories the agent is allowed to check out",
+			Sources: cli.EnvVars("BUILDKITE_ALLOWED_REPOSITORIES"),
 		},
 		&cli.StringFlag{
 			Name:    "commit",
@@ -472,8 +479,18 @@ var BootstrapCommand = &cli.Command{
 			tracingBackend = tracetools.BackendOpenTelemetry
 		}
 
+		var allowedRepositories []*regexp.Regexp
+		for _, pattern := range cfg.AllowedRepositories {
+			compiled, err := regexp.Compile(pattern)
+			if err != nil {
+				return fmt.Errorf("compiling allowed repository pattern: %w", err)
+			}
+			allowedRepositories = append(allowedRepositories, compiled)
+		}
+
 		// Configure the bootstraper
 		bootstrap := job.New(job.ExecutorConfig{
+			AllowedRepositories:          allowedRepositories,
 			AgentName:                    cfg.AgentName,
 			ArtifactUploadDestination:    cfg.ArtifactUploadDestination,
 			AutomaticArtifactUploadPaths: cfg.AutomaticArtifactUploadPaths,

@@ -221,13 +221,18 @@ func (r *JobRunner) Run(ctx context.Context, ignoreAgentInDispatches *bool) (err
 	return nil
 }
 
-func (r *JobRunner) validateConfigAllowlists(job *api.Job) error {
+func (r *JobRunner) validateConfigAllowlists(jobToValidate *api.Job) error {
 	validations := map[string]func() error{
 		"repo": func() error {
-			return validateJobValue(r.conf.AgentConfiguration.AllowedRepositories, job.Env["BUILDKITE_REPO"])
+			repository := jobToValidate.Env["BUILDKITE_REPO"]
+			patterns := r.conf.AgentConfiguration.AllowedRepositories
+			if !job.MatchesAllowedPatterns(patterns, repository) {
+				return fmt.Errorf("%s has no match in %s", repository, patterns)
+			}
+			return nil
 		},
 		"environment variables": func() error {
-			return validateEnv(job.Env, r.conf.AgentConfiguration.AllowedEnvironmentVariables)
+			return validateEnv(jobToValidate.Env, r.conf.AgentConfiguration.AllowedEnvironmentVariables)
 		},
 		"plugins": r.validatePlugins,
 	}
@@ -250,28 +255,12 @@ func validateEnv(env map[string]string, allowedVariablePatterns []*regexp.Regexp
 	}
 
 	for k := range env {
-		if err := validateJobValue(allowedVariablePatterns, k); err != nil {
-			return err
+		if !job.MatchesAllowedPatterns(allowedVariablePatterns, k) {
+			return fmt.Errorf("%s has no match in %s", k, allowedVariablePatterns)
 		}
 	}
 
 	return nil
-}
-
-// validateJobValue returns an error if a job value doesn't match
-// any allowed patterns.
-func validateJobValue(allowedPatterns []*regexp.Regexp, jobValue string) error {
-	if len(allowedPatterns) == 0 {
-		return nil
-	}
-
-	for _, re := range allowedPatterns {
-		if match := re.MatchString(jobValue); match {
-			return nil
-		}
-	}
-
-	return fmt.Errorf("%s has no match in %s", jobValue, allowedPatterns)
 }
 
 // validatePlugins unmarshal and validates the plugins, if the list of allowed plugins is set.
@@ -292,8 +281,10 @@ func (r *JobRunner) validatePlugins() error {
 	}
 
 	for _, plugin := range ps {
-		if err := validateJobValue(r.conf.AgentConfiguration.AllowedPlugins, plugin.FullSource()); err != nil {
-			return err
+		source := plugin.FullSource()
+		patterns := r.conf.AgentConfiguration.AllowedPlugins
+		if !job.MatchesAllowedPatterns(patterns, source) {
+			return fmt.Errorf("%s has no match in %s", source, patterns)
 		}
 	}
 

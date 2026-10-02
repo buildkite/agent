@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"testing"
 
@@ -25,41 +24,6 @@ func TestTruncateEnv(t *testing.T) {
 	format := "FOO=%s\000"
 	if got, want := len(fmt.Sprintf(format, env["FOO"])), limit; got != want {
 		t.Errorf("after truncateEnv(logger, %v, %q, %d): len(fmt.Sprintf(%q, env[%q])) = %d, want %d", env, key, limit, format, key, got, want)
-	}
-}
-
-func TestValidateJobValue(t *testing.T) {
-	bkTarget := "github.com/buildkite/test"
-	bkTargetRE := regexp.MustCompile(`^github\.com/buildkite/.*`)
-	ghTargetRE := regexp.MustCompile(`^github\.com/nope/.*`)
-
-	tests := []struct {
-		name           string
-		allowedTargets []*regexp.Regexp
-		pipelineTarget string
-		wantErr        bool
-	}{
-		{
-			name:           "No error. Allowed targets no configured.",
-			allowedTargets: []*regexp.Regexp{},
-			pipelineTarget: bkTarget,
-		}, {
-			name:           "No pipeline target match",
-			allowedTargets: []*regexp.Regexp{ghTargetRE},
-			pipelineTarget: bkTarget,
-			wantErr:        true,
-		}, {
-			name:           "Pipeline target match",
-			allowedTargets: []*regexp.Regexp{ghTargetRE, bkTargetRE},
-			pipelineTarget: bkTarget,
-		},
-	}
-
-	for _, tc := range tests {
-		err := validateJobValue(tc.allowedTargets, tc.pipelineTarget)
-		if (err != nil) != tc.wantErr {
-			t.Errorf("validateJobValue() error = %v, wantErr = %v", err, tc.wantErr)
-		}
 	}
 }
 

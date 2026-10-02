@@ -1,7 +1,9 @@
 package agent
 
 import (
+	"fmt"
 	"os"
+	"regexp"
 	"runtime"
 	"strings"
 	"testing"
@@ -9,7 +11,45 @@ import (
 	"github.com/buildkite/agent/v4/api"
 	envutil "github.com/buildkite/agent/v4/env"
 	"github.com/buildkite/agent/v4/logger"
+	"github.com/google/go-cmp/cmp"
 )
+
+func TestCreateEnvironmentRepositoryAllowlist(t *testing.T) {
+	t.Setenv("BUILDKITE_ALLOWED_REPOSITORIES", "ambient-policy")
+
+	for _, patterns := range [][]string{nil, {`^https://example\.com/repo[0-9]+\.git$`, `^git@example\.com:org/.*$`}} {
+		t.Run(fmt.Sprint(patterns), func(t *testing.T) {
+			conf := AgentConfiguration{}
+			for _, pattern := range patterns {
+				conf.AllowedRepositories = append(conf.AllowedRepositories, regexp.MustCompile(pattern))
+			}
+			r := controlPlaneTestRunner(t, map[string]string{
+				"BUILDKITE_ALLOWED_REPOSITORIES": "job-policy",
+			}, conf)
+			got, err := r.createEnvironment(t.Context())
+			if err != nil {
+				t.Fatal(err)
+			}
+			value := envutil.FromSlice(got).GetString("BUILDKITE_ALLOWED_REPOSITORIES", "")
+			if diff := cmp.Diff(strings.Join(patterns, ","), value); diff != "" {
+				t.Errorf("bootstrap policy (-want +got):\n%s", diff)
+			}
+			// Container bootstraps must receive the same trusted policy.
+			for _, path := range []string{r.envShellFile.Name(), r.envJSONFile.Name()} {
+				data, err := os.ReadFile(path)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if strings.Contains(string(data), "job-policy") || strings.Contains(string(data), "ambient-policy") {
+					t.Errorf("env file contains an untrusted policy: %s", data)
+				}
+				if !strings.Contains(string(data), "BUILDKITE_ALLOWED_REPOSITORIES") {
+					t.Errorf("env file is missing the policy: %s", data)
+				}
+			}
+		})
+	}
+}
 
 // controlPlaneTestRunner builds the minimal JobRunner that createEnvironment
 // needs: a job env, an agent configuration, real temp env files, and an API
