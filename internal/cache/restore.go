@@ -568,7 +568,9 @@ func (c *client) downloadCache(ctx context.Context, retrieveResp api.CacheEntryR
 		return "", "", nil, fmt.Errorf("failed to create temp directory: %w", err)
 	}
 
-	archiveFile = filepath.Join(tmpDir, storeObjectName)
+	// MkdirTemp gives each download its own directory, so a fixed filename is safe
+	// for concurrent restores and keeps API-supplied paths out of the destination.
+	archiveFile = filepath.Join(tmpDir, "archive")
 
 	// Download archive
 	transferInfo, err = blobStore.Download(ctx, storeObjectName, archiveFile)
