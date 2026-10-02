@@ -46,11 +46,6 @@ import (
 //	    log.Printf("Cache saved: %s (%.2f MB)", result.Key, float64(result.Archive.Size)/(1024*1024))
 //	}
 func (c *client) Save(ctx context.Context, cacheID string) (SaveResult, error) {
-	return c.save(ctx, cacheID, nil)
-}
-
-// save is Save with an optional pre-resolved cache key (nil resolves it from config).
-func (c *client) save(ctx context.Context, cacheID string, cacheKey []api.CacheKeyPart) (SaveResult, error) {
 	tracer := otel.Tracer("github.com/buildkite/agent/v4/internal/cache")
 	ctx, span := tracer.Start(ctx, "Client.Save")
 	defer span.End()
@@ -74,13 +69,11 @@ func (c *client) save(ctx context.Context, cacheID string, cacheKey []api.CacheK
 
 	result.Key = cacheID
 
-	if cacheKey == nil {
-		cacheKey, err = c.resolveCacheKey(cacheConfig)
-		if err != nil {
-			span.RecordError(err)
-			span.SetStatus(codes.Error, "failed to resolve cache key")
-			return result, fmt.Errorf("failed to resolve cache key: %w", err)
-		}
+	cacheKey, err := c.resolveCacheKey(cacheConfig)
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "failed to resolve cache key")
+		return result, fmt.Errorf("failed to resolve cache key: %w", err)
 	}
 
 	span.SetAttributes(
@@ -129,7 +122,6 @@ func (c *client) saveEntry(
 
 		// Check if cache already exists
 		var (
-			peekResp    api.CacheEntryPeekResp
 			peekApiResp *api.Response
 			exists      bool
 		)
@@ -140,7 +132,7 @@ func (c *client) saveEntry(
 			roko.WithJitter(),
 		).DoWithContext(ctx, func(r *roko.Retrier) error {
 			var err error
-			peekResp, exists, peekApiResp, err = c.api.CacheEntryPeekExists(ctx, c.registry, api.CacheEntryPeekReq{
+			_, exists, peekApiResp, err = c.api.CacheEntryPeekExists(ctx, c.registry, api.CacheEntryPeekReq{
 				TargetPaths: targetPaths,
 				CacheKey:    cacheKey,
 			})
@@ -162,9 +154,6 @@ func (c *client) saveEntry(
 		if exists {
 			// Cache already exists, no need to upload
 			result.CacheEntryCreated = false
-			if len(peekResp.Blobs) > 0 {
-				result.ExistingDigest = peekResp.Blobs[0].Digest.Value
-			}
 			result.TotalDuration = time.Since(startTime)
 			span.SetAttributes(
 				attribute.Bool("cache.created", false),

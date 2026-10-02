@@ -75,7 +75,7 @@ func TestCacheExecArgumentErrors(t *testing.T) {
 	}
 }
 
-func TestListJobRedactions(t *testing.T) {
+func TestCacheExecRedactor(t *testing.T) {
 	mux := replacer.NewMux(replacer.New(io.Discard, nil, redact.Redacted))
 	sock, err := jobapi.NewSocketPath(os.TempDir())
 	if err != nil {
@@ -91,14 +91,21 @@ func TestListJobRedactions(t *testing.T) {
 	t.Cleanup(func() { _ = srv.Stop() })
 	t.Setenv("BUILDKITE_AGENT_JOB_API_SOCKET", srv.SocketPath)
 	t.Setenv("BUILDKITE_AGENT_JOB_API_TOKEN", token)
-	mux.Add("from-secret-get")
+	mux.Add("from-secret-get") // known only to the job executor
 
-	got, err := listJobRedactions(t.Context())
+	// from-step-env stands for a variable exported in the step's command, which only exec's own scan knows.
+	got, err := cacheExecRedactor([]string{"from-step-env"})(t.Context(), []jobapi.OutputChunk{
+		{Data: []byte("from-secret-get and from-step-env\n")},
+	})
 	if err != nil {
-		t.Fatalf("listJobRedactions() error = %v", err)
+		t.Fatalf("cacheExecRedactor() error = %v", err)
 	}
-	if len(got) != 1 || got[0] != "from-secret-get" {
-		t.Errorf("listJobRedactions() = %q, want [from-secret-get]", got)
+	var out strings.Builder
+	for _, c := range got {
+		out.Write(c.Data)
+	}
+	if got, want := out.String(), "[REDACTED] and [REDACTED]\n"; got != want {
+		t.Errorf("redacted output = %q, want %q", got, want)
 	}
 }
 
@@ -130,7 +137,7 @@ func TestCacheExecWithoutConfigRunsUncached(t *testing.T) {
 	}
 }
 
-func TestCacheExecWithoutJobAPIRunsUncached(t *testing.T) {
+func TestCacheExecWithoutJobAPISavesNothing(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("uses sh")
 	}
@@ -138,8 +145,8 @@ func TestCacheExecWithoutJobAPIRunsUncached(t *testing.T) {
 		name        string
 		failOnError bool
 	}{
-		{name: "runs the command by default"},
-		{name: "fails with cache-fail-on-error", failOnError: true},
+		{name: "runs the command"},
+		{name: "runs the command, then fails with cache-fail-on-error", failOnError: true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			t.Chdir(t.TempDir())
@@ -159,14 +166,16 @@ func TestCacheExecWithoutJobAPIRunsUncached(t *testing.T) {
 			t.Cleanup(registry.Close)
 			cmd := *CacheExecCommand
 			app := &cli.Command{Commands: []*cli.Command{&cmd}}
-			args := []string{"buildkite-agent", "exec", "--endpoint", registry.URL, "--agent-access-token", "token", "--cache-config-file", "cache.yml", "--name", "build", "--cache-fail-on-error=" + strconv.FormatBool(test.failOnError), "--", "sh", "-c", "touch ran"}
+			args := []string{"buildkite-agent", "exec", "--endpoint", registry.URL, "--agent-access-token", "token", "--cache-config-file", "cache.yml", "--name", "build", "--cache-fail-on-error=" + strconv.FormatBool(test.failOnError), "--", "sh", "-c", "mkdir out && touch ran"}
 			err := app.Run(t.Context(), args)
 			if gotErr := err != nil; gotErr != test.failOnError {
 				t.Errorf("cache exec error = %v, want error: %t", err, test.failOnError)
 			}
-			_, statErr := os.Stat("ran")
-			if ran := statErr == nil; ran == test.failOnError {
-				t.Errorf("command ran = %t, want %t", ran, !test.failOnError)
+			if test.failOnError && !strings.Contains(err.Error(), "Job API") {
+				t.Errorf("cache exec error = %v, want it to be about the Job API", err)
+			}
+			if _, err := os.Stat("ran"); err != nil {
+				t.Errorf("command didn't run: %v", err)
 			}
 			for _, path := range requests {
 				if !strings.HasSuffix(path, "/retrieve") {
