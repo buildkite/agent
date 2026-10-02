@@ -68,6 +68,10 @@ type Shell struct {
 	// Amount of time to wait between sending the InterruptSignal and SIGKILL
 	signalGracePeriod time.Duration
 
+	// Test-only override for the derived process.Config.WaitDelay bound
+	// (see WithProcessWaitDelay in export_test.go). Zero means "use default".
+	processWaitDelay time.Duration
+
 	// stdin is an optional input stream used by Run() and friends.
 	// It remains unexported on the assumption that it's not useful except via
 	// CloneWithStdin to get a clone prepared for a single command that needs
@@ -151,6 +155,7 @@ func (s *Shell) CloneWithStdin(r io.Reader) *Shell {
 		wd:                s.wd,
 		interruptSignal:   s.interruptSignal,
 		signalGracePeriod: s.signalGracePeriod,
+		processWaitDelay:  s.processWaitDelay,
 	}
 }
 
@@ -576,6 +581,7 @@ func (s *Shell) buildCommand(name string, arg ...string) (process.Config, error)
 		Dir:               s.wd,
 		InterruptSignal:   s.interruptSignal,
 		SignalGracePeriod: s.signalGracePeriod,
+		WaitDelay:         s.processWaitDelay,
 	}, nil
 }
 
