@@ -117,6 +117,7 @@ func (c *client) exec(ctx context.Context, l logger.Logger, cacheID string, fail
 // cachedOutput is a downloaded, validated output sidecar; confirm refreshes its retention once its files are restored.
 type cachedOutput struct {
 	path             string
+	ranFor           time.Duration // how long the command ran when its output was recorded
 	cleanup, confirm func()
 }
 
@@ -166,9 +167,9 @@ func (c *client) execRestore(ctx context.Context, l logger.Logger, cacheConfig *
 	}
 
 	found.output.confirm()
-	s.header("+++ :package: Replaying output from cache (command was not run)")
-	ranFor, err := replayOutput(found.output.path, s.Stdout(), s.Stderr())
-	if err != nil {
+	ranFor := found.output.ranFor
+	s.header(replayHeader(ranFor - time.Since(start)))
+	if _, err := replayOutput(found.output.path, s.Stdout(), s.Stderr()); err != nil {
 		// The files are restored and the output was readable before, so only writing it failed; that isn't a reason to fail the build.
 		err = fmt.Errorf("failed to replay cached output for %q: %w", cacheID, err)
 		if failOnError {
@@ -181,17 +182,34 @@ func (c *client) execRestore(ctx context.Context, l logger.Logger, cacheConfig *
 	return true, nil
 }
 
+// replayHeader opens the replayed output's log group, showing in its title the time the hit is saving.
+func replayHeader(saved time.Duration) string {
+	if saved <= 0 {
+		return "+++ :package: Replaying output from cache (command was not run)"
+	}
+	return fmt.Sprintf("+++ :zap: cache exec saved %s: replaying output from cache (command was not run)", roundDuration(saved))
+}
+
 // timeSaved describes, in color, how a hit compares with running the command.
 func timeSaved(ranFor, took time.Duration) string {
 	if ranFor <= 0 {
 		return fmt.Sprintf("\x1b[32m✔\x1b[0m Restored from cache in \x1b[1m%s\x1b[0m", roundDuration(took))
 	}
 	if saved := ranFor - took; saved > 0 {
-		return fmt.Sprintf("\x1b[32m✔\x1b[0m Restored from cache in \x1b[1m%s\x1b[0m instead of running for \x1b[1m%s\x1b[0m: \x1b[1;32m%s saved\x1b[0m",
-			roundDuration(took), roundDuration(ranFor), roundDuration(saved))
+		return fmt.Sprintf("\x1b[32m✔\x1b[0m Restored from cache in \x1b[1m%s\x1b[0m instead of running for \x1b[1m%s\x1b[0m (\x1b[1m%s faster\x1b[0m): \x1b[1;32m%s saved\x1b[0m",
+			roundDuration(took), roundDuration(ranFor), speedup(ranFor, took), roundDuration(saved))
 	}
 	return fmt.Sprintf("\x1b[33m⚠\x1b[0m Restored from cache in \x1b[1m%s\x1b[0m, but running the command took only \x1b[1m%s\x1b[0m: caching it isn't saving time",
 		roundDuration(took), roundDuration(ranFor))
+}
+
+// speedup formats ranFor/took as a multiplier: whole numbers from 10×, one decimal place below.
+func speedup(ranFor, took time.Duration) string {
+	x := float64(ranFor) / float64(max(took, time.Millisecond))
+	if x >= 10 {
+		return fmt.Sprintf("%.0f×", x)
+	}
+	return fmt.Sprintf("%.1f×", x)
 }
 
 // roundDuration rounds to milliseconds under a second, tenths of a second under a minute, and seconds above.
@@ -232,7 +250,8 @@ func (c *client) restoreOutput(ctx context.Context, cacheConfig *configuration.C
 	}
 	cleanup := func() { _ = os.RemoveAll(tmpDir) }
 
-	if _, err := replayOutput(file, io.Discard, io.Discard); err != nil {
+	ranFor, err := replayOutput(file, io.Discard, io.Discard)
+	if err != nil {
 		cleanup()
 		slog.Warn("cached command output is unreadable, treating as miss and invalidating entry",
 			"cache_id", cacheConfig.Name, "err", err)
@@ -251,6 +270,7 @@ func (c *client) restoreOutput(ctx context.Context, cacheConfig *configuration.C
 	}
 	return &cachedOutput{
 		path:    file,
+		ranFor:  ranFor,
 		cleanup: cleanup,
 		confirm: func() { c.confirmRestoreSucceeded(ctx, retrieveResp, stats) },
 	}, nil
