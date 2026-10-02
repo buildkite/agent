@@ -210,7 +210,7 @@ func TestRunExec_MissThenHit(t *testing.T) {
 	}
 	// The replay header's title depends on timing, so check around it.
 	if stdout != "compiling\ndone\n" || !strings.HasPrefix(stderr, "--- :package: Restoring cache...\n+++ ") ||
-		!strings.Contains(stderr, "\nwarning: deprecated\n") || !strings.Contains(stderr, "Restored from cache in") {
+		!strings.Contains(stderr, "\nwarning: deprecated\n") || !strings.Contains(stderr, "Restored from cache") {
 		t.Errorf("hit output: stdout %q, stderr %q", stdout, stderr)
 	}
 
@@ -511,14 +511,12 @@ func TestTimeSaved(t *testing.T) {
 		ranFor, took time.Duration
 		want         string
 	}{
-		{ranFor: 105 * time.Second, took: 2100 * time.Millisecond, want: "Restored from cache in \x1b[1m2.1s\x1b[0m instead of running for \x1b[1m1m45s\x1b[0m (\x1b[1m50× faster\x1b[0m): \x1b[1;32m1m43s saved"},
-		{ranFor: 5 * time.Second, took: 2 * time.Second, want: "(\x1b[1m2.5× faster\x1b[0m)"},
-		{ranFor: time.Second, took: 3 * time.Second, want: "running the command took only \x1b[1m1s\x1b[0m: caching it isn't saving time"},
-		{took: 2 * time.Second, want: "Restored from cache in \x1b[1m2s\x1b[0m"},
-		{ranFor: time.Minute, took: 42 * time.Millisecond, want: "Restored from cache in \x1b[1m42ms\x1b[0m"},
+		{ranFor: 105 * time.Second, took: 42 * time.Millisecond, want: "\x1b[32m✔\x1b[0m Restored from cache"},
+		{took: 2 * time.Second, want: "\x1b[32m✔\x1b[0m Restored from cache"},
+		{ranFor: time.Second, took: 3 * time.Second, want: "\x1b[33m⚠\x1b[0m Restored from cache in \x1b[1m3s\x1b[0m, but running the command took only \x1b[1m1s\x1b[0m: caching it isn't saving time"},
 	} {
-		if got := timeSaved(test.ranFor, test.took); !strings.Contains(got, test.want) {
-			t.Errorf("timeSaved(%v, %v) = %q, want it to contain %q", test.ranFor, test.took, got, test.want)
+		if got := timeSaved(test.ranFor, test.took); got != test.want {
+			t.Errorf("timeSaved(%v, %v) = %q, want %q", test.ranFor, test.took, got, test.want)
 		}
 	}
 

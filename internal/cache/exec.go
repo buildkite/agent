@@ -190,26 +190,13 @@ func replayHeader(saved time.Duration) string {
 	return fmt.Sprintf("+++ :zap: cache exec saved %s", roundDuration(saved))
 }
 
-// timeSaved describes, in color, how a hit compares with running the command.
+// timeSaved summarises a hit, warning in yellow when restoring took longer than running the command.
 func timeSaved(ranFor, took time.Duration) string {
-	if ranFor <= 0 {
-		return fmt.Sprintf("\x1b[32m✔\x1b[0m Restored from cache in \x1b[1m%s\x1b[0m", roundDuration(took))
+	if ranFor > 0 && took >= ranFor {
+		return fmt.Sprintf("\x1b[33m⚠\x1b[0m Restored from cache in \x1b[1m%s\x1b[0m, but running the command took only \x1b[1m%s\x1b[0m: caching it isn't saving time",
+			roundDuration(took), roundDuration(ranFor))
 	}
-	if saved := ranFor - took; saved > 0 {
-		return fmt.Sprintf("\x1b[32m✔\x1b[0m Restored from cache in \x1b[1m%s\x1b[0m instead of running for \x1b[1m%s\x1b[0m (\x1b[1m%s faster\x1b[0m): \x1b[1;32m%s saved\x1b[0m",
-			roundDuration(took), roundDuration(ranFor), speedup(ranFor, took), roundDuration(saved))
-	}
-	return fmt.Sprintf("\x1b[33m⚠\x1b[0m Restored from cache in \x1b[1m%s\x1b[0m, but running the command took only \x1b[1m%s\x1b[0m: caching it isn't saving time",
-		roundDuration(took), roundDuration(ranFor))
-}
-
-// speedup formats ranFor/took as a multiplier: whole numbers from 10×, one decimal place below.
-func speedup(ranFor, took time.Duration) string {
-	x := float64(ranFor) / float64(max(took, time.Millisecond))
-	if x >= 10 {
-		return fmt.Sprintf("%.0f×", x)
-	}
-	return fmt.Sprintf("%.1f×", x)
+	return "\x1b[32m✔\x1b[0m Restored from cache"
 }
 
 // roundDuration rounds to milliseconds under a second, tenths of a second under a minute, and seconds above.
