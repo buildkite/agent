@@ -4,8 +4,6 @@ import (
 	"bytes"
 	"errors"
 	"io"
-	"net/http"
-	"net/http/httptest"
 	"os"
 	"runtime"
 	"strconv"
@@ -75,7 +73,7 @@ func TestCacheExecArgumentErrors(t *testing.T) {
 	}
 }
 
-func TestListJobRedactions(t *testing.T) {
+func TestCacheExecRedactor(t *testing.T) {
 	mux := replacer.NewMux(replacer.New(io.Discard, nil, redact.Redacted))
 	sock, err := jobapi.NewSocketPath(os.TempDir())
 	if err != nil {
@@ -91,14 +89,26 @@ func TestListJobRedactions(t *testing.T) {
 	t.Cleanup(func() { _ = srv.Stop() })
 	t.Setenv("BUILDKITE_AGENT_JOB_API_SOCKET", srv.SocketPath)
 	t.Setenv("BUILDKITE_AGENT_JOB_API_TOKEN", token)
-	mux.Add("from-secret-get")
+	mux.Add("from-secret-get") // known only to the job executor
 
-	got, err := listJobRedactions(t.Context())
+	// from-step-env stands for a variable exported in the step's command, which only exec's own scan knows.
+	got, err := cacheExecRedactor([]string{"from-step-env"})(t.Context(), []jobapi.OutputChunk{
+		{Data: []byte("from-secret-get and from-step-env\n")},
+	})
 	if err != nil {
-		t.Fatalf("listJobRedactions() error = %v", err)
+		t.Fatalf("cacheExecRedactor() error = %v", err)
 	}
-	if len(got) != 1 || got[0] != "from-secret-get" {
-		t.Errorf("listJobRedactions() = %q, want [from-secret-get]", got)
+	var out strings.Builder
+	for _, c := range got {
+		out.Write(c.Data)
+	}
+	if got, want := out.String(), "[REDACTED] and [REDACTED]\n"; got != want {
+		t.Errorf("redacted output = %q, want %q", got, want)
+	}
+	// Without the Job API the job's secrets can't be redacted, so the redactor must fail rather than return the output.
+	t.Setenv("BUILDKITE_AGENT_JOB_API_SOCKET", "")
+	if _, err := cacheExecRedactor(nil)(t.Context(), nil); err == nil {
+		t.Error("cacheExecRedactor() without the Job API succeeded, want an error")
 	}
 }
 
@@ -125,53 +135,6 @@ func TestCacheExecWithoutConfigRunsUncached(t *testing.T) {
 			_, statErr := os.Stat("ran")
 			if ran := statErr == nil; ran == test.failOnError {
 				t.Errorf("command ran = %t, want %t", ran, !test.failOnError)
-			}
-		})
-	}
-}
-
-func TestCacheExecWithoutJobAPIRunsUncached(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("uses sh")
-	}
-	for _, test := range []struct {
-		name        string
-		failOnError bool
-	}{
-		{name: "runs the command by default"},
-		{name: "fails with cache-fail-on-error", failOnError: true},
-	} {
-		t.Run(test.name, func(t *testing.T) {
-			t.Chdir(t.TempDir())
-			t.Setenv("BUILDKITE_AGENT_JOB_API_SOCKET", "")
-			t.Setenv("BUILDKITE_AGENT_JOB_API_TOKEN", "")
-			if err := os.WriteFile("cache.yml", []byte("caches:\n  - name: build\n    cache_key: [v1]\n    target_paths: [out]\n"), 0o600); err != nil {
-				t.Fatal(err)
-			}
-			// A registry with no entries: exec may look for a result, but without the job's secrets it must not save one.
-			var requests []string
-			registry := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				requests = append(requests, r.URL.Path)
-				w.Header().Set("Content-Type", "application/json")
-				w.WriteHeader(http.StatusNotFound)
-				_, _ = io.WriteString(w, `{"message":"Cache entry not found"}`)
-			}))
-			t.Cleanup(registry.Close)
-			cmd := *CacheExecCommand
-			app := &cli.Command{Commands: []*cli.Command{&cmd}}
-			args := []string{"buildkite-agent", "exec", "--endpoint", registry.URL, "--agent-access-token", "token", "--cache-config-file", "cache.yml", "--name", "build", "--cache-fail-on-error=" + strconv.FormatBool(test.failOnError), "--", "sh", "-c", "touch ran"}
-			err := app.Run(t.Context(), args)
-			if gotErr := err != nil; gotErr != test.failOnError {
-				t.Errorf("cache exec error = %v, want error: %t", err, test.failOnError)
-			}
-			_, statErr := os.Stat("ran")
-			if ran := statErr == nil; ran == test.failOnError {
-				t.Errorf("command ran = %t, want %t", ran, !test.failOnError)
-			}
-			for _, path := range requests {
-				if !strings.HasSuffix(path, "/retrieve") {
-					t.Errorf("cache exec requested %s; without the job's secrets it should only look for a result", path)
-				}
 			}
 		})
 	}

@@ -84,7 +84,7 @@ var CacheExecCommand = &cli.Command{
 			return cache.RunUncached(l, cfg.FailOnError, err, os.Stdout, os.Stderr, command)
 		}
 
-		// The saved output is replayed in jobs that may lack these secrets, so redact it before saving.
+		// Variables exported in this step's command aren't known to the job's redactor (it rescans the environment only after hooks), so find them here.
 		envNeedles, _, err := redact.NeedlesFromEnv(cfg.RedactedVars)
 		if err != nil {
 			return err
@@ -96,26 +96,25 @@ var CacheExecCommand = &cli.Command{
 			CacheConfigFile: cacheConfigFile,
 			Names:           cfg.Names,
 			FailOnError:     cfg.FailOnError,
-			// Secrets from secret get and redactor add are only known to the job's redactor, so ask the Job API for them.
-			Redactions: func(ctx context.Context) ([]string, error) {
-				jobNeedles, err := listJobRedactions(ctx)
-				if err != nil {
-					return nil, fmt.Errorf("couldn't get the job's secrets from the Job API: %w", err)
-				}
-				return append(slices.Clone(envNeedles), jobNeedles...), nil
-			},
+			Redact:          cacheExecRedactor(envNeedles),
 		}
 		return cache.RunExec(ctx, l, apiClient, cacheCfg, os.Stdout, os.Stderr, command)
 	},
 }
 
-// listJobRedactions returns the values the job log redacts, from the Job API.
-func listJobRedactions(ctx context.Context) ([]string, error) {
-	client, err := jobapi.NewDefaultClient(ctx)
-	if err != nil {
-		return nil, err
+// cacheExecRedactor redacts envNeedles locally, then has the job executor redact the job's own secrets (e.g. from secret get or redactor add), which never leave it.
+func cacheExecRedactor(envNeedles []string) cache.Redactor {
+	return func(ctx context.Context, chunks []jobapi.OutputChunk) ([]jobapi.OutputChunk, error) {
+		chunks, err := jobapi.RedactChunks(chunks, envNeedles)
+		if err != nil {
+			return nil, err
+		}
+		client, err := jobapi.NewDefaultClient(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("couldn't reach the Job API to redact the job's secrets: %w", err)
+		}
+		return client.Redact(ctx, chunks)
 	}
-	return client.RedactionList(ctx)
 }
 
 // cacheExecWaitDelay is how long to wait, after the command exits, for processes it left running to close its output; a plain step doesn't wait for them at all.

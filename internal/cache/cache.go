@@ -33,8 +33,8 @@ type Config struct {
 	// merging files or bypassing registry access policies, even if an entry
 	// already exists there.
 	Force bool
-	// Redactions returns the secret values to strip (along with Buildkite tokens) from the output cache exec saves; it's called before and after the command, which may register more.
-	Redactions func(context.Context) ([]string, error)
+	// Redact strips secrets from the output cache exec saves, after the command runs; without it, exec doesn't save.
+	Redact Redactor
 }
 
 // cacheOps is the subset of *client used by saveWithClient and restoreWithClient.

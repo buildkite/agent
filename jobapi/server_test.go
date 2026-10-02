@@ -12,7 +12,6 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -762,7 +761,7 @@ func TestCreateRedaction(t *testing.T) {
 	}
 }
 
-func TestListRedactions(t *testing.T) {
+func TestRedact(t *testing.T) {
 	t.Parallel()
 
 	mux := replacer.NewMux(replacer.New(io.Discard, []string{"from-env-var"}, redact.Redacted))
@@ -787,13 +786,28 @@ func TestListRedactions(t *testing.T) {
 		t.Fatalf("client.RedactionCreate() error = %v", err)
 	}
 
-	got, err := client.RedactionList(t.Context())
+	bkToken := "bkaa_" + strings.Repeat("x9Y8", 10)
+	got, err := client.Redact(t.Context(), []jobapi.OutputChunk{
+		{Data: []byte("env: from-env-var, secret: from-secret")},
+		{Stderr: true, Data: []byte("token: " + bkToken + "\n")},
+		{Data: []byte("-get\n")}, // the secret is split across stdout chunks, with stderr between
+	})
 	if err != nil {
-		t.Fatalf("client.RedactionList() error = %v", err)
+		t.Fatalf("client.Redact() error = %v", err)
 	}
-	slices.Sort(got)
-	if diff := cmp.Diff([]string{"from-env-var", "from-secret-get"}, got); diff != "" {
-		t.Errorf("client.RedactionList() diff (-want +got):\n%s", diff)
+	var stdout, stderr strings.Builder
+	for _, c := range got {
+		w := &stdout
+		if c.Stderr {
+			w = &stderr
+		}
+		w.Write(c.Data)
+	}
+	if got, want := stdout.String(), "env: [REDACTED], secret: [REDACTED]\n"; got != want {
+		t.Errorf("redacted stdout = %q, want %q", got, want)
+	}
+	if got, want := stderr.String(), "token: [REDACTED]\n"; got != want {
+		t.Errorf("redacted stderr = %q, want %q", got, want)
 	}
 }
 
