@@ -129,6 +129,7 @@ func (c *client) saveEntry(
 
 		// Check if cache already exists
 		var (
+			peekResp    api.CacheEntryPeekResp
 			peekApiResp *api.Response
 			exists      bool
 		)
@@ -139,7 +140,7 @@ func (c *client) saveEntry(
 			roko.WithJitter(),
 		).DoWithContext(ctx, func(r *roko.Retrier) error {
 			var err error
-			_, exists, peekApiResp, err = c.api.CacheEntryPeekExists(ctx, c.registry, api.CacheEntryPeekReq{
+			peekResp, exists, peekApiResp, err = c.api.CacheEntryPeekExists(ctx, c.registry, api.CacheEntryPeekReq{
 				TargetPaths: targetPaths,
 				CacheKey:    cacheKey,
 			})
@@ -161,6 +162,9 @@ func (c *client) saveEntry(
 		if exists {
 			// Cache already exists, no need to upload
 			result.CacheEntryCreated = false
+			if len(peekResp.Blobs) > 0 {
+				result.ExistingDigest = peekResp.Blobs[0].Digest.Value
+			}
 			result.TotalDuration = time.Since(startTime)
 			span.SetAttributes(
 				attribute.Bool("cache.created", false),

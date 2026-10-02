@@ -197,6 +197,10 @@ type SaveResult struct {
 	// Archive contains information about the archive that was built.
 	Archive ArchiveMetrics
 
+	// ExistingDigest is the SHA-256 digest of the entry that already existed
+	// when CacheEntryCreated is false, if the registry reported one.
+	ExistingDigest string
+
 	// Transfer contains information about the upload (if performed).
 	// Nil if CacheEntryCreated is false (cache already existed).
 	Transfer *TransferMetrics
