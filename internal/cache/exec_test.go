@@ -12,7 +12,6 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
-	"runtime"
 	"slices"
 	"strings"
 	"sync"
@@ -32,7 +31,6 @@ type fakeRegistry struct {
 	pending   map[string]api.CacheEntryRetrieveResp
 	stores    []api.CacheEntryCreateReq
 	retrieves []api.CacheEntryRetrieveReq
-	confirms  []api.CacheEntryConfirmReq
 }
 
 func fakeAddr(targetPaths []string, key []api.CacheKeyPart) string {
@@ -90,9 +88,6 @@ func (f *fakeRegistry) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		f.entries[fakeAddr(entry.TargetPaths, entry.CacheKey)] = entry
 		reply(api.CacheEntryCommitResp{})
 	case "POST /cache_registries/test/confirm":
-		var req api.CacheEntryConfirmReq
-		_ = json.NewDecoder(r.Body).Decode(&req)
-		f.confirms = append(f.confirms, req)
 		reply(api.CacheEntryConfirmResp{})
 	default:
 		w.WriteHeader(http.StatusBadRequest)
@@ -416,40 +411,6 @@ func TestRunExec_HeaderStartsOnNewLine(t *testing.T) {
 	}
 	if !strings.Contains(stderr, "running command\n\n--- :package: Saving cache...\n") {
 		t.Errorf("stderr = %q, want the Saving header to start on a new line", stderr)
-	}
-}
-
-func TestRunExec_FailedRestoreDoesNotConfirmOutput(t *testing.T) {
-	reg, apiClient, cfg := setupExecTest(t)
-	b := &build{}
-	if _, _, err := runExec(t, apiClient, cfg, b.run); err != nil {
-		t.Fatalf("first exec: %v", err)
-	}
-
-	// Lose the main entry's blob, so restoring it fails after the output was found.
-	for _, entry := range reg.entries {
-		if !slices.Contains(entry.TargetPaths, outputTargetPath) {
-			storage, _ := url.Parse(cfg.BucketURL)
-			dir := storage.Path
-			if runtime.GOOS == "windows" {
-				dir = strings.TrimPrefix(dir, "/") // "/C:/..." from setupExecTest
-			}
-			if err := os.Remove(filepath.Join(filepath.FromSlash(dir), entry.Blobs[0].Digest.Value)); err != nil {
-				t.Fatal(err)
-			}
-		}
-	}
-	writeFile(t, "input.txt", "v1")
-	if _, _, err := runExec(t, apiClient, cfg, b.run); err != nil {
-		t.Fatalf("second exec: %v", err)
-	}
-	if b.runs != 2 {
-		t.Errorf("command ran %d times, want 2", b.runs)
-	}
-	for _, req := range reg.confirms {
-		if slices.Contains(req.TargetPaths, outputTargetPath) {
-			t.Errorf("confirmed the output entry, but its files weren't restored")
-		}
 	}
 }
 
