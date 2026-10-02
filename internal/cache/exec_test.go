@@ -210,7 +210,7 @@ func TestRunExec_MissThenHit(t *testing.T) {
 	}
 	// The replay header's title depends on timing, so check around it.
 	if stdout != "compiling\ndone\n" || !strings.HasPrefix(stderr, "--- :package: Restoring cache...\n+++ ") ||
-		!strings.Contains(stderr, "(command was not run)\nwarning: deprecated\n") || !strings.Contains(stderr, "Restored from cache in") {
+		!strings.Contains(stderr, "\nwarning: deprecated\n") || !strings.Contains(stderr, "Restored from cache in") {
 		t.Errorf("hit output: stdout %q, stderr %q", stdout, stderr)
 	}
 
@@ -522,7 +522,7 @@ func TestTimeSaved(t *testing.T) {
 		}
 	}
 
-	if got, want := replayHeader(103*time.Second), "+++ :zap: cache exec saved 1m43s: replaying output from cache (command was not run)"; got != want {
+	if got, want := replayHeader(103*time.Second), "+++ :zap: cache exec saved 1m43s"; got != want {
 		t.Errorf("replayHeader(1m43s) = %q, want %q", got, want)
 	}
 	if got := replayHeader(-time.Second); !strings.HasPrefix(got, "+++ :package: Replaying output from cache") {

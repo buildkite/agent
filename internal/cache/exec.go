@@ -187,7 +187,7 @@ func replayHeader(saved time.Duration) string {
 	if saved <= 0 {
 		return "+++ :package: Replaying output from cache (command was not run)"
 	}
-	return fmt.Sprintf("+++ :zap: cache exec saved %s: replaying output from cache (command was not run)", roundDuration(saved))
+	return fmt.Sprintf("+++ :zap: cache exec saved %s", roundDuration(saved))
 }
 
 // timeSaved describes, in color, how a hit compares with running the command.
