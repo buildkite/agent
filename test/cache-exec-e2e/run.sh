@@ -131,7 +131,7 @@ job() {
 # direct [env...] -- <args>: runs cache exec outside any job (no Job API).
 direct() {
   STEP=$((STEP + 1))
-  (cd "$PROJ" && env "${agent_env[@]}" "$@") > "$WORK/raw.log" 2>&1
+  (cd "$PROJ" && env -u BUILDKITE_AGENT_JOB_API_SOCKET -u BUILDKITE_AGENT_JOB_API_TOKEN "${agent_env[@]}" "$@") > "$WORK/raw.log" 2>&1
   JOB_EXIT=$?
   perl -pe 's/\e\[[0-9;]*m//g' "$WORK/raw.log" > "$JOB_LOG"
   cp "$JOB_LOG" "$WORK/logs/$(printf %02d $STEP).log"
