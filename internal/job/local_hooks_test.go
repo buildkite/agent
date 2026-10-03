@@ -15,6 +15,7 @@ func TestRepositoryHookLocation(t *testing.T) {
 
 	for _, test := range []struct {
 		name       string
+		root       string
 		workdir    string
 		noCheckout bool
 		link       string
@@ -29,6 +30,29 @@ func TestRepositoryHookLocation(t *testing.T) {
 		{
 			name:    "service directory",
 			workdir: "services/api",
+			want:    "services/api/.buildkite/hooks/command",
+		},
+		{
+			name:    "symlinked checkout with physical working directory",
+			root:    "../checkout-link",
+			workdir: ".",
+			link:    "../checkout-link",
+			target:  ".",
+			want:    ".buildkite/hooks/command",
+		},
+		{
+			name:    "symlinked checkout with physical service directory",
+			root:    "../checkout-link",
+			workdir: "services/api",
+			link:    "../checkout-link",
+			target:  ".",
+			want:    "services/api/.buildkite/hooks/command",
+		},
+		{
+			name:    "physical checkout with symlinked service directory",
+			workdir: "../checkout-link/services/api",
+			link:    "../checkout-link",
+			target:  ".",
 			want:    "services/api/.buildkite/hooks/command",
 		},
 		{
@@ -118,7 +142,7 @@ func TestRepositoryHookLocation(t *testing.T) {
 			sh.Env.Set("BUILDKITE_BUILD_CHECKOUT_PATH", workdir)
 			e := &Executor{shell: sh}
 			if !test.noCheckout {
-				root, err := os.OpenRoot(checkout)
+				root, err := os.OpenRoot(filepath.Join(checkout, test.root))
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -137,7 +161,7 @@ func TestRepositoryHookLocation(t *testing.T) {
 				}
 				return
 			}
-			if want := filepath.Join(checkout, test.want); err != nil || got != want {
+			if want := filepath.Join(checkout, test.root, test.want); err != nil || got != want {
 				t.Fatalf("localHookPath(command) = (%q, %v), want (%q, nil)", got, err, want)
 			}
 		})

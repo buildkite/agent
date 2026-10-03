@@ -875,7 +875,16 @@ func (e *Executor) localHookPath(name string) (string, error) {
 
 	// Hooks follow the working directory, but the original checkout remains
 	// their boundary even if a hook changes BUILDKITE_BUILD_CHECKOUT_PATH.
-	rel, err := filepath.Rel(e.checkoutRoot.Name(), e.shell.Getwd())
+	// Resolve both paths so symlink aliases (e.g. after cd -P) compare equally.
+	checkoutPath, err := filepath.EvalSymlinks(e.checkoutRoot.Name())
+	if err != nil {
+		return "", os.ErrNotExist
+	}
+	workdir, err := filepath.EvalSymlinks(e.shell.Getwd())
+	if err != nil {
+		return "", os.ErrNotExist
+	}
+	rel, err := filepath.Rel(checkoutPath, workdir)
 	if err != nil || !filepath.IsLocal(rel) {
 		return "", os.ErrNotExist
 	}

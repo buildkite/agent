@@ -620,6 +620,65 @@ func TestRepositoryHooksFollowPostCheckoutWorkingDirectory(t *testing.T) {
 	tester.RunAndCheck(t)
 }
 
+func TestRepositoryHooksWithSymlinkedBuildPath(t *testing.T) {
+	t.Parallel()
+	if runtime.GOOS == "windows" {
+		t.Skip("requires POSIX shell physical directory commands")
+	}
+
+	for _, test := range []struct{ name, hook, script, dir string }{
+		{
+			name:   "pre-command resolves the working directory",
+			hook:   "pre-command",
+			script: "cd -P .",
+			dir:    ".",
+		},
+		{
+			name:   "post-checkout selects a physical service directory",
+			hook:   "post-checkout",
+			script: "export BUILDKITE_BUILD_CHECKOUT_PATH=\"$(pwd -P)/services/api\"",
+			dir:    "services/api",
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			tester, err := NewExecutorTester(mainCtx)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer tester.Close()
+
+			buildPath := filepath.Join(t.TempDir(), "builds")
+			if err := os.Symlink(tester.BuildDir, buildPath); err != nil {
+				t.Fatal(err)
+			}
+
+			for _, phase := range []string{"command", "post-command", "pre-exit"} {
+				hooksDir := filepath.Join(tester.Repo.Path, test.dir, ".buildkite", "hooks")
+				if _, err := tester.writeHookScript(tester.hookMock, phase, hooksDir, "local", phase); err != nil {
+					t.Fatal(err)
+				}
+				tester.hookMock.Expect("local", phase).Once().AndExitWith(0)
+			}
+			if err := os.MkdirAll(filepath.Join(tester.Repo.Path, ".buildkite", "hooks"), 0o700); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(tester.Repo.Path, ".buildkite", "hooks", test.hook), []byte("#!/bin/sh\n"+test.script+"\n"), 0o700); err != nil {
+				t.Fatal(err)
+			}
+			if err := tester.Repo.Add("."); err != nil {
+				t.Fatal(err)
+			}
+			if err := tester.Repo.Commit("Add hooks using physical checkout paths"); err != nil {
+				t.Fatal(err)
+			}
+
+			tester.RunAndCheck(t, "BUILDKITE_BUILD_PATH="+buildPath)
+		})
+	}
+}
+
 func TestRepositoryHooksWithSeparateCommandPhase(t *testing.T) {
 	t.Parallel()
 
