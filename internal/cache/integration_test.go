@@ -673,6 +673,58 @@ func TestCacheIntegration_SaveAndRestoreReportStats(t *testing.T) {
 	}
 }
 
+// TestCacheIntegration_ExperimentalArchiveMethod covers the A-1952 method
+// selector on the real save and restore paths: a Store archive goes through
+// the store, its stats reflect no compression, a restore expecting Store
+// confirms, and a restore expecting Zstd fails without confirming.
+func TestCacheIntegration_ExperimentalArchiveMethod(t *testing.T) {
+	ctx := t.Context()
+
+	cacheClient, cacheDir, _ := setupTestCache(t, "local_file")
+	mockClient := cacheClient.api.(*mockAPIClient)
+	cacheClient.archiveMethod = "store"
+
+	saveResult, err := cacheClient.Save(ctx, "test-cache")
+	if err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	if len(mockClient.commitCalls) != 1 {
+		t.Fatalf("commit calls = %d, want 1", len(mockClient.commitCalls))
+	}
+	saveStats := mockClient.commitCalls[0].Stats
+	if saveStats.CompressedBytes <= saveStats.UncompressedBytes {
+		t.Errorf("Store save CompressedBytes = %d, want more than UncompressedBytes (%d) (headers, no compression)", saveStats.CompressedBytes, saveStats.UncompressedBytes)
+	}
+	if saveResult.Archive.Sha256Sum == "" {
+		t.Error("Store save has no archive checksum")
+	}
+
+	if err := os.RemoveAll(cacheDir); err != nil {
+		t.Fatalf("RemoveAll: %v", err)
+	}
+	restoreResult, err := cacheClient.Restore(ctx, "test-cache")
+	if err != nil {
+		t.Fatalf("Restore: %v", err)
+	}
+	if !restoreResult.CacheRestored {
+		t.Fatal("CacheRestored = false, want true")
+	}
+	if _, err := os.Stat(filepath.Join(cacheDir, "nested", "large-file-3.bin")); err != nil {
+		t.Errorf("restored file: %v", err)
+	}
+	if len(mockClient.confirmCalls) != 1 {
+		t.Fatalf("confirm calls = %d, want 1", len(mockClient.confirmCalls))
+	}
+
+	cacheClient.archiveMethod = "zstd"
+	if _, err := cacheClient.Restore(ctx, "test-cache"); !errors.Is(err, errRestoreMutatedTargets) {
+		t.Fatalf("Restore expecting zstd from a Store archive: err = %v, want errRestoreMutatedTargets", err)
+	}
+	if len(mockClient.confirmCalls) != 1 {
+		t.Errorf("confirm calls = %d, want still 1: a method mismatch must not confirm", len(mockClient.confirmCalls))
+	}
+}
+
 // TestCacheIntegration_RestoreSucceedsWhenConfirmFails covers confirmation's
 // best-effort contract through the real public Restore path: by the time
 // confirmRestoreSucceeded runs, the blob has already been downloaded,

@@ -387,6 +387,17 @@ func (c *client) Restore(ctx context.Context, cacheID string) (RestoreResult, er
 		PartCount:         transferInfo.PartCount,
 		Concurrency:       transferInfo.Concurrency,
 	}
+	// Experimental (A-1952): don't confirm (and report stats for) a restore
+	// whose archive doesn't use the expected method. Untimed: stats were
+	// sampled above.
+	if c.archiveMethod != "" {
+		if _, err := archive.CheckEntryMethod(archiveFile, transferInfo.BytesTransferred, c.archiveMethod); err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, "archive entry method mismatch")
+			return result, errors.Join(errRestoreMutatedTargets, fmt.Errorf("restored archive failed the experimental entry method check: %w", err))
+		}
+	}
+
 	confirmed := c.confirmRestoreSucceeded(ctx, retrieveResp, stats)
 	result.TotalDuration = time.Since(startTime)
 

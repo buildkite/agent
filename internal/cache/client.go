@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/buildkite/agent/v4/api"
+	"github.com/buildkite/agent/v4/internal/cache/archive"
 	"github.com/buildkite/agent/v4/internal/cache/configuration"
 	"github.com/buildkite/agent/v4/logger"
 )
@@ -60,6 +61,9 @@ type client struct {
 	force      bool
 	caches     []configuration.Cache
 	onProgress ProgressCallback
+
+	// archiveMethod is experimental: see Config.ArchiveMethod.
+	archiveMethod string
 }
 
 // newClient builds a client from apiClient and cfg: loads and expands the
@@ -88,6 +92,12 @@ func newClient(l logger.Logger, apiClient cacheAPI, cfg Config) (*client, []stri
 		}
 	}
 
+	if cfg.ArchiveMethod != "" {
+		if err := archive.ValidateEntryMethod(cfg.ArchiveMethod); err != nil {
+			return nil, nil, fmt.Errorf("%w: %w", ErrInvalidConfiguration, err)
+		}
+	}
+
 	// Registry slug comes from BUILDKITE_AGENT_CACHE_REGISTRY; "~" selects the
 	// cluster default when unset.
 	registry := cfg.Registry
@@ -110,6 +120,7 @@ func newClient(l logger.Logger, apiClient cacheAPI, cfg Config) (*client, []stri
 				logger.StringField("message", message),
 			).Infof("Cache progress")
 		},
+		archiveMethod: cfg.ArchiveMethod,
 	}
 
 	names, err := c.resolveCacheNames(cfg.Names)

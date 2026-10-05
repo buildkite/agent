@@ -184,7 +184,13 @@ func (c *client) Save(ctx context.Context, cacheID string) (SaveResult, error) {
 	c.callProgress(cacheID, "building_archive", "Building archive", 0, len(cacheConfig.TargetPaths))
 
 	// Build archive
-	archiveInfo, err := archive.BuildArchive(ctx, cacheConfig.TargetPaths, cacheID)
+	var archiveInfo *archive.ArchiveInfo
+	if c.archiveMethod != "" {
+		// Experimental (A-1952): compare ZIP entry methods on the real save path.
+		archiveInfo, err = archive.BuildArchiveWithMethod(ctx, cacheConfig.TargetPaths, cacheID, c.archiveMethod)
+	} else {
+		archiveInfo, err = archive.BuildArchive(ctx, cacheConfig.TargetPaths, cacheID)
+	}
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, "failed to build archive")
@@ -310,6 +316,16 @@ func (c *client) Save(ctx context.Context, cacheID string) (SaveResult, error) {
 		EntryCount:        archiveInfo.WrittenEntries,
 		PartCount:         transferInfo.PartCount,
 		Concurrency:       transferInfo.Concurrency,
+	}
+
+	// Experimental (A-1952): don't report stats for an archive that doesn't
+	// use the requested method. Untimed: stats were sampled above.
+	if c.archiveMethod != "" {
+		if _, err := archive.CheckEntryMethod(archiveInfo.ArchivePath, archiveInfo.Size, c.archiveMethod); err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, "archive entry method mismatch")
+			return result, fmt.Errorf("saved archive failed the experimental entry method check: %w", err)
+		}
 	}
 
 	// Commit cache.

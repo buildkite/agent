@@ -147,3 +147,94 @@ func TestCacheSaveForce(t *testing.T) {
 		})
 	}
 }
+
+// TestCacheSaveExperimentalArchiveMethod covers the A-1952 benchmark
+// selector through the CLI: the archive uses the selected method, and every
+// cache API request, including commit, identifies the method and labels in
+// its User-Agent.
+func TestCacheSaveExperimentalArchiveMethod(t *testing.T) {
+	t.Chdir(t.TempDir())
+	if err := os.WriteFile("bench-data", []byte(strings.Repeat("cache contents ", 1_000)), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile("cache.yml", []byte("caches:\n  - name: bench\n    cache_key: [bench-v1]\n    target_paths: [bench-data]\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	storageDir := t.TempDir()
+	storagePath := filepath.ToSlash(storageDir)
+	if !strings.HasPrefix(storagePath, "/") {
+		storagePath = "/" + storagePath
+	}
+	storageURL := (&url.URL{Scheme: "file", Path: storagePath}).String()
+
+	var entry api.CacheEntryCreateReq
+	var commitUserAgent string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.Method + " " + r.URL.Path {
+		case "POST /cache_registries/test/peek":
+			w.WriteHeader(http.StatusNotFound)
+			_, _ = io.WriteString(w, `{"message":"Cache entry not found"}`)
+		case "GET /cache_registries/test":
+			_, _ = io.WriteString(w, `{"store":"local_file"}`)
+		case "PUT /cache_registries/test/store":
+			if err := json.NewDecoder(r.Body).Decode(&entry); err != nil {
+				t.Error(err)
+			}
+			_, _ = io.WriteString(w, `{"upload_id":"upload-1"}`)
+		case "PUT /cache_registries/test/commit":
+			commitUserAgent = r.Header.Get("User-Agent")
+			_, _ = io.WriteString(w, `{}`)
+		default:
+			t.Errorf("unexpected request: %s %s", r.Method, r.URL.Path)
+			w.WriteHeader(http.StatusBadRequest)
+		}
+	}))
+	t.Cleanup(server.Close)
+
+	t.Setenv("BUILDKITE_CACHE_EXPERIMENTAL_ARCHIVE_METHOD", "store")
+	t.Setenv("BUILDKITE_CACHE_EXPERIMENTAL_TELEMETRY_LABELS", "workload_small_typical,trial_2")
+	cmd := *CacheSaveCommand
+	app := &cli.Command{Commands: []*cli.Command{&cmd}}
+	args := []string{"buildkite-agent", "save", "--endpoint", server.URL, "--agent-access-token", "test-token", "--registry", "test", "--cache-config-file", "cache.yml", "--cache-store-url", storageURL, "--name", "bench", "--cache-fail-on-error"}
+	if err := app.Run(t.Context(), args); err != nil {
+		t.Fatalf("cache save: %v", err)
+	}
+
+	if want := " a1952_method_store a1952_workload_small_typical a1952_trial_2"; !strings.HasSuffix(commitUserAgent, want) {
+		t.Errorf("commit User-Agent = %q, want suffix %q", commitUserAgent, want)
+	}
+	if len(entry.Blobs) != 1 {
+		t.Fatalf("blobs = %v, want one archive", entry.Blobs)
+	}
+	if _, err := archive.CheckEntryMethod(filepath.Join(storageDir, entry.Blobs[0].Digest.Value), entry.Blobs[0].FileSize, "store"); err != nil {
+		t.Errorf("stored archive: %v", err)
+	}
+}
+
+func TestExperimentalCacheUserAgent(t *testing.T) {
+	for _, test := range []struct {
+		name    string
+		cfg     CacheConfig
+		want    string
+		wantErr bool
+	}{
+		{name: "unset leaves the User-Agent alone", want: "ua"},
+		{name: "method only", cfg: CacheConfig{ExperimentalArchiveMethod: "zstd"}, want: "ua a1952_method_zstd"},
+		{name: "labels only", cfg: CacheConfig{ExperimentalTelemetryLabels: []string{"trial_1"}}, want: "ua a1952_trial_1"},
+		{name: "unknown method", cfg: CacheConfig{ExperimentalArchiveMethod: "deflate"}, wantErr: true},
+		{name: "label with a space", cfg: CacheConfig{ExperimentalTelemetryLabels: []string{"a b"}}, wantErr: true},
+		{name: "label with upper case", cfg: CacheConfig{ExperimentalTelemetryLabels: []string{"Small"}}, wantErr: true},
+		{name: "empty label", cfg: CacheConfig{ExperimentalTelemetryLabels: []string{""}}, wantErr: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			got, err := experimentalCacheUserAgent("ua", test.cfg)
+			if (err != nil) != test.wantErr {
+				t.Fatalf("err = %v, want error: %t", err, test.wantErr)
+			}
+			if got != test.want {
+				t.Errorf("User-Agent = %q, want %q", got, test.want)
+			}
+		})
+	}
+}

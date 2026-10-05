@@ -33,6 +33,11 @@ type Config struct {
 	// merging files or bypassing registry access policies, even if an entry
 	// already exists there.
 	Force bool
+	// ArchiveMethod is experimental (A-1952 benchmarks only). When set to
+	// "zstd" or "store", save builds the archive with that ZIP entry method,
+	// and both save and restore fail unless the archive uses it. Empty keeps
+	// the normal behaviour.
+	ArchiveMethod string
 }
 
 // cacheOps is the subset of *client used by saveWithClient and restoreWithClient.

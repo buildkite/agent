@@ -4,8 +4,10 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
+	"github.com/buildkite/agent/v4/internal/cache/archive"
 	"github.com/urfave/cli/v3"
 )
 
@@ -18,6 +20,10 @@ type CacheConfig struct {
 	CacheConfigFile string   `cli:"cache-config-file"`
 	Concurrency     int      `cli:"concurrency"`
 	FailOnError     bool     `cli:"cache-fail-on-error"`
+
+	// Experimental (A-1952 benchmarks only).
+	ExperimentalArchiveMethod   string   `cli:"experimental-archive-method"`
+	ExperimentalTelemetryLabels []string `cli:"experimental-telemetry-label"`
 }
 
 func cacheFlags() []cli.Flag {
@@ -58,7 +64,46 @@ func cacheFlags() []cli.Flag {
 			Usage:   "Fail the command (non-zero exit) when a cache save or restore fails. By default a cache is best-effort: failures are logged and skipped so they never fail the build",
 			Sources: cli.EnvVars("BUILDKITE_AGENT_CACHE_FAIL_ON_ERROR"),
 		},
+		&cli.StringFlag{
+			Name:    "experimental-archive-method",
+			Usage:   "EXPERIMENTAL, for A-1952 benchmarks only: the ZIP entry method, zstd or store. Save builds the archive with it; save and restore fail unless the archive uses it",
+			Sources: cli.EnvVars("BUILDKITE_CACHE_EXPERIMENTAL_ARCHIVE_METHOD"),
+			Hidden:  true,
+		},
+		&cli.StringSliceFlag{
+			Name:    "experimental-telemetry-label",
+			Usage:   "EXPERIMENTAL, for A-1952 benchmarks only: a label ([a-z0-9_], up to 64 characters) added to the User-Agent as a1952_<label> (can be specified multiple times)",
+			Sources: cli.EnvVars("BUILDKITE_CACHE_EXPERIMENTAL_TELEMETRY_LABELS"),
+			Hidden:  true,
+		},
 	}
+}
+
+var experimentalTelemetryLabelRE = regexp.MustCompile(`^[a-z0-9_]{1,64}$`)
+
+// experimentalCacheUserAgent appends A-1952 benchmark identification to
+// userAgent: a1952_method_<method> when an archive method is set, then
+// a1952_<label> for each label. Backend request logs record the User-Agent
+// alongside cache.stats, so this attributes stats to a method and workload
+// without a backend change. Returns userAgent unchanged when neither is set.
+func experimentalCacheUserAgent(userAgent string, cfg CacheConfig) (string, error) {
+	var tokens []string
+	if cfg.ExperimentalArchiveMethod != "" {
+		if err := archive.ValidateEntryMethod(cfg.ExperimentalArchiveMethod); err != nil {
+			return "", err
+		}
+		tokens = append(tokens, "a1952_method_"+cfg.ExperimentalArchiveMethod)
+	}
+	for _, label := range cfg.ExperimentalTelemetryLabels {
+		if !experimentalTelemetryLabelRE.MatchString(label) {
+			return "", fmt.Errorf("invalid experimental telemetry label %q: want 1-64 characters from [a-z0-9_]", label)
+		}
+		tokens = append(tokens, "a1952_"+label)
+	}
+	if len(tokens) == 0 {
+		return userAgent, nil
+	}
+	return userAgent + " " + strings.Join(tokens, " "), nil
 }
 
 // defaultCacheConfigPaths lists the candidate cache configuration files, in

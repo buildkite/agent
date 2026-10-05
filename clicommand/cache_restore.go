@@ -108,6 +108,11 @@ var CacheRestoreCommand = &cli.Command{
 		fmt.Println("--- :package: Restoring cache...")
 
 		apiCfg := loadAPIClientConfig(cfg, "AgentAccessToken")
+		userAgent, err := experimentalCacheUserAgent(apiCfg.UserAgent, cfg.CacheConfig)
+		if err != nil {
+			return err
+		}
+		apiCfg.UserAgent = userAgent
 		apiClient := api.NewClient(l, apiCfg)
 
 		cacheConfigFile, err := resolveCacheConfigFile(cfg.CacheConfigFile)
@@ -122,6 +127,7 @@ var CacheRestoreCommand = &cli.Command{
 			CacheConfigFile: cacheConfigFile,
 			Names:           cfg.Names,
 			FailOnError:     cfg.FailOnError,
+			ArchiveMethod:   cfg.ExperimentalArchiveMethod,
 		}
 
 		// Perform cache restore (logging happens inside)

@@ -92,6 +92,11 @@ var CacheSaveCommand = &cli.Command{
 		fmt.Println("--- :package: Saving cache...")
 
 		apiCfg := loadAPIClientConfig(cfg, "AgentAccessToken")
+		userAgent, err := experimentalCacheUserAgent(apiCfg.UserAgent, cfg.CacheConfig)
+		if err != nil {
+			return err
+		}
+		apiCfg.UserAgent = userAgent
 
 		if apiCfg.Token == "" {
 			return fmt.Errorf("an API token must be provided to save caches")
@@ -112,6 +117,7 @@ var CacheSaveCommand = &cli.Command{
 			Names:           cfg.Names,
 			Concurrency:     cfg.Concurrency,
 			FailOnError:     cfg.FailOnError,
+			ArchiveMethod:   cfg.ExperimentalArchiveMethod,
 			Force:           cfg.Force,
 		}
 
