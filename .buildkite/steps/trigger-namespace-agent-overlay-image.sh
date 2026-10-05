@@ -41,6 +41,7 @@ fi
 buildkite-agent pipeline upload <<YAML
 steps:
   - name: ":rocket: Publish Namespace agent overlay images for ${agent_version}${message_suffix}"
+    key: "namespace-agent-overlay-image"
     skip: ${skip}
     trigger: "namespace-agent-overlay-image"
     async: false
