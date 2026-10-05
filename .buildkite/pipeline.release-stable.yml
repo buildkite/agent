@@ -159,3 +159,8 @@ steps:
           image: "032379705303.dkr.ecr.us-east-1.amazonaws.com/deploytools:2022.07"
           propagate-environment: true
           mount-buildkite-agent: true
+
+  # Runs after the wait above, so the GitHub release and Docker Hub images that
+  # the overlay build consumes have been published.
+  - name: ":pipeline: Upload Namespace agent overlay image trigger"
+    command: ".buildkite/steps/trigger-namespace-agent-overlay-image.sh"
