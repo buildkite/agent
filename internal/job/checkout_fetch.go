@@ -86,16 +86,30 @@ func (e *Executor) fetchSource(ctx context.Context, addBloblessFilter bool, atte
 	skipFetch := (e.GitSkipFetchExistingCommits || mirrorHit) && e.Commit != "HEAD" &&
 		hasGitCommit(ctx, e.shell, ".git", e.Commit)
 
-	span.SetAttributes(attribute.Bool("git.skipped", skipFetch))
-
-	if skipFetch {
-		e.shell.Commentf("Commit %q already exists locally, skipping fetch", e.Commit)
-		return nil
+	baseBranchMode, err := parseGitFetchBaseBranchMode(e.GitFetchBaseBranch)
+	if err != nil {
+		return err
 	}
+
+	span.SetAttributes(
+		attribute.Bool("git.skipped", skipFetch),
+		attribute.String("git.fetch_base_branch", baseBranchMode),
+	)
 
 	gitFetchFlags := e.GitFetchFlags
 	if addBloblessFilter {
 		gitFetchFlags = "--filter=blob:none " + gitFetchFlags
+	}
+
+	// A job that asked for the base branch wants it whether or not its own commit
+	// still needs fetching, so this precedes the skip below.
+	if err := e.fetchBaseBranch(ctx, baseBranchMode, gitFetchFlags); err != nil {
+		return err
+	}
+
+	if skipFetch {
+		e.shell.Commentf("Commit %q already exists locally, skipping fetch", e.Commit)
+		return nil
 	}
 
 	switch kind {
