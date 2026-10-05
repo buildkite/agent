@@ -46,9 +46,15 @@ lockfile and vite config are unchanged:
 
 type CacheExecConfig struct {
 	GlobalConfig
-	APIConfig
 	CacheConfig
 	RedactedVars []string `cli:"redacted-vars" normalize:"list"`
+
+	// APIConfig's fields, but with the token optional: without one, cache exec runs the command uncached instead of failing.
+	AgentAccessToken string `cli:"agent-access-token"`
+	DebugHTTP        bool   `cli:"debug-http"`
+	TraceHTTP        bool   `cli:"trace-http"`
+	Endpoint         string `cli:"endpoint" validate:"required"`
+	NoHTTP2          bool   `cli:"no-http2"`
 }
 
 var CacheExecCommand = &cli.Command{

@@ -118,16 +118,20 @@ func TestCacheExecWithoutConfigRunsUncached(t *testing.T) {
 	}
 	for _, test := range []struct {
 		name        string
+		token       string
 		failOnError bool
 	}{
-		{name: "runs the command by default"},
-		{name: "fails with cache-fail-on-error", failOnError: true},
+		{name: "no cache config: runs the command by default", token: "token"},
+		{name: "no cache config: fails with cache-fail-on-error", token: "token", failOnError: true},
+		{name: "no token: runs the command by default"},
+		{name: "no token: fails with cache-fail-on-error", failOnError: true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			t.Chdir(t.TempDir())
+			t.Setenv("BUILDKITE_AGENT_ACCESS_TOKEN", "")
 			cmd := *CacheExecCommand
 			app := &cli.Command{Commands: []*cli.Command{&cmd}}
-			args := []string{"buildkite-agent", "exec", "--agent-access-token", "token", "--name", "build", "--cache-fail-on-error=" + strconv.FormatBool(test.failOnError), "--", "sh", "-c", "touch ran"}
+			args := []string{"buildkite-agent", "exec", "--agent-access-token", test.token, "--name", "build", "--cache-fail-on-error=" + strconv.FormatBool(test.failOnError), "--", "sh", "-c", "touch ran"}
 			err := app.Run(t.Context(), args)
 			if gotErr := err != nil; gotErr != test.failOnError {
 				t.Errorf("cache exec error = %v, want error: %t", err, test.failOnError)
