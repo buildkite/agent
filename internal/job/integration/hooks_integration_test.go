@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -575,49 +576,76 @@ func TestCheckingOutFiresCorrectHooks(t *testing.T) {
 func TestRepositoryHooksFollowPostCheckoutWorkingDirectory(t *testing.T) {
 	t.Parallel()
 
-	tester, err := NewExecutorTester(mainCtx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer tester.Close()
-
-	// Both the repository root and the service provide hooks. After the root's
-	// post-checkout hook selects the service, only the service hooks should run.
-	for _, scope := range []struct{ name, dir string }{
-		{"root", "."},
-		{"service", "services/api"},
+	phases := []string{"pre-command", "command", "post-command", "pre-exit"}
+	for _, test := range []struct {
+		name          string
+		servicePhases []string
+	}{
+		{"service hooks override root", phases},
+		{"missing service hooks use root", nil},
+		{"each hook falls back independently", []string{"command"}},
 	} {
-		for _, phase := range []string{"pre-command", "command", "post-command", "pre-exit"} {
-			hooksDir := filepath.Join(tester.Repo.Path, scope.dir, ".buildkite", "hooks")
-			if _, err := tester.writeHookScript(tester.hookMock, phase, hooksDir, scope.name, phase); err != nil {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			tester, err := NewExecutorTester(mainCtx)
+			if err != nil {
 				t.Fatal(err)
 			}
-			expect := tester.hookMock.Expect(scope.name, phase)
-			if scope.name == "root" {
-				expect.NotCalled()
-			} else {
-				expect.Once().AndExitWith(0)
+			defer tester.Close()
+
+			// Keep the service directory in the checkout even when it has no hooks.
+			serviceDir := filepath.Join(tester.Repo.Path, "services", "api")
+			if err := os.MkdirAll(serviceDir, 0o755); err != nil {
+				t.Fatal(err)
 			}
-		}
-	}
+			if err := os.WriteFile(filepath.Join(serviceDir, "test.txt"), []byte("service\n"), 0o644); err != nil {
+				t.Fatal(err)
+			}
 
-	name := "post-checkout"
-	script := "#!/bin/sh\nexport BUILDKITE_BUILD_CHECKOUT_PATH=\"$BUILDKITE_BUILD_CHECKOUT_PATH/services/api\"\n"
-	if runtime.GOOS == "windows" {
-		name += ".bat"
-		script = "@echo off\r\nset \"BUILDKITE_BUILD_CHECKOUT_PATH=%BUILDKITE_BUILD_CHECKOUT_PATH%\\services\\api\"\r\n"
-	}
-	if err := os.WriteFile(filepath.Join(tester.Repo.Path, ".buildkite", "hooks", name), []byte(script), 0o700); err != nil {
-		t.Fatal(err)
-	}
-	if err := tester.Repo.Add("."); err != nil {
-		t.Fatal(err)
-	}
-	if err := tester.Repo.Commit("Add root and service hooks"); err != nil {
-		t.Fatal(err)
-	}
+			// A service hook overrides the corresponding root hook. Other hooks
+			// continue to run from the root after post-checkout selects the service.
+			for _, scope := range []struct{ name, dir string }{
+				{"root", "."},
+				{"service", "services/api"},
+			} {
+				for _, phase := range phases {
+					serviceHasHook := slices.Contains(test.servicePhases, phase)
+					if scope.name == "service" && !serviceHasHook {
+						continue
+					}
+					hooksDir := filepath.Join(tester.Repo.Path, scope.dir, ".buildkite", "hooks")
+					if _, err := tester.writeHookScript(tester.hookMock, phase, hooksDir, scope.name, phase); err != nil {
+						t.Fatal(err)
+					}
+					expect := tester.hookMock.Expect(scope.name, phase)
+					if scope.name == "root" && serviceHasHook {
+						expect.NotCalled()
+					} else {
+						expect.Once().AndExitWith(0)
+					}
+				}
+			}
 
-	tester.RunAndCheck(t)
+			name := "post-checkout"
+			script := "#!/bin/sh\nexport BUILDKITE_BUILD_CHECKOUT_PATH=\"$BUILDKITE_BUILD_CHECKOUT_PATH/services/api\"\n"
+			if runtime.GOOS == "windows" {
+				name += ".bat"
+				script = "@echo off\r\nset \"BUILDKITE_BUILD_CHECKOUT_PATH=%BUILDKITE_BUILD_CHECKOUT_PATH%\\services\\api\"\r\n"
+			}
+			if err := os.WriteFile(filepath.Join(tester.Repo.Path, ".buildkite", "hooks", name), []byte(script), 0o700); err != nil {
+				t.Fatal(err)
+			}
+			if err := tester.Repo.Add("."); err != nil {
+				t.Fatal(err)
+			}
+			if err := tester.Repo.Commit("Add root and service hooks"); err != nil {
+				t.Fatal(err)
+			}
+
+			tester.RunAndCheck(t)
+		})
+	}
 }
 
 func TestRepositoryHooksWithSymlinkedBuildPath(t *testing.T) {

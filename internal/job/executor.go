@@ -873,7 +873,7 @@ func (e *Executor) localHookPath(name string) (string, error) {
 		return "", os.ErrNotExist
 	}
 
-	// Hooks follow the working directory, but the original checkout remains
+	// Prefer hooks in the working directory, but the original checkout remains
 	// their boundary even if a hook changes BUILDKITE_BUILD_CHECKOUT_PATH.
 	// Resolve both paths so symlink aliases (e.g. after cd -P) compare equally.
 	checkoutPath, err := filepath.EvalSymlinks(e.checkoutRoot.Name())
@@ -890,7 +890,13 @@ func (e *Executor) localHookPath(name string) (string, error) {
 	}
 	dir := filepath.Join(rel, ".buildkite", "hooks")
 	// Keep lookup rooted so symlinks cannot escape the checkout.
-	return hook.Find(e.checkoutRoot, dir, name)
+	hookPath, err := hook.Find(e.checkoutRoot, dir, name)
+	if !errors.Is(err, os.ErrNotExist) || rel == "." {
+		return hookPath, err
+	}
+
+	// Preserve shared root hooks when the working directory has no matching hook.
+	return hook.Find(e.checkoutRoot, filepath.Join(".buildkite", "hooks"), name)
 }
 
 func (e *Executor) hasLocalHook(name string) bool {

@@ -17,6 +17,7 @@ func TestRepositoryHookLocation(t *testing.T) {
 		name       string
 		root       string
 		workdir    string
+		removeHook string
 		noCheckout bool
 		link       string
 		target     string
@@ -56,8 +57,28 @@ func TestRepositoryHookLocation(t *testing.T) {
 			want:    "services/api/.buildkite/hooks/command",
 		},
 		{
-			name:    "missing service hook does not fall back to root",
+			name:    "missing service hooks directory falls back to root",
 			workdir: "services/worker",
+			want:    ".buildkite/hooks/command",
+		},
+		{
+			name:       "missing service hook falls back to root",
+			workdir:    "services/api",
+			removeHook: "services/api/.buildkite/hooks/command",
+			want:       ".buildkite/hooks/command",
+		},
+		{
+			name:       "missing service and root hook",
+			workdir:    "services/worker",
+			removeHook: ".buildkite/hooks/command",
+		},
+		{
+			name:    "symlinked checkout falls back to root",
+			root:    "../checkout-link",
+			workdir: "services/worker",
+			link:    "../checkout-link",
+			target:  ".",
+			want:    ".buildkite/hooks/command",
 		},
 		{
 			name:    "sibling directory with same path prefix",
@@ -86,17 +107,32 @@ func TestRepositoryHookLocation(t *testing.T) {
 			workdir: "services/api",
 			link:    "services/api/.buildkite",
 			target:  "../checkout-other/.buildkite",
+			want:    ".buildkite/hooks/command",
 		},
 		{
 			name:    "hooks directory symlink escapes checkout",
 			workdir: "services/api",
 			link:    "services/api/.buildkite/hooks",
 			target:  "../checkout-other/.buildkite/hooks",
+			want:    ".buildkite/hooks/command",
 		},
 		{
 			name:    "hook symlink escapes checkout",
 			workdir: "services/api",
 			link:    "services/api/.buildkite/hooks/command",
+			target:  "../checkout-other/.buildkite/hooks/command",
+			want:    ".buildkite/hooks/command",
+		},
+		{
+			name:    "fallback hooks directory symlink escapes checkout",
+			workdir: "services/worker",
+			link:    ".buildkite/hooks",
+			target:  "../checkout-other/.buildkite/hooks",
+		},
+		{
+			name:    "fallback hook symlink escapes checkout",
+			workdir: "services/worker",
+			link:    ".buildkite/hooks/command",
 			target:  "../checkout-other/.buildkite/hooks/command",
 		},
 	} {
@@ -110,6 +146,11 @@ func TestRepositoryHookLocation(t *testing.T) {
 					t.Fatal(err)
 				}
 				if err := os.WriteFile(filepath.Join(hooks, "command"), []byte("echo hook\n"), 0o644); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if test.removeHook != "" {
+				if err := os.Remove(filepath.Join(checkout, test.removeHook)); err != nil {
 					t.Fatal(err)
 				}
 			}
