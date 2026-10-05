@@ -7,10 +7,6 @@ set -euo pipefail
 # Must run after github-release.sh and publish-docker-images.sh: the overlay
 # build downloads the darwin-arm64 archive from the v<version> GitHub release
 # and pins docker.io/buildkite/agent:<version>-ubuntu-22.04.
-#
-# agent-release-stable (Main cluster) can only trigger
-# namespace-agent-overlay-image (Namespace Base Images Deployment cluster) once
-# a pipeline.trigger_build.pipeline organization rule allows it.
 
 agent_version="$(buildkite-agent meta-data get "agent-version")"
 is_prerelease="$(buildkite-agent meta-data get "agent-is-prerelease")"
