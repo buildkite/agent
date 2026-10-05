@@ -161,6 +161,8 @@ steps:
           mount-buildkite-agent: true
 
   # Runs after the wait above, so the GitHub release and Docker Hub images that
-  # the overlay build consumes have been published.
+  # the overlay build consumes have been published. Soft-failed like the
+  # trigger it uploads, as the agent release is already complete.
   - name: ":pipeline: Upload Namespace agent overlay image trigger"
     command: ".buildkite/steps/trigger-namespace-agent-overlay-image.sh"
+    soft_fail: true
