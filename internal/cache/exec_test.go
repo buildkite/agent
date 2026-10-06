@@ -193,7 +193,7 @@ func TestRunExec_MissThenHit(t *testing.T) {
 	if got := len(reg.stores); got != 1 {
 		t.Fatalf("got %d stores after a miss, want one entry with the files and the log", got)
 	}
-	if got, want := reg.stores[0].TargetPaths, []string{"out", ".buildkite-cache-exec-build.log"}; !slices.Equal(got, want) {
+	if got, want := reg.stores[0].TargetPaths, []string{"out", ".buildkite-cache-exec-build.v1.log"}; !slices.Equal(got, want) {
 		t.Errorf("saved entry target_paths = %q, want %q", got, want)
 	}
 

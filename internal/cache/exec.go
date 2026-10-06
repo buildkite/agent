@@ -61,7 +61,8 @@ func RunExec(ctx context.Context, l logger.Logger, apiClient *api.Client, cfg Co
 		cacheConfig.CacheKey[i] = configuration.KeyPart{Source: configuration.SourceLiteral, Arg: part.Value}
 	}
 
-	logPath := ".buildkite-cache-exec-" + name + ".log"
+	// The format version is in the name, which is part of the entry's address, so a new format never reads old entries.
+	logPath := ".buildkite-cache-exec-" + name + ".v1.log"
 	cacheConfig.TargetPaths = append(slices.Clone(cacheConfig.TargetPaths), logPath)
 	defer func() { _ = os.Remove(logPath) }()
 
