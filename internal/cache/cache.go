@@ -33,6 +33,8 @@ type Config struct {
 	// merging files or bypassing registry access policies, even if an entry
 	// already exists there.
 	Force bool
+	// Redact strips secrets from the command output cache exec saves.
+	Redact Redactor
 }
 
 // cacheOps is the subset of *client used by saveWithClient and restoreWithClient.
