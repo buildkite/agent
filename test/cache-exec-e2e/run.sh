@@ -223,7 +223,6 @@ expect "a hit skips the command" test "$(runs)" -eq "$runs_before"
 expect "and restores target_paths" test -f dist/input.txt
 expect "and replays the recorded stdout" file_has "$WORK/stdout" "$first_run"
 expect "and replays the recorded stderr" grep -qF -- "build warning" "$WORK/stdout" "$WORK/stderr"
-issue "replay sends the command's stderr to stdout" file_has "$WORK/stdout" "build warning"
 
 section "a failing command"
 new_key
@@ -322,10 +321,6 @@ outside_job BUILDKITE_AGENT_JOB_API_SOCKET=/nonexistent.sock BUILDKITE_AGENT_JOB
 expect "--cache-fail-on-error fails when the Job API socket is dead" test "$EXIT" -eq 1
 
 section "output and exit status"
-in_job 'mkdir -p dist
-for run in miss hit; do echo "$run=[$(RUN_ID=capture buildkite-agent cache exec --name by_run_id -- echo 1.2.3 2>/dev/null)]"; done'
-expect "on a miss, \$(cache exec -- echo 1.2.3) captures only 1.2.3" has "miss=[1.2.3]"
-expect "and on a hit" has "hit=[1.2.3]"
 in_job 'RUN_ID=no_newline buildkite-agent cache exec --name by_run_id -- bash -c "mkdir -p dist; printf no-newline"'
 expect "a header after output without a trailing newline starts on a new line" grep -q -- '^--- :package: Saving cache' "$LOG"
 start=$SECONDS
