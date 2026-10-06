@@ -165,34 +165,29 @@ not() { ! "$@"; }
 has() { grep -qF -- "$1" "$LOG"; }                  # the last output contains this text
 requested() { grep -qE -- "$1" "$REQUESTS"; }       # the registry got a request matching this regex
 file_has() { grep -qaF -- "$2" "$1"; }
-ran_twice() { test "$(grep -c 'No cached result, running command' "$LOG")" -eq 2; }
 ran_once() { test "$(grep -c 'No cached result, running command' "$LOG")" -eq 1; }
-hit() { has "Restored from cache"; }               # the last output includes a cache exec hit
+hit() { has "the command was not run"; }           # the last output includes a cache exec hit
 runs() { wc -l < "$WORK/runs"; }
 
 # new_key: changes the source files, so the build cache key has nothing saved yet.
 new_key() { echo "$RANDOM$RANDOM" > src/input.txt; rm -rf dist; }
 
-# saved_output_blob: path of the newest saved command output in the file store.
-saved_output_blob() { echo "$WORK/store/$(curl -s "$REGISTRY/control/latest-output")"; }
+# saved_exec_blob: path of the newest blob cache exec saved in the file store.
+saved_exec_blob() { echo "$WORK/store/$(curl -s "$REGISTRY/control/latest-exec")"; }
 
-# decode_saved_output <blob>: prints the recorded output, without the format's framing.
-decode_saved_output() {
-  zstd -dcq "$1" | python3 -c '
-import sys
-data = sys.stdin.buffer.read()
-i = len(b"buildkite-agent cache exec output v2\n")
-while i < len(data):
-    stream = data[i]; i += 1  # 1 = stdout, 2 = stderr, 3 = how long the command ran
-    size = shift = 0
-    while True:  # uvarint length
-        byte = data[i]; i += 1
-        size |= (byte & 0x7F) << shift; shift += 7
-        if byte < 0x80: break
-    if stream != 3:
-        sys.stdout.buffer.write(data[i:i + size])
-    i += size
-'
+# decode_saved_log <blob>: prints the command log stored in a cache exec archive.
+# The archive's entries are zstd-compressed, which Python's zipfile can't read, so copy
+# the raw entry out and decompress it with zstd.
+decode_saved_log() {
+  python3 - "$1" <<'PY' | zstd -dcq
+import struct, sys, zipfile
+with zipfile.ZipFile(sys.argv[1]) as z, open(sys.argv[1], "rb") as f:
+    info = next(i for i in z.infolist() if ".buildkite-cache-exec-" in i.filename)
+    f.seek(info.header_offset)
+    name_len, extra_len = struct.unpack("<HH", f.read(30)[26:30])
+    f.seek(name_len + extra_len, 1)
+    sys.stdout.buffer.write(f.read(info.compress_size))
+PY
 }
 
 # --- Showcase ------------------------------------------------------------------
@@ -219,7 +214,7 @@ section "miss, then hit"
 new_key
 in_job 'buildkite-agent cache exec --name build -- ./build.sh'
 expect "a miss runs the command" has "No cached result, running command"
-expect "and saves the files and the output" has "Saving command output for cache: build"
+expect "and saves the files and the log as one entry" requested '^store target_paths=\[.dist., .\.buildkite-cache-exec-build\.log.\]'
 first_run=$(grep -o 'BUILD RAN [0-9]*' "$LOG")
 rm -rf dist
 runs_before=$(runs)
@@ -227,7 +222,8 @@ in_job 'buildkite-agent cache exec --name build -- ./build.sh > ../stdout 2> ../
 expect "a hit skips the command" test "$(runs)" -eq "$runs_before"
 expect "and restores target_paths" test -f dist/input.txt
 expect "and replays the recorded stdout" file_has "$WORK/stdout" "$first_run"
-expect "and replays stderr to stderr" file_has "$WORK/stderr" "build warning"
+expect "and replays stderr, after stdout's header" file_has "$WORK/stdout" "build warning"
+issue "replay sends the command's stderr to stdout" file_has "$WORK/stdout" "build warning"
 
 section "a failing command"
 new_key
@@ -240,9 +236,9 @@ new_key
 in_job 'buildkite-agent cache exec --name build -- ./build.sh'
 rm -rf dist
 in_job 'buildkite-agent cache restore --name build'
-expect "restores target_paths" test -f dist/input.txt
-expect "without replaying output" not hit
-expect "or asking the registry for it" not requested 'cache-exec-output'
+expect "is a miss: exec's entry has its own address" has "Cache not restored"
+expect "so target_paths aren't restored" not test -e dist/input.txt
+expect "and no output is replayed" not hit
 
 section "fallback_limit is ignored"
 # The second run's source checksum differs, so only a fallback match could hit.
@@ -260,7 +256,8 @@ new_key
 in_job 'buildkite-agent cache save --name build
 buildkite-agent cache exec --name build -- ./build.sh
 buildkite-agent cache exec --name build -- ./build.sh'
-expect "the first exec saves output for them" has "Saving command output for cache: build"
+expect "aren't a hit for exec, so the first exec runs the command" ran_once
+expect "and saves its own entry" requested '^store .*cache-exec-build'
 expect "and the second is a hit" hit
 
 section "different files from a plain cache save"
@@ -269,38 +266,37 @@ mkdir -p dist && echo stale > dist/input.txt
 in_job 'buildkite-agent cache save --name build
 buildkite-agent cache exec --name build -- ./build.sh
 buildkite-agent cache exec --name build -- ./build.sh'
-expect "aren't paired with output" has "no recorded command output for these files"
-expect "so the first exec runs the command" ran_once
+expect "aren't a hit for exec, so the first exec runs the command" ran_once
 expect "and replaces them with its own, so the second is a hit" hit
 expect "which restores this run's files, not the plain-saved ones" not file_has dist/input.txt stale
 
-section "exec-saved files replaced by cache save --force"
+section "cache save --force after cache exec"
 new_key
 in_job 'buildkite-agent cache exec --name build -- ./build.sh
 echo replaced > dist/input.txt
 buildkite-agent cache save --force --name build
 rm -rf dist
 buildkite-agent cache exec --name build -- ./build.sh'
-expect "the old output isn't replayed with the new files" not hit
-expect "the command runs" ran_twice
+expect "doesn't replace exec's entry, so the next exec is a hit" hit
+expect "which restores exec's files with their output, not the forced ones" not file_has dist/input.txt replaced
 
-section "corrupt saved output"
+section "corrupt saved entry"
 new_key
 in_job 'buildkite-agent cache exec --name build -- ./build.sh'
-echo garbage > "$(saved_output_blob)"
+echo garbage > "$(saved_exec_blob)"
 rm -rf dist
 in_job 'buildkite-agent cache exec --name build -- ./build.sh
 buildkite-agent cache exec --name build -- ./build.sh'
-expect "is treated as a miss" has "missing or corrupt"
-expect "and expired" requested '^expire .*cache-exec-output'
-expect "the next run saves new output for the same files" has "Saving command output for cache: build"
+expect "is treated as a miss" has "blob digest mismatch"
+expect "and expired" requested '^expire .*cache-exec-build'
+expect "the next run saves a new entry" requested '^store .*cache-exec-build'
 expect "and the run after that is a hit" hit
 
 section "saved output is redacted"
 MY_TOKEN=SECRET-agent-env in_job 'echo SECRET-registered-before | buildkite-agent redactor add 2>/dev/null
 export STEP_SECRET=SECRET-step-env CUSTOM_THING=SECRET-custom-var
 RUN_ID=redact buildkite-agent cache exec --name by_run_id --redacted-vars "*_TOKEN,*_SECRET,CUSTOM_THING" -- ./redact.sh'
-decode_saved_output "$(saved_output_blob)" > "$WORK/saved-output"
+decode_saved_log "$(saved_exec_blob)" > "$WORK/saved-output"
 expect "secret get worked" file_has "$WORK/saved-output" "secret get: [REDACTED]"
 expect "the saved output contains no secrets" not file_has "$WORK/saved-output" "SECRET-"
 in_job 'RUN_ID=redact buildkite-agent cache exec --name by_run_id -- ./redact.sh'

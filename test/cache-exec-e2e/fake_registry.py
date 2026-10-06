@@ -7,8 +7,8 @@ retrieve, expire, confirm) backed by an in-memory entry list with store
 
 Usage: fake_registry.py <port-file> <request-log>
 Binds an ephemeral port on 127.0.0.1 and writes it to <port-file>.
-GET /control/latest-output returns the blob digest of the newest saved command
-output (the entry whose target_paths include "<cache-exec-output>").
+GET /control/latest-exec returns the blob digest of the newest entry saved by
+cache exec (the entry whose target_paths include its ".buildkite-cache-exec-*" log).
 """
 import json
 import re
@@ -49,8 +49,8 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         u = urlparse(self.path)
-        if u.path == "/control/latest-output":
-            outputs = [e for e in ENTRIES if "<cache-exec-output>" in e["target_paths"]]
+        if u.path == "/control/latest-exec":
+            outputs = [e for e in ENTRIES if any(".buildkite-cache-exec-" in p for p in e["target_paths"])]
             body = outputs[-1]["blobs"][0]["digest"]["value"].encode()
             self.send_response(200)
             self.send_header("Content-Length", str(len(body)))
