@@ -17,7 +17,6 @@ echo '--- Configuring gnupg'
 
 echo "confirming gnupg config is stored in memory, not on disk"
 
-apk add --update findmnt
 if ! findmnt --source tmpfs --target /root/.gnupg; then
   echo "/root/.gnupg must be mounted as tmpfs to ensure private keys aren't written to disk"
   exit 1
