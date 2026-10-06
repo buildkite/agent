@@ -24,6 +24,7 @@ type CacheConfig struct {
 	// Experimental (A-1952 benchmarks only).
 	ExperimentalArchiveMethod   string   `cli:"experimental-archive-method"`
 	ExperimentalTelemetryLabels []string `cli:"experimental-telemetry-label"`
+	ExperimentalRusageFile      string   `cli:"experimental-rusage-file"`
 }
 
 func cacheFlags() []cli.Flag {
@@ -66,7 +67,7 @@ func cacheFlags() []cli.Flag {
 		},
 		&cli.StringFlag{
 			Name:    "experimental-archive-method",
-			Usage:   "EXPERIMENTAL, for A-1952 benchmarks only: the ZIP entry method, zstd or store. Save builds the archive with it; save and restore fail unless the archive uses it",
+			Usage:   "EXPERIMENTAL, for A-1952 benchmarks only: the ZIP entry method, zstd, zstd_parallel (Zstd entries encoded with bounded concurrent blocks) or store. Save builds the archive with it; save and restore fail unless the archive uses it",
 			Sources: cli.EnvVars("BUILDKITE_CACHE_EXPERIMENTAL_ARCHIVE_METHOD"),
 			Hidden:  true,
 		},
@@ -74,6 +75,12 @@ func cacheFlags() []cli.Flag {
 			Name:    "experimental-telemetry-label",
 			Usage:   "EXPERIMENTAL, for A-1952 benchmarks only: a label ([a-z0-9_], up to 64 characters) added to the User-Agent as a1952_<label> (can be specified multiple times)",
 			Sources: cli.EnvVars("BUILDKITE_CACHE_EXPERIMENTAL_TELEMETRY_LABELS"),
+			Hidden:  true,
+		},
+		&cli.StringFlag{
+			Name:    "experimental-rusage-file",
+			Usage:   "EXPERIMENTAL, for A-1952 benchmarks only: when the command finishes, write its CPU time and peak memory (getrusage, for the agent and its child processes) to this file as JSON",
+			Sources: cli.EnvVars("BUILDKITE_CACHE_EXPERIMENTAL_RUSAGE_FILE"),
 			Hidden:  true,
 		},
 	}

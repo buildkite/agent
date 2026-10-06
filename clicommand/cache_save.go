@@ -84,6 +84,9 @@ var CacheSaveCommand = &cli.Command{
 	Action: func(ctx context.Context, c *cli.Command) error {
 		ctx, cfg, l, _, done := setupLoggerAndConfig[CacheSaveConfig](ctx, c)
 		defer done()
+		if cfg.ExperimentalRusageFile != "" {
+			defer writeExperimentalRusage(l, cfg.ExperimentalRusageFile)
+		}
 		ctx, span := otel.Tracer("buildkite-agent").Start(ctx, "cache-save")
 		defer span.End()
 

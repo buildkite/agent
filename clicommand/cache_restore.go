@@ -100,6 +100,9 @@ var CacheRestoreCommand = &cli.Command{
 	Action: func(ctx context.Context, c *cli.Command) error {
 		ctx, cfg, l, _, done := setupLoggerAndConfig[CacheRestoreConfig](ctx, c)
 		defer done()
+		if cfg.ExperimentalRusageFile != "" {
+			defer writeExperimentalRusage(l, cfg.ExperimentalRusageFile)
+		}
 		ctx, span := otel.Tracer("buildkite-agent").Start(ctx, "cache-restore")
 		defer span.End()
 

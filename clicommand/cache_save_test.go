@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -193,6 +194,8 @@ func TestCacheSaveExperimentalArchiveMethod(t *testing.T) {
 	t.Cleanup(server.Close)
 
 	t.Setenv("BUILDKITE_CACHE_EXPERIMENTAL_ARCHIVE_METHOD", "store")
+	rusageFile := filepath.Join(t.TempDir(), "rusage.json")
+	t.Setenv("BUILDKITE_CACHE_EXPERIMENTAL_RUSAGE_FILE", rusageFile)
 	t.Setenv("BUILDKITE_CACHE_EXPERIMENTAL_TELEMETRY_LABELS", "workload_small_typical,trial_2")
 	cmd := *CacheSaveCommand
 	app := &cli.Command{Commands: []*cli.Command{&cmd}}
@@ -210,6 +213,17 @@ func TestCacheSaveExperimentalArchiveMethod(t *testing.T) {
 	if _, err := archive.CheckEntryMethod(filepath.Join(storageDir, entry.Blobs[0].Digest.Value), entry.Blobs[0].FileSize, "store"); err != nil {
 		t.Errorf("stored archive: %v", err)
 	}
+	data, err := os.ReadFile(rusageFile)
+	if err != nil {
+		t.Fatalf("rusage file: %v", err)
+	}
+	var rusage map[string]map[string]int64
+	if err := json.Unmarshal(data, &rusage); err != nil {
+		t.Fatalf("rusage file %q: %v", data, err)
+	}
+	if runtime.GOOS != "windows" && rusage["self"]["max_rss"] <= 0 {
+		t.Errorf("rusage self.max_rss = %d, want > 0 (%s)", rusage["self"]["max_rss"], data)
+	}
 }
 
 func TestExperimentalCacheUserAgent(t *testing.T) {
@@ -221,6 +235,7 @@ func TestExperimentalCacheUserAgent(t *testing.T) {
 	}{
 		{name: "unset leaves the User-Agent alone", want: "ua"},
 		{name: "method only", cfg: CacheConfig{ExperimentalArchiveMethod: "zstd"}, want: "ua a1952_method_zstd"},
+		{name: "parallel method", cfg: CacheConfig{ExperimentalArchiveMethod: "zstd_parallel"}, want: "ua a1952_method_zstd_parallel"},
 		{name: "labels only", cfg: CacheConfig{ExperimentalTelemetryLabels: []string{"trial_1"}}, want: "ua a1952_trial_1"},
 		{name: "unknown method", cfg: CacheConfig{ExperimentalArchiveMethod: "deflate"}, wantErr: true},
 		{name: "label with a space", cfg: CacheConfig{ExperimentalTelemetryLabels: []string{"a b"}}, wantErr: true},

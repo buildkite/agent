@@ -716,12 +716,45 @@ func TestCacheIntegration_ExperimentalArchiveMethod(t *testing.T) {
 		t.Fatalf("confirm calls = %d, want 1", len(mockClient.confirmCalls))
 	}
 
+	cacheClient.archiveMethod = "zstd_parallel"
+	if _, err := cacheClient.Restore(ctx, "test-cache"); !errors.Is(err, errRestoreMutatedTargets) {
+		t.Fatalf("Restore expecting zstd_parallel from a Store archive: err = %v, want errRestoreMutatedTargets", err)
+	}
+
 	cacheClient.archiveMethod = "zstd"
 	if _, err := cacheClient.Restore(ctx, "test-cache"); !errors.Is(err, errRestoreMutatedTargets) {
 		t.Fatalf("Restore expecting zstd from a Store archive: err = %v, want errRestoreMutatedTargets", err)
 	}
 	if len(mockClient.confirmCalls) != 1 {
 		t.Errorf("confirm calls = %d, want still 1: a method mismatch must not confirm", len(mockClient.confirmCalls))
+	}
+}
+
+// TestCacheIntegration_ZstdParallelRestoresWithDefaultDecoder saves with the
+// parallel encoder and restores with no experimental method (the default
+// path), as an unmodified agent would.
+func TestCacheIntegration_ZstdParallelRestoresWithDefaultDecoder(t *testing.T) {
+	ctx := t.Context()
+	cacheClient, cacheDir, _ := setupTestCache(t, "local_file")
+	mockClient := cacheClient.api.(*mockAPIClient)
+
+	cacheClient.archiveMethod = "zstd_parallel"
+	if _, err := cacheClient.Save(ctx, "test-cache"); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	if err := os.RemoveAll(cacheDir); err != nil {
+		t.Fatalf("RemoveAll: %v", err)
+	}
+	cacheClient.archiveMethod = ""
+	result, err := cacheClient.Restore(ctx, "test-cache")
+	if err != nil || !result.CacheRestored {
+		t.Fatalf("Restore with the default path: restored=%t err=%v", result.CacheRestored, err)
+	}
+	if _, err := os.Stat(filepath.Join(cacheDir, "nested", "large-file-3.bin")); err != nil {
+		t.Errorf("restored file: %v", err)
+	}
+	if len(mockClient.confirmCalls) != 1 {
+		t.Errorf("confirm calls = %d, want 1", len(mockClient.confirmCalls))
 	}
 }
 

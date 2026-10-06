@@ -34,6 +34,12 @@ func BuildArchive(ctx context.Context, paths []string, key string) (*ArchiveInfo
 // buildArchive allows benchmarks to compare ZIP entry methods without exposing
 // a user-facing cache setting. Production archives always use Zstd.
 func buildArchive(ctx context.Context, paths []string, key string, method entryMethod) (*ArchiveInfo, error) {
+	return buildArchiveWithCompressor(ctx, paths, key, method, nil)
+}
+
+// buildArchiveWithCompressor is buildArchive with an optional compressor for
+// method, replacing quickzip's default (experimental, A-1952).
+func buildArchiveWithCompressor(ctx context.Context, paths []string, key string, method entryMethod, compressor zip.Compressor) (*ArchiveInfo, error) {
 	_, span := trace.Start(ctx, "BuildArchive")
 	defer span.End()
 
@@ -102,7 +108,7 @@ func buildArchive(ctx context.Context, paths []string, key string, method entryM
 
 	var writtenBytes, writtenEntries int64
 	for _, p := range plans {
-		b, e, err := archiveMapping(ctx, zw, p.mapping.ResolvedPath(), p.chroot, p.prefix, modified, method)
+		b, e, err := archiveMapping(ctx, zw, p.mapping.ResolvedPath(), p.chroot, p.prefix, modified, method, compressor)
 		if err != nil {
 			return nil, fmt.Errorf("failed to archive path %q: %w", p.mapping.Path, err)
 		}
@@ -137,7 +143,7 @@ func buildArchive(ctx context.Context, paths []string, key string, method entryM
 // archiveMapping archives a single target path into a temporary zip via
 // quickzip, then copies each entry into the final archive with its namespace prefix.
 // Entries are copied raw (already compressed), so there is no second compression pass.
-func archiveMapping(ctx context.Context, zw *zip.Writer, resolvedPath, chroot, prefix string, modified time.Time, method entryMethod) (writtenBytes, writtenEntries int64, err error) {
+func archiveMapping(ctx context.Context, zw *zip.Writer, resolvedPath, chroot, prefix string, modified time.Time, method entryMethod, compressor zip.Compressor) (writtenBytes, writtenEntries int64, err error) {
 	tmp, err := os.CreateTemp("", "cache-ns-*.zip")
 	if err != nil {
 		return 0, 0, fmt.Errorf("failed to create namespace archive: %w", err)
@@ -156,6 +162,9 @@ func archiveMapping(ctx context.Context, zw *zip.Writer, resolvedPath, chroot, p
 	)
 	if err != nil {
 		return 0, 0, fmt.Errorf("failed to create archiver: %w", err)
+	}
+	if compressor != nil {
+		arc.RegisterCompressor(uint16(method), compressor)
 	}
 
 	files := make(map[string]os.FileInfo)
