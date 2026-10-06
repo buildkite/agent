@@ -104,13 +104,17 @@ func (c *client) exec(ctx context.Context, l logger.Logger, cacheID string, fail
 	}
 	s.header("--- :package: Saving cache...")
 
-	// Redact once, after the command, so secrets it registered while running (e.g. with secret get) are caught; the raw recording stays in a temp file the job can already read, and is removed.
+	// Redact once, after the command, so secrets it registered while running (e.g. with secret get) are caught; the raw recording stays in a temp file the job can already read.
 	var output string
 	if outputErr == nil {
 		output, outputErr = redactRecording(ctx, rec.Path(), redact)
 		if output != "" {
 			defer func() { _ = os.Remove(output) }()
 		}
+	}
+	// Remove the raw recording before saving: if the temp dir is under a target path, it would be archived with its secrets.
+	if err := os.Remove(rec.Path()); err != nil && outputErr == nil {
+		outputErr = fmt.Errorf("failed to remove the unredacted output recording: %w", err)
 	}
 	return c.execSave(ctx, l, cacheConfig.Name, cacheKey, failOnError, output, outputErr)
 }

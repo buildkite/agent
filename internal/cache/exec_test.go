@@ -22,6 +22,8 @@ import (
 	"github.com/buildkite/agent/v4/internal/redact"
 	"github.com/buildkite/agent/v4/jobapi"
 	"github.com/buildkite/agent/v4/logger"
+	"github.com/klauspost/compress/zip"
+	"github.com/klauspost/compress/zstd"
 )
 
 // fakeRegistry is an in-memory registry served over HTTP that matches exact addresses only, as the backend does for all-mandatory keys.
@@ -533,5 +535,66 @@ func TestTimeSaved(t *testing.T) {
 	}
 	if got := replayHeader(-time.Second); !strings.HasPrefix(got, "+++ :package: Replaying output from cache") {
 		t.Errorf("replayHeader with nothing saved = %q, want the plain header", got)
+	}
+}
+
+func TestRunExec_TempDirInTargetPathGetsNoUnredactedOutput(t *testing.T) {
+	reg, apiClient, cfg := setupExecTest(t)
+	cfg.Redact = redactWith("hunter2-secret")
+	t.Setenv("TMPDIR", filepath.Join(t.TempDir(), "unused")) // set, so the next Setenv is undone
+	tmp, err := filepath.Abs(filepath.Join("out", "tmp"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(tmp, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("TMPDIR", tmp)
+
+	if _, _, err := runExec(t, apiClient, cfg, func(stdout, _ io.Writer) error {
+		_, _ = io.WriteString(stdout, "password: hunter2-secret\n")
+		return nil
+	}); err != nil {
+		t.Fatalf("exec: %v", err)
+	}
+	if len(reg.stores) != 1 {
+		t.Fatalf("got %d stores, want 1", len(reg.stores))
+	}
+
+	// Every recording in the saved archive, the reserved entry or temp files under out/tmp, must be redacted.
+	u, err := url.Parse(cfg.BucketURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	zr, err := zip.OpenReader(filepath.Join(filepath.FromSlash(u.Path), reg.stores[0].Blobs[0].Digest.Value))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = zr.Close() }()
+	zr.RegisterDecompressor(zstd.ZipMethodWinZip, zstd.ZipDecompressor())
+	recordings := 0
+	for _, f := range zr.File {
+		if !strings.Contains(f.Name, "cache-exec-output") {
+			continue
+		}
+		recordings++
+		rc, err := f.Open()
+		if err != nil {
+			t.Fatal(err)
+		}
+		path := filepath.Join(t.TempDir(), "recording")
+		data, _ := io.ReadAll(rc)
+		_ = rc.Close()
+		writeFile(t, path, string(data))
+		var replayed bytes.Buffer
+		if _, err := replayOutput(path, &replayed, &replayed); err != nil {
+			t.Fatalf("archive entry %s: %v", f.Name, err)
+		}
+		if strings.Contains(replayed.String(), "hunter2-secret") {
+			t.Errorf("archive entry %s holds the unredacted output", f.Name)
+		}
+	}
+	if recordings == 0 {
+		t.Error("archive has no recorded output")
 	}
 }
