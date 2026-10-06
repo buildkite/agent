@@ -20,7 +20,6 @@ import (
 
 	"github.com/buildkite/agent/v4/api"
 	"github.com/buildkite/agent/v4/internal/redact"
-	"github.com/buildkite/agent/v4/jobapi"
 	"github.com/buildkite/agent/v4/logger"
 )
 
@@ -87,6 +86,13 @@ func (f *fakeRegistry) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		entry := f.pending[req.UploadID]
 		f.entries[fakeAddr(entry.TargetPaths, entry.CacheKey)] = entry
 		reply(api.CacheEntryCommitResp{})
+	case "POST /cache_registries/test/expire":
+		var req api.CacheEntryExpireReq
+		_ = json.NewDecoder(r.Body).Decode(&req)
+		addr := fakeAddr(req.TargetPaths, req.CacheKey)
+		_, existed := f.entries[addr]
+		delete(f.entries, addr)
+		reply(api.CacheEntryExpireResp{Existed: existed})
 	case "POST /cache_registries/test/confirm":
 		reply(api.CacheEntryConfirmResp{})
 	default:
@@ -179,13 +185,16 @@ func TestRunExec_MissThenHit(t *testing.T) {
 	if b.runs != 1 {
 		t.Fatalf("command ran %d times on a miss, want 1", b.runs)
 	}
-	// Section headers go to stderr, so stdout is only the command's output.
-	wantStderr := "--- :package: Restoring cache...\n+++ :package: No cached result, running command\nwarning: deprecated\n--- :package: Saving cache...\n"
+	// Headers go to stderr, so stdout is only the command's output.
+	wantStderr := "--- :package: Restoring cache\n+++ :package: No cached result, running command\nwarning: deprecated\n--- :package: Saving cache\n"
 	if stdout != "compiling\ndone\n" || stderr != wantStderr {
 		t.Errorf("miss output: stdout %q, stderr %q", stdout, stderr)
 	}
-	if got := len(reg.entries); got != 2 {
-		t.Fatalf("registry has %d entries after a miss, want main entry and output sidecar", got)
+	if got := len(reg.stores); got != 1 {
+		t.Fatalf("got %d stores after a miss, want one entry with the files and the log", got)
+	}
+	if got, want := reg.stores[0].TargetPaths, []string{"out", ".buildkite-cache-exec-build.log"}; !slices.Equal(got, want) {
+		t.Errorf("saved entry target_paths = %q, want %q", got, want)
 	}
 
 	// Simulate a fresh checkout: original key inputs, stale out contents.
@@ -208,9 +217,7 @@ func TestRunExec_MissThenHit(t *testing.T) {
 	if _, err := os.Stat(filepath.Join("out", "stale")); !errors.Is(err, os.ErrNotExist) {
 		t.Errorf("restore should replace out, but out/stale remains (err %v)", err)
 	}
-	// The replay header's title depends on timing, so check around it.
-	if stdout != "compiling\ndone\n" || !strings.HasPrefix(stderr, "--- :package: Restoring cache...\n+++ ") ||
-		!strings.Contains(stderr, "\nwarning: deprecated\n") || !strings.Contains(stderr, "Restored from cache") {
+	if stdout != "compiling\nwarning: deprecated\ndone\n" || !strings.Contains(stderr, "the command was not run") {
 		t.Errorf("hit output: stdout %q, stderr %q", stdout, stderr)
 	}
 
@@ -221,19 +228,11 @@ func TestRunExec_MissThenHit(t *testing.T) {
 			}
 		}
 	}
-
-	// Plain restore of the same cache gets only the target paths.
-	if err := os.RemoveAll("out"); err != nil {
-		t.Fatal(err)
-	}
-	if err := RunRestore(t.Context(), logger.Discard, apiClient, cfg); err != nil {
-		t.Fatalf("plain restore: %v", err)
-	}
-	if got := readFile(t, filepath.Join("out", "result")); got != "built" {
-		t.Errorf("plain restore: out/result = %q, want built", got)
-	}
 	if entries, _ := os.ReadDir("."); len(entries) != 3 { // cache.yml, input.txt, out
-		t.Errorf("plain restore left unexpected files: %v", entries)
+		t.Errorf("exec left unexpected files in the workspace: %v", entries)
+	}
+	if got := len(reg.stores); got != 1 {
+		t.Errorf("got %d stores after a hit, want none added", got-1)
 	}
 }
 
@@ -248,7 +247,7 @@ func TestRunExec_FailedCommandSavesNothing(t *testing.T) {
 	if !errors.Is(err, boom) {
 		t.Fatalf("exec error = %v, want the command's error", err)
 	}
-	if !strings.HasSuffix(stdout, "failing\n") {
+	if stdout != "failing\n" {
 		t.Errorf("stdout = %q, want the command's output", stdout)
 	}
 	if len(reg.stores) != 0 {
@@ -256,75 +255,45 @@ func TestRunExec_FailedCommandSavesNothing(t *testing.T) {
 	}
 }
 
-func TestRunExec_MainEntryFromPlainSaveIsReplaced(t *testing.T) {
+func TestRunExec_SeparateFromPlainSave(t *testing.T) {
 	reg, apiClient, cfg := setupExecTest(t)
-	writeFile(t, filepath.Join("out", "result"), "incomplete, from cache save")
+	writeFile(t, filepath.Join("out", "result"), "from cache save")
 	if err := RunSave(t.Context(), logger.Discard, apiClient, cfg); err != nil {
 		t.Fatalf("plain save: %v", err)
 	}
 
-	// Files without recorded output aren't a hit, so they're left alone and the command runs.
+	// A plain save's entry has no log, so it isn't a hit: target_paths are left alone and the command runs.
 	b := &build{}
-	writeFile(t, "input.txt", "v1")
 	if _, _, err := runExec(t, apiClient, cfg, func(stdout, stderr io.Writer) error {
-		if got := readFile(t, filepath.Join("out", "result")); got != "incomplete, from cache save" {
+		if got := readFile(t, filepath.Join("out", "result")); got != "from cache save" {
 			t.Errorf("out/result = %q before the command ran, want target_paths left alone", got)
 		}
 		return b.run(stdout, stderr)
 	}); err != nil {
-		t.Fatalf("first exec: %v", err)
+		t.Fatalf("exec: %v", err)
+	}
+	if got := len(reg.entries); got != 2 {
+		t.Fatalf("registry has %d entries, want the plain save's and exec's", got)
 	}
 
-	// The run saved its output and replaced the files with its own, so the next exec hits with both.
+	// Plain restore still gets the plain save's files.
 	writeFile(t, "input.txt", "v1")
-	writeFile(t, filepath.Join("out", "result"), "stale")
-	stdout, _, err := runExec(t, apiClient, cfg, b.run)
-	if err != nil {
-		t.Fatalf("second exec: %v", err)
+	if err := RunRestore(t.Context(), logger.Discard, apiClient, cfg); err != nil {
+		t.Fatalf("plain restore: %v", err)
 	}
-	if b.runs != 1 || stdout != "compiling\ndone\n" {
-		t.Errorf("command ran %d times, stdout %q; want 1 run and the replayed output", b.runs, stdout)
-	}
-	if got := readFile(t, filepath.Join("out", "result")); got != "built" {
-		t.Errorf("out/result = %q, want the files from the run that recorded the output", got)
-	}
-	if got := len(reg.stores); got != 3 {
-		t.Errorf("got %d stores, want the plain save, the output and the replacement files", got)
+	if got := readFile(t, filepath.Join("out", "result")); got != "from cache save" {
+		t.Errorf("plain restore: out/result = %q, want the plain save's files", got)
 	}
 }
 
-func TestRunExec_ReplacedMainEntryIsNotPairedWithOldOutput(t *testing.T) {
-	_, apiClient, cfg := setupExecTest(t)
-	b := &build{}
-	if _, _, err := runExec(t, apiClient, cfg, b.run); err != nil {
-		t.Fatalf("first exec: %v", err)
-	}
-
-	// Replace the main entry with different files, as cache save --force does.
-	writeFile(t, "input.txt", "v1")
-	writeFile(t, filepath.Join("out", "result"), "incomplete, from a forced save")
-	forced := cfg
-	forced.Force = true
-	if err := RunSave(t.Context(), logger.Discard, apiClient, forced); err != nil {
-		t.Fatalf("forced save: %v", err)
-	}
-
-	// The recorded output belongs to the replaced files, so this misses and leaves target_paths alone.
-	writeFile(t, filepath.Join("out", "local"), "untouched")
-	stdout, _, err := runExec(t, apiClient, cfg, func(stdout, stderr io.Writer) error {
-		if got := readFile(t, filepath.Join("out", "local")); got != "untouched" {
-			t.Errorf("out/local = %q before the command ran, want target_paths left alone", got)
-		}
-		return b.run(stdout, stderr)
-	})
-	if err != nil {
-		t.Fatalf("second exec: %v", err)
-	}
-	if b.runs != 2 {
-		t.Errorf("command ran %d times, want 2: old output was replayed with replaced files", b.runs)
-	}
-	if strings.Contains(stdout, "Replaying output from cache") {
-		t.Errorf("stdout = %q, want no replay", stdout)
+// redactWith redacts needles and Buildkite tokens, as the Job API does.
+func redactWith(needles ...string) Redactor {
+	return func(_ context.Context, output []byte) ([]byte, error) {
+		var out bytes.Buffer
+		r := redact.New(&out, needles)
+		r.AddPrefixes(redact.TokenPrefixes()...)
+		_, _ = r.Write(output)
+		return out.Bytes(), r.Flush()
 	}
 }
 
@@ -332,86 +301,59 @@ func TestRunExec_RedactsSavedOutput(t *testing.T) {
 	_, apiClient, cfg := setupExecTest(t)
 	// The job learns the secret while the command runs, as with secret get.
 	var registered []string
-	cfg.Redact = func(ctx context.Context, chunks []jobapi.OutputChunk) ([]jobapi.OutputChunk, error) {
-		return redactWith(registered...)(ctx, chunks)
+	cfg.Redact = func(ctx context.Context, output []byte) ([]byte, error) {
+		return redactWith(registered...)(ctx, output)
 	}
 	token := "bkua_" + strings.Repeat("a1B2", 10)
-	printSecrets := func(stdout, stderr io.Writer) error {
+	if _, _, err := runExec(t, apiClient, cfg, func(stdout, stderr io.Writer) error {
 		registered = append(registered, "hunter2-secret")
-		// Split the secret across writes, as a command's output may be.
 		_, _ = io.WriteString(stdout, "password: hunter2-")
 		_, _ = io.WriteString(stdout, "secret\n")
 		_, _ = io.WriteString(stderr, "token: "+token+"\n")
 		return os.MkdirAll("out", 0o755)
-	}
-	if _, _, err := runExec(t, apiClient, cfg, printSecrets); err != nil {
+	}); err != nil {
 		t.Fatalf("first exec: %v", err)
 	}
 
-	// Replay in a job that has no secrets to redact.
-	cfg.Redact = nil
-	stdout, stderr, err := runExec(t, apiClient, cfg, func(io.Writer, io.Writer) error {
+	cfg.Redact = nil // a hit doesn't redact again
+	stdout, _, err := runExec(t, apiClient, cfg, func(io.Writer, io.Writer) error {
 		t.Error("command ran on a cache hit")
 		return nil
 	})
 	if err != nil {
 		t.Fatalf("second exec: %v", err)
 	}
-	if stdout != "password: [REDACTED]\n" || !strings.Contains(stderr, "\ntoken: [REDACTED]\n") {
-		t.Errorf("replayed output not redacted: stdout %q, stderr %q", stdout, stderr)
+	if want := "password: [REDACTED]\ntoken: [REDACTED]\n"; stdout != want {
+		t.Errorf("replayed output = %q, want %q", stdout, want)
 	}
 }
 
-// redactWith redacts needles and Buildkite tokens, as the Job API does.
-func redactWith(needles ...string) Redactor {
-	return func(_ context.Context, chunks []jobapi.OutputChunk) ([]jobapi.OutputChunk, error) {
-		return jobapi.RedactChunks(chunks, needles, redact.TokenPrefixes()...)
-	}
-}
-
-func TestRunExec_RedactionFails(t *testing.T) {
+func TestRunExec_OutputNotSaved(t *testing.T) {
 	for _, test := range []struct {
 		name        string
+		redact      Redactor
+		output      string
 		failOnError bool
 	}{
-		{name: "saves nothing by default"},
-		{name: "fails with cache-fail-on-error", failOnError: true},
+		{name: "redaction fails", redact: func(context.Context, []byte) ([]byte, error) { return nil, errors.New("job API went away") }},
+		{name: "redaction fails with cache-fail-on-error", redact: func(context.Context, []byte) ([]byte, error) { return nil, errors.New("job API went away") }, failOnError: true},
+		{name: "output too large", redact: redactWith(), output: strings.Repeat("x", maxOutput+1)},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			reg, apiClient, cfg := setupExecTest(t)
 			cfg.FailOnError = test.failOnError
-			cfg.Redact = func(context.Context, []jobapi.OutputChunk) ([]jobapi.OutputChunk, error) {
-				return nil, errors.New("job API went away")
-			}
-			b := &build{}
-			_, _, err := runExec(t, apiClient, cfg, b.run)
+			cfg.Redact = test.redact
+			_, _, err := runExec(t, apiClient, cfg, func(stdout, _ io.Writer) error {
+				_, _ = io.WriteString(stdout, test.output)
+				return os.MkdirAll("out", 0o755)
+			})
 			if gotErr := err != nil; gotErr != test.failOnError {
 				t.Errorf("exec error = %v, want error: %t", err, test.failOnError)
 			}
-			if b.runs != 1 {
-				t.Errorf("command ran %d times, want 1", b.runs)
-			}
 			if len(reg.stores) != 0 {
-				t.Errorf("saved %d entries without redacting the output, want none", len(reg.stores))
+				t.Errorf("saved %d entries, want none", len(reg.stores))
 			}
 		})
-	}
-}
-
-func TestRunExec_HeaderStartsOnNewLine(t *testing.T) {
-	_, apiClient, cfg := setupExecTest(t)
-	stdout, stderr, err := runExec(t, apiClient, cfg, func(stdout, _ io.Writer) error {
-		_, _ = io.WriteString(stdout, "no trailing newline")
-		return os.MkdirAll("out", 0o755)
-	})
-	if err != nil {
-		t.Fatalf("exec: %v", err)
-	}
-	if stdout != "no trailing newline" {
-		t.Errorf("stdout = %q, want only the command's output", stdout)
-	}
-	if !strings.Contains(stderr, "running command\n\n--- :package: Saving cache...\n") {
-		t.Errorf("stderr = %q, want the Saving header to start on a new line", stderr)
 	}
 }
 
@@ -445,85 +387,11 @@ func TestRunExec_CacheKeyFailure(t *testing.T) {
 	}
 }
 
-func TestOutputRecorderRoundTrip(t *testing.T) {
-	rec, err := newOutputRecorder()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = os.Remove(rec.Path()) })
-	_, _ = io.WriteString(rec.Stdout(), "one\n")
-	_, _ = io.WriteString(rec.Stderr(), "two\n")
-	_, _ = io.WriteString(rec.Stdout(), "")
-	_, _ = io.WriteString(rec.Stdout(), "three\n")
-	info, err := rec.Close(1234 * time.Millisecond)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if info.WrittenBytes != 14 {
-		t.Errorf("WrittenBytes = %d, want 14", info.WrittenBytes)
-	}
-
-	var combined, stderr bytes.Buffer
-	ranFor, err := replayOutput(info.ArchivePath, &combined, io.MultiWriter(&combined, &stderr))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if ranFor != 1234*time.Millisecond {
-		t.Errorf("replayed run time = %v, want 1.234s", ranFor)
-	}
-	if got, want := combined.String(), "one\ntwo\nthree\n"; got != want {
-		t.Errorf("replayed output = %q, want %q in the original order", got, want)
-	}
-	if got := stderr.String(); got != "two\n" {
-		t.Errorf("replayed stderr = %q, want two", got)
-	}
-
-	if err := os.WriteFile(info.ArchivePath, []byte("not a recording"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := replayOutput(info.ArchivePath, io.Discard, io.Discard); err == nil {
-		t.Error("replaying a corrupt recording should fail")
-	}
-}
-
-func TestRunExec_LargeOutputIsNotSaved(t *testing.T) {
-	reg, apiClient, cfg := setupExecTest(t)
-	defer func(n int64) { maxRecordedOutput = n }(maxRecordedOutput)
-	maxRecordedOutput = 10
-
-	stdout, _, err := runExec(t, apiClient, cfg, func(stdout, _ io.Writer) error {
-		_, _ = io.WriteString(stdout, "more than ten bytes\n")
-		return os.MkdirAll("out", 0o755)
-	})
-	if err != nil {
-		t.Fatalf("exec: %v", err)
-	}
-	if stdout != "more than ten bytes\n" {
-		t.Errorf("stdout = %q, want all the output live", stdout)
-	}
-	if len(reg.stores) != 0 {
-		t.Errorf("saved %d entries for output over the limit, want none", len(reg.stores))
-	}
-}
-
-func TestTimeSaved(t *testing.T) {
-	for _, test := range []struct {
-		ranFor, took time.Duration
-		want         string
-	}{
-		{ranFor: 105 * time.Second, took: 42 * time.Millisecond, want: "\x1b[32m✔\x1b[0m Restored from cache"},
-		{took: 2 * time.Second, want: "\x1b[32m✔\x1b[0m Restored from cache"},
-		{ranFor: time.Second, took: 3 * time.Second, want: "\x1b[33m⚠\x1b[0m Restored from cache in \x1b[1m3s\x1b[0m, but running the command took only \x1b[1m1s\x1b[0m: caching it isn't saving time"},
-	} {
-		if got := timeSaved(test.ranFor, test.took); got != test.want {
-			t.Errorf("timeSaved(%v, %v) = %q, want %q", test.ranFor, test.took, got, test.want)
-		}
-	}
-
-	if got, want := replayHeader(103*time.Second), "+++ ⚡ \x1b[1;32mcache exec saved 1m43s\x1b[0m"; got != want {
+func TestReplayHeader(t *testing.T) {
+	if got, want := replayHeader(103*time.Second), "+++ ⚡ \x1b[1;32mCache hit saved 1m43s\x1b[0m: replaying output, the command was not run"; got != want {
 		t.Errorf("replayHeader(1m43s) = %q, want %q", got, want)
 	}
-	if got := replayHeader(-time.Second); !strings.HasPrefix(got, "+++ :package: Replaying output from cache") {
-		t.Errorf("replayHeader with nothing saved = %q, want the plain header", got)
+	if got, want := replayHeader(-time.Second), "+++ :package: Cache hit: replaying output, the command was not run"; got != want {
+		t.Errorf("replayHeader(-1s) = %q, want %q", got, want)
 	}
 }

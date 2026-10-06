@@ -787,27 +787,12 @@ func TestRedact(t *testing.T) {
 	}
 
 	bkToken := "bkaa_" + strings.Repeat("x9Y8", 10)
-	got, err := client.Redact(t.Context(), []jobapi.OutputChunk{
-		{Data: []byte("env: from-env-var, secret: from-secret")},
-		{Stderr: true, Data: []byte("token: " + bkToken + "\n")},
-		{Data: []byte("-get\n")}, // the secret is split across stdout chunks, with stderr between
-	})
+	got, err := client.Redact(t.Context(), []byte("env: from-env-var, secret: from-secret-get\ntoken: "+bkToken+"\n"))
 	if err != nil {
 		t.Fatalf("client.Redact() error = %v", err)
 	}
-	var stdout, stderr strings.Builder
-	for _, c := range got {
-		w := &stdout
-		if c.Stderr {
-			w = &stderr
-		}
-		w.Write(c.Data)
-	}
-	if got, want := stdout.String(), "env: [REDACTED], secret: [REDACTED]\n"; got != want {
-		t.Errorf("redacted stdout = %q, want %q", got, want)
-	}
-	if got, want := stderr.String(), "token: [REDACTED]\n"; got != want {
-		t.Errorf("redacted stderr = %q, want %q", got, want)
+	if got, want := string(got), "env: [REDACTED], secret: [REDACTED]\ntoken: [REDACTED]\n"; got != want {
+		t.Errorf("client.Redact() = %q, want %q", got, want)
 	}
 }
 

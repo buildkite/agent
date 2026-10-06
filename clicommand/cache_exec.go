@@ -72,13 +72,9 @@ var CacheExecCommand = &cli.Command{
 
 		command := cacheExecCommand(args)
 
-		// Like any cache problem, missing configuration runs the command without the cache unless --cache-fail-on-error.
-		apiCfg := loadAPIClientConfig(cfg, "AgentAccessToken")
-		if apiCfg.Token == "" {
-			return cache.RunUncached(l, cfg.FailOnError, errors.New("an API token must be provided to use the cache"), os.Stdout, os.Stderr, command)
-		}
-		apiClient := api.NewClient(l, apiCfg)
+		apiClient := api.NewClient(l, loadAPIClientConfig(cfg, "AgentAccessToken"))
 
+		// Like any cache problem, missing configuration runs the command without the cache unless --cache-fail-on-error.
 		cacheConfigFile, err := resolveCacheConfigFile(cfg.CacheConfigFile)
 		if err != nil {
 			return cache.RunUncached(l, cfg.FailOnError, err, os.Stdout, os.Stderr, command)
@@ -104,16 +100,12 @@ var CacheExecCommand = &cli.Command{
 
 // cacheExecRedactor redacts envNeedles locally, then has the job executor redact the job's own secrets (e.g. from secret get or redactor add), which never leave it.
 func cacheExecRedactor(envNeedles []string) cache.Redactor {
-	return func(ctx context.Context, chunks []jobapi.OutputChunk) ([]jobapi.OutputChunk, error) {
-		chunks, err := jobapi.RedactChunks(chunks, envNeedles)
-		if err != nil {
-			return nil, err
-		}
+	return func(ctx context.Context, output []byte) ([]byte, error) {
 		client, err := jobapi.NewDefaultClient(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("couldn't reach the Job API to redact the job's secrets: %w", err)
 		}
-		return client.Redact(ctx, chunks)
+		return client.Redact(ctx, []byte(redact.String(string(output), envNeedles)))
 	}
 }
 
