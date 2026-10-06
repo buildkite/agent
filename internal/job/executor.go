@@ -880,6 +880,11 @@ func (e *Executor) localHookPath(name string) (string, error) {
 	if err != nil {
 		return "", os.ErrNotExist
 	}
+	// Root.Name may be relative, while the shell's working directory is absolute.
+	checkoutPath, err = filepath.Abs(checkoutPath)
+	if err != nil {
+		return "", os.ErrNotExist
+	}
 	workdir, err := filepath.EvalSymlinks(e.shell.Getwd())
 	if err != nil {
 		return "", os.ErrNotExist

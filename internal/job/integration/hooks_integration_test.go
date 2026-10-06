@@ -707,6 +707,36 @@ func TestRepositoryHooksWithSymlinkedBuildPath(t *testing.T) {
 	}
 }
 
+func TestRepositoryHooksWithRelativeCheckoutPath(t *testing.T) {
+	t.Parallel()
+
+	tester, err := NewExecutorTester(mainCtx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tester.Close()
+
+	for _, phase := range []string{"pre-command", "command", "post-command", "pre-exit"} {
+		tester.ExpectLocalHook(phase).Once().AndExitWith(0)
+	}
+
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	checkoutPath, err := filepath.Rel(wd, tester.Repo.Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Skipping checkout preserves the relative checkout root, while the shell
+	// changes to its absolute path. Hooks must still run in the existing checkout.
+	tester.RunAndCheck(t,
+		"BUILDKITE_SKIP_CHECKOUT=true",
+		"BUILDKITE_BUILD_CHECKOUT_PATH="+checkoutPath,
+	)
+}
+
 func TestRepositoryHooksWithSeparateCommandPhase(t *testing.T) {
 	t.Parallel()
 
