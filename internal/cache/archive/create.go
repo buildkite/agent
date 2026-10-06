@@ -21,6 +21,11 @@ import (
 
 // BuildArchive builds a cache archive for the given target paths.
 func BuildArchive(ctx context.Context, paths []string, key string) (*ArchiveInfo, error) {
+	return BuildArchiveWithOutput(ctx, paths, key, "")
+}
+
+// BuildArchiveWithOutput is BuildArchive that, if outputFile is set, also stores that file as the CommandOutputPath entry, which extraction never writes to the target paths.
+func BuildArchiveWithOutput(ctx context.Context, paths []string, key, outputFile string) (*ArchiveInfo, error) {
 	_, span := trace.Start(ctx, "BuildArchive")
 	defer span.End()
 
@@ -85,6 +90,11 @@ func BuildArchive(ctx context.Context, paths []string, key string) (*ArchiveInfo
 
 	if err := writeManifest(zw, manifest); err != nil {
 		return nil, err
+	}
+	if outputFile != "" {
+		if err := writeCommandOutput(zw, outputFile, modified); err != nil {
+			return nil, err
+		}
 	}
 
 	var writtenBytes, writtenEntries int64
@@ -199,6 +209,23 @@ func archiveMapping(ctx context.Context, zw *zip.Writer, resolvedPath, chroot, p
 	}
 
 	return writtenBytes, writtenEntries, nil
+}
+
+// writeCommandOutput stores outputFile uncompressed as the CommandOutputPath entry; it's already compressed.
+func writeCommandOutput(zw *zip.Writer, outputFile string, modified time.Time) error {
+	f, err := os.Open(outputFile)
+	if err != nil {
+		return fmt.Errorf("failed to open command output: %w", err)
+	}
+	defer func() { _ = f.Close() }()
+	w, err := zw.CreateHeader(&zip.FileHeader{Name: CommandOutputPath, Method: zip.Store, Modified: modified})
+	if err != nil {
+		return fmt.Errorf("failed to create command output entry: %w", err)
+	}
+	if _, err := io.Copy(w, f); err != nil {
+		return fmt.Errorf("failed to write command output: %w", err)
+	}
+	return nil
 }
 
 func copyRawFile(zw *zip.Writer, f *zip.File, hdr zip.FileHeader) error {

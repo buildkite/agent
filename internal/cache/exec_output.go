@@ -11,7 +11,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/buildkite/agent/v4/internal/cache/archive"
 	"github.com/buildkite/agent/v4/jobapi"
 	"github.com/dustin/go-humanize"
 	"github.com/klauspost/compress/zstd"
@@ -36,10 +35,8 @@ type Redactor func(ctx context.Context, chunks []jobapi.OutputChunk) ([]jobapi.O
 type outputRecorder struct {
 	mu      sync.Mutex
 	file    *os.File
-	sum     *archive.ChecksumSHA256
 	enc     *zstd.Encoder
 	written int64
-	start   time.Time
 	// err is the first recording failure; writes still succeed so recording never breaks the command, and Close returns it.
 	err error
 }
@@ -49,14 +46,13 @@ func newOutputRecorder() (*outputRecorder, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to create output recording file: %w", err)
 	}
-	sum := archive.NewChecksumSHA256(f)
-	enc, err := zstd.NewWriter(sum)
+	enc, err := zstd.NewWriter(f)
 	if err != nil {
 		_ = f.Close()
 		_ = os.Remove(f.Name())
 		return nil, fmt.Errorf("failed to create output encoder: %w", err)
 	}
-	r := &outputRecorder{file: f, sum: sum, enc: enc, start: time.Now()}
+	r := &outputRecorder{file: f, enc: enc}
 	_, r.err = io.WriteString(enc, outputFormatHeader)
 	return r, nil
 }
@@ -105,43 +101,33 @@ func (r *outputRecorder) record(stream byte, p []byte) {
 	}
 }
 
-// Close records how long the command ran, finishes the recording and describes it as a blob to upload; writes must have finished.
-func (r *outputRecorder) Close(ranFor time.Duration) (*archive.ArchiveInfo, error) {
+// Close records how long the command ran and finishes the recording; writes must have finished.
+func (r *outputRecorder) Close(ranFor time.Duration) error {
 	r.record(streamRanFor, binary.AppendUvarint(nil, uint64(ranFor.Milliseconds())))
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	err := errors.Join(r.err, r.enc.Close())
-	info, statErr := r.file.Stat()
-	err = errors.Join(err, statErr, r.file.Close())
-	if err != nil {
-		return nil, fmt.Errorf("failed to record command output: %w", err)
+	if err := errors.Join(r.err, r.enc.Close(), r.file.Close()); err != nil {
+		return fmt.Errorf("failed to record command output: %w", err)
 	}
-	return &archive.ArchiveInfo{
-		ArchivePath:    r.file.Name(),
-		Sha256sum:      r.sum.Sum(),
-		Size:           info.Size(),
-		WrittenBytes:   r.written,
-		WrittenEntries: 1,
-		Duration:       time.Since(r.start),
-	}, nil
+	return nil
 }
 
-// redactRecording writes a redacted copy of a raw recording, returning the copy to upload; the caller removes it.
-func redactRecording(ctx context.Context, path string, redact Redactor) (*archive.ArchiveInfo, error) {
+// redactRecording writes a redacted copy of a raw recording, returning the copy's path to save; the caller removes it.
+func redactRecording(ctx context.Context, path string, redact Redactor) (string, error) {
 	if redact == nil {
-		return nil, errors.New("no way to redact secrets from the command output")
+		return "", errors.New("no way to redact secrets from the command output")
 	}
 	var chunks []jobapi.OutputChunk
 	ranFor, err := replayOutput(path, jobapi.ChunkWriter{Chunks: &chunks}, jobapi.ChunkWriter{Chunks: &chunks, Stderr: true})
 	if err != nil {
-		return nil, fmt.Errorf("failed to read recorded output: %w", err)
+		return "", fmt.Errorf("failed to read recorded output: %w", err)
 	}
 	if chunks, err = redact(ctx, chunks); err != nil {
-		return nil, fmt.Errorf("failed to redact secrets from the command output: %w", err)
+		return "", fmt.Errorf("failed to redact secrets from the command output: %w", err)
 	}
 	rec, err := newOutputRecorder()
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 	for _, c := range chunks {
 		stream := streamStdout
@@ -150,12 +136,11 @@ func redactRecording(ctx context.Context, path string, redact Redactor) (*archiv
 		}
 		rec.record(stream, c.Data)
 	}
-	info, err := rec.Close(ranFor)
-	if err != nil {
+	if err := rec.Close(ranFor); err != nil {
 		_ = os.Remove(rec.Path())
-		return nil, err
+		return "", err
 	}
-	return info, nil
+	return rec.Path(), nil
 }
 
 // replayOutput writes a recording back to stdout and stderr and returns how long the command ran; replaying to io.Discard validates it.

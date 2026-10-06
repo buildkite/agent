@@ -87,6 +87,13 @@ func (f *fakeRegistry) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		entry := f.pending[req.UploadID]
 		f.entries[fakeAddr(entry.TargetPaths, entry.CacheKey)] = entry
 		reply(api.CacheEntryCommitResp{})
+	case "POST /cache_registries/test/expire":
+		var req api.CacheEntryExpireReq
+		_ = json.NewDecoder(r.Body).Decode(&req)
+		addr := fakeAddr(req.TargetPaths, req.CacheKey)
+		_, existed := f.entries[addr]
+		delete(f.entries, addr)
+		reply(api.CacheEntryExpireResp{Existed: existed})
 	case "POST /cache_registries/test/confirm":
 		reply(api.CacheEntryConfirmResp{})
 	default:
@@ -184,8 +191,11 @@ func TestRunExec_MissThenHit(t *testing.T) {
 	if stdout != "compiling\ndone\n" || stderr != wantStderr {
 		t.Errorf("miss output: stdout %q, stderr %q", stdout, stderr)
 	}
-	if got := len(reg.entries); got != 2 {
-		t.Fatalf("registry has %d entries after a miss, want main entry and output sidecar", got)
+	if got := len(reg.stores); got != 1 {
+		t.Fatalf("got %d stores after a miss, want one entry with the files and output", got)
+	}
+	if got, want := reg.stores[0].TargetPaths, []string{"out", outputTargetPath}; !slices.Equal(got, want) {
+		t.Errorf("saved entry target_paths = %q, want %q", got, want)
 	}
 
 	// Simulate a fresh checkout: original key inputs, stale out contents.
@@ -222,18 +232,11 @@ func TestRunExec_MissThenHit(t *testing.T) {
 		}
 	}
 
-	// Plain restore of the same cache gets only the target paths.
-	if err := os.RemoveAll("out"); err != nil {
-		t.Fatal(err)
-	}
-	if err := RunRestore(t.Context(), logger.Discard, apiClient, cfg); err != nil {
-		t.Fatalf("plain restore: %v", err)
-	}
-	if got := readFile(t, filepath.Join("out", "result")); got != "built" {
-		t.Errorf("plain restore: out/result = %q, want built", got)
-	}
 	if entries, _ := os.ReadDir("."); len(entries) != 3 { // cache.yml, input.txt, out
-		t.Errorf("plain restore left unexpected files: %v", entries)
+		t.Errorf("hit left unexpected files in the workspace: %v", entries)
+	}
+	if got := len(reg.stores); got != 1 {
+		t.Errorf("got %d stores after a hit, want none added", got-1)
 	}
 }
 
@@ -256,28 +259,36 @@ func TestRunExec_FailedCommandSavesNothing(t *testing.T) {
 	}
 }
 
-func TestRunExec_MainEntryFromPlainSaveIsReplaced(t *testing.T) {
+func TestRunExec_SeparateFromPlainSave(t *testing.T) {
 	reg, apiClient, cfg := setupExecTest(t)
-	writeFile(t, filepath.Join("out", "result"), "incomplete, from cache save")
+	writeFile(t, filepath.Join("out", "result"), "from cache save")
 	if err := RunSave(t.Context(), logger.Discard, apiClient, cfg); err != nil {
 		t.Fatalf("plain save: %v", err)
 	}
 
-	// Files without recorded output aren't a hit, so they're left alone and the command runs.
+	// A plain save's entry isn't a hit, so target_paths are left alone and the command runs.
 	b := &build{}
-	writeFile(t, "input.txt", "v1")
 	if _, _, err := runExec(t, apiClient, cfg, func(stdout, stderr io.Writer) error {
-		if got := readFile(t, filepath.Join("out", "result")); got != "incomplete, from cache save" {
+		if got := readFile(t, filepath.Join("out", "result")); got != "from cache save" {
 			t.Errorf("out/result = %q before the command ran, want target_paths left alone", got)
 		}
 		return b.run(stdout, stderr)
 	}); err != nil {
 		t.Fatalf("first exec: %v", err)
 	}
+	if got := len(reg.entries); got != 2 {
+		t.Fatalf("registry has %d entries, want the plain save's and exec's", got)
+	}
 
-	// The run saved its output and replaced the files with its own, so the next exec hits with both.
+	// A forced plain save replaces only its own entry.
 	writeFile(t, "input.txt", "v1")
-	writeFile(t, filepath.Join("out", "result"), "stale")
+	writeFile(t, filepath.Join("out", "result"), "from a forced cache save")
+	forced := cfg
+	forced.Force = true
+	if err := RunSave(t.Context(), logger.Discard, apiClient, forced); err != nil {
+		t.Fatalf("forced save: %v", err)
+	}
+
 	stdout, _, err := runExec(t, apiClient, cfg, b.run)
 	if err != nil {
 		t.Fatalf("second exec: %v", err)
@@ -286,45 +297,46 @@ func TestRunExec_MainEntryFromPlainSaveIsReplaced(t *testing.T) {
 		t.Errorf("command ran %d times, stdout %q; want 1 run and the replayed output", b.runs, stdout)
 	}
 	if got := readFile(t, filepath.Join("out", "result")); got != "built" {
-		t.Errorf("out/result = %q, want the files from the run that recorded the output", got)
+		t.Errorf("out/result = %q, want the files saved with the output", got)
 	}
-	if got := len(reg.stores); got != 3 {
-		t.Errorf("got %d stores, want the plain save, the output and the replacement files", got)
+
+	// Plain restore gets the plain save's files, not exec's.
+	if err := RunRestore(t.Context(), logger.Discard, apiClient, cfg); err != nil {
+		t.Fatalf("plain restore: %v", err)
+	}
+	if got := readFile(t, filepath.Join("out", "result")); got != "from a forced cache save" {
+		t.Errorf("plain restore: out/result = %q, want the plain save's files", got)
 	}
 }
 
-func TestRunExec_ReplacedMainEntryIsNotPairedWithOldOutput(t *testing.T) {
-	_, apiClient, cfg := setupExecTest(t)
+func TestRunExec_EntryWithoutOutputIsAMiss(t *testing.T) {
+	reg, apiClient, cfg := setupExecTest(t)
+	writeFile(t, filepath.Join("out", "result"), "from cache save")
+	if err := RunSave(t.Context(), logger.Discard, apiClient, cfg); err != nil {
+		t.Fatalf("plain save: %v", err)
+	}
+	// Put that archive, which has no recorded output, at exec's address.
+	for _, entry := range reg.entries {
+		entry.TargetPaths = outputTargetPaths(entry.TargetPaths)
+		reg.entries[fakeAddr(entry.TargetPaths, entry.CacheKey)] = entry
+	}
+
 	b := &build{}
-	if _, _, err := runExec(t, apiClient, cfg, b.run); err != nil {
-		t.Fatalf("first exec: %v", err)
-	}
-
-	// Replace the main entry with different files, as cache save --force does.
-	writeFile(t, "input.txt", "v1")
-	writeFile(t, filepath.Join("out", "result"), "incomplete, from a forced save")
-	forced := cfg
-	forced.Force = true
-	if err := RunSave(t.Context(), logger.Discard, apiClient, forced); err != nil {
-		t.Fatalf("forced save: %v", err)
-	}
-
-	// The recorded output belongs to the replaced files, so this misses and leaves target_paths alone.
-	writeFile(t, filepath.Join("out", "local"), "untouched")
 	stdout, _, err := runExec(t, apiClient, cfg, func(stdout, stderr io.Writer) error {
-		if got := readFile(t, filepath.Join("out", "local")); got != "untouched" {
-			t.Errorf("out/local = %q before the command ran, want target_paths left alone", got)
+		if got := readFile(t, filepath.Join("out", "result")); got != "from cache save" {
+			t.Errorf("out/result = %q before the command ran, want target_paths left alone", got)
 		}
 		return b.run(stdout, stderr)
 	})
 	if err != nil {
-		t.Fatalf("second exec: %v", err)
+		t.Fatalf("exec: %v", err)
 	}
-	if b.runs != 2 {
-		t.Errorf("command ran %d times, want 2: old output was replayed with replaced files", b.runs)
+	if b.runs != 1 || stdout != "compiling\ndone\n" {
+		t.Errorf("command ran %d times, stdout %q; want 1 run", b.runs, stdout)
 	}
-	if strings.Contains(stdout, "Replaying output from cache") {
-		t.Errorf("stdout = %q, want no replay", stdout)
+	// The entry was invalidated, so the run replaced it with its own.
+	if got := len(reg.stores); got != 2 {
+		t.Errorf("got %d stores, want the plain save and the exec's replacement", got)
 	}
 }
 
@@ -455,16 +467,12 @@ func TestOutputRecorderRoundTrip(t *testing.T) {
 	_, _ = io.WriteString(rec.Stderr(), "two\n")
 	_, _ = io.WriteString(rec.Stdout(), "")
 	_, _ = io.WriteString(rec.Stdout(), "three\n")
-	info, err := rec.Close(1234 * time.Millisecond)
-	if err != nil {
+	if err := rec.Close(1234 * time.Millisecond); err != nil {
 		t.Fatal(err)
-	}
-	if info.WrittenBytes != 14 {
-		t.Errorf("WrittenBytes = %d, want 14", info.WrittenBytes)
 	}
 
 	var combined, stderr bytes.Buffer
-	ranFor, err := replayOutput(info.ArchivePath, &combined, io.MultiWriter(&combined, &stderr))
+	ranFor, err := replayOutput(rec.Path(), &combined, io.MultiWriter(&combined, &stderr))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -478,10 +486,10 @@ func TestOutputRecorderRoundTrip(t *testing.T) {
 		t.Errorf("replayed stderr = %q, want two", got)
 	}
 
-	if err := os.WriteFile(info.ArchivePath, []byte("not a recording"), 0o600); err != nil {
+	if err := os.WriteFile(rec.Path(), []byte("not a recording"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := replayOutput(info.ArchivePath, io.Discard, io.Discard); err == nil {
+	if _, err := replayOutput(rec.Path(), io.Discard, io.Discard); err == nil {
 		t.Error("replaying a corrupt recording should fail")
 	}
 }

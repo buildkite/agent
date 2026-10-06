@@ -15,7 +15,6 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
-	"go.opentelemetry.io/otel/trace"
 )
 
 // Save saves a cache to storage by ID.
@@ -46,6 +45,11 @@ import (
 //	    log.Printf("Cache saved: %s (%.2f MB)", result.Key, float64(result.Archive.Size)/(1024*1024))
 //	}
 func (c *client) Save(ctx context.Context, cacheID string) (SaveResult, error) {
+	return c.save(ctx, cacheID, nil, "")
+}
+
+// save is Save with an optional pre-resolved key and, for cache exec, the command's recorded output, which goes into the archive and adds outputTargetPath to the entry's address.
+func (c *client) save(ctx context.Context, cacheID string, cacheKey []api.CacheKeyPart, outputFile string) (SaveResult, error) {
 	tracer := otel.Tracer("github.com/buildkite/agent/v4/internal/cache")
 	ctx, span := tracer.Start(ctx, "Client.Save")
 	defer span.End()
@@ -69,11 +73,17 @@ func (c *client) Save(ctx context.Context, cacheID string) (SaveResult, error) {
 
 	result.Key = cacheID
 
-	cacheKey, err := c.resolveCacheKey(cacheConfig)
-	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "failed to resolve cache key")
-		return result, fmt.Errorf("failed to resolve cache key: %w", err)
+	if cacheKey == nil {
+		cacheKey, err = c.resolveCacheKey(cacheConfig)
+		if err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, "failed to resolve cache key")
+			return result, fmt.Errorf("failed to resolve cache key: %w", err)
+		}
+	}
+	addressPaths := cacheConfig.TargetPaths
+	if outputFile != "" {
+		addressPaths = outputTargetPaths(addressPaths)
 	}
 
 	span.SetAttributes(
@@ -92,32 +102,7 @@ func (c *client) Save(ctx context.Context, cacheID string) (SaveResult, error) {
 		return result, fmt.Errorf("invalid cache paths: %w", err)
 	}
 
-	return c.saveEntry(ctx, cacheID, cacheConfig.TargetPaths, cacheKey, c.format, c.force, startTime, result, func(ctx context.Context) (*archive.ArchiveInfo, error) {
-		c.callProgress(cacheID, "building_archive", "Building archive", 0, len(cacheConfig.TargetPaths))
-		archiveInfo, err := archive.BuildArchive(ctx, cacheConfig.TargetPaths, cacheID)
-		if err != nil {
-			return nil, fmt.Errorf("failed to build archive: %w", err)
-		}
-		return archiveInfo, nil
-	})
-}
-
-// saveEntry uploads the blob from build (then removes it) as the entry at targetPaths/cacheKey, skipping existing entries unless force; tracing goes on ctx's span.
-func (c *client) saveEntry(
-	ctx context.Context,
-	cacheID string,
-	targetPaths []string,
-	cacheKey []api.CacheKeyPart,
-	compression string,
-	force bool,
-	startTime time.Time,
-	result SaveResult,
-	build func(context.Context) (*archive.ArchiveInfo, error),
-) (SaveResult, error) {
-	span := trace.SpanFromContext(ctx)
-	var err error
-
-	if !force {
+	if !c.force {
 		c.callProgress(cacheID, "checking_exists", "Checking if cache already exists", 0, 0)
 
 		// Check if cache already exists
@@ -133,7 +118,7 @@ func (c *client) saveEntry(
 		).DoWithContext(ctx, func(r *roko.Retrier) error {
 			var err error
 			_, exists, peekApiResp, err = c.api.CacheEntryPeekExists(ctx, c.registry, api.CacheEntryPeekReq{
-				TargetPaths: targetPaths,
+				TargetPaths: addressPaths,
 				CacheKey:    cacheKey,
 			})
 			if api.BreakOnNonRetryable(r, peekApiResp, err) {
@@ -207,11 +192,14 @@ func (c *client) saveEntry(
 		return result, fmt.Errorf("invalid cache store configuration: %w", err)
 	}
 
-	archiveInfo, err := build(ctx)
+	c.callProgress(cacheID, "building_archive", "Building archive", 0, len(cacheConfig.TargetPaths))
+
+	// Build archive
+	archiveInfo, err := archive.BuildArchiveWithOutput(ctx, cacheConfig.TargetPaths, cacheID, outputFile)
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, "failed to build archive")
-		return result, err
+		return result, fmt.Errorf("failed to build archive: %w", err)
 	}
 	defer func() {
 		_ = os.Remove(archiveInfo.ArchivePath)
@@ -225,7 +213,7 @@ func (c *client) saveEntry(
 		CompressionRatio: float64(archiveInfo.WrittenBytes) / float64(archiveInfo.Size),
 		Sha256Sum:        archiveInfo.Sha256sum,
 		Duration:         archiveInfo.Duration,
-		Paths:            targetPaths,
+		Paths:            cacheConfig.TargetPaths,
 	}
 
 	span.SetAttributes(
@@ -253,12 +241,12 @@ func (c *client) saveEntry(
 	).DoWithContext(ctx, func(r *roko.Retrier) error {
 		var err error
 		createResp, createApiResp, err = c.api.CacheEntryCreate(ctx, c.registry, api.CacheEntryCreateReq{
-			TargetPaths: targetPaths,
+			TargetPaths: addressPaths,
 			CacheKey:    cacheKey,
 			Blobs: []api.CacheBlob{{
 				Digest:      api.CacheDigest{Algorithm: "sha256", Value: archiveInfo.Sha256sum},
 				FileSize:    archiveInfo.Size,
-				Compression: compression,
+				Compression: c.format,
 			}},
 			Platform: c.platform,
 		})

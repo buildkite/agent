@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log/slog"
 	"os"
 	"slices"
 	"sync"
@@ -14,18 +13,20 @@ import (
 	"github.com/buildkite/agent/v4/api"
 	"github.com/buildkite/agent/v4/internal/cache/archive"
 	"github.com/buildkite/agent/v4/internal/cache/configuration"
-	"github.com/buildkite/agent/v4/internal/cache/store"
 	"github.com/buildkite/agent/v4/logger"
 	"go.opentelemetry.io/otel"
 )
 
-// outputTargetPath is a target path added to target_paths to give the output sidecar its own address that plain cache restore never matches; "<...>" can't be a real file path and stands out in the registry's entry list.
+// outputTargetPath is added to target_paths to address cache exec's entries, which hold the files and the recorded output, so they never replace or get replaced by plain cache save's; "<...>" can't be a real file path and stands out in the registry's entry list.
 const outputTargetPath = "<cache-exec-output>"
+
+// errUnreadableOutput means an entry's recorded output is missing or unreadable, so it can't be a hit.
+var errUnreadableOutput = errors.New("recorded command output is missing or unreadable")
 
 // Command runs the wrapped command with the given streams; a non-nil error means it failed and is returned by RunExec.
 type Command func(stdout, stderr io.Writer) error
 
-// RunExec runs command unless the cache cfg.Names[0] holds an exact-key result, in which case it restores target_paths and replays the recorded output; on success after a miss it saves both, and cache failures follow cfg.FailOnError.
+// RunExec runs command unless the cache cfg.Names[0] holds an exact-key result, in which case it restores target_paths and replays the recorded output; on success after a miss it saves both as one entry, and cache failures follow cfg.FailOnError.
 func RunExec(ctx context.Context, l logger.Logger, apiClient *api.Client, cfg Config, stdout, stderr io.Writer, command Command) error {
 	c, _, err := newClient(l, apiClient, cfg)
 	if err == nil && c == nil {
@@ -97,58 +98,54 @@ func (c *client) exec(ctx context.Context, l logger.Logger, cacheID string, fail
 	s.header("+++ :package: No cached result, running command")
 	commandStart := time.Now()
 	runErr := command(io.MultiWriter(s.Stdout(), rec.Stdout()), io.MultiWriter(s.Stderr(), rec.Stderr()))
-	raw, outputErr := rec.Close(time.Since(commandStart))
+	outputErr := rec.Close(time.Since(commandStart))
 	if runErr != nil {
 		return runErr
 	}
 	s.header("--- :package: Saving cache...")
 
 	// Redact once, after the command, so secrets it registered while running (e.g. with secret get) are caught; the raw recording stays in a temp file the job can already read, and is removed.
-	var output *archive.ArchiveInfo
+	var output string
 	if outputErr == nil {
-		output, outputErr = redactRecording(ctx, raw.ArchivePath, redact)
-		if output != nil {
-			defer func() { _ = os.Remove(output.ArchivePath) }()
+		output, outputErr = redactRecording(ctx, rec.Path(), redact)
+		if output != "" {
+			defer func() { _ = os.Remove(output) }()
 		}
 	}
-	return c.execSave(ctx, l, cacheConfig, cacheKey, failOnError, output, outputErr)
+	return c.execSave(ctx, l, cacheConfig.Name, cacheKey, failOnError, output, outputErr)
 }
 
-// cachedOutput is a downloaded, validated output sidecar; confirm refreshes its retention once its files are restored.
-type cachedOutput struct {
-	path             string
-	ranFor           time.Duration // how long the command ran when its output was recorded
-	cleanup, confirm func()
-}
-
-// execRestore reports a hit, restoring target_paths and replaying output, only for an exact main entry with recorded output for its archive; otherwise the command runs.
+// execRestore reports a hit, restoring target_paths and replaying the recorded output, only for an exact match of cache exec's entry; otherwise the command runs.
 func (c *client) execRestore(ctx context.Context, l logger.Logger, cacheConfig *configuration.Cache, cacheKey []api.CacheKeyPart, failOnError bool, s *streams, start time.Time) (bool, error) {
 	cacheID := cacheConfig.Name
 
-	// Check for matching output before restore downloads or touches target_paths, so files without it (e.g. from plain save) are left alone.
-	var found struct {
-		checked bool
-		output  *cachedOutput
-		err     error
-	}
-	result, err := c.restore(ctx, cacheID, cacheKey, func(main api.CacheEntryRetrieveResp) bool {
-		if len(main.Blobs) == 0 {
-			return false
-		}
-		found.checked = true
-		found.output, found.err = c.restoreOutput(ctx, cacheConfig, outputCacheKey(cacheKey, main.Blobs[0].Digest.Value))
-		return found.output != nil
-	})
-	if found.output != nil {
-		defer found.output.cleanup()
-	}
-	if found.err != nil {
+	output, err := os.CreateTemp("", "cache-exec-output-*.zst")
+	if err != nil {
+		err = fmt.Errorf("failed to restore cache %q: %w", cacheID, err)
 		if failOnError {
-			return false, fmt.Errorf("failed to restore cached output for %q: %w", cacheID, found.err)
+			return false, err
 		}
-		l.Warnf("Failed to restore cached output for %q: %v; running the command", cacheID, found.err)
+		l.Warnf("%v; running the command", err)
 		return false, nil
 	}
+	_ = output.Close()
+	defer func() { _ = os.Remove(output.Name()) }()
+
+	// Take the recording out of the archive, never into the workspace, and check it before restore touches target_paths.
+	var ranFor time.Duration // how long the command ran when its output was recorded
+	result, err := c.restore(ctx, cacheID, cacheKey, func(archiveFile string) error {
+		if err := archive.ExtractCommandOutput(archiveFile, output.Name()); err != nil {
+			if errors.Is(err, archive.ErrNoCommandOutput) {
+				return fmt.Errorf("%w: %w", errUnreadableOutput, err)
+			}
+			return err
+		}
+		var err error
+		if ranFor, err = replayOutput(output.Name(), io.Discard, io.Discard); err != nil {
+			return fmt.Errorf("%w: %w", errUnreadableOutput, err)
+		}
+		return nil
+	})
 	if err != nil {
 		// As in restore, fail rather than run the command against half-restored target paths.
 		if failOnError || errors.Is(err, errRestoreMutatedTargets) {
@@ -158,18 +155,13 @@ func (c *client) execRestore(ctx context.Context, l logger.Logger, cacheConfig *
 		l.Warnf("%s; running the command", restoreReport(cacheID, result, err))
 		return false, nil
 	}
-	if found.checked && found.output == nil {
-		result.NotRestoredReason = "Cache not restored: no recorded command output for these files"
-	}
 	l.Infof("%s", restoreReport(cacheID, result, nil))
 	if !result.CacheRestored || !result.CacheHit {
 		return false, nil
 	}
 
-	found.output.confirm()
-	ranFor := found.output.ranFor
 	s.header(replayHeader(ranFor - time.Since(start)))
-	if _, err := replayOutput(found.output.path, s.Stdout(), s.Stderr()); err != nil {
+	if _, err := replayOutput(output.Name(), s.Stdout(), s.Stderr()); err != nil {
 		// The files are restored and the output was readable before, so only writing it failed; that isn't a reason to fail the build.
 		err = fmt.Errorf("failed to replay cached output for %q: %w", cacheID, err)
 		if failOnError {
@@ -210,62 +202,8 @@ func roundDuration(d time.Duration) time.Duration {
 	return d.Round(time.Second)
 }
 
-// restoreOutput downloads and validates the output sidecar; nil means a miss. Missing or unreadable blobs are invalidated and treated as a miss.
-func (c *client) restoreOutput(ctx context.Context, cacheConfig *configuration.Cache, outputKey []api.CacheKeyPart) (*cachedOutput, error) {
-	startTime := time.Now()
-
-	retrieveResp, exists, err := c.retrieveEntry(ctx, outputTargetPaths(cacheConfig.TargetPaths), outputKey)
-	if err != nil {
-		return nil, fmt.Errorf("failed to retrieve cache: %w", err)
-	}
-	if !exists {
-		return nil, nil
-	}
-	if err := validateCacheStore(retrieveResp.Store, c.bucketURL); err != nil {
-		return nil, fmt.Errorf("invalid cache store configuration: %w", err)
-	}
-
-	tmpDir, file, transferInfo, err := c.downloadCache(ctx, retrieveResp, c.bucketURL)
-	if err != nil {
-		if errors.Is(err, store.ErrBlobNotFound) || errors.Is(err, ErrDigestMismatch) {
-			slog.Warn("cached command output is missing or corrupt, treating as miss and invalidating entry",
-				"cache_id", cacheConfig.Name, "err", err)
-			c.invalidateStaleEntry(ctx, retrieveResp)
-			return nil, nil
-		}
-		return nil, fmt.Errorf("failed to download cache: %w", err)
-	}
-	cleanup := func() { _ = os.RemoveAll(tmpDir) }
-
-	ranFor, err := replayOutput(file, io.Discard, io.Discard)
-	if err != nil {
-		cleanup()
-		slog.Warn("cached command output is unreadable, treating as miss and invalidating entry",
-			"cache_id", cacheConfig.Name, "err", err)
-		c.invalidateStaleEntry(ctx, retrieveResp)
-		return nil, nil
-	}
-
-	// Refresh the sidecar's retention so it doesn't expire while the main entry keeps getting hit.
-	stats := &api.CacheStats{
-		Backend:         store.BackendName(retrieveResp.Store, c.bucketURL),
-		TotalMs:         time.Since(startTime).Milliseconds(),
-		TransferMs:      transferInfo.Duration.Milliseconds(),
-		CompressedBytes: transferInfo.BytesTransferred,
-		PartCount:       transferInfo.PartCount,
-		Concurrency:     transferInfo.Concurrency,
-	}
-	return &cachedOutput{
-		path:    file,
-		ranFor:  ranFor,
-		cleanup: cleanup,
-		confirm: func() { c.confirmRestoreSucceeded(ctx, retrieveResp, stats) },
-	}, nil
-}
-
-// execSave saves the output sidecar, keyed on the main archive's digest, and then the main entry with force, or neither if the output can't be saved. Output first means whichever main entry wins a race has its output; force means a main entry without output (from plain save, or an interrupted run) is replaced instead of blocking hits until it expires.
-func (c *client) execSave(ctx context.Context, l logger.Logger, cacheConfig *configuration.Cache, cacheKey []api.CacheKeyPart, failOnError bool, output *archive.ArchiveInfo, outputErr error) error {
-	cacheID := cacheConfig.Name
+// execSave saves the target paths and the recorded output as one entry, or nothing if the output can't be saved.
+func (c *client) execSave(ctx context.Context, l logger.Logger, cacheID string, cacheKey []api.CacheKeyPart, failOnError bool, output string, outputErr error) error {
 	failed := func(what string, err error) error {
 		if failOnError {
 			return fmt.Errorf("failed to save %s %q: %w", what, cacheID, err)
@@ -280,28 +218,8 @@ func (c *client) execSave(ctx context.Context, l logger.Logger, cacheConfig *con
 	if outputErr != nil {
 		return failed("cache (command output couldn't be saved)", outputErr)
 	}
-	if err := checkPathsExist(cacheConfig.TargetPaths); err != nil {
-		return failed("cache", fmt.Errorf("invalid cache paths: %w", err))
-	}
-	mainArchive, err := archive.BuildArchive(ctx, cacheConfig.TargetPaths, cacheID)
-	if err != nil {
-		return failed("cache", fmt.Errorf("failed to build archive: %w", err))
-	}
-	defer func() { _ = os.Remove(mainArchive.ArchivePath) }()
-
-	l.Infof("Saving command output for cache: %s", cacheID)
-	outputCtx, span := otel.Tracer("github.com/buildkite/agent/v4/internal/cache").Start(ctx, "Client.saveOutput")
-	result, err := c.saveEntry(outputCtx, cacheID, outputTargetPaths(cacheConfig.TargetPaths), outputCacheKey(cacheKey, mainArchive.Sha256sum), "zstd", false, time.Now(), SaveResult{Key: cacheID},
-		func(context.Context) (*archive.ArchiveInfo, error) { return output, nil })
-	span.End()
-	if err != nil {
-		return failed("cache (command output couldn't be saved)", err)
-	}
-	logSaveResult(l, cacheID, result)
-
 	l.Infof("Saving cache: %s", cacheID)
-	result, err = c.saveEntry(ctx, cacheID, cacheConfig.TargetPaths, cacheKey, c.format, true, time.Now(), SaveResult{Key: cacheID},
-		func(context.Context) (*archive.ArchiveInfo, error) { return mainArchive, nil })
+	result, err := c.save(ctx, cacheID, cacheKey, output)
 	if err != nil {
 		return failed("cache", err)
 	}
@@ -309,12 +227,7 @@ func (c *client) execSave(ctx context.Context, l logger.Logger, cacheConfig *con
 	return nil
 }
 
-// outputCacheKey returns the sidecar key: the main entry's key plus its archive digest, so a replaced or re-saved main entry never pairs with old output.
-func outputCacheKey(cacheKey []api.CacheKeyPart, mainDigest string) []api.CacheKeyPart {
-	return append(slices.Clone(cacheKey), api.CacheKeyPart{Value: mainDigest, Mandatory: true})
-}
-
-// outputTargetPaths returns the target_paths addressing a cache's output sidecar.
+// outputTargetPaths returns the target_paths addressing cache exec's entry for a cache.
 func outputTargetPaths(targetPaths []string) []string {
 	return append(slices.Clone(targetPaths), outputTargetPath)
 }
