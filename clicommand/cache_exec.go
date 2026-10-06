@@ -46,15 +46,9 @@ lockfile and vite config are unchanged:
 
 type CacheExecConfig struct {
 	GlobalConfig
+	APIConfig
 	CacheConfig
 	RedactedVars []string `cli:"redacted-vars" normalize:"list"`
-
-	// APIConfig's fields, but with the token optional: without one, cache exec runs the command uncached instead of failing.
-	AgentAccessToken string `cli:"agent-access-token"`
-	DebugHTTP        bool   `cli:"debug-http"`
-	TraceHTTP        bool   `cli:"trace-http"`
-	Endpoint         string `cli:"endpoint" validate:"required"`
-	NoHTTP2          bool   `cli:"no-http2"`
 }
 
 var CacheExecCommand = &cli.Command{
@@ -78,13 +72,9 @@ var CacheExecCommand = &cli.Command{
 
 		command := cacheExecCommand(args)
 
-		// Like any cache problem, missing configuration runs the command without the cache unless --cache-fail-on-error.
-		apiCfg := loadAPIClientConfig(cfg, "AgentAccessToken")
-		if apiCfg.Token == "" {
-			return cache.RunUncached(l, cfg.FailOnError, errors.New("an API token must be provided to use the cache"), os.Stdout, os.Stderr, command)
-		}
-		apiClient := api.NewClient(l, apiCfg)
+		apiClient := api.NewClient(l, loadAPIClientConfig(cfg, "AgentAccessToken"))
 
+		// Like any cache problem, missing configuration runs the command without the cache unless --cache-fail-on-error.
 		cacheConfigFile, err := resolveCacheConfigFile(cfg.CacheConfigFile)
 		if err != nil {
 			return cache.RunUncached(l, cfg.FailOnError, err, os.Stdout, os.Stderr, command)
