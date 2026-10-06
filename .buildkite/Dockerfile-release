@@ -1,0 +1,32 @@
+# Tools for publishing releases in .buildkite/pipeline.release-*.yml.
+#
+# Don't install buildkite-agent here: release steps mount the host agent at
+# /usr/bin/buildkite-agent, and an agent on an earlier PATH entry would shadow it.
+
+FROM public.ecr.aws/aws-cli/aws-cli:2.37.9@sha256:92de75724b6a746951f0e8b915d86bbccd7cb55aff96cd0cb4f7017272160780 AS awscli
+
+# The full (non-slim) image has git, curl, gpg, openssl and a C compiler, which
+# `bundle install` needs for bigdecimal's native extension.
+FROM public.ecr.aws/docker/library/ruby:4.0.6@sha256:8dc3950712ad2078bdd275b890419ba2fd3aab5a0653b291a7325f0d8a24ca05
+
+ARG TARGETARCH
+ARG GH_VERSION=2.102.0
+
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends createrepo-c rpm-common \
+  && rm -rf /var/lib/apt/lists/*
+
+COPY --from=awscli /usr/local/aws-cli /usr/local/aws-cli
+RUN ln -s /usr/local/aws-cli/v2/current/bin/aws /usr/local/bin/aws
+
+# Checksums are from https://github.com/cli/cli/releases/download/v${GH_VERSION}/gh_${GH_VERSION}_checksums.txt
+RUN case "${TARGETARCH}" in \
+      amd64) gh_sha256=bb766f710eef8ede859c18578c72c327597cd4c8a85b06001b1f3843c6019386 ;; \
+      arm64) gh_sha256=7862c86c72f43df3a2d93ddde6f473285b4e2af61b494849846827e513ef6484 ;; \
+      *) echo "Unsupported architecture: ${TARGETARCH}" >&2; exit 1 ;; \
+    esac \
+  && curl -fsSLo /tmp/gh.tar.gz "https://github.com/cli/cli/releases/download/v${GH_VERSION}/gh_${GH_VERSION}_linux_${TARGETARCH}.tar.gz" \
+  && echo "${gh_sha256}  /tmp/gh.tar.gz" | sha256sum -c - \
+  && tar -xzf /tmp/gh.tar.gz -C /tmp \
+  && install "/tmp/gh_${GH_VERSION}_linux_${TARGETARCH}/bin/gh" /usr/local/bin/gh \
+  && rm -rf /tmp/gh*
