@@ -5,7 +5,7 @@ go 1.26.5
 require (
 	cloud.google.com/go/compute/metadata v0.9.0
 	cloud.google.com/go/kms v1.33.0
-	connectrpc.com/connect v1.20.0
+	connectrpc.com/connect v1.21.0
 	drjosh.dev/zzglob v0.4.3
 	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.14.0
 	github.com/Azure/azure-sdk-for-go/sdk/storage/azblob v1.8.0
