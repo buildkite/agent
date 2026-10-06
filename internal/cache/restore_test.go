@@ -224,6 +224,70 @@ func TestInvalidateStaleEntry_ExistedFalseIsNotReportedAsInvalidated(t *testing.
 	}
 }
 
+// resavedEntry sets up the race where another job re-saved the address between
+// this restore's retrieve and a later expire or confirm. The re-save has the
+// same blob, as it usually will (deterministic archive of the same inputs), so
+// only the upload ID distinguishes it.
+func resavedEntry(mockClient *mockAPIClient) (api.CacheEntryRetrieveResp, *mockCacheEntry) {
+	targetPaths := []string{"node_modules"}
+	cacheKey := []api.CacheKeyPart{{Value: "v1-test-key", Mandatory: true}}
+	blobs := []api.CacheBlob{{Digest: api.CacheDigest{Algorithm: "sha256", Value: "same"}}}
+
+	retrieveResp := api.CacheEntryRetrieveResp{
+		TargetPaths: targetPaths,
+		CacheKey:    cacheKey,
+		Blobs:       blobs,
+		UploadID:    "stale-upload",
+	}
+	resaved := &mockCacheEntry{
+		targetPaths: targetPaths,
+		cacheKey:    cacheKey,
+		blobs:       blobs,
+		uploadID:    "fresh-upload",
+		committed:   true,
+	}
+	mockClient.registries["~"].cache[cacheAddr(targetPaths, cacheKey)] = resaved
+	return retrieveResp, resaved
+}
+
+func TestInvalidateStaleEntry_SkipsEntryResavedSinceRetrieve(t *testing.T) {
+	mockClient := newMockAPIClient("s3")
+	c := &client{api: mockClient, registry: "~"}
+	retrieveResp, resaved := resavedEntry(mockClient)
+
+	if c.invalidateStaleEntry(t.Context(), retrieveResp) {
+		t.Error("invalidateStaleEntry() = true, want false when the entry was re-saved")
+	}
+	if len(mockClient.expireCalls) != 1 {
+		t.Fatalf("expire calls = %d, want 1", len(mockClient.expireCalls))
+	}
+	if got := mockClient.expireCalls[0].UploadID; got != "stale-upload" {
+		t.Errorf("expire request upload_id = %q, want %q", got, "stale-upload")
+	}
+	addr := cacheAddr(retrieveResp.TargetPaths, retrieveResp.CacheKey)
+	if mockClient.registries["~"].cache[addr] != resaved {
+		t.Error("re-saved entry was deleted, want it to survive")
+	}
+}
+
+func TestConfirmRestoreSucceeded_DoesNotRefreshEntryResavedSinceRetrieve(t *testing.T) {
+	mockClient := newMockAPIClient("s3")
+	c := &client{api: mockClient, registry: "~"}
+	retrieveResp, resaved := resavedEntry(mockClient)
+
+	c.confirmRestoreSucceeded(t.Context(), retrieveResp, nil)
+
+	if len(mockClient.confirmCalls) != 1 {
+		t.Fatalf("confirm calls = %d, want 1", len(mockClient.confirmCalls))
+	}
+	if got := mockClient.confirmCalls[0].UploadID; got != "stale-upload" {
+		t.Errorf("confirm request upload_id = %q, want %q", got, "stale-upload")
+	}
+	if !resaved.expiresAt.IsZero() {
+		t.Errorf("re-saved entry retention refreshed to %v, want untouched", resaved.expiresAt)
+	}
+}
+
 func TestConfirmRestoreSucceeded_EchoesScopesFromRetrieve(t *testing.T) {
 	mockClient := newMockAPIClient("s3")
 	c := &client{api: mockClient, registry: "~"}
@@ -331,7 +395,7 @@ func TestMissCompleteMessage(t *testing.T) {
 	if got, want := missCompleteMessage("missing blob", true), "Cache miss (missing blob, invalidated stale entry)"; got != want {
 		t.Errorf("missCompleteMessage(invalidated=true) = %q, want %q", got, want)
 	}
-	if got, want := missCompleteMessage("missing blob", false), "Cache miss (missing blob, stale entry could not be invalidated)"; got != want {
+	if got, want := missCompleteMessage("missing blob", false), "Cache miss (missing blob, entry may already have been removed or replaced by a newer save)"; got != want {
 		t.Errorf("missCompleteMessage(invalidated=false) = %q, want %q", got, want)
 	}
 }
