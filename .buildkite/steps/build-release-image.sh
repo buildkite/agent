@@ -25,12 +25,15 @@ else
   builder_name="$(docker buildx create --use)"
   trap 'rm -rf "${context}"; docker buildx rm "${builder_name}" || true' EXIT
 
+  # Release jobs only run on amd64 agents. Building arm64 too would mean
+  # compiling gem native extensions under QEMU, where gcc segfaults.
+  #
   # Tags in this repo are immutable, so if another build pushed the same image
   # first, our push fails. That's fine as long as the image now exists.
   docker buildx build \
     --progress plain \
     --builder "${builder_name}" \
-    --platform linux/amd64,linux/arm64 \
+    --platform linux/amd64 \
     --file "${context}/Dockerfile-release" \
     --tag "${image}" \
     --push \
