@@ -70,20 +70,14 @@ type RedactionCreateResponse struct {
 	Redacted string `json:"redacted"`
 }
 
-// OutputChunk is one write of a command's output, as recorded by cache exec.
-type OutputChunk struct {
-	Stderr bool   `json:"stderr,omitempty"`
-	Data   []byte `json:"data"`
-}
-
 // RedactRequest is the request body for the POST /redact endpoint
 type RedactRequest struct {
-	Chunks []OutputChunk `json:"chunks"`
+	Output []byte `json:"output"`
 }
 
 // RedactResponse is the response body for the POST /redact endpoint
 type RedactResponse struct {
-	Chunks []OutputChunk `json:"chunks"`
+	Redacted []byte `json:"redacted"`
 }
 
 // PromiseFailureRequest is the request body for the POST /promise-failure endpoint

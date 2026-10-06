@@ -85,11 +85,6 @@ func restoreCleanupError(configured, resolved string, err error) error {
 //	    log.Printf("Cache hit: %s (%.2f MB)", result.Key, float64(result.Archive.Size)/(1024*1024))
 //	}
 func (c *client) Restore(ctx context.Context, cacheID string) (RestoreResult, error) {
-	return c.restore(ctx, cacheID, nil, nil)
-}
-
-// restore is Restore with an optional pre-resolved key and, for cache exec, readOutput, which addresses the entry with outputTargetPath and is given the downloaded archive before any target path changes. An errUnreadableOutput from it makes the restore a miss that invalidates the entry; any other error fails the restore.
-func (c *client) restore(ctx context.Context, cacheID string, cacheKey []api.CacheKeyPart, readOutput func(archiveFile string) error) (RestoreResult, error) {
 	tracer := otel.Tracer("github.com/buildkite/agent/v4/internal/cache")
 	ctx, span := tracer.Start(ctx, "Client.Restore")
 	defer span.End()
@@ -110,17 +105,11 @@ func (c *client) restore(ctx context.Context, cacheID string, cacheKey []api.Cac
 		return result, err
 	}
 
-	if cacheKey == nil {
-		cacheKey, err = c.resolveCacheKey(cacheConfig)
-		if err != nil {
-			span.RecordError(err)
-			span.SetStatus(codes.Error, "failed to resolve cache key")
-			return result, fmt.Errorf("failed to resolve cache key: %w", err)
-		}
-	}
-	addressPaths := cacheConfig.TargetPaths
-	if readOutput != nil {
-		addressPaths = outputTargetPaths(addressPaths)
+	cacheKey, err := c.resolveCacheKey(cacheConfig)
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "failed to resolve cache key")
+		return result, fmt.Errorf("failed to resolve cache key: %w", err)
 	}
 	result.Key = displayCacheKey(cacheKey)
 
@@ -152,7 +141,7 @@ func (c *client) restore(ctx context.Context, cacheID string, cacheKey []api.Cac
 	).DoWithContext(ctx, func(r *roko.Retrier) error {
 		var err error
 		retrieveResp, exists, apiResp, err = c.api.CacheEntryRetrieve(ctx, c.registry, api.CacheEntryRetrieveReq{
-			TargetPaths: addressPaths,
+			TargetPaths: cacheConfig.TargetPaths,
 			CacheKey:    cacheKey,
 		})
 		if api.BreakOnNonRetryable(r, apiResp, err) {
@@ -272,16 +261,8 @@ func (c *client) restore(ctx context.Context, cacheID string, cacheKey []api.Cac
 		Concurrency:      transferInfo.Concurrency,
 	}
 
-	// Check the archive is a readable format, with readable recorded output for cache exec, before touching the filesystem.
-	err = archive.Validate(archiveFile, transferInfo.BytesTransferred)
-	if err == nil && readOutput != nil {
-		if err = readOutput(archiveFile); err != nil && !errors.Is(err, errUnreadableOutput) {
-			span.RecordError(err)
-			span.SetStatus(codes.Error, "failed to read recorded command output")
-			return result, fmt.Errorf("failed to read recorded command output: %w", err)
-		}
-	}
-	if err != nil {
+	// Check the archive is a readable format before touching the filesystem.
+	if err := archive.Validate(archiveFile, transferInfo.BytesTransferred); err != nil {
 		// A bad cache must never block a build: an unrecognized or otherwise
 		// unreadable archive degrades to a miss and invalidates the entry
 		// (targets untouched — this runs before cleaning).

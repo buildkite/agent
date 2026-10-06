@@ -13,9 +13,6 @@ const (
 	// ManifestPath is the reserved archive entry.
 	// Extraction reads it but never writes it to disk.
 	ManifestPath = ".buildkite/cache-manifest.json"
-	// CommandOutputPath is the reserved entry holding the recorded output of the command cache exec ran.
-	// Extraction never writes it to the target paths; ExtractCommandOutput reads it.
-	CommandOutputPath = ".buildkite/cache-exec-output"
 	// ManifestVersion is the archive format version this agent reads and writes.
 	ManifestVersion = 2
 )

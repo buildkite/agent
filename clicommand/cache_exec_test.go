@@ -7,7 +7,6 @@ import (
 	"os"
 	"runtime"
 	"strconv"
-	"strings"
 	"testing"
 	"time"
 
@@ -92,17 +91,11 @@ func TestCacheExecRedactor(t *testing.T) {
 	mux.Add("from-secret-get") // known only to the job executor
 
 	// from-step-env stands for a variable exported in the step's command, which only exec's own scan knows.
-	got, err := cacheExecRedactor([]string{"from-step-env"})(t.Context(), []jobapi.OutputChunk{
-		{Data: []byte("from-secret-get and from-step-env\n")},
-	})
+	got, err := cacheExecRedactor([]string{"from-step-env"})(t.Context(), []byte("from-secret-get and from-step-env\n"))
 	if err != nil {
 		t.Fatalf("cacheExecRedactor() error = %v", err)
 	}
-	var out strings.Builder
-	for _, c := range got {
-		out.Write(c.Data)
-	}
-	if got, want := out.String(), "[REDACTED] and [REDACTED]\n"; got != want {
+	if got, want := string(got), "[REDACTED] and [REDACTED]\n"; got != want {
 		t.Errorf("redacted output = %q, want %q", got, want)
 	}
 	// Without the Job API the job's secrets can't be redacted, so the redactor must fail rather than return the output.

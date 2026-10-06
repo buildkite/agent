@@ -4,9 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"errors"
 	"fmt"
-	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -68,7 +66,7 @@ func ExtractFiles(ctx context.Context, zipFile *os.File, zipFileLen int64, paths
 		configPaths[i] = resolved
 	}
 
-	// Entries that are not restored (the manifest, recorded command output, and namespaces absent from
+	// Entries that are not restored (the manifest, and namespaces absent from
 	// local config) are routed to a throwaway directory that is removed when we
 	// return, since quickzip's path mapper cannot skip an entry outright.
 	discardDir, err := os.MkdirTemp("", "cache-extract-discard-*")
@@ -89,7 +87,7 @@ func ExtractFiles(ctx context.Context, zipFile *os.File, zipFileLen int64, paths
 	foundPaths := make(map[string]bool)
 
 	err = extract.ExtractWithPathMapper(ctx, func(file *zip.File) (string, error) {
-		if file.Name == ManifestPath || file.Name == CommandOutputPath {
+		if file.Name == ManifestPath {
 			return discard(file.Name), nil
 		}
 
@@ -160,38 +158,6 @@ func ExtractFiles(ctx context.Context, zipFile *os.File, zipFileLen int64, paths
 		WrittenEntries: countExtracted,
 		Duration:       time.Since(start),
 	}, nil
-}
-
-// ErrNoCommandOutput is returned by ExtractCommandOutput for an archive without a CommandOutputPath entry.
-var ErrNoCommandOutput = errors.New("cache archive has no recorded command output")
-
-// ExtractCommandOutput writes the archive's CommandOutputPath entry to dest.
-func ExtractCommandOutput(archivePath, dest string) error {
-	r, err := zip.OpenReader(archivePath)
-	if err != nil {
-		return fmt.Errorf("failed to open zip reader: %w", err)
-	}
-	defer func() { _ = r.Close() }()
-	for _, f := range r.File {
-		if f.Name != CommandOutputPath {
-			continue
-		}
-		rc, err := f.Open()
-		if err != nil {
-			return fmt.Errorf("failed to open command output: %w", err)
-		}
-		defer func() { _ = rc.Close() }()
-		out, err := os.Create(dest)
-		if err != nil {
-			return fmt.Errorf("failed to create command output file: %w", err)
-		}
-		if _, err := io.Copy(out, rc); err != nil {
-			_ = out.Close()
-			return fmt.Errorf("failed to extract command output: %w", err)
-		}
-		return out.Close()
-	}
-	return ErrNoCommandOutput
 }
 
 // discardName maps a not-restored entry (the manifest, or an unconfigured
