@@ -27,7 +27,14 @@ const cacheExecHelpDescription = `Usage:
 Description:
 
 Runs the given command if the named cache has no result for the current cache
-key.
+key, then saves the cache's target_paths together with the command's output.
+When the cache has a result, the command doesn't run: target_paths are restored
+and the saved output is replayed in the build log.
+
+The replayed output is the command's stdout and stderr combined, all written to
+stdout, so cache exec is for commands whose output goes to the build log. Don't
+capture or pipe its output, for example with $(...), since a cache hit would
+include the command's stderr.
 
 Example:
 
