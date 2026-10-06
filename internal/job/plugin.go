@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"slices"
 	"strconv"
@@ -459,7 +460,7 @@ func (e *Executor) checkoutPlugin(ctx context.Context, p *plugin.Plugin) (*plugi
 	// Switch to the version if we need to
 	if p.Version != "" {
 		e.shell.Commentf("Checking out `%s`", p.Version)
-		if err = e.shell.Command("git", "-c", "advice.detachedHead=false", "checkout", "-f", p.Version).Run(ctx); err != nil {
+		if err = e.shell.Command("git", "-c", "advice.detachedHead=false", "checkout", "-f", pluginCheckoutRevision(p.Version)).Run(ctx); err != nil {
 			return nil, err
 		}
 	}
@@ -486,4 +487,16 @@ func (e *Executor) checkoutPlugin(ctx context.Context, p *plugin.Plugin) (*plugi
 	}
 
 	return checkout, nil
+}
+
+var fullObjectID = regexp.MustCompile(`^(?i:[0-9a-f]{40}|[0-9a-f]{64})$`)
+
+// pluginCheckoutRevision returns the revision to pass to git checkout for a
+// plugin version. git checkout looks up ref names before object IDs, so a full
+// commit SHA is peeled with ^{commit} to make sure it means the commit.
+func pluginCheckoutRevision(version string) string {
+	if fullObjectID.MatchString(version) {
+		return version + "^{commit}"
+	}
+	return version
 }
