@@ -130,6 +130,13 @@ func (r *JobRunner) Run(ctx context.Context, ignoreAgentInDispatches *bool) (err
 
 	job := r.conf.Job
 
+	if len(job.Warnings) > 0 {
+		_, _ = fmt.Fprintln(r.jobLogs, "+++ ⚠️ Warnings from Buildkite")
+		for _, w := range job.Warnings {
+			_, _ = fmt.Fprintln(r.jobLogs, w.Message)
+		}
+	}
+
 	if r.conf.JWKS == nil && job.Step.Signature != nil {
 		r.verificationFailureLogs(
 			VerificationBehaviourBlock,
