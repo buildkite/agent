@@ -13,17 +13,12 @@ steps:
             - organization_id
             - pipeline_slug
             - build_branch
-      - ecr#v2.7.0:
-          login: true
-          account-ids: "032379705303"
-      - docker#v5.8.0:
-          image: "032379705303.dkr.ecr.us-east-1.amazonaws.com/deploytools:2022.07"
-          environment:
-            - "AWS_ACCESS_KEY_ID"
-            - "AWS_SECRET_ACCESS_KEY"
-            - "AWS_SESSION_TOKEN"
-          propagate-environment: true
+      - docker-compose#v5.15.0:
+          config: .buildkite/docker-compose.release.yml
+          run: release
           mount-buildkite-agent: true
+          propagate-environment: true
+          propagate-aws-auth-tokens: true
 
   - name: ":octocat: :rocket: Create Github Release (if necessary)"
     command: ".buildkite/steps/github-release.sh"
@@ -37,17 +32,12 @@ steps:
             - organization_id
             - pipeline_slug
             - build_branch
-      - ecr#v2.7.0:
-          login: true
-          account-ids: "032379705303"
-      - docker#v5.8.0:
-          environment:
-            - "AWS_ACCESS_KEY_ID"
-            - "AWS_SECRET_ACCESS_KEY"
-            - "AWS_SESSION_TOKEN"
-          image: "032379705303.dkr.ecr.us-east-1.amazonaws.com/deploytools:2022.07"
-          propagate-environment: true
+      - docker-compose#v5.15.0:
+          config: .buildkite/docker-compose.release.yml
+          run: release
           mount-buildkite-agent: true
+          propagate-environment: true
+          propagate-aws-auth-tokens: true
 
   - name: ":redhat: Publish RPM Package"
     command: ".buildkite/steps/publish-rpm-package.sh"
@@ -62,17 +52,12 @@ steps:
             - organization_id
             - pipeline_slug
             - build_branch
-      - docker#v5.8.0:
-          environment:
-            - "AWS_ACCESS_KEY_ID"
-            - "AWS_SECRET_ACCESS_KEY"
-            - "AWS_SESSION_TOKEN"
-          image: "buildkite/agent:3.55.0-ubuntu"
-          entrypoint: bash
-          propagate-environment: true
+      - docker-compose#v5.15.0:
+          config: .buildkite/docker-compose.release.yml
+          run: release
           mount-buildkite-agent: true
-          volumes:
-            - "/yum.buildkite.com"
+          propagate-environment: true
+          propagate-aws-auth-tokens: true
     retry:
       automatic:
         - exit_status: 1
@@ -91,19 +76,12 @@ steps:
             - organization_id
             - pipeline_slug
             - build_branch
-      - ecr#v2.7.0:
-          login: true
-          account-ids: "032379705303"
-      - docker#v5.8.0:
-          environment:
-            - "AWS_ACCESS_KEY_ID"
-            - "AWS_SECRET_ACCESS_KEY"
-            - "AWS_SESSION_TOKEN"
-          image: "032379705303.dkr.ecr.us-east-1.amazonaws.com/deploytools:2022.07"
-          propagate-environment: true
+      - docker-compose#v5.15.0:
+          config: .buildkite/docker-compose.release.yml
+          run: release
           mount-buildkite-agent: true
-          tmpfs:
-            - "/root/.gnupg"
+          propagate-environment: true
+          propagate-aws-auth-tokens: true
 
   - group: ":docker: Publish Docker Images"
     steps:
@@ -148,17 +126,12 @@ steps:
             - organization_id
             - pipeline_slug
             - build_branch
-      - ecr#v2.7.0:
-          login: true
-          account-ids: "032379705303"
-      - docker#v5.8.0:
-          environment:
-            - "AWS_ACCESS_KEY_ID"
-            - "AWS_SECRET_ACCESS_KEY"
-            - "AWS_SESSION_TOKEN"
-          image: "032379705303.dkr.ecr.us-east-1.amazonaws.com/deploytools:2022.07"
-          propagate-environment: true
+      - docker-compose#v5.15.0:
+          config: .buildkite/docker-compose.release.yml
+          run: release
           mount-buildkite-agent: true
+          propagate-environment: true
+          propagate-aws-auth-tokens: true
 
   # Runs after the wait above, so the GitHub release and Docker Hub images that
   # the overlay build consumes have been published. Soft-failed like the
