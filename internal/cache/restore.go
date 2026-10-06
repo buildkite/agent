@@ -420,6 +420,8 @@ func displayCacheKey(key []api.CacheKeyPart) string {
 
 // invalidateStaleEntry uses the retrieve response to expire a cache entry whose
 // blob is missing or fails digest verification, so a subsequent save re-uploads it.
+// The expire is conditional on the retrieved upload ID, so an entry re-saved
+// by another job since the retrieve is left alone.
 // Returns whether an entry was actually deleted — a successful (2xx) call can
 // still be an idempotent no-op, which must not be reported as invalidated.
 func (c *client) invalidateStaleEntry(ctx context.Context, retrieveResp api.CacheEntryRetrieveResp) bool {
@@ -432,6 +434,7 @@ func (c *client) invalidateStaleEntry(ctx context.Context, retrieveResp api.Cach
 		TargetPaths: retrieveResp.TargetPaths,
 		CacheKey:    retrieveResp.CacheKey,
 		Scopes:      retrieveResp.Scopes,
+		UploadID:    retrieveResp.UploadID,
 	}
 	var existed bool
 	err := roko.NewRetrier(
@@ -497,6 +500,7 @@ func (c *client) confirmRestoreSucceeded(ctx context.Context, retrieveResp api.C
 		TargetPaths: retrieveResp.TargetPaths,
 		CacheKey:    retrieveResp.CacheKey,
 		Scopes:      retrieveResp.Scopes,
+		UploadID:    retrieveResp.UploadID,
 		Stats:       stats,
 	}
 	err := roko.NewRetrier(
@@ -523,12 +527,13 @@ func (c *client) confirmRestoreSucceeded(ctx context.Context, retrieveResp api.C
 
 // missCompleteMessage builds the progress text for a stale-entry miss,
 // distinguishing an actual deletion from a no-op so callers aren't told an
-// entry was invalidated when it wasn't.
+// entry was invalidated when it wasn't. A no-op usually means another job
+// already removed or re-saved the entry; a failed expire logs its own warning.
 func missCompleteMessage(reason string, invalidated bool) string {
 	if invalidated {
 		return fmt.Sprintf("Cache miss (%s, invalidated stale entry)", reason)
 	}
-	return fmt.Sprintf("Cache miss (%s, stale entry could not be invalidated)", reason)
+	return fmt.Sprintf("Cache miss (%s, entry may already have been removed or replaced by a newer save)", reason)
 }
 
 // downloadCache downloads a cache archive from storage
