@@ -222,7 +222,7 @@ in_job 'buildkite-agent cache exec --name build -- ./build.sh > ../stdout 2> ../
 expect "a hit skips the command" test "$(runs)" -eq "$runs_before"
 expect "and restores target_paths" test -f dist/input.txt
 expect "and replays the recorded stdout" file_has "$WORK/stdout" "$first_run"
-expect "and replays stderr, after stdout's header" file_has "$WORK/stdout" "build warning"
+expect "and replays the recorded stderr" grep -qF -- "build warning" "$WORK/stdout" "$WORK/stderr"
 issue "replay sends the command's stderr to stdout" file_has "$WORK/stdout" "build warning"
 
 section "a failing command"
