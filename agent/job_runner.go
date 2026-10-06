@@ -658,11 +658,18 @@ BUILDKITE_AGENT_JWKS_KEY_ID`
 	// setCheckoutEnv then decides precedence against backend job env: from-job keeps
 	// agent config authoritative on the emitted side, none lets job env win. The
 	// checkout flags above are agent-authoritative in both from-job and strict (they
-	// were always emitted), so only these five differ by mode here.
+	// were always emitted), so only these six differ by mode here.
+	//
+	// BUILDKITE_GIT_MIRRORS_REMOVE_STALE_MAINTENANCE_FILES is a toggle like
+	// skip-fetch, not an agent-only mirror-infra var like the others above: the
+	// backend sets it in the job env for Hosted Agents, where the ephemeral
+	// instance makes the removal safe, so the agent must let a job env value
+	// through when its own config leaves it off.
 	if checkoutMode == envutil.CheckoutOverrideStrict {
 		setEnv("BUILDKITE_GIT_SUBMODULES", fmt.Sprint(r.conf.AgentConfiguration.GitSubmodules))
 		setEnv("BUILDKITE_SKIP_CHECKOUT", fmt.Sprint(r.conf.AgentConfiguration.SkipCheckout))
 		setEnv("BUILDKITE_GIT_SKIP_FETCH_EXISTING_COMMITS", fmt.Sprint(r.conf.AgentConfiguration.GitSkipFetchExistingCommits))
+		setEnv("BUILDKITE_GIT_MIRRORS_REMOVE_STALE_MAINTENANCE_FILES", fmt.Sprint(r.conf.AgentConfiguration.GitMirrorsRemoveStaleMaintenanceFiles))
 		setEnv("BUILDKITE_GIT_FETCH_BASE_BRANCH", cmp.Or(r.conf.AgentConfiguration.GitFetchBaseBranch, job.GitFetchBaseBranchOff))
 		// A zero timeout means no checkout timeout; emit it anyway under strict so
 		// a job-supplied value can't reintroduce one past the agent config.
@@ -681,6 +688,9 @@ BUILDKITE_AGENT_JWKS_KEY_ID`
 		}
 		if r.conf.AgentConfiguration.GitSkipFetchExistingCommits {
 			setCheckoutEnv("BUILDKITE_GIT_SKIP_FETCH_EXISTING_COMMITS", "true")
+		}
+		if r.conf.AgentConfiguration.GitMirrorsRemoveStaleMaintenanceFiles {
+			setCheckoutEnv("BUILDKITE_GIT_MIRRORS_REMOVE_STALE_MAINTENANCE_FILES", "true")
 		}
 		if mode := r.conf.AgentConfiguration.GitFetchBaseBranch; mode != "" && mode != job.GitFetchBaseBranchOff {
 			setCheckoutEnv("BUILDKITE_GIT_FETCH_BASE_BRANCH", mode)

@@ -340,6 +340,19 @@ func TestCheckoutScopedJobEnvOverrideHonorsCheckoutOverrideMode(t *testing.T) {
 			wantIgnoredEnvVars: []string{"BUILDKITE_GIT_SKIP_FETCH_EXISTING_COMMITS"},
 		},
 		{
+			name:    "from_job_locks_mirrors_remove_stale_maintenance_files_to_agent_config",
+			varName: "BUILDKITE_GIT_MIRRORS_REMOVE_STALE_MAINTENANCE_FILES",
+			jobEnv: map[string]string{
+				"BUILDKITE_GIT_MIRRORS_REMOVE_STALE_MAINTENANCE_FILES": "false",
+			},
+			agentCfg: agent.AgentConfiguration{
+				GitMirrorsRemoveStaleMaintenanceFiles: true,
+				CheckoutOverrideMode:                  env.CheckoutOverrideFromJob,
+			},
+			wantEnvValue:       "true",
+			wantIgnoredEnvVars: []string{"BUILDKITE_GIT_MIRRORS_REMOVE_STALE_MAINTENANCE_FILES"},
+		},
+		{
 			name:    "from_job_locks_checkout_timeout_to_agent_config",
 			varName: "BUILDKITE_GIT_CHECKOUT_TIMEOUT",
 			jobEnv: map[string]string{
@@ -400,6 +413,20 @@ func TestCheckoutScopedJobEnvOverrideHonorsCheckoutOverrideMode(t *testing.T) {
 			agentCfg: agent.AgentConfiguration{
 				GitSkipFetchExistingCommits: false,
 				CheckoutOverrideMode:        env.CheckoutOverrideFromJob,
+			},
+			wantEnvValue: "true",
+		},
+		{
+			// This is how Hosted Agents turn the feature on: the backend sets the
+			// var in the job env and the agent config leaves it at the default.
+			name:    "from_job_allows_job_env_mirrors_remove_stale_maintenance_files_when_agent_default_off",
+			varName: "BUILDKITE_GIT_MIRRORS_REMOVE_STALE_MAINTENANCE_FILES",
+			jobEnv: map[string]string{
+				"BUILDKITE_GIT_MIRRORS_REMOVE_STALE_MAINTENANCE_FILES": "true",
+			},
+			agentCfg: agent.AgentConfiguration{
+				GitMirrorsRemoveStaleMaintenanceFiles: false,
+				CheckoutOverrideMode:                  env.CheckoutOverrideFromJob,
 			},
 			wantEnvValue: "true",
 		},
@@ -634,6 +661,31 @@ func TestCheckoutScopedJobEnvOverrideHonorsCheckoutOverrideMode(t *testing.T) {
 			agentCfg: agent.AgentConfiguration{
 				GitSkipFetchExistingCommits: true,
 				CheckoutOverrideMode:        env.CheckoutOverrideNone,
+			},
+			wantEnvValue: "false",
+		},
+		{
+			name:    "strict_locks_mirrors_remove_stale_maintenance_files_to_agent_config",
+			varName: "BUILDKITE_GIT_MIRRORS_REMOVE_STALE_MAINTENANCE_FILES",
+			jobEnv: map[string]string{
+				"BUILDKITE_GIT_MIRRORS_REMOVE_STALE_MAINTENANCE_FILES": "true",
+			},
+			agentCfg: agent.AgentConfiguration{
+				GitMirrorsRemoveStaleMaintenanceFiles: false,
+				CheckoutOverrideMode:                  env.CheckoutOverrideStrict,
+			},
+			wantEnvValue:       "false",
+			wantIgnoredEnvVars: []string{"BUILDKITE_GIT_MIRRORS_REMOVE_STALE_MAINTENANCE_FILES"},
+		},
+		{
+			name:    "none_allows_job_env_to_override_mirrors_remove_stale_maintenance_files",
+			varName: "BUILDKITE_GIT_MIRRORS_REMOVE_STALE_MAINTENANCE_FILES",
+			jobEnv: map[string]string{
+				"BUILDKITE_GIT_MIRRORS_REMOVE_STALE_MAINTENANCE_FILES": "false",
+			},
+			agentCfg: agent.AgentConfiguration{
+				GitMirrorsRemoveStaleMaintenanceFiles: true,
+				CheckoutOverrideMode:                  env.CheckoutOverrideNone,
 			},
 			wantEnvValue: "false",
 		},

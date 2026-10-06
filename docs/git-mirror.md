@@ -220,6 +220,60 @@ Git must process ever more objects, and potentially it could fill the disk.
 But it might be preferable to repeatedly deleting and recreating checkout
 directories.
 
+## What happens when auto maintenance is interrupted?
+
+`git fetch` runs `git maintenance run --auto` when it finishes, and when the
+mirror has accumulated enough loose objects or packs, that starts a `git gc`
+that detaches from the fetch and keeps running after the fetch (and the agent's
+mirror update lock) has finished. On a long-lived host that's fine: gc finishes
+in the background. But if the host is shut down while gc is still repacking,
+for example an ephemeral Hosted Agents instance whose job ended before gc did,
+and the mirror directory is kept (such as on a cache volume), gc leaves these
+behind:
+
+- `objects/pack/tmp_pack_*` (and `tmp_idx_*`, `tmp_rev_*`, `tmp_mtimes_*`,
+  `tmp_bitmap_*`): the partial pack it was writing. This is the expensive one:
+  a partial pack can be a large fraction of the mirror's size. Git only removes
+  these itself when `git prune` finds them older than `gc.pruneExpire` (two
+  weeks by default), so every interrupted gc adds another one.
+- `objects/pack/.tmp-<pid>-pack-*`: a finished pack that `git repack` had not
+  yet renamed into place. Nothing in Git ever removes these.
+- `gc.pid`: the lock `git gc` holds while running. If it names another
+  hostname, a later `git gc --auto` assumes that gc is still running and does
+  nothing for 12 hours.
+- `objects/maintenance.lock`: the lock `git maintenance` holds while running.
+  While it exists, `git maintenance run --auto` silently does nothing, so auto
+  maintenance is permanently disabled for that mirror.
+- `gc.log.lock`: on Git before 2.47, the lock a detached gc holds while
+  running; a later detached gc dies at startup while it exists.
+
+`--git-mirrors-remove-stale-maintenance-files`
+(`BUILDKITE_GIT_MIRRORS_REMOVE_STALE_MAINTENANCE_FILES=true`) makes the agent
+remove all of these from a mirror (including submodule mirrors) once it holds
+the mirror update lock and before it fetches, and prints what it removed to the
+job log. It only does this the first time a job uses a given mirror: a
+checkout retry or a submodule URL that appears twice updates the same mirror
+again within the job, and by then the job's own earlier fetch may have started
+a gc that is still writing these files. It also records the count and total
+size on the `git.mirror.update` tracing span as
+`git.mirror.stale_maintenance_files.count` and
+`git.mirror.stale_maintenance_files.bytes`.
+
+The agent does not remove `gc.log`. That file is written by a gc that ran to
+completion but reported errors (usually "too many unreachable loose objects"),
+and `git gc --auto` skips running while it exists so the same failing gc is
+not repeated every fetch. Git expires it after `gc.logExpiry` (one day).
+
+The flag is off by default and must stay off on long-lived hosts. The agent
+makes no attempt to check whether the Git process that created a file is still
+running: a running gc writes to exactly these files, and removing them from
+under it could corrupt the pack it is writing or let two gc runs overlap. The
+mirror update lock doesn't help, because gc detaches from the fetch that
+started it. So the flag is only safe where nothing else can be running Git
+against the mirror, which on Hosted Agents is guaranteed by each instance
+running one job and then being discarded. The agent doesn't try to detect that
+situation itself; whoever starts the agent is responsible for it.
+
 ## Did I see something about `--dissociate`?
 
 `git clone --reference <path> --dissociate` is like `--reference`, but makes

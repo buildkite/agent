@@ -78,6 +78,7 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string, attem
 	// Create a unique directory for the repository mirror
 	mirrorDir := filepath.Join(e.GitMirrorsPath, dirForRepository(repository))
 	isMainRepository := repository == e.Repository
+	firstVisit := e.markMirrorVisited(mirrorDir)
 
 	// Create the mirrors path if it doesn't exist
 	if baseDir := filepath.Dir(mirrorDir); !osutil.FileExists(baseDir) {
@@ -285,6 +286,16 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string, attem
 			finalErr = errors.Join(finalErr, fmt.Errorf("unable to release update lock: %w", err))
 		}
 	}()
+
+	// Clean up after an interrupted gc before anything else touches the mirror,
+	// and even if the commit turns out to be present already: the leftovers
+	// cost disk space and suppress the auto maintenance the fetch below would
+	// otherwise start. Only on this job's first use of the mirror: a fetch on
+	// an earlier visit may have started a gc that is still running. Opt-in
+	// only; see removeStaleGitMaintenanceFiles.
+	if e.GitMirrorsRemoveStaleMaintenanceFiles && firstVisit {
+		e.removeStaleGitMaintenanceFiles(ctx, mirrorDir)
+	}
 
 	commitAlreadyPresent := false
 	if isMainRepository {

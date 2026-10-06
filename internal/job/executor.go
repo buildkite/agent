@@ -77,6 +77,13 @@ type Executor struct {
 	// Directories to clean up at end of job execution
 	cleanupDirs []string
 
+	// Mirror directories this job has already cloned or fetched into. A fetch
+	// can start a detached git gc that outlives it, so stale maintenance
+	// files are only removed from a mirror the first time this job uses it;
+	// anything found on a later visit (a checkout retry, a repeated submodule
+	// URL) may belong to a gc this same job started.
+	visitedMirrorDirs map[string]struct{}
+
 	// A channel to track cancellation
 	cancelMu  sync.Mutex
 	cancelCh  chan struct{}

@@ -107,21 +107,26 @@ var protectedEnv = map[string]protection{
 // BUILDKITE_GIT_FETCH_BASE_BRANCH ("off", "optimistic", "strict") are enums, not
 // injection vectors, but the backend exposes them under `checkout:` alongside the
 // flag vars, so they're governed by the mode too: only none lets the backend job
-// env and secrets select those modes, matching the other checkout settings. Vars here must not also appear in protectedEnv; the two maps are
-// disjoint.
+// env and secrets select those modes, matching the other checkout settings.
+// BUILDKITE_GIT_MIRRORS_REMOVE_STALE_MAINTENANCE_FILES is the one mirror var
+// that is not agent-only: the backend sets it in the job env for Hosted Agents
+// (where the ephemeral instance makes the removal safe), so it is a toggle
+// governed by the mode like skip-fetch, and strict locks it to agent config.
+// Vars here must not also appear in protectedEnv; the two maps are disjoint.
 var checkoutOverrideScope = map[string]struct{}{
-	"BUILDKITE_GIT_CHECKOUT_FLAGS":              {},
-	"BUILDKITE_GIT_CHECKOUT_TIMEOUT":            {},
-	"BUILDKITE_GIT_CLEAN_FLAGS":                 {},
-	"BUILDKITE_GIT_CLONE_FLAGS":                 {},
-	"BUILDKITE_GIT_COMMIT_VERIFICATION":         {},
-	"BUILDKITE_GIT_FETCH_BASE_BRANCH":           {},
-	"BUILDKITE_GIT_FETCH_FLAGS":                 {},
-	"BUILDKITE_GIT_SKIP_FETCH_EXISTING_COMMITS": {},
-	"BUILDKITE_GIT_SPARSE_CHECKOUT_MODE":        {},
-	"BUILDKITE_GIT_SPARSE_CHECKOUT_PATHS":       {},
-	"BUILDKITE_GIT_SUBMODULES":                  {},
-	"BUILDKITE_SKIP_CHECKOUT":                   {},
+	"BUILDKITE_GIT_CHECKOUT_FLAGS":                         {},
+	"BUILDKITE_GIT_CHECKOUT_TIMEOUT":                       {},
+	"BUILDKITE_GIT_CLEAN_FLAGS":                            {},
+	"BUILDKITE_GIT_CLONE_FLAGS":                            {},
+	"BUILDKITE_GIT_COMMIT_VERIFICATION":                    {},
+	"BUILDKITE_GIT_FETCH_BASE_BRANCH":                      {},
+	"BUILDKITE_GIT_FETCH_FLAGS":                            {},
+	"BUILDKITE_GIT_MIRRORS_REMOVE_STALE_MAINTENANCE_FILES": {},
+	"BUILDKITE_GIT_SKIP_FETCH_EXISTING_COMMITS":            {},
+	"BUILDKITE_GIT_SPARSE_CHECKOUT_MODE":                   {},
+	"BUILDKITE_GIT_SPARSE_CHECKOUT_PATHS":                  {},
+	"BUILDKITE_GIT_SUBMODULES":                             {},
+	"BUILDKITE_SKIP_CHECKOUT":                              {},
 }
 
 // checkoutJobEnvFromJobFloor lists the checkout-scoped vars whose backend job env

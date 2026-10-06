@@ -178,6 +178,11 @@ type ExecutorConfig struct {
 	// Skip updating the Git mirror before using it
 	GitMirrorsSkipUpdate bool `env:"BUILDKITE_GIT_MIRRORS_SKIP_UPDATE"`
 
+	// Remove files left behind by an interrupted git gc / git maintenance from
+	// a mirror before updating it. Only safe when nothing else can be running
+	// Git against the mirror (see removeStaleGitMaintenanceFiles).
+	GitMirrorsRemoveStaleMaintenanceFiles bool `env:"BUILDKITE_GIT_MIRRORS_REMOVE_STALE_MAINTENANCE_FILES"`
+
 	// Path to the buildkite-agent binary
 	BinPath string
 

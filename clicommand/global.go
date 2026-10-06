@@ -241,7 +241,7 @@ var (
 	CheckoutOverrideModeFlag = &cli.StringFlag{
 		Name:    "checkout-override-mode",
 		Value:   "from-job",
-		Usage:   fmt.Sprintf("Controls which sources may override the agent's checkout settings; one of %v. ′strict′ makes the agent authoritative against pipeline/step env, secrets, hooks, plugins, and the Job API. ′from-job′ (default) lets hooks, plugins, and the Job API set checkout vars, blocks secrets, and keeps the agent's checkout flags authoritative over pipeline/step env; pipeline/step env may still set the checkout timeout, submodules, skip-checkout, and skip-fetch-existing-commits toggles that the agent leaves unset, matching earlier agent behaviour, and may set the sparse-checkout paths and mode outright. ′none′ additionally lets pipeline/step env and secrets set them. All mirror configuration and submodule clone config stay agent-authoritative in every mode. The checkout SSH key and Git LFS toggle are not governed by this flag and stay job-settable in every mode. Disabling command-eval forces this to ′strict′.", env.CheckoutOverrideModeNames),
+		Usage:   fmt.Sprintf("Controls which sources may override the agent's checkout settings; one of %v. ′strict′ makes the agent authoritative against pipeline/step env, secrets, hooks, plugins, and the Job API. ′from-job′ (default) lets hooks, plugins, and the Job API set checkout vars, blocks secrets, and keeps the agent's checkout flags authoritative over pipeline/step env; pipeline/step env may still set the checkout timeout, submodules, skip-checkout, skip-fetch-existing-commits, and git-mirrors-remove-stale-maintenance-files toggles that the agent leaves unset, matching earlier agent behaviour, and may set the sparse-checkout paths and mode outright. ′none′ additionally lets pipeline/step env and secrets set them. All other mirror configuration and submodule clone config stay agent-authoritative in every mode. The checkout SSH key and Git LFS toggle are not governed by this flag and stay job-settable in every mode. Disabling command-eval forces this to ′strict′.", env.CheckoutOverrideModeNames),
 		Sources: cli.EnvVars("BUILDKITE_CHECKOUT_OVERRIDE_MODE"),
 	}
 
@@ -332,6 +332,12 @@ var (
 		Name:    "git-mirrors-skip-update",
 		Usage:   "Skip updating the Git mirror (default: false)",
 		Sources: cli.EnvVars("BUILDKITE_GIT_MIRRORS_SKIP_UPDATE"),
+	}
+
+	GitMirrorsRemoveStaleMaintenanceFilesFlag = &cli.BoolFlag{
+		Name:    "git-mirrors-remove-stale-maintenance-files",
+		Usage:   "Before updating a Git mirror, remove files that an interrupted ′git gc′ or ′git maintenance′ left behind in it: temporary pack files under objects/pack, gc.pid, gc.log.lock and objects/maintenance.lock. No check is made for whether the Git process that created them is still running, so only enable this where nothing else can be running Git against the mirror, such as an ephemeral host with one agent per mirror (default: false)",
+		Sources: cli.EnvVars("BUILDKITE_GIT_MIRRORS_REMOVE_STALE_MAINTENANCE_FILES"),
 	}
 
 	GitSubmoduleCloneConfigFlag = &cli.StringSliceFlag{
