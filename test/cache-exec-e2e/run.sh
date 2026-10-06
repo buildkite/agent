@@ -214,7 +214,7 @@ section "miss, then hit"
 new_key
 in_job 'buildkite-agent cache exec --name build -- ./build.sh'
 expect "a miss runs the command" has "No cached result, running command"
-expect "and saves the files and the log as one entry" requested '^store target_paths=\[.dist., .\.buildkite-cache-exec-build\.log.\]'
+expect "and saves the files and the log as one entry" requested '^store target_paths=\[.dist., .\.buildkite-cache-exec-build\.v1\.log.\]'
 first_run=$(grep -o 'BUILD RAN [0-9]*' "$LOG")
 rm -rf dist
 runs_before=$(runs)
