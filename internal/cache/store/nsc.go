@@ -3,6 +3,7 @@ package store
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net/url"
@@ -241,6 +242,39 @@ func (n *NscStore) Download(ctx context.Context, key, filePath string) (*Transfe
 		RequestID:        "", // NSC doesn't expose request IDs
 		Duration:         duration,
 	}, nil
+}
+
+// Stat returns the size of the artifact for key via `nsc artifact describe`.
+// Only a LIVE (finalized, downloadable) artifact counts; any other status is
+// returned as an error. nsc reports a missing or expired artifact on stdout as
+// "<key> doesn't exist", with exit code 2, which maps to ErrBlobNotFound.
+func (n *NscStore) Stat(ctx context.Context, key string) (int64, error) {
+	if err := validateKey(key); err != nil {
+		return 0, fmt.Errorf("invalid key: %w", err)
+	}
+
+	result, err := n.run(ctx, "", n.artifactArgs("describe", key, "-o", "json")...)
+	if err != nil {
+		return 0, fmt.Errorf("failed to execute nsc describe command: %w", err)
+	}
+	if result.ExitCode != 0 {
+		if strings.Contains(result.Stdout, "doesn't exist") {
+			return 0, fmt.Errorf("%w: nsc key %s", ErrBlobNotFound, key)
+		}
+		return 0, fmt.Errorf("nsc describe failed with exit code %d: %s", result.ExitCode, strings.TrimSpace(result.Stderr+result.Stdout))
+	}
+
+	var desc struct {
+		Size   int64  `json:"size"`
+		Status string `json:"status"`
+	}
+	if err := json.Unmarshal([]byte(result.Stdout), &desc); err != nil {
+		return 0, fmt.Errorf("failed to parse nsc describe output: %w", err)
+	}
+	if desc.Status != "LIVE" {
+		return 0, fmt.Errorf("nsc artifact %s has status %q", key, desc.Status)
+	}
+	return desc.Size, nil
 }
 
 // RefreshRetention pushes the artifact's expiry out to at least retention from

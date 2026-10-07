@@ -86,6 +86,29 @@ func TestSaveWithClient_CacheEntryCreated(t *testing.T) {
 	}
 }
 
+// An entry created without an upload has no Transfer; logging it must not
+// dereference the nil pointer.
+func TestSaveWithClient_UploadSkipped(t *testing.T) {
+	t.Parallel()
+	ctx := t.Context()
+
+	mock := &mockCacheClient{
+		saveFunc: func(ctx context.Context, cacheID string) (SaveResult, error) {
+			return SaveResult{
+				CacheEntryCreated: true,
+				UploadSkipped:     true,
+				Key:               "test-key-v1",
+				Archive:           ArchiveMetrics{Size: 1024},
+			}, nil
+		},
+	}
+
+	err := saveWithClient(ctx, logger.Discard, mock, []string{"cache1"}, 1, false)
+	if err != nil {
+		t.Fatalf("saveWithClient(ctx, logger.Discard, mock, []string{\"cache1\"}, %d) error = %v, want nil", 1, err)
+	}
+}
+
 func TestSaveWithClient_CacheAlreadyExists(t *testing.T) {
 	t.Parallel()
 	ctx := t.Context()

@@ -223,8 +223,11 @@ func (c *client) Restore(ctx context.Context, cacheID string) (RestoreResult, er
 		if errors.Is(err, ErrDigestMismatch) {
 			// The blob doesn't match its fingerprint. downloadCache verified this
 			// before any target folder was touched, so existing files are intact.
-			// The blob will never verify, so expire the entry to let a subsequent
-			// save re-upload it, and let the build continue with a clean miss.
+			// The blob will never verify, so expire the entry and let the build
+			// continue with a clean miss. A subsequent save re-uploads unless the
+			// stored blob has the same size as the new archive, in which case save
+			// skips the upload and the bad blob stays until it expires (restore
+			// never refreshes its retention, as it never verifies).
 			slog.Warn("cache blob digest mismatch, treating as miss and invalidating entry",
 				"cache_id", cacheID, "err", err)
 			invalidated := c.invalidateStaleEntry(ctx, retrieveResp)
@@ -419,7 +422,7 @@ func displayCacheKey(key []api.CacheKeyPart) string {
 }
 
 // invalidateStaleEntry uses the retrieve response to expire a cache entry whose
-// blob is missing or fails digest verification, so a subsequent save re-uploads it.
+// blob is missing or fails digest verification, so a subsequent save recreates it.
 // The expire is conditional on the retrieved upload ID, so an entry re-saved
 // by another job since the retrieve is left alone.
 // Returns whether an entry was actually deleted — a successful (2xx) call can

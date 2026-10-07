@@ -538,6 +538,88 @@ func TestCacheIntegration_SaveAlreadyExists(t *testing.T) {
 	}
 }
 
+// A save under a new key whose archive is byte-identical to an earlier one
+// finds the blob already stored under its digest, so it creates the entry
+// without uploading again.
+func TestCacheIntegration_SaveSkipsUploadWhenBlobStored(t *testing.T) {
+	ctx := t.Context()
+
+	cacheClient, _, storageDir := setupTestCache(t, "local_file")
+	setKey := func(key string) {
+		cacheClient.caches[0].CacheKey = []configuration.KeyPart{{Source: configuration.SourceLiteral, Arg: key}}
+	}
+
+	first, err := cacheClient.Save(ctx, "test-cache")
+	if err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	if first.UploadSkipped || first.Transfer == nil {
+		t.Fatalf("first save: UploadSkipped = %v, Transfer = %v; want an upload", first.UploadSkipped, first.Transfer)
+	}
+	blobPath := filepath.Join(storageDir, first.Archive.Sha256Sum)
+
+	t.Run("same content under a new key skips the upload", func(t *testing.T) {
+		setKey("v2-test-key")
+
+		result, err := cacheClient.Save(ctx, "test-cache")
+		if err != nil {
+			t.Fatalf("Save: %v", err)
+		}
+		if !result.CacheEntryCreated || !result.UploadSkipped {
+			t.Errorf("CacheEntryCreated = %v, UploadSkipped = %v; want both true", result.CacheEntryCreated, result.UploadSkipped)
+		}
+		if result.Transfer != nil {
+			t.Errorf("Transfer = %+v, want nil when the upload is skipped", result.Transfer)
+		}
+		if result.Archive.Sha256Sum != first.Archive.Sha256Sum {
+			t.Fatalf("archive digest changed (%s != %s); content-addressing needs deterministic archives", result.Archive.Sha256Sum, first.Archive.Sha256Sum)
+		}
+
+		restored, err := cacheClient.Restore(ctx, "test-cache")
+		if err != nil {
+			t.Fatalf("Restore: %v", err)
+		}
+		if !restored.CacheRestored {
+			t.Error("the entry created without an upload should restore from the existing blob")
+		}
+	})
+
+	t.Run("a stored blob with a different size is re-uploaded", func(t *testing.T) {
+		setKey("v3-test-key")
+		if err := os.Truncate(blobPath, 10); err != nil {
+			t.Fatalf("truncate blob: %v", err)
+		}
+
+		result, err := cacheClient.Save(ctx, "test-cache")
+		if err != nil {
+			t.Fatalf("Save: %v", err)
+		}
+		if result.UploadSkipped {
+			t.Error("UploadSkipped = true, want a re-upload over the truncated blob")
+		}
+		fi, err := os.Stat(blobPath)
+		if err != nil {
+			t.Fatalf("stat blob: %v", err)
+		}
+		if fi.Size() != first.Archive.Size {
+			t.Errorf("blob size = %d, want %d after re-upload", fi.Size(), first.Archive.Size)
+		}
+	})
+
+	t.Run("force always uploads", func(t *testing.T) {
+		setKey("v4-test-key")
+		cacheClient.force = true
+
+		result, err := cacheClient.Save(ctx, "test-cache")
+		if err != nil {
+			t.Fatalf("Save: %v", err)
+		}
+		if result.UploadSkipped || result.Transfer == nil {
+			t.Errorf("UploadSkipped = %v, Transfer = %v; want an upload with --force", result.UploadSkipped, result.Transfer)
+		}
+	})
+}
+
 func TestCacheIntegration_RestoreCacheMiss(t *testing.T) {
 	ctx := t.Context()
 

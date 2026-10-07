@@ -214,6 +214,12 @@ func saveWithClient(ctx context.Context, l logger.Logger, c cacheOps, cacheIDs [
 					}
 
 					switch {
+					case result.UploadSkipped:
+						l.WithFields(
+							logger.StringField("cache_id", cacheID),
+							logger.StringField("cache_key", result.Key),
+							logger.StringField("archive_size", humanize.Bytes(uint64(result.Archive.Size))),
+						).Infof("Cache saved (archive already in store, upload skipped)")
 					case result.CacheEntryCreated:
 						l.WithFields(
 							logger.StringField("cache_id", cacheID),

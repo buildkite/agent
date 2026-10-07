@@ -118,6 +118,12 @@ type objectCopier interface {
 	CopyObject(ctx context.Context, input *s3.CopyObjectInput, opts ...func(*s3.Options)) (*s3.CopyObjectOutput, error)
 }
 
+// objectHeader is the subset of *s3.Client used by Stat, declared so it can be
+// tested with a fake.
+type objectHeader interface {
+	HeadObject(ctx context.Context, input *s3.HeadObjectInput, opts ...func(*s3.Options)) (*s3.HeadObjectOutput, error)
+}
+
 // isPreconditionFailed returns true when an error is an S3 412 PreconditionFailed.
 // This happens when:
 //
@@ -140,10 +146,13 @@ func isPreconditionFailed(err error) bool {
 	return false
 }
 
-// isNotFound reports whether err indicates the S3 object does not exist.
+// isNotFound reports whether err indicates the S3 object does not exist:
+// GetObject returns *types.NoSuchKey, while HeadObject (which has no response
+// body to carry an error code) returns *types.NotFound.
 func isNotFound(err error) bool {
 	var nsk *types.NoSuchKey
-	return errors.As(err, &nsk)
+	var nf *types.NotFound
+	return errors.As(err, &nsk) || errors.As(err, &nf)
 }
 
 // downloadWithRetry runs the multipart download, retrying on S3 412
@@ -179,6 +188,7 @@ func downloadWithRetry(ctx context.Context, r *roko.Retrier, d objectDownloader,
 // S3Blob implements the Blob interface using AWS S3
 type S3Blob struct {
 	client              objectCopier
+	header              objectHeader
 	uploader            *manager.Uploader   //nolint:staticcheck // SA1019: pending migration to transfermanager
 	downloader          *manager.Downloader //nolint:staticcheck // SA1019: pending migration to transfermanager
 	bucketName          string
@@ -253,6 +263,7 @@ func NewS3Blob(ctx context.Context, s3url string) (*S3Blob, error) {
 
 	return &S3Blob{
 		client:              client,
+		header:              client,
 		uploader:            uploader,
 		downloader:          downloader,
 		bucketName:          opts.Bucket,
@@ -474,6 +485,26 @@ func (b *S3Blob) Download(ctx context.Context, key, destPath string) (*TransferI
 		PartCount:        actualPartCount,
 		Concurrency:      b.downloadConcurrency,
 	}, nil
+}
+
+// Stat returns the size of the S3 object for key using HeadObject.
+//
+// A missing object maps to ErrBlobNotFound only when S3 reports 404, which
+// requires s3:ListBucket; without it S3 returns 403 for a missing object, and
+// that surfaces as a plain error.
+func (b *S3Blob) Stat(ctx context.Context, key string) (int64, error) {
+	fullKey := b.getFullKey(key)
+	out, err := b.header.HeadObject(ctx, &s3.HeadObjectInput{
+		Bucket: aws.String(b.bucketName),
+		Key:    aws.String(fullKey),
+	})
+	if err != nil {
+		if isNotFound(err) {
+			return 0, fmt.Errorf("%w: s3 key %s: %w", ErrBlobNotFound, fullKey, err)
+		}
+		return 0, fmt.Errorf("failed to head S3 object %s: %w", fullKey, err)
+	}
+	return aws.ToInt64(out.ContentLength), nil
 }
 
 // RefreshRetention extends an object's effective TTL by performing CopyObject
