@@ -356,6 +356,12 @@ steps:
                 - AWS_ACCESS_KEY_ID
                 - AWS_SECRET_ACCESS_KEY
                 - AWS_SESSION_TOKEN
+                - BUILDKITE_AGENT_JOB_API_SOCKET
+                - BUILDKITE_AGENT_JOB_API_TOKEN
+              # cache exec redacts output through the Job API before saving it.
+              expand-volume-vars: true
+              volumes:
+                - "$$BUILDKITE_AGENT_JOB_API_SOCKET:$$BUILDKITE_AGENT_JOB_API_SOCKET"
           - generate-provenance-attestation#v1.1.0:
               artifacts: "pkg/*"
               attestation_name: "buildkite-agent-{{matrix.os}}-{{matrix.arch}}.build-attestation.json"
