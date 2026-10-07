@@ -388,10 +388,10 @@ func TestRunExec_CacheKeyFailure(t *testing.T) {
 }
 
 func TestReplayHeader(t *testing.T) {
-	if got, want := replayHeader(103*time.Second), "+++ ⚡ \x1b[1;32mCache hit saved 1m43s\x1b[0m: replaying output, the command was not run"; got != want {
+	if got, want := replayHeader(103*time.Second), "+++ ⚡ \x1b[1;32mCache exec saved 1m43s\x1b[0m: replaying output, the command was not run"; got != want {
 		t.Errorf("replayHeader(1m43s) = %q, want %q", got, want)
 	}
-	if got, want := replayHeader(-time.Second), "+++ :package: Cache hit: replaying output, the command was not run"; got != want {
+	if got, want := replayHeader(-time.Second), "+++ :package: Cache exec: replaying output, the command was not run"; got != want {
 		t.Errorf("replayHeader(-1s) = %q, want %q", got, want)
 	}
 }

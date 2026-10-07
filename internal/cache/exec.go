@@ -157,9 +157,9 @@ func replay(path string, restoreTook time.Duration, stdout, stderr io.Writer) bo
 // time saved (Buildkite renders ANSI colours in group titles).
 func replayHeader(saved time.Duration) string {
 	if saved < time.Second {
-		return "+++ :package: Cache hit: replaying output, the command was not run"
+		return "+++ :package: Cache exec: replaying output, the command was not run"
 	}
-	return fmt.Sprintf("+++ ⚡ \x1b[1;32mCache hit saved %s\x1b[0m: replaying output, the command was not run", saved.Round(time.Second))
+	return fmt.Sprintf("+++ ⚡ \x1b[1;32mCache exec saved %s\x1b[0m: replaying output, the command was not run", saved.Round(time.Second))
 }
 
 // recorder keeps the command's combined output, up to maxOutput, and whether it ended mid-line.
