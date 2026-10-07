@@ -17,7 +17,6 @@ echo '--- Configuring gnupg'
 
 echo "confirming gnupg config is stored in memory, not on disk"
 
-apk add --update findmnt
 if ! findmnt --source tmpfs --target /root/.gnupg; then
   echo "/root/.gnupg must be mounted as tmpfs to ensure private keys aren't written to disk"
   exit 1
@@ -61,9 +60,6 @@ echo '--- Downloading built debian packages'
 rm -rf deb
 mkdir -p deb
 buildkite-agent artifact download --build "${artifacts_build}" "deb/*.deb" deb/
-
-echo '--- Installing dependencies'
-bundle install
 
 # Loop over all the .deb files and publish them
 for file in deb/*.deb; do

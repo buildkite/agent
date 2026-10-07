@@ -188,6 +188,7 @@ func (m *mockAPIClient) CacheEntryRetrieve(ctx context.Context, registry string,
 			Fallback:    false,
 			ExpiresAt:   entry.expiresAt,
 			Scopes:      entry.scopes,
+			UploadID:    entry.uploadID,
 		}, true, nil, nil
 	}
 
@@ -203,7 +204,13 @@ func (m *mockAPIClient) CacheEntryExpire(ctx context.Context, registry string, r
 	}
 
 	addr := cacheAddr(req.TargetPaths, req.CacheKey)
-	_, existed := reg.cache[addr]
+	entry, existed := reg.cache[addr]
+
+	// Mirror the backend's conditional delete: an entry with a different
+	// upload ID was re-saved since the retrieve, so leave it alone.
+	if existed && req.UploadID != "" && entry.uploadID != req.UploadID {
+		return api.CacheEntryExpireResp{Existed: false}, nil, nil
+	}
 
 	// Mirror the backend's delete_item so a subsequent save
 	// re-uploads the invalidated entry.
@@ -228,8 +235,10 @@ func (m *mockAPIClient) CacheEntryConfirm(ctx context.Context, registry string, 
 		return api.CacheEntryConfirmResp{}, nil, fmt.Errorf("registry not found: %s", registry)
 	}
 
-	// Mirror the backend refreshing the entry's retention.
-	if entry, exists := reg.cache[cacheAddr(req.TargetPaths, req.CacheKey)]; exists {
+	// Mirror the backend refreshing the entry's retention, unless it was
+	// re-saved since the retrieve.
+	if entry, exists := reg.cache[cacheAddr(req.TargetPaths, req.CacheKey)]; exists &&
+		(req.UploadID == "" || entry.uploadID == req.UploadID) {
 		entry.expiresAt = time.Now().Add(7 * 24 * time.Hour)
 	}
 	return api.CacheEntryConfirmResp{Message: "Restore confirmed"}, nil, nil
@@ -760,6 +769,9 @@ func TestCacheIntegration_RestoreMissingBlobInvalidates(t *testing.T) {
 	got := mockClient.expireCalls[0]
 	if len(got.CacheKey) != 1 || got.CacheKey[0].Value != "v1-test-key" {
 		t.Errorf("expire targeted cache_key %+v, want single part v1-test-key", got.CacheKey)
+	}
+	if want := mockClient.commitCalls[0].UploadID; got.UploadID != want {
+		t.Errorf("expire upload_id = %q, want %q from save", got.UploadID, want)
 	}
 	if len(mockClient.confirmCalls) != 0 {
 		t.Errorf("confirm calls = %d, want 0 for a restore that ended in invalidation, not success", len(mockClient.confirmCalls))

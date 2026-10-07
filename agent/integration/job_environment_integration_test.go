@@ -1147,3 +1147,48 @@ func TestArtifactUploadConcurrencyFromJobEnvIsPreservedWhenAgentConfigUnset(t *t
 		t.Fatalf("runJob() error = %v", err)
 	}
 }
+
+func TestJobWarnings_AreWrittenToJobLog(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	jobID := "job-with-warnings"
+	job := &api.Job{
+		ID:                 jobID,
+		ChunksMaxSizeBytes: 1024,
+		Token:              "bkaj_job-token",
+		Warnings: []api.Warning{
+			{Message: "buildkite-agent v3.90.0 is unsupported."},
+			{Message: "Another warning."},
+		},
+	}
+
+	mb := mockBootstrap(t)
+	defer mb.CheckAndClose(t) //nolint:errcheck // bintest logs to t
+	mb.Expect().Once().AndExitWith(0)
+
+	e := createTestAgentEndpoint()
+	server := e.server()
+	defer server.Close()
+
+	err := runJob(t, ctx, testRunJobConfig{
+		job:           job,
+		server:        server,
+		agentCfg:      agent.AgentConfiguration{},
+		mockBootstrap: mb,
+	})
+	if err != nil {
+		t.Fatalf("runJob() error = %v", err)
+	}
+
+	logs := e.logsFor(t, jobID)
+	for _, want := range []string{
+		"+++ ⚠️ Warnings from Buildkite\n",
+		"buildkite-agent v3.90.0 is unsupported.\n",
+		"Another warning.\n",
+	} {
+		if !strings.Contains(logs, want) {
+			t.Errorf("e.logsFor(t, %q) = %q, want it to contain %q", jobID, logs, want)
+		}
+	}
+}
