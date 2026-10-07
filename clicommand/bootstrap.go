@@ -90,6 +90,7 @@ type BootstrapConfig struct {
 	GitMirrorCheckoutMode        string        `cli:"git-mirror-checkout-mode"`
 	GitMirrorsLockTimeout        int           `cli:"git-mirrors-lock-timeout"`
 	GitMirrorsSkipUpdate         bool          `cli:"git-mirrors-skip-update"`
+	GitMirrorsLFSCache           bool          `cli:"git-mirrors-lfs-cache"`
 	GitSubmoduleCloneConfig      []string      `cli:"git-submodule-clone-config" normalize:"list"`
 	CheckoutOverrideMode         string        `cli:"checkout-override-mode"`
 	BinPath                      string        `cli:"bin-path" normalize:"filepath"`
@@ -282,6 +283,7 @@ var BootstrapCommand = &cli.Command{
 		GitMirrorCheckoutModeFlag,
 		GitMirrorsLockTimeoutFlag,
 		GitMirrorsSkipUpdateFlag,
+		GitMirrorsLFSCacheFlag,
 		GitSubmoduleCloneConfigFlag,
 		GitCheckoutTimeoutFlag,
 		GitSkipFetchExistingCommitsFlag,
@@ -509,6 +511,7 @@ var BootstrapCommand = &cli.Command{
 			GitMirrorsPath:               cfg.GitMirrorsPath,
 			GitMirrorCheckoutMode:        cfg.GitMirrorCheckoutMode,
 			GitMirrorsSkipUpdate:         cfg.GitMirrorsSkipUpdate,
+			GitMirrorsLFSCache:           cfg.GitMirrorsLFSCache,
 			GitRemoteMirrorURL:           cfg.GitRemoteMirrorURL,
 			GitSubmodules:                cfg.GitSubmodules,
 			GitSubmoduleCloneConfig:      cfg.GitSubmoduleCloneConfig,
