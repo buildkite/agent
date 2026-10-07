@@ -8,9 +8,9 @@
 # file store, and runs each case as a real `buildkite-agent bootstrap` job, so commands
 # get a real job log redactor and Job API.
 #
-# It starts with a showcase: a miss and a hit whose job output goes straight to the log,
-# so Buildkite shows cache exec's log groups and colours. Each later section's job
-# output follows its results in a collapsed group.
+# The build log shows only a showcase: a miss and a hit whose job output goes straight to
+# the log, so Buildkite shows cache exec's log groups and colours. The checks after it
+# run quietly; their results and job output are printed only if a check fails.
 #
 # Results:
 #   ok / FAIL   behaviour cache exec promises; any FAIL makes the script exit non-zero
@@ -31,9 +31,10 @@ trap 'kill "${REGISTRY_PID:-}" 2>/dev/null; rm -rf "$WORK"' EXIT
 
 # --- Setup ---------------------------------------------------------------------
 
-echo "Building the agent"
 # -buildvcs=false: CI mounts the checkout into a container as another user, and git refuses to read it.
-go -C "$REPO" build -buildvcs=false -o "$WORK/bin/buildkite-agent" . || exit 1
+if ! go -C "$REPO" build -buildvcs=false -o "$WORK/bin/buildkite-agent" . > "$WORK/build.log" 2>&1; then
+  echo "+++ :x: Building the agent failed"; cat "$WORK/build.log"; exit 1
+fi
 
 python3 "$HERE/fake_registry.py" "$WORK/port" "$REQUESTS" &
 REGISTRY_PID=$!
@@ -210,6 +211,10 @@ rm -rf dist
 
 # --- Cases ---------------------------------------------------------------------
 
+# Keep the build log to the showcase: the checks' output goes to a file, shown only on failure.
+RESULTS=$WORK/results.log
+exec 3>&1 > "$RESULTS" 2>&1
+
 section "miss, then hit"
 new_key
 in_job 'buildkite-agent cache exec --name build -- ./build.sh'
@@ -343,4 +348,8 @@ expect "--cache-fail-on-error fails instead" has "EXIT=1."
 show_output
 echo "+++ Summary"
 printf 'passed: %d  failed: %d  known issues: %d\n' "$PASSED" "$FAILED" "$ISSUES"
-[[ $FAILED -eq 0 ]]
+exec 1>&3 2>&3
+if [[ $FAILED -ne 0 ]]; then
+  cat "$RESULTS"
+  exit 1
+fi
