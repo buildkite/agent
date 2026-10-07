@@ -30,3 +30,8 @@ RUN case "${TARGETARCH}" in \
   && tar -xzf /tmp/gh.tar.gz -C /tmp \
   && install "/tmp/gh_${GH_VERSION}_linux_${TARGETARCH}/bin/gh" /usr/local/bin/gh \
   && rm -rf /tmp/gh*
+
+# deb-s3 for publish-debian-package.sh. The build context is set up by
+# .buildkite/steps/build-release-image.sh.
+COPY Gemfile Gemfile.lock /tmp/gems/
+RUN cd /tmp/gems && bundle install && rm -rf /tmp/gems
