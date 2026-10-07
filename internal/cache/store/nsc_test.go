@@ -614,3 +614,58 @@ func TestNscStore_DownloadNotFound(t *testing.T) {
 		}
 	})
 }
+
+func TestNscStore_Stat(t *testing.T) {
+	stat := func(t *testing.T, result *CommandResult) (int64, []string, error) {
+		t.Helper()
+		var calls [][]string
+		store := &NscStore{namespace: "ns", run: recordingRunner(&calls, func([]string) (*CommandResult, error) {
+			return result, nil
+		})}
+		size, err := store.Stat(t.Context(), "valid-key")
+		if len(calls) != 1 {
+			t.Fatalf("nsc calls = %d, want 1", len(calls))
+		}
+		return size, calls[0], err
+	}
+
+	t.Run("returns the size of an available artifact", func(t *testing.T) {
+		size, args, err := stat(t, &CommandResult{Stdout: `{"path":"valid-key","namespace":"ns","size":4096,"status":"LIVE"}`})
+		if err != nil {
+			t.Fatalf("Stat: %v", err)
+		}
+		if size != 4096 {
+			t.Errorf("Stat size = %d, want 4096", size)
+		}
+		want := []string{"nsc", "artifact", "describe", "valid-key", "-o", "json", "--namespace", "ns"}
+		if diff := cmp.Diff(want, args); diff != "" {
+			t.Errorf("nsc args diff (-want +got):\n%s", diff)
+		}
+	})
+
+	// nsc prints the not-found error to stdout and exits 2, for missing and
+	// expired artifacts alike.
+	t.Run("missing artifact maps to ErrBlobNotFound", func(t *testing.T) {
+		_, _, err := stat(t, &CommandResult{
+			ExitCode: 2,
+			Stdout:   `{"error":"valid-key doesn't exist","path":"valid-key","namespace":"ns"}`,
+		})
+		if !errors.Is(err, ErrBlobNotFound) {
+			t.Errorf("Stat err = %v, want ErrBlobNotFound", err)
+		}
+	})
+
+	t.Run("an artifact that is not live is an error", func(t *testing.T) {
+		_, _, err := stat(t, &CommandResult{Stdout: `{"size":4096,"status":"STATE_UNKNOWN"}`})
+		if err == nil || errors.Is(err, ErrBlobNotFound) {
+			t.Errorf("Stat err = %v, want a non-ErrBlobNotFound error", err)
+		}
+	})
+
+	t.Run("an older CLI without describe is an error", func(t *testing.T) {
+		_, _, err := stat(t, &CommandResult{ExitCode: 1, Stderr: `unknown command "describe" for "nsc artifact"`})
+		if err == nil || errors.Is(err, ErrBlobNotFound) {
+			t.Errorf("Stat err = %v, want a non-ErrBlobNotFound error", err)
+		}
+	})
+}

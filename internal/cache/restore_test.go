@@ -679,6 +679,10 @@ func (f *fakeRefreshingBlob) Download(_ context.Context, _, _ string) (*store.Tr
 	return nil, nil
 }
 
+func (f *fakeRefreshingBlob) Stat(_ context.Context, _ string) (int64, error) {
+	return 0, nil
+}
+
 func (f *fakeRefreshingBlob) RefreshRetention(_ context.Context, key string, retention time.Duration) {
 	f.refreshCalls = append(f.refreshCalls, key)
 	f.refreshRetentions = append(f.refreshRetentions, retention)
@@ -694,6 +698,10 @@ func (f *fakeNonRefreshingBlob) Upload(_ context.Context, _, _ string, _ time.Du
 
 func (f *fakeNonRefreshingBlob) Download(_ context.Context, _, _ string) (*store.TransferInfo, error) {
 	return nil, nil
+}
+
+func (f *fakeNonRefreshingBlob) Stat(_ context.Context, _ string) (int64, error) {
+	return 0, nil
 }
 
 func TestMaybeRefreshRetention(t *testing.T) {
