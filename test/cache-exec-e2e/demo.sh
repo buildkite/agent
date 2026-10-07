@@ -1,36 +1,38 @@
 #!/usr/bin/env bash
-# Demo of the time `buildkite-agent cache exec` saves.
+# Demo: the time `buildkite-agent cache exec` saves.
 #
-# Usage, from the repo root: ./test/cache-exec-e2e/demo.sh
-# Needs go and python3. No Buildkite token or network access is needed.
+# The same slow build step runs three times:
+#   1. First run          nothing is cached yet, so the build runs and is saved
+#   2. Nothing changed    the build is skipped; its files and log are restored
+#   3. A file changed     the cache no longer matches, so the build runs again
 #
-# Runs one slow build step three times, each as a real `buildkite-agent bootstrap` job,
-# against a fake cache registry (fake_registry.py) backed by a local file store:
-#   1. first run:          no cached result, so the build runs and is saved
-#   2. same sources:       cached, so the build is skipped and its output replayed
-#   3. a source changed:   new cache key, so the build runs again
+# Run from the repo root: ./test/cache-exec-e2e/demo.sh
+# It uses a fake local cache (fake_registry.py), so no Buildkite token is needed.
 set -euo pipefail
 
 HERE=$(cd "$(dirname "$0")" && pwd)
 REPO=$(cd "$HERE/../.." && pwd)
 WORK=$(mktemp -d)
-PROJECT=$WORK/project
 trap 'kill "${REGISTRY_PID:-}" 2>/dev/null; rm -rf "$WORK"' EXIT
 
-echo "~~~ :hammer: Setup: building the agent and starting a fake cache registry"
+# ---------------------------------------------------------------------------
+# Setup: build the agent, start the fake cache, and create a small project.
+# ---------------------------------------------------------------------------
 
-# -buildvcs=false: CI mounts the checkout into a container as another user, and git refuses to read it.
+echo "~~~ Setup"
+
 go -C "$REPO" build -buildvcs=false -o "$WORK/bin/buildkite-agent" .
 
 python3 "$HERE/fake_registry.py" "$WORK/port" /dev/null &
 REGISTRY_PID=$!
 for _ in {1..50}; do [[ -s $WORK/port ]] && break; sleep 0.1; done
 
-mkdir -p "$PROJECT/.buildkite" "$PROJECT/src"
-cd "$PROJECT"
+mkdir -p "$WORK/project/.buildkite" "$WORK/project/src"
+cd "$WORK/project"
+
 echo "export const greeting = 'hello'" > src/app.js
 
-# The cache key is a checksum of the sources, so the build is skipped only while they're unchanged.
+# The cache is keyed on the contents of src/, and saves the dist/ folder.
 cat > .buildkite/cache.yml <<'EOF'
 caches:
   - name: frontend_build
@@ -41,49 +43,65 @@ caches:
       - dist
 EOF
 
-# A stand-in for a slow frontend build: about 15 seconds, then copies src/ to dist/.
-cat > slow-build.sh <<'EOF'
+# A stand-in for a slow build: takes 15 seconds, then writes dist/.
+cat > build.sh <<'EOF'
 #!/bin/bash
-echo "vite v5.4.0 building for production..."
-for step in "transforming modules" "rendering chunks" "minifying" "computing gzip size" "writing dist/"; do
+echo "Building..."
+for step in "compiling" "bundling" "minifying" "compressing" "writing dist/"; do
   sleep 3
-  echo "  $step..."
+  echo "  $step"
 done
 mkdir -p dist && cp src/* dist/
-echo "✓ built in 15s"
+echo "Done in 15s"
 EOF
-chmod +x slow-build.sh
+chmod +x build.sh
 
-echo "Cache config (.buildkite/cache.yml):"
-sed 's/^/    /' .buildkite/cache.yml
+# ---------------------------------------------------------------------------
+# run_step <title>: runs the build as a real Buildkite job step, and times it.
+# ---------------------------------------------------------------------------
 
-# step <title>: runs the build step in a bootstrap job, as a pipeline step would, and times it.
-step() {
+STEP_COMMAND="buildkite-agent cache exec --name frontend_build -- ./build.sh"
+SUMMARY=""
+
+run_step() {
   echo "+++ $1"
+  rm -rf dist
   local start=$SECONDS
+
   env PATH="$WORK/bin:$PATH" \
-    BUILDKITE_AGENT_ACCESS_TOKEN=bkaa_fake \
+    BUILDKITE_AGENT_ACCESS_TOKEN=fake-token \
     BUILDKITE_AGENT_ENDPOINT="http://127.0.0.1:$(cat "$WORK/port")/v3" \
     BUILDKITE_AGENT_CACHE_STORE_URL="file://$WORK/store" \
-    BUILDKITE_AGENT_NO_COLOR=true \
-    BUILDKITE_BUILD_CHECKOUT_PATH="$PROJECT" \
-    buildkite-agent bootstrap --phases command \
-    --command 'buildkite-agent cache exec --name frontend_build -- ./slow-build.sh' \
-    --build-path "$WORK/builds" --job demo --repository "$PROJECT" --commit HEAD --branch main \
-    --agent a --organization o --pipeline p --pipeline-provider custom 2>&1 |
-    # Drop bootstrap's own log group so cache exec's groups show; unbuffered so log timestamps are real.
-    sed -u 's/\r$//' | grep --line-buffered -v -e 'Running commands$' -e ' cd /'
+    BUILDKITE_BUILD_CHECKOUT_PATH="$WORK/project" \
+    buildkite-agent bootstrap --phases command --command "$STEP_COMMAND" \
+      --job demo --build-path "$WORK/builds" --repository . --commit HEAD --branch main \
+      --agent a --organization o --pipeline p --pipeline-provider custom 2>&1 |
+    tidy_log
+
   local took=$((SECONDS - start))
-  echo ":stopwatch: This step took ${took}s. dist/ contains: $(ls dist)"
-  TIMES+=("$(printf '%4ss  %s' "$took" "$1")")
-  rm -rf dist # so the next run has to build or restore it
+  echo ":stopwatch: Took ${took}s"
+  SUMMARY+=$(printf '  %-26s %3ss' "$1" "$took")$'\n'
 }
 
-TIMES=()
-step ":one: First run: no cached result, so the build runs and is saved"
-step ":two: Same sources: the build is skipped and its output replayed"
+# tidy_log: removes the job's own setup lines and the fake cache's notes, and
+# passes everything else straight through, line by line, so log times are real.
+tidy_log() {
+  sed -u -e 's/\r$//' -e 's/ (search diagnostics unavailable)//' -e 's/ from unscoped//' |
+    grep --line-buffered -v -e 'Running commands$' -e ' cd /'
+}
+
+# ---------------------------------------------------------------------------
+# The demo
+# ---------------------------------------------------------------------------
+
+run_step "1. First run"
+
+run_step "2. Nothing changed"
+
 echo "export const greeting = 'hello, world'" > src/app.js
-step ":three: A source file changed: new cache key, so the build runs again"
+run_step "3. A source file changed"
 
 echo "+++ :bar_chart: Summary"
-printf '  %s\n' "${TIMES[@]}"
+echo "  Step command: $STEP_COMMAND"
+echo
+printf '%s' "$SUMMARY"
