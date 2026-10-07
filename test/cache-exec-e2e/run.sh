@@ -205,7 +205,7 @@ new_key
 echo "+++ :one: Showcase, first run: a miss, so the build runs and is saved"
 showcase 'RUN_ID=showcase buildkite-agent cache exec --name by_run_id -- ./slow-build.sh'
 rm -rf dist
-echo "+++ :two: Showcase, second run: a hit, so the build is skipped and its output replayed"
+echo "+++ :two: Showcase, second run: cached, so the build is skipped and its output replayed"
 showcase 'RUN_ID=showcase buildkite-agent cache exec --name by_run_id -- ./slow-build.sh'
 rm -rf dist
 
