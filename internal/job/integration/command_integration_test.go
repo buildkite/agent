@@ -113,6 +113,13 @@ func TestCommandFailuresAreCaptured(t *testing.T) {
 			message: "this agent is not allowed to evaluate console commands; to allow this, re-run the agent without the `--no-command-eval` option or specify a script within your repository to run instead (such as scripts/test.sh). The step's command is `echo hello`.",
 		},
 		{
+			// The hook did not exist when the agent chose what to run.
+			name:    "command that creates a command hook",
+			env:     []string{"BUILDKITE_COMMAND=mkdir -p .buildkite/hooks && touch .buildkite/hooks/command && exit 4"},
+			code:    "command_failed",
+			message: "The command `mkdir -p .buildkite/hooks && touch .buildkite/hooks/command && exit 4` exited with status 4.",
+		},
+		{
 			name:    "command not run",
 			env:     []string{"BUILDKITE_COMMAND=echo hello", `BUILDKITE_SHELL=/bin/bash "-c`},
 			code:    "command_not_run",
@@ -137,6 +144,25 @@ func TestCommandFailuresAreCaptured(t *testing.T) {
 				t.Errorf("message = %q, want %q", report.Message, test.message)
 			}
 		})
+	}
+}
+
+func TestRefusedCommandHookIsCapturedOnce(t *testing.T) {
+	t.Parallel()
+	tester, err := NewExecutorTester(mainCtx)
+	if err != nil {
+		t.Fatalf("NewExecutorTester() error = %v", err)
+	}
+	defer tester.Close()
+	agentAPI := newJobErrorsAPI(t, nil)
+
+	tester.ExpectLocalHook("command").NotCalled()
+	if err := tester.Run(t, append(agentAPI.env(), "BUILDKITE_NO_LOCAL_HOOKS=true")...); err == nil {
+		t.Fatalf("tester.Run() = nil, want local hook refusal")
+	}
+	agentAPI.report(t, "local_hook_refused")
+	if codes := agentAPI.codes(); len(codes) != 1 {
+		t.Errorf("captured codes = %v, want only local_hook_refused", codes)
 	}
 }
 
