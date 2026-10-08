@@ -9,6 +9,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/buildkite/agent/v4/internal/redact"
 	"github.com/buildkite/agent/v4/internal/shell"
 	"github.com/buildkite/agent/v4/jobapi"
 )
@@ -134,6 +135,10 @@ func withGitOutput(summary, output string) string {
 	if strings.TrimSpace(output) == "" || !utf8.ValidString(output) || strings.ContainsRune(output, 0) {
 		return summary
 	}
+	// Mask URLs first, so a line that is long only because of a presigned
+	// signature still fits. The Job API masks them again after matching
+	// registered secrets.
+	output = redact.URLQueriesInText(redact.URLCredentialsInText(output))
 	const heading = "\n\nLast lines of Git output:\n"
 	budget := maxGitErrorMessage - utf8.RuneCountInString(summary) - utf8.RuneCountInString(heading)
 	lines := strings.SplitAfter(output, "\n")

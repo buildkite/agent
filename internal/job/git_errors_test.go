@@ -692,6 +692,7 @@ func TestGitErrorOutputCapture(t *testing.T) {
 		{"single line too long for the report", fallback, []string{"fatal: " + strings.Repeat("x", maxGitErrorMessage) + "\n"}},
 		{"long earlier line is dropped", fallback + heading + "fatal: later output", []string{strings.Repeat("x", maxGitErrorMessage) + "\n", "fatal: later output"}},
 		{"output beyond the buffer", fallback + heading + "fatal: later output\n", []string{strings.Repeat("x", maxGitErrorOutput), "secret", "-suffix\n", "fatal: later output\n"}},
+		{"line that fits once its URL is masked", fallback + heading + "fatal: unable to access 'https://xxxxx@example.com/repo?[REDACTED]': denied\n", []string{"fatal: unable to access 'https://user:pass@example.com/repo?sig=" + strings.Repeat("s", maxGitErrorMessage) + "': denied\n"}},
 		{"nul", fallback, []string{"fatal: secret\x00-suffix"}},
 		{"invalid utf8", fallback, []string{"fatal: secret\xff-suffix"}},
 		{"split secret", fallback + heading + "fatal: [REDACTED]\n", []string{"fatal: secret", "-suffix\n"}},
