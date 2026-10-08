@@ -159,7 +159,8 @@ func TestPreBootstrapHookRefusesJob(t *testing.T) {
 		ID:                 jobID,
 		ChunksMaxSizeBytes: 1024,
 		Env: map[string]string{
-			"BUILDKITE_COMMAND": "echo hello world",
+			"BUILDKITE_COMMAND":              "echo hello world",
+			"BUILDKITE_CAPTURE_AGENT_ERRORS": "true",
 		},
 		Token: "bkaj_job-token",
 	}
@@ -191,6 +192,11 @@ func TestPreBootstrapHookRefusesJob(t *testing.T) {
 
 	if got, want := job.SignalReason, "agent_refused"; got != want {
 		t.Errorf("job.SignalReason = %q, want %q", got, want)
+	}
+
+	captured := e.capturedErrorsFor(t, jobID)
+	if len(captured) != 1 || captured[0].Code != "job_refused" || !strings.HasPrefix(captured[0].Message, "This agent's pre-bootstrap hook refused the job.") {
+		t.Errorf("captured errors = %+v, want job_refused by the pre-bootstrap hook", captured)
 	}
 }
 

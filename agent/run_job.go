@@ -19,6 +19,7 @@ import (
 	"github.com/buildkite/agent/v4/internal/job/hook"
 	"github.com/buildkite/agent/v4/internal/process"
 	"github.com/buildkite/agent/v4/internal/redact"
+	"github.com/buildkite/agent/v4/jobapi"
 	"github.com/buildkite/agent/v4/kubernetes"
 	"github.com/buildkite/agent/v4/logger"
 	"github.com/buildkite/agent/v4/metrics"
@@ -144,6 +145,8 @@ func (r *JobRunner) Run(ctx context.Context, ignoreAgentInDispatches *bool) (err
 		)
 
 		if r.VerificationFailureBehavior == VerificationBehaviourBlock {
+			r.captureJobError(ctx, "job_signature_rejected",
+				"This agent rejected the job because its step is signed, but the agent has no verification key (--verification-jwks-file). Run the step on agents that verify signatures, or configure this agent's verification key.")
 			exit.Status = -1
 			exit.SignalReason = SignalReasonSignatureRejected
 			return nil
@@ -156,6 +159,17 @@ func (r *JobRunner) Run(ctx context.Context, ignoreAgentInDispatches *bool) (err
 		case errors.Is(err, ErrNoSignature) || errors.As(err, &ise):
 			r.verificationFailureLogs(r.VerificationFailureBehavior, err)
 			if r.VerificationFailureBehavior == VerificationBehaviourBlock {
+				switch {
+				case errors.Is(err, ErrNoSignature):
+					r.captureJobError(ctx, "job_signature_rejected",
+						"This agent rejected the job because it only runs signed jobs, and the step has no signature. Sign the pipeline when uploading it, for example with `buildkite-agent pipeline upload --jwks-file`, or run the step on agents that do not require signatures.")
+				case errors.Is(err, ErrInvalidJob):
+					r.captureJobError(ctx, "job_signature_rejected",
+						"This agent rejected the job because the job no longer matches its signed step, for example a different command, environment, plugins, or matrix values. Re-upload the pipeline to sign the step again, and avoid changing signed fields after upload.")
+				default:
+					r.captureJobError(ctx, "job_signature_rejected",
+						"This agent rejected the job because the step's signature does not verify with any of the agent's verification keys. Sign the pipeline with a key that matches this agent's --verification-jwks-file, or run the step on agents that trust the signing key.")
+				}
 				exit.Status = -1
 				exit.SignalReason = SignalReasonSignatureRejected
 				return nil
@@ -163,6 +177,9 @@ func (r *JobRunner) Run(ctx context.Context, ignoreAgentInDispatches *bool) (err
 
 		case err != nil: // some other error
 			r.verificationFailureLogs(VerificationBehaviourBlock, err) // errors in verification are always fatal
+			fallback := "This agent rejected the job because it could not verify the step's signature. Check the agent's verification keys."
+			detail := fmt.Sprintf("This agent rejected the job because it could not verify the step's signature: %v. Check the agent's verification keys.", err)
+			r.captureJobError(ctx, "job_signature_rejected", jobapi.CapturedErrorMessage(detail, fallback))
 			exit.Status = -1
 			exit.SignalReason = SignalReasonSignatureRejected
 			return nil
@@ -189,6 +206,15 @@ func (r *JobRunner) Run(ctx context.Context, ignoreAgentInDispatches *bool) (err
 		_, _ = fmt.Fprintln(r.jobLogs, err.Error())
 		r.agentLogger.Errorf("%v", err)
 
+		// Mask credentials in a refused repository URL or plugin source.
+		option := new(allowlistError)
+		if errors.As(err, &option) {
+			fix := "Run the step on agents that allow it, or ask the agent's operator to change the option."
+			detail := fmt.Sprintf("This agent refused the job because its --%s option does not allow it: %s. %s", option.option, redact.URLCredentialsInText(option.err.Error()), fix)
+			fallback := fmt.Sprintf("This agent refused the job because its --%s option does not allow it. %s", option.option, fix)
+			r.captureJobError(ctx, "job_refused", jobapi.CapturedErrorMessage(detail, fallback))
+		}
+
 		exit.Status = -1
 		exit.SignalReason = SignalReasonAgentRefused
 		return nil
@@ -211,6 +237,10 @@ func (r *JobRunner) Run(ctx context.Context, ignoreAgentInDispatches *bool) (err
 			_, _ = fmt.Fprintln(r.jobLogs, "pre-bootstrap hook rejected this job, see the buildkite-agent logs for more details")
 			// But disclose more information in the agent logs
 			r.agentLogger.Errorf("pre-bootstrap hook rejected this job: %s", err)
+			// Like the job log, the report leaves the hook's reasons to the
+			// agent logs.
+			r.captureJobError(ctx, "job_refused",
+				"This agent's pre-bootstrap hook refused the job. The hook's output is in the agent's logs, not the job log. Run the step on other agents, or ask the agent's operator why the hook refused it.")
 
 			exit.Status = -1
 			exit.SignalReason = SignalReasonAgentRefused
@@ -228,20 +258,35 @@ func (r *JobRunner) Run(ctx context.Context, ignoreAgentInDispatches *bool) (err
 	return nil
 }
 
+// allowlistError reports which agent allowlist refused a job.
+type allowlistError struct {
+	name   string // as shown in logs, such as "repo"
+	option string // the agent option, such as "allowed-repositories"
+	err    error
+}
+
+func (e *allowlistError) Error() string {
+	return fmt.Sprintf("failed to validate %s: %v", e.name, e.err)
+}
+func (e *allowlistError) Unwrap() error { return e.err }
+
 func (r *JobRunner) validateConfigAllowlists(job *api.Job) error {
-	validations := map[string]func() error{
-		"repo": func() error {
+	validations := []struct {
+		name, option string
+		validate     func() error
+	}{
+		{"repo", "allowed-repositories", func() error {
 			return validateJobValue(r.conf.AgentConfiguration.AllowedRepositories, job.Env["BUILDKITE_REPO"])
-		},
-		"environment variables": func() error {
+		}},
+		{"environment variables", "allowed-environment-variables", func() error {
 			return validateEnv(job.Env, r.conf.AgentConfiguration.AllowedEnvironmentVariables)
-		},
-		"plugins": r.validatePlugins,
+		}},
+		{"plugins", "allowed-plugins", r.validatePlugins},
 	}
 
-	for name, validation := range validations {
-		if err := validation(); err != nil {
-			return fmt.Errorf("failed to validate %s: %w", name, err)
+	for _, v := range validations {
+		if err := v.validate(); err != nil {
+			return &allowlistError{name: v.name, option: v.option, err: err}
 		}
 	}
 

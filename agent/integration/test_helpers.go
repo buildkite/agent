@@ -121,6 +121,22 @@ func (tae *testAgentEndpoint) finishesFor(t *testing.T, jobID string) []api.Job 
 	return finishes
 }
 
+func (tae *testAgentEndpoint) capturedErrorsFor(t *testing.T, jobID string) []api.JobCapturedError {
+	t.Helper()
+	tae.mtx.Lock()
+	defer tae.mtx.Unlock()
+
+	var capturedErrors []api.JobCapturedError
+	for _, b := range tae.calls[fmt.Sprintf("/jobs/%s/errors", jobID)] {
+		var capturedError api.JobCapturedError
+		if err := json.Unmarshal(b, &capturedError); err != nil {
+			t.Fatalf("decoding captured error request body: %v", err)
+		}
+		capturedErrors = append(capturedErrors, capturedError)
+	}
+	return capturedErrors
+}
+
 func (tae *testAgentEndpoint) logsFor(t *testing.T, _ string) string {
 	t.Helper()
 	tae.mtx.Lock()
@@ -200,6 +216,11 @@ func (t *testAgentEndpoint) defaultRoutes() []route {
 			Method:      "PUT",
 			Path:        "/jobs/{id}/finish",
 			HandlerFunc: func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) },
+		},
+		{
+			Method:      "POST",
+			Path:        "/jobs/{id}/errors",
+			HandlerFunc: func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusCreated) },
 		},
 	}
 }
