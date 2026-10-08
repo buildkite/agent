@@ -145,6 +145,11 @@ func TestCapturedErrorRedactionResponse(t *testing.T) {
 			wantMessage: strings.Repeat("https://xxxxx@b ", 63)[:988] + "…[truncated]",
 			wantWarning: true,
 		},
+		{
+			name:        "URL query strings are masked",
+			body:        `{"code":"x","message":"GET https://a.example/x?sig=unregistered failed"}`,
+			wantMessage: "GET https://a.example/x?[REDACTED] failed",
+		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			before := reported.Load()

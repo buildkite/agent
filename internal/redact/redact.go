@@ -111,7 +111,9 @@ func URLCredentials(rawURL string) string {
 
 // Match just the URL prefix through userinfo, leaving paths and surrounding
 // diagnostic punctuation untouched. Spaces in URL credentials must be escaped.
-var urlUserinfo = regexp.MustCompile(`(?i)(?:[a-z][a-z0-9+.-]*:)?//[^\s/<>]*@`)
+// A password containing an unescaped "/" makes the URL invalid, but Git still
+// prints it, so also match "user:" followed by anything up to "@".
+var urlUserinfo = regexp.MustCompile(`(?i)(?:[a-z][a-z0-9+.-]*:)?//(?:[^\s/<>]*|[^\s/<>@:]*:[^\s<>@]*)@`)
 
 // URLCredentialsInText masks URL userinfo in diagnostic text, including tokens
 // used as usernames. It does not detect secrets in paths, queries or plain text.
@@ -129,8 +131,9 @@ func URLCredentialsInText(text string) string {
 	})
 }
 
-// Match a URL's query string, up to whitespace or surrounding punctuation.
-var urlQuery = regexp.MustCompile(`(?i)\b([a-z][a-z0-9+.-]*://[^\s?#"'<>]+)\?[^\s#"'<>]*`)
+// Match a URL's query string, up to whitespace, a quote, or punctuation that
+// ends the sentence around it.
+var urlQuery = regexp.MustCompile(`(?i)\b([a-z][a-z0-9+.-]*://[^\s?#"<>]+)\?[^\s#"'<>]*[^\s#"'<>.,;:!?)\]}]`)
 
 // URLQueriesInText replaces URL query strings in diagnostic text, which can
 // carry credentials such as the signature in a presigned storage URL.

@@ -300,6 +300,8 @@ func TestURLCredentialsInText(t *testing.T) {
 		{"//bad%zz:password@example.com/repo", "(invalid URL)example.com/repo"},
 		{"https://token@[::1]:8443/repo", "https://xxxxx@[::1]:8443/repo"},
 		{"https://example.com/repo git@host:repo ../relative/ref", "https://example.com/repo git@host:repo ../relative/ref"},
+		{"fatal: unable to access 'https://user:a/b@example.com/repo/': denied", "fatal: unable to access '(invalid URL)example.com/repo/': denied"},
+		{"https://registry.example/@scope/pkg and https://example.com/repo@v1", "https://registry.example/@scope/pkg and https://example.com/repo@v1"},
 		{"remote: plain-token is not a URL\n", "remote: plain-token is not a URL\n"},
 	} {
 		t.Run(tc.input, func(t *testing.T) {
@@ -324,6 +326,10 @@ func TestURLQueriesInText(t *testing.T) {
 		},
 		{"see https://a.example/x?sig=1#frag and http://b.example/?t=2", "see https://a.example/x?[REDACTED]#frag and http://b.example/?[REDACTED]"},
 		{"a question? not a URL", "a question? not a URL"},
+		{"https://bucket.example/a'b?sig=SECRET", "https://bucket.example/a'b?[REDACTED]"},
+		{"failed (see https://a.example/x?sig=SECRET).", "failed (see https://a.example/x?[REDACTED])."},
+		{"is it https://a.example/x?", "is it https://a.example/x?"},
+		{"fatal: unable to access 'https://a.example/x?token=SECRET': denied", "fatal: unable to access 'https://a.example/x?[REDACTED]': denied"},
 	} {
 		if got := URLQueriesInText(test.in); got != test.want {
 			t.Errorf("URLQueriesInText(%q) = %q, want %q", test.in, got, test.want)
