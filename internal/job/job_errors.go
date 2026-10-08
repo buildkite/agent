@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -56,13 +57,21 @@ func (e *Executor) captureHookError(ctx context.Context, hookCfg HookConfig, hoo
 	switch exit, ok := describeExit(err); {
 	case ok:
 		message = fmt.Sprintf("The %s hook at %s %s.%s", hookName, path, exit, where)
-	case errors.Is(err, syscall.ENOENT):
-		// The error names the agent's temporary wrapper script, not what is
-		// missing, which is usually the interpreter on the hook's #! line.
+	case errors.Is(err, syscall.ENOENT) && couldNotStart(err):
+		// The hook could not be started. The error names the agent's temporary
+		// wrapper script, not what is missing, which is usually the
+		// interpreter on the hook's #! line.
 		message = fmt.Sprintf("The %s hook at %s could not be run because a program it needs was not found, usually the interpreter on its #! line, such as bash.%s", hookName, path, where)
 	}
 	message = jobapi.CapturedErrorMessage(message, fmt.Sprintf("The %s hook failed.%s", hookName, where))
 	captureJobError(ctx, e.shell, "hook_failed", e.withRecentOutput(message))
+}
+
+// couldNotStart reports whether err is from starting a process, such as
+// "fork/exec <path>: no such file or directory".
+func couldNotStart(err error) bool {
+	pathErr := new(os.PathError)
+	return errors.As(err, &pathErr) && strings.HasSuffix(pathErr.Op, "exec")
 }
 
 // hookDisplayPath shows hooks in the checkout, including those of vendored

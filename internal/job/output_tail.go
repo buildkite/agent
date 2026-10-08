@@ -24,6 +24,7 @@ var ansiEscape = regexp.MustCompile(`\x1b\[[0-9;?]*[ -/]*[@-~]`)
 type outputTail struct {
 	mu   sync.Mutex
 	data []byte
+	cut  bool // whether earlier output was discarded
 }
 
 func (t *outputTail) Write(p []byte) (int, error) {
@@ -32,6 +33,7 @@ func (t *outputTail) Write(p []byte) (int, error) {
 	t.data = append(t.data, p...)
 	if over := len(t.data) - maxOutputTail; over > 0 {
 		t.data = append(t.data[:0], t.data[over:]...)
+		t.cut = true
 	}
 	return len(p), nil
 }
@@ -41,6 +43,7 @@ func (t *outputTail) reset() {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	t.data = t.data[:0]
+	t.cut = false
 }
 
 // tail returns at most limit characters of the most recent output as readable
@@ -49,8 +52,15 @@ func (t *outputTail) reset() {
 // through a URL cannot hide a credential from later redaction.
 func (t *outputTail) tail(limit int) string {
 	t.mu.Lock()
-	text := string(t.data)
+	text, cut := string(t.data), t.cut
 	t.mu.Unlock()
+
+	// Drop a first line that lost its start when earlier output was
+	// discarded: it could start partway through a URL, which masking would
+	// then not recognize.
+	if cut {
+		_, text, _ = strings.Cut(text, "\n")
+	}
 
 	text = ansiEscape.ReplaceAllString(text, "")
 	text = strings.ReplaceAll(text, "\r\n", "\n")

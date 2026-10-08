@@ -26,6 +26,7 @@ func TestOutputTail(t *testing.T) {
 		{name: "long output keeps the end", writes: []string{strings.Repeat("early\n", 1000), "the last line\n"}, limit: 20, want: "early\nthe last line"},
 		{name: "counts characters", writes: []string{"ééééé"}, limit: 3, want: "ééé"},
 		{name: "URL credentials are masked before the cut", writes: []string{"fatal: https://user:pass-word@host/repo"}, limit: 20, want: "ps://xxxxx@host/repo"},
+		{name: "first line cut by the buffer is dropped", writes: []string{"https://host/a?sig=", strings.Repeat("s", maxOutputTail), "\nlast line\n"}, limit: 100, want: "last line"},
 		{name: "URL queries are masked before the cut", writes: []string{"GET https://host/a?sig=abcdefghij failed"}, limit: 24, want: "host/a?[REDACTED] failed"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
