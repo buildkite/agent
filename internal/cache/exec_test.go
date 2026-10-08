@@ -241,6 +241,11 @@ func TestRunExec_MissThenHit(t *testing.T) {
 	if got := len(reg.stores); got != 1 {
 		t.Errorf("got %d stores after a hit, want none added", got-1)
 	}
+	// Every request is tagged, so the registry can count the miss that ran the command and the hit that skipped it.
+	want := []string{"retrieve exec", "commit exec", "retrieve exec", "confirm exec"}
+	if !slices.Equal(reg.commands, want) {
+		t.Errorf("request commands = %q, want %q", reg.commands, want)
+	}
 }
 
 func TestRunExec_FailedCommandSavesNothing(t *testing.T) {
