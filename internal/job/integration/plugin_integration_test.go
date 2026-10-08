@@ -919,3 +919,114 @@ func createZipArchive(sourceDir, zipPath string) error {
 	}
 	return zipFile.Close()
 }
+
+func TestPluginFailuresAreCaptured(t *testing.T) {
+	t.Parallel()
+
+	if runtime.GOOS == "windows" {
+		t.Skip("plugin fixtures use POSIX shell hooks")
+	}
+
+	failingHook := map[string][]string{"environment": {"#!/usr/bin/env bash", "echo 'registry login failed'", "exit 5"}}
+	passingHook := map[string][]string{"environment": {"#!/usr/bin/env bash", "true"}}
+
+	for _, test := range []struct {
+		name     string
+		env      func(t *testing.T) []string
+		code     string
+		message  string
+		contains string
+	}{
+		{
+			name: "plugins disabled",
+			env: func(t *testing.T) []string {
+				return []string{`BUILDKITE_PLUGINS=[{"docker#v5.0.0":{}}]`, "BUILDKITE_PLUGINS_ENABLED=false"}
+			},
+			code:    "plugins_disabled",
+			message: "The step uses plugins, but this agent was started with `--no-plugins`, which disables them. Remove the plugins from the step, or run it on agents that allow plugins, such as another queue.",
+		},
+		{
+			name: "invalid definition",
+			env:  func(t *testing.T) []string { return []string{`BUILDKITE_PLUGINS={"not":"a list"}`} },
+			code: "plugin_definition_invalid",
+		},
+		{
+			name: "checkout failure",
+			env: func(t *testing.T) []string {
+				return []string{`BUILDKITE_PLUGINS=[{"file:///does-not-exist/missing-plugin#v1.2.3":{}}]`}
+			},
+			code:     "plugin_checkout_failed",
+			message:  "Failed to check out plugin missing-plugin from /does-not-exist/missing-plugin at version \"v1.2.3\". Check that the repository exists, this agent can access it, and the version is a tag, branch, or commit in it.\n\nLast lines of output:\n",
+			contains: "fatal: repository '/does-not-exist/missing-plugin' does not exist",
+		},
+		{
+			name: "invalid configuration",
+			env: func(t *testing.T) []string {
+				p := createTestPlugin(t, passingHook)
+				definition := "name: test\nconfiguration:\n  properties:\n    settings:\n      type: integer\n"
+				if err := os.WriteFile(filepath.Join(p.Path, "plugin.yml"), []byte(definition), 0o600); err != nil {
+					t.Fatal(err)
+				}
+				if err := p.Add("."); err != nil {
+					t.Fatal(err)
+				}
+				if err := p.Commit("Add plugin definition"); err != nil {
+					t.Fatal(err)
+				}
+				var err error
+				if p.versionTag, err = p.RevParse("HEAD"); err != nil {
+					t.Fatal(err)
+				}
+				json, err := p.ToJSON()
+				if err != nil {
+					t.Fatal(err)
+				}
+				return []string{"BUILDKITE_PLUGINS=" + json, "BUILDKITE_PLUGIN_VALIDATION=true"}
+			},
+			code:     "plugin_configuration_invalid",
+			contains: `does not match the plugin's schema: /settings: "blah" type should be integer, got string. Fix the configuration in the step.`,
+		},
+		{
+			name: "vendored plugin missing",
+			env: func(t *testing.T) []string {
+				return []string{`BUILDKITE_PLUGINS=[{"./.buildkite/plugins/missing":{}}]`}
+			},
+			code:    "vendored_plugin_invalid",
+			message: "The step uses vendored plugin missing, but ./.buildkite/plugins/missing is not a directory in the checked-out repository. Commit the plugin at that path, or fix the path in the step.",
+		},
+		{
+			name: "hook failure",
+			env: func(t *testing.T) []string {
+				json, err := createTestPlugin(t, failingHook).ToJSON()
+				if err != nil {
+					t.Fatal(err)
+				}
+				return []string{"BUILDKITE_PLUGINS=" + json}
+			},
+			code:     "hook_failed",
+			contains: " environment hook at hooks/environment exited with status 5. It is part of the plugin, not the repository.\n\nLast lines of output:\nregistry login failed",
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			tester, err := NewExecutorTester(mainCtx)
+			if err != nil {
+				t.Fatalf("NewExecutorTester() error = %v", err)
+			}
+			defer tester.Close()
+			agentAPI := newJobErrorsAPI(t, nil)
+
+			if err := tester.Run(t, append(agentAPI.env(), test.env(t)...)...); err == nil {
+				t.Fatalf("tester.Run() = nil, want plugin failure")
+			}
+
+			report := agentAPI.report(t, test.code)
+			if test.message != "" && !strings.HasPrefix(report.Message, test.message) {
+				t.Errorf("message = %q, want %q", report.Message, test.message)
+			}
+			if !strings.Contains(report.Message, test.contains) {
+				t.Errorf("message = %q, want it to contain %q", report.Message, test.contains)
+			}
+		})
+	}
+}
