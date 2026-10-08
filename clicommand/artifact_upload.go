@@ -173,10 +173,13 @@ var ArtifactUploadCommand = &cli.Command{
 		if err := uploader.Upload(ctx); err != nil {
 			destination := "Buildkite"
 			if cfg.Destination != "" {
-				destination = redact.URLCredentials(cfg.Destination)
+				// A destination can carry a credential in its query string,
+				// such as an Azure SAS token.
+				destination = redact.URLQueriesInText(redact.URLCredentials(cfg.Destination))
 			}
 			summary := fmt.Sprintf("Failed to upload artifacts matching %q to %s", cfg.UploadPaths, destination)
-			message := jobapi.CapturedErrorMessage(summary+": "+storageErrorText(err), summary+".")
+			message := jobapi.CapturedErrorMessage(summary+": "+storageErrorText(err),
+				jobapi.CapturedErrorMessage(summary+".", "Failed to upload artifacts."))
 			captureAgentError(ctx, l, "artifact_upload_failed", message)
 			return fmt.Errorf("failed to upload artifacts: %w", err)
 		}

@@ -34,7 +34,7 @@ func TestCacheRestoreFailureIsCaptured(t *testing.T) {
 		t.Fatalf("reports = %+v, want one", *reports)
 	}
 	report := (*reports)[0]
-	if report.Code != "cache_restore_failed" || report.Message != `Failed to restore caches [rubocop] from registry "test": failed to restore cache "rubocop": failed to retrieve cache: request failed with status: 403 Forbidden` {
+	if report.Code != "cache_restore_failed" || report.Message != `Failed to restore cache "rubocop" from registry "test": failed to restore cache "rubocop": failed to retrieve cache: request failed with status: 403 Forbidden` {
 		t.Errorf("report = %q %q", report.Code, report.Message)
 	}
 }

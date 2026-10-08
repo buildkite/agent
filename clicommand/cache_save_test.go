@@ -102,7 +102,7 @@ func TestCacheSaveForce(t *testing.T) {
 			if test.denied {
 				wantReports = []jobapi.CapturedError{{
 					Code:    "cache_save_failed",
-					Message: `Failed to save caches [rubocop] to registry "test": failed to save cache "rubocop": failed to create cache entry: failed to save: 403 Forbidden`,
+					Message: `Failed to save cache "rubocop" to registry "test": failed to save cache "rubocop": failed to create cache entry: failed to save: 403 Forbidden`,
 				}}
 			}
 			ignoreServerFields := cmpopts.IgnoreFields(jobapi.CapturedError{}, "Timestamp", "IdempotencyKey")

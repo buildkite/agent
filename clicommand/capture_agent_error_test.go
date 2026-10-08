@@ -2,6 +2,8 @@ package clicommand
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/buildkite/agent/v4/jobapi"
@@ -61,5 +63,28 @@ func TestCaptureAgentErrorSkipsCancelledCommands(t *testing.T) {
 
 	if len(*reports) != 0 {
 		t.Fatalf("reports = %d, want none after cancellation", len(*reports))
+	}
+}
+
+func TestStorageErrorText(t *testing.T) {
+	t.Parallel()
+	joined := fmt.Errorf("uploading artifacts: %w", errors.Join(
+		errors.New("a.txt: PUT https://bucket.example/a.txt?sig=one: 403 Forbidden"),
+		errors.New("b.txt: PUT https://bucket.example/b.txt?sig=two: 403 Forbidden"),
+		errors.New("c.txt: PUT https://bucket.example/c.txt?sig=three: 403 Forbidden"),
+	))
+	for _, test := range []struct {
+		name string
+		err  error
+		want string
+	}{
+		{"one error", errors.New("GET https://bucket.example/a.txt?sig=one: 404 Not Found"), "GET https://bucket.example/a.txt?[REDACTED]: 404 Not Found"},
+		{"errors for several files", joined, "a.txt: PUT https://bucket.example/a.txt?[REDACTED]: 403 Forbidden (and 2 more errors)"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if got := storageErrorText(test.err); got != test.want {
+				t.Errorf("storageErrorText() = %q, want %q", got, test.want)
+			}
+		})
 	}
 }

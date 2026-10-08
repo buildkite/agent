@@ -123,10 +123,12 @@ var ArtifactDownloadCommand = &cli.Command{
 				where = fmt.Sprintf("step %q of %s", cfg.Step, where)
 			}
 			summary := fmt.Sprintf("Failed to download artifacts matching %q from %s", cfg.Query, where)
-			detail, fallback := summary+": "+storageErrorText(err), summary+"."
+			detail := summary + ": " + storageErrorText(err)
+			fallback := jobapi.CapturedErrorMessage(summary+".", "Failed to download artifacts.")
 			if errors.Is(err, artifact.ErrNoArtifactsFound) {
-				detail = fmt.Sprintf("No artifacts uploaded to %s matched %q. Check that the pattern matches the uploaded paths, and that the step uploading them finishes before this one starts, for example by adding depends_on.", where, cfg.Query)
-				fallback = detail
+				fix := "Check that the pattern matches the uploaded paths, and that the step uploading them finishes before this one starts, for example by adding depends_on."
+				detail = fmt.Sprintf("No artifacts uploaded to %s matched %q. %s", where, cfg.Query, fix)
+				fallback = "No uploaded artifacts matched the download pattern. " + fix
 			}
 			captureAgentError(ctx, l, "artifact_download_failed", jobapi.CapturedErrorMessage(detail, fallback))
 			return fmt.Errorf("failed to download artifacts: %w", err)
