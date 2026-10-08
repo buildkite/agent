@@ -5,6 +5,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/buildkite/agent/v4/internal/redact"
 	"github.com/buildkite/agent/v4/internal/shell"
 )
 
@@ -42,8 +43,10 @@ func (t *outputTail) reset() {
 	t.data = t.data[:0]
 }
 
-// tail returns at most limit bytes of the most recent output as readable text,
-// starting at a line boundary when the output had to be shortened.
+// tail returns at most limit characters of the most recent output as readable
+// text, starting at a line boundary when the output had to be shortened. URL
+// credentials and query strings are masked before shortening, so cutting
+// through a URL cannot hide a credential from later redaction.
 func (t *outputTail) tail(limit int) string {
 	t.mu.Lock()
 	text := string(t.data)
@@ -53,20 +56,29 @@ func (t *outputTail) tail(limit int) string {
 	text = strings.ReplaceAll(text, "\r\n", "\n")
 	text = strings.ReplaceAll(text, "\x00", "")
 	text = strings.ToValidUTF8(text, "")
+	text = redact.URLQueriesInText(redact.URLCredentialsInText(text))
 	text = strings.TrimSpace(text)
 	if limit <= 0 {
 		return ""
 	}
-	if len(text) > limit {
-		text = text[len(text)-limit:]
-		// Drop the partial first line, and any partial UTF-8 sequence with it.
+	if runes := []rune(text); len(runes) > limit {
+		text = string(runes[len(runes)-limit:])
+		// Drop the partial first line.
 		if i := strings.IndexByte(text, '\n'); i >= 0 {
 			text = text[i+1:]
-		} else {
-			text = strings.ToValidUTF8(text, "")
 		}
 	}
 	return strings.TrimSpace(text)
+}
+
+// resetRecentOutput starts the output tail afresh for the next hook or
+// command. It first releases output the tail's redactor is holding back in
+// case it starts a secret, so that output cannot appear in the next tail.
+func (e *Executor) resetRecentOutput() {
+	if e.outputTailRedactor != nil {
+		_ = e.outputTailRedactor.Flush()
+	}
+	e.outputTail.reset()
 }
 
 // teeRecentOutput copies a command's output into the redacted output tail.

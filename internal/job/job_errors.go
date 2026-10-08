@@ -9,6 +9,7 @@ import (
 	"strings"
 	"syscall"
 	"time"
+	"unicode/utf8"
 
 	"github.com/buildkite/agent/v4/env"
 	"github.com/buildkite/agent/v4/internal/process"
@@ -77,7 +78,7 @@ func (e *Executor) withRecentOutput(summary string) string {
 	// Release output a redactor is holding back in case it starts a secret.
 	_ = e.redactors.Flush()
 	const heading = "\n\nLast lines of output:\n"
-	recent := e.outputTail.tail(jobapi.MaxCapturedErrorDetail - len(summary) - len(heading))
+	recent := e.outputTail.tail(jobapi.MaxCapturedErrorDetail - utf8.RuneCountInString(summary) - utf8.RuneCountInString(heading))
 	if recent == "" {
 		return summary
 	}

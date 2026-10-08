@@ -485,7 +485,7 @@ func (e *Executor) executeHook(ctx context.Context, hookCfg HookConfig) (retErr 
 		}
 		return nil
 	}
-	e.outputTail.reset()
+	e.resetRecentOutput()
 
 	e.shell.Headerf("Running %s hook", hookName)
 
@@ -1550,6 +1550,7 @@ func (e *Executor) setupRedactors(log shell.Logger, environ *env.Environment, st
 	// as a whole stream, with the same needles as the job log, before
 	// keeping only its end.
 	e.outputTailRedactor = replacer.New(&e.outputTail, needles, redact.Redacted)
+	e.outputTailRedactor.AddPrefixes(tokenPrefixes...)
 	e.redactors.Append(e.outputTailRedactor)
 	// The shell logger writes through this redactor into stderrTee, whose
 	// primary sink is stderr. When OTLP job logging is enabled, a secondary
