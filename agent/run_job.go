@@ -211,14 +211,28 @@ func (r *JobRunner) Run(ctx context.Context, ignoreAgentInDispatches *bool) (err
 		switch {
 		case errors.As(err, &invalid):
 			fix := "Fix the plugins in the step."
-			r.captureJobError(ctx, "plugin_definition_invalid", jobapi.CapturedErrorMessage(
-				fmt.Sprintf("The step's plugins could not be parsed: %v. %s", invalid.err, fix),
-				"The step's plugins could not be parsed. "+fix))
+			message := "The step's plugins could not be parsed. " + fix
+			// Only a syntax error is safe to quote: other decoding errors can
+			// name keys from the plugins' configuration.
+			if errors.As(invalid.err, new(*json.SyntaxError)) {
+				message = jobapi.CapturedErrorMessage(fmt.Sprintf("The step's plugins could not be parsed: %v. %s", invalid.err, fix), message)
+			}
+			r.captureJobError(ctx, "plugin_definition_invalid", message)
 		case errors.As(err, &option):
 			fix := "Run the step on agents that allow it, or ask the agent's operator to change the option."
-			detail := fmt.Sprintf("This agent refused the job because its --%s option does not allow it: %s. %s", option.option, option.err, fix)
 			fallback := fmt.Sprintf("This agent refused the job because its --%s option does not allow it. %s", option.option, fix)
-			r.captureJobError(ctx, "job_refused", jobapi.CapturedErrorMessage(detail, fallback))
+			noMatch := new(noMatchError)
+			if !errors.As(option.err, &noMatch) {
+				r.captureJobError(ctx, "job_refused", jobapi.CapturedErrorMessage(
+					fmt.Sprintf("This agent refused the job because its --%s option does not allow it: %v. %s", option.option, option.err, fix), fallback))
+				break
+			}
+			// Mask URLs in the refused value from the job, but not in the
+			// operator's patterns, which masking would corrupt. Mask before
+			// sizing, because masking can shorten the value.
+			detail := fmt.Sprintf("This agent refused the job because its --%s option does not allow it: %s has no match in %s. %s",
+				option.option, maskURLs(noMatch.value), noMatch.patterns, fix)
+			r.reportJobError(ctx, "job_refused", jobapi.CapturedErrorMessage(detail, fallback))
 		}
 
 		exit.Status = -1
@@ -329,7 +343,17 @@ func validateJobValue(allowedPatterns []*regexp.Regexp, jobValue string) error {
 		}
 	}
 
-	return fmt.Errorf("%s has no match in %s", jobValue, allowedPatterns)
+	return &noMatchError{value: jobValue, patterns: allowedPatterns}
+}
+
+// noMatchError is returned for a job value that no allowlist pattern matches.
+type noMatchError struct {
+	value    string
+	patterns []*regexp.Regexp
+}
+
+func (e *noMatchError) Error() string {
+	return fmt.Sprintf("%s has no match in %s", e.value, e.patterns)
 }
 
 // invalidPluginsError is returned when the job's plugins are not valid JSON,
@@ -405,7 +429,7 @@ func (r *JobRunner) runJob(ctx context.Context) core.ProcessExit {
 
 		if timeout := new(kubernetes.StartTimeoutError); errors.As(err, &timeout) && !r.agentStopping.Load() {
 			r.captureJobError(ctx, "kubernetes_container_not_connected", fmt.Sprintf(
-				"Not every container connected to the agent within %v, the agent's --kubernetes-container-start-timeout. The container image may not have been pulled (ImagePullBackOff), or the pod may not have been scheduled. Check that each image in the podSpec exists and the cluster can pull it, and check the pod's events.",
+				"Not every container connected to the agent within %v, the agent's --kubernetes-container-start-timeout. The container image may not have been pulled (ImagePullBackOff). Check that each image in the podSpec exists and the cluster can pull it, and check the pod's events.",
 				timeout.Timeout))
 		}
 

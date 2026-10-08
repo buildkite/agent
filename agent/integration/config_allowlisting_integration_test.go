@@ -295,6 +295,14 @@ func TestRefusedJobErrorsDescribeTheStep(t *testing.T) {
 			excludes: "--allowed-plugins",
 		},
 		{
+			name:        "URL-shaped allowlist patterns are left as they are",
+			env:         map[string]string{"BUILDKITE_REPO": "https://example.com/other.git?access_token=unregistered-secret"},
+			agentConfig: agent.AgentConfiguration{AllowedRepositories: []*regexp.Regexp{regexp.MustCompile(`^https://example\.com/(?:team-a|team-b)/.*$`)}},
+			code:        "job_refused",
+			contains:    "https://example.com/other.git?[REDACTED] has no match in [^https://example\\.com/(?:team-a|team-b)/.*$]",
+			excludes:    "unregistered-secret",
+		},
+		{
 			name:        "a refused repository's query string is masked",
 			env:         map[string]string{"BUILDKITE_REPO": "https://example.com/repo.git?access_token=unregistered-secret"},
 			agentConfig: agent.AgentConfiguration{AllowedRepositories: []*regexp.Regexp{regexp.MustCompile(`^https://github\.com/`)}},
