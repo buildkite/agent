@@ -323,6 +323,11 @@ func describeCheckout(sh *shell.Shell) string {
 		what = append(what, "refspec "+refspec)
 	}
 	repository := value("BUILDKITE_REPO", false)
+	if redact.URLCredentials(repository) == "(invalid URL)" {
+		// A URL that does not parse can hide credentials from masking, such as
+		// a password containing a space.
+		repository = ""
+	}
 	switch {
 	case len(what) > 0 && repository != "":
 		return fmt.Sprintf("The checkout was of %s from %s.", strings.Join(what, ", "), repository)

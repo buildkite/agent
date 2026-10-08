@@ -27,7 +27,8 @@ const maxCapturedErrorMessageLength = 1000
 // for its own reports, including diagnostic text such as command output. It
 // leaves room within the 1000-character message limit for redaction to
 // lengthen short secrets, such as a 6-character value becoming "[REDACTED]",
-// so the end of the message is not cut off.
+// so the end of the message is usually not cut off. Many short secrets in one
+// message can still lengthen it past the limit.
 const MaxCapturedErrorDetail = maxCapturedErrorMessageLength - 100
 
 // CapturedErrorMessage returns detail when it fits whole within

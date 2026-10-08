@@ -2,6 +2,7 @@ package job
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -759,7 +760,7 @@ func TestGitErrorCaptureIdentifiesTheCheckout(t *testing.T) {
 	const summary = "Git fetch could not find the remote reference."
 	const checkout = ` The checkout was of branch "feature/missing", commit "HEAD" from https://xxxxx@github.com/acme/widgets.git.`
 	for _, test := range []struct {
-		name, branch, output, want string
+		name, repo, branch, output, want string
 	}{
 		{
 			name:   "before Git's output",
@@ -790,6 +791,13 @@ func TestGitErrorCaptureIdentifiesTheCheckout(t *testing.T) {
 			want:   summary + ` The checkout was of commit "HEAD" from https://xxxxx@github.com/acme/widgets.git.`,
 		},
 		{
+			// A password with a space does not parse, and masking would miss it.
+			name:   "a repository URL that does not parse is left out",
+			repo:   "https://user:private password@github.com/acme/widgets.git",
+			branch: "feature/missing",
+			want:   summary + ` The checkout was of branch "feature/missing", commit "HEAD".`,
+		},
+		{
 			name:   "control characters are quoted",
 			branch: "feature/\x1b[31m",
 			want:   summary + ` The checkout was of branch "feature/\x1b[31m", commit "HEAD" from https://xxxxx@github.com/acme/widgets.git.`,
@@ -797,7 +805,7 @@ func TestGitErrorCaptureIdentifiesTheCheckout(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			ctx, e, reports := gitErrorCaptureServer(t, true, http.StatusCreated)
-			e.shell.Env.Set("BUILDKITE_REPO", "https://user:token@github.com/acme/widgets.git")
+			e.shell.Env.Set("BUILDKITE_REPO", cmp.Or(test.repo, "https://user:token@github.com/acme/widgets.git"))
 			e.shell.Env.Set("BUILDKITE_BRANCH", test.branch)
 			e.shell.Env.Set("BUILDKITE_COMMIT", "HEAD")
 			e.shell.Env.Remove("BUILDKITE_REFSPEC")
