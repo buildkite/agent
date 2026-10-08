@@ -95,8 +95,7 @@ var GitCredentialsHelperCommand = &cli.Command{
 		credentials, _, err := client.GenerateRepositoryCredentials(ctx, repo, cfg.JobID)
 		if err != nil {
 			// Buildkite's response explains a refusal, such as an unsupported provider.
-			reason := jobapi.CapturedErrorMessage("The request to Buildkite failed: "+err.Error()+".", "The request to Buildkite failed.")
-			return handleAuthError(ctx, c, l, reason, fmt.Errorf("failed to get repository credentials: %w", err))
+			return handleAuthError(ctx, c, l, "The request to Buildkite failed: "+err.Error()+".", fmt.Errorf("failed to get repository credentials: %w", err))
 		}
 		if credentials.Token == "" {
 			return handleAuthError(ctx, c, l, "Buildkite returned an empty token.", errors.New("repository credential response contained an empty token"))
@@ -146,8 +145,10 @@ func handleAuthError(ctx context.Context, c *cli.Command, l logger.Logger, reaso
 	// The Git failure that follows does not say why authentication failed.
 	// Reasons are written by the agent or come from Buildkite's response:
 	// other error text can echo credential input or a rejected token.
+	// Only a reason that includes Buildkite's response can be too long.
+	const lead = "The Git credential helper could not get repository credentials, so Git authentication will fail. "
 	captureAgentError(ctx, l, "repository_credentials_failed",
-		"The Git credential helper could not get repository credentials, so Git authentication will fail. "+reason)
+		jobapi.CapturedErrorMessage(lead+reason, lead+"The request to Buildkite failed."))
 	_, _ = fmt.Fprintln(c.Root().Writer, "username=fail")
 	_, _ = fmt.Fprintln(c.Root().Writer, "password=fail")
 	_, _ = fmt.Fprintln(c.Root().Writer, "")
