@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"slices"
 	"strconv"
@@ -112,10 +113,10 @@ func (e *Executor) validatePluginCheckout(ctx context.Context, checkout *pluginC
 			return nil
 		}
 		if err != nil {
-			fix := "Fix the plugin's plugin.yml, or use a version of the plugin whose plugin.yml is valid."
+			fix := "Fix the plugin's definition, or use a version of the plugin whose definition is valid."
 			captureJobError(ctx, e.shell, "plugin_definition_file_invalid", jobapi.CapturedErrorMessage(
-				fmt.Sprintf("The plugin.yml of plugin %s could not be read: %v. %s", pluginSource(checkout.Plugin), err, fix),
-				fmt.Sprintf("The plugin.yml of plugin %s could not be read. %s", checkout.Plugin.Name(), fix)))
+				fmt.Sprintf("The definition of plugin %s, in its plugin.json, plugin.yaml, or plugin.yml, could not be read: %v. %s", pluginSource(checkout.Plugin), err, fix),
+				"A plugin's definition, in its plugin.json, plugin.yaml, or plugin.yml, could not be read. "+fix))
 			return err
 		}
 		checkout.Definition = def
@@ -153,6 +154,35 @@ func (e *Executor) capturePluginCheckoutError(ctx context.Context, p *plugin.Plu
 		fmt.Sprintf("The agent could not check out plugin %s.", p.Name())))
 }
 
+// schemaErrorRules turn schema validation messages into ones without the
+// invalid value, which can be an unregistered secret, or which the schema
+// library cuts short so a registered one escapes redaction. The values left
+// come from the plugin's schema.
+var schemaErrorRules = []struct {
+	pattern     *regexp.Regexp
+	replacement string
+}{
+	{regexp.MustCompile(`^(additional (items|properties) are not allowed|unevaluated (items|properties) are not allowed|did Not match any specified AnyOf schemas|did not match any of the specified OneOf schemas|matched more than one specified OneOf schemas|result was valid, \('not'\) expected invalid)$`), "$0"},
+	{regexp.MustCompile(`^(\d+ object Properties (below|exceed) \d+ (minimum|maximum)|(array length|contained items) \d+ (below|bellow|exceeds) \d+ (minimum items|min|max))$`), "$0"},
+	{regexp.MustCompile(`^(must be (a multiple of|greater than or equal to|less than or equal to) \S+|should be one of .*|must equal .*|must contain at least one of: .*|"[^"]*" (property|value) is required|type should be .*, got [a-z]+)$`), "$0"},
+	{regexp.MustCompile(`^\S+ must be (greater|less) than (\S+)$`), "must be $1 than $2"},
+	{regexp.MustCompile(`^(max length of \d+ characters exceeded|min length of \d+ characters required): `), "$1"},
+	{regexp.MustCompile(`^regexp pattern .* mismatch on string: `), "does not match the required pattern"},
+	{regexp.MustCompile(`^invalid (\S+): `), "is not a valid $1"},
+	{regexp.MustCompile(`^array items must be unique\.`), "array items must be unique"},
+}
+
+// schemaErrorMessage describes a schema validation failure without the
+// invalid value, falling back to a generic message for unknown forms.
+func schemaErrorMessage(message string) string {
+	for _, rule := range schemaErrorRules {
+		if loc := rule.pattern.FindStringSubmatchIndex(message); loc != nil {
+			return string(rule.pattern.ExpandString(nil, rule.replacement, message, loc))
+		}
+	}
+	return "does not match the schema"
+}
+
 // capturePluginValidationErrors reports commands a plugin requires that the
 // agent lacks separately from configuration that does not match the plugin's
 // schema, because the fixes differ.
@@ -165,13 +195,11 @@ func (e *Executor) capturePluginValidationErrors(ctx context.Context, p *plugin.
 		case errors.Is(err, plugin.ErrCommandNotInPATH):
 			missing = append(missing, strings.TrimSuffix(err.Error(), " "+plugin.ErrCommandNotInPATH.Error()))
 		case errors.As(err, &keyErr) && keyErr.PropertyPath != "":
-			// Leave out the invalid value, which the schema library cuts short,
-			// so part of a secret could escape redaction.
-			invalid = append(invalid, keyErr.PropertyPath+": "+keyErr.Message)
+			invalid = append(invalid, keyErr.PropertyPath+": "+schemaErrorMessage(keyErr.Message))
 		case errors.As(err, &keyErr):
-			invalid = append(invalid, keyErr.Message)
+			invalid = append(invalid, schemaErrorMessage(keyErr.Message))
 		default:
-			invalid = append(invalid, err.Error())
+			invalid = append(invalid, "the configuration could not be checked against the schema")
 		}
 	}
 	if len(missing) > 0 {

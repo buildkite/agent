@@ -147,16 +147,25 @@ const FetchErrorFix = "Check that each secret exists in the job's cluster and th
 // ListKeys lists keys for a message, naming at most max of them, such as
 // "A, B, and 3 more".
 func ListKeys(keys []string, max int) string {
-	if len(keys) <= max {
-		return strings.Join(keys, ", ")
+	shown := make([]string, 0, max)
+	for _, key := range keys[:min(len(keys), max)] {
+		// Keep each name short, so the list fits in a message.
+		if runes := []rune(key); len(runes) > 60 {
+			key = string(runes[:59]) + "…"
+		}
+		shown = append(shown, key)
 	}
-	return fmt.Sprintf("%s, and %d more", strings.Join(keys[:max], ", "), len(keys)-max)
+	if len(keys) <= max {
+		return strings.Join(shown, ", ")
+	}
+	return fmt.Sprintf("%s, and %d more", strings.Join(shown, ", "), len(keys)-max)
 }
 
 // DescribeFetchErrors summarizes failed fetches for a captured job error. It
 // returns the keys that failed and a message, starting with heading, that
-// names each key with Buildkite's response, leaving out request URLs. Fetch
-// errors never contain secret values.
+// names each key with Buildkite's response, or with the request error when
+// there was no response. Fetch errors never contain secret values, and the
+// Local Job API masks query strings in absolute URLs.
 func DescribeFetchErrors(heading string, errs []error) (failedKeys []string, message string) {
 	var b strings.Builder
 	b.WriteString(heading)

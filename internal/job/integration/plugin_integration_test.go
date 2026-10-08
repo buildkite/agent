@@ -971,6 +971,16 @@ func TestPluginFailuresAreCaptured(t *testing.T) {
 			excludes: "blah",
 		},
 		{
+			// maxLength messages include the value, which must be left out.
+			name: "invalid configuration with a value-bearing rule",
+			env: func(t *testing.T) []string {
+				return pluginWithDefinition(t, "name: test\nconfiguration:\n  properties:\n    settings:\n      type: string\n      maxLength: 2\n")
+			},
+			code:     "plugin_configuration_invalid",
+			contains: `does not match the plugin's schema: /settings: max length of 2 characters exceeded. Fix the configuration in the step.`,
+			excludes: "blah",
+		},
+		{
 			name: "missing requirement",
 			env: func(t *testing.T) []string {
 				return pluginWithDefinition(t, "name: test\nrequirements:\n  - definitely-not-a-command\n")
@@ -1023,6 +1033,33 @@ func TestPluginFailuresAreCaptured(t *testing.T) {
 				t.Errorf("message = %q, want it not to contain %q", report.Message, test.excludes)
 			}
 		})
+	}
+}
+
+func TestFailingPluginCommandHookIsNamed(t *testing.T) {
+	t.Parallel()
+	tester, err := NewExecutorTester(mainCtx)
+	if err != nil {
+		t.Fatalf("NewExecutorTester() error = %v", err)
+	}
+	defer tester.Close()
+	agentAPI := newJobErrorsAPI(t, nil)
+
+	// Without --strict-single-hooks the agent runs every plugin's command
+	// hook, so the report must name the one that failed, not the first.
+	passing := createTestPlugin(t, map[string][]string{"command": {"#!/usr/bin/env bash", "echo first plugin ran"}})
+	failing := createTestPlugin(t, map[string][]string{"command": {"#!/usr/bin/env bash", "echo second plugin failed", "exit 4"}})
+	plugins, err := json.Marshal([]*testPlugin{passing, failing})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := tester.Run(t, append(agentAPI.env(), "BUILDKITE_PLUGINS="+string(plugins))...); err == nil {
+		t.Fatalf("tester.Run() = nil, want command hook failure")
+	}
+	report := agentAPI.report(t, "command_failed")
+	name := filepath.Base(failing.Path)
+	if !strings.Contains(report.Message, name+" plugin's command hook") || strings.Contains(report.Message, filepath.Base(passing.Path)) || !strings.HasSuffix(report.Message, "second plugin failed") {
+		t.Errorf("message = %q, want it to name plugin %s and show its output", report.Message, name)
 	}
 }
 

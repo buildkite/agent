@@ -141,3 +141,25 @@ func TestCaptureHookErrorMissingInterpreter(t *testing.T) {
 		t.Errorf("message = %q, want the error rather than a missing interpreter", report.Message)
 	}
 }
+
+func TestSchemaErrorMessage(t *testing.T) {
+	t.Parallel()
+	for _, test := range []struct{ in, want string }{
+		{"type should be integer, got string", "type should be integer, got string"},
+		{`"region" value is required`, `"region" value is required`},
+		{"additional properties are not allowed", "additional properties are not allowed"},
+		{"should be one of [a, b]", "should be one of [a, b]"},
+		{"must be less than or equal to 10", "must be less than or equal to 10"},
+		{"max length of 2 characters exceeded: hunter2", "max length of 2 characters exceeded"},
+		{"min length of 9 characters required: hunter2", "min length of 9 characters required"},
+		{"regexp pattern ^a+$ mismatch on string: hunter2", "does not match the required pattern"},
+		{"12345 must be less than 10", "must be less than 10"},
+		{"array items must be unique. duplicated entry: hunter2", "array items must be unique"},
+		{"invalid email: mail: no angle-addr hunter2", "is not a valid email"},
+		{"something new: hunter2", "does not match the schema"},
+	} {
+		if got := schemaErrorMessage(test.in); got != test.want || strings.Contains(got, "hunter2") {
+			t.Errorf("schemaErrorMessage(%q) = %q, want %q", test.in, got, test.want)
+		}
+	}
+}
