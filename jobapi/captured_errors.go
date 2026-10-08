@@ -109,13 +109,13 @@ func (s *Server) handleCapturedError(w http.ResponseWriter, r *http.Request) {
 }
 
 func (e *CapturedError) redact(needles []string) error {
-	if len(needles) == 0 {
-		return nil
-	}
 	// These needles already include the escaped forms registered for logs.
 	// Use a separate matcher so reports cannot flush or mix with log output.
+	// Like job logs, also redact anything that looks like a Buildkite-issued
+	// token, even when its value was never registered.
 	var output strings.Builder
 	matcher := replacer.New(&output, needles, redact.Redacted)
+	matcher.AddPrefixes(redact.TokenPrefixes()...)
 	changed := false
 	replace := func(s string) string {
 		output.Reset()
