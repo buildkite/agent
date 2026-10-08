@@ -270,7 +270,7 @@ func (e *Executor) Run(ctx context.Context) (exitCode int) {
 	var phaseErr error
 
 	if e.includePhase("plugin") {
-		phaseErr = e.preparePlugins()
+		phaseErr = e.preparePlugins(ctx)
 
 		if phaseErr == nil {
 			phaseErr = e.PluginPhase(ctx)
