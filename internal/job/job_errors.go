@@ -102,6 +102,59 @@ func relativePath(dir, path string) (string, bool) {
 	return filepath.ToSlash(rel), true
 }
 
+// captureCommandError reports a command that failed or could not be run,
+// whether run by default or by a command hook, with the end of its output.
+func (e *Executor) captureCommandError(ctx context.Context, err error) {
+	// Quote short, single-line commands. Longer scripts are in the step.
+	command := strings.TrimSpace(e.Command)
+	quoted := command != "" && len(command) <= 200 && !strings.Contains(command, "\n")
+	subject := "The step's command"
+	if quoted {
+		subject = fmt.Sprintf("The command `%s`", command)
+	}
+	switch {
+	case shell.IsExitError(err):
+		if hook := map[string]string{
+			HookScopePlugin:     "The plugin command hook",
+			HookScopeRepository: "The repository command hook",
+			HookScopeAgent:      "The agent command hook",
+		}[e.commandHookScope()]; hook != "" {
+			subject = hook + ", which runs instead of the step's command,"
+		}
+		exit, _ := describeExit(err)
+		message := subject + " " + exit + "."
+		if strings.HasSuffix(exit, "SIGKILL") {
+			message += " The operating system may have killed it for using too much memory."
+		}
+		captureJobError(ctx, e.shell, "command_failed", e.withRecentOutput(message))
+	case errors.Is(err, errNoCommand):
+		captureJobError(ctx, e.shell, "command_missing", err.Error())
+	case errors.Is(err, errCommandEvalDisabled), errors.Is(err, errCommandOutsideRepository):
+		message := err.Error()
+		if quoted {
+			message += fmt.Sprintf(". The step's command is `%s`.", command)
+		}
+		captureJobError(ctx, e.shell, "command_eval_disabled", message)
+	default:
+		captureJobError(ctx, e.shell, "command_not_run", jobapi.CapturedErrorMessage(
+			fmt.Sprintf("%s could not be run: %v.", subject, err), subject+" could not be run."))
+	}
+}
+
+// commandHookScope reports which command hook replaced the step's command, if
+// any, in the order runCommand chooses one.
+func (e *Executor) commandHookScope() string {
+	switch {
+	case e.hasPluginHook("command"):
+		return HookScopePlugin
+	case e.hasLocalHook("command"):
+		return HookScopeRepository
+	case e.hasGlobalHook("command"):
+		return HookScopeAgent
+	}
+	return ""
+}
+
 // withRecentOutput appends the end of the redacted output from the hook,
 // command, or plugin checkout that just failed, using whatever room the
 // message budget leaves after the summary.

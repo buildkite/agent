@@ -1297,6 +1297,8 @@ func (e *Executor) CommandPhase(ctx context.Context) (hookErr, commandErr error)
 	// Expand the job log header from the command to surface the error
 	e.shell.Printf("^^^ +++")
 
+	e.captureCommandError(ctx, commandErr)
+
 	isExitError := shell.IsExitError(commandErr)
 	isExitSignaled := shell.IsExitSignaled(commandErr)
 
@@ -1317,6 +1319,12 @@ func (e *Executor) CommandPhase(ctx context.Context) (hookErr, commandErr error)
 	}
 }
 
+var (
+	errNoCommand                = errors.New("the command phase has no `command` to execute; provide a `command` field in your step configuration or define a `command` hook in a step plugin, your repository `.buildkite/hooks`, or the agent `hooks-path`")
+	errCommandEvalDisabled      = errors.New("this agent is not allowed to evaluate console commands; to allow this, re-run the agent without the `--no-command-eval` option or specify a script within your repository to run instead (such as scripts/test.sh)")
+	errCommandOutsideRepository = errors.New("this agent is only allowed to run scripts within your repository; to allow this, re-run the agent without the `--no-command-eval` option or specify a script within your repository to run instead (such as scripts/test.sh)")
+)
+
 // defaultCommandPhase is executed if there is no global or plugin command hook
 func (e *Executor) defaultCommandPhase(ctx context.Context) (retErr error) {
 	span, ctx := tracetools.StartSpanFromContext(ctx, "default command hook", e.TracingBackend)
@@ -1335,9 +1343,11 @@ func (e *Executor) defaultCommandPhase(ctx context.Context) (retErr error) {
 		}
 	}()
 
+	e.outputTail.reset()
+
 	// Make sure we actually have a command to run
 	if strings.TrimSpace(e.Command) == "" {
-		return fmt.Errorf("the command phase has no `command` to execute; provide a `command` field in your step configuration or define a `command` hook in a step plugin, your repository `.buildkite/hooks`, or the agent `hooks-path`")
+		return errNoCommand
 	}
 
 	scriptFileName := strings.ReplaceAll(e.Command, "\n", "")
@@ -1350,14 +1360,14 @@ func (e *Executor) defaultCommandPhase(ctx context.Context) (retErr error) {
 	// check that the agent is allowed to eval commands.
 	if !commandIsScript && !e.CommandEval {
 		e.shell.Commentf("No such file: \"%s\"", scriptFileName)
-		return fmt.Errorf("this agent is not allowed to evaluate console commands; to allow this, re-run the agent without the `--no-command-eval` option or specify a script within your repository to run instead (such as scripts/test.sh)")
+		return errCommandEvalDisabled
 	}
 
 	// Also make sure that the script we've resolved is definitely within this
 	// repository checkout and isn't elsewhere on the system.
 	if commandIsScript && !e.CommandEval && !strings.HasPrefix(pathToCommand, e.shell.Getwd()+string(os.PathSeparator)) {
 		e.shell.Commentf("No such file: \"%s\"", scriptFileName)
-		return fmt.Errorf("this agent is only allowed to run scripts within your repository; to allow this, re-run the agent without the `--no-command-eval` option or specify a script within your repository to run instead (such as scripts/test.sh)")
+		return errCommandOutsideRepository
 	}
 
 	var cmdToExec string
@@ -1445,7 +1455,7 @@ func (e *Executor) defaultCommandPhase(ctx context.Context) (retErr error) {
 		e.shell.Promptf("%s", cmdToExec)
 	}
 
-	err = e.shell.Command(cmd[0], cmd[1:]...).Run(ctx, shell.ShowPrompt(false))
+	err = e.shell.Command(cmd[0], cmd[1:]...).Run(ctx, shell.ShowPrompt(false), e.teeRecentOutput())
 	return err
 }
 
