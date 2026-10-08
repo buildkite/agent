@@ -129,6 +129,15 @@ func URLCredentialsInText(text string) string {
 	})
 }
 
+// Match a URL's query string, up to whitespace or surrounding punctuation.
+var urlQuery = regexp.MustCompile(`(?i)\b([a-z][a-z0-9+.-]*://[^\s?#"'<>]+)\?[^\s#"'<>]*`)
+
+// URLQueriesInText replaces URL query strings in diagnostic text, which can
+// carry credentials such as the signature in a presigned storage URL.
+func URLQueriesInText(text string) string {
+	return urlQuery.ReplaceAllString(text, "$1?"+string(Redacted(nil)))
+}
+
 // String is a convenience wrapper for redacting small strings.
 // This is fine to call repeatedly with many separate strings, but avoid using
 // this to redact large streams - it requires buffering the whole input and

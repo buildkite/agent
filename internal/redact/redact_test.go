@@ -312,3 +312,21 @@ func TestURLCredentialsInText(t *testing.T) {
 		})
 	}
 }
+
+func TestURLQueriesInText(t *testing.T) {
+	t.Parallel()
+	for _, test := range []struct{ in, want string }{
+		{"no URLs here", "no URLs here"},
+		{"https://example.com/path", "https://example.com/path"},
+		{
+			`PUT "https://bucket.s3.amazonaws.com/a.txt?X-Amz-Signature=abc&X-Amz-Credential=def": 403 Forbidden`,
+			`PUT "https://bucket.s3.amazonaws.com/a.txt?[REDACTED]": 403 Forbidden`,
+		},
+		{"see https://a.example/x?sig=1#frag and http://b.example/?t=2", "see https://a.example/x?[REDACTED]#frag and http://b.example/?[REDACTED]"},
+		{"a question? not a URL", "a question? not a URL"},
+	} {
+		if got := URLQueriesInText(test.in); got != test.want {
+			t.Errorf("URLQueriesInText(%q) = %q, want %q", test.in, got, test.want)
+		}
+	}
+}
