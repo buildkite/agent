@@ -13,7 +13,9 @@ import (
 
 	"github.com/buildkite/agent/v4/api"
 	"github.com/buildkite/agent/v4/internal/cache/archive"
+	"github.com/buildkite/agent/v4/jobapi"
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/urfave/cli/v3"
 )
 
@@ -88,12 +90,24 @@ func TestCacheSaveForce(t *testing.T) {
 				}
 			}))
 			t.Cleanup(server.Close)
+			reports := startAgentErrorTestServer(t)
 			cmd := *CacheSaveCommand
 			app := &cli.Command{Commands: []*cli.Command{&cmd}}
 			args := []string{"buildkite-agent", "save", "--endpoint", server.URL, "--agent-access-token", "test-token", "--registry", "test", "--cache-config-file", "cache.yml", "--cache-store-url", storageURL, "--name", "rubocop"}
 			err := app.Run(t.Context(), append(args, test.args...))
 			if (err != nil) != test.denied {
 				t.Fatalf("cache save error = %v, want error: %t", err, test.denied)
+			}
+			var wantReports []jobapi.CapturedError
+			if test.denied {
+				wantReports = []jobapi.CapturedError{{
+					Code:    "cache_save_failed",
+					Message: `Failed to save caches [rubocop] to registry "test": failed to save cache "rubocop": failed to create cache entry: failed to save: 403 Forbidden`,
+				}}
+			}
+			ignoreServerFields := cmpopts.IgnoreFields(jobapi.CapturedError{}, "Timestamp", "IdempotencyKey")
+			if diff := cmp.Diff(wantReports, *reports, ignoreServerFields, cmpopts.EquateEmpty()); diff != "" {
+				t.Errorf("captured errors mismatch (-want +got):\n%s", diff)
 			}
 			server.Close()
 			close(requests)
