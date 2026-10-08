@@ -388,6 +388,12 @@ func (r *JobRunner) runJob(ctx context.Context) core.ProcessExit {
 		// Send the error to job logs
 		_, _ = fmt.Fprintf(r.jobLogs, "Error running job: %s\n", err)
 
+		if timeout := new(kubernetes.StartTimeoutError); errors.As(err, &timeout) && !r.agentStopping.Load() {
+			r.captureJobError(ctx, "kubernetes_container_not_connected", fmt.Sprintf(
+				"Not every container connected to the agent within %v, the agent's --kubernetes-container-start-timeout. The container image may not have been pulled (ImagePullBackOff), or the pod may not have been scheduled. Check that each image in the podSpec exists and the cluster can pull it, and check the pod's events.",
+				timeout.Timeout))
+		}
+
 		// The process did not run at all, so make sure it fails
 		return core.ProcessExit{
 			Status:       -1,
@@ -405,13 +411,13 @@ func (r *JobRunner) runJob(ctx context.Context) core.ProcessExit {
 One or more containers never connected to the agent. Perhaps the container image specified in your podSpec could not be pulled (ImagePullBackOff)?
 `)
 			r.captureJobError(ctx, "kubernetes_container_not_connected",
-				"One or more containers never connected to the agent, so the job was canceled. The container image may not have been pulled (ImagePullBackOff). Check that each image in the podSpec exists and the cluster can pull it, and check the pod's events.")
+				"The job was canceled while one or more containers had not connected to the agent. If the job did not start, the container image may not have been pulled (ImagePullBackOff). Check that each image in the podSpec exists and the cluster can pull it, and check the pod's events.")
 		case k8sProcess.AnyClientIn(kubernetes.StateLost):
 			_, _ = fmt.Fprint(r.jobLogs, `+++ Unknown container exit status
 One or more containers connected to the agent, but then stopped communicating without exiting normally. Perhaps the container was OOM-killed?
 `)
 			r.captureJobError(ctx, "kubernetes_container_lost",
-				"One or more containers stopped communicating with the agent without exiting. The container may have been OOM-killed. Check the container's memory limit and the pod's events.")
+				"One or more containers stopped communicating with the agent without reporting an exit status. The container may have been OOM-killed. Check the container's memory limit and the pod's events.")
 		}
 	}
 
