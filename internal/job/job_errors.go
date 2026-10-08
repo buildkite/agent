@@ -30,7 +30,8 @@ func captureJobError(ctx context.Context, sh *shell.Shell, code, message string)
 }
 
 func deliverError(ctx context.Context, sh *shell.Shell, report jobapi.CapturedError) {
-	if ctx.Err() != nil {
+	// Failures after cancellation are consequences of it, not separate errors.
+	if ctx.Err() != nil || sh.Env.GetString("BUILDKITE_JOB_CANCELLED", "") == "true" {
 		return
 	}
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
