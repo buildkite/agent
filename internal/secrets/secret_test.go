@@ -372,3 +372,19 @@ func TestDescribeFetchErrors(t *testing.T) {
 		t.Errorf("message = %q, want %q", message, want)
 	}
 }
+
+func TestListKeys(t *testing.T) {
+	t.Parallel()
+	for _, test := range []struct {
+		keys []string
+		want string
+	}{
+		{[]string{"A"}, "A"},
+		{[]string{"A", "B"}, "A, B"},
+		{[]string{"A", "B", "C", "D"}, "A, B, and 2 more"},
+	} {
+		if got := ListKeys(test.keys, 2); got != test.want {
+			t.Errorf("ListKeys(%q, 2) = %q, want %q", test.keys, got, test.want)
+		}
+	}
+}

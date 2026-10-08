@@ -144,6 +144,15 @@ func FetchSecrets(ctx context.Context, l logger.Logger, client APIClient, jobID 
 // FetchErrorFix is what a captured error for failed secret fetches suggests.
 const FetchErrorFix = "Check that each secret exists in the job's cluster and that this pipeline is allowed to use it."
 
+// ListKeys lists keys for a message, naming at most max of them, such as
+// "A, B, and 3 more".
+func ListKeys(keys []string, max int) string {
+	if len(keys) <= max {
+		return strings.Join(keys, ", ")
+	}
+	return fmt.Sprintf("%s, and %d more", strings.Join(keys[:max], ", "), len(keys)-max)
+}
+
 // DescribeFetchErrors summarizes failed fetches for a captured job error. It
 // returns the keys that failed and a message, starting with heading, that
 // names each key with Buildkite's response, leaving out request URLs. Fetch
