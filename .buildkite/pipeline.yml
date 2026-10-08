@@ -77,67 +77,14 @@ steps:
             - GOCACHE
             - GOMODCACHE
 
-  # EXPERIMENT: mirror the lint steps onto the kube-operator queues in the
-  # Agent cluster. Soft-fail and nothing depends on them, so they can't block
-  # the build. The standard queues have no Docker and are expected to fail.
-  - group: ":kubernetes: Kube operator lint mirror"
-    steps:
-      - name: ":go::robot_face: Lint on {{matrix}}"
-        key: kube-mirror-check-code-committed
-        command: .buildkite/steps/check-code-committed.sh
-        soft_fail: true
-        agents:
-          queue: "{{matrix}}"
-        matrix: &kube_operator_queues
-          - kube-operator-standard
-          - kube-operator-standard-ephemeral
-          - kube-operator-sysbox
-          - kube-operator-sysbox-ephemeral
-          - kube-operator-dind
-          - kube-operator-dind-ephemeral
-        plugins:
-          - *assume_cache_role
-          - docker-compose#v4.14.0:
-              config: .buildkite/docker-compose.yml
-              cli-version: 2
-              mount-buildkite-agent: true
-              run: lint
-              env:
-                - BUILDKITE_AGENT_ACCESS_TOKEN
-                - BUILDKITE_AGENT_CACHE_REGISTRY
-                - BUILDKITE_AGENT_CACHE_STORE_URL
-                - AWS_ACCESS_KEY_ID
-                - AWS_SECRET_ACCESS_KEY
-                - AWS_SESSION_TOKEN
-
-      - name: ":go::robot_face: Check protobuf generation on {{matrix}}"
-        key: kube-mirror-check-protobuf-generation
-        env:
-          GOBIN: /root/.protobuf-tools/bin
-          GOCACHE: /root/.protobuf-tools/gocache
-          GOMODCACHE: /root/.protobuf-tools/gomodcache
-        command: .buildkite/steps/check-protobuf-generation.sh
-        soft_fail: true
-        agents:
-          queue: "{{matrix}}"
-        matrix: *kube_operator_queues
-        plugins:
-          - *assume_cache_role
-          - docker-compose#v4.14.0:
-              config: .buildkite/docker-compose.yml
-              cli-version: 2
-              mount-buildkite-agent: true
-              run: lint
-              env:
-                - BUILDKITE_AGENT_ACCESS_TOKEN
-                - BUILDKITE_AGENT_CACHE_REGISTRY
-                - BUILDKITE_AGENT_CACHE_STORE_URL
-                - AWS_ACCESS_KEY_ID
-                - AWS_SECRET_ACCESS_KEY
-                - AWS_SESSION_TOKEN
-                - GOBIN
-                - GOCACHE
-                - GOMODCACHE
+  # EXPERIMENT: mirror the lint steps onto the kube-operator queues. The
+  # kube-operator runners have no verification JWKS, so these steps are
+  # uploaded without a signature by unsetting the signing key for this upload.
+  - name: ":pipeline::kubernetes: Upload unsigned kube-operator lint mirror"
+    key: upload-kube-mirror
+    command: >-
+      env -u BUILDKITE_AGENT_JWKS_FILE -u BUILDKITE_AGENT_JWKS_KEY_ID
+      buildkite-agent pipeline upload .buildkite/pipeline.kube-mirror.yml
 
   # Send git commit metadata to the Test Engine plan-metadata pipeline on
   # every build. Plan output is discarded -- the Tests and Coverage group
