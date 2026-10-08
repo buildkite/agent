@@ -3,10 +3,6 @@
 # Soft-fail and nothing depends on them. The standard queues have no Docker
 # and are expected to fail.
 
-env:
-  BUILDKITE_AGENT_CACHE_REGISTRY: "agent-cache"
-  BUILDKITE_AGENT_CACHE_STORE_URL: "s3://bk-agent-cache-v2-dogfood-445615400570-us-east-1?region=us-east-1"
-
 steps:
   - group: ":kubernetes: Kube operator lint mirror"
     steps:
@@ -24,14 +20,7 @@ steps:
           - kube-operator-dind
           - kube-operator-dind-ephemeral
         plugins:
-          - &assume_cache_role
-            aws-assume-role-with-web-identity#v1.4.0:
-              role_arn: "arn:aws:iam::445615400570:role/pipeline-buildkite-agent"
-              session-tags:
-                - organization_slug
-                - organization_id
-                - pipeline_slug
-          - docker-compose#v4.14.0:
+          - docker-compose#v5.15.0:
               config: .buildkite/docker-compose.yml
               cli-version: 2
               mount-buildkite-agent: true
@@ -56,8 +45,7 @@ steps:
           queue: "{{matrix}}"
         matrix: *kube_operator_queues
         plugins:
-          - *assume_cache_role
-          - docker-compose#v4.14.0:
+          - docker-compose#v5.15.0:
               config: .buildkite/docker-compose.yml
               cli-version: 2
               mount-buildkite-agent: true
