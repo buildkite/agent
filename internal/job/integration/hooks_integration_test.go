@@ -1196,3 +1196,77 @@ func TestPolyglotBinaryHooksCanBeRun(t *testing.T) {
 		t.Fatalf("tester.Output %s does not contain expected output: %q", tester.Output, "hi there from golang 🌊")
 	}
 }
+
+func TestHookFailuresAreCaptured(t *testing.T) {
+	t.Parallel()
+
+	for _, hook := range []string{"environment", "pre-checkout", "pre-command", "post-command", "pre-exit"} {
+		t.Run(hook, func(t *testing.T) {
+			t.Parallel()
+			tester, err := NewExecutorTester(mainCtx)
+			if err != nil {
+				t.Fatalf("NewExecutorTester() error = %v", err)
+			}
+			defer tester.Close()
+			agentAPI := newJobErrorsAPI(t, nil)
+
+			tester.ExpectGlobalHook(hook).Once().AndExitWith(5)
+			if err := tester.Run(t, agentAPI.env()...); err == nil {
+				t.Fatalf("tester.Run() = nil, want hook failure")
+			}
+
+			report := agentAPI.report(t, "hook_failed")
+			path := filepath.Join(tester.HooksDir, hookFileName(hook))
+			if want := "The agent " + hook + " hook at " + path + " exited with status 5. It is installed on the agent, not in the repository."; report.Message != want {
+				t.Errorf("message = %q, want %q", report.Message, want)
+			}
+		})
+	}
+
+	t.Run("repository hook", func(t *testing.T) {
+		t.Parallel()
+		tester, err := NewExecutorTester(mainCtx)
+		if err != nil {
+			t.Fatalf("NewExecutorTester() error = %v", err)
+		}
+		defer tester.Close()
+		agentAPI := newJobErrorsAPI(t, nil)
+
+		tester.ExpectLocalHook("pre-command").Once().AndExitWith(5)
+		if err := tester.Run(t, agentAPI.env()...); err == nil {
+			t.Fatalf("tester.Run() = nil, want hook failure")
+		}
+		report := agentAPI.report(t, "hook_failed")
+		if want := "The repository pre-command hook at .buildkite/hooks/" + hookFileName("pre-command") + " exited with status 5."; report.Message != want {
+			t.Errorf("message = %q, want %q", report.Message, want)
+		}
+	})
+
+	t.Run("local hooks disabled", func(t *testing.T) {
+		t.Parallel()
+		tester, err := NewExecutorTester(mainCtx)
+		if err != nil {
+			t.Fatalf("NewExecutorTester() error = %v", err)
+		}
+		defer tester.Close()
+		agentAPI := newJobErrorsAPI(t, nil)
+
+		tester.ExpectLocalHook("pre-command").NotCalled()
+		if err := tester.Run(t, append(agentAPI.env(), "BUILDKITE_NO_LOCAL_HOOKS=true")...); err == nil {
+			t.Fatalf("tester.Run() = nil, want local hook refusal")
+		}
+		report := agentAPI.report(t, "local_hook_refused")
+		path := ".buildkite/hooks/" + hookFileName("pre-command")
+		if want := "The repository has a pre-command hook at " + path + ", but BUILDKITE_NO_LOCAL_HOOKS disables local hooks, so the job failed. Remove BUILDKITE_NO_LOCAL_HOOKS from the job's environment, or remove the hook from the repository."; report.Message != want {
+			t.Errorf("message = %q, want %q", report.Message, want)
+		}
+	})
+}
+
+// hookFileName is the name ExecutorTester gives a mocked hook script.
+func hookFileName(name string) string {
+	if runtime.GOOS == "windows" {
+		return name + ".bat"
+	}
+	return name
+}

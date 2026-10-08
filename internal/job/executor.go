@@ -473,12 +473,19 @@ func (e *Executor) executeHook(ctx context.Context, hookCfg HookConfig) (retErr 
 	}
 	hookName += " " + hookCfg.Name
 
+	// A command hook's failure is the command's failure, which CommandPhase
+	// captures instead.
+	if hookCfg.Name != "command" {
+		defer func() { e.captureHookError(ctx, hookCfg, hookName, retErr) }()
+	}
+
 	if !osutil.FileExists(hookCfg.Path) {
 		if e.Debug {
 			e.shell.Commentf("Skipping %s hook, no script at \"%s\"", hookName, hookCfg.Path)
 		}
 		return nil
 	}
+	e.outputTail.reset()
 
 	e.shell.Headerf("Running %s hook", hookName)
 
@@ -539,7 +546,7 @@ func (e *Executor) runUnwrappedHook(ctx context.Context, _ string, hookCfg HookC
 	environ.Set("BUILDKITE_HOOK_PATH", hookCfg.Path)
 	environ.Set("BUILDKITE_HOOK_SCOPE", hookCfg.Scope)
 
-	err := e.shell.Command(hookCfg.Path).Run(ctx, shell.WithExtraEnv(environ))
+	err := e.shell.Command(hookCfg.Path).Run(ctx, shell.WithExtraEnv(environ), e.teeRecentOutput())
 	// Store the last hook exit code for subsequent steps, matching wrapped shell hooks.
 	e.shell.Env.Set("BUILDKITE_LAST_HOOK_EXIT_STATUS", strconv.Itoa(shell.ExitCode(err)))
 	if err != nil {
@@ -651,7 +658,7 @@ func (e *Executor) runWrappedShellScriptHook(ctx context.Context, hookName strin
 		if err != nil {
 			return err
 		}
-		return script.Run(ctx, shell.ShowPrompt(false), shell.WithExtraEnv(hookCfg.Env))
+		return script.Run(ctx, shell.ShowPrompt(false), shell.WithExtraEnv(hookCfg.Env), e.teeRecentOutput())
 	}()
 	if err != nil {
 		exitCode := shell.ExitCode(err)
@@ -944,6 +951,15 @@ func (e *Executor) executeLocalHook(ctx context.Context, name string) error {
 	}
 
 	if !localHooksEnabled {
+		// Say which setting disabled local hooks, since only the step's
+		// environment can be changed from the repository.
+		disabledBy, fix := "BUILDKITE_NO_LOCAL_HOOKS", "Remove BUILDKITE_NO_LOCAL_HOOKS from the job's environment, or remove the hook from the repository."
+		if !e.LocalHooksEnabled {
+			disabledBy, fix = "the agent's --no-local-hooks option", "Remove the hook from the repository, or run the step on agents that allow local hooks."
+		}
+		relPath, _ := filepath.Rel(e.shell.Env.GetString("BUILDKITE_BUILD_CHECKOUT_PATH", ""), localHookPath)
+		captureJobError(ctx, e.shell, "local_hook_refused",
+			fmt.Sprintf("The repository has a %s hook at %s, but %s disables local hooks, so the job failed. %s", name, filepath.ToSlash(relPath), disabledBy, fix))
 		return fmt.Errorf("refusing to run %s, local hooks are disabled", localHookPath)
 	}
 
