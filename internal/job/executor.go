@@ -968,8 +968,9 @@ func (e *Executor) executeLocalHook(ctx context.Context, name string) error {
 			disabledBy, fix = "the agent's --no-local-hooks option", "Remove the hook from the repository, or run the step on agents that allow local hooks."
 		}
 		relPath, _ := filepath.Rel(e.shell.Env.GetString("BUILDKITE_BUILD_CHECKOUT_PATH", ""), localHookPath)
-		captureJobError(ctx, e.shell, "local_hook_refused",
-			fmt.Sprintf("The repository has a %s hook at %s, but %s disables local hooks, so the job failed. %s", name, filepath.ToSlash(relPath), disabledBy, fix))
+		captureJobError(ctx, e.shell, "local_hook_refused", jobapi.CapturedErrorMessage(
+			fmt.Sprintf("The repository has a %s hook at %s, but %s disables local hooks, so the job failed. %s", name, filepath.ToSlash(relPath), disabledBy, fix),
+			fmt.Sprintf("The repository has a %s hook, but %s disables local hooks, so the job failed. %s", name, disabledBy, fix)))
 		return fmt.Errorf("refusing to run %s, local hooks are disabled", localHookPath)
 	}
 

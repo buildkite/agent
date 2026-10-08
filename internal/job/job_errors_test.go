@@ -2,11 +2,13 @@ package job
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"syscall"
 	"testing"
 
@@ -125,10 +127,17 @@ func TestDescribeExitSeesThroughHookErrors(t *testing.T) {
 func TestCaptureHookErrorMissingInterpreter(t *testing.T) {
 	t.Parallel()
 	ctx, e, reports := agentErrorCaptureServer(t)
-	err := &os.PathError{Op: "fork/exec", Path: "/tmp/buildkite-agent-hook-wrapper/hook", Err: syscall.ENOENT}
+	var err error = &os.PathError{Op: "fork/exec", Path: "/tmp/buildkite-agent-hook-wrapper/hook", Err: syscall.ENOENT}
 	e.captureHookError(ctx, HookConfig{Scope: HookScopeAgent, Path: "/etc/buildkite-agent/hooks/environment"}, "agent environment", err)
 	report := <-reports
 	if want := "The agent environment hook at /etc/buildkite-agent/hooks/environment could not be run because a program it needs was not found, usually the interpreter on its #! line, such as bash. It is installed on the agent, not in the repository."; report.Message != want {
 		t.Errorf("message = %q, want %q", report.Message, want)
+	}
+
+	// A missing file after the hook ran is not a missing interpreter.
+	err = fmt.Errorf("failed to get environment: %w", &os.PathError{Op: "open", Path: "/tmp/env", Err: syscall.ENOENT})
+	e.captureHookError(ctx, HookConfig{Scope: HookScopeAgent, Path: "/etc/buildkite-agent/hooks/environment"}, "agent environment", err)
+	if report := <-reports; strings.Contains(report.Message, "interpreter") {
+		t.Errorf("message = %q, want the error rather than a missing interpreter", report.Message)
 	}
 }
