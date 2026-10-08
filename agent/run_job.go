@@ -207,10 +207,16 @@ func (r *JobRunner) Run(ctx context.Context, ignoreAgentInDispatches *bool) (err
 		r.agentLogger.Errorf("%v", err)
 
 		// Mask credentials in a refused repository URL or plugin source.
-		option := new(allowlistError)
-		if errors.As(err, &option) {
+		option, invalid := new(allowlistError), new(invalidPluginsError)
+		switch {
+		case errors.As(err, &invalid):
+			fix := "Fix the plugins in the step."
+			r.captureJobError(ctx, "plugin_definition_invalid", jobapi.CapturedErrorMessage(
+				fmt.Sprintf("The step's plugins could not be parsed: %v. %s", invalid.err, fix),
+				"The step's plugins could not be parsed. "+fix))
+		case errors.As(err, &option):
 			fix := "Run the step on agents that allow it, or ask the agent's operator to change the option."
-			detail := fmt.Sprintf("This agent refused the job because its --%s option does not allow it: %s. %s", option.option, redact.URLCredentialsInText(option.err.Error()), fix)
+			detail := fmt.Sprintf("This agent refused the job because its --%s option does not allow it: %s. %s", option.option, option.err, fix)
 			fallback := fmt.Sprintf("This agent refused the job because its --%s option does not allow it. %s", option.option, fix)
 			r.captureJobError(ctx, "job_refused", jobapi.CapturedErrorMessage(detail, fallback))
 		}
@@ -326,6 +332,15 @@ func validateJobValue(allowedPatterns []*regexp.Regexp, jobValue string) error {
 	return fmt.Errorf("%s has no match in %s", jobValue, allowedPatterns)
 }
 
+// invalidPluginsError is returned when the job's plugins are not valid JSON,
+// which is a problem with the step rather than with what the agent allows.
+type invalidPluginsError struct{ err error }
+
+func (e *invalidPluginsError) Error() string {
+	return "failed to unmarshal plugins for validation: " + e.err.Error()
+}
+func (e *invalidPluginsError) Unwrap() error { return e.err }
+
 // validatePlugins unmarshal and validates the plugins, if the list of allowed plugins is set.
 // Disabled plugins or errors in json.Unmarshal will by-pass the plugin verification.
 func (r *JobRunner) validatePlugins() error {
@@ -340,7 +355,7 @@ func (r *JobRunner) validatePlugins() error {
 
 	var ps pipeline.Plugins
 	if err := json.Unmarshal(pluginsVar, &ps); err != nil {
-		return fmt.Errorf("failed to unmarshal plugins for validation: %w", err)
+		return &invalidPluginsError{err: err}
 	}
 
 	for _, plugin := range ps {
