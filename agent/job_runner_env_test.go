@@ -223,3 +223,31 @@ func TestCreateEnvironmentControlPlaneOTLPCaseVariantCollision(t *testing.T) {
 		t.Errorf("bootstrap env %s = %q, want unset (injection skipped)", envutil.OTELTracesHeaders, v)
 	}
 }
+
+func TestWindowsJobEnvAliasesCannotOverrideAgentControls(t *testing.T) {
+	t.Parallel()
+
+	jobEnv, err := normalizeJobEnv(map[string]string{
+		"buildkite_agent_endpoint": "https://attacker.invalid",
+		"buildkite_command_eval":   "true",
+		"buildkite_agent_token":    "synthetic-registration-token",
+	}, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := controlPlaneTestRunner(t, jobEnv, AgentConfiguration{CommandEval: false})
+	got, err := r.createEnvironment(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	bootstrapEnv := envutil.FromSlice(got)
+	if value, _ := bootstrapEnv.Get("BUILDKITE_AGENT_ENDPOINT"); value != "http://localhost/fake" {
+		t.Errorf("endpoint = %q, want agent endpoint", value)
+	}
+	if value, _ := bootstrapEnv.Get("BUILDKITE_COMMAND_EVAL"); value != "false" {
+		t.Errorf("command eval = %q, want false", value)
+	}
+	if value, exists := bootstrapEnv.Get("BUILDKITE_AGENT_TOKEN"); exists {
+		t.Errorf("registration token reached bootstrap: %q", value)
+	}
+}
