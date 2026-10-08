@@ -2,6 +2,7 @@ package clicommand
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -11,6 +12,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/buildkite/agent/v4/api"
 	"github.com/buildkite/agent/v4/env"
 	"github.com/buildkite/agent/v4/internal/experiments"
 	"github.com/buildkite/agent/v4/logger"
@@ -1062,6 +1064,22 @@ func TestPipelineUploadFailuresAreCaptured(t *testing.T) {
 			args:     []string{"--redacted-vars", "UPLOAD_TEST_SECRET"},
 		},
 		{
+			// The parent agent does not know a value set only in the step's
+			// shell, so the command redacts it.
+			name:     "interpolation error naming a secret",
+			pipeline: "steps:\n  - command: echo ${MISSING_VALUE?the value is $UPLOAD_TEST_SECRET}\n",
+			doing:    "parsing the pipeline",
+			message:  "the value is [REDACTED]",
+			args:     []string{"--redacted-vars", "UPLOAD_TEST_SECRET"},
+		},
+		{
+			name:     "missing job",
+			pipeline: "steps:\n  - command: echo hello\n",
+			doing:    "checking the job's environment",
+			message:  "missing job parameter",
+			args:     []string{"--job", ""},
+		},
+		{
 			name:     "upload",
 			pipeline: "steps:\n  - command: echo hello\n",
 			doing:    "uploading the pipeline to Buildkite",
@@ -1095,6 +1113,29 @@ func TestPipelineUploadFailuresAreCaptured(t *testing.T) {
 			}
 			if !strings.Contains(report.Message, test.message) || strings.Contains(report.Message, "a-very-secret-value") {
 				t.Errorf("message = %q, want it to contain %q and no secret value", report.Message, test.message)
+			}
+		})
+	}
+}
+
+func TestPipelineUploadFix(t *testing.T) {
+	t.Parallel()
+	apiError := func(status int) error {
+		return &api.ErrorResponse{Response: &http.Response{StatusCode: status}}
+	}
+	for _, test := range []struct {
+		name string
+		err  error
+		want string
+	}{
+		{"pipeline rejected", apiError(http.StatusUnprocessableEntity), "Fix the pipeline definition so that Buildkite accepts it."},
+		{"token rejected", apiError(http.StatusUnauthorized), "Buildkite rejected the job's agent access token."},
+		{"server error", apiError(http.StatusServiceUnavailable), "Retry the step."},
+		{"transport or processing failure", errors.New("connection refused"), "If Buildkite rejected the pipeline, fix the pipeline definition"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if got := pipelineUploadFix(fmt.Errorf("failed to upload: %w", test.err)); !strings.Contains(got, test.want) {
+				t.Errorf("pipelineUploadFix() = %q, want it to contain %q", got, test.want)
 			}
 		})
 	}
