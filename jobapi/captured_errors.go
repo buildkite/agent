@@ -23,6 +23,25 @@ const MaxCapturedErrorBody = 32 << 10
 
 const maxCapturedErrorMessageLength = 1000
 
+// MaxCapturedErrorDetail is the most characters the agent writes in a message
+// for its own reports, including diagnostic text such as command output. It
+// leaves room within the 1000-character message limit for redaction to
+// lengthen short secrets, such as a 6-character value becoming "[REDACTED]",
+// so the end of the message is not cut off.
+const MaxCapturedErrorDetail = maxCapturedErrorMessageLength - 100
+
+// CapturedErrorMessage returns detail when it fits whole within
+// MaxCapturedErrorDetail characters, and fallback otherwise. Detail is not cut
+// short here, before redaction, because part of a cut-off secret could escape
+// it. Blank, invalid UTF-8, or NUL-containing detail also falls back. Keep
+// fallback within the budget too: list at most a few names in it.
+func CapturedErrorMessage(detail, fallback string) string {
+	if strings.TrimSpace(detail) == "" || !utf8.ValidString(detail) || strings.ContainsRune(detail, 0) || utf8.RuneCountInString(detail) > MaxCapturedErrorDetail {
+		return fallback
+	}
+	return detail
+}
+
 func (s *Server) handleCapturedError(w http.ResponseWriter, r *http.Request) {
 	if s.reportCapturedError == nil {
 		s.writeCapturedError(w, errors.New("error capture is unavailable on the parent agent"), http.StatusNotFound)
