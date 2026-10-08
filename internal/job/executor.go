@@ -1154,7 +1154,10 @@ func (e *Executor) fetchAndSetSecrets(ctx context.Context) error {
 			fmt.Fprintf(&errorMsg, "\n   %s", err)
 		}
 		failedKeys, detail := secrets.DescribeFetchErrors("Could not fetch these secrets for the job:", errs)
-		fallback := fmt.Sprintf("Could not fetch these secrets for the job: %s. %s", strings.Join(failedKeys, ", "), secrets.FetchErrorFix)
+		fallback := "Could not fetch the job's secrets. " + secrets.FetchErrorFix
+		if len(failedKeys) > 0 {
+			fallback = fmt.Sprintf("Could not fetch these secrets for the job: %s. %s", secrets.ListKeys(failedKeys, 5), secrets.FetchErrorFix)
+		}
 		captureJobError(ctx, e.shell, "secrets_fetch_failed", jobapi.CapturedErrorMessage(detail, fallback))
 		return errors.New(errorMsg.String())
 	}
@@ -1181,7 +1184,7 @@ func (e *Executor) fetchAndSetSecrets(ctx context.Context) error {
 					rejected = fmt.Errorf("secret %q cannot set checkout-locked environment variable %q while BUILDKITE_CHECKOUT_OVERRIDE_MODE=%s", pipelineSecret.Key, pipelineSecret.EnvironmentVariable, e.CheckoutOverrideMode)
 				}
 				if rejected != nil {
-					message := jobapi.CapturedErrorMessage(rejected.Error()+". Map the secret to a different environment_variable in the step.", "A secret cannot set a protected environment variable. Map it to a different environment_variable in the step.")
+					message := jobapi.CapturedErrorMessage(rejected.Error()+". Map the secret to a different environment_variable in the step.", "A secret cannot set this protected or checkout-locked environment variable. Map it to a different environment_variable in the step.")
 					captureJobError(ctx, e.shell, "secret_environment_variable_rejected", message)
 					return rejected
 				}
