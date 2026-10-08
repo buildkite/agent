@@ -2,6 +2,8 @@ package clicommand
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"os"
 	"time"
 
@@ -32,9 +34,16 @@ func captureAgentError(ctx context.Context, l logger.Logger, code, message strin
 	}
 }
 
-// storageErrorText describes an artifact or cache storage failure without URL
-// query strings, which can hold the signature of a presigned URL. The Local Job
-// API masks URL credentials and registered secrets.
+// storageErrorText describes err for a captured error without URL query
+// strings, which can carry presigned credentials. When err joins the errors of
+// several files, it describes the first and counts the others, so one cause
+// fits in the message.
 func storageErrorText(err error) string {
+	var joined interface{ Unwrap() []error }
+	if errors.As(err, &joined) {
+		if errs := joined.Unwrap(); len(errs) > 1 {
+			return fmt.Sprintf("%s (and %d more errors)", redact.URLQueriesInText(errs[0].Error()), len(errs)-1)
+		}
+	}
 	return redact.URLQueriesInText(err.Error())
 }
