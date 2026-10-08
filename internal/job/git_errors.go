@@ -1,7 +1,6 @@
 package job
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"strings"
@@ -36,8 +35,14 @@ var (
 type gitErrorReportsKey struct{}
 
 // maxGitErrorOutput bounds the Git output kept while a command runs. The
-// report needs only its last lines, which usually say why Git failed.
+// report needs only its last lines, which usually say why Git failed, but
+// longer output is left out of the report.
 const maxGitErrorOutput = 16 << 10
+
+// gitOutputOmitted replaces Git output longer than maxGitErrorOutput. Keeping
+// only its end could keep the end of a long multi-line secret without its
+// start, which redaction could then no longer recognize.
+const gitOutputOmitted = "Git printed too much output to include here. See the job log for Git's full output."
 
 // maxGitErrorMessage is the most characters of summary and Git output to
 // report. It leaves room within the Job API's 1000-character message limit for
@@ -61,28 +66,24 @@ func (o *gitErrorOutput) tee(sh *shell.Shell) shell.RunCommandOpt {
 func (o *gitErrorOutput) Write(p []byte) (int, error) {
 	o.mu.Lock()
 	defer o.mu.Unlock()
-	o.data = append(o.data, p...)
-	if over := len(o.data) - maxGitErrorOutput; over > 0 {
-		o.data = append(o.data[:0], o.data[over:]...)
+	if !o.cut && len(o.data)+len(p) > maxGitErrorOutput {
+		o.data = nil
 		o.cut = true
+	}
+	if !o.cut {
+		o.data = append(o.data, p...)
 	}
 	return len(p), nil
 }
 
-// String returns the whole lines of output kept, dropping a first line that
-// was cut short.
+// String returns the output kept, or gitOutputOmitted if there was too much.
 func (o *gitErrorOutput) String() string {
 	o.mu.Lock()
 	defer o.mu.Unlock()
-	data := o.data
 	if o.cut {
-		i := bytes.IndexByte(data, '\n')
-		if i < 0 {
-			return ""
-		}
-		data = data[i+1:]
+		return gitOutputOmitted
 	}
-	return string(data)
+	return string(o.data)
 }
 
 func (o *gitErrorOutput) reset() {
@@ -123,9 +124,15 @@ func captureGitError(ctx context.Context, sh *shell.Shell, err error, output str
 	// An outer checkout failure must not resubmit a failed delivery either.
 	gitErr.captured = true
 	code, message := classifyGitError(err)
-	if code != "" {
-		captureError(ctx, sh, code, withGitOutput(message, redactGitOutput(ctx, output)))
+	if code == "" {
+		return
 	}
+	if output == gitOutputOmitted {
+		message += "\n\n" + gitOutputOmitted
+	} else {
+		message = withGitOutput(message, redactGitOutput(ctx, output))
+	}
+	captureError(ctx, sh, code, message)
 }
 
 type gitErrorNeedlesKey struct{}
@@ -140,8 +147,7 @@ func withGitErrorNeedles(ctx context.Context, needles func() []string) context.C
 // output before withGitOutput keeps only its last lines, so the cut cannot
 // leave part of a multi-line secret, such as a private key, that the Job API
 // could no longer match. Needles are read now, so they include secrets
-// registered while Git ran. A secret longer than the output kept can still
-// lose its start to the buffer's cut, but not reach the lines reported.
+// registered while Git ran.
 func redactGitOutput(ctx context.Context, output string) string {
 	var needles []string
 	if f, ok := ctx.Value(gitErrorNeedlesKey{}).(func() []string); ok {

@@ -691,7 +691,7 @@ func TestGitErrorOutputCapture(t *testing.T) {
 		{"keeps the last lines that fit", fallback + heading + strings.Join(numbered[108:], ""), numbered},
 		{"single line too long for the report", fallback, []string{"fatal: " + strings.Repeat("x", maxGitErrorMessage) + "\n"}},
 		{"long earlier line is dropped", fallback + heading + "fatal: later output", []string{strings.Repeat("x", maxGitErrorMessage) + "\n", "fatal: later output"}},
-		{"output beyond the buffer", fallback + heading + "fatal: later output\n", []string{strings.Repeat("x", maxGitErrorOutput), "secret", "-suffix\n", "fatal: later output\n"}},
+		{"output beyond the buffer", fallback + "\n\n" + gitOutputOmitted, []string{strings.Repeat("x", maxGitErrorOutput), "secret", "-suffix\n", "fatal: later output\n"}},
 		{"line that fits once its URL is masked", fallback + heading + "fatal: unable to access 'https://xxxxx@example.com/repo?[REDACTED]': denied\n", []string{"fatal: unable to access 'https://user:pass@example.com/repo?sig=" + strings.Repeat("s", maxGitErrorMessage) + "': denied\n"}},
 		{"nul", fallback, []string{"fatal: secret\x00-suffix"}},
 		{"invalid utf8", fallback, []string{"fatal: secret\xff-suffix"}},
@@ -724,16 +724,27 @@ func TestGitErrorOutputCapture(t *testing.T) {
 
 func TestGitErrorOutputRedactsSecretsBeforeTheCut(t *testing.T) {
 	t.Parallel()
-	ctx, e, reports := gitErrorCaptureServer(t, true, http.StatusCreated)
-	// A registered multi-line secret whose first line is too long to report:
+	// A registered multi-line secret whose first line is too long to keep:
 	// cutting before redaction would leave its last line unmatched.
-	secret := strings.Repeat("A", maxGitErrorMessage) + "\nPRIVATE_CREDENTIAL_SUFFIX"
-	e.redactors.Append(redact.New(io.Discard, []string{secret}))
-	var output gitErrorOutput
-	_, _ = io.WriteString(&output, "remote: "+secret+"\nfatal: unable to read from remote\n")
-	captureGitError(ctx, e.shell, &gitError{error: errors.New("exit status 128"), Type: gitErrorFetch}, output.String())
-	report := <-reports
-	if strings.Contains(report.Message, "PRIVATE_CREDENTIAL_SUFFIX") || !strings.HasSuffix(report.Message, "remote: [REDACTED]\nfatal: unable to read from remote\n") {
-		t.Errorf("message = %q, want the secret redacted before the cut", report.Message)
+	for _, tc := range []struct {
+		name       string
+		firstLine  int
+		wantSuffix string
+	}{
+		{"too long for the report", maxGitErrorMessage, "remote: [REDACTED]\nfatal: unable to read from remote\n"},
+		{"too long for the buffer", maxGitErrorOutput, "\n\n" + gitOutputOmitted},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx, e, reports := gitErrorCaptureServer(t, true, http.StatusCreated)
+			secret := strings.Repeat("A", tc.firstLine) + "\nPRIVATE_CREDENTIAL_SUFFIX"
+			e.redactors.Append(redact.New(io.Discard, []string{secret}))
+			var output gitErrorOutput
+			_, _ = io.WriteString(&output, "remote: "+secret+"\nfatal: unable to read from remote\n")
+			captureGitError(ctx, e.shell, &gitError{error: errors.New("exit status 128"), Type: gitErrorFetch}, output.String())
+			report := <-reports
+			if strings.Contains(report.Message, "PRIVATE_CREDENTIAL_SUFFIX") || !strings.HasSuffix(report.Message, tc.wantSuffix) {
+				t.Errorf("message = %q, want the secret left out and suffix %q", report.Message, tc.wantSuffix)
+			}
+		})
 	}
 }
