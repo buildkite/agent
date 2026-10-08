@@ -4,19 +4,29 @@ import (
 	"context"
 	"crypto/rand"
 	"time"
+	"unicode/utf8"
 
 	"github.com/buildkite/agent/v4/api"
+	"github.com/buildkite/agent/v4/internal/redact"
+	"github.com/buildkite/agent/v4/jobapi"
 )
 
 // captureJobError reports a failure the agent observed outside the job's
 // bootstrap process, such as refusing to run the job, when the job opted in
 // with BUILDKITE_CAPTURE_AGENT_ERRORS. There is no Local Job API here, so the
-// runner reports directly with the job's token. Messages are written by the
-// agent, contain no job output to redact, and mask URL credentials. Delivery is
-// best-effort and never changes the job's outcome.
+// runner reports directly with the job's token, and does what the Local Job
+// API would: it masks URL credentials and query strings, then shortens the
+// message to the agent's budget. Messages are written by the agent and contain
+// no job output to redact. Delivery is best-effort and never changes the job's
+// outcome.
 func (r *JobRunner) captureJobError(ctx context.Context, code, message string) {
 	if r.conf.Job.Env["BUILDKITE_CAPTURE_AGENT_ERRORS"] != "true" {
 		return
+	}
+	message = redact.URLQueriesInText(redact.URLCredentialsInText(message))
+	if runes := []rune(message); len(runes) > jobapi.MaxCapturedErrorDetail {
+		const marker = "…[truncated]"
+		message = string(runes[:jobapi.MaxCapturedErrorDetail-utf8.RuneCountInString(marker)]) + marker
 	}
 	// Report even while the agent is stopping, but never wait long.
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 2*time.Second)
