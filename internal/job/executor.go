@@ -108,8 +108,8 @@ type Executor struct {
 	outputTail         outputTail
 	outputTailRedactor *replacer.Replacer
 
-	// commandHook describes the command hook runCommand chose to run instead
-	// of the step's command, such as "The agent command hook", if any.
+	// commandHook describes the command hook that ran instead of the step's
+	// command, such as "The agent command hook", if any.
 	commandHook string
 
 	// stderrTee carries the redacted shell logger output (section headers,
@@ -490,6 +490,17 @@ func (e *Executor) executeHook(ctx context.Context, hookCfg HookConfig) (retErr 
 		return nil
 	}
 	e.resetRecentOutput()
+
+	// Record which command hook runs, so a failure is attributed to it rather
+	// than to the step's command. Several plugins' command hooks can run, and
+	// the last to run is the one that failed.
+	if hookCfg.Name == "command" {
+		e.commandHook = map[string]string{
+			HookScopeAgent:      "The agent command hook",
+			HookScopeRepository: "The repository command hook",
+			HookScopePlugin:     fmt.Sprintf("The %s plugin's command hook", hookCfg.PluginName),
+		}[hookCfg.Scope]
+	}
 
 	e.shell.Headerf("Running %s hook", hookName)
 
@@ -1231,19 +1242,10 @@ func (e *Executor) runCommand(ctx context.Context) error {
 	// There can only be one command hook, so we check them in order of plugin, local
 	switch {
 	case e.hasPluginHook("command"):
-		e.commandHook = "The plugin command hook"
-		for _, p := range e.pluginCheckouts {
-			if _, err := hook.Find(p.Root, p.HooksDir, "command"); err == nil {
-				e.commandHook = fmt.Sprintf("The %s plugin's command hook", p.Plugin.Name())
-				break
-			}
-		}
 		return e.executePluginHook(ctx, "command", e.pluginCheckouts)
 	case e.hasLocalHook("command"):
-		e.commandHook = "The repository command hook"
 		return e.executeLocalHook(ctx, "command")
 	case e.hasGlobalHook("command"):
-		e.commandHook = "The agent command hook"
 		return e.executeGlobalHook(ctx, "command")
 	default:
 		return e.defaultCommandPhase(ctx)
