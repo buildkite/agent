@@ -101,6 +101,13 @@ type Executor struct {
 	// into the OTLP exporter.
 	stdoutTee *teeWriter
 
+	// outputTail keeps the end of the redacted child-process output, so
+	// captured errors can include what a failed hook or command printed. It is
+	// fed by outputTailRedactor, which receives only hook, command, and plugin
+	// checkout output, never the agent's own logging.
+	outputTail         outputTail
+	outputTailRedactor *replacer.Replacer
+
 	// stderrTee carries the redacted shell logger output (section headers,
 	// prompts, comments, warnings) to stderr and, when OTLP job logging is
 	// enabled, mirrors it into the OTLP exporter so the exported records match
@@ -1523,6 +1530,11 @@ func (e *Executor) setupRedactors(log shell.Logger, environ *env.Environment, st
 	stdoutRedactor := replacer.New(e.stdoutTee, needles, redact.Redacted)
 	stdoutRedactor.AddPrefixes(tokenPrefixes...)
 	e.redactors.Append(stdoutRedactor)
+	// Captured errors include the end of a failed command's output. Redact it
+	// as a whole stream, with the same needles as the job log, before
+	// keeping only its end.
+	e.outputTailRedactor = replacer.New(&e.outputTail, needles, redact.Redacted)
+	e.redactors.Append(e.outputTailRedactor)
 	// The shell logger writes through this redactor into stderrTee, whose
 	// primary sink is stderr. When OTLP job logging is enabled, a secondary
 	// sink is attached so the same already-redacted control output is mirrored
