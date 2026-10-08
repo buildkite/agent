@@ -487,9 +487,12 @@ func capturePipelineUploadError(ctx context.Context, l logger.Logger, stage stri
 	// The Local Job API redacts the values the agent knows of, but not a
 	// secret set only in the step's shell, which an interpolation error such
 	// as ${VAR?$SECRET} can include, so redact those here.
-	if values, _, err := redact.NeedlesFromEnv(redactedVars); err == nil {
-		message = redact.String(message, values)
+	values, _, needlesErr := redact.NeedlesFromEnv(redactedVars)
+	if needlesErr != nil {
+		// Without the values to redact, send only the agent's own text.
+		message = fallback
 	}
+	message = redact.String(message, values)
 	captureAgentError(ctx, l, "pipeline_upload_failed", jobapi.CapturedErrorMessage(message, fallback))
 }
 
@@ -498,12 +501,15 @@ func capturePipelineUploadError(ctx context.Context, l logger.Logger, stage stri
 func pipelineUploadFix(err error) string {
 	if errResp := new(api.ErrorResponse); errors.As(err, &errResp) && errResp.Response != nil {
 		switch status := errResp.Response.StatusCode; {
+		case status == http.StatusBadRequest || status == http.StatusUnprocessableEntity:
+			return "Fix the pipeline definition so that Buildkite accepts it."
 		case status == http.StatusUnauthorized || status == http.StatusForbidden:
 			return "Buildkite rejected the job's agent access token. Run the upload in the job the token belongs to, while it is running."
+		case status == http.StatusTooManyRequests:
+			return "Buildkite rate limited the upload. Retry the step later."
 		case status >= 500:
 			return "Buildkite could not process the request. Retry the step."
 		}
-		return "Fix the pipeline definition so that Buildkite accepts it."
 	}
 	return "If Buildkite rejected the pipeline, fix the pipeline definition so that it accepts it. Otherwise, retry the step, and check this agent's network access to Buildkite if it keeps failing."
 }

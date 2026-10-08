@@ -1049,6 +1049,7 @@ func TestPipelineUploadFailuresAreCaptured(t *testing.T) {
 	for _, test := range []struct {
 		name, pipeline, doing, message string
 		args                           []string
+		fallback                       bool
 	}{
 		{
 			name:     "parse",
@@ -1071,6 +1072,16 @@ func TestPipelineUploadFailuresAreCaptured(t *testing.T) {
 			doing:    "parsing the pipeline",
 			message:  "the value is [REDACTED]",
 			args:     []string{"--redacted-vars", "UPLOAD_TEST_SECRET"},
+		},
+		{
+			// Without usable patterns nothing can be redacted, so only the
+			// agent's own text is sent.
+			name:     "invalid redacted-vars pattern",
+			pipeline: "steps:\n  - command: echo ${MISSING_VALUE?the value is $UPLOAD_TEST_SECRET}\n",
+			doing:    "parsing the pipeline",
+			message:  "Fix the pipeline definition",
+			args:     []string{"--redacted-vars", "[UPLOAD_TEST_SECRET"},
+			fallback: true,
 		},
 		{
 			name:     "missing job",
@@ -1108,7 +1119,11 @@ func TestPipelineUploadFailuresAreCaptured(t *testing.T) {
 				t.Fatalf("reports = %+v, want one", *reports)
 			}
 			report := (*reports)[0]
-			if want := "`buildkite-agent pipeline upload` failed while " + test.doing + ": "; report.Code != "pipeline_upload_failed" || !strings.HasPrefix(report.Message, want) {
+			want := "`buildkite-agent pipeline upload` failed while " + test.doing + ": "
+			if test.fallback {
+				want = "`buildkite-agent pipeline upload` failed while " + test.doing + ". "
+			}
+			if report.Code != "pipeline_upload_failed" || !strings.HasPrefix(report.Message, want) {
 				t.Errorf("report = %q %q, want pipeline_upload_failed starting %q", report.Code, report.Message, want)
 			}
 			if !strings.Contains(report.Message, test.message) || strings.Contains(report.Message, "a-very-secret-value") {
@@ -1131,6 +1146,8 @@ func TestPipelineUploadFix(t *testing.T) {
 		{"pipeline rejected", apiError(http.StatusUnprocessableEntity), "Fix the pipeline definition so that Buildkite accepts it."},
 		{"token rejected", apiError(http.StatusUnauthorized), "Buildkite rejected the job's agent access token."},
 		{"server error", apiError(http.StatusServiceUnavailable), "Retry the step."},
+		{"rate limited", apiError(http.StatusTooManyRequests), "Buildkite rate limited the upload."},
+		{"not found", apiError(http.StatusNotFound), "If Buildkite rejected the pipeline, fix the pipeline definition"},
 		{"transport or processing failure", errors.New("connection refused"), "If Buildkite rejected the pipeline, fix the pipeline definition"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
