@@ -5,6 +5,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/buildkite/agent/v4/internal/redact"
 	"github.com/buildkite/agent/v4/jobapi"
 	"github.com/buildkite/agent/v4/logger"
 )
@@ -29,4 +30,11 @@ func captureAgentError(ctx context.Context, l logger.Logger, code, message strin
 		// Transport errors can contain upstream response bodies or socket paths.
 		l.Warnf("Could not capture job error %q", code)
 	}
+}
+
+// storageErrorText describes an artifact or cache storage failure without URL
+// query strings, which can hold the signature of a presigned URL. The Local Job
+// API masks URL credentials and registered secrets.
+func storageErrorText(err error) string {
+	return redact.URLQueriesInText(err.Error())
 }
