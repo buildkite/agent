@@ -213,8 +213,8 @@ func TestGitErrorCapture(t *testing.T) {
 						"secret-host", "[REDACTED]", "secret-proxy", "[REDACTED]",
 						"secret-user", "[REDACTED]",
 					).Replace(tc.diagnostic) + "\n"
-					if r.Message != wantMessage {
-						t.Fatalf("message = %q, want Git's redacted output %q", r.Message, wantMessage)
+					if !strings.HasSuffix(r.Message, ".\n\nLast lines of Git output:\n"+wantMessage) {
+						t.Fatalf("message = %q, want a summary and Git's redacted output %q", r.Message, wantMessage)
 					}
 				}
 			}
@@ -293,7 +293,7 @@ fi
 				if tc.operation == "lfs" {
 					attempt = tc.attempts
 				}
-				if want := fmt.Sprintf("fatal: couldn't find remote ref attempt-%d\n", attempt); r.Message != want {
+				if want := fmt.Sprintf("\nfatal: couldn't find remote ref attempt-%d\n", attempt); !strings.HasSuffix(r.Message, want) {
 					t.Fatalf("message = %q, want current attempt's output %q", r.Message, want)
 				}
 				if r.Timestamp.IsZero() || !r.Timestamp.Before(deliveryStarted) {
@@ -352,7 +352,7 @@ esac
 		{"git_network_failed", "fatal: unable to access 'secret-url': Could not resolve host: secret-host\n"},
 		{"git_fetch_unclassified", "fatal: unable to access 'secret-url': The requested URL returned error: 500\n"},
 	} {
-		if report := <-reports; report.Code != want.code || report.Message != want.message {
+		if report := <-reports; report.Code != want.code || !strings.HasSuffix(report.Message, "\nLast lines of Git output:\n"+want.message) {
 			t.Fatalf("report = %#v, want %q with message %q", report, want.code, want.message)
 		}
 	}
@@ -676,18 +676,26 @@ func TestCheckoutErrorCaptureGenuineTimeout(t *testing.T) {
 func TestGitErrorOutputCapture(t *testing.T) {
 	t.Parallel()
 	const fallback = "Git fetch failed with an unclassified error."
+	const heading = "\n\nLast lines of Git output:\n"
+	// Each numbered line is 9 characters, so 92 of them fit after the summary.
+	var numbered []string
+	for i := range 200 {
+		numbered = append(numbered, fmt.Sprintf("line %03d\n", i))
+	}
 	for _, tc := range []struct {
 		name, want string
 		chunks     []string
 	}{
 		{"empty", fallback, nil},
 		{"whitespace", fallback, []string{" \n\t"}},
-		{"at limit", strings.Repeat("x", 4095) + "!", []string{strings.Repeat("x", 4095), "!"}},
-		{"over limit", fallback, []string{strings.Repeat("x", 4090), "secret", "-suffix", "fatal: later output"}},
+		{"keeps the last lines that fit", fallback + heading + strings.Join(numbered[108:], ""), numbered},
+		{"single line too long for the report", fallback, []string{"fatal: " + strings.Repeat("x", maxGitErrorMessage) + "\n"}},
+		{"long earlier line is dropped", fallback + heading + "fatal: later output", []string{strings.Repeat("x", maxGitErrorMessage) + "\n", "fatal: later output"}},
+		{"output beyond the buffer", fallback + heading + "fatal: later output\n", []string{strings.Repeat("x", maxGitErrorOutput), "secret", "-suffix\n", "fatal: later output\n"}},
 		{"nul", fallback, []string{"fatal: secret\x00-suffix"}},
 		{"invalid utf8", fallback, []string{"fatal: secret\xff-suffix"}},
-		{"split secret", "fatal: [REDACTED]\n", []string{"fatal: secret", "-suffix\n"}},
-		{"multiline secret", "fatal: \n[REDACTED]\n\n", []string{"fatal: \nsecret\n", "part\n\n"}},
+		{"split secret", fallback + heading + "fatal: [REDACTED]\n", []string{"fatal: secret", "-suffix\n"}},
+		{"multiline secret", fallback + heading + "fatal: \n[REDACTED]\n\n", []string{"fatal: \nsecret\n", "part\n\n"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			ctx, e, reports := gitErrorCaptureServer(t, true, http.StatusCreated)

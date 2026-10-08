@@ -1,6 +1,7 @@
 package job
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"strings"
@@ -32,15 +33,19 @@ var (
 
 type gitErrorReportsKey struct{}
 
-// Keep complete output or none: truncating before Job API redaction could leave
-// part of a registered secret unmatched. 4 KiB also leaves room for JSON escaping
-// within the API's 32 KiB request limit.
-const maxGitErrorOutput = 4 << 10
+// maxGitErrorOutput bounds the Git output kept while a command runs. The
+// report needs only its last lines, which usually say why Git failed.
+const maxGitErrorOutput = 16 << 10
+
+// maxGitErrorMessage is the most characters of summary and Git output to
+// report. It leaves room within the Job API's 1000-character message limit for
+// redaction to lengthen short secrets, so the end of the output is not cut.
+const maxGitErrorMessage = 900
 
 type gitErrorOutput struct {
-	mu       sync.Mutex
-	data     []byte
-	overflow bool
+	mu   sync.Mutex
+	data []byte
+	cut  bool
 }
 
 func (o *gitErrorOutput) tee(sh *shell.Shell) shell.RunCommandOpt {
@@ -54,27 +59,35 @@ func (o *gitErrorOutput) tee(sh *shell.Shell) shell.RunCommandOpt {
 func (o *gitErrorOutput) Write(p []byte) (int, error) {
 	o.mu.Lock()
 	defer o.mu.Unlock()
-	if len(o.data)+len(p) > maxGitErrorOutput {
-		o.overflow = true
-		o.data = nil
-	}
-	if !o.overflow {
-		o.data = append(o.data, p...)
+	o.data = append(o.data, p...)
+	if over := len(o.data) - maxGitErrorOutput; over > 0 {
+		o.data = append(o.data[:0], o.data[over:]...)
+		o.cut = true
 	}
 	return len(p), nil
 }
 
+// String returns the whole lines of output kept, dropping a first line that
+// was cut short.
 func (o *gitErrorOutput) String() string {
 	o.mu.Lock()
 	defer o.mu.Unlock()
-	return string(o.data)
+	data := o.data
+	if o.cut {
+		i := bytes.IndexByte(data, '\n')
+		if i < 0 {
+			return ""
+		}
+		data = data[i+1:]
+	}
+	return string(data)
 }
 
 func (o *gitErrorOutput) reset() {
 	o.mu.Lock()
 	defer o.mu.Unlock()
 	o.data = nil
-	o.overflow = false
+	o.cut = false
 }
 
 // gitErrorReports collects observations from the sequential Git operations in
@@ -109,13 +122,35 @@ func captureGitError(ctx context.Context, sh *shell.Shell, err error, output str
 	gitErr.captured = true
 	code, message := classifyGitError(err)
 	if code != "" {
-		if strings.TrimSpace(output) != "" && utf8.ValidString(output) && !strings.ContainsRune(output, 0) {
-			// Preserve complete output, including whitespace, so registered
-			// multi-line secrets can still be matched by the Job API.
-			message = output
-		}
-		captureError(ctx, sh, code, message)
+		captureError(ctx, sh, code, withGitOutput(message, output))
 	}
+}
+
+// withGitOutput adds as many of the last whole lines of Git's output to
+// summary as fit within maxGitErrorMessage characters. The Job API redacts the
+// report, and cutting only between lines keeps whole the URLs and tokens that
+// Git prints, so it can still recognize them.
+func withGitOutput(summary, output string) string {
+	if strings.TrimSpace(output) == "" || !utf8.ValidString(output) || strings.ContainsRune(output, 0) {
+		return summary
+	}
+	const heading = "\n\nLast lines of Git output:\n"
+	budget := maxGitErrorMessage - utf8.RuneCountInString(summary) - utf8.RuneCountInString(heading)
+	lines := strings.SplitAfter(output, "\n")
+	start := len(lines)
+	for start > 0 {
+		n := utf8.RuneCountInString(lines[start-1])
+		if n > budget {
+			break
+		}
+		budget -= n
+		start--
+	}
+	recent := strings.Join(lines[start:], "")
+	if strings.TrimSpace(recent) == "" {
+		return summary
+	}
+	return summary + heading + recent
 }
 
 // classifyGitError maps checkout errors to codes and messages independently of
