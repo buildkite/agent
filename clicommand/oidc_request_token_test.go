@@ -219,3 +219,27 @@ func TestOIDCRequestTokenRetriesUndecodableResponse(t *testing.T) {
 		t.Errorf("server received %d requests, want %d", got, want)
 	}
 }
+
+func TestOIDCRequestTokenFailureIsCaptured(t *testing.T) {
+	reports := startAgentErrorTestServer(t)
+	server := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
+		rw.Header().Set("Content-Type", "application/json")
+		rw.WriteHeader(http.StatusForbidden)
+		_, _ = fmt.Fprint(rw, `{"message":"audience not allowed"}`)
+	}))
+	defer server.Close()
+
+	if _, err := runOIDCRequestTokenCommand(t, server.URL, "--audience", "sts.example.com"); err == nil {
+		t.Fatal("runOIDCRequestTokenCommand() error = nil, want refusal")
+	}
+
+	if len(*reports) != 1 {
+		t.Fatalf("reports = %+v, want one", *reports)
+	}
+	report := (*reports)[0]
+	for _, want := range []string{"for audience sts.example.com", "403 Forbidden: audience not allowed", "Buildkite refused the request"} {
+		if report.Code != "oidc_token_request_failed" || !strings.Contains(report.Message, want) {
+			t.Errorf("report = %q %q, want oidc_token_request_failed containing %q", report.Code, report.Message, want)
+		}
+	}
+}

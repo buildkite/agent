@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -207,4 +208,30 @@ func TestSecretGet(t *testing.T) {
 			}
 		}
 	})
+}
+
+func TestSecretGetFailureIsCaptured(t *testing.T) {
+	reports := startAgentErrorTestServer(t)
+	server := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
+		rw.Header().Set("Content-Type", "application/json")
+		rw.WriteHeader(http.StatusNotFound)
+		_, _ = fmt.Fprint(rw, `{"message":"secret not found"}`)
+	}))
+	defer server.Close()
+
+	err := secretGet(t.Context(), baseSecretGetConfig(server.URL, []string{"deploy_key"}, "default"), io.Discard, logger.NewBuffer())
+	if err == nil {
+		t.Fatal("secretGet() error = nil, want fetch failure")
+	}
+
+	if len(*reports) != 1 {
+		t.Fatalf("reports = %+v, want one", *reports)
+	}
+	report := (*reports)[0]
+	want := "`buildkite-agent secret get` could not fetch these secrets:\n" +
+		"- deploy_key: 404 Not Found: secret not found\n" +
+		"Check that each secret exists in the job's cluster and that this pipeline is allowed to use it."
+	if report.Code != "secrets_fetch_failed" || report.Message != want {
+		t.Errorf("report = %q %q, want secrets_fetch_failed %q", report.Code, report.Message, want)
+	}
 }
