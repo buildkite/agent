@@ -10,6 +10,10 @@ steps:
         key: kube-mirror-check-code-committed
         command: .buildkite/steps/check-code-committed.sh
         soft_fail: true
+        env:
+          GIT_CONFIG_COUNT: "1"
+          GIT_CONFIG_KEY_0: url.https://github.com/.insteadOf
+          GIT_CONFIG_VALUE_0: "git@github.com:"
         agents:
           queue: "{{matrix}}"
         matrix: &kube_operator_queues
@@ -39,6 +43,9 @@ steps:
           GOBIN: /root/.protobuf-tools/bin
           GOCACHE: /root/.protobuf-tools/gocache
           GOMODCACHE: /root/.protobuf-tools/gomodcache
+          GIT_CONFIG_COUNT: "1"
+          GIT_CONFIG_KEY_0: url.https://github.com/.insteadOf
+          GIT_CONFIG_VALUE_0: "git@github.com:"
         command: .buildkite/steps/check-protobuf-generation.sh
         soft_fail: true
         agents:
