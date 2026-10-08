@@ -30,6 +30,8 @@ type fakeRegistry struct {
 	pending   map[string]api.CacheEntryRetrieveResp
 	stores    []api.CacheEntryCreateReq
 	retrieves []api.CacheEntryRetrieveReq
+	// commands records "<operation> <command>" for each retrieve, commit and confirm.
+	commands []string
 }
 
 func fakeAddr(targetPaths []string, key []api.CacheKeyPart) string {
@@ -67,6 +69,7 @@ func (f *fakeRegistry) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		var req api.CacheEntryRetrieveReq
 		_ = json.NewDecoder(r.Body).Decode(&req)
 		f.retrieves = append(f.retrieves, req)
+		f.commands = append(f.commands, "retrieve "+req.Command)
 		entry, ok := f.entries[fakeAddr(req.TargetPaths, req.CacheKey)]
 		if !ok {
 			notFound()
@@ -83,6 +86,7 @@ func (f *fakeRegistry) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case "PUT /cache_registries/test/commit":
 		var req api.CacheEntryCommitReq
 		_ = json.NewDecoder(r.Body).Decode(&req)
+		f.commands = append(f.commands, "commit "+req.Command)
 		entry := f.pending[req.UploadID]
 		f.entries[fakeAddr(entry.TargetPaths, entry.CacheKey)] = entry
 		reply(api.CacheEntryCommitResp{})
@@ -94,6 +98,9 @@ func (f *fakeRegistry) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		delete(f.entries, addr)
 		reply(api.CacheEntryExpireResp{Existed: existed})
 	case "POST /cache_registries/test/confirm":
+		var req api.CacheEntryConfirmReq
+		_ = json.NewDecoder(r.Body).Decode(&req)
+		f.commands = append(f.commands, "confirm "+req.Command)
 		reply(api.CacheEntryConfirmResp{})
 	default:
 		w.WriteHeader(http.StatusBadRequest)
@@ -283,6 +290,12 @@ func TestRunExec_SeparateFromPlainSave(t *testing.T) {
 	}
 	if got := readFile(t, filepath.Join("out", "result")); got != "from cache save" {
 		t.Errorf("plain restore: out/result = %q, want the plain save's files", got)
+	}
+
+	// Only exec's requests are tagged, so the registry can count them separately.
+	want := []string{"commit ", "retrieve exec", "commit exec", "retrieve ", "confirm "}
+	if !slices.Equal(reg.commands, want) {
+		t.Errorf("request commands = %q, want %q", reg.commands, want)
 	}
 }
 

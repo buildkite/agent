@@ -143,6 +143,7 @@ func (c *client) Restore(ctx context.Context, cacheID string) (RestoreResult, er
 		retrieveResp, exists, apiResp, err = c.api.CacheEntryRetrieve(ctx, c.registry, api.CacheEntryRetrieveReq{
 			TargetPaths: cacheConfig.TargetPaths,
 			CacheKey:    cacheKey,
+			Command:     c.command,
 		})
 		if api.BreakOnNonRetryable(r, apiResp, err) {
 			return err
@@ -505,6 +506,7 @@ func (c *client) confirmRestoreSucceeded(ctx context.Context, retrieveResp api.C
 		Scopes:      retrieveResp.Scopes,
 		UploadID:    retrieveResp.UploadID,
 		Stats:       stats,
+		Command:     c.command,
 	}
 	err := roko.NewRetrier(
 		roko.WithMaxAttempts(5),

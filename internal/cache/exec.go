@@ -45,6 +45,7 @@ func RunExec(ctx context.Context, l logger.Logger, apiClient *api.Client, cfg Co
 		return RunUncached(l, cfg.FailOnError, err, stdout, stderr, command)
 	}
 	c.onProgress = nil
+	c.command = "exec"
 	cacheConfig, _ := c.findCache(name) // newClient checked it exists
 
 	// Resolve the key before the command can change its inputs, and pin it as literal parts so the save uses the
