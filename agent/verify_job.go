@@ -37,14 +37,18 @@ func (e *invalidSignatureError) Unwrap() error {
 
 func (r *JobRunner) verifyJob(ctx context.Context, keySet any) error {
 	step := &r.conf.Job.Step
+	jobEnv := r.originalJobEnv
+	if jobEnv == nil {
+		jobEnv = r.conf.Job.Env
+	}
 
 	// First, verify the signature.
 	err := signature.VerifyStep(
 		ctx,
 		step,
 		keySet,
-		r.conf.Job.Env["BUILDKITE_REPO"],
-		signature.WithEnv(r.conf.Job.Env),
+		jobEnv["BUILDKITE_REPO"],
+		signature.WithEnv(jobEnv),
 		signature.WithLogger(logger.DeprecatedLogger{Logger: r.agentLogger}),
 		signature.WithDebugSigning(r.conf.AgentConfiguration.DebugSigning),
 	)
@@ -110,7 +114,7 @@ func (r *JobRunner) verifyJob(ctx context.Context, keySet any) error {
 	for _, field := range signedFields {
 		switch field {
 		case "command": // compare directly
-			jobCommand := r.conf.Job.Env["BUILDKITE_COMMAND"]
+			jobCommand := jobEnv["BUILDKITE_COMMAND"]
 			if step.Command != jobCommand {
 				r.agentLogger.Debugf("failed to verifyJob: BUILDKITE_COMMAND = %q != %q = step.Command", jobCommand, step.Command)
 				return newInvalidSignatureError(ErrInvalidJob)
@@ -120,7 +124,7 @@ func (r *JobRunner) verifyJob(ctx context.Context, keySet any) error {
 			// Everything in the step env (post-matrix interpolation) must be
 			// present in the job env, and have equal values.
 			for name, stepEnvValue := range step.Env {
-				jobEnvValue, has := r.conf.Job.Env[name]
+				jobEnvValue, has := jobEnv[name]
 				if !has {
 					r.agentLogger.Debugf("failed to verifyJob: %q missing from Job.Env; step.Env[%q] = %q", name, name, stepEnvValue)
 					return newInvalidSignatureError(ErrInvalidJob)
@@ -132,7 +136,7 @@ func (r *JobRunner) verifyJob(ctx context.Context, keySet any) error {
 			}
 
 		case "plugins": // compare canonicalised JSON
-			jobPluginsJSON := r.conf.Job.Env["BUILDKITE_PLUGINS"]
+			jobPluginsJSON := jobEnv["BUILDKITE_PLUGINS"]
 			// Various equivalent ways to represent "no plugins", however...
 			// jcs.Transform chokes on "" and "null", and json.Marshal encodes
 			// nil slice as "null", but zero-length slice as "[]".
@@ -208,7 +212,7 @@ func (r *JobRunner) verifyJob(ctx context.Context, keySet any) error {
 		default:
 			// env:: - skip any that were verified with Verify.
 			if name, isEnv := strings.CutPrefix(field, signature.EnvNamespacePrefix); isEnv {
-				if _, has := r.conf.Job.Env[name]; !has {
+				if _, has := jobEnv[name]; !has {
 					// A pipeline env var that is now missing.
 					r.agentLogger.Debugf("failed to verifyJob: %q missing from Job.Env", name)
 					return newInvalidSignatureError(ErrInvalidJob)

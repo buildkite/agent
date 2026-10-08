@@ -229,12 +229,19 @@ func (r *JobRunner) Run(ctx context.Context, ignoreAgentInDispatches *bool) (err
 }
 
 func (r *JobRunner) validateConfigAllowlists(job *api.Job) error {
+	if r.jobEnvError != nil {
+		return fmt.Errorf("failed to validate environment variables: %w", r.jobEnvError)
+	}
+	originalJobEnv := r.originalJobEnv
+	if originalJobEnv == nil {
+		originalJobEnv = job.Env
+	}
 	validations := map[string]func() error{
 		"repo": func() error {
 			return validateJobValue(r.conf.AgentConfiguration.AllowedRepositories, job.Env["BUILDKITE_REPO"])
 		},
 		"environment variables": func() error {
-			return validateEnv(job.Env, r.conf.AgentConfiguration.AllowedEnvironmentVariables)
+			return validateEnv(originalJobEnv, r.conf.AgentConfiguration.AllowedEnvironmentVariables)
 		},
 		"plugins": r.validatePlugins,
 	}

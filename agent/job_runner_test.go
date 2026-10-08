@@ -2,12 +2,14 @@ package agent
 
 import (
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
 
+	"github.com/buildkite/agent/v4/api"
 	"github.com/buildkite/agent/v4/logger"
 )
 
@@ -75,6 +77,59 @@ func TestJobTimeoutFilePath(t *testing.T) {
 	k8sDir := jobContextDir(JobRunnerConfig{KubernetesExec: true})
 	if got, want := jobTimeoutFilePath("abc123", k8sDir), filepath.Join("/workspace", "job-timeout-abc123"); got != want {
 		t.Errorf("jobTimeoutFilePath(%q, %q) = %q, want %q", "abc123", k8sDir, got, want)
+	}
+}
+
+func TestNormalizeJobEnv(t *testing.T) {
+	tests := []struct {
+		name            string
+		caseInsensitive bool
+		input           map[string]string
+		want            map[string]string
+		wantError       bool
+	}{
+		{"windows_plugin_alias", true, map[string]string{"buildkite_plugins": "[]"}, map[string]string{"BUILDKITE_PLUGINS": "[]"}, false},
+		{"windows_token_alias", true, map[string]string{"buildkite_agent_token": "secret"}, map[string]string{"BUILDKITE_AGENT_TOKEN": "secret"}, false},
+		{"windows_collision", true, map[string]string{"BUILDKITE_REPO": "safe", "buildkite_repo": "unsafe"}, nil, true},
+		{"unix_distinct", false, map[string]string{"BUILDKITE_REPO": "safe", "buildkite_repo": "unsafe"}, map[string]string{"BUILDKITE_REPO": "safe", "buildkite_repo": "unsafe"}, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := normalizeJobEnv(tt.input, tt.caseInsensitive)
+			if (err != nil) != tt.wantError {
+				t.Fatalf("normalizeJobEnv() error = %v, want error %v", err, tt.wantError)
+			}
+			if tt.wantError {
+				return
+			}
+			if !maps.Equal(got, tt.want) {
+				t.Errorf("normalizeJobEnv() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestWindowsPluginAliasReachesAllowlist(t *testing.T) {
+	jobEnv := map[string]string{
+		"buildkite_plugins": `[{"github.com/other/plugin#v1":{}}]`,
+	}
+	normalized, err := normalizeJobEnv(jobEnv, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	job := &api.Job{Env: normalized}
+	r := &JobRunner{
+		conf: JobRunnerConfig{
+			Job: job,
+			AgentConfiguration: AgentConfiguration{
+				PluginsEnabled: true,
+				AllowedPlugins: []*regexp.Regexp{regexp.MustCompile(`^github\.com/buildkite-plugins/`)},
+			},
+		},
+		originalJobEnv: jobEnv,
+	}
+	if err := r.validateConfigAllowlists(job); err == nil {
+		t.Fatal("case-variant plugin escaped the allowlist")
 	}
 }
 
