@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"slices"
+	"strconv"
+	"strings"
 
 	"github.com/buildkite/agent/v4/api"
 	"github.com/buildkite/agent/v4/internal/cache"
@@ -122,10 +124,26 @@ var CacheSaveCommand = &cli.Command{
 
 		// Perform cache save (logging happens inside)
 		if err := cache.RunSave(ctx, l, apiClient, cacheCfg); err != nil {
-			summary := fmt.Sprintf("Failed to save caches %v to registry %q", cfg.Names, cfg.Registry)
-			captureAgentError(ctx, l, "cache_save_failed", jobapi.CapturedErrorMessage(summary+": "+storageErrorText(err), summary+"."))
+			summary := fmt.Sprintf("Failed to save %s to registry %q", cacheNames(cfg.Names), cfg.Registry)
+			captureAgentError(ctx, l, "cache_save_failed", jobapi.CapturedErrorMessage(summary+": "+storageErrorText(err),
+				jobapi.CapturedErrorMessage(summary+".", "Failed to save caches.")))
 			return err
 		}
 		return nil
 	},
+}
+
+// cacheNames describes the caches a command was asked to save or restore.
+func cacheNames(names []string) string {
+	quoted := make([]string, len(names))
+	for i, name := range names {
+		quoted[i] = strconv.Quote(name)
+	}
+	switch len(names) {
+	case 0:
+		return "all configured caches"
+	case 1:
+		return "cache " + quoted[0]
+	}
+	return "caches " + strings.Join(quoted, ", ")
 }
