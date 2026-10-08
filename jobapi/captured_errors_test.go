@@ -15,7 +15,6 @@ import (
 	"github.com/buildkite/agent/v4/internal/replacer"
 	"github.com/buildkite/agent/v4/internal/socket"
 	"github.com/buildkite/agent/v4/jobapi"
-	"github.com/google/go-cmp/cmp"
 )
 
 func TestCapturedErrorRedactionResponse(t *testing.T) {
@@ -40,17 +39,7 @@ func TestCapturedErrorRedactionResponse(t *testing.T) {
 	}{
 		{
 			name: "response is also redacted",
-			body: `{"code":"x","message":"Failed alpha-secret","context":{"details":"beta-secret"}}`,
-		},
-		{
-			name:      "two secret keys collide",
-			body:      `{"code":"x","message":"Failed","context":{"nested":[{"alpha-secret":1,"beta-secret":2}]}}`,
-			wantError: "redacting captured error: context keys collide after redaction",
-		},
-		{
-			name:      "secret key collides with existing marker",
-			body:      `{"code":"x","message":"Failed","context":{"alpha-secret":1,"[REDACTED]":2}}`,
-			wantError: "redacting captured error: context keys collide after redaction",
+			body: `{"code":"x","message":"Failed alpha-secret"}`,
 		},
 		{
 			name:      "redaction expands code beyond schema limit",
@@ -95,7 +84,7 @@ func TestCapturedErrorRedactionResponse(t *testing.T) {
 				if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
 					t.Fatal(err)
 				}
-				if response.Message != "Failed [REDACTED]" || response.Context["details"] != "[REDACTED]" {
+				if response.Message != "Failed [REDACTED]" {
 					t.Errorf("response not redacted: %+v", response)
 				}
 			}
@@ -129,12 +118,7 @@ func TestCapturedErrorRedactsBuildkiteTokensWithoutRegisteredSecrets(t *testing.
 	bkToken := "bkua_" + strings.Repeat("x9Y8", 10)
 	body, err := json.Marshal(map[string]any{
 		"code":    "x",
-		"message": "Request failed with " + bkToken,
-		"context": map[string]any{
-			"details":    []any{"token: " + bkToken},
-			bkToken:      "rejected",
-			"short_body": "bkua_encoded-token",
-		},
+		"message": "Request failed with " + bkToken + " (short body: bkua_encoded-token)",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -155,16 +139,8 @@ func TestCapturedErrorRedactsBuildkiteTokensWithoutRegisteredSecrets(t *testing.
 	if reported == nil {
 		t.Fatal("reporter was not called")
 	}
-	if got, want := reported.Message, "Request failed with [REDACTED]"; got != want {
+	if got, want := reported.Message, "Request failed with [REDACTED] (short body: bkua_encoded-token)"; got != want {
 		t.Errorf("reported message = %q, want %q", got, want)
-	}
-	wantContext := map[string]any{
-		"details":    []any{"token: [REDACTED]"},
-		"[REDACTED]": "rejected",
-		"short_body": "bkua_encoded-token",
-	}
-	if diff := cmp.Diff(wantContext, reported.Context); diff != "" {
-		t.Errorf("reported context diff (-want +got):\n%s", diff)
 	}
 }
 
@@ -185,7 +161,7 @@ func TestCapturedErrorIsAuthenticatedAndNormalized(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = srv.Stop() })
 
-	payload := `{"code":"container.process_failed","message":"Container command failed","context":{"plugin":"docker","image":"example:latest","exit_status":7,"Docker.Detail":{"a":{"b":{"c":{"d":[true,42]}}}}}}`
+	payload := `{"code":"container.process_failed","message":"Container command failed"}`
 	req, err := http.NewRequest(http.MethodPost, "http://job/api/current-job/v0/errors", strings.NewReader(payload))
 	if err != nil {
 		t.Fatalf("http.NewRequest() error = %v", err)
@@ -207,17 +183,6 @@ func TestCapturedErrorIsAuthenticatedAndNormalized(t *testing.T) {
 	}
 	if got, want := reported.Message, "Container command failed"; got != want {
 		t.Errorf("reported message = %q, want %q", got, want)
-	}
-	wantContext := map[string]any{
-		"plugin":      "docker",
-		"image":       "example:latest",
-		"exit_status": json.Number("7"),
-		"Docker.Detail": map[string]any{"a": map[string]any{"b": map[string]any{
-			"c": map[string]any{"d": []any{true, json.Number("42")}},
-		}}},
-	}
-	if diff := cmp.Diff(wantContext, reported.Context); diff != "" {
-		t.Errorf("reported context diff (-want +got):\n%s", diff)
 	}
 	if reported.Timestamp == nil || time.Since(*reported.Timestamp) > time.Minute {
 		t.Errorf("reported timestamp = %v, want recent parent timestamp", reported.Timestamp)
@@ -249,15 +214,14 @@ func TestCapturedErrorRejectsMalformedAndUnauthenticatedRequests(t *testing.T) {
 	}{
 		{name: "unauthenticated", body: `{"code":"x","message":"diagnostic"}`, want: http.StatusUnauthorized},
 		{name: "invalid JSON", body: `{`, token: token, want: http.StatusBadRequest},
-		{name: "null context", body: `{"code":"x","message":"diagnostic","context":null}`, token: token, want: http.StatusBadRequest},
 		{name: "NUL message", body: `{"code":"x","message":"a\u0000b"}`, token: token, want: http.StatusBadRequest},
 		{name: "year zero", body: `{"code":"x","message":"diagnostic","timestamp":"0000-12-31T23:59:59Z"}`, token: token, want: http.StatusBadRequest},
 		{name: "UTC year underflow", body: `{"code":"x","message":"diagnostic","timestamp":"0001-01-01T00:00:00+01:00"}`, token: token, want: http.StatusBadRequest},
 		{name: "UTC year overflow", body: `{"code":"x","message":"diagnostic","timestamp":"9999-12-31T23:59:59-01:00"}`, token: token, want: http.StatusBadRequest},
 		{name: "future timestamp", body: `{"code":"x","message":"diagnostic","timestamp":"9999-12-31T23:59:59Z"}`, token: token, want: http.StatusCreated},
 		{name: "long message", body: `{"code":"x","message":"` + strings.Repeat("x", 4097) + `"}`, token: token, want: http.StatusCreated},
-		{name: "non-object context", body: `{"code":"x","message":"diagnostic","context":[]}`, token: token, want: http.StatusBadRequest},
-		{name: "oversized body", body: `{"code":"x","message":"diagnostic","context":{"large":"` + strings.Repeat("x", 32<<10) + `"}}`, token: token, want: http.StatusRequestEntityTooLarge},
+		{name: "context is unsupported", body: `{"code":"x","message":"diagnostic","context":{"detail":"x"}}`, token: token, want: http.StatusBadRequest},
+		{name: "oversized body", body: `{"code":"x","message":"` + strings.Repeat("x", 32<<10) + `"}`, token: token, want: http.StatusRequestEntityTooLarge},
 		{name: "missing message", body: `{"code":"x"}`, token: token, want: http.StatusBadRequest},
 		{name: "NUL code", body: `{"code":"x\u0000","message":"diagnostic"}`, token: token, want: http.StatusBadRequest},
 		{name: "unknown field", body: `{"code":"x","message":"diagnostic","raw":"unsafe"}`, token: token, want: http.StatusBadRequest},
@@ -304,7 +268,7 @@ func TestCapturedErrorBodyLimit(t *testing.T) {
 	// A 20 KiB message must be forwarded unchanged. Multibyte text makes the
 	// byte-versus-character limit observable.
 	message := strings.Repeat("é", 10<<10)
-	body := `{"code":"x","message":"` + message + `","context":{"detail":"kept"}}`
+	body := `{"code":"x","message":"` + message + `"}`
 	for _, test := range []struct {
 		name string
 		size int
@@ -344,8 +308,8 @@ func TestCapturedErrorBodyLimit(t *testing.T) {
 				if test.want != http.StatusCreated {
 					t.Fatal("oversized request was forwarded")
 				}
-				if payload.Message != message || payload.Context["detail"] != "kept" {
-					t.Error("message or context was changed before forwarding")
+				if payload.Message != message {
+					t.Error("message was changed before forwarding")
 				}
 				if payload.Timestamp == nil || payload.IdempotencyKey == "" {
 					t.Error("parent metadata was not added to the limit-sized request")
