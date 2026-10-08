@@ -178,7 +178,7 @@ var ArtifactUploadCommand = &cli.Command{
 				destination = redact.URLQueriesInText(redact.URLCredentials(cfg.Destination))
 			}
 			summary := fmt.Sprintf("Failed to upload artifacts matching %q to %s", cfg.UploadPaths, destination)
-			message := jobapi.CapturedErrorMessage(summary+": "+storageErrorText(err),
+			message := jobapi.CapturedErrorMessage(summary+": "+uploadErrorText(err),
 				jobapi.CapturedErrorMessage(summary+".", "Failed to upload artifacts."))
 			captureAgentError(ctx, l, "artifact_upload_failed", message)
 			return fmt.Errorf("failed to upload artifacts: %w", err)
