@@ -7,6 +7,7 @@ import (
 
 	"github.com/buildkite/agent/v4/api"
 	"github.com/buildkite/agent/v4/internal/cache"
+	"github.com/buildkite/agent/v4/jobapi"
 	"github.com/urfave/cli/v3"
 	"go.opentelemetry.io/otel"
 )
@@ -120,6 +121,11 @@ var CacheSaveCommand = &cli.Command{
 		}
 
 		// Perform cache save (logging happens inside)
-		return cache.RunSave(ctx, l, apiClient, cacheCfg)
+		if err := cache.RunSave(ctx, l, apiClient, cacheCfg); err != nil {
+			summary := fmt.Sprintf("Failed to save caches %v to registry %q", cfg.Names, cfg.Registry)
+			captureAgentError(ctx, l, "cache_save_failed", jobapi.CapturedErrorMessage(summary+": "+storageErrorText(err), summary+"."))
+			return err
+		}
+		return nil
 	},
 }
