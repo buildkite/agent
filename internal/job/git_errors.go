@@ -308,19 +308,3 @@ func captureError(ctx context.Context, sh *shell.Shell, code, message string) {
 	}
 	deliverError(ctx, sh, report)
 }
-
-func deliverError(ctx context.Context, sh *shell.Shell, report jobapi.CapturedError) {
-	if ctx.Err() != nil {
-		return
-	}
-	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
-	defer cancel()
-	client, err := jobapi.NewClient(ctx, sh.Env.GetString("BUILDKITE_AGENT_JOB_API_SOCKET", ""), sh.Env.GetString("BUILDKITE_AGENT_JOB_API_TOKEN", ""))
-	if err == nil {
-		_, err = client.CaptureError(ctx, &report)
-	}
-	if err != nil {
-		// Transport errors can contain upstream response bodies or socket paths.
-		sh.Warningf("Could not capture Git error %q", report.Code)
-	}
-}
