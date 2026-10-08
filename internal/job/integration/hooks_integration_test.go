@@ -1223,6 +1223,29 @@ func TestHookFailuresAreCaptured(t *testing.T) {
 		})
 	}
 
+	t.Run("output", func(t *testing.T) {
+		t.Parallel()
+		tester, err := NewExecutorTester(mainCtx)
+		if err != nil {
+			t.Fatalf("NewExecutorTester() error = %v", err)
+		}
+		defer tester.Close()
+		agentAPI := newJobErrorsAPI(t, nil)
+
+		tester.ExpectGlobalHook("pre-command").Once().AndCallFunc(func(c *bintest.Call) {
+			_, _ = fmt.Fprintln(c.Stdout, "checking the cache")
+			_, _ = fmt.Fprintln(c.Stdout, "error: the cache bucket is unreachable")
+			c.Exit(3)
+		})
+		if err := tester.Run(t, agentAPI.env()...); err == nil {
+			t.Fatalf("tester.Run() = nil, want hook failure")
+		}
+		report := agentAPI.report(t, "hook_failed")
+		if want := "exited with status 3. It is installed on the agent, not in the repository.\n\nLast lines of output:\nchecking the cache\nerror: the cache bucket is unreachable"; !strings.HasSuffix(report.Message, want) {
+			t.Errorf("message = %q, want it to end with %q", report.Message, want)
+		}
+	})
+
 	t.Run("repository hook", func(t *testing.T) {
 		t.Parallel()
 		tester, err := NewExecutorTester(mainCtx)

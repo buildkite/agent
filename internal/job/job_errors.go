@@ -43,32 +43,54 @@ func (e *Executor) captureHookError(ctx context.Context, hookCfg HookConfig, hoo
 	if err == nil {
 		return
 	}
+	path, inCheckout := e.hookDisplayPath(hookCfg)
 	// Say where the hook lives when it is not in the repository being built.
-	where := map[string]string{
-		HookScopeAgent:  " It is installed on the agent, not in the repository.",
-		HookScopePlugin: " It is part of the plugin, not the repository.",
-	}[hookCfg.Scope]
-	path := e.hookDisplayPath(hookCfg)
-	message := fmt.Sprintf("The %s hook at %s could not be run: %v.%s", hookName, path, err, where)
-	if exit, ok := describeExit(err); ok {
-		message = fmt.Sprintf("The %s hook at %s %s.%s", hookName, path, exit, where)
+	where := ""
+	if !inCheckout {
+		where = map[string]string{
+			HookScopeAgent:  " It is installed on the agent, not in the repository.",
+			HookScopePlugin: " It is part of the plugin, not the repository.",
+		}[hookCfg.Scope]
 	}
+	message := fmt.Sprintf("The %s hook at %s could not be run: %v.%s", hookName, path, err, where)
+	switch exit, ok := describeExit(err); {
+	case ok:
+		message = fmt.Sprintf("The %s hook at %s %s.%s", hookName, path, exit, where)
+	case errors.Is(err, syscall.ENOENT):
+		// The error names the agent's temporary wrapper script, not what is
+		// missing, which is usually the interpreter on the hook's #! line.
+		message = fmt.Sprintf("The %s hook at %s could not be run because a program it needs was not found, usually the interpreter on its #! line, such as bash.%s", hookName, path, where)
+	}
+	message = jobapi.CapturedErrorMessage(message, fmt.Sprintf("The %s hook failed.%s", hookName, where))
 	captureJobError(ctx, e.shell, "hook_failed", e.withRecentOutput(message))
 }
 
-// hookDisplayPath shows repository hooks relative to the checkout and plugin
-// hooks relative to the plugin, which is how a pipeline author finds them.
-func (e *Executor) hookDisplayPath(hookCfg HookConfig) string {
-	switch hookCfg.Scope {
-	case HookScopeRepository:
-		checkout := e.shell.Env.GetString("BUILDKITE_BUILD_CHECKOUT_PATH", "")
-		if rel, err := filepath.Rel(checkout, hookCfg.Path); checkout != "" && err == nil && !strings.HasPrefix(rel, "..") {
-			return filepath.ToSlash(rel)
-		}
-	case HookScopePlugin:
-		return "hooks/" + filepath.Base(hookCfg.Path)
+// hookDisplayPath shows hooks in the checkout, including those of vendored
+// plugins, relative to the checkout, and other plugin hooks relative to the
+// plugins directory, which is how a pipeline author finds them. It reports
+// whether the hook is in the checkout.
+func (e *Executor) hookDisplayPath(hookCfg HookConfig) (string, bool) {
+	if rel, ok := relativePath(e.shell.Env.GetString("BUILDKITE_BUILD_CHECKOUT_PATH", ""), hookCfg.Path); ok {
+		return rel, true
 	}
-	return hookCfg.Path
+	if hookCfg.Scope == HookScopePlugin {
+		if rel, ok := relativePath(e.PluginsPath, hookCfg.Path); ok {
+			return rel, false
+		}
+	}
+	return hookCfg.Path, false
+}
+
+// relativePath returns path relative to dir, if it is inside dir.
+func relativePath(dir, path string) (string, bool) {
+	if dir == "" {
+		return "", false
+	}
+	rel, err := filepath.Rel(dir, path)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) || filepath.IsAbs(rel) {
+		return "", false
+	}
+	return filepath.ToSlash(rel), true
 }
 
 // withRecentOutput appends the end of the redacted output from the hook,
