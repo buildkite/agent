@@ -382,6 +382,7 @@ func TestListKeys(t *testing.T) {
 		{[]string{"A"}, "A"},
 		{[]string{"A", "B"}, "A, B"},
 		{[]string{"A", "B", "C", "D"}, "A, B, and 2 more"},
+		{[]string{strings.Repeat("K", 70)}, strings.Repeat("K", 59) + "…"},
 	} {
 		if got := ListKeys(test.keys, 2); got != test.want {
 			t.Errorf("ListKeys(%q, 2) = %q, want %q", test.keys, got, test.want)
