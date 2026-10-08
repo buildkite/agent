@@ -35,15 +35,24 @@ func captureAgentError(ctx context.Context, l logger.Logger, code, message strin
 }
 
 // storageErrorText describes err for a captured error without URL query
-// strings, which can carry presigned credentials. When err joins the errors of
-// several files, it describes the first and counts the others, so one cause
-// fits in the message.
+// strings, which can carry presigned credentials.
 func storageErrorText(err error) string {
+	return redact.URLQueriesInText(err.Error())
+}
+
+// uploadErrorText is storageErrorText for a failed artifact upload, which
+// joins the errors of each failed file. It describes the first and counts the
+// others, so one cause fits in the message.
+func uploadErrorText(err error) string {
 	var joined interface{ Unwrap() []error }
 	if errors.As(err, &joined) {
 		if errs := joined.Unwrap(); len(errs) > 1 {
-			return fmt.Sprintf("%s (and %d more errors)", redact.URLQueriesInText(errs[0].Error()), len(errs)-1)
+			more := "errors"
+			if len(errs) == 2 {
+				more = "error"
+			}
+			return fmt.Sprintf("%s (and %d more %s)", storageErrorText(errs[0]), len(errs)-1, more)
 		}
 	}
-	return redact.URLQueriesInText(err.Error())
+	return storageErrorText(err)
 }
