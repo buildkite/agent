@@ -621,6 +621,16 @@ func logMissingHookInfo(l shell.Logger, hookName, wrapperPath string) {
 	l.Errorf("The %s hook failed to run - perhaps the script interpreter %q is missing", hookName, interpreter)
 }
 
+// hookExitError keeps the cause of a hook's exit, such as the signal that
+// terminated it, behind the short message shown in the job log.
+type hookExitError struct {
+	message string
+	err     error
+}
+
+func (e hookExitError) Error() string { return e.message }
+func (e hookExitError) Unwrap() error { return e.err }
+
 func (e *Executor) runWrappedShellScriptHook(ctx context.Context, hookName string, hookCfg HookConfig) error {
 	defer func() {
 		if err := e.redactors.Flush(); err != nil {
@@ -669,7 +679,7 @@ func (e *Executor) runWrappedShellScriptHook(ctx context.Context, hookName strin
 		if shell.IsExitError(err) {
 			return &shell.ExitError{
 				Code: exitCode,
-				Err:  fmt.Errorf("the %s hook exited with status %d", hookName, exitCode),
+				Err:  hookExitError{message: fmt.Sprintf("the %s hook exited with status %d", hookName, exitCode), err: err},
 			}
 		}
 
