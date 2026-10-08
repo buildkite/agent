@@ -70,21 +70,26 @@ func TestGitErrorCaptureOptIn(t *testing.T) {
 	}
 	t.Parallel()
 	for _, tc := range []struct {
-		name, optIn, capability string
-		want                    bool
+		name, optIn, agentOptIn, capability string
+		want                                bool
 	}{
-		{"unset", "", "true", false},
-		{"disabled", "false", "true", false},
-		{"invalid", "yes", "true", false},
-		{"enabled", "true", "true", true},
-		{"API unavailable", "true", "", false},
+		{"unset", "", "", "true", false},
+		{"disabled", "false", "", "true", false},
+		{"invalid", "yes", "", "true", false},
+		{"enabled", "true", "", "true", true},
+		{"enabled with all agent errors", "", "true", "true", true},
+		{"API unavailable", "true", "true", "", false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			var logs bytes.Buffer
 			sh := shell.NewTestShell(t, shell.WithStdout(&logs))
 			sh.Env.Remove("BUILDKITE_CAPTURE_GIT_ERRORS")
+			sh.Env.Remove("BUILDKITE_CAPTURE_AGENT_ERRORS")
 			if tc.optIn != "" {
 				sh.Env.Set("BUILDKITE_CAPTURE_GIT_ERRORS", tc.optIn)
+			}
+			if tc.agentOptIn != "" {
+				sh.Env.Set("BUILDKITE_CAPTURE_AGENT_ERRORS", tc.agentOptIn)
 			}
 			sh.Env.Set("BUILDKITE_AGENT_JOB_API_CAPTURE_ERROR", tc.capability)
 			var output gitErrorOutput

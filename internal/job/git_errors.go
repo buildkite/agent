@@ -10,6 +10,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/buildkite/agent/v4/env"
 	"github.com/buildkite/agent/v4/internal/redact"
 	"github.com/buildkite/agent/v4/internal/replacer"
 	"github.com/buildkite/agent/v4/internal/shell"
@@ -57,8 +58,7 @@ type gitErrorOutput struct {
 }
 
 func (o *gitErrorOutput) tee(sh *shell.Shell) shell.RunCommandOpt {
-	if sh.Env.GetString("BUILDKITE_CAPTURE_GIT_ERRORS", "") != "true" ||
-		sh.Env.GetString("BUILDKITE_AGENT_JOB_API_CAPTURE_ERROR", "") != "true" {
+	if !gitErrorCaptureEnabled(sh.Env) {
 		return shell.TeeOutput(nil)
 	}
 	return shell.TeeOutput(o)
@@ -343,10 +343,17 @@ func withCheckout(summary, checkout string) string {
 	return summary + " " + checkout
 }
 
+// gitErrorCaptureEnabled reports whether the job opted in to reports of Git
+// failures, alone or with every agent-observed failure, and the Local Job API
+// can deliver them.
+func gitErrorCaptureEnabled(environ *env.Environment) bool {
+	return (environ.GetString("BUILDKITE_CAPTURE_GIT_ERRORS", "") == "true" || agentErrorCaptureEnabled(environ)) &&
+		environ.GetString("BUILDKITE_AGENT_JOB_API_CAPTURE_ERROR", "") == "true"
+}
+
 func captureError(ctx context.Context, sh *shell.Shell, code, message string) {
 	// Automatic Git reporting is opt-in independently of the general capture API.
-	if sh.Env.GetString("BUILDKITE_CAPTURE_GIT_ERRORS", "") != "true" ||
-		sh.Env.GetString("BUILDKITE_AGENT_JOB_API_CAPTURE_ERROR", "") != "true" {
+	if !gitErrorCaptureEnabled(sh.Env) {
 		return
 	}
 	// The Local Job API redacts registered secrets before forwarding the report.
