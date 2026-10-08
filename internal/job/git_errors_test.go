@@ -748,3 +748,64 @@ func TestGitErrorOutputRedactsSecretsBeforeTheCut(t *testing.T) {
 		})
 	}
 }
+
+func TestGitErrorCaptureIdentifiesTheCheckout(t *testing.T) {
+	t.Parallel()
+	const summary = "Git fetch could not find the remote reference."
+	const checkout = ` The checkout was of branch "feature/missing", commit "HEAD" from https://xxxxx@github.com/acme/widgets.git.`
+	for _, test := range []struct {
+		name, branch, output, want string
+	}{
+		{
+			name:   "before Git's output",
+			branch: "feature/missing",
+			output: "fatal: couldn't find remote ref feature/missing\n",
+			want:   summary + checkout + "\n\nLast lines of Git output:\nfatal: couldn't find remote ref feature/missing\n",
+		},
+		{
+			name:   "with Git output too long to include",
+			branch: "feature/missing",
+			output: gitOutputOmitted,
+			want:   summary + checkout + "\n\n" + gitOutputOmitted,
+		},
+		{
+			name:   "after a fixed summary",
+			branch: "feature/missing",
+			want:   summary + checkout,
+		},
+		{
+			name:   "output that does not fit with the checkout",
+			branch: "feature/missing",
+			output: strings.Repeat("x", maxGitErrorMessage-len(summary+checkout)) + "\n",
+			want:   summary + checkout,
+		},
+		{
+			name:   "long values are left out",
+			branch: strings.Repeat("b", 149),
+			want:   summary + ` The checkout was of commit "HEAD" from https://xxxxx@github.com/acme/widgets.git.`,
+		},
+		{
+			name:   "control characters are quoted",
+			branch: "feature/\x1b[31m",
+			want:   summary + ` The checkout was of branch "feature/\x1b[31m", commit "HEAD" from https://xxxxx@github.com/acme/widgets.git.`,
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			ctx, e, reports := gitErrorCaptureServer(t, true, http.StatusCreated)
+			e.shell.Env.Set("BUILDKITE_REPO", "https://user:token@github.com/acme/widgets.git")
+			e.shell.Env.Set("BUILDKITE_BRANCH", test.branch)
+			e.shell.Env.Set("BUILDKITE_COMMIT", "HEAD")
+			e.shell.Env.Remove("BUILDKITE_REFSPEC")
+
+			captureGitError(ctx, e.shell, &gitError{error: errors.New("exit status 128"), Type: gitErrorFetchBadReference}, test.output)
+
+			if len(reports) != 1 {
+				t.Fatalf("reports = %d, want 1", len(reports))
+			}
+			report := <-reports
+			if report.Code != "git_ref_not_found" || report.Message != test.want {
+				t.Errorf("report = %q %q, want git_ref_not_found %q", report.Code, report.Message, test.want)
+			}
+		})
+	}
+}

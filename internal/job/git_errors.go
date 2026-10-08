@@ -3,6 +3,8 @@ package job
 import (
 	"context"
 	"errors"
+	"fmt"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -44,10 +46,9 @@ const maxGitErrorOutput = 16 << 10
 // start, which redaction could then no longer recognize.
 const gitOutputOmitted = "Git printed too much output to include here. See the job log for Git's full output."
 
-// maxGitErrorMessage is the most characters of summary and Git output to
-// report. It leaves room within the Job API's 1000-character message limit for
-// redaction to lengthen short secrets, so the end of the output is not cut.
-const maxGitErrorMessage = 900
+// maxGitErrorMessage is the most characters of summary, checkout and Git
+// output to report: the agent's budget for its own reports.
+const maxGitErrorMessage = jobapi.MaxCapturedErrorDetail
 
 type gitErrorOutput struct {
 	mu   sync.Mutex
@@ -127,6 +128,7 @@ func captureGitError(ctx context.Context, sh *shell.Shell, err error, output str
 	if code == "" {
 		return
 	}
+	message = withCheckout(message, describeCheckout(sh))
 	if output == gitOutputOmitted {
 		message += "\n\n" + gitOutputOmitted
 	} else {
@@ -285,12 +287,60 @@ func captureCheckoutError(ctx context.Context, sh *shell.Shell, err error) {
 			// Git commands capture their own failures. Other checkout operations
 			// reuse these error types for recovery, not to identify a failed command.
 			gitErr.captured = true
-			captureError(ctx, sh, "git_checkout_phase_failed", "The default checkout phase failed.")
+			captureError(ctx, sh, "git_checkout_phase_failed", withCheckout("The default checkout phase failed.", describeCheckout(sh)))
 			return
 		}
 	}
 	code, message := classifyGitError(err)
-	captureError(ctx, sh, code, message)
+	captureError(ctx, sh, code, withCheckout(message, describeCheckout(sh)))
+}
+
+// describeCheckout says what the checkout was fetching, such as
+// `The checkout was of branch "main", commit HEAD from https://github.com/acme/widgets.git.`,
+// so a Git error such as a missing ref can be acted on without the job log.
+// The Job API masks credentials in the repository URL after matching
+// registered secrets. Values over 150 characters are left out, so the
+// description leaves room for Git's output.
+func describeCheckout(sh *shell.Shell) string {
+	value := func(name string, quote bool) string {
+		v := sh.Env.GetString(name, "")
+		if quote && v != "" {
+			v = strconv.Quote(v)
+		}
+		if utf8.RuneCountInString(v) > 150 {
+			return ""
+		}
+		return v
+	}
+	var what []string
+	if branch := value("BUILDKITE_BRANCH", true); branch != "" {
+		what = append(what, "branch "+branch)
+	}
+	if commit := value("BUILDKITE_COMMIT", true); commit != "" {
+		what = append(what, "commit "+commit)
+	}
+	if refspec := value("BUILDKITE_REFSPEC", true); refspec != "" {
+		what = append(what, "refspec "+refspec)
+	}
+	repository := value("BUILDKITE_REPO", false)
+	switch {
+	case len(what) > 0 && repository != "":
+		return fmt.Sprintf("The checkout was of %s from %s.", strings.Join(what, ", "), repository)
+	case len(what) > 0:
+		return fmt.Sprintf("The checkout was of %s.", strings.Join(what, ", "))
+	case repository != "":
+		return fmt.Sprintf("The checkout was from %s.", repository)
+	}
+	return ""
+}
+
+// withCheckout follows summary with the checkout description, if any, before
+// any Git output, so the description is kept if the message is cut.
+func withCheckout(summary, checkout string) string {
+	if checkout == "" {
+		return summary
+	}
+	return summary + " " + checkout
 }
 
 func captureError(ctx context.Context, sh *shell.Shell, code, message string) {
