@@ -130,9 +130,9 @@ func (e *Executor) captureCommandError(ctx context.Context, err error) {
 	case e.commandHook != "":
 		// The hook may have run and failed afterwards, such as while the agent
 		// read the environment changes it made.
-		captureJobError(ctx, e.shell, "command_hook_failed", jobapi.CapturedErrorMessage(
+		captureJobError(ctx, e.shell, "command_hook_failed", e.withRecentOutput(jobapi.CapturedErrorMessage(
 			fmt.Sprintf("%s, which runs instead of the step's command, failed: %v.", e.commandHook, err),
-			e.commandHook+", which runs instead of the step's command, failed."))
+			e.commandHook+", which runs instead of the step's command, failed.")))
 	case errors.Is(err, errNoCommand):
 		captureJobError(ctx, e.shell, "command_missing", err.Error())
 	case errors.Is(err, errCommandEvalDisabled), errors.Is(err, errCommandOutsideRepository):
