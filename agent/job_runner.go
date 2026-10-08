@@ -185,13 +185,16 @@ type jobProcess interface {
 
 // Initializes the job runner
 func NewJobRunner(ctx context.Context, l logger.Logger, apiClient *api.Client, conf JobRunnerConfig) (*JobRunner, error) {
-	// Windows treats environment names case-insensitively. Normalize the job
-	// input before either validation or agent overrides can observe it.
-	job := *conf.Job
-	originalJobEnv := maps.Clone(conf.Job.Env)
-	normalizedEnv, jobEnvError := normalizeJobEnv(conf.Job.Env, runtime.GOOS == "windows")
-	job.Env = normalizedEnv
-	conf.Job = &job
+	var originalJobEnv map[string]string
+	var jobEnvError error
+	if runtime.GOOS == "windows" {
+		// Normalize before either validation or agent overrides can observe
+		// the job, while retaining its original names for signature checks.
+		job := *conf.Job
+		originalJobEnv = maps.Clone(conf.Job.Env)
+		job.Env, jobEnvError = normalizeJobEnv(conf.Job.Env, true)
+		conf.Job = &job
+	}
 
 	// If the accept response has a token attached, we should use that instead of the Agent Access Token that
 	// our current apiClient is using
