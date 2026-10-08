@@ -1246,6 +1246,28 @@ func TestHookFailuresAreCaptured(t *testing.T) {
 		}
 	})
 
+	t.Run("command hook", func(t *testing.T) {
+		t.Parallel()
+		tester, err := NewExecutorTester(mainCtx)
+		if err != nil {
+			t.Fatalf("NewExecutorTester() error = %v", err)
+		}
+		defer tester.Close()
+		agentAPI := newJobErrorsAPI(t, nil)
+
+		tester.ExpectGlobalHook("command").Once().AndExitWith(5)
+		if err := tester.Run(t, agentAPI.env()...); err == nil {
+			t.Fatalf("tester.Run() = nil, want command hook failure")
+		}
+		if slices.Contains(agentAPI.codes(), "hook_failed") {
+			t.Errorf("captured codes = %v, want the command hook left to command capture", agentAPI.codes())
+		}
+		want := "The agent command hook, which runs instead of the step's command, exited with status 5."
+		if report := agentAPI.report(t, "command_failed"); !strings.HasPrefix(report.Message, want) {
+			t.Errorf("command_failed message = %q, want it to start with %q", report.Message, want)
+		}
+	})
+
 	t.Run("repository hook", func(t *testing.T) {
 		t.Parallel()
 		tester, err := NewExecutorTester(mainCtx)

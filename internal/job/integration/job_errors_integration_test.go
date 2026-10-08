@@ -49,6 +49,13 @@ func (a *jobErrorsAPI) env() []string {
 	return []string{"BUILDKITE_AGENT_ENDPOINT=" + a.URL, "BUILDKITE_CAPTURE_AGENT_ERRORS=true"}
 }
 
+// codes returns the captured error codes in order.
+func (a *jobErrorsAPI) codes() []string {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.codesLocked()
+}
+
 // report returns the only captured error with code, failing otherwise.
 func (a *jobErrorsAPI) report(t *testing.T, code string) api.JobCapturedError {
 	t.Helper()
