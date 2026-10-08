@@ -10,6 +10,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/buildkite/agent/v4/internal/redact"
+	"github.com/buildkite/agent/v4/internal/replacer"
 	"github.com/buildkite/agent/v4/internal/shell"
 	"github.com/buildkite/agent/v4/jobapi"
 )
@@ -123,8 +124,40 @@ func captureGitError(ctx context.Context, sh *shell.Shell, err error, output str
 	gitErr.captured = true
 	code, message := classifyGitError(err)
 	if code != "" {
-		captureError(ctx, sh, code, withGitOutput(message, output))
+		captureError(ctx, sh, code, withGitOutput(message, redactGitOutput(ctx, output)))
 	}
+}
+
+type gitErrorNeedlesKey struct{}
+
+// withGitErrorNeedles gives Git error capture the job's registered secrets,
+// such as the executor's redactors' needles, read when output is captured.
+func withGitErrorNeedles(ctx context.Context, needles func() []string) context.Context {
+	return context.WithValue(ctx, gitErrorNeedlesKey{}, needles)
+}
+
+// redactGitOutput redacts registered secrets and Buildkite tokens in Git's
+// output before withGitOutput keeps only its last lines, so the cut cannot
+// leave part of a multi-line secret, such as a private key, that the Job API
+// could no longer match. Needles are read now, so they include secrets
+// registered while Git ran. A secret longer than the output kept can still
+// lose its start to the buffer's cut, but not reach the lines reported.
+func redactGitOutput(ctx context.Context, output string) string {
+	var needles []string
+	if f, ok := ctx.Value(gitErrorNeedlesKey{}).(func() []string); ok {
+		needles = f()
+	}
+	var b strings.Builder
+	r := replacer.New(&b, needles, redact.Redacted)
+	r.AddPrefixes(redact.TokenPrefixes()...)
+	// Errors writing to a strings.Builder are bugs.
+	if _, err := r.Write([]byte(output)); err != nil {
+		panic(err)
+	}
+	if err := r.Flush(); err != nil {
+		panic(err)
+	}
+	return b.String()
 }
 
 // withGitOutput adds as many of the last whole lines of Git's output to

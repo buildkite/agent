@@ -61,7 +61,7 @@ func gitErrorCaptureServer(t *testing.T, enabled bool, status int) (context.Cont
 	if enabled {
 		sh.Env.Set("BUILDKITE_CAPTURE_GIT_ERRORS", "true")
 	}
-	return ctx, e, reports
+	return withGitErrorNeedles(ctx, e.redactors.Needles), e, reports
 }
 
 func TestGitErrorCaptureOptIn(t *testing.T) {
@@ -719,5 +719,21 @@ func TestGitErrorOutputCapture(t *testing.T) {
 				t.Fatalf("report = %#v, want unclassified code and message %q", report, tc.want)
 			}
 		})
+	}
+}
+
+func TestGitErrorOutputRedactsSecretsBeforeTheCut(t *testing.T) {
+	t.Parallel()
+	ctx, e, reports := gitErrorCaptureServer(t, true, http.StatusCreated)
+	// A registered multi-line secret whose first line is too long to report:
+	// cutting before redaction would leave its last line unmatched.
+	secret := strings.Repeat("A", maxGitErrorMessage) + "\nPRIVATE_CREDENTIAL_SUFFIX"
+	e.redactors.Append(redact.New(io.Discard, []string{secret}))
+	var output gitErrorOutput
+	_, _ = io.WriteString(&output, "remote: "+secret+"\nfatal: unable to read from remote\n")
+	captureGitError(ctx, e.shell, &gitError{error: errors.New("exit status 128"), Type: gitErrorFetch}, output.String())
+	report := <-reports
+	if strings.Contains(report.Message, "PRIVATE_CREDENTIAL_SUFFIX") || !strings.HasSuffix(report.Message, "remote: [REDACTED]\nfatal: unable to read from remote\n") {
+		t.Errorf("message = %q, want the secret redacted before the cut", report.Message)
 	}
 }
