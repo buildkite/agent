@@ -404,10 +404,14 @@ func (r *JobRunner) runJob(ctx context.Context) core.ProcessExit {
 			_, _ = fmt.Fprint(r.jobLogs, `+++ Unknown container exit status
 One or more containers never connected to the agent. Perhaps the container image specified in your podSpec could not be pulled (ImagePullBackOff)?
 `)
+			r.captureJobError(ctx, "kubernetes_container_not_connected",
+				"One or more containers never connected to the agent, so the job was canceled. The container image may not have been pulled (ImagePullBackOff). Check that each image in the podSpec exists and the cluster can pull it, and check the pod's events.")
 		case k8sProcess.AnyClientIn(kubernetes.StateLost):
 			_, _ = fmt.Fprint(r.jobLogs, `+++ Unknown container exit status
 One or more containers connected to the agent, but then stopped communicating without exiting normally. Perhaps the container was OOM-killed?
 `)
+			r.captureJobError(ctx, "kubernetes_container_lost",
+				"One or more containers stopped communicating with the agent without exiting. The container may have been OOM-killed. Check the container's memory limit and the pod's events.")
 		}
 	}
 
