@@ -20,10 +20,20 @@ import (
 // no job output to redact. Delivery is best-effort and never changes the job's
 // outcome.
 func (r *JobRunner) captureJobError(ctx context.Context, code, message string) {
+	r.reportJobError(ctx, code, maskURLs(message))
+}
+
+// maskURLs masks URL credentials and query strings, as the Local Job API does.
+func maskURLs(text string) string {
+	return redact.URLQueriesInText(redact.URLCredentialsInText(text))
+}
+
+// reportJobError is captureJobError for a message whose URLs are already
+// masked where needed.
+func (r *JobRunner) reportJobError(ctx context.Context, code, message string) {
 	if r.conf.Job.Env["BUILDKITE_CAPTURE_AGENT_ERRORS"] != "true" {
 		return
 	}
-	message = redact.URLQueriesInText(redact.URLCredentialsInText(message))
 	if runes := []rune(message); len(runes) > jobapi.MaxCapturedErrorDetail {
 		const marker = "…[truncated]"
 		message = string(runes[:jobapi.MaxCapturedErrorDetail-utf8.RuneCountInString(marker)]) + marker
