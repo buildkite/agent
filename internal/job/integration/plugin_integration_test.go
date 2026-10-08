@@ -928,7 +928,6 @@ func TestPluginFailuresAreCaptured(t *testing.T) {
 	}
 
 	failingHook := map[string][]string{"environment": {"#!/usr/bin/env bash", "echo 'registry login failed'", "exit 5"}}
-	passingHook := map[string][]string{"environment": {"#!/usr/bin/env bash", "true"}}
 
 	for _, test := range []struct {
 		name     string
@@ -936,6 +935,7 @@ func TestPluginFailuresAreCaptured(t *testing.T) {
 		code     string
 		message  string
 		contains string
+		excludes string
 	}{
 		{
 			name: "plugins disabled",
@@ -956,35 +956,27 @@ func TestPluginFailuresAreCaptured(t *testing.T) {
 				return []string{`BUILDKITE_PLUGINS=[{"file:///does-not-exist/missing-plugin#v1.2.3":{}}]`}
 			},
 			code:     "plugin_checkout_failed",
-			message:  "Failed to check out plugin missing-plugin from /does-not-exist/missing-plugin at version \"v1.2.3\". Check that the repository exists, this agent can access it, and the version is a tag, branch, or commit in it.\n\nLast lines of output:\n",
+			message:  "Git could not check out plugin missing-plugin from /does-not-exist/missing-plugin at version \"v1.2.3\". Check that the repository exists, this agent can access it, and the version is a tag, branch, or commit in it.\n\nLast lines of output:\n",
 			contains: "fatal: repository '/does-not-exist/missing-plugin' does not exist",
 		},
 		{
 			name: "invalid configuration",
 			env: func(t *testing.T) []string {
-				p := createTestPlugin(t, passingHook)
-				definition := "name: test\nconfiguration:\n  properties:\n    settings:\n      type: integer\n"
-				if err := os.WriteFile(filepath.Join(p.Path, "plugin.yml"), []byte(definition), 0o600); err != nil {
-					t.Fatal(err)
-				}
-				if err := p.Add("."); err != nil {
-					t.Fatal(err)
-				}
-				if err := p.Commit("Add plugin definition"); err != nil {
-					t.Fatal(err)
-				}
-				var err error
-				if p.versionTag, err = p.RevParse("HEAD"); err != nil {
-					t.Fatal(err)
-				}
-				json, err := p.ToJSON()
-				if err != nil {
-					t.Fatal(err)
-				}
-				return []string{"BUILDKITE_PLUGINS=" + json, "BUILDKITE_PLUGIN_VALIDATION=true"}
+				return pluginWithDefinition(t, "name: test\nconfiguration:\n  properties:\n    settings:\n      type: integer\n")
 			},
 			code:     "plugin_configuration_invalid",
-			contains: `does not match the plugin's schema: /settings: "blah" type should be integer, got string. Fix the configuration in the step.`,
+			contains: `does not match the plugin's schema: /settings: type should be integer, got string. Fix the configuration in the step.`,
+			// The schema library cuts values short, so a secret could escape
+			// redaction.
+			excludes: "blah",
+		},
+		{
+			name: "missing requirement",
+			env: func(t *testing.T) []string {
+				return pluginWithDefinition(t, "name: test\nrequirements:\n  - definitely-not-a-command\n")
+			},
+			code:     "plugin_requirement_missing",
+			contains: `needs commands that are not in this agent's PATH: "definitely-not-a-command". Install them on the agent`,
 		},
 		{
 			name: "vendored plugin missing",
@@ -1004,7 +996,7 @@ func TestPluginFailuresAreCaptured(t *testing.T) {
 				return []string{"BUILDKITE_PLUGINS=" + json}
 			},
 			code:     "hook_failed",
-			contains: " environment hook at hooks/environment exited with status 5. It is part of the plugin, not the repository.\n\nLast lines of output:\nregistry login failed",
+			contains: "/hooks/environment exited with status 5. It is part of the plugin, not the repository.\n\nLast lines of output:\nregistry login failed",
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
@@ -1027,6 +1019,34 @@ func TestPluginFailuresAreCaptured(t *testing.T) {
 			if !strings.Contains(report.Message, test.contains) {
 				t.Errorf("message = %q, want it to contain %q", report.Message, test.contains)
 			}
+			if test.excludes != "" && strings.Contains(report.Message, test.excludes) {
+				t.Errorf("message = %q, want it not to contain %q", report.Message, test.excludes)
+			}
 		})
 	}
+}
+
+// pluginWithDefinition returns the environment for a step using a test plugin
+// with the given plugin.yml, validated against the step's configuration.
+func pluginWithDefinition(t *testing.T, definition string) []string {
+	t.Helper()
+	p := createTestPlugin(t, map[string][]string{"environment": {"#!/usr/bin/env bash", "true"}})
+	if err := os.WriteFile(filepath.Join(p.Path, "plugin.yml"), []byte(definition), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := p.Add("."); err != nil {
+		t.Fatal(err)
+	}
+	if err := p.Commit("Add plugin definition"); err != nil {
+		t.Fatal(err)
+	}
+	var err error
+	if p.versionTag, err = p.RevParse("HEAD"); err != nil {
+		t.Fatal(err)
+	}
+	json, err := p.ToJSON()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return []string{"BUILDKITE_PLUGINS=" + json, "BUILDKITE_PLUGIN_VALIDATION=true"}
 }
