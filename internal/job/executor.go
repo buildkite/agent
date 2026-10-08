@@ -108,6 +108,10 @@ type Executor struct {
 	outputTail         outputTail
 	outputTailRedactor *replacer.Replacer
 
+	// commandHook describes the command hook runCommand chose to run instead
+	// of the step's command, such as "The agent command hook", if any.
+	commandHook string
+
 	// stderrTee carries the redacted shell logger output (section headers,
 	// prompts, comments, warnings) to stderr and, when OTLP job logging is
 	// enabled, mirrors it into the OTLP exporter so the exported records match
@@ -971,7 +975,7 @@ func (e *Executor) executeLocalHook(ctx context.Context, name string) error {
 		captureJobError(ctx, e.shell, "local_hook_refused", jobapi.CapturedErrorMessage(
 			fmt.Sprintf("The repository has a %s hook at %s, but %s disables local hooks, so the job failed. %s", name, filepath.ToSlash(relPath), disabledBy, fix),
 			fmt.Sprintf("The repository has a %s hook, but %s disables local hooks, so the job failed. %s", name, disabledBy, fix)))
-		return fmt.Errorf("refusing to run %s, local hooks are disabled", localHookPath)
+		return localHookRefusedError{path: localHookPath}
 	}
 
 	return e.executeHook(ctx, HookConfig{
@@ -979,6 +983,15 @@ func (e *Executor) executeLocalHook(ctx context.Context, name string) error {
 		Name:  name,
 		Path:  localHookPath,
 	})
+}
+
+// localHookRefusedError is returned for a repository hook the agent refused
+// to run because local hooks are disabled. The refusal is captured where it
+// happens, so it is not captured again as a failure of the command.
+type localHookRefusedError struct{ path string }
+
+func (e localHookRefusedError) Error() string {
+	return fmt.Sprintf("refusing to run %s, local hooks are disabled", e.path)
 }
 
 var badCharsRE = regexp.MustCompile("[[:^alnum:]]")
@@ -1218,10 +1231,19 @@ func (e *Executor) runCommand(ctx context.Context) error {
 	// There can only be one command hook, so we check them in order of plugin, local
 	switch {
 	case e.hasPluginHook("command"):
+		e.commandHook = "The plugin command hook"
+		for _, p := range e.pluginCheckouts {
+			if _, err := hook.Find(p.Root, p.HooksDir, "command"); err == nil {
+				e.commandHook = fmt.Sprintf("The %s plugin's command hook", p.Plugin.Name())
+				break
+			}
+		}
 		return e.executePluginHook(ctx, "command", e.pluginCheckouts)
 	case e.hasLocalHook("command"):
+		e.commandHook = "The repository command hook"
 		return e.executeLocalHook(ctx, "command")
 	case e.hasGlobalHook("command"):
+		e.commandHook = "The agent command hook"
 		return e.executeGlobalHook(ctx, "command")
 	default:
 		return e.defaultCommandPhase(ctx)
@@ -1343,7 +1365,7 @@ func (e *Executor) defaultCommandPhase(ctx context.Context) (retErr error) {
 		}
 	}()
 
-	e.outputTail.reset()
+	e.resetRecentOutput()
 
 	// Make sure we actually have a command to run
 	if strings.TrimSpace(e.Command) == "" {
