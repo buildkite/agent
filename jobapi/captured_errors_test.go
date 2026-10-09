@@ -492,3 +492,24 @@ func TestCapturedErrorBodyLimit(t *testing.T) {
 		})
 	}
 }
+
+func TestCapturedErrorMessage(t *testing.T) {
+	t.Parallel()
+
+	for _, test := range []struct {
+		name, detail, want string
+	}{
+		{name: "detail", detail: "fatal: bad ref\n", want: "fatal: bad ref\n"},
+		{name: "detail at limit", detail: strings.Repeat("é", jobapi.MaxCapturedErrorDetail), want: strings.Repeat("é", jobapi.MaxCapturedErrorDetail)},
+		{name: "detail over limit", detail: strings.Repeat("é", jobapi.MaxCapturedErrorDetail+1), want: "fallback"},
+		{name: "blank", detail: " \n", want: "fallback"},
+		{name: "invalid UTF-8", detail: "bad \xff", want: "fallback"},
+		{name: "NUL", detail: "bad \x00", want: "fallback"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if got := jobapi.CapturedErrorMessage(test.detail, "fallback"); got != test.want {
+				t.Errorf("CapturedErrorMessage() = %.40q, want %.40q", got, test.want)
+			}
+		})
+	}
+}

@@ -2,6 +2,7 @@ package job
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -70,21 +71,26 @@ func TestGitErrorCaptureOptIn(t *testing.T) {
 	}
 	t.Parallel()
 	for _, tc := range []struct {
-		name, optIn, capability string
-		want                    bool
+		name, optIn, agentOptIn, capability string
+		want                                bool
 	}{
-		{"unset", "", "true", false},
-		{"disabled", "false", "true", false},
-		{"invalid", "yes", "true", false},
-		{"enabled", "true", "true", true},
-		{"API unavailable", "true", "", false},
+		{"unset", "", "", "true", false},
+		{"disabled", "false", "", "true", false},
+		{"invalid", "yes", "", "true", false},
+		{"enabled", "true", "", "true", true},
+		{"enabled with all agent errors", "", "true", "true", true},
+		{"API unavailable", "true", "true", "", false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			var logs bytes.Buffer
 			sh := shell.NewTestShell(t, shell.WithStdout(&logs))
 			sh.Env.Remove("BUILDKITE_CAPTURE_GIT_ERRORS")
+			sh.Env.Remove("BUILDKITE_CAPTURE_AGENT_ERRORS")
 			if tc.optIn != "" {
 				sh.Env.Set("BUILDKITE_CAPTURE_GIT_ERRORS", tc.optIn)
+			}
+			if tc.agentOptIn != "" {
+				sh.Env.Set("BUILDKITE_CAPTURE_AGENT_ERRORS", tc.agentOptIn)
 			}
 			sh.Env.Set("BUILDKITE_AGENT_JOB_API_CAPTURE_ERROR", tc.capability)
 			var output gitErrorOutput
@@ -744,6 +750,74 @@ func TestGitErrorOutputRedactsSecretsBeforeTheCut(t *testing.T) {
 			report := <-reports
 			if strings.Contains(report.Message, "PRIVATE_CREDENTIAL_SUFFIX") || !strings.HasSuffix(report.Message, tc.wantSuffix) {
 				t.Errorf("message = %q, want the secret left out and suffix %q", report.Message, tc.wantSuffix)
+			}
+		})
+	}
+}
+
+func TestGitErrorCaptureIdentifiesTheCheckout(t *testing.T) {
+	t.Parallel()
+	const summary = "Git fetch could not find the remote reference."
+	const checkout = ` The checkout was of branch "feature/missing", commit "HEAD" from https://xxxxx@github.com/acme/widgets.git.`
+	for _, test := range []struct {
+		name, repo, branch, output, want string
+	}{
+		{
+			name:   "before Git's output",
+			branch: "feature/missing",
+			output: "fatal: couldn't find remote ref feature/missing\n",
+			want:   summary + checkout + "\n\nLast lines of Git output:\nfatal: couldn't find remote ref feature/missing\n",
+		},
+		{
+			name:   "with Git output too long to include",
+			branch: "feature/missing",
+			output: gitOutputOmitted,
+			want:   summary + checkout + "\n\n" + gitOutputOmitted,
+		},
+		{
+			name:   "after a fixed summary",
+			branch: "feature/missing",
+			want:   summary + checkout,
+		},
+		{
+			name:   "output that does not fit with the checkout",
+			branch: "feature/missing",
+			output: strings.Repeat("x", maxGitErrorMessage-len(summary+checkout)) + "\n",
+			want:   summary + checkout,
+		},
+		{
+			name:   "long values are left out",
+			branch: strings.Repeat("b", 149),
+			want:   summary + ` The checkout was of commit "HEAD" from https://xxxxx@github.com/acme/widgets.git.`,
+		},
+		{
+			// A password with a space does not parse, and masking would miss it.
+			name:   "a repository URL that does not parse is left out",
+			repo:   "https://user:private password@github.com/acme/widgets.git",
+			branch: "feature/missing",
+			want:   summary + ` The checkout was of branch "feature/missing", commit "HEAD".`,
+		},
+		{
+			name:   "control characters are quoted",
+			branch: "feature/\x1b[31m",
+			want:   summary + ` The checkout was of branch "feature/\x1b[31m", commit "HEAD" from https://xxxxx@github.com/acme/widgets.git.`,
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			ctx, e, reports := gitErrorCaptureServer(t, true, http.StatusCreated)
+			e.shell.Env.Set("BUILDKITE_REPO", cmp.Or(test.repo, "https://user:token@github.com/acme/widgets.git"))
+			e.shell.Env.Set("BUILDKITE_BRANCH", test.branch)
+			e.shell.Env.Set("BUILDKITE_COMMIT", "HEAD")
+			e.shell.Env.Remove("BUILDKITE_REFSPEC")
+
+			captureGitError(ctx, e.shell, &gitError{error: errors.New("exit status 128"), Type: gitErrorFetchBadReference}, test.output)
+
+			if len(reports) != 1 {
+				t.Fatalf("reports = %d, want 1", len(reports))
+			}
+			report := <-reports
+			if report.Code != "git_ref_not_found" || report.Message != test.want {
+				t.Errorf("report = %q %q, want git_ref_not_found %q", report.Code, report.Message, test.want)
 			}
 		})
 	}

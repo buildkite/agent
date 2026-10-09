@@ -3,11 +3,14 @@ package job
 import (
 	"context"
 	"errors"
+	"fmt"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 	"unicode/utf8"
 
+	"github.com/buildkite/agent/v4/env"
 	"github.com/buildkite/agent/v4/internal/redact"
 	"github.com/buildkite/agent/v4/internal/replacer"
 	"github.com/buildkite/agent/v4/internal/shell"
@@ -44,10 +47,9 @@ const maxGitErrorOutput = 16 << 10
 // start, which redaction could then no longer recognize.
 const gitOutputOmitted = "Git printed too much output to include here. See the job log for Git's full output."
 
-// maxGitErrorMessage is the most characters of summary and Git output to
-// report. It leaves room within the Job API's 1000-character message limit for
-// redaction to lengthen short secrets, so the end of the output is not cut.
-const maxGitErrorMessage = 900
+// maxGitErrorMessage is the most characters of summary, checkout and Git
+// output to report: the agent's budget for its own reports.
+const maxGitErrorMessage = jobapi.MaxCapturedErrorDetail
 
 type gitErrorOutput struct {
 	mu   sync.Mutex
@@ -56,8 +58,7 @@ type gitErrorOutput struct {
 }
 
 func (o *gitErrorOutput) tee(sh *shell.Shell) shell.RunCommandOpt {
-	if sh.Env.GetString("BUILDKITE_CAPTURE_GIT_ERRORS", "") != "true" ||
-		sh.Env.GetString("BUILDKITE_AGENT_JOB_API_CAPTURE_ERROR", "") != "true" {
+	if !gitErrorCaptureEnabled(sh.Env) {
 		return shell.TeeOutput(nil)
 	}
 	return shell.TeeOutput(o)
@@ -127,6 +128,7 @@ func captureGitError(ctx context.Context, sh *shell.Shell, err error, output str
 	if code == "" {
 		return
 	}
+	message = withCheckout(message, describeCheckout(sh))
 	if output == gitOutputOmitted {
 		message += "\n\n" + gitOutputOmitted
 	} else {
@@ -285,18 +287,78 @@ func captureCheckoutError(ctx context.Context, sh *shell.Shell, err error) {
 			// Git commands capture their own failures. Other checkout operations
 			// reuse these error types for recovery, not to identify a failed command.
 			gitErr.captured = true
-			captureError(ctx, sh, "git_checkout_phase_failed", "The default checkout phase failed.")
+			captureError(ctx, sh, "git_checkout_phase_failed", withCheckout("The default checkout phase failed.", describeCheckout(sh)))
 			return
 		}
 	}
 	code, message := classifyGitError(err)
-	captureError(ctx, sh, code, message)
+	captureError(ctx, sh, code, withCheckout(message, describeCheckout(sh)))
+}
+
+// describeCheckout says what the checkout was fetching, such as
+// `The checkout was of branch "main", commit HEAD from https://github.com/acme/widgets.git.`,
+// so a Git error such as a missing ref can be acted on without the job log.
+// The Job API masks credentials in the repository URL after matching
+// registered secrets. Values over 150 characters are left out, so the
+// description leaves room for Git's output.
+func describeCheckout(sh *shell.Shell) string {
+	value := func(name string, quote bool) string {
+		v := sh.Env.GetString(name, "")
+		if quote && v != "" {
+			v = strconv.Quote(v)
+		}
+		if utf8.RuneCountInString(v) > 150 {
+			return ""
+		}
+		return v
+	}
+	var what []string
+	if branch := value("BUILDKITE_BRANCH", true); branch != "" {
+		what = append(what, "branch "+branch)
+	}
+	if commit := value("BUILDKITE_COMMIT", true); commit != "" {
+		what = append(what, "commit "+commit)
+	}
+	if refspec := value("BUILDKITE_REFSPEC", true); refspec != "" {
+		what = append(what, "refspec "+refspec)
+	}
+	repository := value("BUILDKITE_REPO", false)
+	if redact.URLCredentials(repository) == "(invalid URL)" {
+		// A URL that does not parse can hide credentials from masking, such as
+		// a password containing a space.
+		repository = ""
+	}
+	switch {
+	case len(what) > 0 && repository != "":
+		return fmt.Sprintf("The checkout was of %s from %s.", strings.Join(what, ", "), repository)
+	case len(what) > 0:
+		return fmt.Sprintf("The checkout was of %s.", strings.Join(what, ", "))
+	case repository != "":
+		return fmt.Sprintf("The checkout was from %s.", repository)
+	}
+	return ""
+}
+
+// withCheckout follows summary with the checkout description, if any, before
+// any Git output, so the description is kept if the message is cut.
+func withCheckout(summary, checkout string) string {
+	if checkout == "" {
+		return summary
+	}
+	return summary + " " + checkout
+}
+
+// gitErrorCaptureEnabled reports whether the job opted in to reports of Git
+// failures, alone or with every agent-observed failure, and the Local Job API
+// can deliver them.
+func gitErrorCaptureEnabled(environ *env.Environment) bool {
+	return (environ.GetString("BUILDKITE_CAPTURE_GIT_ERRORS", "") == "true" || agentErrorCaptureEnabled(environ)) &&
+		environ.GetString("BUILDKITE_AGENT_JOB_API_CAPTURE_ERROR", "") == "true"
 }
 
 func captureError(ctx context.Context, sh *shell.Shell, code, message string) {
 	// Automatic Git reporting is opt-in independently of the general capture API.
-	if sh.Env.GetString("BUILDKITE_CAPTURE_GIT_ERRORS", "") != "true" ||
-		sh.Env.GetString("BUILDKITE_AGENT_JOB_API_CAPTURE_ERROR", "") != "true" {
+	if !gitErrorCaptureEnabled(sh.Env) {
 		return
 	}
 	// The Local Job API redacts registered secrets before forwarding the report.
@@ -307,20 +369,4 @@ func captureError(ctx context.Context, sh *shell.Shell, code, message string) {
 		return
 	}
 	deliverError(ctx, sh, report)
-}
-
-func deliverError(ctx context.Context, sh *shell.Shell, report jobapi.CapturedError) {
-	if ctx.Err() != nil {
-		return
-	}
-	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
-	defer cancel()
-	client, err := jobapi.NewClient(ctx, sh.Env.GetString("BUILDKITE_AGENT_JOB_API_SOCKET", ""), sh.Env.GetString("BUILDKITE_AGENT_JOB_API_TOKEN", ""))
-	if err == nil {
-		_, err = client.CaptureError(ctx, &report)
-	}
-	if err != nil {
-		// Transport errors can contain upstream response bodies or socket paths.
-		sh.Warningf("Could not capture Git error %q", report.Code)
-	}
 }
