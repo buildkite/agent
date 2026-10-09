@@ -40,6 +40,7 @@ require (
 	github.com/gowebpki/jcs v1.0.1
 	github.com/klauspost/compress v1.20.0
 	github.com/lestrrat-go/jwx/v3 v3.3.0
+	github.com/moby/moby/api v1.56.1
 	github.com/oleiade/reflections v1.1.0
 	github.com/pborman/uuid v1.2.1
 	github.com/prometheus/client_golang v1.24.1
