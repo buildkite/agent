@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -84,8 +85,15 @@ func (e *Executor) preparePlugins(ctx context.Context) error {
 	var err error
 	e.plugins, err = plugin.CreateFromJSON(e.Plugins)
 	if err != nil {
+		// A URL that does not parse is quoted whole in the error, and masking
+		// cannot cover it, such as a password containing a space. Report only
+		// why it did not parse.
+		reason := err.Error()
+		if urlErr := new(url.Error); errors.As(err, &urlErr) {
+			reason = "a plugin's URL is invalid: " + urlErr.Err.Error()
+		}
 		captureJobError(ctx, e.shell, "plugin_definition_invalid",
-			jobapi.CapturedErrorMessage("The step's plugins could not be parsed: "+err.Error(), "The step's plugins could not be parsed."))
+			jobapi.CapturedErrorMessage("The step's plugins could not be parsed: "+reason, "The step's plugins could not be parsed."))
 		return fmt.Errorf("failed to parse a plugin definition: %w", err)
 	}
 

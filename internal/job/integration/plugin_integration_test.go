@@ -951,6 +951,15 @@ func TestPluginFailuresAreCaptured(t *testing.T) {
 			code: "plugin_definition_invalid",
 		},
 		{
+			name: "invalid plugin URL",
+			env: func(t *testing.T) []string {
+				return []string{`BUILDKITE_PLUGINS=[{"https://user:my password@example.com/org/plugin.git#v1":{}}]`}
+			},
+			code:     "plugin_definition_invalid",
+			contains: "The step's plugins could not be parsed: a plugin's URL is invalid: ",
+			excludes: "my password",
+		},
+		{
 			name: "checkout failure",
 			env: func(t *testing.T) []string {
 				return []string{`BUILDKITE_PLUGINS=[{"file:///does-not-exist/missing-plugin#v1.2.3":{}}]`}
