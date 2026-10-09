@@ -814,7 +814,7 @@ selectLoop:
 
 			if result.err != nil {
 				// The work unit failed, so the whole artifact upload has failed.
-				errs = append(errs, result.err)
+				errs = append(errs, fmt.Errorf("%s: %w", artifact.Path, result.err))
 				tracker.State = "error"
 				a.logger.Debugf("Artifact %s has entered state %s", tracker.ID, tracker.State)
 				continue

@@ -2,6 +2,9 @@ package clicommand
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/buildkite/agent/v4/jobapi"
@@ -61,5 +64,38 @@ func TestCaptureAgentErrorSkipsCancelledCommands(t *testing.T) {
 
 	if len(*reports) != 0 {
 		t.Fatalf("reports = %d, want none after cancellation", len(*reports))
+	}
+}
+
+func TestUploadErrorText(t *testing.T) {
+	t.Parallel()
+	joined := fmt.Errorf("uploading artifacts: %w", errors.Join(
+		errors.New("a.txt: PUT https://bucket.example/a.txt?sig=one: 403 Forbidden"),
+		errors.New("b.txt: PUT https://bucket.example/b.txt?sig=two: 403 Forbidden"),
+		errors.New("c.txt: PUT https://bucket.example/c.txt?sig=three: 403 Forbidden"),
+	))
+	for _, test := range []struct {
+		name string
+		err  error
+		want string
+	}{
+		{"one error", errors.New("GET https://bucket.example/a.txt?sig=one: 404 Not Found"), "GET https://bucket.example/a.txt?[REDACTED]: 404 Not Found"},
+		{"errors for several files", joined, "a.txt: PUT https://bucket.example/a.txt?[REDACTED]: 403 Forbidden (and 2 more errors)"},
+		{"errors for two files", errors.Join(errors.New("a.txt: denied"), errors.New("b.txt: denied")), "a.txt: denied (and 1 more error)"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if got := uploadErrorText(test.err); got != test.want {
+				t.Errorf("uploadErrorText() = %q, want %q", got, test.want)
+			}
+		})
+	}
+}
+
+func TestStorageErrorTextKeepsJoinedCauses(t *testing.T) {
+	t.Parallel()
+	// Cache restore joins a sentinel with the actual cause, which must survive.
+	err := errors.Join(errors.New("cache restore failed after modifying target paths"), errors.New(`restoring "node_modules": directory not empty`))
+	if got := storageErrorText(err); !strings.Contains(got, "directory not empty") {
+		t.Errorf("storageErrorText() = %q, want both causes", got)
 	}
 }

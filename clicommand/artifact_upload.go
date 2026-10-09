@@ -7,6 +7,8 @@ import (
 
 	"github.com/buildkite/agent/v4/api"
 	"github.com/buildkite/agent/v4/internal/artifact"
+	"github.com/buildkite/agent/v4/internal/redact"
+	"github.com/buildkite/agent/v4/jobapi"
 	"github.com/urfave/cli/v3"
 	"go.opentelemetry.io/otel"
 )
@@ -169,6 +171,16 @@ var ArtifactUploadCommand = &cli.Command{
 
 		// Upload the artifacts
 		if err := uploader.Upload(ctx); err != nil {
+			destination := "Buildkite"
+			if cfg.Destination != "" {
+				// A destination can carry a credential in its query string,
+				// such as an Azure SAS token.
+				destination = redact.URLQueriesInText(redact.URLCredentials(cfg.Destination))
+			}
+			summary := fmt.Sprintf("Failed to upload artifacts matching %q to %s", cfg.UploadPaths, destination)
+			message := jobapi.CapturedErrorMessage(summary+": "+uploadErrorText(err),
+				jobapi.CapturedErrorMessage(summary+".", "Failed to upload artifacts."))
+			captureAgentError(ctx, l, "artifact_upload_failed", message)
 			return fmt.Errorf("failed to upload artifacts: %w", err)
 		}
 
