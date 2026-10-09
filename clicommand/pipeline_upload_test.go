@@ -1050,6 +1050,7 @@ func TestPipelineUploadFailuresAreCaptured(t *testing.T) {
 		name, pipeline, doing, message string
 		args                           []string
 		fallback                       bool
+		excludes                       string
 	}{
 		{
 			name:     "parse",
@@ -1082,6 +1083,16 @@ func TestPipelineUploadFailuresAreCaptured(t *testing.T) {
 			message:  "Fix the pipeline definition",
 			args:     []string{"--redacted-vars", "[UPLOAD_TEST_SECRET"},
 			fallback: true,
+		},
+		{
+			// The pipeline's env block adds the value only to the
+			// interpolation environment, which the parent agent never sees.
+			name:     "interpolation error naming a pipeline env secret",
+			pipeline: "env:\n  DEPLOY_SECRET: sensitive-value\nsteps:\n  - command: echo ${MISSING_VALUE?the value is $DEPLOY_SECRET}\n",
+			doing:    "parsing the pipeline",
+			message:  "the value is [REDACTED]",
+			args:     []string{"--redacted-vars", "*_SECRET"},
+			excludes: "sensitive-value",
 		},
 		{
 			name:     "missing job",
@@ -1126,7 +1137,7 @@ func TestPipelineUploadFailuresAreCaptured(t *testing.T) {
 			if report.Code != "pipeline_upload_failed" || !strings.HasPrefix(report.Message, want) {
 				t.Errorf("report = %q %q, want pipeline_upload_failed starting %q", report.Code, report.Message, want)
 			}
-			if !strings.Contains(report.Message, test.message) || strings.Contains(report.Message, "a-very-secret-value") {
+			if !strings.Contains(report.Message, test.message) || strings.Contains(report.Message, "a-very-secret-value") || (test.excludes != "" && strings.Contains(report.Message, test.excludes)) {
 				t.Errorf("message = %q, want it to contain %q and no secret value", report.Message, test.message)
 			}
 		})
