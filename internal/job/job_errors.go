@@ -102,6 +102,51 @@ func relativePath(dir, path string) (string, bool) {
 	return filepath.ToSlash(rel), true
 }
 
+// captureCommandError reports a command that failed or could not be run,
+// whether run by default or by a command hook, with the end of its output.
+func (e *Executor) captureCommandError(ctx context.Context, err error) {
+	// A refused repository command hook was reported when it was refused.
+	if errors.As(err, new(localHookRefusedError)) {
+		return
+	}
+	// Quote short, single-line commands. Longer scripts are in the step.
+	command := strings.TrimSpace(e.Command)
+	quoted := command != "" && utf8.RuneCountInString(command) <= 200 && !strings.Contains(command, "\n")
+	subject := "The step's command"
+	if quoted {
+		subject = fmt.Sprintf("The command `%s`", command)
+	}
+	switch {
+	case shell.IsExitError(err):
+		if e.commandHook != "" {
+			subject = e.commandHook + ", which runs instead of the step's command,"
+		}
+		exit, _ := describeExit(err)
+		message := subject + " " + exit + "."
+		if strings.HasSuffix(exit, "SIGKILL") {
+			message += " The operating system may have killed it for using too much memory."
+		}
+		captureJobError(ctx, e.shell, "command_failed", e.withRecentOutput(message))
+	case e.commandHook != "":
+		// The hook may have run and failed afterwards, such as while the agent
+		// read the environment changes it made.
+		captureJobError(ctx, e.shell, "command_hook_failed", e.withRecentOutput(jobapi.CapturedErrorMessage(
+			fmt.Sprintf("%s, which runs instead of the step's command, failed: %v.", e.commandHook, err),
+			e.commandHook+", which runs instead of the step's command, failed.")))
+	case errors.Is(err, errNoCommand):
+		captureJobError(ctx, e.shell, "command_missing", err.Error())
+	case errors.Is(err, errCommandEvalDisabled), errors.Is(err, errCommandOutsideRepository):
+		message := err.Error()
+		if quoted {
+			message += fmt.Sprintf(". The step's command is `%s`.", command)
+		}
+		captureJobError(ctx, e.shell, "command_eval_disabled", message)
+	default:
+		captureJobError(ctx, e.shell, "command_not_run", jobapi.CapturedErrorMessage(
+			fmt.Sprintf("%s could not be run: %v.", subject, err), subject+" could not be run."))
+	}
+}
+
 // withRecentOutput appends the end of the redacted output from the hook,
 // command, or plugin checkout that just failed, using whatever room the
 // message budget leaves after the summary.

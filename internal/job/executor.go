@@ -108,6 +108,10 @@ type Executor struct {
 	outputTail         outputTail
 	outputTailRedactor *replacer.Replacer
 
+	// commandHook describes the command hook that ran instead of the step's
+	// command, such as "The agent command hook", if any.
+	commandHook string
+
 	// stderrTee carries the redacted shell logger output (section headers,
 	// prompts, comments, warnings) to stderr and, when OTLP job logging is
 	// enabled, mirrors it into the OTLP exporter so the exported records match
@@ -486,6 +490,17 @@ func (e *Executor) executeHook(ctx context.Context, hookCfg HookConfig) (retErr 
 		return nil
 	}
 	e.resetRecentOutput()
+
+	// Record which command hook runs, so a failure is attributed to it rather
+	// than to the step's command. Several plugins' command hooks can run, and
+	// the last to run is the one that failed.
+	if hookCfg.Name == "command" {
+		e.commandHook = map[string]string{
+			HookScopeAgent:      "The agent command hook",
+			HookScopeRepository: "The repository command hook",
+			HookScopePlugin:     fmt.Sprintf("The %s plugin's command hook", hookCfg.PluginName),
+		}[hookCfg.Scope]
+	}
 
 	e.shell.Headerf("Running %s hook", hookName)
 
@@ -971,7 +986,7 @@ func (e *Executor) executeLocalHook(ctx context.Context, name string) error {
 		captureJobError(ctx, e.shell, "local_hook_refused", jobapi.CapturedErrorMessage(
 			fmt.Sprintf("The repository has a %s hook at %s, but %s disables local hooks, so the job failed. %s", name, filepath.ToSlash(relPath), disabledBy, fix),
 			fmt.Sprintf("The repository has a %s hook, but %s disables local hooks, so the job failed. %s", name, disabledBy, fix)))
-		return fmt.Errorf("refusing to run %s, local hooks are disabled", localHookPath)
+		return localHookRefusedError{path: localHookPath}
 	}
 
 	return e.executeHook(ctx, HookConfig{
@@ -979,6 +994,15 @@ func (e *Executor) executeLocalHook(ctx context.Context, name string) error {
 		Name:  name,
 		Path:  localHookPath,
 	})
+}
+
+// localHookRefusedError is returned for a repository hook the agent refused
+// to run because local hooks are disabled. The refusal is captured where it
+// happens, so it is not captured again as a failure of the command.
+type localHookRefusedError struct{ path string }
+
+func (e localHookRefusedError) Error() string {
+	return fmt.Sprintf("refusing to run %s, local hooks are disabled", e.path)
 }
 
 var badCharsRE = regexp.MustCompile("[[:^alnum:]]")
@@ -1297,6 +1321,8 @@ func (e *Executor) CommandPhase(ctx context.Context) (hookErr, commandErr error)
 	// Expand the job log header from the command to surface the error
 	e.shell.Printf("^^^ +++")
 
+	e.captureCommandError(ctx, commandErr)
+
 	isExitError := shell.IsExitError(commandErr)
 	isExitSignaled := shell.IsExitSignaled(commandErr)
 
@@ -1317,6 +1343,12 @@ func (e *Executor) CommandPhase(ctx context.Context) (hookErr, commandErr error)
 	}
 }
 
+var (
+	errNoCommand                = errors.New("the command phase has no `command` to execute; provide a `command` field in your step configuration or define a `command` hook in a step plugin, your repository `.buildkite/hooks`, or the agent `hooks-path`")
+	errCommandEvalDisabled      = errors.New("this agent is not allowed to evaluate console commands; to allow this, re-run the agent without the `--no-command-eval` option or specify a script within your repository to run instead (such as scripts/test.sh)")
+	errCommandOutsideRepository = errors.New("this agent is only allowed to run scripts within your repository; to allow this, re-run the agent without the `--no-command-eval` option or specify a script within your repository to run instead (such as scripts/test.sh)")
+)
+
 // defaultCommandPhase is executed if there is no global or plugin command hook
 func (e *Executor) defaultCommandPhase(ctx context.Context) (retErr error) {
 	span, ctx := tracetools.StartSpanFromContext(ctx, "default command hook", e.TracingBackend)
@@ -1335,9 +1367,11 @@ func (e *Executor) defaultCommandPhase(ctx context.Context) (retErr error) {
 		}
 	}()
 
+	e.resetRecentOutput()
+
 	// Make sure we actually have a command to run
 	if strings.TrimSpace(e.Command) == "" {
-		return fmt.Errorf("the command phase has no `command` to execute; provide a `command` field in your step configuration or define a `command` hook in a step plugin, your repository `.buildkite/hooks`, or the agent `hooks-path`")
+		return errNoCommand
 	}
 
 	scriptFileName := strings.ReplaceAll(e.Command, "\n", "")
@@ -1350,14 +1384,14 @@ func (e *Executor) defaultCommandPhase(ctx context.Context) (retErr error) {
 	// check that the agent is allowed to eval commands.
 	if !commandIsScript && !e.CommandEval {
 		e.shell.Commentf("No such file: \"%s\"", scriptFileName)
-		return fmt.Errorf("this agent is not allowed to evaluate console commands; to allow this, re-run the agent without the `--no-command-eval` option or specify a script within your repository to run instead (such as scripts/test.sh)")
+		return errCommandEvalDisabled
 	}
 
 	// Also make sure that the script we've resolved is definitely within this
 	// repository checkout and isn't elsewhere on the system.
 	if commandIsScript && !e.CommandEval && !strings.HasPrefix(pathToCommand, e.shell.Getwd()+string(os.PathSeparator)) {
 		e.shell.Commentf("No such file: \"%s\"", scriptFileName)
-		return fmt.Errorf("this agent is only allowed to run scripts within your repository; to allow this, re-run the agent without the `--no-command-eval` option or specify a script within your repository to run instead (such as scripts/test.sh)")
+		return errCommandOutsideRepository
 	}
 
 	var cmdToExec string
@@ -1445,7 +1479,7 @@ func (e *Executor) defaultCommandPhase(ctx context.Context) (retErr error) {
 		e.shell.Promptf("%s", cmdToExec)
 	}
 
-	err = e.shell.Command(cmd[0], cmd[1:]...).Run(ctx, shell.ShowPrompt(false))
+	err = e.shell.Command(cmd[0], cmd[1:]...).Run(ctx, shell.ShowPrompt(false), e.teeRecentOutput())
 	return err
 }
 
