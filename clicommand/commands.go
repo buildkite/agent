@@ -75,6 +75,7 @@ var BuildkiteAgentCommands = []*cli.Command{
 			EnvUnsetCommand,
 		},
 	},
+	GHACommand,
 	GitCredentialsHelperCommand,
 	{
 		Name:     "lock",

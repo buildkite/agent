@@ -10,6 +10,8 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/buildkite/agent/v4/clicommand"
 	"github.com/buildkite/agent/v4/version"
@@ -60,6 +62,9 @@ func commandNotFound(ctx context.Context, c *cli.Command, command string) {
 }
 
 func main() {
+	if code, handled := clicommand.RunGHAPrivateHelper(os.Args); handled {
+		os.Exit(code)
+	}
 	cli.CommandHelpTemplate = commandHelpTemplate
 	cli.SubcommandHelpTemplate = subcommandHelpTemplate
 	cli.VersionPrinter = printVersion
@@ -73,7 +78,14 @@ func main() {
 		CommandNotFound: commandNotFound,
 	}
 
-	if err := app.Run(context.Background(), os.Args); err != nil {
+	args := clicommand.GHAProtocolArgs(os.Args)
+	ctx := context.Background()
+	if len(args) > 1 && args[1] == "gha" {
+		var stop context.CancelFunc
+		ctx, stop = signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
+		defer stop()
+	}
+	if err := app.Run(ctx, args); err != nil {
 		os.Exit(clicommand.PrintMessageAndReturnExitCode(err))
 	}
 }

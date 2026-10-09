@@ -65,10 +65,18 @@ scripts that generate dynamic pipelines. The configuration file has a
 limit of 500 steps per file. Configuration files with over 500 steps
 must be split into multiple files and uploaded in separate steps.
 
+Use --format github-actions with explicit workflow paths to import GitHub
+Actions as native Buildkite jobs. This mode uploads plan artifacts and the
+agent executable before the generated pipeline, without interpolation.
+With --dry-run it emits generated YAML, but still requires a job environment
+and may query APIs and publish diagnostic annotations. Signing is not yet
+supported. The importer and generated runners must use the same platform.
+
 Example:
 
     $ buildkite-agent pipeline upload
     $ buildkite-agent pipeline upload my-custom-pipeline.yml
+    $ buildkite-agent pipeline upload --format github-actions .github/workflows/ci.yml
     $ ./script/dynamic_step_generator | buildkite-agent pipeline upload`
 
 const ifChangedSkippedMsg = "No changed files matched if_changed."
@@ -88,6 +96,10 @@ type PipelineUploadConfig struct {
 	RedactedVars        []string `cli:"redacted-vars" normalize:"list"`
 	AllowSecrets        bool     `cli:"allow-secrets"`
 	RejectParseWarnings bool     `cli:"reject-parse-warnings"`
+
+	GHAEventPath         string   `cli:"gha-event-path"`
+	GHARunnerQueues      []string `cli:"gha-runner-queue"`
+	GHADisableRunnerUser bool     `cli:"gha-disable-runner-user"`
 
 	// Used for if_changed processing
 	ApplyIfChanged   bool   `cli:"apply-if-changed"`
@@ -126,10 +138,13 @@ var PipelineUploadCommand = &cli.Command{
 		},
 		&cli.StringFlag{
 			Name:    "format",
-			Usage:   "In dry-run mode, specifies the form to output the pipeline in. Must be one of: json,yaml",
+			Usage:   "Dry-run output format (json,yaml), or github-actions to import workflow files (dry-run emits generated YAML)",
 			Value:   "json",
 			Sources: cli.EnvVars("BUILDKITE_PIPELINE_UPLOAD_DRY_RUN_FORMAT"),
 		},
+		&cli.StringFlag{Name: "gha-event-path", Usage: "GitHub Actions event snapshot (otherwise use the build's effective event)"},
+		&cli.StringSliceFlag{Name: "gha-runner-queue", Usage: "Map a GitHub Actions runs-on label to an active queue: label=queue (repeatable; requires server validation)"},
+		&cli.BoolFlag{Name: "gha-disable-runner-user", Usage: "Disable the generated Linux runner identity for the GitHub Actions proof of concept"},
 		&cli.BoolFlag{
 			Name:    "no-interpolation",
 			Usage:   "Skip variable interpolation into the pipeline prior to upload (default: false)",
@@ -202,6 +217,10 @@ var PipelineUploadCommand = &cli.Command{
 		defer done()
 		ctx, span := otel.Tracer("buildkite-agent").Start(ctx, "pipeline-upload")
 		defer span.End()
+
+		if cfg.DryRunFormat == "github-actions" {
+			return uploadGitHubActions(ctx, c, cfg, l)
+		}
 
 		// Find the pipeline either from STDIN or the non-flag arguments
 		type input struct {

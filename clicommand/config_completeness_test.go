@@ -35,6 +35,8 @@ var commandConfigPairs = []configCommandPair{
 	{Config: EnvGetConfig{}, Command: EnvGetCommand},
 	{Config: EnvSetConfig{}, Command: EnvSetCommand},
 	{Config: EnvUnsetConfig{}, Command: EnvUnsetCommand},
+	{Config: ghaRunConfig{}, Command: GHACommand.Commands[0]},
+	{Config: ghaStageConfig{}, Command: GHACommand.Commands[1]},
 	{Config: GitCredentialsHelperConfig{}, Command: GitCredentialsHelperCommand},
 	{Config: JobPromiseFailureConfig{}, Command: JobPromiseFailureCommand},
 	{Config: JobCaptureErrorConfig{}, Command: JobCaptureErrorCommand},
