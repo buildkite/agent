@@ -27,6 +27,7 @@ require (
 	github.com/buildkite/interpolate v0.1.5
 	github.com/buildkite/roko v1.4.0
 	github.com/buildkite/shellwords v1.0.1
+	github.com/containerd/errdefs v1.0.0
 	github.com/coreos/go-systemd/v22 v22.7.0
 	github.com/creack/pty v1.1.24
 	github.com/denisbrodbeck/machineid v1.0.1
@@ -113,7 +114,6 @@ require (
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/clipperhouse/uax29/v2 v2.7.0 // indirect
-	github.com/containerd/errdefs v1.0.0 // indirect
 	github.com/containerd/errdefs/pkg v0.3.0 // indirect
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.4.1 // indirect
 	github.com/dnephin/pflag v1.0.7 // indirect
