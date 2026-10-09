@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/buildkite/agent/v4/internal/redact"
 	"github.com/buildkite/agent/v4/internal/replacer"
@@ -19,6 +20,8 @@ import (
 // MaxCapturedErrorBody is the local request limit in bytes, before the parent
 // adds a timestamp and idempotency key.
 const MaxCapturedErrorBody = 32 << 10
+
+const maxCapturedErrorMessageLength = 1000
 
 func (s *Server) handleCapturedError(w http.ResponseWriter, r *http.Request) {
 	if s.reportCapturedError == nil {
@@ -60,6 +63,15 @@ func (s *Server) handleCapturedError(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Redact the whole message first, so cutting through a secret cannot leave
+	// an unrecognizable fragment of it in the report.
+	var warning string
+	if utf8.RuneCountInString(payload.Message) > maxCapturedErrorMessageLength {
+		const marker = "…[truncated]"
+		payload.Message = string([]rune(payload.Message)[:maxCapturedErrorMessageLength-utf8.RuneCountInString(marker)]) + marker
+		warning = "Captured error message was truncated to 1000 characters. Put detailed output in an annotation or artifact."
+	}
+
 	now := time.Now().UTC()
 	if payload.Timestamp == nil {
 		payload.Timestamp = &now
@@ -74,8 +86,11 @@ func (s *Server) handleCapturedError(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if warning != "" {
+		s.Logger.Warningf("%s", warning)
+	}
 	w.WriteHeader(http.StatusCreated)
-	if err := json.NewEncoder(w).Encode(payload); err != nil {
+	if err := json.NewEncoder(w).Encode(CapturedErrorResponse{CapturedError: *payload, Warning: warning}); err != nil {
 		s.Logger.Errorf("Job API: couldn't encode captured-error response: %v", err)
 	}
 }
@@ -107,19 +122,9 @@ func (e *CapturedError) redact(needles []string) error {
 	if !changed {
 		return nil
 	}
-	// Replacements can be longer than the original secret. Do not forward a
-	// report that redaction made invalid or too large, or retry it unredacted.
-	if err := validateCapturedError(e); err != nil {
-		return err
-	}
-	body, err := json.Marshal(e)
-	if err != nil {
-		return err
-	}
-	if len(body) > MaxCapturedErrorBody {
-		return fmt.Errorf("captured error exceeds %d bytes after redaction", MaxCapturedErrorBody)
-	}
-	return nil
+	// Redaction can expand the code beyond its limit. Reject an invalid code;
+	// the caller will shorten an overlong message after redaction.
+	return validateCapturedError(e)
 }
 
 func requireJSONEOF(dec *json.Decoder) error {

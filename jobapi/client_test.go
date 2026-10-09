@@ -187,8 +187,12 @@ func TestClientCaptureErrorUsesAuthenticatedLocalTransport(t *testing.T) {
 		Code:    "image_pull_failed",
 		Message: "registry denied access",
 	}
-	if err := cli.CaptureError(t.Context(), &want); err != nil {
+	response, err := cli.CaptureError(t.Context(), &want)
+	if err != nil {
 		t.Fatalf("CaptureError() error = %v", err)
+	}
+	if response.Message != want.Message || response.IdempotencyKey != "server-key" || response.Warning != "" {
+		t.Errorf("CaptureError() response = %+v, want accepted report without a warning", response)
 	}
 	if diff := cmp.Diff([]CapturedError{want}, svr.captured); diff != "" {
 		t.Errorf("captured requests diff (-want +got):\n%s", diff)
@@ -221,7 +225,7 @@ func TestClientCaptureErrorBodyLimit(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			before := len(svr.captured)
-			err := cli.CaptureError(t.Context(), &test.payload)
+			_, err := cli.CaptureError(t.Context(), &test.payload)
 			if test.wantErr {
 				if err == nil || !strings.Contains(err.Error(), "request exceeds 32768 bytes after JSON encoding") {
 					t.Fatalf("CaptureError() error = %v, want serialized request overflow", err)

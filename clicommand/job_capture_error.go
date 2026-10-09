@@ -30,11 +30,18 @@ Buildkite-issued tokens are also redacted. Register dynamically obtained secrets
 with buildkite-agent redactor add before reporting them. This does not
 automatically detect other sensitive information.
 
-Reports are rejected if redaction causes an invalid error code or an oversized
-payload.
+Messages longer than 1000 characters are shortened after redaction, with
+…[truncated] at the end and a warning. The marker is included in the limit.
+Put the most important information first, and detailed output in an annotation
+or artifact. The error code has its own 255-byte limit and is never shortened;
+reports are rejected if redaction makes the code invalid.
 
-This command limits error reports to 32 KiB, including JSON encoding.
-If a report is too large, shorten the message.
+The limit counts Unicode code points, not bytes. Some emoji and letters with
+separate accent marks count as more than one character. The Buildkite server
+also validates reports and shortens overlong messages.
+
+There is also a separate 32 KiB limit on the whole JSON request. This input
+limit still rejects oversized requests before redaction or shortening.
 
 Note: This feature is currently in development and subject to change. It is not
 yet available to all customers.`
@@ -57,7 +64,7 @@ var JobCaptureErrorCommand = &cli.Command{
 		},
 	),
 	Action: func(ctx context.Context, c *cli.Command) error {
-		ctx, cfg, _, _, done := setupLoggerAndConfig[JobCaptureErrorConfig](ctx, c)
+		ctx, cfg, l, _, done := setupLoggerAndConfig[JobCaptureErrorConfig](ctx, c)
 		defer done()
 
 		if c.Args().Len() != 1 || strings.TrimSpace(cfg.ErrorCode) == "" {
@@ -72,8 +79,12 @@ var JobCaptureErrorCommand = &cli.Command{
 		}
 
 		capturedError := jobapi.CapturedError{Code: cfg.ErrorCode, Message: cfg.Message}
-		if err := client.CaptureError(ctx, &capturedError); err != nil {
+		response, err := client.CaptureError(ctx, &capturedError)
+		if err != nil {
 			return fmt.Errorf("failed to capture error through the Local Job API: %w", err)
+		}
+		if response.Warning != "" {
+			l.Warnf("%s", response.Warning)
 		}
 		return nil
 	},

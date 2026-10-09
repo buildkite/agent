@@ -112,11 +112,17 @@ type PromiseFailureResponse struct {
 	Error string `json:"error,omitempty"`
 }
 
-// CapturedError is the request and response body for POST /errors. Timestamp
+// CapturedError is the request body for POST /errors. Timestamp
 // is optional; the parent assigns it and a delivery idempotency key.
 type CapturedError struct {
 	Code           string     `json:"code"`
 	Message        string     `json:"message"`
 	Timestamp      *time.Time `json:"timestamp,omitempty"`
 	IdempotencyKey string     `json:"idempotency_key,omitempty"`
+}
+
+// CapturedErrorResponse contains the forwarded report and any truncation warning.
+type CapturedErrorResponse struct {
+	CapturedError
+	Warning string `json:"warning,omitempty"`
 }
