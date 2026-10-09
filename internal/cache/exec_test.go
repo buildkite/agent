@@ -186,7 +186,7 @@ func TestRunExec_MissThenHit(t *testing.T) {
 		t.Fatalf("command ran %d times on a miss, want 1", b.runs)
 	}
 	// Headers go to stderr, so stdout is only the command's output.
-	wantStderr := "--- :package: Restoring cache\n+++ :package: No cached result, running command\nwarning: deprecated\n--- :package: Saving cache\n"
+	wantStderr := "+++ :package: No cached result, running command\nwarning: deprecated\n--- :package: Saving cache\n"
 	if stdout != "compiling\ndone\n" || stderr != wantStderr {
 		t.Errorf("miss output: stdout %q, stderr %q", stdout, stderr)
 	}
@@ -217,7 +217,8 @@ func TestRunExec_MissThenHit(t *testing.T) {
 	if _, err := os.Stat(filepath.Join("out", "stale")); !errors.Is(err, os.ErrNotExist) {
 		t.Errorf("restore should replace out, but out/stale remains (err %v)", err)
 	}
-	if stdout != "compiling\nwarning: deprecated\ndone\n" || !strings.Contains(stderr, "the command was not run") {
+	// The replay header is the only group, so a hit doesn't add a restore group to the build log.
+	if stdout != "compiling\nwarning: deprecated\ndone\n" || !strings.HasPrefix(stderr, "+++ ") || strings.Count(stderr, "\n") != 1 || !strings.Contains(stderr, "the command was not run") {
 		t.Errorf("hit output: stdout %q, stderr %q", stdout, stderr)
 	}
 
