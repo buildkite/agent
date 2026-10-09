@@ -2,6 +2,7 @@ package dockerexec
 
 import (
 	"context"
+	"crypto/rand"
 	"debug/elf"
 	"fmt"
 	"os"
@@ -75,6 +76,7 @@ func prepare(ctx context.Context, l logger.Logger, cfg Config, deps preflightDep
 		uid:         os.Getuid(),
 		gid:         os.Getgid(),
 		groups:      groups,
+		runID:       rand.Text(),
 	}, nil
 }
 

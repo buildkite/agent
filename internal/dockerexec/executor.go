@@ -3,6 +3,7 @@ package dockerexec
 import (
 	"context"
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -36,6 +37,9 @@ type Executor struct {
 	// The agent process's identity, which the container runs as.
 	uid, gid int
 	groups   []int
+
+	// runID identifies this agent run in container labels.
+	runID string
 }
 
 // dockerClient is the part of the Docker Engine API client the executor uses.
@@ -76,4 +80,21 @@ func Prepare(ctx context.Context, l logger.Logger, cfg Config) (*Executor, error
 		return nil, err
 	}
 	return e, nil
+}
+
+// Request holds the per-job values the executor needs.
+type Request struct {
+	// JobID names and labels the container.
+	JobID string
+
+	// Env is the job environment. It does not include the agent's own
+	// process environment, which never reaches the container.
+	Env []string
+
+	// Output receives the container's stdout and stderr.
+	Output io.Writer
+
+	// JobLogTmpfile is the path of the job log tmpfile, or empty if
+	// enable-job-log-tmpfile is off.
+	JobLogTmpfile string
 }
