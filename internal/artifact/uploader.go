@@ -34,6 +34,10 @@ type UploaderConfig struct {
 	// The ID of the Job
 	JobID string
 
+	// WorkingDirectory, when set, is an absolute root for discovery and
+	// artifact names. It does not change the process working directory.
+	WorkingDirectory string
+
 	// The path of the uploads
 	Paths string
 
@@ -248,6 +252,12 @@ func (a *Uploader) collect(ctx context.Context) ([]*api.Artifact, error) {
 	if err != nil {
 		return nil, fmt.Errorf("getting working directory: %w", err)
 	}
+	if a.conf.WorkingDirectory != "" {
+		if !filepath.IsAbs(a.conf.WorkingDirectory) {
+			return nil, errors.New("artifact working directory must be absolute")
+		}
+		wd = a.conf.WorkingDirectory
+	}
 
 	ac := &artifactCollector{
 		Uploader:  a,
@@ -323,6 +333,9 @@ func (a *Uploader) literal(ctx context.Context, paths iter.Seq[string], filesCh 
 		if path == "" {
 			continue
 		}
+		if a.conf.WorkingDirectory != "" && !filepath.IsAbs(path) {
+			path = filepath.Join(a.conf.WorkingDirectory, path)
+		}
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
@@ -345,6 +358,13 @@ func (a *Uploader) glob(ctx context.Context, paths iter.Seq[string], filesCh cha
 		if globPath == "" {
 			continue
 		}
+		if a.conf.WorkingDirectory != "" && filepath.IsAbs(globPath) {
+			var err error
+			globPath, err = filepath.Rel(a.conf.WorkingDirectory, globPath)
+			if err != nil || !filepath.IsLocal(globPath) {
+				return fmt.Errorf("artifact pattern is outside working directory: %q", globPath)
+			}
+		}
 		pattern, err := zzglob.Parse(globPath)
 		if err != nil {
 			return fmt.Errorf("invalid glob pattern %q: %w", globPath, err)
@@ -361,6 +381,9 @@ func (a *Uploader) glob(ctx context.Context, paths iter.Seq[string], filesCh cha
 			a.logger.Warnf("One of the glob patterns matched a directory: %s", path)
 			return nil
 		}
+		if a.conf.WorkingDirectory != "" {
+			path = filepath.Join(a.conf.WorkingDirectory, path)
+		}
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
@@ -368,7 +391,11 @@ func (a *Uploader) glob(ctx context.Context, paths iter.Seq[string], filesCh cha
 			return nil
 		}
 	}
-	err := zzglob.MultiGlob(ctx, patterns, walkDirFunc, zzglob.TraverseSymlinks(a.conf.GlobResolveFollowSymlinks))
+	opts := []zzglob.GlobOption{zzglob.TraverseSymlinks(a.conf.GlobResolveFollowSymlinks)}
+	if a.conf.WorkingDirectory != "" {
+		opts = append(opts, zzglob.WithFilesystem(os.DirFS(a.conf.WorkingDirectory)))
+	}
+	err := zzglob.MultiGlob(ctx, patterns, walkDirFunc, opts...)
 	if err != nil {
 		return fmt.Errorf("globbing patterns: %w", err)
 	}
@@ -427,7 +454,7 @@ func (c *artifactCollector) worker(ctx context.Context, filesCh <-chan string) e
 		// https://github.com/buildkite/agent/commit/8ae46d975aa60d1ae0e2cc0bff7a43d3bf960935
 		// from 2014, so I'm replicating it here to avoid breaking things
 		basepath := c.wd
-		if filepath.IsAbs(file) {
+		if filepath.IsAbs(file) && c.conf.WorkingDirectory == "" {
 			basepath = "/"
 			if runtime.GOOS == "windows" {
 				basepath = filepath.VolumeName(absolutePath) + "/"
@@ -437,6 +464,9 @@ func (c *artifactCollector) worker(ctx context.Context, filesCh <-chan string) e
 		path, err := filepath.Rel(basepath, absolutePath)
 		if err != nil {
 			return fmt.Errorf("resolving relative path for file %s: %w", file, err)
+		}
+		if c.conf.WorkingDirectory != "" && !filepath.IsLocal(path) {
+			return fmt.Errorf("artifact %q is outside working directory", file)
 		}
 
 		// Convert any Windows paths to Unix/URI form

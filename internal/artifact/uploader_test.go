@@ -135,6 +135,31 @@ func TestCollect(t *testing.T) {
 	}
 }
 
+func TestCollectWorkingDirectory(t *testing.T) {
+	t.Parallel()
+	root := filepath.Join(t.TempDir(), "root [literal]")
+	if err := os.MkdirAll(filepath.Join(root, "nested"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "nested", "result.txt"), []byte("native-root"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for _, literal := range []bool{false, true} {
+		path := "nested/*.txt"
+		if literal {
+			path = "nested/result.txt"
+		}
+		u := NewUploader(logger.Discard, nil, UploaderConfig{WorkingDirectory: root, Paths: path, Literal: literal})
+		artifacts, err := u.collect(t.Context())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(artifacts) != 1 || artifacts[0].Path != "nested/result.txt" || artifacts[0].AbsolutePath != filepath.Join(root, "nested", "result.txt") || artifacts[0].FileSize != 11 {
+			t.Fatalf("collect with literal=%t: %+v", literal, artifacts)
+		}
+	}
+}
+
 func TestCollectThatDoesntMatchAnyFiles(t *testing.T) {
 	t.Parallel()
 	ctx := t.Context()
