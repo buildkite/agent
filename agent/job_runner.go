@@ -268,10 +268,10 @@ func NewJobRunner(ctx context.Context, l logger.Logger, apiClient *api.Client, c
 			return nil, fmt.Errorf("failed to set permissions on job log tmpfile %s: %w", tmpFile.Name(), err)
 		}
 
-		if err := os.Setenv("BUILDKITE_JOB_LOG_TMPFILE", tmpFile.Name()); err != nil {
-			r.removeJobLogTmpfile()
-			return nil, fmt.Errorf("failed to set BUILDKITE_JOB_LOG_TMPFILE: %v", err)
-		}
+		// Pass the path to this job's bootstrap only. Setting it in the agent
+		// process env would leak it into concurrent jobs (--spawn) and later
+		// jobs. As before, it is not written to the job env files.
+		env = append(env, "BUILDKITE_JOB_LOG_TMPFILE="+tmpFile.Name())
 
 		// The tmpfile is a secondary copy of the log. Writing to it must never
 		// fail the write to r.output, otherwise a tmpfile error (disk full,

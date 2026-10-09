@@ -27,22 +27,23 @@ import (
 // bootstrap process exits.
 const jobLogTmpfileTestLines = 5000
 
-// writeChattyBootstrap writes a bootstrap script that prints
-// jobLogTmpfileTestLines numbered lines followed by a final marker line, and
-// returns the bootstrap-script config value to run it.
+// writeChattyBootstrap writes a bootstrap script that prints the
+// BUILDKITE_JOB_LOG_TMPFILE it received, then jobLogTmpfileTestLines numbered
+// lines followed by a final marker line, and returns the bootstrap-script
+// config value to run it.
 func writeChattyBootstrap(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
 	if runtime.GOOS == "windows" {
 		path := filepath.Join(dir, "bootstrap.bat")
-		script := fmt.Sprintf("@echo off\r\nfor /L %%%%i in (1,1,%d) do echo line %%%%i\r\necho LAST LINE\r\n", jobLogTmpfileTestLines)
+		script := fmt.Sprintf("@echo off\r\necho BUILDKITE_JOB_LOG_TMPFILE=%%BUILDKITE_JOB_LOG_TMPFILE%%\r\nfor /L %%%%i in (1,1,%d) do echo line %%%%i\r\necho LAST LINE\r\n", jobLogTmpfileTestLines)
 		if err := os.WriteFile(path, []byte(script), 0o700); err != nil {
 			t.Fatalf("os.WriteFile(%q) = %v", path, err)
 		}
 		return fmt.Sprintf(`cmd.exe /c "%s"`, path)
 	}
 	path := filepath.Join(dir, "bootstrap.sh")
-	script := fmt.Sprintf("#!/bin/sh\ni=1\nwhile [ $i -le %d ]; do echo \"line $i\"; i=$((i+1)); done\necho LAST LINE\n", jobLogTmpfileTestLines)
+	script := fmt.Sprintf("#!/bin/sh\necho \"BUILDKITE_JOB_LOG_TMPFILE=$BUILDKITE_JOB_LOG_TMPFILE\"\ni=1\nwhile [ $i -le %d ]; do echo \"line $i\"; i=$((i+1)); done\necho LAST LINE\n", jobLogTmpfileTestLines)
 	if err := os.WriteFile(path, []byte(script), 0o700); err != nil {
 		t.Fatalf("os.WriteFile(%q) = %v", path, err)
 	}
@@ -137,13 +138,20 @@ func newJobLogTmpfileRunner(t *testing.T, bootstrap string, pty bool) (*JobRunne
 }
 
 // TestJobRunner_JobLogTmpfile_ClosedAndRemovedAfterJob checks that the job log
-// tmpfile is both closed and deleted once the job finishes. Removing an open
-// file fails on Windows, and on Unix it would silently leak one file
-// descriptor per job (https://github.com/buildkite/agent/issues/4331).
+// tmpfile path reaches the bootstrap through the job env without being set in
+// the agent process env, which is shared by every job when using --spawn. It
+// also checks that the tmpfile is both closed and deleted once the job
+// finishes. Removing an open file fails on Windows, and on Unix it would
+// silently leak one file descriptor per job
+// (https://github.com/buildkite/agent/issues/4331).
 func TestJobRunner_JobLogTmpfile_ClosedAndRemovedAfterJob(t *testing.T) {
-	// NewJobRunner sets BUILDKITE_JOB_LOG_TMPFILE in the process environment,
-	// so this test cannot be parallel. t.Setenv restores the original value.
+	// Make sure the agent process env doesn't have BUILDKITE_JOB_LOG_TMPFILE
+	// (it might, if the tests run inside a job). t.Setenv restores the
+	// original value afterwards, and means this test cannot be parallel.
 	t.Setenv("BUILDKITE_JOB_LOG_TMPFILE", "")
+	if err := os.Unsetenv("BUILDKITE_JOB_LOG_TMPFILE"); err != nil {
+		t.Fatalf("os.Unsetenv(BUILDKITE_JOB_LOG_TMPFILE) = %v", err)
+	}
 
 	tests := []struct {
 		name         string
@@ -183,12 +191,13 @@ func TestJobRunner_JobLogTmpfile_ClosedAndRemovedAfterJob(t *testing.T) {
 			if tmpFile == nil {
 				t.Fatal("jr.jobLogTmpFile = nil, want a file")
 			}
-			if got, want := os.Getenv("BUILDKITE_JOB_LOG_TMPFILE"), tmpFile.Name(); got != want {
-				t.Errorf("BUILDKITE_JOB_LOG_TMPFILE = %q, want %q", got, want)
-			}
 
 			if err := jr.Run(t.Context(), nil); err != nil {
 				t.Fatalf("jr.Run() = %v", err)
+			}
+
+			if got, ok := os.LookupEnv("BUILDKITE_JOB_LOG_TMPFILE"); ok {
+				t.Errorf("agent process env has BUILDKITE_JOB_LOG_TMPFILE = %q, want it unset", got)
 			}
 
 			// The runner must have closed the file itself. Closing an already
@@ -208,6 +217,9 @@ func TestJobRunner_JobLogTmpfile_ClosedAndRemovedAfterJob(t *testing.T) {
 			if tc.wantFullLog {
 				if got, want := strings.Count(log, "line "), jobLogTmpfileTestLines; got != want {
 					t.Errorf("uploaded job log contains %d numbered lines, want %d", got, want)
+				}
+				if want := "BUILDKITE_JOB_LOG_TMPFILE=" + tmpFile.Name(); !strings.Contains(log, want) {
+					t.Errorf("uploaded job log does not contain %q, so the bootstrap did not receive the tmpfile path", want)
 				}
 				if !strings.Contains(log, "LAST LINE") {
 					t.Errorf("uploaded job log is missing the final line; tail = %q", tail(log, 200))
