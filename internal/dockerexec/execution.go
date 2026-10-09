@@ -55,6 +55,7 @@ type Execution struct {
 	exited          bool // Run has finished waiting for the container.
 	id              string
 	cancelCreate    context.CancelFunc
+	cancelStart     context.CancelFunc
 	cancelRun       context.CancelFunc
 	exitCode        int
 }
@@ -214,19 +215,26 @@ func (x *Execution) Interrupt() error {
 }
 
 // Terminate kills the container. Before start, it stops Run's daemon calls
-// instead, and Cleanup removes whatever was created. During start, it is
-// recorded and Run kills the container once start returns. If the daemon
-// does not respond to the kill, it stops Run waiting on it, so the agent can
-// move on even if the container is left running.
+// instead, and Cleanup removes whatever was created. During start, the
+// daemon may already have launched the container while its response is
+// delayed, so it kills the container and stops waiting for the response. If
+// the daemon does not respond to the kill, it stops Run waiting on it, so the
+// agent can move on even if the container is left running.
 func (x *Execution) Terminate() error {
 	x.mu.Lock()
 	x.pending = signalTerminate
-	state, id, cancelRun := x.state, x.id, x.cancelRun
+	state, id, cancelRun, cancelStart := x.state, x.id, x.cancelRun, x.cancelStart
 	x.mu.Unlock()
 
 	switch {
 	case state == stateRunning:
 		return x.terminateRunning(id)
+	case state == stateStarting:
+		cancelStart()
+		err := x.kill(id, "SIGKILL")
+		if err != nil {
+			return fmt.Errorf("killing job container %s: %w", id, err)
+		}
 	case state < stateStarting && cancelRun != nil:
 		cancelRun()
 	}
@@ -308,26 +316,35 @@ func (x *Execution) start(runCtx context.Context, id string) error {
 		x.mu.Unlock()
 		return errCancelledBeforeStart
 	}
-	x.state = stateStarting
-	x.mu.Unlock()
-
 	startCtx, cancel := context.WithTimeout(runCtx, startTimeout)
 	defer cancel()
-	if _, err := x.e.client.ContainerStart(startCtx, id, client.ContainerStartOptions{}); err != nil {
-		return fmt.Errorf("starting the job container: %w", err)
-	}
+	x.state = stateStarting
+	x.cancelStart = cancel
+	x.mu.Unlock()
+
+	_, err := x.e.client.ContainerStart(startCtx, id, client.ContainerStartOptions{})
 
 	x.mu.Lock()
-	x.state = stateRunning
 	pending := x.pending
+	if err == nil && pending != signalTerminate {
+		x.state = stateRunning
+	}
 	x.mu.Unlock()
-	switch pending {
-	case signalInterrupt:
-		x.deliverInterrupt()
-	case signalTerminate:
-		if err := x.terminateRunning(id); err != nil {
-			x.e.logger.Errorf("%v", err)
+	switch {
+	case pending == signalTerminate:
+		// Terminate may have tried to kill the container before the daemon
+		// finished starting it, so kill it again. Cleanup removes it.
+		if err == nil {
+			if killErr := x.kill(id, "SIGKILL"); killErr != nil {
+				x.e.logger.Errorf("Couldn't kill job container %s: %v", id, killErr)
+			}
 		}
+		return errors.New("job was terminated while its container was starting")
+	case err != nil:
+		return fmt.Errorf("starting the job container: %w", err)
+	}
+	if pending == signalInterrupt {
+		x.deliverInterrupt()
 	}
 	return nil
 }
