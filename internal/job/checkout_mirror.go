@@ -194,9 +194,10 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string, attem
 				)
 			}
 			if err == nil {
-				// C16: agents predating remote mirrors may share this mirror.
-				// Canonicalize the temporary repository before atomically
-				// publishing it to the shared mixed-version cache.
+				// Agents predating remote mirrors may share this mirror volume,
+				// so remote.origin.url must always be canonical. Canonicalize the
+				// temporary repository before atomically publishing it to the
+				// shared mixed-version cache.
 				err = e.shell.Command(
 					"git", "--git-dir", tempMirrorDir,
 					"remote", "set-url", "origin", repository,
@@ -291,10 +292,12 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string, attem
 	if isMainRepository {
 		// Another process may have fetched the commit while we waited for the lock.
 		//
-		// Presence-only by design (C22): proving the object is also reachable from a
+		// Presence-only by design: proving the object is also reachable from a
 		// mirror ref requires a global `for-each-ref --contains` scan, which costs
 		// minutes on large mirrors. An unpinned object pruned by mirror gc fails one
-		// job with a retryable git error that the retry-clean path heals.
+		// job with a retryable git error that the retry-clean path heals. Do not add
+		// a global reachability scan here; if stronger pinning is ever needed, check
+		// only the expected refs.
 		if hasGitCommit(ctx, e.shell, mirrorDir, e.Commit) {
 			e.shell.Commentf("Commit %q exists in mirror", e.Commit)
 			commitAlreadyPresent = true
@@ -328,9 +331,11 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string, attem
 				return "", err
 			}
 			if hit {
-				// C2: the helper requires both a successful ref write and
-				// local object presence. Keep going through rename
-				// maintenance instead of returning early.
+				// The helper requires both a successful ref write and local
+				// object presence: a fetch can succeed while its ref write fails,
+				// leaving unreferenced objects that mirror gc may prune from under
+				// --reference checkouts. Keep going through rename maintenance
+				// instead of returning early.
 				remoteMirrorHit = true
 			}
 		}
