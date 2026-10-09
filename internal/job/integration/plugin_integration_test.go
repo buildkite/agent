@@ -919,3 +919,180 @@ func createZipArchive(sourceDir, zipPath string) error {
 	}
 	return zipFile.Close()
 }
+
+func TestPluginFailuresAreCaptured(t *testing.T) {
+	t.Parallel()
+
+	if runtime.GOOS == "windows" {
+		t.Skip("plugin fixtures use POSIX shell hooks")
+	}
+
+	failingHook := map[string][]string{"environment": {"#!/usr/bin/env bash", "echo 'registry login failed'", "exit 5"}}
+
+	for _, test := range []struct {
+		name     string
+		env      func(t *testing.T) []string
+		code     string
+		message  string
+		contains string
+		excludes string
+	}{
+		{
+			name: "plugins disabled",
+			env: func(t *testing.T) []string {
+				return []string{`BUILDKITE_PLUGINS=[{"docker#v5.0.0":{}}]`, "BUILDKITE_PLUGINS_ENABLED=false"}
+			},
+			code:    "plugins_disabled",
+			message: "The step uses plugins, but this agent was started with `--no-plugins`, which disables them. Remove the plugins from the step, or run it on agents that allow plugins, such as another queue.",
+		},
+		{
+			name: "invalid definition",
+			env:  func(t *testing.T) []string { return []string{`BUILDKITE_PLUGINS={"not":"a list"}`} },
+			code: "plugin_definition_invalid",
+		},
+		{
+			name: "invalid plugin URL",
+			env: func(t *testing.T) []string {
+				return []string{`BUILDKITE_PLUGINS=[{"https://user:my password@example.com/org/plugin.git#v1":{}}]`}
+			},
+			code:     "plugin_definition_invalid",
+			contains: "The step's plugins could not be parsed: a plugin's URL is invalid: ",
+			excludes: "my password",
+		},
+		{
+			name: "checkout failure",
+			env: func(t *testing.T) []string {
+				return []string{`BUILDKITE_PLUGINS=[{"file:///does-not-exist/missing-plugin#v1.2.3":{}}]`}
+			},
+			code:     "plugin_checkout_failed",
+			message:  "Git could not check out plugin missing-plugin from /does-not-exist/missing-plugin at version \"v1.2.3\". Check that the repository exists, this agent can access it, and the version is a tag, branch, or commit in it.\n\nLast lines of output:\n",
+			contains: "fatal: repository '/does-not-exist/missing-plugin' does not exist",
+		},
+		{
+			name: "invalid configuration",
+			env: func(t *testing.T) []string {
+				return pluginWithDefinition(t, "name: test\nconfiguration:\n  properties:\n    settings:\n      type: integer\n")
+			},
+			code:     "plugin_configuration_invalid",
+			contains: `does not match the plugin's schema: /settings: type should be integer, got string. Fix the configuration in the step.`,
+			// The schema library cuts values short, so a secret could escape
+			// redaction.
+			excludes: "blah",
+		},
+		{
+			// maxLength messages include the value, which must be left out.
+			name: "invalid configuration with a value-bearing rule",
+			env: func(t *testing.T) []string {
+				return pluginWithDefinition(t, "name: test\nconfiguration:\n  properties:\n    settings:\n      type: string\n      maxLength: 2\n")
+			},
+			code:     "plugin_configuration_invalid",
+			contains: `does not match the plugin's schema: /settings: max length of 2 characters exceeded. Fix the configuration in the step.`,
+			excludes: "blah",
+		},
+		{
+			name: "missing requirement",
+			env: func(t *testing.T) []string {
+				return pluginWithDefinition(t, "name: test\nrequirements:\n  - definitely-not-a-command\n")
+			},
+			code:     "plugin_requirement_missing",
+			contains: `needs commands that are not in this agent's PATH: "definitely-not-a-command". Install them on the agent`,
+		},
+		{
+			name: "vendored plugin missing",
+			env: func(t *testing.T) []string {
+				return []string{`BUILDKITE_PLUGINS=[{"./.buildkite/plugins/missing":{}}]`}
+			},
+			code:    "vendored_plugin_invalid",
+			message: "The step uses vendored plugin missing, but ./.buildkite/plugins/missing is not a directory in the checked-out repository. Commit the plugin at that path, or fix the path in the step.",
+		},
+		{
+			name: "hook failure",
+			env: func(t *testing.T) []string {
+				json, err := createTestPlugin(t, failingHook).ToJSON()
+				if err != nil {
+					t.Fatal(err)
+				}
+				return []string{"BUILDKITE_PLUGINS=" + json}
+			},
+			code:     "hook_failed",
+			contains: "/hooks/environment exited with status 5. It is part of the plugin, not the repository.\n\nLast lines of output:\nregistry login failed",
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			tester, err := NewExecutorTester(mainCtx)
+			if err != nil {
+				t.Fatalf("NewExecutorTester() error = %v", err)
+			}
+			defer tester.Close()
+			agentAPI := newJobErrorsAPI(t, nil)
+
+			if err := tester.Run(t, append(agentAPI.env(), test.env(t)...)...); err == nil {
+				t.Fatalf("tester.Run() = nil, want plugin failure")
+			}
+
+			report := agentAPI.report(t, test.code)
+			if test.message != "" && !strings.HasPrefix(report.Message, test.message) {
+				t.Errorf("message = %q, want %q", report.Message, test.message)
+			}
+			if !strings.Contains(report.Message, test.contains) {
+				t.Errorf("message = %q, want it to contain %q", report.Message, test.contains)
+			}
+			if test.excludes != "" && strings.Contains(report.Message, test.excludes) {
+				t.Errorf("message = %q, want it not to contain %q", report.Message, test.excludes)
+			}
+		})
+	}
+}
+
+func TestFailingPluginCommandHookIsNamed(t *testing.T) {
+	t.Parallel()
+	tester, err := NewExecutorTester(mainCtx)
+	if err != nil {
+		t.Fatalf("NewExecutorTester() error = %v", err)
+	}
+	defer tester.Close()
+	agentAPI := newJobErrorsAPI(t, nil)
+
+	// Without --strict-single-hooks the agent runs every plugin's command
+	// hook, so the report must name the one that failed, not the first.
+	passing := createTestPlugin(t, map[string][]string{"command": {"#!/usr/bin/env bash", "echo first plugin ran"}})
+	failing := createTestPlugin(t, map[string][]string{"command": {"#!/usr/bin/env bash", "echo second plugin failed", "exit 4"}})
+	plugins, err := json.Marshal([]*testPlugin{passing, failing})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := tester.Run(t, append(agentAPI.env(), "BUILDKITE_PLUGINS="+string(plugins))...); err == nil {
+		t.Fatalf("tester.Run() = nil, want command hook failure")
+	}
+	report := agentAPI.report(t, "command_failed")
+	name := filepath.Base(failing.Path)
+	if !strings.Contains(report.Message, name+" plugin's command hook") || strings.Contains(report.Message, filepath.Base(passing.Path)) || !strings.HasSuffix(report.Message, "second plugin failed") {
+		t.Errorf("message = %q, want it to name plugin %s and show its output", report.Message, name)
+	}
+}
+
+// pluginWithDefinition returns the environment for a step using a test plugin
+// with the given plugin.yml, validated against the step's configuration.
+func pluginWithDefinition(t *testing.T, definition string) []string {
+	t.Helper()
+	p := createTestPlugin(t, map[string][]string{"environment": {"#!/usr/bin/env bash", "true"}})
+	if err := os.WriteFile(filepath.Join(p.Path, "plugin.yml"), []byte(definition), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := p.Add("."); err != nil {
+		t.Fatal(err)
+	}
+	if err := p.Commit("Add plugin definition"); err != nil {
+		t.Fatal(err)
+	}
+	var err error
+	if p.versionTag, err = p.RevParse("HEAD"); err != nil {
+		t.Fatal(err)
+	}
+	json, err := p.ToJSON()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return []string{"BUILDKITE_PLUGINS=" + json, "BUILDKITE_PLUGIN_VALIDATION=true"}
+}

@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"slices"
 	"strconv"
@@ -16,8 +18,11 @@ import (
 	"github.com/buildkite/agent/v4/agent/plugin"
 	"github.com/buildkite/agent/v4/internal/experiments"
 	"github.com/buildkite/agent/v4/internal/job/hook"
+	"github.com/buildkite/agent/v4/internal/shell"
+	"github.com/buildkite/agent/v4/jobapi"
 	"github.com/buildkite/roko"
 	"github.com/buildkite/shellwords"
+	"github.com/qri-io/jsonschema"
 )
 
 type pluginCheckout struct {
@@ -39,11 +44,21 @@ type pluginCheckout struct {
 	HooksDir string
 }
 
+// pluginSource identifies a plugin in captured errors as the step refers to
+// it, such as "github.com/acme/thing-buildkite-plugin#v1.2.0". Plugin parsing
+// keeps repository credentials out of the location.
+func pluginSource(p *plugin.Plugin) string {
+	if p.Version == "" {
+		return p.Location
+	}
+	return p.Location + "#" + p.Version
+}
+
 func (e *Executor) hasPlugins() bool {
 	return e.Plugins != ""
 }
 
-func (e *Executor) preparePlugins() error {
+func (e *Executor) preparePlugins(ctx context.Context) error {
 	if !e.hasPlugins() {
 		return nil
 	}
@@ -56,18 +71,29 @@ func (e *Executor) preparePlugins() error {
 
 	// Check if we can run plugins (disabled via --no-plugins)
 	if !e.PluginsEnabled {
+		flag := "--no-plugins"
 		if !e.LocalHooksEnabled {
-			return fmt.Errorf("plugins have been disabled on this agent with `--no-local-hooks`")
+			flag = "--no-local-hooks"
 		} else if !e.CommandEval {
-			return fmt.Errorf("plugins have been disabled on this agent with `--no-command-eval`")
-		} else {
-			return fmt.Errorf("plugins have been disabled on this agent with `--no-plugins`")
+			flag = "--no-command-eval"
 		}
+		captureJobError(ctx, e.shell, "plugins_disabled",
+			fmt.Sprintf("The step uses plugins, but this agent was started with `%s`, which disables them. Remove the plugins from the step, or run it on agents that allow plugins, such as another queue.", flag))
+		return fmt.Errorf("plugins have been disabled on this agent with `%s`", flag)
 	}
 
 	var err error
 	e.plugins, err = plugin.CreateFromJSON(e.Plugins)
 	if err != nil {
+		// A URL that does not parse is quoted whole in the error, and masking
+		// cannot cover it, such as a password containing a space. Report only
+		// why it did not parse.
+		reason := err.Error()
+		if urlErr := new(url.Error); errors.As(err, &urlErr) {
+			reason = "a plugin's URL is invalid: " + urlErr.Err.Error()
+		}
+		captureJobError(ctx, e.shell, "plugin_definition_invalid",
+			jobapi.CapturedErrorMessage("The step's plugins could not be parsed: "+reason, "The step's plugins could not be parsed."))
 		return fmt.Errorf("failed to parse a plugin definition: %w", err)
 	}
 
@@ -95,6 +121,10 @@ func (e *Executor) validatePluginCheckout(ctx context.Context, checkout *pluginC
 			return nil
 		}
 		if err != nil {
+			fix := "Fix the plugin's definition, or use a version of the plugin whose definition is valid."
+			captureJobError(ctx, e.shell, "plugin_definition_file_invalid", jobapi.CapturedErrorMessage(
+				fmt.Sprintf("The definition of plugin %s, in its plugin.json, plugin.yaml, or plugin.yml, could not be read: %v. %s", pluginSource(checkout.Plugin), err, fix),
+				"A plugin's definition, in its plugin.json, plugin.yaml, or plugin.yml, could not be read. "+fix))
 			return err
 		}
 		checkout.Definition = def
@@ -107,11 +137,91 @@ func (e *Executor) validatePluginCheckout(ctx context.Context, checkout *pluginC
 		e.shell.Headerf("Plugin validation failed for %q", checkout.Plugin.Name())
 		json, _ := json.Marshal(checkout.Plugin.Configuration)
 		e.shell.Commentf("Plugin configuration JSON is %s", json)
+		e.capturePluginValidationErrors(ctx, checkout.Plugin, result)
 		return result
 	}
 
 	e.shell.Commentf("Valid plugin configuration for %q", checkout.Plugin.Name())
 	return nil
+}
+
+// capturePluginCheckoutError reports why a plugin could not be checked out.
+// When Git failed, it reports Git's output, which says why, rather than err.
+// The Job API masks URL credentials and query strings in either.
+func (e *Executor) capturePluginCheckoutError(ctx context.Context, p *plugin.Plugin, err error) {
+	if shell.IsExitError(err) {
+		fix := "Check that the repository exists, this agent can access it, and the version is a tag, branch, or commit in it."
+		message := jobapi.CapturedErrorMessage(
+			fmt.Sprintf("Git could not check out plugin %s from %s at version %q. %s", p.Name(), p.Location, p.Version, fix),
+			fmt.Sprintf("Git could not check out plugin %s. %s", p.Name(), fix))
+		captureJobError(ctx, e.shell, "plugin_checkout_failed", e.withRecentOutput(message))
+		return
+	}
+	captureJobError(ctx, e.shell, "plugin_checkout_failed", jobapi.CapturedErrorMessage(
+		fmt.Sprintf("The agent could not check out plugin %s: %v.", pluginSource(p), err),
+		fmt.Sprintf("The agent could not check out plugin %s.", p.Name())))
+}
+
+// schemaErrorRules turn schema validation messages into ones without the
+// invalid value, which can be an unregistered secret, or which the schema
+// library cuts short so a registered one escapes redaction. The values left
+// come from the plugin's schema.
+var schemaErrorRules = []struct {
+	pattern     *regexp.Regexp
+	replacement string
+}{
+	{regexp.MustCompile(`^(additional (items|properties) are not allowed|unevaluated (items|properties) are not allowed|did Not match any specified AnyOf schemas|did not match any of the specified OneOf schemas|matched more than one specified OneOf schemas|result was valid, \('not'\) expected invalid)$`), "$0"},
+	{regexp.MustCompile(`^(\d+ object Properties (below|exceed) \d+ (minimum|maximum)|(array length|contained items) \d+ (below|bellow|exceeds) \d+ (minimum items|min|max))$`), "$0"},
+	{regexp.MustCompile(`^(must be (a multiple of|greater than or equal to|less than or equal to) \S+|should be one of .*|must equal .*|must contain at least one of: .*|"[^"]*" (property|value) is required|type should be .*, got [a-z]+)$`), "$0"},
+	{regexp.MustCompile(`^\S+ must be (greater|less) than (\S+)$`), "must be $1 than $2"},
+	{regexp.MustCompile(`^(max length of \d+ characters exceeded|min length of \d+ characters required): `), "$1"},
+	{regexp.MustCompile(`^regexp pattern .* mismatch on string: `), "does not match the required pattern"},
+	{regexp.MustCompile(`^invalid (\S+): `), "is not a valid $1"},
+	{regexp.MustCompile(`^array items must be unique\.`), "array items must be unique"},
+}
+
+// schemaErrorMessage describes a schema validation failure without the
+// invalid value, falling back to a generic message for unknown forms.
+func schemaErrorMessage(message string) string {
+	for _, rule := range schemaErrorRules {
+		if loc := rule.pattern.FindStringSubmatchIndex(message); loc != nil {
+			return string(rule.pattern.ExpandString(nil, rule.replacement, message, loc))
+		}
+	}
+	return "does not match the schema"
+}
+
+// capturePluginValidationErrors reports commands a plugin requires that the
+// agent lacks separately from configuration that does not match the plugin's
+// schema, because the fixes differ.
+func (e *Executor) capturePluginValidationErrors(ctx context.Context, p *plugin.Plugin, result plugin.ValidateResult) {
+	source := pluginSource(p)
+	var missing, invalid []string
+	for _, err := range result.Unwrap() {
+		keyErr := jsonschema.KeyError{}
+		switch {
+		case errors.Is(err, plugin.ErrCommandNotInPATH):
+			missing = append(missing, strings.TrimSuffix(err.Error(), " "+plugin.ErrCommandNotInPATH.Error()))
+		case errors.As(err, &keyErr) && keyErr.PropertyPath != "":
+			invalid = append(invalid, keyErr.PropertyPath+": "+schemaErrorMessage(keyErr.Message))
+		case errors.As(err, &keyErr):
+			invalid = append(invalid, schemaErrorMessage(keyErr.Message))
+		default:
+			invalid = append(invalid, "the configuration could not be checked against the schema")
+		}
+	}
+	if len(missing) > 0 {
+		fix := "Install them on the agent, or run the step on agents that have them, such as another queue."
+		captureJobError(ctx, e.shell, "plugin_requirement_missing", jobapi.CapturedErrorMessage(
+			fmt.Sprintf("Plugin %s needs commands that are not in this agent's PATH: %s. %s", source, strings.Join(missing, ", "), fix),
+			fmt.Sprintf("Plugin %s needs commands that are not in this agent's PATH. %s", p.Name(), fix)))
+	}
+	if len(invalid) > 0 {
+		fix := "Fix the configuration in the step."
+		captureJobError(ctx, e.shell, "plugin_configuration_invalid", jobapi.CapturedErrorMessage(
+			fmt.Sprintf("The step's configuration for plugin %s does not match the plugin's schema: %s. %s", source, strings.Join(invalid, "; "), fix),
+			fmt.Sprintf("The step's configuration for plugin %s does not match the plugin's schema. %s", p.Name(), fix)))
+	}
 }
 
 // PluginPhase is where plugins that weren't filtered in the Environment phase are
@@ -145,8 +255,10 @@ func (e *Executor) PluginPhase(ctx context.Context) error {
 			continue
 		}
 
+		e.resetRecentOutput()
 		checkout, err := e.checkoutPlugin(ctx, p)
 		if err != nil {
+			e.capturePluginCheckoutError(ctx, p, err)
 			return fmt.Errorf("failed to checkout plugin %s: %w", p.Name(), err)
 		}
 
@@ -187,12 +299,18 @@ func (e *Executor) VendoredPluginPhase(ctx context.Context) error {
 
 		// Check that the plugin exists in the checkout.
 		if fi, err := e.checkoutRoot.Stat(p.Location); err != nil || !fi.IsDir() {
+			captureJobError(ctx, e.shell, "vendored_plugin_invalid", jobapi.CapturedErrorMessage(
+				fmt.Sprintf("The step uses vendored plugin %s, but %s is not a directory in the checked-out repository. Commit the plugin at that path, or fix the path in the step.", p.Name(), p.Location),
+				fmt.Sprintf("The step uses vendored plugin %s, but its path is not a directory in the checked-out repository. Commit the plugin at that path, or fix the path in the step.", p.Name())))
 			return fmt.Errorf("vendored plugin path %q must be a directory within the checked-out repository: %w", p.Location, err)
 		}
 
 		// Similarly, check that the plugin's hooks exists in the checkout.
 		hooksPath := filepath.Join(p.Location, "hooks")
 		if fi, err := e.checkoutRoot.Stat(hooksPath); err != nil || !fi.IsDir() {
+			captureJobError(ctx, e.shell, "vendored_plugin_invalid", jobapi.CapturedErrorMessage(
+				fmt.Sprintf("The step uses vendored plugin %s, but %s has no hooks directory in the checked-out repository. A plugin's hooks must be in a hooks directory at its root.", p.Name(), p.Location),
+				fmt.Sprintf("The step uses vendored plugin %s, but it has no hooks directory in the checked-out repository. A plugin's hooks must be in a hooks directory at its root.", p.Name())))
 			return fmt.Errorf("vendored plugin hooks path %q must be a directory within the checked-out repository: %w", hooksPath, err)
 		}
 
@@ -450,7 +568,7 @@ func (e *Executor) checkoutPlugin(ctx context.Context, p *plugin.Plugin) (*plugi
 		roko.WithMaxAttempts(3),
 		roko.WithStrategy(roko.Constant(2*time.Second)),
 	).DoWithContext(ctx, func(r *roko.Retrier) error {
-		return e.shell.Command("git", args...).Run(ctx)
+		return e.shell.Command("git", args...).Run(ctx, e.teeRecentOutput())
 	})
 	if err != nil {
 		return nil, err
@@ -459,7 +577,7 @@ func (e *Executor) checkoutPlugin(ctx context.Context, p *plugin.Plugin) (*plugi
 	// Switch to the version if we need to
 	if p.Version != "" {
 		e.shell.Commentf("Checking out `%s`", p.Version)
-		if err = e.shell.Command("git", "-c", "advice.detachedHead=false", "checkout", "-f", p.Version).Run(ctx); err != nil {
+		if err = e.shell.Command("git", "-c", "advice.detachedHead=false", "checkout", "-f", p.Version).Run(ctx, e.teeRecentOutput()); err != nil {
 			return nil, err
 		}
 	}
