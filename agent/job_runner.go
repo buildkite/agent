@@ -80,12 +80,13 @@ type JobRunnerConfig struct {
 	// Whether to set debug HTTP Requests in the job
 	DebugHTTP bool
 
-	// KubernetesExec enables Kubernetes execution mode. When true, the job runner
-	// creates a kubernetes.Runner that listens on a UNIX socket for other agent containers
-	// to connect, rather than spawning a local bootstrap subprocess. The other agent containers
-	// containers run `kubernetes-bootstrap` which connects to this socket, receives
-	// environment variables, and executes the bootstrap phases.
-	KubernetesExec bool
+	// Executor selects how the job's bootstrap is launched: ExecutorExec (or
+	// empty) runs bootstrap-script as a local subprocess. ExecutorKubernetes
+	// creates a kubernetes.Runner that listens on a UNIX socket for other agent
+	// containers to connect. Those containers run `kubernetes-bootstrap`, which
+	// connects to this socket, receives environment variables, and executes the
+	// bootstrap phases.
+	Executor string
 
 	// KubernetesContainerStartTimeout is the maximum duration to wait for all
 	// containers in a Kubernetes pod to connect before the job is considered failed.
@@ -203,7 +204,13 @@ func NewJobRunner(ctx context.Context, l logger.Logger, apiClient *api.Client, c
 		signedJobEnv: signedJobEnv,
 	}
 
-	var err error
+	// Select the executor before creating any files, so a bad executor name
+	// leaves nothing behind.
+	executor, err := newJobExecutor(r.agentLogger, conf)
+	if err != nil {
+		return nil, err
+	}
+
 	r.VerificationFailureBehavior, err = r.normalizeVerificationBehavior(conf.AgentConfiguration.VerificationFailureBehaviour)
 	if err != nil {
 		return nil, fmt.Errorf("setting no signature behavior: %w", err)
@@ -312,7 +319,7 @@ func NewJobRunner(ctx context.Context, l logger.Logger, apiClient *api.Client, c
 	// The writer that output from the process goes into
 	r.jobLogs = io.MultiWriter(allWriters...)
 
-	r.process, err = newJobExecutor(r.agentLogger, conf).New(ctx, JobExecutionRequest{
+	r.process, err = executor.New(ctx, JobExecutionRequest{
 		Env:        env,
 		ContextDir: contextDir,
 		Output:     r.jobLogs,
@@ -462,7 +469,7 @@ func (r *JobRunner) createEnvironment(ctx context.Context) ([]string, error) {
 	// since it's not a real plugin. agent-stack-k8s reads it but we have no
 	// need for it. Supplying it when not using agent-stack-k8s is a mistake
 	// but not one worth preventing.
-	if pluginsJSON := env["BUILDKITE_PLUGINS"]; pluginsJSON != "" && r.conf.KubernetesExec {
+	if pluginsJSON := env["BUILDKITE_PLUGINS"]; pluginsJSON != "" && r.conf.Executor == ExecutorKubernetes {
 		filtered, err := removeKubernetesPlugin([]byte(pluginsJSON))
 		if err != nil {
 			r.agentLogger.Errorf("Invalid BUILDKITE_PLUGINS: %v", err)
@@ -1119,7 +1126,7 @@ func jobContextDir(conf JobRunnerConfig) string {
 	if conf.JobContextDir != "" {
 		return conf.JobContextDir
 	}
-	if conf.KubernetesExec {
+	if conf.Executor == ExecutorKubernetes {
 		return kubernetes.DefaultContextDir
 	}
 	return os.TempDir()

@@ -56,7 +56,7 @@ type AgentConfiguration struct {
 	LocalHooksEnabled                       bool
 	StrictSingleHooks                       bool
 	RunInPty                                bool
-	KubernetesExec                          bool
+	Executor                                string
 	KubernetesContainerStartTimeout         time.Duration
 	JobContextDir                           string
 

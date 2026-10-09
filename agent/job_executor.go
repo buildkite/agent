@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"time"
 
@@ -62,21 +63,32 @@ type JobExecutionRequest struct {
 	Output io.Writer
 }
 
-// newJobExecutor returns the executor selected by the job runner config.
-func newJobExecutor(l logger.Logger, conf JobRunnerConfig) JobExecutor {
-	if conf.KubernetesExec {
+// Values for the executor setting.
+const (
+	ExecutorExec       = "exec"
+	ExecutorKubernetes = "kubernetes"
+)
+
+// newJobExecutor returns the executor named by conf.Executor. An empty name
+// means ExecutorExec.
+func newJobExecutor(l logger.Logger, conf JobRunnerConfig) (JobExecutor, error) {
+	switch conf.Executor {
+	case "", ExecutorExec:
+		return &execExecutor{
+			logger:            l,
+			bootstrapScript:   conf.AgentConfiguration.BootstrapScript,
+			buildPath:         conf.AgentConfiguration.BuildPath,
+			runInPty:          conf.AgentConfiguration.RunInPty,
+			cancelSignal:      conf.CancelSignal,
+			signalGracePeriod: conf.AgentConfiguration.CancelSignalTimeout,
+		}, nil
+	case ExecutorKubernetes:
 		return &kubernetesExecutor{
 			logger:                l,
 			containerStartTimeout: conf.KubernetesContainerStartTimeout,
-		}
-	}
-	return &execExecutor{
-		logger:            l,
-		bootstrapScript:   conf.AgentConfiguration.BootstrapScript,
-		buildPath:         conf.AgentConfiguration.BuildPath,
-		runInPty:          conf.AgentConfiguration.RunInPty,
-		cancelSignal:      conf.CancelSignal,
-		signalGracePeriod: conf.AgentConfiguration.CancelSignalTimeout,
+		}, nil
+	default:
+		return nil, fmt.Errorf("unknown executor %q", conf.Executor)
 	}
 }
 
