@@ -14,6 +14,22 @@ import (
 	"github.com/buildkite/agent/v4/jobapi"
 )
 
+var (
+	gitAuthenticationErrorPatterns = []string{
+		"fatal: Authentication failed",
+		"fatal: authentication failed",
+		"Permission denied (publickey",
+		"Permission denied (password",
+	}
+	gitNetworkErrorPatterns = []string{
+		"Could not resolve host:",
+		"Could not resolve proxy:",
+		"ssh: Could not resolve hostname",
+		"Failed to connect to",
+		"ssh: connect to host",
+	}
+)
+
 type gitErrorReportsKey struct{}
 
 // maxGitErrorOutput bounds the Git output kept while a command runs. The
@@ -82,6 +98,16 @@ type gitErrorReports []jobapi.CapturedError
 func (reports gitErrorReports) deliver(ctx context.Context, sh *shell.Shell) {
 	for _, report := range reports {
 		deliverError(ctx, sh, report)
+	}
+}
+
+// addGitRemoteErrorPatterns adds reporting-only patterns to a command's search.
+func addGitRemoteErrorPatterns(smelt map[string]bool) {
+	for _, pattern := range gitAuthenticationErrorPatterns {
+		smelt[pattern] = false
+	}
+	for _, pattern := range gitNetworkErrorPatterns {
+		smelt[pattern] = false
 	}
 }
 
@@ -171,6 +197,16 @@ func classifyGitError(err error) (string, string) {
 	if !errors.As(err, &gitErr) {
 		return "", ""
 	}
+	for _, pattern := range gitAuthenticationErrorPatterns {
+		if gitErr.outputMatches[pattern] {
+			return "git_authentication_failed", "Git reported an authentication failure."
+		}
+	}
+	for _, pattern := range gitNetworkErrorPatterns {
+		if gitErr.outputMatches[pattern] {
+			return "git_network_failed", "Git reported a network connection failure."
+		}
+	}
 	var code, message string
 	switch gitErr.Type {
 	case gitErrorCheckout:
@@ -179,6 +215,20 @@ func classifyGitError(err error) (string, string) {
 		code, message = "git_reference_not_a_tree", "Git checkout could not resolve the reference to a tree."
 	case gitErrorCheckoutRetryClean:
 		code, message = "git_checkout_unclassified", "Git checkout failed with an unclassified error."
+	case gitErrorClone:
+		code, message = "git_clone_failed", "Git clone failed."
+	case gitErrorCloneTimeout:
+		code, message = "git_clone_timeout", "Git clone failed because the transfer was too slow."
+	case gitErrorFetch:
+		code, message = "git_fetch_failed", "Git fetch failed."
+	case gitErrorFetchRetryClean:
+		code, message = "git_fetch_unclassified", "Git fetch failed with an unclassified error."
+	case gitErrorFetchBadObject:
+		code, message = "git_bad_object", "Git fetch encountered a bad object."
+	case gitErrorFetchBadReference:
+		code, message = "git_ref_not_found", "Git fetch could not find the remote reference."
+	case gitErrorFetchRefNotOnRemote:
+		code, message = "git_ref_not_on_remote", "Git fetch requested an object the remote does not have or advertise."
 	case gitErrorClean:
 		code, message = "git_clean_failed", "Git clean failed."
 	case gitErrorCleanSubmodules:
