@@ -144,6 +144,16 @@ func TestExecution_LaunchFailuresAreExecutorErrors(t *testing.T) {
 			cleanup: "ContainerRemove buildkite-job-job-1-",
 		},
 		{
+			name: "create_image_removed",
+			breakIt: func(f *fakeClient) {
+				f.containerCreate = func(context.Context, client.ContainerCreateOptions) (client.ContainerCreateResult, error) {
+					return client.ContainerCreateResult{}, cerrdefs.ErrNotFound.WithMessage("No such image: sha256:abc")
+				}
+			},
+			wantErr: "creating the job container: No such image: sha256:abc (the docker executor image was removed after the agent started, restart the agent to pull it again)",
+			cleanup: "ContainerRemove buildkite-job-job-1-",
+		},
+		{
 			name: "start",
 			breakIt: func(f *fakeClient) {
 				f.containerStart = func(context.Context, string) error { return errors.New("exec format error") }

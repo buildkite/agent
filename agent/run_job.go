@@ -452,10 +452,20 @@ func (r *JobRunner) runJob(ctx context.Context) core.ProcessExit {
 		}
 
 		// The process did not run at all, so make sure it fails
-		return core.ProcessExit{
+		exit := core.ProcessExit{
 			Status:       -1,
 			SignalReason: SignalReasonProcessRunError,
 		}
+		if r.conf.Executor != ExecutorDocker {
+			return exit
+		}
+		switch {
+		case r.agentStopping.Load():
+			exit.SignalReason = SignalReasonAgentStop
+		case r.cancelled.Load():
+			exit.SignalReason = SignalReasonCancel
+		}
+		return exit
 	}
 	// Intended to capture situations where the job-exec (aka bootstrap) container did not
 	// start. Normally such errors are hidden in the Kubernetes events. Let's feed them up

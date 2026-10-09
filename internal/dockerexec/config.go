@@ -38,7 +38,7 @@ type Config struct {
 	Network string
 
 	// Host paths the executor mounts at the same path in the container.
-	// GitMirrorsPath and SigningJWKSFile are optional.
+	// PluginsPath, GitMirrorsPath, and SigningJWKSFile are optional.
 	BuildPath       string
 	PluginsPath     string
 	GitMirrorsPath  string
@@ -76,7 +76,7 @@ func (c Config) validate(lookupEnv func(string) (string, bool)) ([]mount.Mount, 
 		required bool
 	}{
 		{"build-path", c.BuildPath, true},
-		{"plugins-path", c.PluginsPath, true},
+		{"plugins-path", c.PluginsPath, false},
 		{"sockets-path", c.SocketsPath, true},
 		{"job-context-dir", c.JobContextDir, true},
 		{"git-mirrors-path", c.GitMirrorsPath, false},

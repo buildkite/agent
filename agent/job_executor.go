@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"time"
@@ -51,6 +52,9 @@ type JobExecution interface {
 
 // JobExecutionRequest holds the per-job values an executor needs.
 type JobExecutionRequest struct {
+	// JobID identifies the job.
+	JobID string
+
 	// Env is the job environment from createEnvironment. It does not include
 	// the agent's own process environment.
 	Env []string
@@ -61,12 +65,17 @@ type JobExecutionRequest struct {
 
 	// Output receives the job's stdout and stderr.
 	Output io.Writer
+
+	// JobLogTmpfile is the path of the job log tmpfile, or empty if
+	// enable-job-log-tmpfile is off.
+	JobLogTmpfile string
 }
 
 // Values for the executor setting.
 const (
 	ExecutorExec       = "exec"
 	ExecutorKubernetes = "kubernetes"
+	ExecutorDocker     = "docker"
 )
 
 // newJobExecutor returns the executor named by conf.Executor. An empty name
@@ -87,6 +96,11 @@ func newJobExecutor(l logger.Logger, conf JobRunnerConfig) (JobExecutor, error) 
 			logger:                l,
 			containerStartTimeout: conf.KubernetesContainerStartTimeout,
 		}, nil
+	case ExecutorDocker:
+		if conf.AgentConfiguration.DockerExecutor == nil {
+			return nil, errors.New("the docker executor was not prepared at agent start")
+		}
+		return dockerExecutor{conf.AgentConfiguration.DockerExecutor}, nil
 	default:
 		return nil, fmt.Errorf("unknown executor %q", conf.Executor)
 	}

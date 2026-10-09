@@ -3,6 +3,10 @@ package clicommand
 import (
 	"strings"
 	"testing"
+
+	"github.com/buildkite/agent/v4/internal/dockerexec"
+	"github.com/buildkite/agent/v4/internal/process"
+	"github.com/google/go-cmp/cmp"
 )
 
 func TestResolveExecutor(t *testing.T) {
@@ -18,11 +22,12 @@ func TestResolveExecutor(t *testing.T) {
 		{name: "default", want: "exec"},
 		{name: "exec", executor: "exec", want: "exec"},
 		{name: "kubernetes", executor: "kubernetes", want: "kubernetes"},
+		{name: "docker", executor: "docker", want: "docker"},
 		{name: "kubernetes_exec_alias", kubernetesExec: true, want: "kubernetes"},
 		{name: "kubernetes_exec_and_kubernetes", executor: "kubernetes", kubernetesExec: true, want: "kubernetes"},
 		{name: "kubernetes_exec_conflicts_with_exec", executor: "exec", kubernetesExec: true, wantErr: "cannot be combined"},
-		{name: "unknown_rejected_before_conflict", executor: "docker", kubernetesExec: true, wantErr: "unknown executor"},
-		{name: "docker_unknown", executor: "docker", wantErr: "unknown executor"},
+		{name: "kubernetes_exec_conflicts_with_docker", executor: "docker", kubernetesExec: true, wantErr: "cannot be combined"},
+		{name: "unknown_rejected_before_conflict", executor: "dokcer", kubernetesExec: true, wantErr: "unknown executor"},
 		{name: "typo", executor: "dokcer", wantErr: "unknown executor"},
 		{name: "case_sensitive", executor: "Exec", wantErr: "unknown executor"},
 	}
@@ -44,5 +49,44 @@ func TestResolveExecutor(t *testing.T) {
 				t.Errorf("resolveExecutor(%q, %t) = %q, want %q", tc.executor, tc.kubernetesExec, got, tc.want)
 			}
 		})
+	}
+}
+
+func TestDockerExecutorConfig(t *testing.T) {
+	t.Parallel()
+
+	got := dockerExecutorConfig(AgentStartConfig{
+		ExecutorDockerImage:   "debian:stable-slim",
+		ExecutorDockerMount:   []string{"/srv/cache:/cache"},
+		ExecutorDockerEnv:     []string{"HTTP_PROXY"},
+		ExecutorDockerNetwork: "builds",
+		BuildPath:             "/var/lib/buildkite-agent/builds",
+		PluginsPath:           "/var/lib/buildkite-agent/plugins",
+		GitMirrorsPath:        "/var/lib/buildkite-agent/git-mirrors",
+		SocketsPath:           "/var/lib/buildkite-agent/sockets",
+		JobContextDir:         "/var/lib/buildkite-agent/job-context",
+		HooksPath:             "/etc/buildkite-agent/hooks",
+		AdditionalHooksPaths:  []string{"/opt/hooks"},
+		SigningJWKSFile:       "/etc/buildkite-agent/jwks.json",
+		NoPTY:                 true,
+	}, process.SIGINT)
+
+	want := dockerexec.Config{
+		Image:           "debian:stable-slim",
+		Mounts:          []string{"/srv/cache:/cache"},
+		Env:             []string{"HTTP_PROXY"},
+		Network:         "builds",
+		BuildPath:       "/var/lib/buildkite-agent/builds",
+		PluginsPath:     "/var/lib/buildkite-agent/plugins",
+		GitMirrorsPath:  "/var/lib/buildkite-agent/git-mirrors",
+		SocketsPath:     "/var/lib/buildkite-agent/sockets",
+		JobContextDir:   "/var/lib/buildkite-agent/job-context",
+		HooksPaths:      []string{"/etc/buildkite-agent/hooks", "/opt/hooks"},
+		SigningJWKSFile: "/etc/buildkite-agent/jwks.json",
+		RunInPty:        false,
+		CancelSignal:    process.SIGINT,
+	}
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Errorf("dockerExecutorConfig() diff (-want +got):\n%s", diff)
 	}
 }

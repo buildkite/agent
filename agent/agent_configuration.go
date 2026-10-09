@@ -6,6 +6,7 @@ import (
 
 	"github.com/buildkite/agent/v4/api"
 	"github.com/buildkite/agent/v4/env"
+	"github.com/buildkite/agent/v4/internal/dockerexec"
 	"github.com/buildkite/agent/v4/internal/job"
 )
 
@@ -57,6 +58,7 @@ type AgentConfiguration struct {
 	StrictSingleHooks                       bool
 	RunInPty                                bool
 	Executor                                string
+	DockerExecutor                          *dockerexec.Executor
 	KubernetesContainerStartTimeout         time.Duration
 	JobContextDir                           string
 
