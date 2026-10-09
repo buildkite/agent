@@ -79,7 +79,10 @@ func gitLFSFetchCheckout(ctx context.Context, args gitLFSFetchCheckoutArgs) erro
 
 	checkoutPathspecs, checkoutScoped := args.checkoutPathspecs()
 
+	var output gitErrorOutput
+	runOpts = append(runOpts, output.tee(args.Shell))
 	err := retrier.DoWithContext(ctx, func(retrier *roko.Retrier) error {
+		output.reset()
 		if err := args.Shell.Command("git", fetchCmd...).Run(ctx, runOpts...); err != nil {
 			if args.Retry {
 				args.Shell.Commentf("%s", retrier)
@@ -90,6 +93,7 @@ func gitLFSFetchCheckout(ctx context.Context, args gitLFSFetchCheckoutArgs) erro
 			return nil
 		}
 		if !checkoutScoped {
+			output.reset()
 			if err := args.Shell.Command("git", "lfs", "checkout").Run(ctx, runOpts...); err != nil {
 				if args.Retry {
 					args.Shell.Commentf("%s", retrier)
@@ -100,6 +104,7 @@ func gitLFSFetchCheckout(ctx context.Context, args gitLFSFetchCheckoutArgs) erro
 		}
 		for batch := range slices.Chunk(checkoutPathspecs, gitLFSCheckoutPathBatchSize) {
 			checkoutCmd := append([]string{"lfs", "checkout"}, batch...)
+			output.reset()
 			if err := args.Shell.Command("git", checkoutCmd...).Run(ctx, runOpts...); err != nil {
 				if args.Retry {
 					args.Shell.Commentf("%s", retrier)
@@ -110,10 +115,13 @@ func gitLFSFetchCheckout(ctx context.Context, args gitLFSFetchCheckoutArgs) erro
 		return nil
 	})
 
-	if err != nil && args.Retry {
-		return &gitError{error: err, Type: gitErrorLFS, WasRetried: args.Retry}
+	if err == nil {
+		return nil
 	}
-	return err
+	// Capture the terminal LFS failure, not every attempt in its internal retry loop.
+	gitErr := &gitError{error: err, Type: gitErrorLFS, WasRetried: args.Retry}
+	captureGitError(ctx, args.Shell, gitErr, output.String())
+	return gitErr
 }
 
 // checkoutPathspecs returns the pathspecs for `git lfs checkout` and whether

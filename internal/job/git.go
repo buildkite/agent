@@ -98,7 +98,10 @@ func hasGitCommit(ctx context.Context, sh *shell.Shell, gitDir, commit string) b
 	return true
 }
 
-func gitCheckout(ctx context.Context, sh *shell.Shell, gitCheckoutFlags, reference string) error {
+func gitCheckout(ctx context.Context, sh *shell.Shell, gitCheckoutFlags, reference string) (retErr error) {
+	var output gitErrorOutput
+	defer func() { captureGitError(ctx, sh, retErr, output.String()) }()
+
 	individualCheckoutFlags, err := shellwords.Split(gitCheckoutFlags)
 	if err != nil {
 		return err
@@ -114,13 +117,13 @@ func gitCheckout(ctx context.Context, sh *shell.Shell, gitCheckoutFlags, referen
 	const badReference = "fatal: reference is not a tree"
 	smelt := map[string]bool{badReference: false}
 
-	if err := sh.Command("git", commandArgs...).Run(ctx, shell.WithStringSearch(smelt)); err != nil {
+	if err := sh.Command("git", commandArgs...).Run(ctx, shell.WithStringSearch(smelt), output.tee(sh)); err != nil {
 		if smelt[badReference] {
 			return &gitError{error: err, Type: gitErrorCheckoutReferenceIsNotATree}
 		}
 
-		// 128 is extremely broad, but it seems permissions errors, network unreachable errors etc,
-		// don't result in it
+		// Exit 128 is broad and does not establish a cause. Preserve the
+		// existing clean-checkout recovery policy for unclassified failures.
 		if exitErr := new(exec.ExitError); errors.As(err, &exitErr) && exitErr.ExitCode() == 128 {
 			return &gitError{error: err, Type: gitErrorCheckoutRetryClean}
 		}
@@ -169,7 +172,10 @@ func gitClone(
 	return nil
 }
 
-func gitClean(ctx context.Context, sh *shell.Shell, gitCleanFlags string) error {
+func gitClean(ctx context.Context, sh *shell.Shell, gitCleanFlags string) (retErr error) {
+	var output gitErrorOutput
+	defer func() { captureGitError(ctx, sh, retErr, output.String()) }()
+
 	individualCleanFlags, err := shellwords.Split(gitCleanFlags)
 	if err != nil {
 		return err
@@ -178,14 +184,17 @@ func gitClean(ctx context.Context, sh *shell.Shell, gitCleanFlags string) error 
 	commandArgs := []string{"clean"}
 	commandArgs = append(commandArgs, individualCleanFlags...)
 
-	if err := sh.Command("git", commandArgs...).Run(ctx); err != nil {
+	if err := sh.Command("git", commandArgs...).Run(ctx, output.tee(sh)); err != nil {
 		return &gitError{error: err, Type: gitErrorClean}
 	}
 
 	return nil
 }
 
-func gitCleanSubmodules(ctx context.Context, sh *shell.Shell, gitCleanFlags string) error {
+func gitCleanSubmodules(ctx context.Context, sh *shell.Shell, gitCleanFlags string) (retErr error) {
+	var output gitErrorOutput
+	defer func() { captureGitError(ctx, sh, retErr, output.String()) }()
+
 	individualCleanFlags, err := shellwords.Split(gitCleanFlags)
 	if err != nil {
 		return err
@@ -194,18 +203,21 @@ func gitCleanSubmodules(ctx context.Context, sh *shell.Shell, gitCleanFlags stri
 	gitCleanCommand := strings.Join(append([]string{"git", "clean"}, individualCleanFlags...), " ")
 	commandArgs := append([]string{"submodule", "foreach", "--recursive"}, gitCleanCommand)
 
-	if err := sh.Command("git", commandArgs...).Run(ctx); err != nil {
+	if err := sh.Command("git", commandArgs...).Run(ctx, output.tee(sh)); err != nil {
 		return &gitError{error: err, Type: gitErrorCleanSubmodules}
 	}
 
 	return nil
 }
 
-func gitRepack(ctx context.Context, sh *shell.Shell, args ...string) error {
+func gitRepack(ctx context.Context, sh *shell.Shell, args ...string) (retErr error) {
+	var output gitErrorOutput
+	defer func() { captureGitError(ctx, sh, retErr, output.String()) }()
+
 	commandArgs := []string{"repack"}
 	commandArgs = append(commandArgs, args...)
 
-	if err := sh.Command("git", commandArgs...).Run(ctx); err != nil {
+	if err := sh.Command("git", commandArgs...).Run(ctx, output.tee(sh)); err != nil {
 		return &gitError{error: err, Type: gitErrorRepack}
 	}
 	return nil

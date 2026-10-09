@@ -267,7 +267,7 @@ func (e *Executor) Run(ctx context.Context) (exitCode int) {
 	}
 
 	if phaseErr == nil && e.includePhase("checkout") {
-		phaseErr = e.CheckoutPhase(ctx)
+		phaseErr = e.CheckoutPhase(withGitErrorNeedles(ctx, e.redactors.Needles))
 	} else {
 		// For various reasons we should still pretend there was a checkout
 		// phase. It might have happened in a different container, or may have
