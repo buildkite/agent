@@ -3,9 +3,11 @@ package dockerexec
 import (
 	"context"
 	"debug/elf"
+	"errors"
 	"fmt"
 	"io"
 	"iter"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -13,6 +15,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/moby/moby/api/types/container"
 	"github.com/moby/moby/api/types/jsonstream"
 	"github.com/moby/moby/client"
 )
@@ -25,6 +28,14 @@ type fakeClient struct {
 	ping         func() error
 	imagePull    func(ref string, opts client.ImagePullOptions) error
 	imageInspect func(ref string) (client.ImageInspectResult, error)
+
+	containerCreate  func(ctx context.Context, opts client.ContainerCreateOptions) (client.ContainerCreateResult, error)
+	containerAttach  func(ctx context.Context, id string) (client.ContainerAttachResult, error)
+	containerWait    func(ctx context.Context, id string) client.ContainerWaitResult
+	containerStart   func(ctx context.Context, id string) error
+	containerKill    func(id, signal string) error
+	containerInspect func(id string) (client.ContainerInspectResult, error)
+	containerRemove  func(ref string, opts client.ContainerRemoveOptions) error
 
 	mu    sync.Mutex
 	calls []string
@@ -70,6 +81,139 @@ func (f *fakeClient) ImageInspect(_ context.Context, ref string, _ ...client.Ima
 		return client.ImageInspectResult{}, nil
 	}
 	return f.imageInspect(ref)
+}
+
+func (f *fakeClient) ContainerCreate(ctx context.Context, opts client.ContainerCreateOptions) (client.ContainerCreateResult, error) {
+	f.record("ContainerCreate")
+	if f.containerCreate == nil {
+		f.t.Error("unexpected ContainerCreate")
+		return client.ContainerCreateResult{}, errors.New("unexpected")
+	}
+	return f.containerCreate(ctx, opts)
+}
+
+func (f *fakeClient) ContainerAttach(ctx context.Context, id string, _ client.ContainerAttachOptions) (client.ContainerAttachResult, error) {
+	f.record("ContainerAttach")
+	if f.containerAttach == nil {
+		f.t.Error("unexpected ContainerAttach")
+		return client.ContainerAttachResult{}, errors.New("unexpected")
+	}
+	return f.containerAttach(ctx, id)
+}
+
+func (f *fakeClient) ContainerWait(ctx context.Context, id string, _ client.ContainerWaitOptions) client.ContainerWaitResult {
+	f.record("ContainerWait")
+	if f.containerWait == nil {
+		f.t.Error("unexpected ContainerWait")
+		errC := make(chan error, 1)
+		errC <- errors.New("unexpected")
+		return client.ContainerWaitResult{Error: errC}
+	}
+	return f.containerWait(ctx, id)
+}
+
+func (f *fakeClient) ContainerStart(ctx context.Context, id string, _ client.ContainerStartOptions) (client.ContainerStartResult, error) {
+	f.record("ContainerStart")
+	if f.containerStart == nil {
+		f.t.Error("unexpected ContainerStart")
+		return client.ContainerStartResult{}, errors.New("unexpected")
+	}
+	return client.ContainerStartResult{}, f.containerStart(ctx, id)
+}
+
+func (f *fakeClient) ContainerKill(_ context.Context, id string, opts client.ContainerKillOptions) (client.ContainerKillResult, error) {
+	f.record("ContainerKill " + opts.Signal)
+	if f.containerKill == nil {
+		f.t.Error("unexpected ContainerKill")
+		return client.ContainerKillResult{}, errors.New("unexpected")
+	}
+	return client.ContainerKillResult{}, f.containerKill(id, opts.Signal)
+}
+
+func (f *fakeClient) ContainerInspect(_ context.Context, id string, _ client.ContainerInspectOptions) (client.ContainerInspectResult, error) {
+	f.record("ContainerInspect")
+	if f.containerInspect == nil {
+		f.t.Error("unexpected ContainerInspect")
+		return client.ContainerInspectResult{}, errors.New("unexpected")
+	}
+	return f.containerInspect(id)
+}
+
+func (f *fakeClient) ContainerRemove(_ context.Context, ref string, opts client.ContainerRemoveOptions) (client.ContainerRemoveResult, error) {
+	f.record("ContainerRemove " + ref)
+	if f.containerRemove == nil {
+		f.t.Error("unexpected ContainerRemove")
+		return client.ContainerRemoveResult{}, errors.New("unexpected")
+	}
+	return client.ContainerRemoveResult{}, f.containerRemove(ref, opts)
+}
+
+// fakeContainer simulates one container behind a fakeClient: it writes
+// output to the attach stream once started, and exits when a code is sent
+// to exit. By default SIGKILL makes it exit 137 and other signals are
+// ignored.
+type fakeContainer struct {
+	output []byte
+	exit   chan int
+	onKill func(signal string) error
+
+	server  net.Conn
+	written chan struct{}
+}
+
+// newFakeDaemon returns a fakeClient wired to a fakeContainer with ID "cid".
+func newFakeDaemon(t *testing.T) (*fakeClient, *fakeContainer) {
+	t.Helper()
+	c := &fakeContainer{exit: make(chan int, 1), written: make(chan struct{})}
+	c.onKill = func(signal string) error {
+		if signal == "SIGKILL" {
+			c.exitWith(137)
+		}
+		return nil
+	}
+	f := &fakeClient{t: t}
+	f.containerCreate = func(context.Context, client.ContainerCreateOptions) (client.ContainerCreateResult, error) {
+		return client.ContainerCreateResult{ID: "cid"}, nil
+	}
+	f.containerAttach = func(context.Context, string) (client.ContainerAttachResult, error) {
+		clientConn, serverConn := net.Pipe()
+		c.server = serverConn
+		return client.ContainerAttachResult{HijackedResponse: client.NewHijackedResponse(clientConn, "")}, nil
+	}
+	f.containerWait = func(ctx context.Context, _ string) client.ContainerWaitResult {
+		// Unbuffered, like the real client's.
+		resultC := make(chan container.WaitResponse)
+		errC := make(chan error, 1)
+		go func() {
+			select {
+			case code := <-c.exit:
+				<-c.written
+				_ = c.server.Close()
+				resultC <- container.WaitResponse{StatusCode: int64(code)}
+			case <-ctx.Done():
+				errC <- ctx.Err()
+			}
+		}()
+		return client.ContainerWaitResult{Result: resultC, Error: errC}
+	}
+	f.containerStart = func(context.Context, string) error {
+		go func() {
+			defer close(c.written)
+			_, _ = c.server.Write(c.output)
+		}()
+		return nil
+	}
+	f.containerKill = func(_, signal string) error { return c.onKill(signal) }
+	f.containerRemove = func(string, client.ContainerRemoveOptions) error { return nil }
+	return f, c
+}
+
+// exitWith makes the container exit with code, if it has not already.
+func (c *fakeContainer) exitWith(code int) {
+	select {
+	case c.exit <- code:
+	default:
+	}
 }
 
 // fakePullResponse is a finished pull whose Wait returns err.
