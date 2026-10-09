@@ -141,6 +141,7 @@ type AgentStartConfig struct {
 	Shell           string `cli:"shell"`
 	HooksShell      string `cli:"hooks-shell"`
 	BootstrapScript string `cli:"bootstrap-script" normalize:"commandpath"`
+	Executor        string `cli:"executor"`
 	NoPTY           bool   `cli:"no-pty"`
 
 	Queue                     string        `cli:"queue"`
@@ -555,6 +556,15 @@ var AgentStartCommand = &cli.Command{
 		CheckoutAttemptsFlag,
 
 		&cli.StringFlag{
+			Name: "executor",
+			Usage: "How to launch each job's bootstrap. One of: exec, which runs --bootstrap-script " +
+				"as a local process, or kubernetes, which is the same as --kubernetes-exec (default: exec)",
+			Sources: cli.EnvVars("BUILDKITE_EXECUTOR"),
+			// No Value: leaving it empty lets resolveExecutor tell an unset
+			// executor apart from an explicit one that conflicts with
+			// --kubernetes-exec.
+		},
+		&cli.StringFlag{
 			Name:    "bootstrap-script",
 			Value:   "",
 			Usage:   "The command that is executed for bootstrapping a job, defaults to the bootstrap sub-command of this binary",
@@ -748,7 +758,7 @@ var AgentStartCommand = &cli.Command{
 			Name: "kubernetes-exec",
 			Usage: "This is intended to be used only by the Buildkite k8s stack " +
 				"(github.com/buildkite/agent-stack-k8s); it enables a Unix socket for transporting " +
-				"logs and exit statuses between containers in a pod (default: false)",
+				"logs and exit statuses between containers in a pod. An alias for --executor=kubernetes (default: false)",
 			Sources: cli.EnvVars("BUILDKITE_KUBERNETES_EXEC"),
 		},
 		&cli.DurationFlag{
@@ -830,6 +840,12 @@ var AgentStartCommand = &cli.Command{
 		if cfg.PingMode == pingModePingOnly {
 			cfg.PingMode = agent.PingModePollOnly
 		}
+
+		executor, err := resolveExecutor(cfg.Executor, cfg.KubernetesExec)
+		if err != nil {
+			return err
+		}
+		cfg.Executor = executor
 
 		validSpawnWithPriorities := []string{"static", "ascending", "descending"}
 		if !slices.Contains(validSpawnWithPriorities, cfg.SpawnWithPriority) {
@@ -1046,7 +1062,7 @@ var AgentStartCommand = &cli.Command{
 			TelemetryServiceName:            cfg.TelemetryServiceName,
 			AllowMultipartArtifactUpload:    !cfg.NoMultipartArtifactUpload,
 			ArtifactUploadConcurrency:       cfg.ArtifactUploadConcurrency,
-			KubernetesExec:                  cfg.KubernetesExec,
+			Executor:                        cfg.Executor,
 			KubernetesContainerStartTimeout: cfg.KubernetesContainerStartTimeout,
 			JobContextDir:                   cfg.JobContextDir,
 			PingMode:                        cfg.PingMode,
@@ -1169,7 +1185,7 @@ var AgentStartCommand = &cli.Command{
 
 		tags, err := agent.FetchTags(ctx, l, agent.FetchTagsConfig{
 			Tags:                      cfg.Tags,
-			TagsFromK8s:               cfg.KubernetesExec,
+			TagsFromK8s:               cfg.Executor == agent.ExecutorKubernetes,
 			TagsFromEC2MetaData:       cfg.TagsFromEC2MetaData,
 			TagsFromEC2MetaDataPaths:  cfg.TagsFromEC2MetaDataPaths,
 			TagsFromEC2Tags:           cfg.TagsFromEC2Tags,
@@ -1360,7 +1376,7 @@ var AgentStartCommand = &cli.Command{
 			cancelGracePeriod: cfg.CancelSignalTimeout + cfg.CancelCleanupTimeout,
 			// Under Kubernetes, there is no user interactively signalling us,
 			// so on SIGTERM, stop un-gracefully.
-			skipGraceful: cfg.KubernetesExec,
+			skipGraceful: cfg.Executor == agent.ExecutorKubernetes,
 		}
 		signals := poolSigs.handle(ctx)
 		defer close(signals)
