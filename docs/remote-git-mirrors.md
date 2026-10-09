@@ -182,7 +182,9 @@ point a reader would otherwise file a bug. §10 lists each one and where it goes
 4. `git clean`, optional `git lfs install --local`.
 5. `fetchSource` → `git fetch <flags> -- origin <refspec>`, where the refspec is
    the custom refspec, or `refs/pull/N/{head,merge}`, or the branch (when
-   `BUILDKITE_COMMIT=HEAD`), or — the common case — the commit SHA.
+   `BUILDKITE_COMMIT=HEAD`), or — the common case — the commit SHA. With
+   `--git-fetch-base-branch=optimistic` or `=strict`, an additional fetch runs
+   first and updates `refs/remotes/origin/<base>`.
 6. Commit verification, sparse setup, `git checkout`, submodules, LFS, clean.
 
 Four things are easy to get wrong, and the plan depends on all of them:
@@ -1423,7 +1425,10 @@ initialization.
 
 **C10 — Git LFS objects always come from canonical**, because `git lfs` resolves
 its endpoint from `remote.origin.url`. An LFS-heavy repository therefore gets no
-mirror benefit for its LFS objects. The one window where that reasoning inverts
+*remote* mirror benefit for its LFS objects. (The separate, opt-in
+`--git-mirrors-lfs-cache` caches LFS objects fetched from canonical in the
+*on-host* mirror; see [`git-mirror.md`](git-mirror.md). It does not change
+where LFS objects are downloaded from.) The one window where that reasoning inverts
 is PR 4's clone, where `origin` is still the mirror: an LFS repository whose
 mirror does not proxy LFS fails that clone and falls back to canonical, which is
 the correct outcome and is why PR 4 declines to suppress the smudge filter.

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net"
 	"net/url"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
@@ -209,6 +210,9 @@ func gitCleanSubmodules(ctx context.Context, sh *shell.Shell, gitCleanFlags stri
 type gitLFSFetchCheckoutArgs struct {
 	Shell *shell.Shell
 	Retry bool // Whether to retry the fetch+checkout on failure
+	// ReferenceDir supplies cached LFS objects, including for dissociated clones
+	// and clones referencing disposable Git mirror snapshots.
+	ReferenceDir string
 	// FetchInclude is passed as --include=<csv> to `git lfs fetch`. Empty means
 	// fetch all LFS objects.
 	FetchInclude []string
@@ -248,6 +252,15 @@ func gitLFSFetchCheckout(ctx context.Context, args gitLFSFetchCheckoutArgs) erro
 		)
 	}
 
+	var runOpts []shell.RunCommandOpt
+	if args.ReferenceDir != "" {
+		objects := filepath.Join(args.ReferenceDir, "objects")
+		if existing, ok := args.Shell.Env.Get("GIT_ALTERNATE_OBJECT_DIRECTORIES"); ok && existing != "" {
+			objects += string(os.PathListSeparator) + existing
+		}
+		runOpts = append(runOpts, shell.WithExtraEnv(env.FromSlice([]string{"GIT_ALTERNATE_OBJECT_DIRECTORIES=" + objects})))
+	}
+
 	fetchCmd := []string{"lfs", "fetch"}
 	if len(args.FetchInclude) > 0 {
 		fetchCmd = append(fetchCmd, "--include="+strings.Join(args.FetchInclude, ","))
@@ -256,7 +269,7 @@ func gitLFSFetchCheckout(ctx context.Context, args gitLFSFetchCheckoutArgs) erro
 	checkoutPathspecs, checkoutScoped := args.checkoutPathspecs()
 
 	err := retrier.DoWithContext(ctx, func(retrier *roko.Retrier) error {
-		if err := args.Shell.Command("git", fetchCmd...).Run(ctx); err != nil {
+		if err := args.Shell.Command("git", fetchCmd...).Run(ctx, runOpts...); err != nil {
 			if args.Retry {
 				args.Shell.Commentf("%s", retrier)
 			}
@@ -266,7 +279,7 @@ func gitLFSFetchCheckout(ctx context.Context, args gitLFSFetchCheckoutArgs) erro
 			return nil
 		}
 		if !checkoutScoped {
-			if err := args.Shell.Command("git", "lfs", "checkout").Run(ctx); err != nil {
+			if err := args.Shell.Command("git", "lfs", "checkout").Run(ctx, runOpts...); err != nil {
 				if args.Retry {
 					args.Shell.Commentf("%s", retrier)
 				}
@@ -276,7 +289,7 @@ func gitLFSFetchCheckout(ctx context.Context, args gitLFSFetchCheckoutArgs) erro
 		}
 		for batch := range slices.Chunk(checkoutPathspecs, gitLFSCheckoutPathBatchSize) {
 			checkoutCmd := append([]string{"lfs", "checkout"}, batch...)
-			if err := args.Shell.Command("git", checkoutCmd...).Run(ctx); err != nil {
+			if err := args.Shell.Command("git", checkoutCmd...).Run(ctx, runOpts...); err != nil {
 				if args.Retry {
 					args.Shell.Commentf("%s", retrier)
 				}
@@ -322,8 +335,17 @@ type gitFetchArgs struct {
 	GitFetchFlags string       // Flags to pass to the fetch command
 	Repository    string       // The remote to fetch from
 	Retry         bool         // Whether to retry the fetch on certain errors
-	RefSpecs      []string     // Refspecs to fetch
+	RefSpecs      []string     // Refspecs to fetch, word-split like a shell would
 	HidePrompt    bool         // Never log argv, including in shell debug mode
+
+	// LiteralRefSpecs are refspecs passed to git exactly as given, one argument
+	// each. RefSpecs is word-split because it carries operator-supplied strings
+	// that may hold several refspecs, but a refspec the agent builds from a ref
+	// name must not be: quotes are legal in a git ref name, and splitting a
+	// branch called release'candidate yields a refspec for releasecandidate
+	// instead. Quoting the refspec first is not a fix — shellwords.QuoteBatch
+	// escapes neither quote character, so the round trip loses them on Windows.
+	LiteralRefSpecs []string
 }
 
 func gitFetch(ctx context.Context, args gitFetchArgs) error {
@@ -352,6 +374,8 @@ func gitFetch(ctx context.Context, args gitFetchArgs) error {
 		}
 		commandArgs = append(commandArgs, individualRefSpecs...)
 	}
+
+	commandArgs = append(commandArgs, args.LiteralRefSpecs...)
 
 	smelt := map[string]bool{
 		gitErrStrBadObject:             false,
@@ -449,6 +473,98 @@ func gitEnumerateSubmoduleURLs(ctx context.Context, sh *shell.Shell) ([]string, 
 	return urls, nil
 }
 
+func resolveGitSubmoduleURL(superprojectURL, submoduleURL string) (string, error) {
+	if !isRelativeSubmoduleURL(submoduleURL) {
+		return submoduleURL, nil
+	}
+
+	return gitRelativeURL(superprojectURL, submoduleURL, "")
+}
+
+// gitRelativeURL follows Git's relative_url() resolver in remote.c.
+func gitRelativeURL(remoteURL, relativeURL, upPath string) (string, error) {
+	if !gitURLIsLocalNotSSH(relativeURL) || gitIsAbsolutePath(relativeURL) {
+		return relativeURL, nil
+	}
+	if remoteURL == "" {
+		return "", errors.New("invalid empty remote URL")
+	}
+
+	remoteURL = strings.TrimSuffix(remoteURL, "/")
+
+	isRelative := gitURLIsLocalNotSSH(remoteURL) && !gitIsAbsolutePath(remoteURL)
+	if isRelative && !strings.HasPrefix(remoteURL, "./") && !strings.HasPrefix(remoteURL, "../") {
+		remoteURL = "./" + remoteURL
+	}
+
+	colonSep := false
+	for {
+		switch {
+		case strings.HasPrefix(relativeURL, "../"):
+			relativeURL = strings.TrimPrefix(relativeURL, "../")
+			var choppedColonSep bool
+			var err error
+			remoteURL, choppedColonSep, err = gitChopLastDir(remoteURL, isRelative)
+			if err != nil {
+				return "", err
+			}
+			colonSep = colonSep || choppedColonSep
+		case strings.HasPrefix(relativeURL, "./"):
+			relativeURL = strings.TrimPrefix(relativeURL, "./")
+		default:
+			separator := "/"
+			if colonSep {
+				separator = ":"
+			}
+			out := remoteURL + separator + relativeURL
+			if strings.HasSuffix(relativeURL, "/") {
+				out = strings.TrimSuffix(out, "/")
+			}
+			out = strings.TrimPrefix(out, "./")
+
+			if upPath == "" || !isRelative {
+				return out, nil
+			}
+			return upPath + out, nil
+		}
+	}
+}
+
+func isRelativeSubmoduleURL(repository string) bool {
+	return strings.HasPrefix(repository, "./") || strings.HasPrefix(repository, "../")
+}
+
+func gitChopLastDir(remoteURL string, isRelative bool) (string, bool, error) {
+	if i := strings.LastIndex(remoteURL, "/"); i >= 0 {
+		return remoteURL[:i], false, nil
+	}
+	if i := strings.LastIndex(remoteURL, ":"); i >= 0 {
+		return remoteURL[:i], true, nil
+	}
+	if isRelative || remoteURL == "." {
+		return "", false, fmt.Errorf("cannot strip one component off url %q", remoteURL)
+	}
+	return ".", false, nil
+}
+
+func gitURLIsLocalNotSSH(gitURL string) bool {
+	colon := strings.Index(gitURL, ":")
+	slash := strings.Index(gitURL, "/")
+
+	return colon < 0 || (slash >= 0 && slash < colon) || hasDOSDrivePrefix(gitURL)
+}
+
+func gitIsAbsolutePath(gitPath string) bool {
+	return strings.HasPrefix(gitPath, "/") || hasDOSDrivePrefix(gitPath)
+}
+
+func hasDOSDrivePrefix(gitPath string) bool {
+	if len(gitPath) < 2 || gitPath[1] != ':' {
+		return false
+	}
+	return ('A' <= gitPath[0] && gitPath[0] <= 'Z') || ('a' <= gitPath[0] && gitPath[0] <= 'z')
+}
+
 func gitRevParseInWorkingDirectory(ctx context.Context, sh *shell.Shell, workingDirectory string, extraRevParseArgs ...string) (string, error) {
 	gitDirectory := filepath.Join(workingDirectory, ".git")
 
@@ -459,8 +575,10 @@ func gitRevParseInWorkingDirectory(ctx context.Context, sh *shell.Shell, working
 }
 
 var (
-	hasSchemePattern  = regexp.MustCompile("^[^:]+://")
-	scpLikeURLPattern = regexp.MustCompile("^([^@]+@)?([^:]{2,}):/?(.+)$")
+	hasSchemePattern = regexp.MustCompile("^[^:]+://")
+	// Require at least two non-colon characters before ":" so Windows drive
+	// paths like C:\repo are handled as local filesystem paths, not scp-like URLs.
+	scpLikeURLPattern = regexp.MustCompile("^([^@]+@)?([^:]{2,}):(.+)$")
 )
 
 // parseGittableURL parses and converts a git repository url into a url.URL
@@ -470,8 +588,12 @@ func parseGittableURL(ref string) (*url.URL, error) {
 			matched := scpLikeURLPattern.FindStringSubmatch(ref)
 			user := matched[1]
 			host := matched[2]
-			path := matched[3]
-			ref = fmt.Sprintf("ssh://%s%s/%s", user, host, path)
+			repoPath := matched[3]
+			if strings.HasPrefix(repoPath, "/") {
+				ref = fmt.Sprintf("ssh://%s%s%s", user, host, repoPath)
+			} else {
+				ref = fmt.Sprintf("ssh://%s%s/%s", user, host, repoPath)
+			}
 		} else {
 			normalizedRef := strings.ReplaceAll(ref, "\\", "/")
 			ref = fmt.Sprintf("file:///%s", strings.TrimPrefix(normalizedRef, "/"))

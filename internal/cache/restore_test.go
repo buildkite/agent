@@ -1,19 +1,174 @@
 package cache
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"reflect"
 	"runtime"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
 	"github.com/buildkite/agent/v4/api"
+	"github.com/buildkite/agent/v4/internal/cache/configuration"
 	"github.com/buildkite/agent/v4/internal/cache/store"
+	"github.com/buildkite/agent/v4/logger"
 )
+
+func TestRestoreCleanupError(t *testing.T) {
+	for _, tc := range []struct {
+		name           string
+		cause          error
+		wantWriterHint bool
+	}{
+		{"non-empty directory", syscall.ENOTEMPTY, true},
+		{"permission denied", os.ErrPermission, false},
+		{"canceled", context.Canceled, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			pathErr := &os.PathError{Op: "unlinkat", Path: "/shared/go-cache/76", Err: tc.cause}
+			// Match cleanPath's wrapping; detection must use errors.Is rather
+			// than a direct errno assertion or platform-dependent error text.
+			err := restoreCleanupError("~/go-cache", "/shared/go-cache", fmt.Errorf("cleanPath: %w", pathErr))
+			for _, text := range []string{"~/go-cache", "/shared/go-cache", pathErr.Error(), "extraction was not started", "may already have been modified"} {
+				if !strings.Contains(err.Error(), text) {
+					t.Errorf("error %q should contain %q", err, text)
+				}
+			}
+			for _, text := range []string{"possibly because another process", "job-private target", "exclusive access for the entire time"} {
+				if got := strings.Contains(err.Error(), text); got != tc.wantWriterHint {
+					t.Errorf("error contains %q = %v, want %v: %v", text, got, tc.wantWriterHint, err)
+				}
+			}
+			var gotPathErr *os.PathError
+			if !errors.Is(err, tc.cause) || !errors.As(err, &gotPathErr) || gotPathErr != pathErr {
+				t.Fatalf("filesystem cause was lost: %v", err)
+			}
+			mock := &mockCacheClient{restoreFunc: func(context.Context, string) (RestoreResult, error) {
+				return RestoreResult{}, err
+			}}
+			if got := restoreWithClient(t.Context(), logger.Discard, mock, []string{"cache"}, 1, false); !errors.Is(got, errRestoreMutatedTargets) {
+				t.Fatalf("cleanup failure must stay fatal when fail-open: %v", got)
+			}
+		})
+	}
+}
+
+func TestRunRestore_Diagnostics(t *testing.T) {
+	t.Chdir(t.TempDir())
+	if err := os.Mkdir("cache", 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile("cache/file", []byte("cached contents"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	storageURL := (&url.URL{Scheme: "file", Path: "/" + strings.TrimPrefix(filepath.ToSlash(t.TempDir()), "/")}).String()
+	mock := newMockAPIClient("local_file")
+	c := &client{api: mock, registry: "~", bucketURL: storageURL, caches: []configuration.Cache{{
+		Name: "npm", CacheKey: []configuration.KeyPart{{Source: configuration.SourceLiteral, Arg: "stored"}}, TargetPaths: []string{"cache"},
+	}}}
+	if _, err := c.Save(t.Context(), "npm"); err != nil {
+		t.Fatal(err)
+	}
+	entry, _, _, err := mock.CacheEntryRetrieve(t.Context(), "~", api.CacheEntryRetrieveReq{
+		TargetPaths: []string{"cache"}, CacheKey: []api.CacheKeyPart{{Value: "stored"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	configFile := createTempCacheConfig(t, "caches:\n  - name: npm\n    cache_key: [npm, v1, current]\n    target_paths: [cache]\n")
+	for _, test := range []struct {
+		name             string
+		status           int
+		attempts         string
+		blobs            []api.CacheBlob
+		want             string
+		searchIncomplete bool
+	}{
+		{
+			name:     "fallback hit",
+			status:   http.StatusOK,
+			attempts: `[{"cache_key":["npm","v1","current"],"scopes":{"pipeline":"ci"},"outcome":"miss"},{"cache_key":["npm","v1"],"scopes":{"pipeline":"ci"},"outcome":"hit"}]`,
+			blobs:    entry.Blobs,
+			want:     "Restoring cache: npm\n  npm-v1-current · pipeline=ci → miss\n  npm-v1         · pipeline=ci → hit\nCache restored using fallback key npm-v1-older from pipeline=ci, branch=main\n",
+		},
+		{
+			name:     "policy denied",
+			status:   http.StatusNotFound,
+			attempts: `[{"cache_key":["npm","v1","current"],"scopes":{"pipeline":"ci"},"outcome":"denied","rule":"forks-read-only"}]`,
+			want:     "Restoring cache: npm\n  npm-v1-current · pipeline=ci → denied (rule: forks-read-only)\nCache not restored: no allowed entry found (registry policy denied matching entries)\n",
+		},
+		{
+			name:             "later candidates skipped",
+			status:           http.StatusNotFound,
+			attempts:         `[{"cache_key":["npm","v1","current"],"scopes":{},"outcome":"miss"}]`,
+			searchIncomplete: true,
+			want:             "Restoring cache: npm\n  npm-v1-current · any scope → miss\n  Registry search budget exhausted\nCache not restored: search incomplete\n",
+		},
+		{
+			name:     "hit without downloadable blob",
+			status:   http.StatusOK,
+			attempts: `[{"cache_key":["npm","v1","current"],"scopes":{"pipeline":"ci"},"outcome":"hit"}]`,
+			want:     "Restoring cache: npm\n  npm-v1-current · pipeline=ci → hit\nFailed to restore cache: failed to download cache: cache entry has no blobs to download; continuing without failing the build\n",
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if err := os.WriteFile("cache/file", []byte("uncached contents"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path != "/cache_registries/~/retrieve" {
+					t.Errorf("unexpected API path: %s", r.URL.Path)
+					http.NotFound(w, r)
+					return
+				}
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(test.status)
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"message": "Cache entry not found", "store": "local_file", "fallback": true,
+					"cache_key": []map[string]any{{"value": "npm"}, {"value": "v1"}, {"value": "older"}},
+					"scopes":    map[string]string{"pipeline": "ci", "branch": "main"}, "blobs": test.blobs,
+					"restore_diagnostics": map[string]any{
+						"cache_key": []string{"npm", "v1", "current"}, "scope_candidates": []map[string]string{{"pipeline": "ci"}},
+						"attempts": json.RawMessage(test.attempts), "budget_exhausted": test.searchIncomplete,
+						"search_incomplete": test.searchIncomplete,
+					},
+				})
+			}))
+			defer server.Close()
+			var output bytes.Buffer
+			l := logger.NewConsoleLogger(logger.NewTextPrinter(&output), nil)
+			l.SetLevel(logger.INFO)
+			apiClient := api.NewClient(logger.Discard, api.Config{Endpoint: server.URL})
+			if err := RunRestore(t.Context(), l, apiClient, Config{CacheConfigFile: configFile, BucketURL: storageURL}); err != nil {
+				t.Fatal(err)
+			}
+			// Ignore only the timestamp/level prefix supplied by the console logger.
+			_, got, ok := strings.Cut(output.String(), "Restoring cache:")
+			if !ok || "Restoring cache:"+got != test.want || strings.Contains(output.String(), "Cache progress") {
+				t.Errorf("output = %q, want report %q without progress chatter", output.String(), test.want)
+			}
+			wantContents := "uncached contents"
+			if test.blobs != nil {
+				wantContents = "cached contents"
+			}
+			contents, err := os.ReadFile("cache/file")
+			if err != nil || string(contents) != wantContents {
+				t.Fatalf("restored file = %q, want %q, err = %v", contents, wantContents, err)
+			}
+			t.Logf("\n%s", output.String())
+		})
+	}
+}
 
 func TestInvalidateStaleEntry_EchoesScopesFromRetrieve(t *testing.T) {
 	mockClient := newMockAPIClient("s3")
@@ -69,6 +224,70 @@ func TestInvalidateStaleEntry_ExistedFalseIsNotReportedAsInvalidated(t *testing.
 	}
 }
 
+// resavedEntry sets up the race where another job re-saved the address between
+// this restore's retrieve and a later expire or confirm. The re-save has the
+// same blob, as it usually will (deterministic archive of the same inputs), so
+// only the upload ID distinguishes it.
+func resavedEntry(mockClient *mockAPIClient) (api.CacheEntryRetrieveResp, *mockCacheEntry) {
+	targetPaths := []string{"node_modules"}
+	cacheKey := []api.CacheKeyPart{{Value: "v1-test-key", Mandatory: true}}
+	blobs := []api.CacheBlob{{Digest: api.CacheDigest{Algorithm: "sha256", Value: "same"}}}
+
+	retrieveResp := api.CacheEntryRetrieveResp{
+		TargetPaths: targetPaths,
+		CacheKey:    cacheKey,
+		Blobs:       blobs,
+		UploadID:    "stale-upload",
+	}
+	resaved := &mockCacheEntry{
+		targetPaths: targetPaths,
+		cacheKey:    cacheKey,
+		blobs:       blobs,
+		uploadID:    "fresh-upload",
+		committed:   true,
+	}
+	mockClient.registries["~"].cache[cacheAddr(targetPaths, cacheKey)] = resaved
+	return retrieveResp, resaved
+}
+
+func TestInvalidateStaleEntry_SkipsEntryResavedSinceRetrieve(t *testing.T) {
+	mockClient := newMockAPIClient("s3")
+	c := &client{api: mockClient, registry: "~"}
+	retrieveResp, resaved := resavedEntry(mockClient)
+
+	if c.invalidateStaleEntry(t.Context(), retrieveResp) {
+		t.Error("invalidateStaleEntry() = true, want false when the entry was re-saved")
+	}
+	if len(mockClient.expireCalls) != 1 {
+		t.Fatalf("expire calls = %d, want 1", len(mockClient.expireCalls))
+	}
+	if got := mockClient.expireCalls[0].UploadID; got != "stale-upload" {
+		t.Errorf("expire request upload_id = %q, want %q", got, "stale-upload")
+	}
+	addr := cacheAddr(retrieveResp.TargetPaths, retrieveResp.CacheKey)
+	if mockClient.registries["~"].cache[addr] != resaved {
+		t.Error("re-saved entry was deleted, want it to survive")
+	}
+}
+
+func TestConfirmRestoreSucceeded_DoesNotRefreshEntryResavedSinceRetrieve(t *testing.T) {
+	mockClient := newMockAPIClient("s3")
+	c := &client{api: mockClient, registry: "~"}
+	retrieveResp, resaved := resavedEntry(mockClient)
+
+	c.confirmRestoreSucceeded(t.Context(), retrieveResp, nil)
+
+	if len(mockClient.confirmCalls) != 1 {
+		t.Fatalf("confirm calls = %d, want 1", len(mockClient.confirmCalls))
+	}
+	if got := mockClient.confirmCalls[0].UploadID; got != "stale-upload" {
+		t.Errorf("confirm request upload_id = %q, want %q", got, "stale-upload")
+	}
+	if !resaved.expiresAt.IsZero() {
+		t.Errorf("re-saved entry retention refreshed to %v, want untouched", resaved.expiresAt)
+	}
+}
+
 func TestConfirmRestoreSucceeded_EchoesScopesFromRetrieve(t *testing.T) {
 	mockClient := newMockAPIClient("s3")
 	c := &client{api: mockClient, registry: "~"}
@@ -81,7 +300,7 @@ func TestConfirmRestoreSucceeded_EchoesScopesFromRetrieve(t *testing.T) {
 		Fallback:    false,
 	}
 
-	confirmed := c.confirmRestoreSucceeded(t.Context(), retrieveResp)
+	confirmed := c.confirmRestoreSucceeded(t.Context(), retrieveResp, nil)
 	if !confirmed {
 		t.Fatalf("confirmRestoreSucceeded() = false, want true")
 	}
@@ -108,7 +327,7 @@ func TestConfirmRestoreSucceeded_SkipsFallbackMatch(t *testing.T) {
 		Fallback:    true,
 	}
 
-	confirmed := c.confirmRestoreSucceeded(t.Context(), retrieveResp)
+	confirmed := c.confirmRestoreSucceeded(t.Context(), retrieveResp, nil)
 	if confirmed {
 		t.Error("confirmRestoreSucceeded() = true, want false for a fallback match")
 	}
@@ -138,7 +357,7 @@ func TestConfirmRestoreSucceeded_DeadlineBoundsEntireOperation(t *testing.T) {
 	}
 
 	start := time.Now()
-	confirmed := c.confirmRestoreSucceeded(t.Context(), retrieveResp)
+	confirmed := c.confirmRestoreSucceeded(t.Context(), retrieveResp, nil)
 	elapsed := time.Since(start)
 
 	if confirmed {
@@ -160,7 +379,7 @@ func TestConfirmRestoreSucceeded_MissingResolvedAddress(t *testing.T) {
 	mockClient := newMockAPIClient("s3")
 	c := &client{api: mockClient, registry: "~"}
 
-	confirmed := c.confirmRestoreSucceeded(t.Context(), api.CacheEntryRetrieveResp{})
+	confirmed := c.confirmRestoreSucceeded(t.Context(), api.CacheEntryRetrieveResp{}, nil)
 	if confirmed {
 		t.Error("confirmRestoreSucceeded() = true, want false when the retrieve response has no resolved address")
 	}
@@ -176,7 +395,7 @@ func TestMissCompleteMessage(t *testing.T) {
 	if got, want := missCompleteMessage("missing blob", true), "Cache miss (missing blob, invalidated stale entry)"; got != want {
 		t.Errorf("missCompleteMessage(invalidated=true) = %q, want %q", got, want)
 	}
-	if got, want := missCompleteMessage("missing blob", false), "Cache miss (missing blob, stale entry could not be invalidated)"; got != want {
+	if got, want := missCompleteMessage("missing blob", false), "Cache miss (missing blob, entry may already have been removed or replaced by a newer save)"; got != want {
 		t.Errorf("missCompleteMessage(invalidated=false) = %q, want %q", got, want)
 	}
 }
@@ -460,6 +679,10 @@ func (f *fakeRefreshingBlob) Download(_ context.Context, _, _ string) (*store.Tr
 	return nil, nil
 }
 
+func (f *fakeRefreshingBlob) Stat(_ context.Context, _ string) (int64, error) {
+	return 0, nil
+}
+
 func (f *fakeRefreshingBlob) RefreshRetention(_ context.Context, key string, retention time.Duration) {
 	f.refreshCalls = append(f.refreshCalls, key)
 	f.refreshRetentions = append(f.refreshRetentions, retention)
@@ -475,6 +698,10 @@ func (f *fakeNonRefreshingBlob) Upload(_ context.Context, _, _ string, _ time.Du
 
 func (f *fakeNonRefreshingBlob) Download(_ context.Context, _, _ string) (*store.TransferInfo, error) {
 	return nil, nil
+}
+
+func (f *fakeNonRefreshingBlob) Stat(_ context.Context, _ string) (int64, error) {
+	return 0, nil
 }
 
 func TestMaybeRefreshRetention(t *testing.T) {

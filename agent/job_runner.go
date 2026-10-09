@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -20,6 +21,7 @@ import (
 	"github.com/buildkite/agent/v4/core"
 	envutil "github.com/buildkite/agent/v4/env"
 	"github.com/buildkite/agent/v4/internal/experiments"
+	"github.com/buildkite/agent/v4/internal/job"
 	"github.com/buildkite/agent/v4/internal/process"
 	"github.com/buildkite/agent/v4/internal/shell"
 	"github.com/buildkite/agent/v4/kubernetes"
@@ -143,6 +145,13 @@ type JobRunner struct {
 	envShellFile *os.File
 	envJSONFile  *os.File
 
+	// jobLogTmpFile is the file that receives a copy of the job log when
+	// enable-job-log-tmpfile is set. It stays open for the life of the job
+	// because output can arrive after the bootstrap process exits (the PTY
+	// copy drains after Done() closes, and runJob writes notices after Run
+	// returns). cleanup closes and removes it once all writers are finished.
+	jobLogTmpFile *os.File
+
 	// jobTimeoutFilePath is the path to a marker file that, if present at
 	// post-command hook time, signals to the executor that the job was
 	// cancelled because of a Buildkite job-level timeout. The path is passed
@@ -246,27 +255,36 @@ func NewJobRunner(ctx context.Context, l logger.Logger, apiClient *api.Client, c
 	// if agent config "EnableJobLogTmpfile" is set, we extend the outputWriter to write to a temporary file.
 	// By default, the tmp file will be created on os.TempDir unless config "JobLogPath" is specified.
 	// BUILDKITE_JOB_LOG_TMPFILE is an environment variable that contains the full path to this temporary file.
-	var tmpFile *os.File
 	if conf.AgentConfiguration.EnableJobLogTmpfile {
 		jobLogDir := ""
 		if conf.AgentConfiguration.JobLogPath != "" {
 			jobLogDir = conf.AgentConfiguration.JobLogPath
 			r.agentLogger.Debugf("[JobRunner] Job Log Path: %s", jobLogDir)
 		}
-		tmpFile, err = os.CreateTemp(jobLogDir, "buildkite_job_log")
+		tmpFile, err := os.CreateTemp(jobLogDir, "buildkite_job_log")
 		if err != nil {
 			return nil, err
 		}
+		r.jobLogTmpFile = tmpFile
 
-		err := os.Chmod(tmpFile.Name(), 0o644) // Make it world-readable - useful for log collection etc
-		if err != nil {
+		if err := os.Chmod(tmpFile.Name(), 0o644); err != nil { // Make it world-readable - useful for log collection etc
+			r.removeJobLogTmpfile()
 			return nil, fmt.Errorf("failed to set permissions on job log tmpfile %s: %w", tmpFile.Name(), err)
 		}
 
 		if err := os.Setenv("BUILDKITE_JOB_LOG_TMPFILE", tmpFile.Name()); err != nil {
+			r.removeJobLogTmpfile()
 			return nil, fmt.Errorf("failed to set BUILDKITE_JOB_LOG_TMPFILE: %v", err)
 		}
-		outputWriter = io.MultiWriter(outputWriter, tmpFile)
+
+		// The tmpfile is a secondary copy of the log. Writing to it must never
+		// fail the write to r.output, otherwise a tmpfile error (disk full,
+		// file closed) would abort the copy that feeds the Buildkite job log.
+		outputWriter = io.MultiWriter(outputWriter, &bestEffortWriter{
+			w:      tmpFile,
+			logger: r.agentLogger,
+			desc:   "job log tmpfile " + tmpFile.Name(),
+		})
 	}
 
 	// processWriter -> timestamper -> outputWriter
@@ -335,17 +353,46 @@ func NewJobRunner(ctx context.Context, l logger.Logger, apiClient *api.Client, c
 		})
 	}
 
-	// Close the writer end of the pipe when the process finishes
-	go func() {
-		<-r.process.Done()
-		if tmpFile != nil {
-			if err := os.Remove(tmpFile.Name()); err != nil {
-				r.agentLogger.Errorf("Couldn't remove job log temp file: %v", err)
-			}
-		}
-	}()
-
 	return r, nil
+}
+
+// removeJobLogTmpfile closes and deletes the job log tmpfile, if there is one.
+// Closing before removing matters: on Windows, removing an open file fails,
+// and on Unix the descriptor would otherwise stay open (leaking one per job).
+// It must only be called once nothing else can write to the file.
+func (r *JobRunner) removeJobLogTmpfile() {
+	if r.jobLogTmpFile == nil {
+		return
+	}
+	if err := r.jobLogTmpFile.Close(); err != nil {
+		r.agentLogger.Warnf("[JobRunner] Error closing job log tmpfile: %s", err)
+	}
+	if err := os.Remove(r.jobLogTmpFile.Name()); err != nil {
+		r.agentLogger.Warnf("[JobRunner] Error cleaning up job log tmpfile: %s", err)
+	} else {
+		r.agentLogger.Debugf("[JobRunner] Deleted job log tmpfile: %s", r.jobLogTmpFile.Name())
+	}
+	r.jobLogTmpFile = nil
+}
+
+// bestEffortWriter forwards writes to w but always reports success. A failed
+// write is logged once, then further failures are silent. Use it for secondary
+// sinks (such as the job log tmpfile) that must not disturb the primary log.
+type bestEffortWriter struct {
+	w      io.Writer
+	logger logger.Logger
+	desc   string
+
+	warnOnce sync.Once
+}
+
+func (b *bestEffortWriter) Write(p []byte) (int, error) {
+	if _, err := b.w.Write(p); err != nil {
+		b.warnOnce.Do(func() {
+			b.logger.Warnf("[JobRunner] Couldn't write to %s, further errors will not be logged: %v", b.desc, err)
+		})
+	}
+	return len(p), nil
 }
 
 func (r *JobRunner) normalizeVerificationBehavior(behavior string) (string, error) {
@@ -472,6 +519,7 @@ BUILDKITE_GIT_FETCH_FLAGS
 BUILDKITE_GIT_MIRRORS_LOCK_TIMEOUT
 BUILDKITE_GIT_MIRRORS_PATH
 BUILDKITE_GIT_MIRRORS_SKIP_UPDATE
+BUILDKITE_GIT_MIRRORS_LFS_CACHE
 BUILDKITE_GIT_SUBMODULES
 BUILDKITE_GIT_SUBMODULE_CLONE_CONFIG
 BUILDKITE_CHECKOUT_OVERRIDE_MODE
@@ -597,24 +645,27 @@ BUILDKITE_AGENT_JWKS_KEY_ID`
 	setEnv("BUILDKITE_SOCKETS_PATH", r.conf.AgentConfiguration.SocketsPath)
 	setEnv("BUILDKITE_GIT_MIRRORS_PATH", r.conf.AgentConfiguration.GitMirrorsPath)
 	setEnv("BUILDKITE_GIT_MIRRORS_SKIP_UPDATE", fmt.Sprint(r.conf.AgentConfiguration.GitMirrorsSkipUpdate))
+	setEnv("BUILDKITE_GIT_MIRRORS_LFS_CACHE", fmt.Sprint(r.conf.AgentConfiguration.GitMirrorsLFSCache))
 	setEnv("BUILDKITE_HOOKS_PATH", r.conf.AgentConfiguration.HooksPath)
 	setEnv("BUILDKITE_ADDITIONAL_HOOKS_PATHS", strings.Join(r.conf.AgentConfiguration.AdditionalHooksPaths, ","))
 	setEnv("BUILDKITE_PLUGINS_PATH", r.conf.AgentConfiguration.PluginsPath)
 	setEnv("BUILDKITE_SSH_KEYSCAN", fmt.Sprint(r.conf.AgentConfiguration.SSHKeyscan))
-	// submodules/skip-checkout/skip-fetch/timeout are each emitted by the agent on
-	// only one side of their default (submodules off, skip-checkout on, skip-fetch
-	// on, timeout > 0); on the other, silent, side the agent stays quiet and
-	// historically let pipeline/step env decide. Only strict closes that silent
-	// side, emitting the agent value unconditionally so a job can't reintroduce a
-	// setting the agent left at its default. from-job and none keep the historical
-	// conditional emit; setCheckoutEnv then decides precedence against backend job
-	// env: from-job keeps agent config authoritative on the emitted side, none lets
-	// job env win. The checkout flags above are agent-authoritative in both from-job
-	// and strict (they were always emitted), so only these four differ by mode here.
+	// submodules/skip-checkout/skip-fetch/timeout/fetch-base-branch are each emitted
+	// by the agent on only one side of their default (submodules off, skip-checkout
+	// on, skip-fetch on, timeout > 0, base branch fetch not off); on the other,
+	// silent, side the agent stays quiet and historically let pipeline/step env
+	// decide. Only strict closes that silent side, emitting the agent value
+	// unconditionally so a job can't reintroduce a setting the agent left at its
+	// default. from-job and none keep the historical conditional emit;
+	// setCheckoutEnv then decides precedence against backend job env: from-job keeps
+	// agent config authoritative on the emitted side, none lets job env win. The
+	// checkout flags above are agent-authoritative in both from-job and strict (they
+	// were always emitted), so only these five differ by mode here.
 	if checkoutMode == envutil.CheckoutOverrideStrict {
 		setEnv("BUILDKITE_GIT_SUBMODULES", fmt.Sprint(r.conf.AgentConfiguration.GitSubmodules))
 		setEnv("BUILDKITE_SKIP_CHECKOUT", fmt.Sprint(r.conf.AgentConfiguration.SkipCheckout))
 		setEnv("BUILDKITE_GIT_SKIP_FETCH_EXISTING_COMMITS", fmt.Sprint(r.conf.AgentConfiguration.GitSkipFetchExistingCommits))
+		setEnv("BUILDKITE_GIT_FETCH_BASE_BRANCH", cmp.Or(r.conf.AgentConfiguration.GitFetchBaseBranch, job.GitFetchBaseBranchOff))
 		// A zero timeout means no checkout timeout; emit it anyway under strict so
 		// a job-supplied value can't reintroduce one past the agent config.
 		setEnv("BUILDKITE_GIT_CHECKOUT_TIMEOUT", strconv.Itoa(r.conf.AgentConfiguration.GitCheckoutTimeout))
@@ -632,6 +683,9 @@ BUILDKITE_AGENT_JWKS_KEY_ID`
 		}
 		if r.conf.AgentConfiguration.GitSkipFetchExistingCommits {
 			setCheckoutEnv("BUILDKITE_GIT_SKIP_FETCH_EXISTING_COMMITS", "true")
+		}
+		if mode := r.conf.AgentConfiguration.GitFetchBaseBranch; mode != "" && mode != job.GitFetchBaseBranchOff {
+			setCheckoutEnv("BUILDKITE_GIT_FETCH_BASE_BRANCH", mode)
 		}
 		if r.conf.AgentConfiguration.GitCheckoutTimeout > 0 {
 			setCheckoutEnv("BUILDKITE_GIT_CHECKOUT_TIMEOUT", strconv.Itoa(r.conf.AgentConfiguration.GitCheckoutTimeout))

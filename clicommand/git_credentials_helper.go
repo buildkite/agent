@@ -90,16 +90,23 @@ var GitCredentialsHelperCommand = &cli.Command{
 		}
 
 		client := api.NewClient(l, loadAPIClientConfig(cfg, "AgentAccessToken"))
-		tok, _, err := client.GenerateRepositoryAccessToken(ctx, repo, cfg.JobID)
+		credentials, _, err := client.GenerateRepositoryCredentials(ctx, repo, cfg.JobID)
 		if err != nil {
 			return handleAuthError(c, l, fmt.Errorf("failed to get repository credentials: %w", err))
 		}
-		if tok == "" {
+		if credentials.Token == "" {
 			return handleAuthError(c, l, errors.New("repository credential response contained an empty token"))
 		}
+		username := credentials.Username
+		if username == "" {
+			username = "token"
+		}
+		if strings.ContainsAny(username+credentials.Token, "\r\n\x00") {
+			return handleAuthError(c, l, errors.New("repository credential response contained invalid characters"))
+		}
 
-		_, _ = fmt.Fprintln(c.Root().Writer, "username=token")
-		_, _ = fmt.Fprintln(c.Root().Writer, "password="+tok)
+		_, _ = fmt.Fprintln(c.Root().Writer, "username="+username)
+		_, _ = fmt.Fprintln(c.Root().Writer, "password="+credentials.Token)
 		_, _ = fmt.Fprintln(c.Root().Writer, "")
 
 		l.Debugf("Authentication successful!")

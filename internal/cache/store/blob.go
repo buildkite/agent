@@ -8,8 +8,8 @@ import (
 	"time"
 )
 
-// ErrBlobNotFound is returned by a Blob's Download when the requested object
-// does not exist in the backing store.
+// ErrBlobNotFound is returned by a Blob's Download or Stat when the requested
+// object does not exist in the backing store.
 var ErrBlobNotFound = errors.New("blob not found")
 
 // Blob interface defines the operations for blob storage
@@ -20,6 +20,11 @@ type Blob interface {
 
 	// Download downloads a file from blob storage
 	Download(ctx context.Context, key, destPath string) (*TransferInfo, error)
+
+	// Stat returns the size in bytes of the blob stored under key, without
+	// downloading it. Returns an error wrapping ErrBlobNotFound if there is no
+	// such blob.
+	Stat(ctx context.Context, key string) (int64, error)
 }
 
 // RetentionRefresher is implemented by Blob stores that support extending a
@@ -28,6 +33,20 @@ type Blob interface {
 // does not implement it).
 type RetentionRefresher interface {
 	RefreshRetention(ctx context.Context, key string, retention time.Duration)
+}
+
+// BackendName names the blob store NewBlobStore selects for store and
+// bucketURL: "nsc", "file" or "s3".
+func BackendName(store, bucketURL string) string {
+	if store == LocalFileStore {
+		return "file"
+	}
+	switch scheme, _, _ := strings.Cut(bucketURL, "://"); scheme {
+	case nscScheme, "file":
+		return scheme
+	default:
+		return "s3"
+	}
 }
 
 func NewBlobStore(ctx context.Context, store, bucketURL string) (Blob, error) {

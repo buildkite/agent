@@ -187,6 +187,10 @@ type SaveResult struct {
 	// When false, Transfer will be nil since no upload was performed.
 	CacheEntryCreated bool
 
+	// UploadSkipped indicates the entry was created without uploading, because
+	// the store already held a blob with the archive's digest and size.
+	UploadSkipped bool
+
 	// Key is the actual cache key that was used (after template expansion).
 	Key string
 
@@ -198,7 +202,8 @@ type SaveResult struct {
 	Archive ArchiveMetrics
 
 	// Transfer contains information about the upload (if performed).
-	// Nil if CacheEntryCreated is false (cache already existed).
+	// Nil if CacheEntryCreated is false (cache already existed) or
+	// UploadSkipped is true (blob already stored).
 	Transfer *TransferMetrics
 
 	// TotalDuration is the end-to-end duration of the save operation.
@@ -213,8 +218,13 @@ type RestoreResult struct {
 	// CacheRestored indicates whether any cache was restored (including fallbacks).
 	CacheRestored bool
 
-	// Key is the actual cache key that was restored.
-	Key string
+	// Key is the resolved key, or the selected stored key when an entry matched.
+	// Parts are joined with hyphens for display; API addresses retain their parts.
+	Key         string
+	Scopes      map[string]string
+	Diagnostics *api.CacheRestoreDiagnostics
+	// NotRestoredReason explains a registry hit whose archive could not be restored.
+	NotRestoredReason string
 
 	// FallbackUsed indicates whether a fallback key was used.
 	FallbackUsed bool

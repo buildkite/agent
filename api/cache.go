@@ -97,6 +97,28 @@ type CacheEntryRetrieveResp struct {
 	// invalidate this exact entry — its scope may no longer match what the
 	// registry's current policy would resolve.
 	Scopes map[string]string `json:"scopes"`
+	// UploadID identifies the save that wrote this entry; a re-save under the
+	// same address gets a new one. Empty for entries saved before the registry
+	// recorded it.
+	UploadID           string                   `json:"upload_id,omitempty"`
+	RestoreDiagnostics *CacheRestoreDiagnostics `json:"restore_diagnostics,omitempty"`
+}
+
+// CacheRestoreDiagnostics describes the actual registry search, including on a 404.
+type CacheRestoreDiagnostics struct {
+	CacheKey         []string              `json:"cache_key"`
+	ScopeCandidates  []map[string]string   `json:"scope_candidates"`
+	Attempts         []CacheRestoreAttempt `json:"attempts"`
+	BudgetExhausted  bool                  `json:"budget_exhausted"`
+	SearchIncomplete bool                  `json:"search_incomplete"`
+}
+
+type CacheRestoreAttempt struct {
+	CacheKey []string          `json:"cache_key"`
+	Scopes   map[string]string `json:"scopes"`
+	Outcome  string            `json:"outcome"`
+	// An absent rule on a denied attempt means default deny.
+	Rule string `json:"rule,omitempty"`
 }
 
 // CacheEntryExpireReq is the request body for invalidating a cache entry.
@@ -108,12 +130,17 @@ type CacheEntryExpireReq struct {
 	// resolved this entry, not recomputed — omit only when the entry was
 	// retrieved unscoped.
 	Scopes map[string]string `json:"scopes,omitempty"`
+	// UploadID should be copied verbatim from the CacheEntryRetrieveResp that
+	// resolved this entry. When set, the registry only expires the entry if it
+	// hasn't been re-saved since, even with identical content.
+	UploadID string `json:"upload_id,omitempty"`
 }
 
 // CacheEntryExpireResp acknowledges an expire request. Existed distinguishes
 // an actual deletion from an idempotent no-op (e.g. the entry was already
-// gone, or the supplied address/scopes didn't match anything) — callers must
-// not assume a 2xx response means something was deleted.
+// gone, the supplied address/scopes didn't match anything, or the entry was
+// re-saved since UploadID) — callers must not assume a 2xx response
+// means something was deleted.
 type CacheEntryExpireResp struct {
 	Message string `json:"message"`
 	Existed bool   `json:"existed"`
@@ -129,6 +156,12 @@ type CacheEntryConfirmReq struct {
 	// resolved this entry, not recomputed — omit only when the entry was
 	// retrieved unscoped.
 	Scopes map[string]string `json:"scopes,omitempty"`
+	// UploadID should be copied verbatim from the CacheEntryRetrieveResp that
+	// resolved this entry. When set, the registry only refreshes retention if
+	// the entry hasn't been re-saved since.
+	UploadID string `json:"upload_id,omitempty"`
+	// Stats reports how the restore performed. Informational only.
+	Stats *CacheStats `json:"stats,omitempty"`
 }
 
 // CacheEntryConfirmResp acknowledges a confirm request.
@@ -163,6 +196,28 @@ type CacheRegistryResp struct {
 type CacheEntryCommitReq struct {
 	UploadID string   `json:"upload_id"`
 	ETags    []string `json:"e_tags,omitempty"`
+	// Stats reports how the save performed. Informational only.
+	Stats *CacheStats `json:"stats,omitempty"`
+}
+
+// CacheStats reports how a save or restore performed, sent on commit (save)
+// and confirm (restore). The server only logs it:
+// it never rejects a request over its stats.
+type CacheStats struct {
+	// Backend is the blob store the agent transferred with: "s3", "nsc" or "file".
+	Backend    string `json:"backend,omitempty"`
+	TotalMs    int64  `json:"total_ms"`
+	ArchiveMs  int64  `json:"archive_ms"`
+	TransferMs int64  `json:"transfer_ms"`
+	// CleanupMs is how long a restore spent clearing the target paths before
+	// extracting. Nil on save, which has no cleanup phase.
+	CleanupMs         *int64 `json:"cleanup_ms,omitempty"`
+	CompressedBytes   int64  `json:"compressed_bytes"`
+	UncompressedBytes int64  `json:"uncompressed_bytes"`
+	// EntryCount counts the files and directories in the archive.
+	EntryCount  int64 `json:"entry_count"`
+	PartCount   int   `json:"part_count"`
+	Concurrency int   `json:"concurrency"`
 }
 
 // CacheEntryCommitResp acknowledges a commit.

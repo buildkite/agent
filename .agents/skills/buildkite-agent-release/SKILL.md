@@ -16,73 +16,110 @@ Use this skill when you need to:
 
 The repo has two active release lines:
 
-* **v4** — released from `main`. Currently pre-releases (e.g. `4.0.0-beta.15`).
-* **v3** — released from the `v3` branch (e.g. `3.136.4`).
+* **v4**: released from `main` (e.g. `4.1.0`).
+* **v3**: released from the `v3` branch (e.g. `3.138.1`). This is maintenance-only: 3.138 is intended to be the last minor version of v3, so v3 releases should be patches (see step 4).
 
-Ask the user to pick v4 or v3 before doing anything else. The chosen line
-determines the base branch for everything below: `main` for v4, `v3` for v3.
+Ask the user to pick v4 or v3 before doing anything else. The chosen line determines the base branch for everything below: `main` for v4, `v3` for v3.
 
 ### 2. Double check the current commit is up to date with the release branch
 
-The current commit should be up to date with the latest `origin/main` (v4) or
-`origin/v3` (v3).
+The current commit should be up to date with the latest `origin/main` (v4) or `origin/v3` (v3).
 
-### 3. Determine the new version number
+### 3. Find the previous release and preview what's changed
 
-Find the latest version for the chosen line. Don't use `gh release view` on its
-own — it returns the latest *stable* release, which hides v4 pre-releases:
+Find the latest release on the chosen line. `gh release view` on its own returns the repo-wide latest release, which is the wrong line for v3, so list them instead:
 
 ```bash
 gh release list --repo buildkite/agent --limit 20
 ```
 
-Then ask the user to decide the new version:
-
-* **v4 (while in beta):** usually the next beta, e.g. `4.0.0-beta.14` → `4.0.0-beta.15`.
-* **v3:** ask whether it's a minor or patch bump.
-
-### 4. Update the agent version file
-
-Edit the `version/VERSION` to update the value to the new version number. Use the bare semver (e.g. `3.136.4` or `4.0.0-beta.15`), not a `v`-prefixed tag.
-
-### 5. Preview the auto-generated release notes
-
-Generate the same notes GitHub will publish at release time, so they can be reviewed in the PR description. Set `target_commitish` to the release branch (`main` for v4, `v3` for v3):
+Generate the release notes GitHub will publish, using a placeholder tag name because the version hasn't been decided yet. Pass `previous_tag_name` explicitly so the preview is guaranteed to diff against the right release on the chosen line. Set `target_commitish` to the release branch:
 
 ```bash
 mkdir -p tmp
 gh api -X POST repos/buildkite/agent/releases/generate-notes \
-  -f tag_name=v3.136.4 \
-  -f target_commitish=v3 \
-  --jq .body > tmp/release-notes.md
-```
-
-This is a read-only API call — it does not create a release or tag. GitHub auto-detects the previous release and applies the categorisation from [.github/release.yml](../../../.github/release.yml). The `tmp/` directory is gitignored, so the file won't be committed.
-
-GitHub's auto-detection compares against the previous *stable* release, which is wrong for v4 betas (it would diff against the latest v3.x). For v4, pass the previous tag explicitly:
-
-```bash
-gh api -X POST repos/buildkite/agent/releases/generate-notes \
-  -f tag_name=v4.0.0-beta.15 \
+  -f tag_name=v4.0.8-next \
   -f target_commitish=main \
-  -f previous_tag_name=v4.0.0-beta.14 \
+  -f previous_tag_name=v4.0.8 \
   --jq .body > tmp/release-notes.md
 ```
 
-Inspect `tmp/release-notes.md`. If any PRs are mis-categorised (e.g. landed under 🏠 Internal because they had no labels), fix the labels on those PRs and re-run the command.
+This is a read-only API call; it doesn't create a release or tag. Categories come from the PR labels via [.github/release.yml](../../../.github/release.yml). The `tmp/` directory is gitignored.
 
-### 6. Create the release PR
+Read every entry in `tmp/release-notes.md`, including 🏠 Internal. Any unlabelled PR lands in Internal, and so do mislabelled user-facing ones. For anything whose impact isn't obvious from its title, read the PR (`gh pr view <number> --repo buildkite/agent`). If a PR is mis-categorised, fix its labels and re-run the command.
 
-* Create a new branch for the release (e.g. `release/v3.136.4` or `release/v4.0.0-beta.15`), based on the release branch.
+### 4. Decide the version number with the user
+
+Classify each change using SemVer, applied to what users of the agent can observe:
+
+* **Major**: breaks existing usage, e.g. removes or renames a flag, command, env var or config option, or drops platform support. Stop and discuss with the user; this shouldn't happen on an established line without a plan.
+* **Minor**: adds or changes something users can reach or observe. This includes:
+  * new commands or subcommands (including hidden ones), flags, env vars, config options, experiments, Job API routes, or pipeline/API fields the agent now understands
+  * promoting an experiment, or enabling a capability by default
+  * changing a default or existing behaviour, even if a flag restores the old behaviour
+  * new user-visible output, such as new log reports or diagnostics
+* **Patch**: bug fixes, security fixes, dependency bumps, docs, help-text and wording fixes, and internal or CI-only changes. A fix that makes the agent behave as it was already documented or intended to is still a patch.
+
+The highest classification of any change wins. One ✨ Added entry makes the whole release a minor. A change being experimental or hidden doesn't make it a patch; it's still new surface area, it's just a "patchier" minor. When a change sits on the boundary, round up to minor. Minor version numbers are cheap, and under-classifying hides new behaviour from people reading version numbers.
+
+Don't just ask "minor or patch?". Present a recommendation and your reasoning, then have the user confirm or override it:
+
+* the recommended version, e.g. `4.0.8` → `4.1.0`
+* the changes that drive the classification, with PR links, and why they count as minor (or why nothing does)
+* any borderline changes, and which way you leaned
+
+Prompt the user to sanity-check with SemVer in mind: "Is there anything here someone could start depending on, or would notice has changed, after upgrading? If so, it's at least a minor." Wait for their answer before continuing.
+
+Only cut a pre-release (e.g. `4.1.0-beta.1`) if the user explicitly asks for one.
+
+#### v3 releases should be patches
+
+Minor releases of v3 are strongly discouraged. 3.138 is intended to be the last minor version of v3, which only gets security fixes and selected bug fixes from here on; new features go to v4.
+
+Classify v3 changes with the same rules as above. If anything on the `v3` branch would make the release a minor, don't quietly bump the minor version, and don't reclassify the change as a patch to dodge the rule. Instead, stop and flag it to the user: list the offending PRs and suggest reverting or dropping them from `v3` so the release can go out as a patch. Only cut a new v3 minor if the user explicitly confirms that's what they want after seeing this warning.
+
+### 5. Update the agent version file
+
+Edit `version/VERSION` to the new version number. Use the bare semver (e.g. `4.1.0`), not a `v`-prefixed tag.
+
+### 6. Regenerate the release notes with the real tag
+
+Re-run the command from step 3 with the chosen `tag_name` (e.g. `v4.1.0`) so the "Full Changelog" link is correct.
+
+### 7. Suggest an editorial pass on the changelog
+
+The generated notes are built from PR titles, which are written for reviewers rather than agent users. Prompt the user to do an editorial pass, and make it easy by suggesting rewritten titles for any entry in a user-facing category (🔒 Security, ✨ Added, 🐛 Fixed, 🔧 Changed) that would read poorly to someone outside Buildkite. Good titles:
+
+* drop internal ticket IDs (`A-1234:`, `[SUP-5678]`, `PS-2073:`), since the PR link leads back to the ticket anyway
+* drop conventional-commit prefixes (`feat:`, `fix(cache):`) and `[Backport]` tags; the category heading already says what kind of change it is
+* describe the effect on users, not the implementation, e.g. "Stop leaking job log temp files and file descriptors when `enable-job-log-tmpfile` is set" rather than "Close the job log tmpfile once the job is done, not when the process exits"
+* name the command, flag or setting involved, e.g. `buildkite-agent cache save --force`
+* start with a capitalised verb and don't end with a full stop
+
+Collapse the Dependabot PRs (author `@dependabot[bot]`, usually titled `build(deps): bump ...`) into a single bullet in the section they appear in, linking each PR, e.g.:
+
+```markdown
+* Dependency updates by @dependabot[bot] in https://github.com/buildkite/agent/pull/4391, https://github.com/buildkite/agent/pull/4392 and https://github.com/buildkite/agent/pull/4393
+```
+
+Only group the Dependabot PRs. Keep dependency changes made by people as their own bullets, e.g. Go toolchain upgrades ("Upgrade to Go 1.26.5") and targeted bumps like "Bump go-pipeline to v0.18.1". If a Dependabot PR is labelled `security`, it stays as its own bullet under 🔒 Security.
+
+Present the suggestions as a complete, copy-pasteable edited version of the release notes. Keep the generated format: the same headings, one bullet per PR (apart from the grouped Dependabot line), and the `by @author in <PR URL>` attribution. Write it to `tmp/release-notes-edited.md` and show it in a fenced `markdown` code block, so it's easy to copy.
+
+Ask the user to review it and tell you what to change. It's fine for them to drop unimportant entries.
+
+### 8. Create the release PR
+
+* Create a new branch for the release (e.g. `release/v4.1.0`), based on the release branch.
 * Commit the `version/VERSION` change.
 * Push the branch and open a PR using `gh pr create` against the release branch (`--base main` for v4, `--base v3` for v3):
-    * Title: `release: v3.136.4` (matching the convention from previous release PRs).
-    * Body: contents of `tmp/release-notes.md` from the previous step.
-    * Label: `release` — required so the PR-labels workflow passes, and so the release PR itself is excluded from its own auto-generated notes (configured in [.github/release.yml](../../../.github/release.yml)).
-    * Example: `gh pr create --base v3 --title "release: v3.136.4" --body-file tmp/release-notes.md --label release`.
+    * Title: `release: v4.1.0` (matching the convention from previous release PRs).
+    * Body: contents of `tmp/release-notes-edited.md` from the previous step, or `tmp/release-notes.md` if the user skipped the editorial pass.
+    * Label: `release`. This is required so the PR-labels workflow passes, and so the release PR itself is excluded from its own auto-generated notes (configured in [.github/release.yml](../../../.github/release.yml)).
+    * Example: `gh pr create --base main --title "release: v4.1.0" --body-file tmp/release-notes-edited.md --label release`.
 
-The PR body is for human review only; the actual release notes are regenerated by `gh release create --generate-notes` in [.buildkite/steps/github-release.sh](../../../.buildkite/steps/github-release.sh) when the release pipeline runs, so they will reflect any label fixes made between PR creation and release.
+The PR body is the release notes. When the release pipeline runs on the merge commit, [.buildkite/steps/github-release.sh](../../../.buildkite/steps/github-release.sh) publishes the release PR's body verbatim as the GitHub release notes, falling back to GitHub's generated notes only if there's no release PR for the commit or its body is empty. So edit the PR body (not just PR titles or labels) to change the notes, and update it before merging if more PRs land on the release branch.
 
-### 7. Done
+### 9. Done
 
-* No manual GitHub release editing is required, but the user may want to review the auto-generated notes after the release publishes.
+* The user may want to review the published notes on GitHub.

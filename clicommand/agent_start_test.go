@@ -1,11 +1,16 @@
 package clicommand
 
 import (
+	"context"
 	"errors"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"runtime"
 	"slices"
+	"sync/atomic"
 	"testing"
 
 	"github.com/buildkite/agent/v4/agent"
@@ -341,6 +346,85 @@ func TestAgentShutdownHook(t *testing.T) {
 			t.Errorf("log.Messages diff (-got +want):\n%s", diff)
 		}
 	})
+}
+
+func TestAgentStartRegistrationRejected(t *testing.T) {
+	// Prevent token scrubbing from re-executing the test process.
+	t.Setenv("BUILDKITE_AGENT_TOKEN", "")
+
+	for _, tc := range []struct {
+		name     string
+		status   int
+		message  string
+		wantExit int
+	}{
+		{
+			name:     "job unacquirable",
+			status:   http.StatusUnprocessableEntity,
+			message:  "Job is not eligible for job acquisition registration",
+			wantExit: 27,
+		},
+		{
+			name:     "other validation failure",
+			status:   http.StatusUnprocessableEntity,
+			message:  "Job acquisition tokens require acquire-job mode",
+			wantExit: 1,
+		},
+		{
+			name:     "invalid token",
+			status:   http.StatusUnauthorized,
+			message:  "Invalid job acquisition token",
+			wantExit: 1,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var requests atomic.Int32
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				requests.Add(1)
+				if r.Method != http.MethodPost || r.URL.Path != "/register" {
+					t.Errorf("request = %s %s, want POST /register", r.Method, r.URL.Path)
+				}
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(tc.status)
+				_, _ = fmt.Fprintf(w, `{"message":%q}`, tc.message)
+			}))
+			defer server.Close()
+
+			configPath := filepath.Join(t.TempDir(), "buildkite-agent.cfg")
+			if err := os.WriteFile(configPath, nil, 0o600); err != nil {
+				t.Fatal(err)
+			}
+			// Clone the command: Run mutates it.
+			cmd := *AgentStartCommand
+			app := &cli.Command{
+				Name:           "buildkite-agent",
+				Commands:       []*cli.Command{&cmd},
+				ExitErrHandler: func(context.Context, *cli.Command, error) {},
+			}
+			err := app.Run(t.Context(), []string{
+				"buildkite-agent", "start",
+				"--config", configPath,
+				"--token", "test-token",
+				"--endpoint", server.URL,
+				"--build-path", t.TempDir(),
+				"--acquire-job", "job-123",
+			})
+			if err == nil {
+				t.Fatal("agent start succeeded, want registration failure")
+			}
+			gotExit := 1
+			var exitErr cli.ExitCoder
+			if errors.As(err, &exitErr) {
+				gotExit = exitErr.ExitCode()
+			}
+			if gotExit != tc.wantExit {
+				t.Errorf("exit code = %d, want %d (error: %v)", gotExit, tc.wantExit, err)
+			}
+			if got := requests.Load(); got != 1 {
+				t.Errorf("requests = %d, want 1 (no retries or job acquisition)", got)
+			}
+		})
+	}
 }
 
 func TestAgentStartJobLocked_ExitCode28(t *testing.T) {

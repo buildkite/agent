@@ -2,6 +2,7 @@ package cache
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"runtime"
 	"sync"
@@ -24,7 +25,16 @@ type Config struct {
 	Names []string
 	// Concurrency is the number of concurrent cache operations
 	Concurrency int
-	Force       bool
+	// FailOnError makes a save/restore failure fatal (non-zero exit). When false
+	// (the default) a failure is logged and skipped so a cache problem never
+	// fails the build — a cache is an optimization, not a build input.
+	FailOnError bool
+	// Force replaces the entire cache at the same save address, without
+	// merging files or bypassing registry access policies, even if an entry
+	// already exists there.
+	Force bool
+	// Redact strips secrets from the command output cache exec saves.
+	Redact Redactor
 }
 
 // cacheOps is the subset of *client used by saveWithClient and restoreWithClient.
@@ -46,7 +56,7 @@ func RunSave(ctx context.Context, l logger.Logger, apiClient *api.Client, cfg Co
 		l.Infof("No caches defined in the cache configuration file, nothing to save")
 		return nil
 	}
-	return saveWithClient(ctx, l, c, cacheIDs, cfg.Concurrency)
+	return saveWithClient(ctx, l, c, cacheIDs, cfg.Concurrency, cfg.FailOnError)
 }
 
 // RunRestore restores caches based on the provided configuration and logs results
@@ -60,7 +70,14 @@ func RunRestore(ctx context.Context, l logger.Logger, apiClient *api.Client, cfg
 		l.Infof("No caches defined in the cache configuration file, nothing to restore")
 		return nil
 	}
-	return restoreWithClient(ctx, l, c, cacheIDs, cfg.Concurrency)
+	c.onProgress = func(cacheID, stage, message string, _, _ int) {
+		l.WithFields(
+			logger.StringField("cache_id", cacheID),
+			logger.StringField("stage", stage),
+			logger.StringField("message", message),
+		).Debugf("Cache progress")
+	}
+	return restoreWithClient(ctx, l, c, cacheIDs, cfg.Concurrency, cfg.FailOnError)
 }
 
 // ListCaches returns all cache definitions configured on the client.
@@ -69,7 +86,7 @@ func (c *client) ListCaches() []configuration.Cache {
 }
 
 // restoreWithClient performs the restore operation for the given cache IDs using the provided client.
-func restoreWithClient(ctx context.Context, l logger.Logger, c cacheOps, cacheIDs []string, concurrency int) error {
+func restoreWithClient(ctx context.Context, l logger.Logger, c cacheOps, cacheIDs []string, concurrency int, failOnError bool) error {
 	if concurrency <= 0 {
 		concurrency = runtime.GOMAXPROCS(0)
 	}
@@ -90,15 +107,29 @@ func restoreWithClient(ctx context.Context, l logger.Logger, c cacheOps, cacheID
 						return
 					}
 
-					l.Infof("Restoring cache: %s", cacheID)
 					result, err := c.Restore(wctx, cacheID)
 					if err != nil {
-						cancel(fmt.Errorf("failed to restore cache %q: %w", cacheID, err))
-						return
+						// A restore that failed after cleaning/extracting target paths
+						// leaves a partial workspace, which is not equivalent to a cache
+						// miss, so it stays fatal even when fail-open.
+						if failOnError || errors.Is(err, errRestoreMutatedTargets) {
+							l.Warnf("%s", restoreReport(cacheID, result, err))
+							cancel(fmt.Errorf("failed to restore cache %q: %w", cacheID, err))
+							return
+						}
+						if wctx.Err() != nil {
+							// Batch is being torn down (context cancelled); stop quietly.
+							return
+						}
+						// Fail-open: a restore that failed before touching the target
+						// paths is equivalent to a cache miss, so warn and carry on
+						// rather than failing the build.
+						l.Warnf("%s; continuing without failing the build", restoreReport(cacheID, result, err))
+						continue
 					}
 
-					switch {
-					case result.CacheHit, result.FallbackUsed:
+					l.Infof("%s", restoreReport(cacheID, result, nil))
+					if result.CacheRestored {
 						l.WithFields(
 							logger.StringField("cache_id", cacheID),
 							logger.StringField("cache_key", result.Key),
@@ -110,12 +141,7 @@ func restoreWithClient(ctx context.Context, l logger.Logger, c cacheOps, cacheID
 							logger.StringField("transfer_speed", fmt.Sprintf("%.2fMB/s", result.Transfer.TransferSpeed)),
 							logger.IntField("part_count", result.Transfer.PartCount),
 							logger.IntField("concurrency", result.Transfer.Concurrency),
-						).Infof("Cache restored")
-					default:
-						l.WithFields(
-							logger.StringField("cache_id", cacheID),
-							logger.StringField("cache_key", result.Key),
-						).Infof("Cache not restored (not found)")
+						).Debugf("Cache restored")
 					}
 
 				case <-wctx.Done():
@@ -145,7 +171,7 @@ sendLoop:
 }
 
 // saveWithClient performs the save operation for the given cache IDs using the provided client.
-func saveWithClient(ctx context.Context, l logger.Logger, c cacheOps, cacheIDs []string, concurrency int) error {
+func saveWithClient(ctx context.Context, l logger.Logger, c cacheOps, cacheIDs []string, concurrency int, failOnError bool) error {
 	if concurrency <= 0 {
 		concurrency = runtime.GOMAXPROCS(0)
 	}
@@ -169,11 +195,31 @@ func saveWithClient(ctx context.Context, l logger.Logger, c cacheOps, cacheIDs [
 					l.Infof("Saving cache: %s", cacheID)
 					result, err := c.Save(wctx, cacheID)
 					if err != nil {
-						cancel(fmt.Errorf("failed to save cache %q: %w", cacheID, err))
-						return
+						if failOnError {
+							cancel(fmt.Errorf("failed to save cache %q: %w", cacheID, err))
+							return
+						}
+						if wctx.Err() != nil {
+							// Batch is being torn down (context cancelled); stop quietly.
+							return
+						}
+						// Fail-open: the build's work is already done, so a failed save
+						// only costs a future cache hit. Warn and carry on rather than
+						// failing the build.
+						l.WithFields(
+							logger.StringField("cache_id", cacheID),
+							logger.StringField("error", err.Error()),
+						).Warnf("Failed to save cache; continuing without failing the build")
+						continue
 					}
 
 					switch {
+					case result.UploadSkipped:
+						l.WithFields(
+							logger.StringField("cache_id", cacheID),
+							logger.StringField("cache_key", result.Key),
+							logger.StringField("archive_size", humanize.Bytes(uint64(result.Archive.Size))),
+						).Infof("Cache saved (archive already in store, upload skipped)")
 					case result.CacheEntryCreated:
 						l.WithFields(
 							logger.StringField("cache_id", cacheID),

@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"time"
 )
 
 // Server hosts a HTTP server on a Unix domain socket.
@@ -39,7 +40,10 @@ func NewServer(socketPath string, handler http.Handler) (*Server, error) {
 
 	return &Server{
 		path: socketPath,
-		svr:  &http.Server{Handler: handler},
+		svr: &http.Server{
+			Handler:     handler,
+			IdleTimeout: 30 * time.Second,
+		},
 	}, nil
 }
 

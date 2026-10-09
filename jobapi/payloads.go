@@ -2,6 +2,7 @@ package jobapi
 
 import (
 	"sort"
+	"time"
 
 	"github.com/buildkite/agent/v4/internal/socket"
 )
@@ -69,6 +70,16 @@ type RedactionCreateResponse struct {
 	Redacted string `json:"redacted"`
 }
 
+// RedactRequest is the request body for the POST /redact endpoint
+type RedactRequest struct {
+	Output []byte `json:"output"`
+}
+
+// RedactResponse is the response body for the POST /redact endpoint
+type RedactResponse struct {
+	Redacted []byte `json:"redacted"`
+}
+
 // PromiseFailureRequest is the request body for the POST /promise-failure endpoint
 type PromiseFailureRequest struct {
 	ExitStatus int    `json:"exit_status"`
@@ -99,4 +110,14 @@ type PromiseFailureResponse struct {
 
 	// Error is the Buildkite API declaration error, if Accepted is false.
 	Error string `json:"error,omitempty"`
+}
+
+// CapturedError is the request and response body for POST /errors. Timestamp
+// is optional; the parent assigns it and a delivery idempotency key.
+type CapturedError struct {
+	Code           string         `json:"code"`
+	Message        string         `json:"message"`
+	Timestamp      *time.Time     `json:"timestamp,omitempty"`
+	IdempotencyKey string         `json:"idempotency_key,omitempty"`
+	Context        map[string]any `json:"context,omitempty"`
 }

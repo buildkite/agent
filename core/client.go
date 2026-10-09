@@ -27,8 +27,8 @@ var (
 	osVersionDump        string
 )
 
-// ErrJobAcquisitionRejected is a sentinel error used when acquisition fails because
-// the job is already acquired/started/finished/cancelled.
+// ErrJobAcquisitionRejected is a sentinel error used when acquisition or
+// registration with a job acquisition token fails because the job is unacquirable.
 var ErrJobAcquisitionRejected = errors.New("job acquisition rejected")
 
 // ErrJobLocked is a sentinel error used when acquisition fails because
@@ -269,6 +269,13 @@ func (c *Client) Register(ctx context.Context, req api.AgentRegisterRequest) (*a
 		if err != nil {
 			if !api.BreakOnNonRetryable(r, resp, err) {
 				c.Logger.Warnf("%s (%s)", err, r)
+			}
+			// JAT registration checks job eligibility before acquisition. Other
+			// registration validation errors also use 422, so match the message.
+			var apiErr *api.ErrorResponse
+			if resp != nil && resp.StatusCode == http.StatusUnprocessableEntity &&
+				errors.As(err, &apiErr) && apiErr.Message == "Job is not eligible for job acquisition registration" {
+				return registered, fmt.Errorf("%w: %w", ErrJobAcquisitionRejected, err)
 			}
 			return registered, err
 		}

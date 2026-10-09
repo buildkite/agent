@@ -50,6 +50,7 @@ var BuildkiteAgentCommands = []*cli.Command{
 		Commands: []*cli.Command{
 			JobUpdateCommand,
 			JobPromiseFailureCommand,
+			JobCaptureErrorCommand,
 		},
 	},
 	{
@@ -60,6 +61,7 @@ var BuildkiteAgentCommands = []*cli.Command{
 		Commands: []*cli.Command{
 			CacheSaveCommand,
 			CacheRestoreCommand,
+			CacheExecCommand,
 		},
 	},
 	{

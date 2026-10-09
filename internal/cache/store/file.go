@@ -395,6 +395,22 @@ func (b *LocalFileBlob) Download(ctx context.Context, key, destPath string) (*Tr
 	}, nil
 }
 
+// Stat returns the size of the cached data file for key.
+func (b *LocalFileBlob) Stat(_ context.Context, key string) (int64, error) {
+	dataPath, _, err := b.keyToPaths(key)
+	if err != nil {
+		return 0, err
+	}
+	fi, err := os.Stat(dataPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return 0, fmt.Errorf("%w: local key %s: %w", ErrBlobNotFound, key, err)
+		}
+		return 0, fmt.Errorf("failed to stat cached file: %w", err)
+	}
+	return fi.Size(), nil
+}
+
 func (b *LocalFileBlob) keyToPaths(key string) (dataPath, metaPath string, err error) {
 	if err := validateFileKey(key); err != nil {
 		return "", "", err

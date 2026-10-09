@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"runtime"
 	"slices"
 	"time"
@@ -154,10 +155,14 @@ func (e *Executor) checkout(ctx context.Context) error {
 			}
 		}
 
-		// Also fail fast on an unusable sparse checkout mode. resolveSparseCheckout
-		// rejects it again during the checkout, but it can arrive from job env, and
-		// retrying a typo for the whole attempt budget only delays the failure.
+		// Also fail fast on an unusable sparse checkout mode, or base branch fetch
+		// mode. fetchSource and resolveSparseCheckout reject either again during the
+		// checkout, but they can arrive from job env, and retrying a typo for the
+		// whole attempt budget only delays the failure.
 		if _, err := ParseSparseCheckoutMode(e.GitSparseCheckoutMode); err != nil {
+			return err
+		}
+		if _, err := parseGitFetchBaseBranchMode(e.GitFetchBaseBranch); err != nil {
 			return err
 		}
 
@@ -180,9 +185,12 @@ func (e *Executor) checkout(ctx context.Context) error {
 			var errGit *gitError
 
 			switch {
-			case errors.Is(err, ErrCommitVerificationFailed):
-				// A commit that is provably not on its branch won't become valid by
-				// retrying, so fail fast instead of re-cloning through the whole backoff.
+			case errors.Is(err, ErrCommitVerificationFailed),
+				errors.Is(err, errNoBaseBranchToFetch),
+				errors.Is(err, errBaseBranchFetchWritesNoRef):
+				// A commit that is provably not on its branch, a job that names no base
+				// branch to fetch, and fetch flags that write no ref are all settled
+				// answers, so fail fast instead of re-cloning through the whole backoff.
 				e.shell.Warningf("Checkout failed! %s", err)
 				r.Break()
 
@@ -439,6 +447,7 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context, previousAttempts in
 
 	addBloblessFilter := sparse.active() &&
 		e.shell.Env.GetString("BUILDKITE_KUBERNETES_EXEC", "") != "true" &&
+		!e.usesOnHostReferenceMirror(mirrorDir) &&
 		!userSuppliedCloneFilter &&
 		!hasPartialFilterFlags(gitFetchFlags)
 	if err := e.fetchSource(ctx, addBloblessFilter, &attempt); err != nil {
@@ -530,6 +539,13 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context, previousAttempts in
 			Retry:        true,
 			FetchInclude: sparse.lfsInclude(), // cone dirs; nil when inactive or no-cone
 		}
+		if mirrorDir != "" && e.mirrorLFSCacheEnabled() {
+			// Reuse LFS objects prefetched into the persistent mirror (see
+			// checkout_mirror_lfs.go). Point at the mirror itself rather than
+			// mirrorDir: snapshots and dissociated clones contain Git objects
+			// only, while the LFS objects live in the persistent mirror.
+			lfsArgs.ReferenceDir = filepath.Join(e.GitMirrorsPath, dirForRepository(e.Repository))
+		}
 		if sparse.noCone() {
 			// FetchInclude is empty on purpose (see table above). Scope checkout
 			// to LFS paths that are still in the sparse working tree.
@@ -620,18 +636,42 @@ func (e *Executor) updateGitSubmodules(ctx context.Context) (retErr error) {
 	mirrorSubmodules := e.GitMirrorsPath != ""
 	if mirrorSubmodules {
 		for _, repository := range submoduleRepos {
-			// getOrUpdateMirrorDir is shared with the main repo's mirror update, so
-			// this produces the same sub-tree of spans; git.repo distinguishes
-			// submodules since the span names repeat.
-			subMirrorSpan, subMirrorCtx := e.traceOpSpan(ctx, "git.mirror.update")
-			subMirrorSpan.SetAttributes(attribute.String("git.repo", redact.URLCredentials(repository)))
+			isRelativeSubmodule := isRelativeSubmoduleURL(repository)
+			mirrorRepository := repository
+			if isRelativeSubmodule {
+				resolvedRepository, err := resolveGitSubmoduleURL(e.Repository, repository)
+				if err != nil {
+					e.shell.Warningf("Failed to resolve relative submodule URL %q against %q for git mirror: %v", repository, redact.URLCredentials(e.Repository), err)
+					mirrorRepository = ""
+				} else {
+					mirrorRepository = resolvedRepository
+				}
+			}
 
-			mirrorDir, err := e.getOrUpdateMirrorDir(subMirrorCtx, repository, nil)
+			var mirrorDir string
+			if mirrorRepository != "" {
+				// getOrUpdateMirrorDir is shared with the main repo's mirror update, so
+				// this produces the same sub-tree of spans; git.repo distinguishes
+				// submodules since the span names repeat.
+				subMirrorSpan, subMirrorCtx := e.traceOpSpan(ctx, "git.mirror.update")
+				subMirrorSpan.SetAttributes(attribute.String("git.repo", redact.URLCredentials(mirrorRepository)))
+				if mirrorRepository != repository {
+					subMirrorSpan.SetAttributes(attribute.String("git.raw_repo", redact.URLCredentials(repository)))
+					e.shell.Commentf("Resolved relative submodule URL %q to %q for git mirror", repository, redact.URLCredentials(mirrorRepository))
+				}
 
-			tracetools.FinishWithError(subMirrorSpan, err)
+				var err error
+				mirrorDir, err = e.getOrUpdateMirrorDir(subMirrorCtx, mirrorRepository, nil)
 
-			if err != nil {
-				return fmt.Errorf("getting/updating mirror dir for submodules: %w", err)
+				tracetools.FinishWithError(subMirrorSpan, err)
+
+				if err != nil {
+					if !isRelativeSubmodule {
+						return fmt.Errorf("getting/updating mirror dir for submodules: %w", err)
+					}
+					e.shell.Warningf("Failed to update git mirror for resolved relative submodule URL %q (%q): %v", repository, redact.URLCredentials(mirrorRepository), err)
+					mirrorDir = ""
+				}
 			}
 
 			// Switch back to the checkout dir, doing other operations from GitMirrorsPath will fail.

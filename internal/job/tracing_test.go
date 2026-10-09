@@ -45,6 +45,9 @@ func TestOTelResourceAttributesFromEnv(t *testing.T) {
 		"BUILDKITE_SOURCE":                "webhook",
 		"BUILDKITE_RETRY_COUNT":           "1",
 		"BUILDKITE_LABEL":                 ":go: test",
+		"BUILDKITE_COMMIT":                "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
+		"BUILDKITE_PULL_REQUEST":          "1234",
+		"BUILDKITE_BUILD_AUTHOR":          "Ada Lovelace",
 	})
 
 	attrs := OTelResourceAttributesFromEnv(environ)
@@ -63,6 +66,9 @@ func TestOTelResourceAttributesFromEnv(t *testing.T) {
 		"buildkite.job_id":       "job-123",
 		"buildkite.job_label":    ":go: test",
 		"buildkite.build_number": "42",
+		"buildkite.commit":       "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
+		"buildkite.pull_request": "1234",
+		"buildkite.build_author": "Ada Lovelace",
 	}
 	for key, want := range wantStrings {
 		if got := byKey[key].AsString(); got != want {
@@ -72,6 +78,35 @@ func TestOTelResourceAttributesFromEnv(t *testing.T) {
 
 	if got, want := byKey["buildkite.retry"].AsInt64(), int64(1); got != want {
 		t.Errorf("attribute buildkite.retry = %d, want %d", got, want)
+	}
+}
+
+func TestGenericTracingExtrasPullRequest(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name  string
+		value string
+		want  string
+	}{
+		{name: "pull request build", value: "1234", want: "1234"},
+		{name: "non pull request build", value: "false", want: "n/a"},
+		{name: "empty value", value: "", want: "n/a"},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			environ := env.FromMap(map[string]string{
+				"BUILDKITE_PULL_REQUEST": test.value,
+			})
+			extras := genericTracingExtras(jobTracingValues{}, environ)
+
+			if got := extras["buildkite.pull_request"]; got != test.want {
+				t.Errorf("buildkite.pull_request = %v, want %v", got, test.want)
+			}
+		})
 	}
 }
 

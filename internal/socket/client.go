@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"runtime"
+	"time"
 )
 
 // Error response is the response body for any errors that occur
@@ -68,10 +69,17 @@ func NewClient(ctx context.Context, path, token string) (*Client, error) {
 				DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
 					return dialer.DialContext(ctx, "unix", path)
 				},
+				IdleConnTimeout: 30 * time.Second,
 			},
 		},
 		token: token,
 	}, nil
+}
+
+// Close closes any idle connections held by the client. The client can still
+// be used afterwards, but new requests will open new connections.
+func (c *Client) Close() {
+	c.cli.CloseIdleConnections()
 }
 
 // Do implements the common bits of an API call. req is serialised to JSON and

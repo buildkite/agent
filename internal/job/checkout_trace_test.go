@@ -82,6 +82,24 @@ func TestTraceGitCheckout_Mirrors(t *testing.T) {
 	assertSpanChildOf(t, spans, "git.dissociate", "repo-checkout")
 }
 
+func TestTraceGitCheckout_RedactsUsernameToken(t *testing.T) {
+	e, _ := newTracedExecutor(t, "trace-credentials")
+	// Synthetic userinfo on the local test server; no real credential is used.
+	want := strings.Replace(e.Repository, "://", "://xxxxx@", 1)
+	e.Repository = strings.Replace(e.Repository, "://", "://test-secret@", 1)
+	e.GitMirrorsPath = tracingTempDir(t, "git-mirrors-")
+	e.GitMirrorsLockTimeout = 30
+	recorder := installGlobalSpanRecorder(t)
+
+	if err := e.defaultCheckoutPhase(t.Context(), 0); err != nil {
+		t.Fatalf("defaultCheckoutPhase error = %v, want nil", err)
+	}
+
+	spans := recorder.Ended()
+	assertSpanAttr(t, findOnlySpan(t, spans, "repo-checkout"), "checkout.repo_name", want)
+	assertSpanAttr(t, findOnlySpan(t, spans, "git.mirror.update"), "git.repo", want)
+}
+
 // TestTraceGitCheckout_Submodules asserts the git.submodules and
 // git.submodule.update spans are emitted for a repo with a submodule.
 func TestTraceGitCheckout_Submodules(t *testing.T) {

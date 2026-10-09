@@ -13,17 +13,22 @@ steps:
             - organization_id
             - pipeline_slug
             - build_branch
-      - ecr#v2.7.0:
+      - ecr#v2.12.0:
           login: true
-          account-ids: "032379705303"
-      - docker#v5.8.0:
-          environment:
-            - "AWS_ACCESS_KEY_ID"
-            - "AWS_SECRET_ACCESS_KEY"
-            - "AWS_SESSION_TOKEN"
-          image: "032379705303.dkr.ecr.us-east-1.amazonaws.com/deploytools:2022.07"
-          propagate-environment: true
+          account-ids: "445615400570"
+      # RELEASE_TOOLS_IMAGE is built by .buildkite/steps/build-release-image.sh
+      # and passed in by the trigger in .buildkite/steps/upload-release-steps.sh
+      - docker#v5.14.0: &release_tools
+          image: "${RELEASE_TOOLS_IMAGE?}"
           mount-buildkite-agent: true
+          propagate-environment: true
+          propagate-aws-auth-tokens: true
+          # publish-debian-package.sh refuses to import signing keys unless this is tmpfs
+          tmpfs:
+            - "/root/.gnupg:mode=0700"
+          # Scratch space for the yum repo in publish-rpm-package.sh
+          volumes:
+            - "/yum.buildkite.com"
 
   - name: ":octocat: :rocket: Create Github Release (if necessary)"
     command: ".buildkite/steps/github-release.sh"
@@ -37,17 +42,10 @@ steps:
             - organization_id
             - pipeline_slug
             - build_branch
-      - ecr#v2.7.0:
+      - ecr#v2.12.0:
           login: true
-          account-ids: "032379705303"
-      - docker#v5.8.0:
-          environment:
-            - "AWS_ACCESS_KEY_ID"
-            - "AWS_SECRET_ACCESS_KEY"
-            - "AWS_SESSION_TOKEN"
-          image: "032379705303.dkr.ecr.us-east-1.amazonaws.com/deploytools:2022.07"
-          propagate-environment: true
-          mount-buildkite-agent: true
+          account-ids: "445615400570"
+      - docker#v5.14.0: *release_tools
 
   - name: ":redhat: Publish Oldstable RPM Package"
     command: ".buildkite/steps/publish-rpm-package.sh"
@@ -62,17 +60,10 @@ steps:
             - organization_id
             - pipeline_slug
             - build_branch
-      - docker#v5.8.0:
-          environment:
-            - "AWS_ACCESS_KEY_ID"
-            - "AWS_SECRET_ACCESS_KEY"
-            - "AWS_SESSION_TOKEN"
-          image: "buildkite/agent:3.55.0-ubuntu"
-          entrypoint: bash
-          propagate-environment: true
-          mount-buildkite-agent: true
-          volumes:
-            - "/yum.buildkite.com"
+      - ecr#v2.12.0:
+          login: true
+          account-ids: "445615400570"
+      - docker#v5.14.0: *release_tools
     retry:
       automatic:
         - exit_status: 1
@@ -91,19 +82,10 @@ steps:
             - organization_id
             - pipeline_slug
             - build_branch
-      - ecr#v2.7.0:
+      - ecr#v2.12.0:
           login: true
-          account-ids: "032379705303"
-      - docker#v5.8.0:
-          environment:
-            - "AWS_ACCESS_KEY_ID"
-            - "AWS_SECRET_ACCESS_KEY"
-            - "AWS_SESSION_TOKEN"
-          image: "032379705303.dkr.ecr.us-east-1.amazonaws.com/deploytools:2022.07"
-          propagate-environment: true
-          mount-buildkite-agent: true
-          tmpfs:
-            - "/root/.gnupg"
+          account-ids: "445615400570"
+      - docker#v5.14.0: *release_tools
 
   - group: ":docker: Publish Oldstable Docker Images"
     steps:
@@ -148,14 +130,7 @@ steps:
             - organization_id
             - pipeline_slug
             - build_branch
-      - ecr#v2.7.0:
+      - ecr#v2.12.0:
           login: true
-          account-ids: "032379705303"
-      - docker#v5.8.0:
-          environment:
-            - "AWS_ACCESS_KEY_ID"
-            - "AWS_SECRET_ACCESS_KEY"
-            - "AWS_SESSION_TOKEN"
-          image: "032379705303.dkr.ecr.us-east-1.amazonaws.com/deploytools:2022.07"
-          propagate-environment: true
-          mount-buildkite-agent: true
+          account-ids: "445615400570"
+      - docker#v5.14.0: *release_tools

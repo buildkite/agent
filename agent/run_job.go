@@ -130,6 +130,13 @@ func (r *JobRunner) Run(ctx context.Context, ignoreAgentInDispatches *bool) (err
 
 	job := r.conf.Job
 
+	if len(job.Warnings) > 0 {
+		_, _ = fmt.Fprintln(r.jobLogs, "+++ ⚠️ Warnings from Buildkite")
+		for _, w := range job.Warnings {
+			_, _ = fmt.Fprintln(r.jobLogs, w.Message)
+		}
+	}
+
 	if r.conf.JWKS == nil && job.Step.Signature != nil {
 		r.verificationFailureLogs(
 			VerificationBehaviourBlock,
@@ -430,6 +437,12 @@ func (r *JobRunner) cleanup(ctx context.Context, wg *sync.WaitGroup, exit core.P
 		}
 		r.agentLogger.Debugf("[JobRunner] Deleted env file: %s", f.Name())
 	}
+
+	// Remove the job log tmpfile, if any. This is safe only now: the process
+	// has finished (including the PTY output drain that runs after Done()
+	// closes), runJob has written its final notices, and the helper routines
+	// have been waited for. Nothing else writes to the job logs after this.
+	r.removeJobLogTmpfile()
 
 	// Remove the job timeout marker file if it was created. It is fine if
 	// the file does not exist — Cancel only writes it on a job-level timeout.

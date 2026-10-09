@@ -38,6 +38,16 @@ func WithPromiseFailureDeclarer(d PromiseFailureDeclarer) ServerOpts {
 	}
 }
 
+// WithCapturedErrorReporter configures forwarding of normalized errors.
+func WithCapturedErrorReporter(r CapturedErrorReporter) ServerOpts {
+	return func(s *Server) {
+		s.reportCapturedError = r
+	}
+}
+
+// CapturedErrorReporter receives a normalized error.
+type CapturedErrorReporter func(ctx context.Context, capturedError *CapturedError) error
+
 // PromiseFailureDeclarer declares a promised failure for the current job to the
 // Buildkite API. It returns the status code of the most recent API response (0
 // if none was received, e.g. a network error after exhausting retries) and an
@@ -63,7 +73,8 @@ type Server struct {
 	pendingWorkdir string
 
 	// promiseFailures coalesces concurrent and repeated promise-failure calls.
-	promiseFailures *promiseFailureCoordinator
+	promiseFailures     *promiseFailureCoordinator
+	reportCapturedError CapturedErrorReporter
 
 	token   string
 	sockSvr *socket.Server

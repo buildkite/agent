@@ -27,6 +27,16 @@ and their associated cache key. An entry is restored when its target_paths
 default every key part is mandatory; mark a part with fallback_limit: true to make
 every part after it optional.
 
+Restore replaces the contents of target_paths; it does not merge with existing
+files. Use job-private target directories. Sharing a remote cache entry between
+jobs is fine, but restoring into a local directory that another job or process
+is using can delete its files. If a local target must be shared, coordinate
+exclusive access for the entire time the cache is in use, not only during restore.
+
+Cleanup is not transactional. If cleanup fails, extraction for that cache does
+not start, but target paths may already have been modified. These failures remain
+fatal even when --cache-fail-on-error is false.
+
 Note: This feature is currently in development and subject to change. It is not
 yet available to all customers.
 
@@ -69,10 +79,12 @@ but making checksum optional:
 
 Cache Restoration Results:
 
-The command will report one of three outcomes for each cache:
-  - Cache hit: Exact key match found and restored
-  - Fallback used: No exact match, but a fallback key was found and restored
-  - Cache miss: No matching cache found`
+The command groups restore results by cache, showing each attempted key and scope
+in registry search order, including misses, policy denials and the selected hit.
+Denied attempts include the matched rule name when available. Successful restores
+identify the selected key and scope and whether the match was exact or a fallback.
+An incomplete search is distinguished from a miss. Older registries may not
+provide search diagnostics.`
 
 type CacheRestoreConfig struct {
 	GlobalConfig
@@ -109,6 +121,7 @@ var CacheRestoreCommand = &cli.Command{
 			BucketURL:       cfg.BucketURL,
 			CacheConfigFile: cacheConfigFile,
 			Names:           cfg.Names,
+			FailOnError:     cfg.FailOnError,
 		}
 
 		// Perform cache restore (logging happens inside)

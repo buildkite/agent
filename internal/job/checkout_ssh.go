@@ -10,7 +10,6 @@ import (
 
 	"github.com/buildkite/agent/v4/internal/self"
 	"github.com/buildkite/agent/v4/internal/shell"
-	"github.com/buildkite/shellwords"
 )
 
 // configureGitCredentialHelper sets up the agent to use a git credential helper
@@ -120,7 +119,12 @@ func (e *Executor) prepareGitSSHKey() (sshKeyPath string, cleanup func() error, 
 }
 
 func gitSSHCommandForKeyFile(path, previous string) string {
-	keyOptions := fmt.Sprintf("-i %s -o IdentitiesOnly=yes", shellwords.Quote(path))
+	// Git executes GIT_SSH_COMMAND through its bundled POSIX-style shell
+	// (MSYS2 sh.exe on Windows too), not cmd.exe. Use POSIX single-quote
+	// escaping here: shellwords.Quote picks cmd.exe-style quoting on Windows,
+	// which does not escape backslashes and corrupts Windows key file paths.
+	quotedPath := "'" + strings.ReplaceAll(path, "'", `'\''`) + "'"
+	keyOptions := fmt.Sprintf("-i %s -o IdentitiesOnly=yes", quotedPath)
 	if previous == "" {
 		return "ssh " + keyOptions
 	}

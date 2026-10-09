@@ -35,6 +35,11 @@ func TestParseGittableURL(t *testing.T) {
 			wantHost:   "github.com",
 		},
 		{
+			url:        "git@gerrit.example.com:/var/git/project.git",
+			wantParsed: "ssh://git@gerrit.example.com/var/git/project.git",
+			wantHost:   "gerrit.example.com",
+		},
+		{
 			url:        "git@github.com-alias1:buildkite/agent.git",
 			wantParsed: "ssh://git@github.com-alias1/buildkite/agent.git",
 			wantHost:   "github.com-alias1",
@@ -64,6 +69,234 @@ func TestParseGittableURL(t *testing.T) {
 			}
 			if got, want := u.Host, test.wantHost; got != want {
 				t.Errorf("parseGittableURL(%q) u.Host = %q, want %q", test.url, got, want)
+			}
+		})
+	}
+}
+
+func TestResolveGitSubmoduleURL(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name         string
+		superproject string
+		submodule    string
+		want         string
+	}{
+		{
+			name:         "absolute https submodule is unchanged",
+			superproject: "https://gerrit.googlesource.com/gerrit.git",
+			submodule:    "https://gerrit.googlesource.com/java-prettify",
+			want:         "https://gerrit.googlesource.com/java-prettify",
+		},
+		{
+			name:         "absolute local submodule is unchanged",
+			superproject: "/var/git/gerrit",
+			submodule:    "/var/git/java-prettify",
+			want:         "/var/git/java-prettify",
+		},
+		{
+			name:         "relative https sibling",
+			superproject: "https://gerrit.googlesource.com/gerrit.git",
+			submodule:    "../java-prettify",
+			want:         "https://gerrit.googlesource.com/java-prettify",
+		},
+		{
+			name:         "relative https sibling preserves escaped slash",
+			superproject: "https://host/team%2Frepos/main.git",
+			submodule:    "../child",
+			want:         "https://host/team%2Frepos/child",
+		},
+		{
+			name:         "relative https child",
+			superproject: "https://gerrit.googlesource.com/gerrit.git",
+			submodule:    "./modules/java-prettify",
+			want:         "https://gerrit.googlesource.com/gerrit.git/modules/java-prettify",
+		},
+		{
+			name:         "relative ssh sibling",
+			superproject: "ssh://git@gerrit.example.com:29418/gerrit.git",
+			submodule:    "../java-prettify",
+			want:         "ssh://git@gerrit.example.com:29418/java-prettify",
+		},
+		{
+			name:         "relative scp-like sibling",
+			superproject: "git@github.com:buildkite/agent.git",
+			submodule:    "../plugins.git",
+			want:         "git@github.com:buildkite/plugins.git",
+		},
+		{
+			name:         "relative scp-like absolute path sibling",
+			superproject: "git@gerrit.example.com:/var/git/gerrit.git",
+			submodule:    "../java-prettify.git",
+			want:         "git@gerrit.example.com:/var/git/java-prettify.git",
+		},
+		{
+			name:         "relative absolute local sibling",
+			superproject: "/var/git/gerrit",
+			submodule:    "../java-prettify",
+			want:         "/var/git/java-prettify",
+		},
+		{
+			name:         "relative local child",
+			superproject: "/var/git/gerrit",
+			submodule:    "./modules/java-prettify",
+			want:         "/var/git/gerrit/modules/java-prettify",
+		},
+		{
+			name:         "relative local path is cleaned",
+			superproject: "/var/git/projects/gerrit",
+			submodule:    "../../plugins/replication",
+			want:         "/var/git/plugins/replication",
+		},
+		{
+			name:         "bare repository name is unchanged",
+			superproject: "https://gerrit.googlesource.com/gerrit.git",
+			submodule:    "java-prettify",
+			want:         "java-prettify",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got, err := resolveGitSubmoduleURL(tt.superproject, tt.submodule)
+			if err != nil {
+				t.Fatalf("resolveGitSubmoduleURL(%q, %q) error = %v", tt.superproject, tt.submodule, err)
+			}
+			if got != tt.want {
+				t.Errorf("resolveGitSubmoduleURL(%q, %q) = %q, want %q", tt.superproject, tt.submodule, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestResolveGitSubmoduleURLDoesNotParseURL(t *testing.T) {
+	t.Parallel()
+
+	got, err := resolveGitSubmoduleURL("https://example.com/%zz", "./module.git")
+	if err != nil {
+		t.Fatalf(`resolveGitSubmoduleURL("https://example.com/%%zz", "./module.git") error = %v`, err)
+	}
+	if want := "https://example.com/%zz/module.git"; got != want {
+		t.Errorf(`resolveGitSubmoduleURL("https://example.com/%%zz", "./module.git") = %q, want %q`, got, want)
+	}
+}
+
+func TestGitRelativeURLInterleavesDotSlashAndDotDotSlash(t *testing.T) {
+	t.Parallel()
+
+	got, err := gitRelativeURL("https://host/team/main.git", "./../child", "")
+	if err != nil {
+		t.Fatalf("gitRelativeURL() error = %v", err)
+	}
+	if want := "https://host/team/child"; got != want {
+		t.Errorf("gitRelativeURL() = %q, want %q", got, want)
+	}
+}
+
+// These cases match Git core's t/t0060-path-utils.sh.
+func TestGitRelativeURLMatchesGitCorePathUtilsCases(t *testing.T) {
+	t.Parallel()
+
+	pwd := "/tmp/git-t0060"
+	tests := []struct {
+		upPath      string
+		remoteURL   string
+		relativeURL string
+		want        string
+	}{
+		{upPath: "../", remoteURL: "../foo", relativeURL: "../submodule", want: "../../submodule"},
+		{upPath: "../", remoteURL: "../foo/bar", relativeURL: "../submodule", want: "../../foo/submodule"},
+		{upPath: "../", remoteURL: "../foo/submodule", relativeURL: "../submodule", want: "../../foo/submodule"},
+		{upPath: "../", remoteURL: "./foo", relativeURL: "../submodule", want: "../submodule"},
+		{upPath: "../", remoteURL: "./foo/bar", relativeURL: "../submodule", want: "../foo/submodule"},
+		{upPath: "../../../", remoteURL: "../foo/bar", relativeURL: "../sub/a/b/c", want: "../../../../foo/sub/a/b/c"},
+		{upPath: "../", remoteURL: pwd + "/addtest", relativeURL: "../repo", want: pwd + "/repo"},
+		{upPath: "../", remoteURL: "foo/bar", relativeURL: "../submodule", want: "../foo/submodule"},
+		{upPath: "../", remoteURL: "foo", relativeURL: "../submodule", want: "../submodule"},
+		{remoteURL: "../foo/bar", relativeURL: "../sub/a/b/c", want: "../foo/sub/a/b/c"},
+		{remoteURL: "../foo/bar", relativeURL: "../sub/a/b/c/", want: "../foo/sub/a/b/c"},
+		{remoteURL: "../foo/bar/", relativeURL: "../sub/a/b/c", want: "../foo/sub/a/b/c"},
+		{remoteURL: "../foo/bar", relativeURL: "../submodule", want: "../foo/submodule"},
+		{remoteURL: "../foo/submodule", relativeURL: "../submodule", want: "../foo/submodule"},
+		{remoteURL: "../foo", relativeURL: "../submodule", want: "../submodule"},
+		{remoteURL: "./foo/bar", relativeURL: "../submodule", want: "foo/submodule"},
+		{remoteURL: "./foo", relativeURL: "../submodule", want: "submodule"},
+		{remoteURL: "//somewhere else/repo", relativeURL: "../subrepo", want: "//somewhere else/subrepo"},
+		{remoteURL: "//somewhere else/repo", relativeURL: "../../subrepo", want: "//subrepo"},
+		{remoteURL: "//somewhere else/repo", relativeURL: "../../../subrepo", want: "/subrepo"},
+		{remoteURL: "//somewhere else/repo", relativeURL: "../../../../subrepo", want: "subrepo"},
+		{remoteURL: pwd + "/subsuper_update_r", relativeURL: "../subsubsuper_update_r", want: pwd + "/subsubsuper_update_r"},
+		{remoteURL: pwd + "/super_update_r2", relativeURL: "../subsuper_update_r", want: pwd + "/subsuper_update_r"},
+		{remoteURL: pwd + "/.", relativeURL: "../.", want: pwd + "/."},
+		{remoteURL: pwd, relativeURL: "./.", want: pwd + "/."},
+		{remoteURL: pwd + "/addtest", relativeURL: "../repo", want: pwd + "/repo"},
+		{remoteURL: pwd, relativeURL: "./å äö", want: pwd + "/å äö"},
+		{remoteURL: pwd + "/.", relativeURL: "../submodule", want: pwd + "/submodule"},
+		{remoteURL: pwd + "/submodule", relativeURL: "../submodule", want: pwd + "/submodule"},
+		{remoteURL: pwd + "/home2/../remote", relativeURL: "../bundle1", want: pwd + "/home2/../bundle1"},
+		{remoteURL: pwd + "/submodule_update_repo", relativeURL: "./.", want: pwd + "/submodule_update_repo/."},
+		{remoteURL: "file:///tmp/repo", relativeURL: "../subrepo", want: "file:///tmp/subrepo"},
+		{remoteURL: "foo/bar", relativeURL: "../submodule", want: "foo/submodule"},
+		{remoteURL: "foo", relativeURL: "../submodule", want: "submodule"},
+		{remoteURL: "helper:://hostname/repo", relativeURL: "../subrepo", want: "helper:://hostname/subrepo"},
+		{remoteURL: "helper:://hostname/repo", relativeURL: "../../subrepo", want: "helper:://subrepo"},
+		{remoteURL: "helper:://hostname/repo", relativeURL: "../../../subrepo", want: "helper::/subrepo"},
+		{remoteURL: "helper:://hostname/repo", relativeURL: "../../../../subrepo", want: "helper::subrepo"},
+		{remoteURL: "helper:://hostname/repo", relativeURL: "../../../../../subrepo", want: "helper:subrepo"},
+		{remoteURL: "helper:://hostname/repo", relativeURL: "../../../../../../subrepo", want: ".:subrepo"},
+		{remoteURL: "ssh://hostname/repo", relativeURL: "../subrepo", want: "ssh://hostname/subrepo"},
+		{remoteURL: "ssh://hostname/repo", relativeURL: "../../subrepo", want: "ssh://subrepo"},
+		{remoteURL: "ssh://hostname/repo", relativeURL: "../../../subrepo", want: "ssh:/subrepo"},
+		{remoteURL: "ssh://hostname/repo", relativeURL: "../../../../subrepo", want: "ssh:subrepo"},
+		{remoteURL: "ssh://hostname/repo", relativeURL: "../../../../../subrepo", want: ".:subrepo"},
+		{remoteURL: "ssh://hostname:22/repo", relativeURL: "../subrepo", want: "ssh://hostname:22/subrepo"},
+		{remoteURL: "user@host:path/to/repo", relativeURL: "../subrepo", want: "user@host:path/to/subrepo"},
+		{remoteURL: "user@host:repo", relativeURL: "../subrepo", want: "user@host:subrepo"},
+		{remoteURL: "user@host:repo", relativeURL: "../../subrepo", want: ".:subrepo"},
+	}
+
+	for _, tt := range tests {
+		t.Run(fmt.Sprintf("%q %q %q", tt.upPath, tt.remoteURL, tt.relativeURL), func(t *testing.T) {
+			t.Parallel()
+
+			got, err := gitRelativeURL(tt.remoteURL, tt.relativeURL, tt.upPath)
+			if err != nil {
+				t.Fatalf("gitRelativeURL(%q, %q, %q) error = %v", tt.remoteURL, tt.relativeURL, tt.upPath, err)
+			}
+			if got != tt.want {
+				t.Errorf("gitRelativeURL(%q, %q, %q) = %q, want %q", tt.remoteURL, tt.relativeURL, tt.upPath, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestIsRelativeSubmoduleURL(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		repository string
+		want       bool
+	}{
+		{repository: "../java-prettify", want: true},
+		{repository: "../x:x", want: true},
+		{repository: "./modules/java-prettify", want: true},
+		{repository: "../../plugins/replication", want: true},
+		{repository: "..foo", want: false},
+		{repository: "java-prettify", want: false},
+		{repository: "/tmp/java-prettify", want: false},
+		{repository: "https://gerrit.googlesource.com/java-prettify", want: false},
+		{repository: "git@github.com:buildkite/agent.git", want: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.repository, func(t *testing.T) {
+			t.Parallel()
+
+			if got := isRelativeSubmoduleURL(tt.repository); got != tt.want {
+				t.Errorf("isRelativeSubmoduleURL(%q) = %t, want %t", tt.repository, got, tt.want)
 			}
 		})
 	}

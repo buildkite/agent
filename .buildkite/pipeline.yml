@@ -103,8 +103,7 @@ steps:
           config: .buildkite/docker-compose.yml
           cli-version: 2
           propagate-environment: true
-          # Mount the agent binary so the step can stash the xgboost plan
-          # identifier via `buildkite-agent meta-data set`. See TE-6071.
+          # bktec requests an OIDC token via the agent when no API token is set.
           mount-buildkite-agent: true
           run: agent
 
@@ -540,6 +539,23 @@ steps:
           artifacts: "releases/*.tar.gz;releases/*.zip"
           attestation_name: "buildkite-agent-github-releases.attestation.json"
 
+  - name: ":docker: Build release tools image"
+    key: build-release-image
+    command: ".buildkite/steps/build-release-image.sh"
+    agents:
+      queue: $AGENT_BUILDERS_QUEUE
+    plugins:
+      - aws-assume-role-with-web-identity#v1.4.0:
+          role_arn: "arn:aws:iam::${BUILD_AWS_ACCOUNT_ID}:role/${BUILD_AWS_ROLE_NAME}"
+          session-tags:
+            - organization_slug
+            - organization_id
+            - pipeline_slug
+      - ecr#v2.9.0:
+          login: true
+          account_ids: "${BUILD_AWS_ACCOUNT_ID}"
+          region: "us-east-1"
+
   - name: ":memo: Trigger docs draft"
     if: build.branch == "main"
     soft_fail: true
@@ -550,6 +566,7 @@ steps:
     depends_on:
       - build-debian-packages
       - build-github-release
+      - build-release-image
       - build-rpm-packages
       - check-code-committed
       - check-version-string

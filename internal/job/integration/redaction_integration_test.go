@@ -34,6 +34,55 @@ func TestRedactorRedactsAgentToken(t *testing.T) {
 	}
 }
 
+func TestRedactorRedactsBuildkiteTokensByPrefix(t *testing.T) {
+	t.Parallel()
+
+	tester, err := NewExecutorTester(mainCtx)
+	if err != nil {
+		t.Fatalf("setting up executor tester: %v", err)
+	}
+	defer tester.Close()
+
+	// A made-up job acquisition token in the shape of a real one (a JWT). It
+	// is not in the job environment, so it can only be redacted by prefix.
+	// The scenario is `ps` output showing the agent's own command line.
+	const token = "bkjat_eyJhbGciOiJIUzUxMiJ9.eyJqb2JfaWQiOiIwMTkwMDAwMC0wMDAwLTAwMDAtMDAwMC0wMDAwMDAwMDAwMDAifQ.c2lnbmF0dXJlc2lnbmF0dXJlc2lnbmF0dXJlc2lnbmF0dXJlc2lnbmF0dXJlc2lnbmF0dXJlc2lnbmF0dXJlc2lnbmF0dXJl"
+	const truncated = "bkjat_eyJhbGciOiJIUzUxMiJ9.eyJqb2JfaWQ"
+
+	tester.ExpectGlobalHook("command").AndCallFunc(func(c *bintest.Call) {
+		_, _ = fmt.Fprintf(c.Stdout, "stdout: 1 tini -- buildkite-agent bootstrap --acquire-job %s --job 0190\n", token)
+		_, _ = fmt.Fprintf(c.Stderr, "stderr: 1 tini -- buildkite-agent bootstrap --acquire-job %s --job 0190\n", token)
+		_, _ = fmt.Fprintf(c.Stdout, "truncated: tini -- buildkite-agent bootstrap --acquire-job %s\n", truncated)
+		_, _ = fmt.Fprintf(c.Stdout, "placeholder: %s\n", "bkjat_encoded-token")
+		c.Exit(0)
+	})
+
+	err = tester.Run(t)
+	if err != nil {
+		t.Fatalf("running executor tester: %v", err)
+	}
+
+	// Line endings vary (a PTY converts \n to \r\n), so check line content
+	// only.
+	for _, want := range []string{
+		"stdout: 1 tini -- buildkite-agent bootstrap --acquire-job [REDACTED] --job 0190",
+		"stderr: 1 tini -- buildkite-agent bootstrap --acquire-job [REDACTED] --job 0190",
+		"truncated: tini -- buildkite-agent bootstrap --acquire-job [REDACTED]",
+		"placeholder: bkjat_encoded-token",
+	} {
+		if !strings.Contains(tester.Output, want) {
+			t.Errorf("expected output to contain %q, but it didn't. Full output: %s", want, tester.Output)
+		}
+	}
+	// No part of a token should survive, e.g. the tail of a token after
+	// [REDACTED].
+	for _, part := range []string{truncated, "eyJqb2JfaWQ", "c2lnbmF0dXJl"} {
+		if strings.Contains(tester.Output, part) {
+			t.Errorf("expected tokens to be redacted, but %q was in the output. Full output: %s", part, tester.Output)
+		}
+	}
+}
+
 func TestRedactorDoesNotRedactAgentToken_WhenNotInRedactedVars(t *testing.T) {
 	t.Parallel()
 

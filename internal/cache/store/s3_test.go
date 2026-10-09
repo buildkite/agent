@@ -558,9 +558,10 @@ func TestDownloadWithRetry(t *testing.T) {
 	})
 }
 
-// TestIsNotFound covers the classification that Download maps to
+// TestIsNotFound covers the classification that Download and Stat map to
 // store.ErrBlobNotFound: a missing S3 object surfaces as a typed
-// *types.NoSuchKey (even when wrapped), while other errors must not match.
+// *types.NoSuchKey or *types.NotFound (even when wrapped), while other errors
+// must not match.
 func TestIsNotFound(t *testing.T) {
 	tests := []struct {
 		name string
@@ -569,6 +570,7 @@ func TestIsNotFound(t *testing.T) {
 	}{
 		{name: "typed NoSuchKey", err: &types.NoSuchKey{}, want: true},
 		{name: "wrapped NoSuchKey", err: fmt.Errorf("download failed: %w", &types.NoSuchKey{}), want: true},
+		{name: "typed NotFound (HeadObject)", err: &types.NotFound{}, want: true},
 		{name: "precondition failed (412)", err: responseErrorWithStatus(http.StatusPreconditionFailed), want: false},
 		{name: "internal error (500)", err: responseErrorWithStatus(http.StatusInternalServerError), want: false},
 		{name: "plain error", err: errors.New("boom"), want: false},
@@ -647,4 +649,53 @@ func TestS3Blob_RefreshRetention(t *testing.T) {
 	if got := aws.ToString(copier.calls[0].Key); got != "prefix/key" {
 		t.Errorf("CopyObjectInput.Key = %q, want %q", got, "prefix/key")
 	}
+}
+
+// fakeHeader is a test double for objectHeader.
+type fakeHeader struct {
+	input *s3.HeadObjectInput
+	out   *s3.HeadObjectOutput
+	err   error
+}
+
+func (f *fakeHeader) HeadObject(_ context.Context, input *s3.HeadObjectInput, _ ...func(*s3.Options)) (*s3.HeadObjectOutput, error) {
+	f.input = input
+	return f.out, f.err
+}
+
+func TestS3Blob_Stat(t *testing.T) {
+	t.Run("returns the object size for the prefixed key", func(t *testing.T) {
+		header := &fakeHeader{out: &s3.HeadObjectOutput{ContentLength: aws.Int64(1234)}}
+		b := &S3Blob{header: header, bucketName: "my-bucket", prefix: "prefix"}
+
+		size, err := b.Stat(t.Context(), "key")
+		if err != nil {
+			t.Fatalf("Stat: %v", err)
+		}
+		if size != 1234 {
+			t.Errorf("Stat size = %d, want 1234", size)
+		}
+		if got := aws.ToString(header.input.Key); got != "prefix/key" {
+			t.Errorf("HeadObjectInput.Key = %q, want %q", got, "prefix/key")
+		}
+	})
+
+	t.Run("maps NotFound to ErrBlobNotFound", func(t *testing.T) {
+		b := &S3Blob{header: &fakeHeader{err: &types.NotFound{}}, bucketName: "my-bucket"}
+
+		if _, err := b.Stat(t.Context(), "key"); !errors.Is(err, ErrBlobNotFound) {
+			t.Errorf("Stat err = %v, want ErrBlobNotFound", err)
+		}
+	})
+
+	// Without s3:ListBucket, S3 answers 403 for a missing object; that must not
+	// be mistaken for "not found".
+	t.Run("other errors are not ErrBlobNotFound", func(t *testing.T) {
+		b := &S3Blob{header: &fakeHeader{err: responseErrorWithStatus(http.StatusForbidden)}, bucketName: "my-bucket"}
+
+		_, err := b.Stat(t.Context(), "key")
+		if err == nil || errors.Is(err, ErrBlobNotFound) {
+			t.Errorf("Stat err = %v, want a non-ErrBlobNotFound error", err)
+		}
+	})
 }

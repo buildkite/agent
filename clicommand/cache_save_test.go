@@ -30,7 +30,7 @@ func TestCacheSaveForce(t *testing.T) {
 		{name: "force replaces existing entry", args: []string{"--force"}, exists: true, wantSave: true},
 		{name: "force creates missing entry", args: []string{"--force"}, wantSave: true},
 		{name: "explicit false skips existing entry", args: []string{"--force=false"}, exists: true, wantPeek: true},
-		{name: "force respects policy denial", args: []string{"--force"}, exists: true, denied: true},
+		{name: "force respects policy denial", args: []string{"--force", "--cache-fail-on-error"}, exists: true, denied: true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			t.Chdir(t.TempDir())

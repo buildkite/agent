@@ -66,6 +66,8 @@ Example:
 
 const pingModePingOnly = "ping-only"
 
+const acquisitionFailedExitCode = 27 // chosen by fair dice roll
+
 var (
 	verificationFailureBehaviors = []string{agent.VerificationBehaviourBlock, agent.VerificationBehaviourWarn}
 
@@ -168,12 +170,14 @@ type AgentStartConfig struct {
 	GitMirrorCheckoutMode       string   `cli:"git-mirror-checkout-mode"`
 	GitMirrorsLockTimeout       int      `cli:"git-mirrors-lock-timeout"`
 	GitMirrorsSkipUpdate        bool     `cli:"git-mirrors-skip-update"`
+	GitMirrorsLFSCache          bool     `cli:"git-mirrors-lfs-cache"`
 	GitCheckoutTimeout          int      `cli:"git-checkout-timeout"`
 	GitCommitVerification       string   `cli:"git-commit-verification"`
 	NoGitSubmodules             bool     `cli:"no-git-submodules"`
 	GitSubmoduleCloneConfig     []string `cli:"git-submodule-clone-config"`
 	SkipCheckout                bool     `cli:"skip-checkout"`
 	GitSkipFetchExistingCommits bool     `cli:"git-skip-fetch-existing-commits"`
+	GitFetchBaseBranch          string   `cli:"git-fetch-base-branch"`
 	CheckoutOverrideMode        string   `cli:"checkout-override-mode"`
 	CheckoutAttempts            int      `cli:"checkout-attempts"`
 
@@ -543,9 +547,11 @@ var AgentStartCommand = &cli.Command{
 		GitMirrorCheckoutModeFlag,
 		GitMirrorsLockTimeoutFlag,
 		GitMirrorsSkipUpdateFlag,
+		GitMirrorsLFSCacheFlag,
 		GitCheckoutTimeoutFlag,
 		GitSubmoduleCloneConfigFlag,
 		GitSkipFetchExistingCommitsFlag,
+		GitFetchBaseBranchFlag,
 		CheckoutAttemptsFlag,
 
 		&cli.StringFlag{
@@ -841,8 +847,11 @@ var AgentStartCommand = &cli.Command{
 		}
 
 		// The config file is loaded after CLI flag validation, so validate its
-		// commit verification value here as well.
+		// commit verification and base branch fetch values here as well.
 		if err := validateGitCommitVerification(cfg.GitCommitVerification); err != nil {
+			return err
+		}
+		if err := validateGitFetchBaseBranch(cfg.GitFetchBaseBranch); err != nil {
 			return err
 		}
 
@@ -990,6 +999,7 @@ var AgentStartCommand = &cli.Command{
 			GitMirrorCheckoutMode:           cfg.GitMirrorCheckoutMode,
 			GitMirrorsLockTimeout:           cfg.GitMirrorsLockTimeout,
 			GitMirrorsSkipUpdate:            cfg.GitMirrorsSkipUpdate,
+			GitMirrorsLFSCache:              cfg.GitMirrorsLFSCache,
 			HooksPath:                       cfg.HooksPath,
 			AdditionalHooksPaths:            cfg.AdditionalHooksPaths,
 			PluginsPath:                     cfg.PluginsPath,
@@ -1006,6 +1016,7 @@ var AgentStartCommand = &cli.Command{
 			GitSubmoduleCloneConfig:         cfg.GitSubmoduleCloneConfig,
 			SkipCheckout:                    cfg.SkipCheckout,
 			GitSkipFetchExistingCommits:     cfg.GitSkipFetchExistingCommits,
+			GitFetchBaseBranch:              cfg.GitFetchBaseBranch,
 			CheckoutOverrideMode:            checkoutMode,
 			CheckoutAttempts:                cfg.CheckoutAttempts,
 			SSHKeyscan:                      !cfg.NoSSHKeyscan,
@@ -1278,12 +1289,22 @@ var AgentStartCommand = &cli.Command{
 			OTLPDestinationSet:      agent.HasLocalOTLPDestination(),
 		}
 
+		// Spawned workers register separately but get the same warnings, so
+		// only log each one once.
+		var loggedWarnings sync.Map
+
 		// Send register requests.
 		workers, err := concurrently.Map(ctx, regReqs, func(ctx context.Context, i int, regReq api.AgentRegisterRequest) (*agent.AgentWorker, error) {
 			// Register the agent with the buildkite API
 			reg, err := client.Register(ctx, regReq)
 			if err != nil {
 				return nil, err
+			}
+
+			for _, w := range reg.Warnings {
+				if _, logged := loggedWarnings.LoadOrStore(w.Message, struct{}{}); !logged {
+					l.Warnf("%s", w.Message)
+				}
 			}
 
 			wl := l.WithFields(logger.StringField("agent", reg.Name))
@@ -1311,6 +1332,9 @@ var AgentStartCommand = &cli.Command{
 				},
 			), nil
 		})
+		if errors.Is(err, core.ErrJobAcquisitionRejected) {
+			return cli.Exit(err, acquisitionFailedExitCode)
+		}
 		if err != nil {
 			return err
 		}
@@ -1355,7 +1379,6 @@ var AgentStartCommand = &cli.Command{
 			// If the agent tried to acquire a job, but it couldn't because the job was already taken, we should exit with a
 			// specific exit code so that the caller can know that this job can't be acquired.
 
-			const acquisitionFailedExitCode = 27 // chosen by fair dice roll
 			return cli.Exit(err, acquisitionFailedExitCode)
 
 		case errors.Is(err, core.ErrJobLocked):
@@ -1631,6 +1654,20 @@ func runAgentAPI(ctx context.Context, l logger.Logger, socketsPath string) (func
 // leaderPinger pings the leader socket for liveness, and takes over if it
 // fails.
 func leaderPinger(ctx context.Context, l logger.Logger, path, leaderPath string) {
+	// Reuse one client (and its connection) while the leader stays the same.
+	// Creating a client on every tick leaks a connection each time.
+	var (
+		cl       *agentapi.Client
+		clTarget string
+	)
+	resetClient := func() {
+		if cl != nil {
+			cl.Close()
+		}
+		cl, clTarget = nil, ""
+	}
+	defer resetClient()
+
 	pingLeader := func() error {
 		d, err := os.Readlink(leaderPath)
 		if err != nil {
@@ -1639,21 +1676,47 @@ func leaderPinger(ctx context.Context, l logger.Logger, path, leaderPath string)
 		}
 		if d == path {
 			// It's me! Don't bother pinging.
+			resetClient()
 			return nil
 		}
 
 		ctx, canc := context.WithTimeout(ctx, 100*time.Millisecond)
 		defer canc()
 
-		cl, err := agentapi.NewClient(ctx, leaderPath)
-		if err != nil {
+		if cl == nil || clTarget != d {
+			resetClient()
+			// Dial the resolved target, so that a reused connection always
+			// belongs to the leader that the client was created for.
+			target := d
+			if !filepath.IsAbs(target) {
+				target = filepath.Join(filepath.Dir(leaderPath), target)
+			}
+			c, err := agentapi.NewClient(ctx, target)
+			if err != nil {
+				return err
+			}
+			cl, clTarget = c, d
+		}
+		if err := cl.Ping(ctx); err != nil {
+			resetClient()
 			return err
 		}
-		return cl.Ping(ctx)
+		return nil
 	}
 
-	for range time.Tick(100 * time.Millisecond) {
+	ticker := time.NewTicker(100 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+		}
 		if err := pingLeader(); err != nil {
+			if ctx.Err() != nil {
+				// The agent is shutting down, so the leader is not at fault.
+				return
+			}
 			l.Warnf("Agent API: Leader ping failed, staging coup: %v", err)
 			l.Warnf("Agent API: Leader state (locks) has been lost!")
 			_ = os.Remove(leaderPath)
