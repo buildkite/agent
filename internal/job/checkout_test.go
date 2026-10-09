@@ -259,6 +259,107 @@ func TestCommitSecondParent(t *testing.T) {
 	}
 }
 
+// TestJobRef covers the shared job ref selection and how the callers differ on
+// a pinned commit: fetchSource and the mirror fetch use the custom refspec or
+// pull request ref over the commit (and fetchSource uses the commit instead of
+// the branch), while the mirror LFS prefetch always prefers the commit.
+func TestJobRef(t *testing.T) {
+	t.Parallel()
+
+	const commit = "1234567890abcdef1234567890abcdef12345678"
+	for _, test := range []struct {
+		name          string
+		config        ExecutorConfig
+		wantKind      refspecKind
+		wantRef       string
+		wantMirrorLFS string
+	}{
+		{
+			name:          "branch without commit",
+			config:        ExecutorConfig{Commit: "HEAD", Branch: "main", PullRequest: "false"},
+			wantKind:      refspecBranch,
+			wantRef:       "main",
+			wantMirrorLFS: "main",
+		},
+		{
+			name:          "branch with pinned commit",
+			config:        ExecutorConfig{Commit: commit, Branch: "main", PullRequest: "false"},
+			wantKind:      refspecBranch,
+			wantRef:       "main",
+			wantMirrorLFS: commit,
+		},
+		{
+			name:          "custom refspec without commit uses its source",
+			config:        ExecutorConfig{Commit: "HEAD", Branch: "main", PullRequest: "false", RefSpec: "+refs/custom/a:refs/remotes/origin/a"},
+			wantKind:      refspecCustom,
+			wantRef:       "+refs/custom/a:refs/remotes/origin/a",
+			wantMirrorLFS: "refs/custom/a",
+		},
+		{
+			name:          "custom refspec with pinned commit",
+			config:        ExecutorConfig{Commit: commit, Branch: "main", PullRequest: "false", RefSpec: "refs/custom/a"},
+			wantKind:      refspecCustom,
+			wantRef:       "refs/custom/a",
+			wantMirrorLFS: commit,
+		},
+		{
+			name:          "custom refspec beats pull request",
+			config:        ExecutorConfig{Commit: "HEAD", Branch: "main", PullRequest: "12", PipelineProvider: "github", RefSpec: "refs/custom/a"},
+			wantKind:      refspecCustom,
+			wantRef:       "refs/custom/a",
+			wantMirrorLFS: "refs/custom/a",
+		},
+		{
+			name:          "GitHub pull request head",
+			config:        ExecutorConfig{Commit: "HEAD", Branch: "feature", PullRequest: "12", PipelineProvider: "github"},
+			wantKind:      refspecGithubPRHead,
+			wantRef:       "refs/pull/12/head",
+			wantMirrorLFS: "refs/pull/12/head",
+		},
+		{
+			name:          "GitHub Enterprise pull request merge ref",
+			config:        ExecutorConfig{Commit: "HEAD", Branch: "feature", PullRequest: "12", PipelineProvider: "github_enterprise", PullRequestUsingMergeRefspec: true},
+			wantKind:      refspecGithubPRMerge,
+			wantRef:       "refs/pull/12/merge",
+			wantMirrorLFS: "refs/pull/12/merge",
+		},
+		{
+			name:          "GitHub pull request with pinned commit",
+			config:        ExecutorConfig{Commit: commit, Branch: "feature", PullRequest: "12", PipelineProvider: "github"},
+			wantKind:      refspecGithubPRHead,
+			wantRef:       "refs/pull/12/head",
+			wantMirrorLFS: commit,
+		},
+		{
+			name:          "pull request on a non-GitHub provider uses the branch",
+			config:        ExecutorConfig{Commit: "HEAD", Branch: "feature", PullRequest: "12", PipelineProvider: "bitbucket"},
+			wantKind:      refspecBranch,
+			wantRef:       "feature",
+			wantMirrorLFS: "feature",
+		},
+		{
+			name:          "merge refspec without a pull request uses the branch",
+			config:        ExecutorConfig{Commit: "HEAD", Branch: "main", PullRequest: "false", PipelineProvider: "github", PullRequestUsingMergeRefspec: true},
+			wantKind:      refspecBranch,
+			wantRef:       "main",
+			wantMirrorLFS: "main",
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			e := &Executor{ExecutorConfig: test.config}
+
+			gotKind, gotRef := e.jobRef()
+			if gotKind != test.wantKind || gotRef != test.wantRef {
+				t.Errorf("e.jobRef() = (%q, %q), want (%q, %q)", gotKind, gotRef, test.wantKind, test.wantRef)
+			}
+			if got := e.mirrorLFSRef(); got != test.wantMirrorLFS {
+				t.Errorf("e.mirrorLFSRef() = %q, want %q", got, test.wantMirrorLFS)
+			}
+		})
+	}
+}
+
 func TestPrepareGitSSHKey(t *testing.T) {
 	t.Parallel()
 

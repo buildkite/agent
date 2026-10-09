@@ -41,6 +41,25 @@ const (
 	refspecCommit refspecKind = "commit"
 )
 
+// jobRef returns the ref that names the job's revision on the remote, in
+// priority order: a custom refspec, then a GitHub pull request ref
+// (refs/pull/N/merge or refs/pull/N/head), then the branch. It never returns
+// refspecCommit: whether a pinned e.Commit takes precedence differs between
+// callers, so each caller decides that itself.
+func (e *Executor) jobRef() (refspecKind, string) {
+	switch {
+	case e.RefSpec != "":
+		return refspecCustom, e.RefSpec
+	case e.PullRequest != "false" && strings.Contains(e.PipelineProvider, "github"):
+		if e.PullRequestUsingMergeRefspec {
+			return refspecGithubPRMerge, fmt.Sprintf("refs/pull/%s/merge", e.PullRequest)
+		}
+		return refspecGithubPRHead, fmt.Sprintf("refs/pull/%s/head", e.PullRequest)
+	default:
+		return refspecBranch, e.Branch
+	}
+}
+
 // fetchSource fetches the git source for the job. If GitSkipFetchExistingCommits is
 // enabled and the commit already exists locally, the fetch is skipped entirely.
 // When addBloblessFilter is true, --filter=blob:none is prepended to the fetch
@@ -53,18 +72,11 @@ func (e *Executor) fetchSource(ctx context.Context, addBloblessFilter bool, atte
 	defer func() { tracetools.FinishWithError(span, retErr) }()
 
 	// Classify the refspec kind once and dispatch on it in the switch below.
-	kind := refspecCommit
-	switch {
-	case e.RefSpec != "":
-		kind = refspecCustom
-	case e.PullRequest != "false" && strings.Contains(e.PipelineProvider, "github"):
-		if e.PullRequestUsingMergeRefspec {
-			kind = refspecGithubPRMerge
-		} else {
-			kind = refspecGithubPRHead
-		}
-	case e.Commit == "HEAD":
-		kind = refspecBranch
+	// A custom refspec or pull request ref takes precedence over a pinned
+	// commit; the branch is only fetched when no commit is known.
+	kind, ref := e.jobRef()
+	if kind == refspecBranch && e.Commit != "HEAD" {
+		kind = refspecCommit
 	}
 
 	span.SetAttributes(
@@ -127,8 +139,6 @@ func (e *Executor) fetchSource(ctx context.Context, addBloblessFilter bool, atte
 		}
 
 	case refspecGithubPRMerge, refspecGithubPRHead:
-		var refspec string
-
 		if kind == refspecGithubPRMerge {
 			// Merge refspecs represents a speculative merge of the PR branch against the base branch.
 			// Checking out this refspec enables testing the result of the merge before it happens.
@@ -136,15 +146,14 @@ func (e *Executor) fetchSource(ctx context.Context, addBloblessFilter bool, atte
 			// case we want the job to fail earlier, rather than retrying the fetch (which adds ~2-3 mins job run time before failing)
 			// Note: An outer retry loop will still retry the failed checkout 3 times before failing.
 			e.shell.Commentf("Fetch and checkout pull request merge commit from GitHub")
-			refspec = fmt.Sprintf("refs/pull/%s/merge", e.PullRequest)
 		} else {
 			// GitHub has a special ref which lets us fetch a pull request head, whether
 			// or not it's a current head in this repository or a fork. See:
 			// https://help.github.com/articles/checking-out-pull-requests-locally/#modifying-an-inactive-pull-request-locally
 			e.shell.Commentf("Fetch and checkout pull request head from GitHub")
-			refspec = fmt.Sprintf("refs/pull/%s/head", e.PullRequest)
 		}
-		refspecs := []string{refspec}
+		// ref is refs/pull/N/merge or refs/pull/N/head, per jobRef.
+		refspecs := []string{ref}
 
 		if e.Commit == "HEAD" {
 			// If we don't know the commit, we don't want to fetch with a fallback (otherwise FETCH_HEAD
