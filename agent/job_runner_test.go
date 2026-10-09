@@ -72,7 +72,7 @@ func TestJobTimeoutFilePath(t *testing.T) {
 		t.Errorf("jobTimeoutFilePath(%q, jobContextDir({})) = %q, want %q", "abc123", got, want)
 	}
 
-	k8sDir := jobContextDir(JobRunnerConfig{KubernetesExec: true})
+	k8sDir := jobContextDir(JobRunnerConfig{Executor: ExecutorKubernetes})
 	if got, want := jobTimeoutFilePath("abc123", k8sDir), filepath.Join("/workspace", "job-timeout-abc123"); got != want {
 		t.Errorf("jobTimeoutFilePath(%q, %q) = %q, want %q", "abc123", k8sDir, got, want)
 	}
@@ -98,14 +98,14 @@ func TestJobContextDir(t *testing.T) {
 		},
 		{
 			name: "kubernetes_default",
-			conf: JobRunnerConfig{KubernetesExec: true},
+			conf: JobRunnerConfig{Executor: ExecutorKubernetes},
 			want: "/workspace",
 		},
 		{
 			name: "kubernetes_explicit_dir",
 			conf: JobRunnerConfig{
-				KubernetesExec: true,
-				JobContextDir:  "/buildkite-shared",
+				Executor:      ExecutorKubernetes,
+				JobContextDir: "/buildkite-shared",
 			},
 			want: "/buildkite-shared",
 		},
