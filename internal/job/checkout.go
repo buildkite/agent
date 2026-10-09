@@ -151,6 +151,7 @@ func (e *Executor) checkout(ctx context.Context) error {
 			// a misconfigured agent environment, and git's specific message
 			// (e.g. "'lfs' is not a git command") is the fastest diagnostic.
 			if _, err := e.shell.Command("git", "lfs", "version").RunAndCaptureStdout(ctx, shell.ShowStderr(true)); err != nil {
+				captureCheckoutError(ctx, e.shell, errors.Join(errGitLFSPreflight, err))
 				return fmt.Errorf("BUILDKITE_GIT_LFS_ENABLED=true but `git lfs version` failed; git-lfs may not be installed or not resolvable by git: %w", err)
 			}
 		}
@@ -160,6 +161,7 @@ func (e *Executor) checkout(ctx context.Context) error {
 		// checkout, but they can arrive from job env, and retrying a typo for the
 		// whole attempt budget only delays the failure.
 		if _, err := ParseSparseCheckoutMode(e.GitSparseCheckoutMode); err != nil {
+			captureCheckoutError(ctx, e.shell, errors.Join(errInvalidSparseCheckoutMode, err))
 			return err
 		}
 		if _, err := parseGitFetchBaseBranchMode(e.GitFetchBaseBranch); err != nil {
@@ -180,6 +182,7 @@ func (e *Executor) checkout(ctx context.Context) error {
 			if err == nil {
 				return nil
 			}
+			captureCheckoutError(ctx, e.shell, err)
 
 			var errLockTimeout ErrTimedOutAcquiringLock
 			var errGit *gitError
