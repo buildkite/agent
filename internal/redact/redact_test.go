@@ -301,6 +301,7 @@ func TestURLCredentialsInText(t *testing.T) {
 		{"https://token@[::1]:8443/repo", "https://xxxxx@[::1]:8443/repo"},
 		{"https://example.com/repo git@host:repo ../relative/ref", "https://example.com/repo git@host:repo ../relative/ref"},
 		{"fatal: unable to access 'https://user:a/b@example.com/repo/': denied", "fatal: unable to access 'https://xxxxx@example.com/repo/': denied"},
+		{"fatal: unable to access 'https://user:a/b@SUFFIX@example.com/repo/': denied", "fatal: unable to access 'https://xxxxx@example.com/repo/': denied"},
 		{"https://registry.example/@scope/pkg and https://example.com/repo@v1", "https://registry.example/@scope/pkg and https://example.com/repo@v1"},
 		{"https://[::1]/a@b and https://[::1]:8443/a@b", "https://[::1]/a@b and https://[::1]:8443/a@b"},
 		// A host with a port and an "@" in its path looks like a password

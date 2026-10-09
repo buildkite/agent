@@ -112,9 +112,10 @@ func URLCredentials(rawURL string) string {
 // Match just the URL prefix through userinfo, leaving paths and surrounding
 // diagnostic punctuation untouched. Spaces in URL credentials must be escaped.
 // A password containing an unescaped "/" makes the URL invalid, but Git still
-// prints it, so also match "user:" followed by anything up to "@". This also
+// prints it, so also match "user:" followed by anything up to the last "@",
+// since the password can contain "@" too. This also
 // matches a host with a port and an "@" in its path, which is masked too.
-var urlUserinfo = regexp.MustCompile(`(?i)(?:[a-z][a-z0-9+.-]*:)?//(?:[^\s/<>]*|[^\s/<>@:\[]*:[^\s<>@]*)@`)
+var urlUserinfo = regexp.MustCompile(`(?i)(?:[a-z][a-z0-9+.-]*:)?//(?:[^\s/<>]*|[^\s/<>@:\[]*:[^\s<>]*)@`)
 
 // URLCredentialsInText masks URL userinfo in diagnostic text, including tokens
 // used as usernames. It does not detect secrets in paths, queries or plain text.
