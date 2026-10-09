@@ -345,6 +345,7 @@ func (c *client) Save(ctx context.Context, cacheID string) (SaveResult, error) {
 		_, commitApiResp, err = c.api.CacheEntryCommit(ctx, c.registry, api.CacheEntryCommitReq{
 			UploadID: createResp.UploadID,
 			Stats:    stats,
+			Command:  c.command,
 		})
 		if api.BreakOnNonRetryable(r, commitApiResp, err) {
 			return err

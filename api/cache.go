@@ -78,6 +78,9 @@ type CacheEntryCreateResp struct {
 type CacheEntryRetrieveReq struct {
 	TargetPaths []string       `json:"target_paths"`
 	CacheKey    []CacheKeyPart `json:"cache_key"`
+	// Command is "exec" when the request comes from buildkite-agent cache exec,
+	// and empty for cache save and restore. Informational only.
+	Command string `json:"command,omitempty"`
 }
 
 // CacheEntryRetrieveResp describes the cache entry to download.
@@ -162,6 +165,9 @@ type CacheEntryConfirmReq struct {
 	UploadID string `json:"upload_id,omitempty"`
 	// Stats reports how the restore performed. Informational only.
 	Stats *CacheStats `json:"stats,omitempty"`
+	// Command is "exec" when the request comes from buildkite-agent cache exec,
+	// and empty for cache save and restore. Informational only.
+	Command string `json:"command,omitempty"`
 }
 
 // CacheEntryConfirmResp acknowledges a confirm request.
@@ -198,6 +204,9 @@ type CacheEntryCommitReq struct {
 	ETags    []string `json:"e_tags,omitempty"`
 	// Stats reports how the save performed. Informational only.
 	Stats *CacheStats `json:"stats,omitempty"`
+	// Command is "exec" when the request comes from buildkite-agent cache exec,
+	// and empty for cache save and restore. Informational only.
+	Command string `json:"command,omitempty"`
 }
 
 // CacheStats reports how a save or restore performed, sent on commit (save)

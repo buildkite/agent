@@ -52,12 +52,15 @@ var (
 // bucket and the expanded, validated cache definitions used by every call.
 // Safe for concurrent use; honours context cancellation.
 type client struct {
-	api        cacheAPI
-	bucketURL  string
-	format     string
-	platform   string
-	registry   string
-	force      bool
+	api       cacheAPI
+	bucketURL string
+	format    string
+	platform  string
+	registry  string
+	force     bool
+	// command is sent with retrieve, confirm and commit requests so the
+	// registry can tell cache exec apart from save and restore.
+	command    string
 	caches     []configuration.Cache
 	onProgress ProgressCallback
 }
