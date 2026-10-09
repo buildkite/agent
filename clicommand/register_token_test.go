@@ -210,7 +210,17 @@ func TestResolveRegistrationToken_FD(t *testing.T) {
 		t.Fatalf("w.Close() = %v", err)
 	}
 
-	got, err := resolveRegistrationToken("fd://" + strconv.FormatUint(uint64(r.Fd()), 10))
+	// resolveRegistrationToken takes ownership of (and closes) the descriptor
+	// it's given, so pass it a duplicate. Passing r.Fd() directly would close
+	// r's descriptor out from under it, and r's own close (or finalizer) would
+	// then close whatever reused that number. On Windows that can be one of the
+	// Go runtime's handles, which crashes the test binary.
+	fd := dupFd(t, r)
+	if err := r.Close(); err != nil {
+		t.Fatalf("r.Close() = %v", err)
+	}
+
+	got, err := resolveRegistrationToken("fd://" + strconv.FormatUint(uint64(fd), 10))
 	if err != nil {
 		t.Fatalf("resolveRegistrationToken(fd://) error = %v", err)
 	}

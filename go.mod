@@ -3,9 +3,9 @@ module github.com/buildkite/agent/v4
 go 1.26.5
 
 require (
-	cloud.google.com/go/compute/metadata v0.9.0
-	cloud.google.com/go/kms v1.33.0
-	connectrpc.com/connect v1.20.0
+	cloud.google.com/go/compute/metadata v0.10.0
+	cloud.google.com/go/kms v1.35.0
+	connectrpc.com/connect v1.21.0
 	drjosh.dev/zzglob v0.4.3
 	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.14.1
 	github.com/Azure/azure-sdk-for-go/sdk/storage/azblob v1.8.1
@@ -23,14 +23,14 @@ require (
 	github.com/brunoscheufler/aws-ecs-metadata-go v0.0.0-20221221133751-67e37ae746cd
 	github.com/buildkite/bintest/v3 v3.3.0
 	github.com/buildkite/go-buildkite/v4 v4.23.0
-	github.com/buildkite/go-pipeline v0.18.0
+	github.com/buildkite/go-pipeline v0.18.1
 	github.com/buildkite/interpolate v0.1.5
 	github.com/buildkite/roko v1.4.0
 	github.com/buildkite/shellwords v1.0.1
 	github.com/coreos/go-systemd/v22 v22.7.0
 	github.com/creack/pty v1.1.19
 	github.com/denisbrodbeck/machineid v1.0.1
-	github.com/dustin/go-humanize v1.0.1
+	github.com/dustin/go-humanize v1.1.0
 	github.com/dustinkirkland/golang-petname v0.0.0-20260215035315-f0c533e9ce9b
 	github.com/go-chi/chi/v5 v5.3.2
 	github.com/gofrs/flock v0.13.1
@@ -45,7 +45,7 @@ require (
 	github.com/prometheus/client_golang v1.24.1
 	github.com/puzpuzpuz/xsync/v2 v2.5.1
 	github.com/qri-io/jsonschema v0.2.1
-	github.com/urfave/cli/v3 v3.11.0
+	github.com/urfave/cli/v3 v3.13.0
 	github.com/wolfeidau/quickzip v1.0.3
 	go.opentelemetry.io/contrib/propagators/aws v1.46.0
 	go.opentelemetry.io/contrib/propagators/b3 v1.46.0

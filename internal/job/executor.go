@@ -194,9 +194,9 @@ func (e *Executor) Run(ctx context.Context) (exitCode int) {
 		defer cleanup()
 	}
 
-	// Initialize the job API, iff the experiment is enabled. Noop otherwise
+	// Initialize the Job API when enabled.
 	if e.JobAPI {
-		cleanup, err := e.startJobAPI()
+		cleanup, err := e.startJobAPI(ctx)
 		if err != nil {
 			e.shell.Errorf("Error setting up Job API: %v", err)
 			retErr = err
@@ -204,6 +204,7 @@ func (e *Executor) Run(ctx context.Context) (exitCode int) {
 		}
 		defer cleanup()
 	} else {
+		e.shell.Env.Remove("BUILDKITE_AGENT_JOB_API_CAPTURE_ERROR")
 		e.shell.OptionalWarningf("job-api-disabled", "The Job API has been disabled. Features like automatic redaction of secrets and polyglot hooks will either not work or have degraded functionality")
 	}
 
@@ -867,9 +868,40 @@ func (e *Executor) executeGlobalHook(ctx context.Context, name string) error {
 
 // Returns the absolute path to a local hook, or os.ErrNotExist if none is found
 func (e *Executor) localHookPath(name string) (string, error) {
-	// The local hooks dir must exist within the checkout root.
-	dir := filepath.Join(".buildkite", "hooks")
-	return hook.Find(e.checkoutRoot, dir, name)
+	// A job can fail before checkout and still attempt pre-exit hooks.
+	if e.checkoutRoot == nil {
+		return "", os.ErrNotExist
+	}
+
+	// Prefer hooks in the working directory, but the original checkout remains
+	// their boundary even if a hook changes BUILDKITE_BUILD_CHECKOUT_PATH.
+	// Resolve both paths so symlink aliases (e.g. after cd -P) compare equally.
+	checkoutPath, err := filepath.EvalSymlinks(e.checkoutRoot.Name())
+	if err != nil {
+		return "", os.ErrNotExist
+	}
+	// Root.Name may be relative, while the shell's working directory is absolute.
+	checkoutPath, err = filepath.Abs(checkoutPath)
+	if err != nil {
+		return "", os.ErrNotExist
+	}
+	workdir, err := filepath.EvalSymlinks(e.shell.Getwd())
+	if err != nil {
+		return "", os.ErrNotExist
+	}
+	rel, err := filepath.Rel(checkoutPath, workdir)
+	if err != nil || !filepath.IsLocal(rel) {
+		return "", os.ErrNotExist
+	}
+	dir := filepath.Join(rel, ".buildkite", "hooks")
+	// Keep lookup rooted so symlinks cannot escape the checkout.
+	hookPath, err := hook.Find(e.checkoutRoot, dir, name)
+	if !errors.Is(err, os.ErrNotExist) || rel == "." {
+		return hookPath, err
+	}
+
+	// Preserve shared root hooks when the working directory has no matching hook.
+	return hook.Find(e.checkoutRoot, filepath.Join(".buildkite", "hooks"), name)
 }
 
 func (e *Executor) hasLocalHook(name string) bool {
@@ -1019,7 +1051,7 @@ func formatDebugEnvironmentVariable(envar string) string {
 	switch name {
 	case "BUILDKITE_AGENT_ACCESS_TOKEN":
 		value = "******************"
-	case "BUILDKITE_GIT_REMOTE_MIRROR_URL":
+	case "BUILDKITE_REPO", "BUILDKITE_GIT_REMOTE_MIRROR_URL":
 		value = redact.URLCredentials(value)
 	}
 	return name + "=" + strings.ReplaceAll(value, "\n", "\\n")
@@ -1477,12 +1509,19 @@ func (e *Executor) setupRedactors(log shell.Logger, environ *env.Environment, st
 	}
 	needles = redact.AppendGoEscaped(needles)
 
+	// As well as the known values above, redact anything that looks like a
+	// Buildkite-issued token. Some tokens are never in the job environment
+	// (e.g. the job acquisition token, which is only in the agent's command
+	// line) but can still end up in the log, e.g. via `ps`.
+	tokenPrefixes := redact.TokenPrefixes()
+
 	// Child-process output writes through this redactor into stdoutTee, whose
 	// primary sink is stdout. When OTLP job logging is enabled, a secondary
 	// sink is attached so the same already-redacted output is mirrored into
 	// the OTLP exporter.
 	e.stdoutTee = &teeWriter{primary: stdout}
 	stdoutRedactor := replacer.New(e.stdoutTee, needles, redact.Redacted)
+	stdoutRedactor.AddPrefixes(tokenPrefixes...)
 	e.redactors.Append(stdoutRedactor)
 	// The shell logger writes through this redactor into stderrTee, whose
 	// primary sink is stderr. When OTLP job logging is enabled, a secondary
@@ -1490,6 +1529,7 @@ func (e *Executor) setupRedactors(log shell.Logger, environ *env.Environment, st
 	// into the OTLP exporter.
 	e.stderrTee = &teeWriter{primary: stderr}
 	loggerRedactor := replacer.New(e.stderrTee, needles, redact.Redacted)
+	loggerRedactor.AddPrefixes(tokenPrefixes...)
 	e.redactors.Append(loggerRedactor)
 
 	logger := shell.NewWriterLogger(loggerRedactor, true, e.DisabledWarnings)

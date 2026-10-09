@@ -11,10 +11,13 @@ dry_run() {
   fi
 }
 
-# createrepo_c is much faster and more resilient than createrepo
+# createrepo_c is much faster and more resilient than createrepo.
+# createrepo_c 1.x defaults to zstd, which older yum clients can't read, so we
+# ask for gzip explicitly.
 createrepo() {
   # Ignores old metadata, builds repodata from scratch.
   createrepo_c \
+    --general-compress-type=gz \
     --no-database \
     --unique-md-filenames \
     --retain-old-md-by-age=180d \
@@ -32,6 +35,7 @@ updaterepo() {
   pkglist="$(mktemp pkglist.XXXXXXXX)"
   find "$1" -type f -name '*.rpm' | awk -F/ '{print $NF}' > "${pkglist}"
   createrepo_c \
+    --general-compress-type=gz \
     --no-database \
     --unique-md-filenames \
     --retain-old-md-by-age=180d \
@@ -64,10 +68,6 @@ echo '--- Downloading built yum packages'
 rm -rf rpm
 mkdir -p rpm
 buildkite-agent artifact download --build "${artifacts_build}" "rpm/*.rpm" rpm/
-
-echo '--- Installing dependencies'
-apt update
-DEBIAN_FRONTEND=noninteractive apt install -y createrepo-c awscli
 
 mkdir -p "${YUM_PATH}"
 

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"math"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -19,6 +20,7 @@ import (
 
 	"github.com/buildkite/agent/v4/api"
 	"github.com/buildkite/agent/v4/internal/cache/configuration"
+	"github.com/buildkite/agent/v4/logger"
 )
 
 // mockAPIClient implements api.CacheClient for integration testing
@@ -26,6 +28,8 @@ type mockAPIClient struct {
 	registries map[string]*mockRegistry
 	// expireCalls records the addresses passed to CacheEntryExpire
 	expireCalls []api.CacheEntryExpireReq
+	// commitCalls records the requests passed to CacheEntryCommit
+	commitCalls []api.CacheEntryCommitReq
 	// confirmCalls records the addresses passed to CacheEntryConfirm
 	confirmCalls []api.CacheEntryConfirmReq
 	// confirmErr and confirmResp, if confirmErr is set, are returned by every
@@ -151,6 +155,8 @@ func (m *mockAPIClient) CacheEntryCreate(ctx context.Context, registry string, r
 }
 
 func (m *mockAPIClient) CacheEntryCommit(ctx context.Context, registry string, req api.CacheEntryCommitReq) (api.CacheEntryCommitResp, *api.Response, error) {
+	m.commitCalls = append(m.commitCalls, req)
+
 	reg, ok := m.registries[registry]
 	if !ok {
 		return api.CacheEntryCommitResp{}, nil, fmt.Errorf("registry not found: %s", registry)
@@ -182,6 +188,7 @@ func (m *mockAPIClient) CacheEntryRetrieve(ctx context.Context, registry string,
 			Fallback:    false,
 			ExpiresAt:   entry.expiresAt,
 			Scopes:      entry.scopes,
+			UploadID:    entry.uploadID,
 		}, true, nil, nil
 	}
 
@@ -197,7 +204,13 @@ func (m *mockAPIClient) CacheEntryExpire(ctx context.Context, registry string, r
 	}
 
 	addr := cacheAddr(req.TargetPaths, req.CacheKey)
-	_, existed := reg.cache[addr]
+	entry, existed := reg.cache[addr]
+
+	// Mirror the backend's conditional delete: an entry with a different
+	// upload ID was re-saved since the retrieve, so leave it alone.
+	if existed && req.UploadID != "" && entry.uploadID != req.UploadID {
+		return api.CacheEntryExpireResp{Existed: false}, nil, nil
+	}
 
 	// Mirror the backend's delete_item so a subsequent save
 	// re-uploads the invalidated entry.
@@ -222,8 +235,10 @@ func (m *mockAPIClient) CacheEntryConfirm(ctx context.Context, registry string, 
 		return api.CacheEntryConfirmResp{}, nil, fmt.Errorf("registry not found: %s", registry)
 	}
 
-	// Mirror the backend refreshing the entry's retention.
-	if entry, exists := reg.cache[cacheAddr(req.TargetPaths, req.CacheKey)]; exists {
+	// Mirror the backend refreshing the entry's retention, unless it was
+	// re-saved since the retrieve.
+	if entry, exists := reg.cache[cacheAddr(req.TargetPaths, req.CacheKey)]; exists &&
+		(req.UploadID == "" || entry.uploadID == req.UploadID) {
 		entry.expiresAt = time.Now().Add(7 * 24 * time.Hour)
 	}
 	return api.CacheEntryConfirmResp{Message: "Restore confirmed"}, nil, nil
@@ -442,8 +457,8 @@ func TestCacheIntegration_SaveAndRestore(t *testing.T) {
 		if result.FallbackUsed {
 			t.Error("should not use fallback")
 		}
-		if result.Key != "test-cache" {
-			t.Errorf("Key = %q, want %q", result.Key, "test-cache")
+		if result.Key != "v1-test-key" {
+			t.Errorf("Key = %q, want %q", result.Key, "v1-test-key")
 		}
 		if result.Archive.Size <= 0 {
 			t.Errorf("archive should have size, got %d", result.Archive.Size)
@@ -523,6 +538,88 @@ func TestCacheIntegration_SaveAlreadyExists(t *testing.T) {
 	}
 }
 
+// A save under a new key whose archive is byte-identical to an earlier one
+// finds the blob already stored under its digest, so it creates the entry
+// without uploading again.
+func TestCacheIntegration_SaveSkipsUploadWhenBlobStored(t *testing.T) {
+	ctx := t.Context()
+
+	cacheClient, _, storageDir := setupTestCache(t, "local_file")
+	setKey := func(key string) {
+		cacheClient.caches[0].CacheKey = []configuration.KeyPart{{Source: configuration.SourceLiteral, Arg: key}}
+	}
+
+	first, err := cacheClient.Save(ctx, "test-cache")
+	if err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	if first.UploadSkipped || first.Transfer == nil {
+		t.Fatalf("first save: UploadSkipped = %v, Transfer = %v; want an upload", first.UploadSkipped, first.Transfer)
+	}
+	blobPath := filepath.Join(storageDir, first.Archive.Sha256Sum)
+
+	t.Run("same content under a new key skips the upload", func(t *testing.T) {
+		setKey("v2-test-key")
+
+		result, err := cacheClient.Save(ctx, "test-cache")
+		if err != nil {
+			t.Fatalf("Save: %v", err)
+		}
+		if !result.CacheEntryCreated || !result.UploadSkipped {
+			t.Errorf("CacheEntryCreated = %v, UploadSkipped = %v; want both true", result.CacheEntryCreated, result.UploadSkipped)
+		}
+		if result.Transfer != nil {
+			t.Errorf("Transfer = %+v, want nil when the upload is skipped", result.Transfer)
+		}
+		if result.Archive.Sha256Sum != first.Archive.Sha256Sum {
+			t.Fatalf("archive digest changed (%s != %s); content-addressing needs deterministic archives", result.Archive.Sha256Sum, first.Archive.Sha256Sum)
+		}
+
+		restored, err := cacheClient.Restore(ctx, "test-cache")
+		if err != nil {
+			t.Fatalf("Restore: %v", err)
+		}
+		if !restored.CacheRestored {
+			t.Error("the entry created without an upload should restore from the existing blob")
+		}
+	})
+
+	t.Run("a stored blob with a different size is re-uploaded", func(t *testing.T) {
+		setKey("v3-test-key")
+		if err := os.Truncate(blobPath, 10); err != nil {
+			t.Fatalf("truncate blob: %v", err)
+		}
+
+		result, err := cacheClient.Save(ctx, "test-cache")
+		if err != nil {
+			t.Fatalf("Save: %v", err)
+		}
+		if result.UploadSkipped {
+			t.Error("UploadSkipped = true, want a re-upload over the truncated blob")
+		}
+		fi, err := os.Stat(blobPath)
+		if err != nil {
+			t.Fatalf("stat blob: %v", err)
+		}
+		if fi.Size() != first.Archive.Size {
+			t.Errorf("blob size = %d, want %d after re-upload", fi.Size(), first.Archive.Size)
+		}
+	})
+
+	t.Run("force always uploads", func(t *testing.T) {
+		setKey("v4-test-key")
+		cacheClient.force = true
+
+		result, err := cacheClient.Save(ctx, "test-cache")
+		if err != nil {
+			t.Fatalf("Save: %v", err)
+		}
+		if result.UploadSkipped || result.Transfer == nil {
+			t.Errorf("UploadSkipped = %v, Transfer = %v; want an upload with --force", result.UploadSkipped, result.Transfer)
+		}
+	})
+}
+
 func TestCacheIntegration_RestoreCacheMiss(t *testing.T) {
 	ctx := t.Context()
 
@@ -543,8 +640,8 @@ func TestCacheIntegration_RestoreCacheMiss(t *testing.T) {
 	if result.FallbackUsed {
 		t.Error("should not use fallback")
 	}
-	if result.Key != "test-cache" {
-		t.Errorf("should return requested key, Key = %q, want %q", result.Key, "test-cache")
+	if result.Key != "v1-test-key" {
+		t.Errorf("should return resolved key, Key = %q, want %q", result.Key, "v1-test-key")
 	}
 }
 
@@ -590,6 +687,80 @@ func TestCacheIntegration_RestoreConfirmsSuccessfulExactMatch(t *testing.T) {
 	got := mockClient.confirmCalls[0]
 	if len(got.CacheKey) != 1 || got.CacheKey[0].Value != "v1-test-key" {
 		t.Errorf("confirm targeted cache_key %+v, want single part v1-test-key", got.CacheKey)
+	}
+}
+
+// TestCacheIntegration_SaveAndRestoreReportStats checks that commit (save) and
+// confirm (restore) carry the metrics the operation measured, so the registry
+// can log them.
+func TestCacheIntegration_SaveAndRestoreReportStats(t *testing.T) {
+	ctx := t.Context()
+
+	cacheClient, cacheDir, _ := setupTestCache(t, "local_file")
+	mockClient := cacheClient.api.(*mockAPIClient)
+
+	saveResult, err := cacheClient.Save(ctx, "test-cache")
+	if err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	if len(mockClient.commitCalls) != 1 {
+		t.Fatalf("commit calls = %d, want 1", len(mockClient.commitCalls))
+	}
+	saveStats := mockClient.commitCalls[0].Stats
+	if saveStats == nil {
+		t.Fatal("commit Stats = nil, want the save's stats")
+	}
+	if got, want := saveStats.Backend, "file"; got != want {
+		t.Errorf("save Stats.Backend = %q, want %q", got, want)
+	}
+	if got, want := saveStats.CompressedBytes, saveResult.Archive.Size; got != want {
+		t.Errorf("save Stats.CompressedBytes = %d, want %d", got, want)
+	}
+	if got, want := saveStats.UncompressedBytes, saveResult.Archive.WrittenBytes; got != want {
+		t.Errorf("save Stats.UncompressedBytes = %d, want %d", got, want)
+	}
+	if got, want := saveStats.EntryCount, saveResult.Archive.WrittenEntries; got != want {
+		t.Errorf("save Stats.EntryCount = %d, want %d", got, want)
+	}
+	if got, want := saveStats.ArchiveMs, saveResult.Archive.Duration.Milliseconds(); got != want {
+		t.Errorf("save Stats.ArchiveMs = %d, want %d", got, want)
+	}
+	if saveStats.TotalMs < saveStats.ArchiveMs+saveStats.TransferMs {
+		t.Errorf("save Stats.TotalMs = %d, want at least archive + transfer (%d)", saveStats.TotalMs, saveStats.ArchiveMs+saveStats.TransferMs)
+	}
+	if saveStats.CleanupMs != nil {
+		t.Errorf("save Stats.CleanupMs = %d, want nil", *saveStats.CleanupMs)
+	}
+
+	if err := os.RemoveAll(cacheDir); err != nil {
+		t.Fatalf("RemoveAll: %v", err)
+	}
+
+	restoreResult, err := cacheClient.Restore(ctx, "test-cache")
+	if err != nil {
+		t.Fatalf("Restore: %v", err)
+	}
+	if len(mockClient.confirmCalls) != 1 {
+		t.Fatalf("confirm calls = %d, want 1", len(mockClient.confirmCalls))
+	}
+	restoreStats := mockClient.confirmCalls[0].Stats
+	if restoreStats == nil {
+		t.Fatal("confirm Stats = nil, want the restore's stats")
+	}
+	if got, want := restoreStats.Backend, "file"; got != want {
+		t.Errorf("restore Stats.Backend = %q, want %q", got, want)
+	}
+	if got, want := restoreStats.UncompressedBytes, restoreResult.Archive.WrittenBytes; got != want {
+		t.Errorf("restore Stats.UncompressedBytes = %d, want %d", got, want)
+	}
+	if got, want := restoreStats.EntryCount, restoreResult.Archive.WrittenEntries; got != want {
+		t.Errorf("restore Stats.EntryCount = %d, want %d", got, want)
+	}
+	if got, want := restoreStats.TransferMs, restoreResult.Transfer.Duration.Milliseconds(); got != want {
+		t.Errorf("restore Stats.TransferMs = %d, want %d", got, want)
+	}
+	if restoreStats.CleanupMs == nil {
+		t.Error("restore Stats.CleanupMs = nil, want the cleanup duration")
 	}
 }
 
@@ -680,6 +851,9 @@ func TestCacheIntegration_RestoreMissingBlobInvalidates(t *testing.T) {
 	got := mockClient.expireCalls[0]
 	if len(got.CacheKey) != 1 || got.CacheKey[0].Value != "v1-test-key" {
 		t.Errorf("expire targeted cache_key %+v, want single part v1-test-key", got.CacheKey)
+	}
+	if want := mockClient.commitCalls[0].UploadID; got.UploadID != want {
+		t.Errorf("expire upload_id = %q, want %q from save", got.UploadID, want)
 	}
 	if len(mockClient.confirmCalls) != 0 {
 		t.Errorf("confirm calls = %d, want 0 for a restore that ended in invalidation, not success", len(mockClient.confirmCalls))
@@ -924,6 +1098,56 @@ func TestCacheIntegration_RestoreOverlapAfterHomeChange(t *testing.T) {
 	// Soft-failed before cleanup, so the target's content is untouched.
 	if content, err := os.ReadFile(sentinel); err != nil || string(content) != "b" {
 		t.Errorf("target should be untouched, content=%q err=%v", content, err)
+	}
+}
+
+// A cleanup failure after an earlier target was removed must not extract a
+// partial cache or become a harmless miss. Use a protected target to force a
+// deterministic failure rather than racing filesystem operations in CI.
+func TestCacheIntegration_CleanupFailureStopsBeforeExtraction(t *testing.T) {
+	first := t.TempDir()
+	second := t.TempDir()
+	storagePath := filepath.ToSlash(t.TempDir())
+	if !strings.HasPrefix(storagePath, "/") {
+		storagePath = "/" + storagePath // file:///C:/... on Windows
+	}
+	c := &client{
+		api: newMockAPIClient("local_file"), registry: "~", format: "zip",
+		bucketURL: (&url.URL{Scheme: "file", Path: storagePath}).String(),
+		caches: []configuration.Cache{{
+			Name: "test-cache", TargetPaths: []string{first, second},
+			CacheKey: []configuration.KeyPart{{Source: configuration.SourceLiteral, Arg: "cleanup-failure"}},
+		}},
+	}
+	for _, dir := range []string{first, second} {
+		if err := os.WriteFile(filepath.Join(dir, "data"), []byte("saved"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := c.Save(t.Context(), "test-cache"); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(second, "data"), []byte("live"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	// The first target is removed; the second is now protected as cwd.
+	t.Chdir(second)
+	extracting := false
+	c.onProgress = func(_, stage, _ string, _, _ int) {
+		extracting = extracting || stage == "extracting"
+	}
+	err := restoreWithClient(t.Context(), logger.Discard, c, []string{"test-cache"}, 1, false)
+	if !errors.Is(err, errRestoreMutatedTargets) || !strings.Contains(err.Error(), "target paths may already have been modified") {
+		t.Fatalf("expected fatal partial-cleanup diagnostic: %v", err)
+	}
+	if extracting {
+		t.Error("extraction must not start after cleanup fails")
+	}
+	if _, err := os.Stat(first); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("first target should remain removed, not restored: %v", err)
+	}
+	if got, err := os.ReadFile(filepath.Join(second, "data")); err != nil || string(got) != "live" {
+		t.Fatalf("second target should not be overwritten from archive: %q, %v", got, err)
 	}
 }
 

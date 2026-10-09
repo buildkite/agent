@@ -1,6 +1,6 @@
 ---
 name: cherrypicking-pr-to-v3
-description: Backports (cherry-picks) a merged PR from main (v4) to the v3 branch of buildkite/agent, translating v4 code back to v3 conventions. Use when asked to backport, cherry-pick, or port a PR or commit to v3.
+description: Backports (cherry-picks) a merged PR from main (v4) to the v3 branch of buildkite/agent, translating v4 code back to v3 conventions after checking the change is eligible under the v3 backport policy (security fixes and eligible bug fixes; features only with explicit approval). Use when asked to backport, cherry-pick, or port a PR or commit to v3.
 ---
 
 # Cherry-picking a PR to v3
@@ -10,11 +10,22 @@ Since August 2026, `main` is the v4 codebase. Stable v3 releases come from the
 `main`, then be backported as a second PR against `v3` with the same changes
 translated back to v3 conventions.
 
+## Should this be backported at all?
+
+v4 is the primary agent release and v3 is maintenance-only while it's supported. Before doing any work, check the change against the [Agent v3 Backport Policy](https://app.notion.com/p/buildkite/Agent-v3-Backport-Policy-3d0b8dbc2c8980368255d4c30e058d99):
+
+- **Security fixes**: always eligible for backporting to the latest v3 minor release line, but not automatically required. Check that the vulnerability actually affects v3 agents and is worth fixing there (for example, a dependency bump for a CVE in code v3 never calls may not be).
+- **Bug fixes**: case-by-case only. They must fix a production-affecting bug (not confusing logs or cosmetic issues) that has no backend mitigation or other workaround. In practice, we should also only backport a bug fix when it affects a major customer who can't or won't upgrade to v4.
+- **New features**: don't backport. Exceptions need a very, very good reason and approval from both the Agents team and product. A new feature on v3 would also mean a new v3 minor release line, which extends v3's support window by another year.
+
+The default answer for a customer issue on v3 is to fix it in v4 and ask them to upgrade, not to backport. If the change isn't clearly a security fix that matters for v3 or an eligible bug fix, stop before cherry-picking and tell the user which part of the policy it falls under. Only continue if they confirm the justification (and, for features, that Agents team and product approval has been given). Include that justification in the backport PR description.
+
 ## Workflow
 
 1. Identify the merged PR/commit on `main` to backport. Never cherry-pick the
    v4 merge commit (`8aea45a`, PR #3807) itself — it is the entire v4 delta.
-2. Apply the change onto `v3`: with jj, `jj duplicate <rev> -d v3` (then
+2. Confirm the change is eligible under the backport policy (see above).
+3. Apply the change onto `v3`: with jj, `jj duplicate <rev> -d v3` (then
    `jj edit` the duplicate to resolve conflicts); with git, branch off `v3`
    and `git cherry-pick -x --no-commit <sha>`. Resolve conflicts by
    translating the code as described below. PRs in this repo merge as
@@ -22,12 +33,13 @@ translated back to v3 conventions.
    commit(s), not the merge commit: `jj duplicate` of the merge commit
    produces an empty commit, and `git cherry-pick` refuses it without
    `-m 1`. Select the PR's constituent commit(s) instead.
-3. Translate all v4-isms back to v3 (see checklist).
-4. Raise the backport PR against `v3`. Keep the description concise: state
-   that it is a backport of the original PR (with a link) and note any
-   translation deviations. Do not duplicate the original PR's full
-   description — reviewers can follow the link.
-5. Do not touch the `VERSION` file unless a release is explicitly requested.
+4. Translate all v4-isms back to v3 (see checklist).
+5. Raise the backport PR against `v3`. Keep the description concise: state
+   that it is a backport of the original PR (with a link), why it qualifies
+   under the backport policy, and any translation deviations. Do not
+   duplicate the original PR's full description — reviewers can follow the
+   link.
+6. Do not touch the `VERSION` file unless a release is explicitly requested.
 
 ## Translation checklist (v4 → v3)
 

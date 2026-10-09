@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"runtime"
 	"slices"
 	"time"
@@ -154,10 +155,14 @@ func (e *Executor) checkout(ctx context.Context) error {
 			}
 		}
 
-		// Also fail fast on an unusable sparse checkout mode. resolveSparseCheckout
-		// rejects it again during the checkout, but it can arrive from job env, and
-		// retrying a typo for the whole attempt budget only delays the failure.
+		// Also fail fast on an unusable sparse checkout mode, or base branch fetch
+		// mode. fetchSource and resolveSparseCheckout reject either again during the
+		// checkout, but they can arrive from job env, and retrying a typo for the
+		// whole attempt budget only delays the failure.
 		if _, err := ParseSparseCheckoutMode(e.GitSparseCheckoutMode); err != nil {
+			return err
+		}
+		if _, err := parseGitFetchBaseBranchMode(e.GitFetchBaseBranch); err != nil {
 			return err
 		}
 
@@ -180,9 +185,12 @@ func (e *Executor) checkout(ctx context.Context) error {
 			var errGit *gitError
 
 			switch {
-			case errors.Is(err, ErrCommitVerificationFailed):
-				// A commit that is provably not on its branch won't become valid by
-				// retrying, so fail fast instead of re-cloning through the whole backoff.
+			case errors.Is(err, ErrCommitVerificationFailed),
+				errors.Is(err, errNoBaseBranchToFetch),
+				errors.Is(err, errBaseBranchFetchWritesNoRef):
+				// A commit that is provably not on its branch, a job that names no base
+				// branch to fetch, and fetch flags that write no ref are all settled
+				// answers, so fail fast instead of re-cloning through the whole backoff.
 				e.shell.Warningf("Checkout failed! %s", err)
 				r.Break()
 
@@ -530,6 +538,13 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context, previousAttempts in
 			Shell:        e.shell,
 			Retry:        true,
 			FetchInclude: sparse.lfsInclude(), // cone dirs; nil when inactive or no-cone
+		}
+		if mirrorDir != "" && e.mirrorLFSCacheEnabled() {
+			// Reuse LFS objects prefetched into the persistent mirror (see
+			// checkout_mirror_lfs.go). Point at the mirror itself rather than
+			// mirrorDir: snapshots and dissociated clones contain Git objects
+			// only, while the LFS objects live in the persistent mirror.
+			lfsArgs.ReferenceDir = filepath.Join(e.GitMirrorsPath, dirForRepository(e.Repository))
 		}
 		if sparse.noCone() {
 			// FetchInclude is empty on purpose (see table above). Scope checkout

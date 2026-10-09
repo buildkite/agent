@@ -30,6 +30,10 @@ type Replacer struct {
 	// All strings to search for, for deduplication purposes
 	allNeedles map[string]struct{}
 
+	// Prefix patterns to search for, organised by first byte of the prefix.
+	// Unlike needles, these are not cleared by Reset.
+	prefixesByFirstByte [256][]*prefixPattern
+
 	// For synchronising writes. Each write can touch everything below.
 	mu sync.Mutex
 
@@ -130,6 +134,34 @@ func (r *Replacer) Write(b []byte) (int, error) {
 			// and is added to nextMatches).
 			s.matched++
 
+			// Finished matching a prefix, and now matching its body?
+			if s.prefix != nil && s.position == len(s.needle) {
+				if !s.prefix.body[c] {
+					// The body ended before this byte. Is it long enough to
+					// count as a match?
+					if body := s.matched - 1 - len(s.needle); body >= s.prefix.minBody {
+						r.completedMatches = append(r.completedMatches, subrange{
+							from: bufidx - s.matched + 1,
+							to:   bufidx,
+						})
+					}
+					continue
+				}
+
+				// This byte is part of the body. Keep going, unless the body
+				// has reached the maximum length, in which case the match
+				// ends here.
+				if body := s.matched - len(s.needle); body < s.prefix.maxBody {
+					r.nextMatches = append(r.nextMatches, s)
+					continue
+				}
+				r.completedMatches = append(r.completedMatches, subrange{
+					from: bufidx - s.matched + 1,
+					to:   bufidx + 1,
+				})
+				continue
+			}
+
 			// Does the needle match on this byte?
 			switch s.needle[s.position] {
 			case '\n':
@@ -160,8 +192,9 @@ func (r *Replacer) Write(b []byte) (int, error) {
 				continue
 			}
 
-			// Have we fully matched this needle?
-			if s.position < len(s.needle) {
+			// Have we fully matched this needle? (A fully-matched prefix
+			// survives to match its body on the following bytes.)
+			if s.position < len(s.needle) || s.prefix != nil {
 				// This state survives for another byte.
 				r.nextMatches = append(r.nextMatches, s)
 				continue
@@ -189,6 +222,16 @@ func (r *Replacer) Write(b []byte) (int, error) {
 				needle:   s,
 				matched:  1,
 				position: 1,
+			})
+		}
+		for _, p := range r.prefixesByFirstByte[c] {
+			// A single-byte prefix is not a pathological case: the match
+			// only completes once the body has been matched.
+			r.nextMatches = append(r.nextMatches, partialMatch{
+				needle:   p.prefix,
+				matched:  1,
+				position: 1,
+				prefix:   p,
 			})
 		}
 
@@ -220,14 +263,28 @@ func (r *Replacer) Write(b []byte) (int, error) {
 }
 
 // Flush writes all buffered data to the destination. It assumes there is no
-// more data in the stream, and so any incomplete matches are non-matches.
+// more data in the stream, and so any incomplete needle matches are
+// non-matches. A prefix match whose body is already at least MinBody long is
+// treated as ending at the end of the stream, and is replaced.
 func (r *Replacer) Flush() error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
 	// Since there is no more incoming data, any remaining partial matches
-	// cannot complete.
+	// cannot become any longer.
+	for _, s := range r.partialMatches {
+		if s.prefix == nil || s.position < len(s.needle) {
+			continue
+		}
+		if body := s.matched - len(s.needle); body >= s.prefix.minBody {
+			r.completedMatches = append(r.completedMatches, subrange{
+				from: len(r.buf) - s.matched,
+				to:   len(r.buf),
+			})
+		}
+	}
 	r.partialMatches = r.partialMatches[:0]
+	r.completedMatches = mergeOverlaps(r.completedMatches)
 	return r.flushUpTo(len(r.buf))
 }
 
@@ -332,8 +389,77 @@ func (r *Replacer) Needles() []string {
 	return slices.Collect(maps.Keys(r.allNeedles))
 }
 
-// Reset removes all current needes and sets new set of needles. It is not
-// necessary to Flush beforehand, but:
+// Prefix describes a family of strings to match: a fixed prefix followed by
+// a run of "body" bytes. It suits tokens with a well-known prefix and an
+// unpredictable body, such as "bkua_..." Buildkite API tokens.
+//
+// The match begins at the first byte of Prefix, and extends over every
+// subsequent byte in Body, until either:
+//   - a byte not in Body (or the end of the stream at Flush) is reached, in
+//     which case the match ends before that byte, and is only a match if the
+//     body is at least MinBody bytes long; or
+//   - the body reaches MaxBody bytes, in which case the match ends there.
+//     Further Body bytes are not part of the match.
+//
+// MaxBody bounds the amount of output held back while a body is matching.
+type Prefix struct {
+	// Prefix is the fixed start of the string. It is matched in the same way
+	// as a needle, so it should not contain newlines.
+	Prefix string
+
+	// Body is the set of bytes that may appear after Prefix.
+	Body string
+
+	// MinBody and MaxBody bound the length of the body. Both must be positive,
+	// and MinBody must not exceed MaxBody.
+	MinBody, MaxBody int
+}
+
+// prefixPattern is the internal representation of a Prefix.
+type prefixPattern struct {
+	prefix  string
+	body    [256]bool
+	minBody int
+	maxBody int
+}
+
+// AddPrefixes adds prefix patterns to be matched by the replacer. It is not
+// necessary to Flush beforehand, but new prefixes will not be compared against
+// existing buffer content, only data passed to Write calls after AddPrefixes.
+// Prefixes are not removed by Reset.
+//
+// AddPrefixes panics if any prefix is invalid (see [Prefix]); prefixes are
+// expected to be static configuration.
+func (r *Replacer) AddPrefixes(prefixes ...Prefix) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	for _, p := range prefixes {
+		switch {
+		case p.Prefix == "":
+			panic("replacer: Prefix.Prefix must not be empty")
+		case p.Body == "":
+			panic("replacer: Prefix.Body must not be empty")
+		case p.MinBody <= 0 || p.MaxBody < p.MinBody:
+			panic(fmt.Sprintf("replacer: Prefix must have 0 < MinBody <= MaxBody, got MinBody=%d, MaxBody=%d", p.MinBody, p.MaxBody))
+		}
+
+		pp := &prefixPattern{
+			prefix:  p.Prefix,
+			minBody: p.MinBody,
+			maxBody: p.MaxBody,
+		}
+		for _, c := range []byte(p.Body) {
+			pp.body[c] = true
+		}
+		firstByte := p.Prefix[0]
+		r.prefixesByFirstByte[firstByte] = append(r.prefixesByFirstByte[firstByte], pp)
+	}
+}
+
+// Reset removes all current needles and sets new set of needles. Prefixes
+// (added with AddPrefixes) are unaffected. It is not necessary to Flush
+// beforehand, but:
 //   - any previous needles which have begun matching will continue matching
 //     (until they reach a terminal state), and
 //   - any new needles will not be compared against existing buffer content,
@@ -393,11 +519,17 @@ func NormaliseMultiline(needle string) string {
 	return strings.Join(outLines, "\n")
 }
 
-// partialMatch tracks how far through one of the needles we have matched.
+// partialMatch tracks how far through one of the needles or prefixes we have
+// matched.
 type partialMatch struct {
 	needle   string
-	matched  int // number of bytes i the stream matched
+	matched  int // number of bytes in the stream matched
 	position int // position within the needle matched up to
+
+	// prefix is non-nil if this is a prefix match (in which case needle is
+	// prefix.prefix). Once position reaches len(needle), the match continues
+	// through body bytes; the body length is matched - len(needle).
+	prefix *prefixPattern
 }
 
 // subrange designates a contiguous range in a buffer (slice indexes: inclusive

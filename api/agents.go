@@ -31,6 +31,13 @@ type AgentRegisterResponse struct {
 	HeartbeatInterval int               `json:"heartbeat_interval"`
 	Tags              []string          `json:"meta_data"`
 	Tracing           *AgentTracing     `json:"tracing,omitempty"`
+	Warnings          []Warning         `json:"warnings,omitempty"`
+}
+
+// Warning is a message from Buildkite for the agent to show to its operator,
+// such as a notice that the agent's version is no longer supported.
+type Warning struct {
+	Message string `json:"message"`
 }
 
 // Registers the agent against the Buildkite Agent API. The client for this

@@ -75,6 +75,7 @@ type BootstrapConfig struct {
 	SkipCheckout                 bool          `cli:"skip-checkout"`
 	GitCheckoutTimeout           int           `cli:"git-checkout-timeout"`
 	GitSkipFetchExistingCommits  bool          `cli:"git-skip-fetch-existing-commits"`
+	GitFetchBaseBranch           string        `cli:"git-fetch-base-branch"`
 	GitCheckoutFlags             string        `cli:"git-checkout-flags"`
 	GitCloneFlags                string        `cli:"git-clone-flags"`
 	GitFetchFlags                string        `cli:"git-fetch-flags"`
@@ -89,6 +90,7 @@ type BootstrapConfig struct {
 	GitMirrorCheckoutMode        string        `cli:"git-mirror-checkout-mode"`
 	GitMirrorsLockTimeout        int           `cli:"git-mirrors-lock-timeout"`
 	GitMirrorsSkipUpdate         bool          `cli:"git-mirrors-skip-update"`
+	GitMirrorsLFSCache           bool          `cli:"git-mirrors-lfs-cache"`
 	GitSubmoduleCloneConfig      []string      `cli:"git-submodule-clone-config" normalize:"list"`
 	CheckoutOverrideMode         string        `cli:"checkout-override-mode"`
 	BinPath                      string        `cli:"bin-path" normalize:"filepath"`
@@ -281,9 +283,11 @@ var BootstrapCommand = &cli.Command{
 		GitMirrorCheckoutModeFlag,
 		GitMirrorsLockTimeoutFlag,
 		GitMirrorsSkipUpdateFlag,
+		GitMirrorsLFSCacheFlag,
 		GitSubmoduleCloneConfigFlag,
 		GitCheckoutTimeoutFlag,
 		GitSkipFetchExistingCommitsFlag,
+		GitFetchBaseBranchFlag,
 		CheckoutAttemptsFlag,
 
 		&cli.StringFlag{
@@ -487,6 +491,7 @@ var BootstrapCommand = &cli.Command{
 			SkipCheckout:                 cfg.SkipCheckout,
 			GitCheckoutTimeout:           cfg.GitCheckoutTimeout,
 			GitSkipFetchExistingCommits:  cfg.GitSkipFetchExistingCommits,
+			GitFetchBaseBranch:           cfg.GitFetchBaseBranch,
 			CheckoutOverrideMode:         checkoutMode,
 			Command:                      cfg.Command,
 			CommandEval:                  cfg.CommandEval,
@@ -506,6 +511,7 @@ var BootstrapCommand = &cli.Command{
 			GitMirrorsPath:               cfg.GitMirrorsPath,
 			GitMirrorCheckoutMode:        cfg.GitMirrorCheckoutMode,
 			GitMirrorsSkipUpdate:         cfg.GitMirrorsSkipUpdate,
+			GitMirrorsLFSCache:           cfg.GitMirrorsLFSCache,
 			GitRemoteMirrorURL:           cfg.GitRemoteMirrorURL,
 			GitSubmodules:                cfg.GitSubmodules,
 			GitSubmoduleCloneConfig:      cfg.GitSubmoduleCloneConfig,

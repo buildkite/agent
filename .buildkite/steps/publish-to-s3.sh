@@ -49,6 +49,8 @@ latest_s3_url="$s3_base_url/latest/"
 
 echo "Copying $latest_version_s3_url to $latest_s3_url"
 
-dry_run aws s3 cp --region "us-east-1" --acl "public-read" --recursive "$latest_version_s3_url" "$latest_s3_url"
+# aws-cli v2 copies object tags by default, which needs s3:GetObjectTagging for
+# multipart copies. We don't use tags, so only copy metadata like content-type.
+dry_run aws s3 cp --region "us-east-1" --acl "public-read" --copy-props metadata-directive --recursive "$latest_version_s3_url" "$latest_s3_url"
 
 echo "--- :llama::sparkles::llama: All done!"

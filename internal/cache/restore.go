@@ -9,6 +9,8 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
+	"syscall"
 	"time"
 
 	"github.com/buildkite/agent/v4/api"
@@ -26,6 +28,19 @@ import (
 // miss, so it stays fatal even when cache errors are otherwise fail-open —
 // continuing would run the build against half-restored targets.
 var errRestoreMutatedTargets = errors.New("cache restore failed after modifying target paths")
+
+// restoreCleanupError preserves the filesystem cause and fatal mutation marker.
+// ENOTEMPTY is consistent with a concurrent writer, not proof of one: do not
+// retry destructive cleanup or tell the user their original files are intact.
+func restoreCleanupError(configured, resolved string, err error) error {
+	detail := ""
+	if errors.Is(err, syscall.ENOTEMPTY) {
+		detail = "; a directory remained non-empty during cleanup, possibly because another process is writing to the target; use a job-private target or ensure exclusive access for the entire time the cache is in use"
+	}
+	return errors.Join(errRestoreMutatedTargets, fmt.Errorf(
+		"failed to clean target_path %q (resolved to %q): %w%s; extraction was not started, but target paths may already have been modified",
+		configured, resolved, err, detail))
+}
 
 // Restore restores a cache from storage by ID.
 //
@@ -90,14 +105,13 @@ func (c *client) Restore(ctx context.Context, cacheID string) (RestoreResult, er
 		return result, err
 	}
 
-	result.Key = cacheID
-
 	cacheKey, err := c.resolveCacheKey(cacheConfig)
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, "failed to resolve cache key")
 		return result, fmt.Errorf("failed to resolve cache key: %w", err)
 	}
+	result.Key = displayCacheKey(cacheKey)
 
 	span.SetAttributes(
 		attribute.String("cache.id", cacheID),
@@ -144,6 +158,7 @@ func (c *client) Restore(ctx context.Context, cacheID string) (RestoreResult, er
 		span.SetStatus(codes.Error, "failed to retrieve cache")
 		return result, fmt.Errorf("failed to retrieve cache: %w", err)
 	}
+	result.Diagnostics = retrieveResp.RestoreDiagnostics
 
 	if !exists {
 		// Cache miss
@@ -156,7 +171,7 @@ func (c *client) Restore(ctx context.Context, cacheID string) (RestoreResult, er
 			attribute.Int64("cache.duration_ms", result.TotalDuration.Milliseconds()),
 		)
 		span.SetStatus(codes.Ok, "cache miss")
-		c.callProgress(cacheID, "complete", "Cache miss", 0, 0)
+		c.callProgress(cacheID, "complete", "Cache not restored", 0, 0)
 		return result, nil
 	}
 
@@ -164,6 +179,8 @@ func (c *client) Restore(ctx context.Context, cacheID string) (RestoreResult, er
 	result.FallbackUsed = retrieveResp.Fallback
 	result.CacheHit = !retrieveResp.Fallback
 	result.ExpiresAt = retrieveResp.ExpiresAt
+	result.Key = displayCacheKey(retrieveResp.CacheKey)
+	result.Scopes = retrieveResp.Scopes
 
 	span.SetAttributes(
 		attribute.Bool("cache.fallback_used", result.FallbackUsed),
@@ -199,14 +216,18 @@ func (c *client) Restore(ctx context.Context, cacheID string) (RestoreResult, er
 				attribute.Bool("cache.invalidated", invalidated),
 			)
 			span.SetStatus(codes.Ok, "cache miss (missing blob)")
-			c.callProgress(cacheID, "complete", missCompleteMessage("missing blob", invalidated), 0, 0)
+			result.NotRestoredReason = missCompleteMessage("missing blob", invalidated)
+			c.callProgress(cacheID, "complete", result.NotRestoredReason, 0, 0)
 			return result, nil
 		}
 		if errors.Is(err, ErrDigestMismatch) {
 			// The blob doesn't match its fingerprint. downloadCache verified this
 			// before any target folder was touched, so existing files are intact.
-			// The blob will never verify, so expire the entry to let a subsequent
-			// save re-upload it, and let the build continue with a clean miss.
+			// The blob will never verify, so expire the entry and let the build
+			// continue with a clean miss. A subsequent save re-uploads unless the
+			// stored blob has the same size as the new archive, in which case save
+			// skips the upload and the bad blob stays until it expires (restore
+			// never refreshes its retention, as it never verifies).
 			slog.Warn("cache blob digest mismatch, treating as miss and invalidating entry",
 				"cache_id", cacheID, "err", err)
 			invalidated := c.invalidateStaleEntry(ctx, retrieveResp)
@@ -221,7 +242,8 @@ func (c *client) Restore(ctx context.Context, cacheID string) (RestoreResult, er
 				attribute.Bool("cache.invalidated", invalidated),
 			)
 			span.SetStatus(codes.Ok, "cache miss (digest mismatch)")
-			c.callProgress(cacheID, "complete", missCompleteMessage("blob digest mismatch", invalidated), 0, 0)
+			result.NotRestoredReason = missCompleteMessage("blob digest mismatch", invalidated)
+			c.callProgress(cacheID, "complete", result.NotRestoredReason, 0, 0)
 			return result, nil
 		}
 		span.RecordError(err)
@@ -262,7 +284,8 @@ func (c *client) Restore(ctx context.Context, cacheID string) (RestoreResult, er
 			attribute.Bool("cache.invalidated", invalidated),
 		)
 		span.SetStatus(codes.Ok, "cache miss (archive failed verification)")
-		c.callProgress(cacheID, "complete", missCompleteMessage("archive failed verification", invalidated), 0, 0)
+		result.NotRestoredReason = missCompleteMessage("archive failed verification", invalidated)
+		c.callProgress(cacheID, "complete", result.NotRestoredReason, 0, 0)
 		return result, nil
 	}
 
@@ -292,11 +315,23 @@ func (c *client) Restore(ctx context.Context, cacheID string) (RestoreResult, er
 			attribute.Bool("cache.targets_overlap", true),
 		)
 		span.SetStatus(codes.Ok, "cache miss (targets overlap at restore)")
-		c.callProgress(cacheID, "complete", "Cache miss (targets overlap at restore)", 0, 0)
+		result.NotRestoredReason = "Cache not restored (targets overlap at restore)"
+		c.callProgress(cacheID, "complete", result.NotRestoredReason, 0, 0)
 		return result, nil
 	}
 
+	// Reject unsafe mount layouts for every target before cleaning any of them.
+	for _, path := range resolvedTargets {
+		if _, err := cleanupMount(path); err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, "failed to inspect cache target")
+			return result, fmt.Errorf("failed to inspect cache target %q: %w", path, err)
+		}
+	}
+
 	c.callProgress(cacheID, "cleaning", "Cleaning paths", 0, 0)
+
+	cleanupStart := time.Now()
 
 	for _, path := range cacheConfig.TargetPaths {
 		// Resolve exactly as save/restore matching does.
@@ -312,9 +347,11 @@ func (c *client) Restore(ctx context.Context, cacheID string) (RestoreResult, er
 		if err := cleanPath(ctx, extractedPath); err != nil {
 			span.RecordError(err)
 			span.SetStatus(codes.Error, "failed to clean path")
-			return result, errors.Join(errRestoreMutatedTargets, fmt.Errorf("failed to clean path %q: %w", extractedPath, err))
+			return result, restoreCleanupError(path, extractedPath, err)
 		}
 	}
+
+	cleanupMs := time.Since(cleanupStart).Milliseconds()
 
 	c.callProgress(cacheID, "extracting", "Extracting files from cache", 0, int(transferInfo.BytesTransferred))
 
@@ -341,7 +378,19 @@ func (c *client) Restore(ctx context.Context, cacheID string) (RestoreResult, er
 	// The restore is now fully verified (downloaded, digest-checked, and
 	// extracted) — confirm it with the server so retention refreshes off a
 	// restore that's actually known to be good.
-	confirmed := c.confirmRestoreSucceeded(ctx, retrieveResp)
+	stats := &api.CacheStats{
+		Backend:           store.BackendName(retrieveResp.Store, c.bucketURL),
+		TotalMs:           time.Since(startTime).Milliseconds(),
+		ArchiveMs:         archiveInfo.Duration.Milliseconds(),
+		TransferMs:        transferInfo.Duration.Milliseconds(),
+		CleanupMs:         &cleanupMs,
+		CompressedBytes:   archiveInfo.Size,
+		UncompressedBytes: archiveInfo.WrittenBytes,
+		EntryCount:        archiveInfo.WrittenEntries,
+		PartCount:         transferInfo.PartCount,
+		Concurrency:       transferInfo.Concurrency,
+	}
+	confirmed := c.confirmRestoreSucceeded(ctx, retrieveResp, stats)
 	result.TotalDuration = time.Since(startTime)
 
 	// Add result attributes to span
@@ -364,8 +413,18 @@ func (c *client) Restore(ctx context.Context, cacheID string) (RestoreResult, er
 	return result, nil
 }
 
+func displayCacheKey(key []api.CacheKeyPart) string {
+	parts := make([]string, len(key))
+	for i, part := range key {
+		parts[i] = part.Value
+	}
+	return strings.Join(parts, "-")
+}
+
 // invalidateStaleEntry uses the retrieve response to expire a cache entry whose
-// blob is missing or fails digest verification, so a subsequent save re-uploads it.
+// blob is missing or fails digest verification, so a subsequent save recreates it.
+// The expire is conditional on the retrieved upload ID, so an entry re-saved
+// by another job since the retrieve is left alone.
 // Returns whether an entry was actually deleted — a successful (2xx) call can
 // still be an idempotent no-op, which must not be reported as invalidated.
 func (c *client) invalidateStaleEntry(ctx context.Context, retrieveResp api.CacheEntryRetrieveResp) bool {
@@ -378,6 +437,7 @@ func (c *client) invalidateStaleEntry(ctx context.Context, retrieveResp api.Cach
 		TargetPaths: retrieveResp.TargetPaths,
 		CacheKey:    retrieveResp.CacheKey,
 		Scopes:      retrieveResp.Scopes,
+		UploadID:    retrieveResp.UploadID,
 	}
 	var existed bool
 	err := roko.NewRetrier(
@@ -427,7 +487,7 @@ var confirmRestoreTimeout = 5 * time.Second
 // every cache hit, so a network partition here must not be able to stall an
 // otherwise-successful, latency-sensitive restore by using up 5 full client
 // timeouts.
-func (c *client) confirmRestoreSucceeded(ctx context.Context, retrieveResp api.CacheEntryRetrieveResp) bool {
+func (c *client) confirmRestoreSucceeded(ctx context.Context, retrieveResp api.CacheEntryRetrieveResp, stats *api.CacheStats) bool {
 	if retrieveResp.Fallback {
 		return false
 	}
@@ -443,6 +503,8 @@ func (c *client) confirmRestoreSucceeded(ctx context.Context, retrieveResp api.C
 		TargetPaths: retrieveResp.TargetPaths,
 		CacheKey:    retrieveResp.CacheKey,
 		Scopes:      retrieveResp.Scopes,
+		UploadID:    retrieveResp.UploadID,
+		Stats:       stats,
 	}
 	err := roko.NewRetrier(
 		roko.WithMaxAttempts(5),
@@ -468,12 +530,13 @@ func (c *client) confirmRestoreSucceeded(ctx context.Context, retrieveResp api.C
 
 // missCompleteMessage builds the progress text for a stale-entry miss,
 // distinguishing an actual deletion from a no-op so callers aren't told an
-// entry was invalidated when it wasn't.
+// entry was invalidated when it wasn't. A no-op usually means another job
+// already removed or re-saved the entry; a failed expire logs its own warning.
 func missCompleteMessage(reason string, invalidated bool) string {
 	if invalidated {
 		return fmt.Sprintf("Cache miss (%s, invalidated stale entry)", reason)
 	}
-	return fmt.Sprintf("Cache miss (%s, stale entry could not be invalidated)", reason)
+	return fmt.Sprintf("Cache miss (%s, entry may already have been removed or replaced by a newer save)", reason)
 }
 
 // downloadCache downloads a cache archive from storage
@@ -602,7 +665,8 @@ func (c *client) extractCache(ctx context.Context, archiveFile string, archiveSi
 	return archiveInfo, nil
 }
 
-// cleanPath removes a directory tree for a configured cache path.
+// cleanPath removes a directory tree for a configured cache path, preserving
+// Linux mount roots while removing their contents.
 // It handles Go module cache directories that have 0555 permissions by
 // making them writable before removal.
 func cleanPath(ctx context.Context, dir string) error {
@@ -627,6 +691,7 @@ func cleanPath(ctx context.Context, dir string) error {
 			return fmt.Errorf("cleanPath: refusing to remove volume root %q", clean)
 		}
 	}
+	mounted := false
 	// A final symlink is only unlinked by RemoveAll, so the guards below run only
 	// for a real (non-symlink) target; os.Lstat doesn't dereference it.
 	if lstat, err := os.Lstat(clean); err == nil && lstat.Mode()&os.ModeSymlink == 0 {
@@ -641,6 +706,11 @@ func cleanPath(ctx context.Context, dir string) error {
 
 		// Module cache has 0555 directories; make them writable before removal.
 		if lstat.IsDir() {
+			var err error
+			mounted, err = cleanupMount(clean)
+			if err != nil {
+				return err
+			}
 			if err := makeTreeWritable(ctx, clean); err != nil {
 				return err
 			}
@@ -650,6 +720,27 @@ func cleanPath(ctx context.Context, dir string) error {
 	// Check context again before potentially long RemoveAll
 	if ctx.Err() != nil {
 		return ctx.Err()
+	}
+
+	if mounted {
+		root, err := os.OpenRoot(clean)
+		if err != nil {
+			return fmt.Errorf("cleanPath: open mounted target %q: %w", clean, err)
+		}
+		defer func() { _ = root.Close() }()
+		entries, err := fs.ReadDir(root.FS(), ".")
+		if err != nil {
+			return fmt.Errorf("cleanPath: read mounted target %q: %w", clean, err)
+		}
+		for _, entry := range entries {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+			if err := root.RemoveAll(entry.Name()); err != nil {
+				return fmt.Errorf("cleanPath: remove contents of mounted target %q: %w", clean, err)
+			}
+		}
+		return nil
 	}
 
 	if err := os.RemoveAll(clean); err != nil {

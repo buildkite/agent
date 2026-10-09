@@ -110,8 +110,18 @@ func (p *Process) terminateProcessGroup() error {
 		p.logger.Debugf("[Process] Terminating process")
 		return p.terminateFunc()
 	}
+	// Terminate can be called more than once (e.g. Interrupt falling back to
+	// terminating, then the signal grace period expiring). Only close the job
+	// once: closing it again could close an unrelated handle that has since
+	// reused the number, including one of the Go runtime's.
+	if p.winJobHandle == 0 {
+		p.logger.Debugf("[Process] Job object already destroyed")
+		return nil
+	}
 	p.logger.Debugf("[Process] Terminating process tree by destroying job")
-	return windows.CloseHandle(windows.Handle(p.winJobHandle))
+	h := p.winJobHandle
+	p.winJobHandle = 0
+	return windows.CloseHandle(windows.Handle(h))
 }
 
 func (p *Process) interruptProcessGroup() error {

@@ -1,5 +1,19 @@
 # Buildkite Agent Development Guide
 
+## Documentation contributions
+
+When creating a pull request for the Buildkite documentation site as part of a task
+that involves modifying or analyzing this repository, open it in
+`buildkite/docs-private` by default. This destination is required for Buildkite
+staff. For known external contributors, use `buildkite/docs` instead.
+
+Verify the push destination and pull request base repository before publishing.
+If the required destination is unavailable, ask for guidance rather than switching
+repositories.
+
+Documentation maintained in this repository, such as `README.md`, `CONTRIBUTING.md`,
+and `AGENTS.md`, stays in `buildkite/agent`.
+
 ## Build/Test/Lint Commands
 
 - **Build:** `go build -o buildkite-agent .` or `go run *.go <command>`

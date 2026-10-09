@@ -2,7 +2,9 @@ package jobapi
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"os"
 
@@ -13,7 +15,9 @@ const (
 	envURL            = "http://job/api/current-job/v0/env"
 	workdirURL        = "http://job/api/current-job/v0/workdir"
 	redactionsURL     = "http://job/api/current-job/v0/redactions"
+	redactURL         = "http://job/api/current-job/v0/redact"
 	promiseFailureURL = "http://job/api/current-job/v0/promise-failure"
+	capturedErrorsURL = "http://job/api/current-job/v0/errors"
 )
 
 var (
@@ -26,6 +30,19 @@ var (
 // Client connects to the Job API.
 type Client struct {
 	client *socket.Client
+}
+
+// CaptureError sends an error to the running parent agent. It never falls
+// back to sending the payload directly to Buildkite.
+func (c *Client) CaptureError(ctx context.Context, capturedError *CapturedError) error {
+	body, err := json.Marshal(capturedError)
+	if err != nil {
+		return fmt.Errorf("marshalling captured error: %w", err)
+	}
+	if len(body) > MaxCapturedErrorBody {
+		return fmt.Errorf("captured error request exceeds %d bytes after JSON encoding", MaxCapturedErrorBody)
+	}
+	return c.client.Do(ctx, http.MethodPost, capturedErrorsURL, json.RawMessage(body), nil)
 }
 
 // NewDefaultClient returns a new Job API Client with the default socket path
@@ -119,6 +136,15 @@ func (c *Client) RedactionCreate(ctx context.Context, text string) (string, erro
 	var resp RedactionCreateResponse
 	if err := c.client.Do(ctx, http.MethodPost, redactionsURL, &req, &resp); err != nil {
 		return "", err
+	}
+	return resp.Redacted, nil
+}
+
+// Redact returns output with the job log's secrets redacted by the job executor.
+func (c *Client) Redact(ctx context.Context, output []byte) ([]byte, error) {
+	var resp RedactResponse
+	if err := c.client.Do(ctx, http.MethodPost, redactURL, &RedactRequest{Output: output}, &resp); err != nil {
+		return nil, err
 	}
 	return resp.Redacted, nil
 }

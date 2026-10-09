@@ -2,6 +2,7 @@ package cache
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -265,9 +266,6 @@ func (c *client) Save(ctx context.Context, cacheID string) (SaveResult, error) {
 		attribute.String("cache.object_name", storeObjectName),
 	)
 
-	c.callProgress(cacheID, "uploading", "Uploading cache archive", 0, int(archiveInfo.Size))
-
-	// Upload archive
 	blobStore, err := store.NewBlobStore(ctx, registryResp.Store, c.bucketURL)
 	if err != nil {
 		span.RecordError(err)
@@ -275,30 +273,60 @@ func (c *client) Save(ctx context.Context, cacheID string) (SaveResult, error) {
 		return result, fmt.Errorf("failed to create blob store: %w", err)
 	}
 
-	transferInfo, err := blobStore.Upload(ctx, archiveInfo.ArchivePath, storeObjectName, time.Duration(createResp.RetentionDays)*24*time.Hour)
-	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "failed to upload cache")
-		return result, fmt.Errorf("failed to upload cache: %w", err)
-	}
+	// Content-addressed storage: a blob already stored under this digest holds
+	// these exact bytes, so don't upload it again. Trusting a blob this save
+	// didn't write is safe because restore verifies the digest before unpacking.
+	// --force always uploads, replacing a suspect blob.
+	//
+	// A skipped blob's retention is deliberately not refreshed: restore refreshes
+	// it only after the digest verifies, so a good blob in use stays alive while
+	// a corrupt one ages out instead of being kept alive by every save.
+	result.UploadSkipped = !c.force && blobAlreadyStored(ctx, blobStore, storeObjectName, archiveInfo.Size)
+	span.SetAttributes(attribute.Bool("cache.upload_skipped", result.UploadSkipped))
 
-	// Populate transfer metrics
-	result.Transfer = &TransferMetrics{
-		BytesTransferred: transferInfo.BytesTransferred,
-		TransferSpeed:    transferInfo.TransferSpeed,
-		Duration:         transferInfo.Duration,
-		RequestID:        transferInfo.RequestID,
-		PartCount:        transferInfo.PartCount,
-		Concurrency:      transferInfo.Concurrency,
-	}
+	transferInfo := &store.TransferInfo{}
+	if result.UploadSkipped {
+		c.callProgress(cacheID, "uploading", "Cache archive already in store, skipping upload", 0, 0)
+	} else {
+		c.callProgress(cacheID, "uploading", "Uploading cache archive", 0, int(archiveInfo.Size))
 
-	span.SetAttributes(
-		attribute.Int64("cache.transfer_bytes", transferInfo.BytesTransferred),
-		attribute.Float64("cache.transfer_speed_mbps", transferInfo.TransferSpeed),
-		attribute.String("cache.request_id", transferInfo.RequestID),
-	)
+		transferInfo, err = blobStore.Upload(ctx, archiveInfo.ArchivePath, storeObjectName, time.Duration(createResp.RetentionDays)*24*time.Hour)
+		if err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, "failed to upload cache")
+			return result, fmt.Errorf("failed to upload cache: %w", err)
+		}
+
+		// Populate transfer metrics
+		result.Transfer = &TransferMetrics{
+			BytesTransferred: transferInfo.BytesTransferred,
+			TransferSpeed:    transferInfo.TransferSpeed,
+			Duration:         transferInfo.Duration,
+			RequestID:        transferInfo.RequestID,
+			PartCount:        transferInfo.PartCount,
+			Concurrency:      transferInfo.Concurrency,
+		}
+
+		span.SetAttributes(
+			attribute.Int64("cache.transfer_bytes", transferInfo.BytesTransferred),
+			attribute.Float64("cache.transfer_speed_mbps", transferInfo.TransferSpeed),
+			attribute.String("cache.request_id", transferInfo.RequestID),
+		)
+	}
 
 	c.callProgress(cacheID, "committing", "Committing cache entry", 0, 0)
+
+	stats := &api.CacheStats{
+		Backend:           store.BackendName(registryResp.Store, c.bucketURL),
+		TotalMs:           time.Since(startTime).Milliseconds(),
+		ArchiveMs:         archiveInfo.Duration.Milliseconds(),
+		TransferMs:        transferInfo.Duration.Milliseconds(),
+		CompressedBytes:   archiveInfo.Size,
+		UncompressedBytes: archiveInfo.WrittenBytes,
+		EntryCount:        archiveInfo.WrittenEntries,
+		PartCount:         transferInfo.PartCount,
+		Concurrency:       transferInfo.Concurrency,
+	}
 
 	// Commit cache.
 	// Retry-safe: server-side put_item is an unconditional overwrite with
@@ -316,6 +344,7 @@ func (c *client) Save(ctx context.Context, cacheID string) (SaveResult, error) {
 		// backend-managed multipart uploads, which land in a later milestone.
 		_, commitApiResp, err = c.api.CacheEntryCommit(ctx, c.registry, api.CacheEntryCommitReq{
 			UploadID: createResp.UploadID,
+			Stats:    stats,
 		})
 		if api.BreakOnNonRetryable(r, commitApiResp, err) {
 			return err
@@ -345,6 +374,25 @@ func (c *client) Save(ctx context.Context, cacheID string) (SaveResult, error) {
 	c.callProgress(cacheID, "complete", "Cache saved successfully", 0, 0)
 
 	return result, nil
+}
+
+// blobAlreadyStored reports whether blobStore already holds key with the
+// expected size. The size check catches a truncated blob, not a corrupted one.
+// Any error means "not stored", so a failed check costs an upload, never a save.
+func blobAlreadyStored(ctx context.Context, blobStore store.Blob, key string, size int64) bool {
+	got, err := blobStore.Stat(ctx, key)
+	switch {
+	case errors.Is(err, store.ErrBlobNotFound):
+		return false
+	case err != nil:
+		slog.Warn("cache blob existence check failed, uploading anyway", "key", key, "err", err)
+		return false
+	case got != size:
+		slog.Warn("cache blob already stored with a different size, uploading anyway",
+			"key", key, "stored_size", got, "archive_size", size)
+		return false
+	}
+	return true
 }
 
 // checkPathsExist validates that all paths exist on the filesystem
