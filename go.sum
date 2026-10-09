@@ -114,8 +114,8 @@ github.com/bugsnag/panicwrap v1.3.4 h1:A6sXFtDGsgU/4BLf5JT0o5uYg3EeKgGx3Sfs+/uk3
 github.com/bugsnag/panicwrap v1.3.4/go.mod h1:D/8v3kj0zr8ZAKg1AQ6crr+5VwKN5eIywRkfhyM/+dE=
 github.com/buildkite/bintest/v3 v3.3.0 h1:RTWcSaJRlOT6t/K311ejPf+0J3LE/QEODzVG3vlLnWo=
 github.com/buildkite/bintest/v3 v3.3.0/go.mod h1:btqpTsVODiJcb0NMdkkmtMQ6xoFc2W/nY5yy+3I0zcs=
-github.com/buildkite/buildkite-gha v0.102.1-0.20261009094340-da6485b51f3f h1:QWXYqyCY1I6/TUCB/pxnDCejI44dL5+WhVKUP8hbfw8=
-github.com/buildkite/buildkite-gha v0.102.1-0.20261009094340-da6485b51f3f/go.mod h1:H9s8eX3U+2KUoQGcawaIrAOlbUIx/J+z3MdrKjFDkhk=
+github.com/buildkite/buildkite-gha v0.102.1-0.20261009103817-0099d1ba090e h1:2kfxQhHkzGQQLyfzSlC7xd3461mxEIOA/9m4fJZ78d4=
+github.com/buildkite/buildkite-gha v0.102.1-0.20261009103817-0099d1ba090e/go.mod h1:H9s8eX3U+2KUoQGcawaIrAOlbUIx/J+z3MdrKjFDkhk=
 github.com/buildkite/go-buildkite/v4 v4.23.0 h1:GlLgPzGz/+B/4Fc5CphIxynoQn00SdSu6QQp4PlAI3M=
 github.com/buildkite/go-buildkite/v4 v4.23.0/go.mod h1:t/M4DUcs7qyebtzm3nkyZ1zUB/svWnKtR+uRU2Ca8tQ=
 github.com/buildkite/go-pipeline v0.18.1 h1:24vuQtRrHoLTC+ywuG7/C6I1TYiiP/ib2sCM4byPCZY=

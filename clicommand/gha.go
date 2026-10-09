@@ -28,7 +28,7 @@ import (
 
 // This identity binds the opaque plans to the compiler/runtime module, not the
 // agent release. The executable digest additionally binds them to this binary.
-const ghaVersion = "agent-da6485b51f3f"
+const ghaVersion = "agent-0099d1ba090e"
 
 type ghaBackend struct {
 	client     *api.Client

@@ -22,7 +22,7 @@ require (
 	github.com/aws/smithy-go v1.28.1
 	github.com/brunoscheufler/aws-ecs-metadata-go v0.0.0-20221221133751-67e37ae746cd
 	github.com/buildkite/bintest/v3 v3.3.0
-	github.com/buildkite/buildkite-gha v0.102.1-0.20261009094340-da6485b51f3f
+	github.com/buildkite/buildkite-gha v0.102.1-0.20261009103817-0099d1ba090e
 	github.com/buildkite/go-buildkite/v4 v4.23.0
 	github.com/buildkite/go-pipeline v0.18.1
 	github.com/buildkite/interpolate v0.1.5
