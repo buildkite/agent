@@ -192,6 +192,7 @@ func TestGitErrorCapture(t *testing.T) {
 					if !errors.As(err, &gitErr) || gitErr.Type != tc.errorType || gitErr.WasRetried {
 						t.Fatalf("error classification changed: %v", err)
 					}
+					captureCheckoutError(ctx, sh, fmt.Errorf("secret-wrapper: %w", err))
 				}
 				want := 0
 				if enabled && tc.code != "" {
@@ -274,6 +275,7 @@ fi
 			}
 			deliveryStarted := time.Now()
 			pending.deliver(ctx, e.shell)
+			captureCheckoutError(ctx, e.shell, err)
 			attempts, readErr := os.ReadFile(attemptsFile)
 			if readErr != nil || strings.TrimSpace(string(attempts)) != fmt.Sprint(tc.attempts) {
 				t.Fatalf("attempts = %q, %v; want %d", attempts, readErr, tc.attempts)
@@ -337,6 +339,7 @@ esac
 		t.Fatalf("fetch recovery classification changed: %v", err)
 	}
 	pending.deliver(ctx, e.shell)
+	captureCheckoutError(ctx, e.shell, err)
 	if attempts, err := os.ReadFile(attemptsFile); err != nil || string(attempts) != "4\n" {
 		t.Fatalf("attempts = %q, %v; want 4", attempts, err)
 	}
@@ -386,6 +389,7 @@ func TestGitHTTPAuthenticationErrorCapture(t *testing.T) {
 			if shell.ExitCode(err) != 128 {
 				t.Fatalf("exit = %d, want 128: %v", shell.ExitCode(err), err)
 			}
+			captureCheckoutError(ctx, sh, err)
 			if len(reports) != 1 {
 				t.Fatalf("reports = %d, want 1", len(reports))
 			}
@@ -396,10 +400,180 @@ func TestGitHTTPAuthenticationErrorCapture(t *testing.T) {
 	}
 }
 
+func TestCheckoutErrorCaptureFromExecutor(t *testing.T) {
+	ctx, e, reports := gitErrorCaptureServer(t, true, http.StatusCreated)
+	e.Repository = "secret-url"
+	e.GitCloneFlags = "'"
+	e.CheckoutAttempts = 1
+	e.shell.Env.Set("BUILDKITE_BUILD_CHECKOUT_PATH", filepath.Join(t.TempDir(), "checkout"))
+	t.Cleanup(func() {
+		if e.checkoutRoot != nil {
+			_ = e.checkoutRoot.Close()
+		}
+	})
+	if err := e.checkout(ctx); err == nil || !strings.Contains(err.Error(), "splitting --git-clone-flags") {
+		t.Fatalf("checkout error = %v, want invalid clone flags", err)
+	}
+	if len(reports) != 1 {
+		t.Fatalf("reports = %d, want 1", len(reports))
+	}
+	if r := <-reports; r.Code != "git_checkout_phase_failed" || r.Message != "The default checkout phase failed." {
+		t.Fatalf("unexpected checkout report: %#v", r)
+	}
+}
+
+func TestSubmoduleErrorCapture(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Git fixture uses a POSIX shell")
+	}
+	t.Parallel()
+	for _, tc := range []struct {
+		command, wantError string
+	}{
+		{"submodule update", "updating submodules: exit status 128"},
+		{"submodule foreach", "resetting submodules: exit status 128"},
+	} {
+		t.Run(tc.command, func(t *testing.T) {
+			t.Parallel()
+			ctx, e, reports := gitErrorCaptureServer(t, true, http.StatusCreated)
+			dir := t.TempDir()
+			script := `#!/bin/sh
+if [ "$1" = "config" ]; then
+  printf 'submodule.example.url\nsecret-url\000'
+fi
+if [ "$1 $2" = "$FAIL_COMMAND" ]; then
+  echo 'fatal: secret-error' >&2
+  exit 128
+fi
+exit 0
+`
+			if err := os.WriteFile(filepath.Join(dir, "git"), []byte(script), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			e.shell.Env.Set("PATH", dir)
+			e.shell.Env.Set("FAIL_COMMAND", tc.command)
+			err := e.updateGitSubmodules(ctx)
+			if err == nil || err.Error() != tc.wantError || shell.ExitCode(err) != 128 {
+				t.Fatalf("submodule error = %v, want %q with exit 128", err, tc.wantError)
+			}
+			captureCheckoutError(ctx, e.shell, err)
+			if len(reports) != 1 {
+				t.Fatalf("reports = %d, want 1", len(reports))
+			}
+			if report := <-reports; report.Code != "git_checkout_phase_failed" || report.Message != "The default checkout phase failed." {
+				t.Fatalf("unexpected submodule report: %#v", report)
+			}
+		})
+	}
+}
+
+func TestCheckoutPreflightErrorCapture(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name, sparseMode, wantError string
+		code, message               string
+		lfsEnabled                  bool
+	}{
+		{
+			name:       "missing git-lfs",
+			lfsEnabled: true,
+			wantError:  "BUILDKITE_GIT_LFS_ENABLED=true but `git lfs version` failed; git-lfs may not be installed or not resolvable by git: exit status 1",
+			code:       "git_lfs_preflight_failed",
+			message:    "Git LFS version check failed.",
+		},
+		{
+			name:       "invalid sparse checkout mode",
+			sparseMode: "secret-mode",
+			wantError:  `invalid sparse checkout mode "secret-mode", must be one of [cone no-cone]`,
+			code:       "git_invalid_sparse_checkout_mode",
+			message:    "Git checkout received an invalid sparse checkout mode.",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			if tc.lfsEnabled && runtime.GOOS == "windows" {
+				t.Skip("Git fixture uses a POSIX shell")
+			}
+			ctx, e, reports := gitErrorCaptureServer(t, true, http.StatusCreated)
+			e.Repository = "secret-url"
+			e.GitLFSEnabled = tc.lfsEnabled
+			e.GitSparseCheckoutMode = tc.sparseMode
+			if tc.lfsEnabled {
+				dir := t.TempDir()
+				if err := os.WriteFile(filepath.Join(dir, "git"), []byte("#!/bin/sh\necho 'git: lfs is not a git command' >&2\nexit 1\n"), 0o755); err != nil {
+					t.Fatal(err)
+				}
+				e.shell.Env.Set("PATH", dir)
+			}
+			if err := e.checkout(ctx); err == nil || err.Error() != tc.wantError {
+				t.Fatalf("checkout error = %v, want %q", err, tc.wantError)
+			}
+			if len(reports) != 1 {
+				t.Fatalf("reports = %d, want 1", len(reports))
+			}
+			if r := <-reports; r.Code != tc.code || r.Message != tc.message {
+				t.Fatalf("unexpected checkout report: %#v", r)
+			}
+		})
+	}
+}
+
+func TestCheckoutErrorCapture(t *testing.T) {
+	for _, tc := range []struct {
+		name, code string
+		err        error
+	}{
+		{"invalid ref", "git_invalid_ref", fmt.Errorf("secret-ref: %w", errInvalidRef)},
+		{"verification", "git_commit_verification_failed", fmt.Errorf("secret-ref: %w", ErrCommitVerificationFailed)},
+		{"timeout", "git_checkout_timeout", errors.Join(errCheckoutAttemptTimedOut, &gitError{error: &shell.ExitError{Code: -1}, Type: gitErrorClone})},
+		{"setup", "git_checkout_phase_failed", errors.New("secret-path")},
+		{"merge head validation", "git_checkout_phase_failed", &gitError{error: errors.New("unexpected merge head secret-ref"), Type: gitErrorFetch}},
+		{"mirror state repair", "git_checkout_phase_failed", &gitError{error: &shell.ExitError{Code: 128}, Type: gitErrorFetchRetryClean}},
+		{"lock timeout", "git_checkout_lock_timeout", fmt.Errorf("secret-path: %w", ErrTimedOutAcquiringLock{Name: "secret-lock", Err: context.DeadlineExceeded})},
+		{"cancelled preflight", "", errors.Join(errGitLFSPreflight, context.Canceled)},
+		{"signalled preflight", "", errors.Join(errGitLFSPreflight, &shell.ExitError{Code: -1})},
+		{"cancelled", "", &gitError{error: context.Canceled, Type: gitErrorFetch}},
+		{"signalled", "", &gitError{error: &shell.ExitError{Code: -1}, Type: gitErrorClone}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx, e, reports := gitErrorCaptureServer(t, true, http.StatusCreated)
+			var before gitError
+			if gitErr, ok := tc.err.(*gitError); ok {
+				before = *gitErr
+			}
+			captureCheckoutError(ctx, e.shell, tc.err)
+			if gitErr, ok := tc.err.(*gitError); ok {
+				if gitErr.Type != before.Type || gitErr.WasRetried != before.WasRetried || gitErr.error != before.error {
+					t.Fatal("capture changed the original error or retry behavior")
+				}
+				// Outer handling must not resubmit the same observation.
+				captureCheckoutError(ctx, e.shell, tc.err)
+			}
+			if tc.code == "" {
+				if len(reports) != 0 {
+					t.Fatal("cancellation produced a report")
+				}
+				return
+			}
+			if len(reports) != 1 {
+				t.Fatalf("reports = %d, want 1", len(reports))
+			}
+			r := <-reports
+			if r.Code != tc.code || strings.Contains(r.Message, "secret-") {
+				t.Fatalf("unexpected report: %#v", r)
+			}
+			if tc.code == "git_checkout_phase_failed" && r.Message != "The default checkout phase failed." {
+				t.Fatalf("message = %q, want neutral checkout summary", r.Message)
+			}
+		})
+	}
+}
+
 func TestGitCaptureDeliveryFailureAndCancellation(t *testing.T) {
 	ctx, e, reports := gitErrorCaptureServer(t, true, http.StatusServiceUnavailable)
 	gitErr := &gitError{error: &shell.ExitError{Code: 128}, Type: gitErrorClean}
 	captureGitError(ctx, e.shell, gitErr, "")
+	captureCheckoutError(ctx, e.shell, gitErr)
 	if len(reports) != 1 || shell.ExitCode(gitErr) != 128 {
 		t.Fatal("failed delivery was retried or changed the Git result")
 	}
@@ -458,15 +632,44 @@ func TestCheckoutErrorCaptureDeliveryDoesNotCauseTimeout(t *testing.T) {
 		t.Fatalf("checkout error = %v, want missing remote ref with exit 128", err)
 	}
 	// The upstream stalls until the delivery deadline, beyond the checkout's
-	// one-second budget.
+	// one-second budget. Outer handling must not submit it again or add a timeout.
 	if elapsed := time.Since(start); elapsed < 2*time.Second {
 		t.Fatalf("delivery took %v, want its own two-second budget", elapsed)
 	}
+	captureCheckoutError(ctx, e.shell, err)
 	if len(reports) != 1 {
 		t.Fatalf("reports = %d, want one missing-ref report", len(reports))
 	}
 	if report := <-reports; report.Code != "git_ref_not_found" {
 		t.Fatalf("report code = %q, want git_ref_not_found", report.Code)
+	}
+}
+
+func TestCheckoutErrorCaptureGenuineTimeout(t *testing.T) {
+	ctx, e, reports := gitErrorCaptureServer(t, true, http.StatusCreated)
+	remote := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		<-r.Context().Done()
+	}))
+	t.Cleanup(remote.Close)
+	e.Repository = remote.URL
+	e.GitCheckoutTimeout = 1
+	e.shell.Env.Set("BUILDKITE_BUILD_CHECKOUT_PATH", filepath.Join(t.TempDir(), "checkout"))
+	t.Cleanup(func() {
+		if e.checkoutRoot != nil {
+			_ = e.checkoutRoot.Close()
+		}
+	})
+
+	err := e.runDefaultCheckoutAttempt(ctx, 0)
+	if !errors.Is(err, errCheckoutAttemptTimedOut) {
+		t.Fatalf("checkout error = %v, want checkout timeout", err)
+	}
+	captureCheckoutError(ctx, e.shell, err)
+	if len(reports) != 1 {
+		t.Fatalf("reports = %d, want one timeout report", len(reports))
+	}
+	if report := <-reports; report.Code != "git_checkout_timeout" {
+		t.Fatalf("report code = %q, want git_checkout_timeout", report.Code)
 	}
 }
 
