@@ -109,6 +109,51 @@ func URLCredentials(rawURL string) string {
 	return u.String()
 }
 
+// Match just the URL prefix through userinfo, leaving paths and surrounding
+// diagnostic punctuation untouched. Spaces in URL credentials must be escaped.
+// A password containing an unescaped "/" makes the URL invalid, but Git still
+// prints it, so also match "user:" followed by anything up to the last "@",
+// since the password can contain "@" too. This also
+// matches a host with a port and an "@" in its path, which is masked too.
+var urlUserinfo = regexp.MustCompile(`(?i)(?:[a-z][a-z0-9+.-]*:)?//(?:[^\s/<>]*|[^\s/<>@:\[]*:[^\s<>]*)@`)
+
+// URLCredentialsInText masks URL userinfo in diagnostic text, including tokens
+// used as usernames. It does not detect secrets in paths, queries or plain text.
+func URLCredentialsInText(text string) string {
+	return urlUserinfo.ReplaceAllStringFunc(text, func(prefix string) string {
+		masked := URLCredentials(prefix)
+		if masked != prefix && masked != "(invalid URL)" {
+			return masked
+		}
+		if u, err := url.Parse(prefix); err == nil && u.User != nil {
+			return masked // already masked
+		}
+		// Malformed userinfo can parse as a host, path, query or fragment
+		// instead. Mask it, but keep the scheme, so the rest of the URL is still
+		// recognized, such as by URLQueriesInText.
+		return prefix[:strings.Index(prefix, "//")+2] + "xxxxx@"
+	})
+}
+
+// Match a URL's query string, up to whitespace, a quote, or punctuation that
+// ends the sentence around it.
+var urlQuery = regexp.MustCompile(`(?i)\b([a-z][a-z0-9+.-]*://[^\s?#"<>]+)\?[^\s#"<>]*[^\s#"'<>.,;:!?)\]}]`)
+
+// URLQueriesInText replaces URL query strings in diagnostic text, which can
+// carry credentials such as the signature in a presigned storage URL.
+func URLQueriesInText(text string) string {
+	redacted := string(Redacted(nil))
+	return urlQuery.ReplaceAllStringFunc(text, func(match string) string {
+		url, query, _ := strings.Cut(match, "?")
+		// Leave a query masked earlier alone, including its closing bracket,
+		// which the match leaves out as punctuation.
+		if strings.HasPrefix(redacted, query) {
+			return match
+		}
+		return url + "?" + redacted
+	})
+}
+
 // String is a convenience wrapper for redacting small strings.
 // This is fine to call repeatedly with many separate strings, but avoid using
 // this to redact large streams - it requires buffering the whole input and
