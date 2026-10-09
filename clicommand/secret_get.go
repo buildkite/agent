@@ -109,6 +109,12 @@ func secretGet(ctx context.Context, cfg SecretGetConfig, w io.Writer, l logger.L
 		for _, err := range errs {
 			_, _ = fmt.Fprintf(sb, " - %v\n", err)
 		}
+		failedKeys, detail := secrets.DescribeFetchErrors("`buildkite-agent secret get` could not fetch these secrets:", errs)
+		fallback := "`buildkite-agent secret get` could not fetch the secrets. " + secrets.FetchErrorFix
+		if len(failedKeys) > 0 {
+			fallback = fmt.Sprintf("`buildkite-agent secret get` could not fetch these secrets: %s. %s", secrets.ListKeys(failedKeys, 5), secrets.FetchErrorFix)
+		}
+		captureAgentError(ctx, l, "secrets_fetch_failed", jobapi.CapturedErrorMessage(detail, fallback))
 		return errors.New(sb.String())
 	}
 

@@ -9,6 +9,7 @@ import (
 	"io"
 	"iter"
 	"maps"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -28,6 +29,7 @@ import (
 	"github.com/buildkite/agent/v4/internal/redact"
 	"github.com/buildkite/agent/v4/internal/replacer"
 	"github.com/buildkite/agent/v4/internal/stdin"
+	"github.com/buildkite/agent/v4/jobapi"
 	"github.com/buildkite/agent/v4/logger"
 	"github.com/buildkite/go-pipeline"
 	"github.com/buildkite/go-pipeline/jwkutil"
@@ -197,11 +199,23 @@ var PipelineUploadCommand = &cli.Command{
 		},
 		RedactedVars,
 	}),
-	Action: func(ctx context.Context, c *cli.Command) error {
+	Action: func(ctx context.Context, c *cli.Command) (err error) {
 		ctx, cfg, l, _, done := setupLoggerAndConfig[PipelineUploadConfig](ctx, c)
 		defer done()
 		ctx, span := otel.Tracer("buildkite-agent").Start(ctx, "pipeline-upload")
 		defer span.End()
+
+		// stage records how far the upload got, and failure the underlying
+		// cause when the returned error is a silent exit.
+		stage, failure := "read", error(nil)
+		// environ is the interpolation environment, which also gains the
+		// variables a pipeline's env block declares.
+		var environ *env.Environment
+		defer func() {
+			if err != nil {
+				capturePipelineUploadError(ctx, l, stage, cmp.Or(failure, err), cfg.RedactedVars, environ)
+			}
+		}()
 
 		// Find the pipeline either from STDIN or the non-flag arguments
 		type input struct {
@@ -288,7 +302,7 @@ var PipelineUploadCommand = &cli.Command{
 			}
 		}
 
-		environ := env.FromSlice(os.Environ())
+		environ = env.FromSlice(os.Environ())
 
 		if !cfg.NoInterpolation { // yes, interpolation
 			// resolve BUILDKITE_COMMIT based on the local git repo
@@ -296,6 +310,7 @@ var PipelineUploadCommand = &cli.Command{
 		}
 
 		// Used to encode output in dry-run mode.
+		stage = "options"
 		dryRunEnc := func(any) error { return nil }
 		if cfg.DryRun {
 			switch cfg.DryRunFormat {
@@ -341,10 +356,12 @@ var PipelineUploadCommand = &cli.Command{
 			// For each pipeline in the input (could be multiple)...
 			count := 1
 			for result, err := range cfg.parseAndInterpolate(ctx, input.name, input.file, environ) {
+				stage = "parse"
 				if abort := cfg.handleParseError(l, input.name, err); abort != nil {
 					return abort
 				}
 
+				stage = "secret_detection"
 				if len(cfg.RedactedVars) > 0 {
 					// Secret detection uses the original environment, since
 					// Interpolate merges the pipeline's env block into `environ`.
@@ -354,6 +371,7 @@ var PipelineUploadCommand = &cli.Command{
 					}
 				}
 
+				stage = "signing"
 				var key signature.Key
 
 				switch {
@@ -404,6 +422,7 @@ var PipelineUploadCommand = &cli.Command{
 				// All logging happens to stderr.
 				// So this can be used with other tools to get interpolated, signed
 				// JSON or YAML.
+				stage = "dry_run"
 				if err := dryRunEnc(result); err != nil {
 					return err
 				}
@@ -414,6 +433,7 @@ var PipelineUploadCommand = &cli.Command{
 					continue
 				}
 
+				stage = "environment"
 				// Check we have a job id set if not in dry run
 				if cfg.Job == "" {
 					return errors.New("missing job parameter; this is usually set in the environment for a Buildkite job via BUILDKITE_JOB_ID")
@@ -424,6 +444,7 @@ var PipelineUploadCommand = &cli.Command{
 					return errors.New("missing agent-access-token parameter; this is usually set in the environment for a Buildkite job via BUILDKITE_AGENT_ACCESS_TOKEN")
 				}
 
+				stage = "upload"
 				uploader := &agent.PipelineUploader{
 					Client: api.NewClient(l, loadAPIClientConfig(cfg, "AgentAccessToken")),
 					JobID:  cfg.Job,
@@ -436,6 +457,7 @@ var PipelineUploadCommand = &cli.Command{
 				}
 				if err := uploader.Upload(ctx, l); err != nil {
 					l.Errorf("Couldn't upload: %v", err)
+					failure = err
 					return NewSilentExitError(1)
 				}
 
@@ -446,6 +468,62 @@ var PipelineUploadCommand = &cli.Command{
 
 		return nil
 	},
+}
+
+// capturePipelineUploadError reports why a pipeline upload failed. Parse and
+// API errors explain what to fix, so they are reported when they fit.
+func capturePipelineUploadError(ctx context.Context, l logger.Logger, stage string, err error, redactedVars []string, environ *env.Environment) {
+	// Each stage is what the upload was doing, and how to fix a failure there.
+	stages := map[string][2]string{
+		"read":             {"reading the pipeline", "Check that the pipeline file exists and is not empty."},
+		"options":          {"checking its options", "Pass --format json or --format yaml with --dry-run."},
+		"parse":            {"parsing the pipeline", "Fix the pipeline definition; line numbers refer to the uploaded input."},
+		"secret_detection": {"checking the pipeline for secrets", "Write the variable as $$VAR so it is interpolated when each job runs, or stop interpolating secrets into the pipeline."},
+		"signing":          {"signing the pipeline", "Check the signing key options passed to `buildkite-agent pipeline upload`."},
+		"dry_run":          {"writing the dry-run output", "Check that the command's standard output can be written to."},
+		"environment":      {"checking the job's environment", "Run the upload in a job, where BUILDKITE_JOB_ID and BUILDKITE_AGENT_ACCESS_TOKEN are set, or pass --job and --agent-access-token."},
+		"upload":           {"uploading the pipeline to Buildkite", pipelineUploadFix(err)},
+	}
+	doing, fix := stages[stage][0], stages[stage][1]
+	fallback := fmt.Sprintf("`buildkite-agent pipeline upload` failed while %s. %s", doing, fix)
+	message := fmt.Sprintf("`buildkite-agent pipeline upload` failed while %s: %v. %s", doing, err, fix)
+	// The Local Job API redacts the values the agent knows of, but not a
+	// secret set only in the step's shell or declared in the pipeline's env
+	// block, which an interpolation error such as ${VAR?$SECRET} can include,
+	// so redact those here.
+	pairs := env.FromSlice(os.Environ()).DumpPairs()
+	if environ != nil {
+		pairs = append(pairs, environ.DumpPairs()...)
+	}
+	matched, _, needlesErr := redact.Vars(redactedVars, pairs)
+	if needlesErr != nil {
+		// Without the values to redact, send only the agent's own text.
+		message = fallback
+	}
+	values := make([]string, 0, len(matched))
+	for _, pair := range matched {
+		values = append(values, pair.Value)
+	}
+	message = redact.String(message, values)
+	captureAgentError(ctx, l, "pipeline_upload_failed", jobapi.CapturedErrorMessage(message, fallback))
+}
+
+// pipelineUploadFix suggests how to fix a failed upload, depending on whether
+// Buildkite rejected the pipeline, rejected the job's token, or failed.
+func pipelineUploadFix(err error) string {
+	if errResp := new(api.ErrorResponse); errors.As(err, &errResp) && errResp.Response != nil {
+		switch status := errResp.Response.StatusCode; {
+		case status == http.StatusBadRequest || status == http.StatusUnprocessableEntity:
+			return "Fix the pipeline definition so that Buildkite accepts it."
+		case status == http.StatusUnauthorized || status == http.StatusForbidden:
+			return "Buildkite rejected the job's agent access token. Run the upload in the job the token belongs to, while it is running."
+		case status == http.StatusTooManyRequests:
+			return "Buildkite rate limited the upload. Retry the step later."
+		case status >= 500:
+			return "Buildkite could not process the request. Retry the step."
+		}
+	}
+	return "If Buildkite rejected the pipeline, fix the pipeline definition so that it accepts it. Otherwise, retry the step, and check this agent's network access to Buildkite if it keeps failing."
 }
 
 // resolveCommit resolves and replaces BUILDKITE_COMMIT with the resolved value.

@@ -95,6 +95,7 @@ func TestGitCredentialsHelperCommand(t *testing.T) {
 		wantRepo   string
 		wantOutput string
 		wantError  bool
+		wantReason string
 	}{
 		{
 			name:       "GitHub URL",
@@ -134,6 +135,7 @@ func TestGitCredentialsHelperCommand(t *testing.T) {
 			wantRepo:   "https://acme.code.storage/team/widgets.git",
 			wantOutput: "username=fail\npassword=fail\n\n",
 			wantError:  true,
+			wantReason: "Buildkite's response contained invalid characters.",
 		},
 		{
 			name:       "malformed input",
@@ -141,6 +143,7 @@ func TestGitCredentialsHelperCommand(t *testing.T) {
 			input:      "protocol=https\nhost=git.example.com\n",
 			wantOutput: "username=fail\npassword=fail\n\n",
 			wantError:  true,
+			wantReason: "Git's credential request did not name an HTTPS repository",
 		},
 		{
 			name:       "HTTP failure",
@@ -150,6 +153,7 @@ func TestGitCredentialsHelperCommand(t *testing.T) {
 			wantRepo:   "https://git.example.com/acme/widgets.git",
 			wantOutput: "username=fail\npassword=fail\n\n",
 			wantError:  true,
+			wantReason: "The request to Buildkite failed: POST ",
 		},
 		{
 			name:       "empty token",
@@ -159,6 +163,7 @@ func TestGitCredentialsHelperCommand(t *testing.T) {
 			wantRepo:   "https://git.example.com/acme/widgets.git",
 			wantOutput: "username=fail\npassword=fail\n\n",
 			wantError:  true,
+			wantReason: "Buildkite returned an empty token.",
 		},
 		{
 			name:   "non-get action is a no-op",
@@ -189,6 +194,7 @@ func TestGitCredentialsHelperCommand(t *testing.T) {
 			}))
 			t.Cleanup(server.Close)
 
+			reports := startAgentErrorTestServer(t)
 			output, err := runGitCredentialsHelperCommand(t, server.URL, test.action, test.input)
 			if (err != nil) != test.wantError {
 				t.Fatalf("error = %v, wantError %t", err, test.wantError)
@@ -202,6 +208,19 @@ func TestGitCredentialsHelperCommand(t *testing.T) {
 			}
 			if requests != wantRequests {
 				t.Errorf("requests = %d, want %d", requests, wantRequests)
+			}
+			if test.wantReason == "" {
+				if len(*reports) != 0 {
+					t.Errorf("reports = %+v, want none", *reports)
+				}
+				return
+			}
+			const lead = "The Git credential helper could not get repository credentials, so Git authentication will fail. "
+			if len(*reports) != 1 || (*reports)[0].Code != "repository_credentials_failed" || !strings.HasPrefix((*reports)[0].Message, lead+test.wantReason) {
+				t.Fatalf("reports = %+v, want repository_credentials_failed with reason %q", *reports, test.wantReason)
+			}
+			if message := (*reports)[0].Message; strings.Contains(message, "pierre-jwt") || strings.HasPrefix(test.wantReason, "The request") != strings.Contains(message, "400 Bad Request") {
+				t.Errorf("message = %q, want only an HTTP failure's response and never a token", message)
 			}
 		})
 	}

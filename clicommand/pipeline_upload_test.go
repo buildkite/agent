@@ -2,11 +2,17 @@ package clicommand
 
 import (
 	"errors"
+	"fmt"
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
 
+	"github.com/buildkite/agent/v4/api"
 	"github.com/buildkite/agent/v4/env"
 	"github.com/buildkite/agent/v4/internal/experiments"
 	"github.com/buildkite/agent/v4/logger"
@@ -14,6 +20,7 @@ import (
 	"github.com/buildkite/go-pipeline/ordered"
 	"github.com/buildkite/go-pipeline/warning"
 	"github.com/google/go-cmp/cmp"
+	"github.com/urfave/cli/v3"
 )
 
 func TestSearchForSecrets(t *testing.T) {
@@ -1028,5 +1035,136 @@ func TestIfChangedApplicator_WithChangedFilesPath(t *testing.T) {
 	ica.apply(l, steps)
 	if diff := cmp.Diff(steps, want); diff != "" {
 		t.Errorf("after ica.apply(l, steps) (-got, +want):\n%s", diff)
+	}
+}
+
+func TestPipelineUploadFailuresAreCaptured(t *testing.T) {
+	agentAPI := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusUnprocessableEntity)
+		_, _ = w.Write([]byte(`{"message":"Step 1 is missing a command"}`))
+	}))
+	t.Cleanup(agentAPI.Close)
+
+	for _, test := range []struct {
+		name, pipeline, doing, message string
+		args                           []string
+		fallback                       bool
+		excludes                       string
+	}{
+		{
+			name:     "parse",
+			pipeline: "steps:\n  - command: [unterminated\n",
+			doing:    "parsing the pipeline",
+			message:  `pipeline parsing of "pipeline.yml" failed`,
+		},
+		{
+			name:     "secret detection",
+			pipeline: "steps:\n  - command: echo $UPLOAD_TEST_SECRET\n",
+			doing:    "checking the pipeline for secrets",
+			message:  "UPLOAD_TEST_SECRET",
+			args:     []string{"--redacted-vars", "UPLOAD_TEST_SECRET"},
+		},
+		{
+			// The parent agent does not know a value set only in the step's
+			// shell, so the command redacts it.
+			name:     "interpolation error naming a secret",
+			pipeline: "steps:\n  - command: echo ${MISSING_VALUE?the value is $UPLOAD_TEST_SECRET}\n",
+			doing:    "parsing the pipeline",
+			message:  "the value is [REDACTED]",
+			args:     []string{"--redacted-vars", "UPLOAD_TEST_SECRET"},
+		},
+		{
+			// Without usable patterns nothing can be redacted, so only the
+			// agent's own text is sent.
+			name:     "invalid redacted-vars pattern",
+			pipeline: "steps:\n  - command: echo ${MISSING_VALUE?the value is $UPLOAD_TEST_SECRET}\n",
+			doing:    "parsing the pipeline",
+			message:  "Fix the pipeline definition",
+			args:     []string{"--redacted-vars", "[UPLOAD_TEST_SECRET"},
+			fallback: true,
+		},
+		{
+			// The pipeline's env block adds the value only to the
+			// interpolation environment, which the parent agent never sees.
+			name:     "interpolation error naming a pipeline env secret",
+			pipeline: "env:\n  DEPLOY_SECRET: sensitive-value\nsteps:\n  - command: echo ${MISSING_VALUE?the value is $DEPLOY_SECRET}\n",
+			doing:    "parsing the pipeline",
+			message:  "the value is [REDACTED]",
+			args:     []string{"--redacted-vars", "*_SECRET"},
+			excludes: "sensitive-value",
+		},
+		{
+			name:     "missing job",
+			pipeline: "steps:\n  - command: echo hello\n",
+			doing:    "checking the job's environment",
+			message:  "missing job parameter",
+			args:     []string{"--job", ""},
+		},
+		{
+			name:     "upload",
+			pipeline: "steps:\n  - command: echo hello\n",
+			doing:    "uploading the pipeline to Buildkite",
+			message:  "Step 1 is missing a command",
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			reports := startAgentErrorTestServer(t)
+			t.Setenv("UPLOAD_TEST_SECRET", "a-very-secret-value")
+			path := filepath.Join(t.TempDir(), "pipeline.yml")
+			if err := os.WriteFile(path, []byte(test.pipeline), 0o600); err != nil {
+				t.Fatal(err)
+			}
+
+			cmd := *PipelineUploadCommand
+			app := &cli.Command{Name: "buildkite-agent", Commands: []*cli.Command{&cmd}, Writer: io.Discard, ErrWriter: io.Discard}
+			args := append([]string{
+				"buildkite-agent", "upload",
+				"--endpoint", agentAPI.URL, "--agent-access-token", "job-token", "--job", "job-id",
+			}, test.args...)
+			if err := app.Run(t.Context(), append(args, path)); err == nil {
+				t.Fatal("pipeline upload succeeded, want failure")
+			}
+
+			if len(*reports) != 1 {
+				t.Fatalf("reports = %+v, want one", *reports)
+			}
+			report := (*reports)[0]
+			want := "`buildkite-agent pipeline upload` failed while " + test.doing + ": "
+			if test.fallback {
+				want = "`buildkite-agent pipeline upload` failed while " + test.doing + ". "
+			}
+			if report.Code != "pipeline_upload_failed" || !strings.HasPrefix(report.Message, want) {
+				t.Errorf("report = %q %q, want pipeline_upload_failed starting %q", report.Code, report.Message, want)
+			}
+			if !strings.Contains(report.Message, test.message) || strings.Contains(report.Message, "a-very-secret-value") || (test.excludes != "" && strings.Contains(report.Message, test.excludes)) {
+				t.Errorf("message = %q, want it to contain %q and no secret value", report.Message, test.message)
+			}
+		})
+	}
+}
+
+func TestPipelineUploadFix(t *testing.T) {
+	t.Parallel()
+	apiError := func(status int) error {
+		return &api.ErrorResponse{Response: &http.Response{StatusCode: status}}
+	}
+	for _, test := range []struct {
+		name string
+		err  error
+		want string
+	}{
+		{"pipeline rejected", apiError(http.StatusUnprocessableEntity), "Fix the pipeline definition so that Buildkite accepts it."},
+		{"token rejected", apiError(http.StatusUnauthorized), "Buildkite rejected the job's agent access token."},
+		{"server error", apiError(http.StatusServiceUnavailable), "Retry the step."},
+		{"rate limited", apiError(http.StatusTooManyRequests), "Buildkite rate limited the upload."},
+		{"not found", apiError(http.StatusNotFound), "If Buildkite rejected the pipeline, fix the pipeline definition"},
+		{"transport or processing failure", errors.New("connection refused"), "If Buildkite rejected the pipeline, fix the pipeline definition"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if got := pipelineUploadFix(fmt.Errorf("failed to upload: %w", test.err)); !strings.Contains(got, test.want) {
+				t.Errorf("pipelineUploadFix() = %q, want it to contain %q", got, test.want)
+			}
+		})
 	}
 }

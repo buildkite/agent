@@ -81,30 +81,31 @@ var GitCredentialsHelperCommand = &cli.Command{
 		// see: https://git-scm.com/docs/git-credential
 		stdin, err := io.ReadAll(os.Stdin)
 		if err != nil {
-			return handleAuthError(c, l, fmt.Errorf("failed to read stdin: %w", err))
+			return handleAuthError(ctx, c, l, "It could not read Git's credential request.", fmt.Errorf("failed to read stdin: %w", err))
 		}
 
 		l.Debugf("Requesting repository credentials from Buildkite")
 
 		repo, err := parseGitURLFromCredentialInput(string(stdin))
 		if err != nil {
-			return handleAuthError(c, l, fmt.Errorf("failed to parse git URL from stdin: %w", err))
+			return handleAuthError(ctx, c, l, "Git's credential request did not name an HTTPS repository, and repository credentials are only issued for HTTPS remotes.", fmt.Errorf("failed to parse git URL from stdin: %w", err))
 		}
 
 		client := api.NewClient(l, loadAPIClientConfig(cfg, "AgentAccessToken"))
 		credentials, _, err := client.GenerateRepositoryCredentials(ctx, repo, cfg.JobID)
 		if err != nil {
-			return handleAuthError(c, l, fmt.Errorf("failed to get repository credentials: %w", err))
+			// Buildkite's response explains a refusal, such as an unsupported provider.
+			return handleAuthError(ctx, c, l, "The request to Buildkite failed: "+err.Error()+".", fmt.Errorf("failed to get repository credentials: %w", err))
 		}
 		if credentials.Token == "" {
-			return handleAuthError(c, l, errors.New("repository credential response contained an empty token"))
+			return handleAuthError(ctx, c, l, "Buildkite returned an empty token.", errors.New("repository credential response contained an empty token"))
 		}
 		username := credentials.Username
 		if username == "" {
 			username = "token"
 		}
 		if strings.ContainsAny(username+credentials.Token, "\r\n\x00") {
-			return handleAuthError(c, l, errors.New("repository credential response contained invalid characters"))
+			return handleAuthError(ctx, c, l, "Buildkite's response contained invalid characters.", errors.New("repository credential response contained invalid characters"))
 		}
 
 		// Register before Git can echo the token in logs or captured errors.
@@ -118,7 +119,7 @@ var GitCredentialsHelperCommand = &cli.Command{
 			}
 			if err != nil {
 				// Do not log the transport error: it may contain the secret.
-				return handleAuthError(c, l, errors.New("failed to register repository credential for redaction"))
+				return handleAuthError(ctx, c, l, "It could not register the token for redaction with the Local Job API.", errors.New("failed to register repository credential for redaction"))
 			}
 		}
 
@@ -136,8 +137,18 @@ var GitCredentialsHelperCommand = &cli.Command{
 // git continues with clones etc even when the credential helper fails, so we should output something that will 100% cause
 // the clone to fail
 // this function always returns a cli.ExitError
-func handleAuthError(c *cli.Command, l logger.Logger, err error) error {
+//
+// reason explains the failure in the captured error, and err in the log.
+func handleAuthError(ctx context.Context, c *cli.Command, l logger.Logger, reason string, err error) error {
 	l.Errorf("Error: %v. Authentication will proceed, but will fail.", err)
+
+	// The Git failure that follows does not say why authentication failed.
+	// Reasons are written by the agent or come from Buildkite's response:
+	// other error text can echo credential input or a rejected token.
+	// Only a reason that includes Buildkite's response can be too long.
+	const lead = "The Git credential helper could not get repository credentials, so Git authentication will fail. "
+	captureAgentError(ctx, l, "repository_credentials_failed",
+		jobapi.CapturedErrorMessage(lead+reason, lead+"The request to Buildkite failed."))
 	_, _ = fmt.Fprintln(c.Root().Writer, "username=fail")
 	_, _ = fmt.Fprintln(c.Root().Writer, "password=fail")
 	_, _ = fmt.Fprintln(c.Root().Writer, "")
