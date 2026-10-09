@@ -452,12 +452,23 @@ func (r *JobRunner) createEnvironment(ctx context.Context) ([]string, error) {
 	mirrorURL := env["BUILDKITE_GIT_REMOTE_MIRROR_URL"]
 	env["BUILDKITE_GIT_REMOTE_MIRROR_URL"] = ""
 	if mirrorURL != "" {
-		if err := validateJobValue(r.conf.AgentConfiguration.AllowedRepositories, mirrorURL); err != nil {
+		if !job.MatchesAllowedPatterns(r.conf.AgentConfiguration.AllowedRepositories, mirrorURL) {
 			r.droppedRemoteMirrorURL = mirrorURL
 		} else {
 			env["BUILDKITE_GIT_REMOTE_MIRROR_URL"] = mirrorURL
 		}
 	}
+
+	allowedRepositories := make([]string, 0, len(r.conf.AgentConfiguration.AllowedRepositories))
+	for _, pattern := range r.conf.AgentConfiguration.AllowedRepositories {
+		allowedRepositories = append(allowedRepositories, pattern.String())
+	}
+	// Windows treats env names as case-insensitive, so remove job-supplied
+	// variants that could override the agent's policy when bootstrap starts.
+	maps.DeleteFunc(env, func(name, _ string) bool {
+		return strings.EqualFold(name, "BUILDKITE_ALLOWED_REPOSITORIES")
+	})
+	env["BUILDKITE_ALLOWED_REPOSITORIES"] = strings.Join(allowedRepositories, ",")
 
 	// When in KubernetesExec mode, filter out the Kubernetes plugin,
 	// since it's not a real plugin. agent-stack-k8s reads it but we have no
@@ -523,6 +534,7 @@ BUILDKITE_GIT_MIRRORS_LFS_CACHE
 BUILDKITE_GIT_SUBMODULES
 BUILDKITE_GIT_SUBMODULE_CLONE_CONFIG
 BUILDKITE_CHECKOUT_OVERRIDE_MODE
+BUILDKITE_ALLOWED_REPOSITORIES
 BUILDKITE_CANCEL_SIGNAL_TIMEOUT
 BUILDKITE_CANCEL_CLEANUP_TIMEOUT
 BUILDKITE_COMMAND_EVAL

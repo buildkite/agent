@@ -60,7 +60,9 @@ func runJob(t *testing.T, ctx context.Context, cfg testRunJobConfig) error {
 	scope := m.Scope(metrics.Tags{})
 
 	// set the bootstrap into the config
-	cfg.agentCfg.BootstrapScript = cfg.mockBootstrap.Path
+	if cfg.mockBootstrap != nil {
+		cfg.agentCfg.BootstrapScript = cfg.mockBootstrap.Path
+	}
 
 	if cfg.client == nil {
 		cfg.client = api.NewClient(l, api.Config{

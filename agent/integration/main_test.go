@@ -42,6 +42,7 @@ func TestMain(m *testing.M) {
 		Name:    "buildkite-agent",
 		Version: version.Version(),
 		Commands: []*cli.Command{
+			clicommand.BootstrapCommand,
 			{
 				Name: "env",
 				Commands: []*cli.Command{

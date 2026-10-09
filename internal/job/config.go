@@ -3,6 +3,7 @@ package job
 import (
 	"log"
 	"reflect"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -34,6 +35,10 @@ type ExecutorConfig struct {
 
 	// The repository that needs to be cloned
 	Repository string `env:"BUILDKITE_REPO"`
+
+	// Agent-configured repository allowlist. Intentionally has no env tag so
+	// hooks and the Job API cannot relax it at runtime.
+	AllowedRepositories []*regexp.Regexp
 
 	// Backend-provided remote mirror used as an optional checkout source.
 	// Intentionally has no env tag so hooks cannot replace it at runtime.
