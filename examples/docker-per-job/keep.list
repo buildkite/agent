@@ -1,0 +1,15 @@
+# Resources on the dedicated Docker daemon that survive between jobs.
+# Format: KIND REGEX, where KIND is container, network or volume and REGEX is
+# a bash regular expression matched against the resource name. Anchor it.
+# Docker's built-in bridge, host and none networks are always kept.
+#
+# Everything not listed is removed before every job and at agent startup.
+# If a kept container is attached to a network that isn't kept, that network
+# can't be removed and the agent poisons itself, so keep the set closed.
+#
+# If the agent itself runs in a container on this daemon, it MUST be listed:
+# container ^buildkite-agent$
+#
+# Examples:
+# container ^registry-mirror$
+# volume ^shared-cache-

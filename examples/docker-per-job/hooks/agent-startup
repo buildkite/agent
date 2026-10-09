@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# Runs once when the agent starts, before it accepts work. Refuses to start a
+# poisoned host, and cleans up whatever a crashed agent left behind.
+set -euo pipefail
+# shellcheck source=../lib/common.bash
+source "$(dirname "${BASH_SOURCE[0]}")/../lib/common.bash"
+
+if [[ -e "$dpj_poison_file" ]]; then
+  dpj_log "refusing to start: $dpj_poison_file exists:"
+  cat "$dpj_poison_file" >&2
+  exit 1
+fi
+
+mkdir -p "$BK_DPJ_CONTEXT_DIR" "$BK_DPJ_JOBS_ROOT"
+
+if ! dpj_reap; then
+  # The agent isn't running jobs yet; failing this hook stops it starting.
+  mkdir -p "$BK_DPJ_STATE_DIR"
+  printf '%s %s\n' "$(date -u +%FT%TZ)" "cleanup not confirmed at agent startup" >>"$dpj_poison_file"
+  dpj_log "POISONED: cleanup not confirmed at agent startup"
+  exit 1
+fi

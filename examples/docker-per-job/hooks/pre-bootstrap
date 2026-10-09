@@ -1,0 +1,70 @@
+#!/usr/bin/env bash
+# Runs in the agent before every job. Confirms the daemon is clean, then
+# starts the job's container. The agent (--kubernetes-exec) waits for
+# `buildkite-agent kubernetes-bootstrap` in that container to connect over
+# $BK_DPJ_CONTEXT_DIR/buildkite.sock, streams its logs, and reports its exit
+# status. Exiting non-zero here fails the job with exit status -1.
+#
+# Output goes to the agent log, not the job log.
+set -euo pipefail
+# shellcheck source=../lib/common.bash
+source "$(dirname "${BASH_SOURCE[0]}")/../lib/common.bash"
+
+job_id="$BUILDKITE_JOB_ID"
+
+if [[ -e "$dpj_poison_file" ]]; then
+  dpj_log "rejecting job $job_id: host is poisoned"
+  dpj_poison "job $job_id offered to a poisoned host"
+  exit 1
+fi
+
+# Remove everything earlier jobs left, including after a forced cancel or an
+# agent crash, and confirm it's gone before this job starts.
+if ! BK_DPJ_CURRENT_JOB="$job_id" dpj_reap; then
+  dpj_poison "cleanup not confirmed before job $job_id"
+  exit 1
+fi
+
+job_dir="$BK_DPJ_JOBS_ROOT/$job_id"
+mkdir -p "$job_dir/sockets"
+
+# kubernetes-bootstrap ignores the agent's BUILDKITE_COMMAND (agent-stack-k8s
+# sets its own), so pass the step's command explicitly. It's exported and
+# passed by name so it doesn't appear in the docker CLI's argv.
+BUILDKITE_COMMAND="$(jq -r '.BUILDKITE_COMMAND // ""' "$BUILDKITE_ENV_JSON_FILE")"
+export BUILDKITE_COMMAND
+
+declare -a args=(
+  run --detach --init
+  --name "buildkite-job-$job_id"
+  --label "com.buildkite.job-id=$job_id"
+  --workdir "$BK_DPJ_BUILD_PATH"
+  # The job can run its own containers on the host daemon.
+  --volume "$BK_DPJ_DOCKER_SOCKET:/var/run/docker.sock"
+  # Same-path mounts: env files and the coordination socket, the job's
+  # checkout and sockets, agent hooks, and the agent binary.
+  --volume "$BK_DPJ_CONTEXT_DIR:$BK_DPJ_CONTEXT_DIR"
+  --volume "$job_dir:$job_dir"
+  --volume "$dpj_root/hooks:$dpj_root/hooks:ro"
+  --volume "$BK_DPJ_AGENT_BINARY:/usr/local/bin/buildkite-agent:ro"
+  --env BUILDKITE_COMMAND
+  --env BUILDKITE_CONTAINER_ID=0
+  --env "BUILDKITE_JOB_CONTEXT_DIR=$BK_DPJ_CONTEXT_DIR"
+  --env "BUILDKITE_BUILD_CHECKOUT_PATH=$job_dir/checkout"
+  # Puts the Job API socket on a same-path mount, so plugins that mount it
+  # into sibling containers find it on the host.
+  --env "BUILDKITE_SOCKETS_PATH=$job_dir/sockets"
+)
+if [[ -n "${BK_DPJ_GIT_MIRRORS_PATH:-}" ]]; then
+  args+=(--volume "$BK_DPJ_GIT_MIRRORS_PATH:$BK_DPJ_GIT_MIRRORS_PATH")
+fi
+if [[ -n "${BK_DPJ_EXTRA_RUN_ARGS:-}" ]]; then
+  read -ra extra <<<"$BK_DPJ_EXTRA_RUN_ARGS"
+  args+=("${extra[@]}")
+fi
+args+=("$BK_DPJ_IMAGE" buildkite-agent kubernetes-bootstrap)
+
+# The container isn't --rm: it stays until the next job's cleanup, so
+# `docker logs buildkite-job-<id>` still works after a forced cancel.
+docker "${args[@]}" >/dev/null
+dpj_log "started buildkite-job-$job_id"

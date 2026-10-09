@@ -1,0 +1,151 @@
+#!/usr/bin/env bash
+# docker-per-job-reap: return a dedicated Docker daemon and the agent's job
+# directories to a known-clean state, then confirm it.
+#
+# Removes every container, network and volume on the daemon that is not on the
+# keep list, leaves any swarm, deletes stale coordination files from the job
+# context directory, and deletes old per-job directories. It then re-lists
+# everything and exits non-zero if anything unexpected is still there.
+#
+# Images and the build cache are deliberately kept, so the image cache stays
+# warm between jobs.
+#
+# This is only safe on a daemon that serves exactly one agent worker
+# (--spawn 1). It removes resources by elimination, not by ownership: Docker
+# cannot tell which job created a resource when jobs talk to the socket
+# directly, so labels or name prefixes can't be trusted for that.
+#
+# Settings (environment):
+#   BK_DPJ_KEEP_FILE      Keep list. Lines are "container|network|volume REGEX",
+#                         matched against the full name. "#" starts a comment.
+#   BK_DPJ_CONTEXT_DIR    Agent --job-context-dir. Optional.
+#   BK_DPJ_JOBS_ROOT      Parent of the per-job directories. Optional.
+#   BK_DPJ_HELPER_IMAGE   Image with sh/find/rm, used to delete files that job
+#                         containers created as root. Required with JOBS_ROOT.
+#   BK_DPJ_CURRENT_JOB    Job ID whose files must be kept. Optional.
+#   BK_DPJ_REAP_ATTEMPTS  Remove/confirm rounds before giving up. Default 3.
+set -euo pipefail
+
+log() { echo "docker-per-job-reap: $*" >&2; }
+
+keep_file="${BK_DPJ_KEEP_FILE:-}"
+context_dir="${BK_DPJ_CONTEXT_DIR:-}"
+jobs_root="${BK_DPJ_JOBS_ROOT:-}"
+helper_image="${BK_DPJ_HELPER_IMAGE:-}"
+current_job="${BK_DPJ_CURRENT_JOB:-}"
+attempts="${BK_DPJ_REAP_ATTEMPTS:-3}"
+
+# Docker's built-in networks can't be removed and are always kept.
+declare -a keep_container=() keep_network=('^(bridge|host|none)$') keep_volume=()
+if [[ -n "$keep_file" ]]; then
+  while read -r kind regex _; do
+    case "$kind" in
+      '' | '#'*) ;;
+      container) keep_container+=("$regex") ;;
+      network) keep_network+=("$regex") ;;
+      volume) keep_volume+=("$regex") ;;
+      *)
+        log "unknown kind '$kind' in $keep_file"
+        exit 2
+        ;;
+    esac
+  done <"$keep_file"
+fi
+
+kept() { # kept NAME REGEX...
+  local name="$1" re
+  shift
+  for re in "$@"; do
+    [[ "$name" =~ $re ]] && return 0
+  done
+  return 1
+}
+
+# Each lister prints "ID NAME" lines for resources that are not kept.
+leftover_containers() {
+  docker ps -a --no-trunc --format '{{.ID}} {{.Names}}' | while read -r id name; do
+    kept "$name" "${keep_container[@]}" || echo "$id $name"
+  done
+}
+leftover_networks() {
+  docker network ls --no-trunc --format '{{.ID}} {{.Name}}' | while read -r id name; do
+    kept "$name" "${keep_network[@]}" || echo "$id $name"
+  done
+}
+leftover_volumes() {
+  docker volume ls --format '{{.Name}}' | while read -r name; do
+    kept "$name" "${keep_volume[@]}" || echo "$name $name"
+  done
+}
+swarm_state() { docker info --format '{{.Swarm.LocalNodeState}}'; }
+
+remove_docker_resources() {
+  local id _
+  if [[ "$(swarm_state)" != inactive ]]; then
+    docker swarm leave --force >/dev/null 2>&1 || true
+  fi
+  # Errors are ignored here: resources can disappear on their own (--rm), and
+  # whatever really failed is caught by the confirmation pass.
+  leftover_containers | while read -r id _; do docker rm -f -v "$id" >/dev/null 2>&1 || true; done
+  leftover_networks | while read -r id _; do docker network rm "$id" >/dev/null 2>&1 || true; done
+  leftover_volumes | while read -r id _; do docker volume rm -f "$id" >/dev/null 2>&1 || true; done
+}
+
+remove_stale_files() {
+  if [[ -n "$context_dir" && -d "$context_dir" ]]; then
+    # With --spawn 1 and this running before the job's listener starts, any
+    # socket here is left over from a crashed agent and would make the next
+    # job fail with "address already in use".
+    rm -f "$context_dir/buildkite.sock"
+    local f
+    for f in "$context_dir"/job-env-* "$context_dir"/job-timeout-*; do
+      [[ -e "$f" ]] || continue
+      [[ -n "$current_job" && "$f" == *"$current_job"* ]] && continue
+      rm -f "$f"
+    done
+  fi
+  if [[ -n "$jobs_root" && -d "$jobs_root" ]]; then
+    if [[ -z "$helper_image" ]]; then
+      log "BK_DPJ_HELPER_IMAGE is required to clean $jobs_root"
+      return 1
+    fi
+    # Job containers usually run as root, so the agent user can't always
+    # delete what they wrote. Delete through a container instead.
+    docker run --rm --network none -v "$jobs_root:/jobs" "$helper_image" \
+      find /jobs -mindepth 1 -maxdepth 1 ! -name "${current_job:-.}" -exec rm -rf {} + ||
+      true
+  fi
+}
+
+leftover_report() {
+  local out=""
+  [[ "$(swarm_state)" == inactive ]] || out+="swarm: $(swarm_state)"$'\n'
+  out+="$(leftover_containers | sed 's/^/container: /')"$'\n'
+  out+="$(leftover_networks | sed 's/^/network: /')"$'\n'
+  out+="$(leftover_volumes | sed 's/^/volume: /')"$'\n'
+  if [[ -n "$context_dir" && -e "$context_dir/buildkite.sock" ]]; then
+    out+="file: $context_dir/buildkite.sock"$'\n'
+  fi
+  if [[ -n "$jobs_root" && -d "$jobs_root" ]]; then
+    out+="$(find "$jobs_root" -mindepth 1 -maxdepth 1 ! -name "${current_job:-.}" | sed 's/^/file: /')"$'\n'
+  fi
+  # Drop blank lines.
+  grep -v '^$' <<<"$out" || true
+}
+
+for ((i = 1; i <= attempts; i++)); do
+  remove_docker_resources
+  remove_stale_files || true
+  # The helper container is --rm, but remove it here too in case it lingered.
+  remove_docker_resources
+  report="$(leftover_report)"
+  if [[ -z "$report" ]]; then
+    log "clean (attempt $i)"
+    exit 0
+  fi
+  log "attempt $i left:"$'\n'"$report"
+  sleep 1
+done
+
+log "could not confirm a clean state after $attempts attempts"
+exit 1

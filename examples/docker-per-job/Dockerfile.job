@@ -1,0 +1,5 @@
+# Minimal job image for the docker-per-job prototype. Jobs need bash and git
+# for checkout and commands, and the docker CLI to use the host daemon. The
+# buildkite-agent binary is mounted in by hooks/pre-bootstrap.
+FROM docker:29-cli
+RUN apk add --no-cache bash git openssh-client coreutils
