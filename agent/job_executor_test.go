@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/buildkite/agent/v4/internal/dockerexec"
 	"github.com/buildkite/agent/v4/logger"
 )
 
@@ -27,6 +28,17 @@ func TestNewJobExecutor(t *testing.T) {
 		if gotT, wantT := fmt.Sprintf("%T", got), fmt.Sprintf("%T", tc.want); gotT != wantT {
 			t.Errorf("newJobExecutor(Executor: %q) = %s, want %s", tc.executor, gotT, wantT)
 		}
+	}
+
+	// The docker executor needs the executor prepared at agent start.
+	if got, err := newJobExecutor(logger.Discard, JobRunnerConfig{Executor: ExecutorDocker}); err == nil {
+		t.Errorf("newJobExecutor(Executor: docker, unprepared) = %T, want an error", got)
+	}
+	prepared := JobRunnerConfig{Executor: ExecutorDocker, AgentConfiguration: AgentConfiguration{DockerExecutor: &dockerexec.Executor{}}}
+	if got, err := newJobExecutor(logger.Discard, prepared); err != nil {
+		t.Errorf("newJobExecutor(Executor: docker) error = %v", err)
+	} else if _, ok := got.(dockerExecutor); !ok {
+		t.Errorf("newJobExecutor(Executor: docker) = %T, want dockerExecutor", got)
 	}
 
 	// An unknown name must fail rather than fall back to running bootstrap on

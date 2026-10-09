@@ -73,14 +73,11 @@ func (e *Executor) containerMounts(req Request, exists func(string) bool) []moun
 		return mount.Mount{Type: mount.TypeBind, Source: p, Target: p, ReadOnly: readOnly}
 	}
 
-	mounts := []mount.Mount{
-		bind(e.cfg.BuildPath, false),
-		bind(e.cfg.PluginsPath, false),
-		bind(e.cfg.SocketsPath, false),
-		bind(e.cfg.JobContextDir, false),
-	}
-	if e.cfg.GitMirrorsPath != "" {
-		mounts = append(mounts, bind(e.cfg.GitMirrorsPath, false))
+	var mounts []mount.Mount
+	for _, p := range []string{e.cfg.BuildPath, e.cfg.PluginsPath, e.cfg.SocketsPath, e.cfg.JobContextDir, e.cfg.GitMirrorsPath} {
+		if p != "" {
+			mounts = append(mounts, bind(p, false))
+		}
 	}
 	for _, p := range append(slices.Clone(e.cfg.HooksPaths), e.cfg.SigningJWKSFile) {
 		if p != "" && exists(p) {

@@ -289,6 +289,8 @@ func (x *Execution) create(runCtx context.Context) (string, error) {
 	switch {
 	case pending != signalNone:
 		return "", errCancelledBeforeStart
+	case cerrdefs.IsNotFound(err):
+		return "", fmt.Errorf("creating the job container: %w (the docker executor image was removed after the agent started, restart the agent to pull it again)", err)
 	case err != nil:
 		return "", fmt.Errorf("creating the job container: %w", err)
 	}

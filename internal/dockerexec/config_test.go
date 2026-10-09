@@ -175,4 +175,9 @@ func TestConfigValidate_RequiredSettings(t *testing.T) {
 	if _, _, err := validConfig().validate(noEnv); err != nil {
 		t.Errorf("validConfig().validate() error = %v", err)
 	}
+	noPlugins := validConfig()
+	noPlugins.PluginsPath = ""
+	if _, _, err := noPlugins.validate(noEnv); err != nil {
+		t.Errorf("validate() without plugins-path error = %v, want nil since it is optional", err)
+	}
 }

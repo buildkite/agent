@@ -94,7 +94,7 @@ func TestCreateOptions_MinimalConfig(t *testing.T) {
 	t.Parallel()
 
 	e := &Executor{cfg: validConfig(), imageID: "sha256:abc", agentBinary: "/usr/bin/buildkite-agent"}
-	e.cfg.GitMirrorsPath, e.cfg.SigningJWKSFile = "", ""
+	e.cfg.GitMirrorsPath, e.cfg.SigningJWKSFile, e.cfg.PluginsPath = "", "", ""
 	got := e.createOptions(Request{JobID: "job-1"}, "name", func(string) bool { return false })
 
 	if got.Config.Tty {
@@ -109,7 +109,6 @@ func TestCreateOptions_MinimalConfig(t *testing.T) {
 	}
 	wantTargets := []string{
 		"/var/lib/buildkite/builds",
-		"/var/lib/buildkite/plugins",
 		"/var/lib/buildkite/sockets",
 		"/var/lib/buildkite/job-context",
 		"/etc/passwd",

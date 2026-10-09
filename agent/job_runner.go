@@ -296,11 +296,16 @@ func NewJobRunner(ctx context.Context, l logger.Logger, apiClient *api.Client, c
 	// The writer that output from the process goes into
 	r.jobLogs = io.MultiWriter(allWriters...)
 
-	r.process, err = executor.New(ctx, JobExecutionRequest{
+	req := JobExecutionRequest{
+		JobID:      conf.Job.ID,
 		Env:        env,
 		ContextDir: contextDir,
 		Output:     r.jobLogs,
-	})
+	}
+	if r.jobLogTmpFile != nil {
+		req.JobLogTmpfile = r.jobLogTmpFile.Name()
+	}
+	r.process, err = executor.New(ctx, req)
 	if err != nil {
 		return nil, err
 	}

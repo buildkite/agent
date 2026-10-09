@@ -188,20 +188,32 @@ New `buildkite-agent start` settings, available as flags, env vars, and
 | `executor-docker-env` | repeatable, `KEY=VALUE` or `KEY` | extra container env |
 | `executor-docker-network` | network name | default: Docker's default bridge network |
 
+The env vars are `BUILDKITE_EXECUTOR`, `BUILDKITE_EXECUTOR_DOCKER_IMAGE`,
+`BUILDKITE_EXECUTOR_DOCKER_MOUNT`, `BUILDKITE_EXECUTOR_DOCKER_ENV`, and
+`BUILDKITE_EXECUTOR_DOCKER_NETWORK`. Like other repeatable settings, the mount
+and env lists are split on commas, so pass a value that contains a comma
+(`NO_PROXY=a,b`) with the name-only `KEY` form.
+
 Rules:
 
 - `bootstrap-script` is used only by `exec`. If `executor=docker` and
   `bootstrap-script` was set explicitly, log a warning and ignore it.
 - `executor-docker-mount`: both paths absolute. The source must exist at agent
   start, so Docker never creates a missing source as root. The destination may
-  not equal or sit inside a path the executor mounts itself (the table under
-  Mounts), with one exception: destinations *inside* `/tmp/buildkite-home` are
-  allowed, so you can mount ssh keys or git config into `HOME`.
+  not overlap a path the executor mounts itself (the table under Mounts) in
+  either direction, nor repeat another mount's destination. The exception:
+  destinations *inside* `/tmp/buildkite-home` are allowed, so you can mount
+  ssh keys or git config into `HOME`.
 - `executor-docker-env`: `KEY` alone copies the value from the agent's own
   environment at agent start, and agent start fails if it is unset. This is
-  how you pass host settings such as `HTTP_PROXY` into the container. `HOME`
-  and `BUILDKITE_BIN_PATH` are owned by the executor and rejected. Precedence
-  is described under Environment.
+  how you pass host settings such as `HTTP_PROXY` into the container. Agent
+  settings given as env vars (such as `BUILDKITE_GIT_CLONE_FLAGS`) are
+  removed from the agent's environment before this lookup, so they cannot be
+  copied by name. They reach jobs through the job env anyway. `HOME` and
+  `BUILDKITE_BIN_PATH` are owned by the executor and rejected. Precedence is
+  described under Environment.
+- `executor-docker-*` settings given with another executor are ignored with
+  a warning.
 - `executor-docker-network` is passed through as the container's network mode.
   `host` is allowed and is the operator's call.
 - The image is an agent-pool decision. Users who need different images run
@@ -253,28 +265,35 @@ validation and before registering. Any failure stops agent start with a
 message that names the problem.
 
 1. **Platform.** Linux only. Other platforms fail with an error.
-2. **Agent binary.** Resolve `os.Executable()` through symlinks and check with
+2. **Configuration.** Validate the settings, check that every
+   `executor-docker-mount` source exists, and resolve every name-only
+   `executor-docker-env` entry.
+3. **Agent binary.** Resolve `os.Executable()` through symlinks and check with
    `debug/elf` that it has no dynamic loader (`PT_INTERP`). Official builds
    are static (`CGO_ENABLED=0` in `scripts/build-binary.sh`), so this only
    catches custom or distro builds made with cgo, which would fail inside an
    arbitrary image.
-3. **Daemon.** `Ping` the daemon, which also negotiates the API version.
-4. **Operator mounts and env.** Check that every `executor-docker-mount`
-   source exists, and resolve every name-only `executor-docker-env` entry.
-5. **Image.** `ImagePull` for platform `linux/<GOARCH>`, then `ImageInspect`
-   to resolve the reference to an image ID and confirm its OS and
-   architecture. Every `ContainerCreate` uses that ID, not the reference, so a
-   tag that moves while the agent runs cannot swap in an image the preflight
-   never saw. If the pull fails but the image is already present locally,
-   log a warning and use the local image. This covers air-gapped hosts and
-   registries the agent cannot authenticate to. The whole step is bounded at
-   10 minutes.
+4. **Image reference and credentials.** Parse the image reference and read
+   registry credentials (below).
+5. **Daemon.** `Ping` the daemon with API version negotiation (30 s).
+6. **Image.** `ImagePull` for platform `linux/<GOARCH>` (10 minutes), then
+   `ImageInspect` (30 s) to resolve the reference to an image ID and confirm
+   its OS and architecture. Every `ContainerCreate` uses that ID, not the
+   reference, so a tag that moves while the agent runs cannot swap in an image
+   the preflight never saw. If the pull fails but the image is already present
+   locally, log a warning that the local copy may be out of date and use it.
+   This covers air-gapped hosts and registries the agent cannot authenticate
+   to. If the agent is shutting down, there is no fallback.
+
+The steps run cheapest first, so a configuration mistake is reported before
+any daemon call.
 
 Registry credentials come from the agent user's Docker config
 (`$DOCKER_CONFIG/config.json`, default `~/.docker/config.json`). The MVP reads
-static entries under `auths` only. Credential helpers (`credsStore`,
-`credHelpers`) are not supported: an image that needs one must be pulled
-ahead of time, and the preflight's local-image fallback picks it up.
+static entries under `auths` only, skipping the empty entries `docker login`
+leaves behind when a credential store holds the secret. Credential helpers
+(`credsStore`, `credHelpers`) are not supported: an image that needs one must
+be pulled ahead of time, and the preflight's local-image fallback picks it up.
 
 The preflight keeps Docker calls out of `New` (which would orphan work if
 `StartJob` failed) and out of `Run`'s cancellation path. It also means the pull
@@ -312,11 +331,12 @@ which also appends its binary directory.
 ```text
 New():        build the container spec (no daemon calls)
 Run():        close Started()
+              create rw mount sources as the agent user
               ContainerCreate  name=buildkite-job-<jobid>-<random>
                                labels com.buildkite.job-id, com.buildkite.agent-run   [60 s]
               ContainerAttach  stdout+stderr stream -> jobLogs                        [lives with the job]
               ContainerWait    condition next-exit                                    [lives with the job]
-              if a cancel was recorded: remove the container, return an error
+              if a cancel was recorded or the wait already failed: return an error
               ContainerStart                                                          [60 s]
               -> error: launch failed, return the daemon's error
               mark running, deliver any pending signal
@@ -325,17 +345,24 @@ Run():        close Started()
               -> wait error: ContainerInspect [10 s]
                    exited  -> WaitStatus = State.ExitCode
                    running -> attach was lost: ContainerKill, return an error
-Interrupt():  record "interrupt", then if running, ContainerKill <cancel-signal> [10 s]
-Terminate():  record "terminate", then if running, ContainerKill SIGKILL [10 s]
-              if that fails, cancel Run's context so Run returns
+Interrupt():  record "interrupt"
+              creating: abandon the create
+              running:  ContainerKill <cancel-signal> [10 s], once
+Terminate():  record "terminate"
+              before start: cancel Run's daemon calls
+              starting: Run kills the container once start returns
+              running:  ContainerKill SIGKILL [10 s], and cancel Run's daemon
+                        calls if the kill fails or Run is still waiting 10 s later
 Cleanup():    ContainerRemove force=true, volumes=true [10 s], ignoring not-found
 ```
 
 - `New` makes no daemon calls. `NewJobRunner` calls it before `StartJob`, and
   if `StartJob` fails the runner returns without running `cleanup`, so
   anything created in `New` would be orphaned. Create and start both happen
-  inside `Run`, where `runJob` maps an error to exit -1 with
-  `SignalReasonProcessRunError` and `cleanup` always runs afterwards.
+  inside `Run`, where `runJob` maps an error to exit -1 and `cleanup` always
+  runs afterwards. The signal reason is `SignalReasonProcessRunError`, or the
+  cancel or agent-stop reason if the job was cancelled, as it can be while
+  its container is being created.
 - Attach and wait are both set up before `ContainerStart`, the same order the
   `docker run` CLI uses. Attaching first means no early output is lost.
   Waiting with `next-exit` registered against a `created` container means the
@@ -348,7 +375,9 @@ Cleanup():    ContainerRemove force=true, volumes=true [10 s], ignoring not-foun
   `ContainerCreate` returned. The name carries a random suffix so a stale
   container from a crashed agent cannot make create fail with a name clash,
   and removal by name cannot hit something this execution did not create. The
-  labels are for operators sweeping leftovers.
+  labels are for operators sweeping leftovers: the job ID, and a random ID
+  for each agent run, so a crashed agent's containers can be told apart from
+  a running agent's.
 - A `ContainerWait` error (for example, the daemon connection dropped) is not
   a job result. `Run` inspects the container: an exited container still has a
   trustworthy exit code, and a running one means the agent lost track of it,
@@ -373,7 +402,8 @@ Cleanup():    ContainerRemove force=true, volumes=true [10 s], ignoring not-foun
 - Every call except attach and wait has a timeout in addition to `Run`'s
   context. A create that times out is handled like a cancelled create (below).
   An inspect that times out is an executor failure: `Run` attempts a kill,
-  then returns an error.
+  then returns an error. A create that fails because the pinned image is gone
+  (pruned while the agent ran) says to restart the agent.
 - `Cleanup` passes `volumes=true` because an image `VOLUME` makes every create
   allocate an anonymous volume that a plain forced removal leaves behind.
   Named volumes and bind mounts are unaffected.
@@ -393,16 +423,18 @@ container is running. Killing a container that has not started fails, and
 (`none → interrupt → terminate`, monotonic) and records the request first.
 Then:
 
-- If create is in flight, cancel its context, remove the container by its
-  unique name in case the daemon created it before the call was abandoned
-  (no ID was returned), and return an error from `Run`. A cancelled create is
+- If create is in flight, cancel it and return an error from `Run`. `Cleanup`
+  removes the container by its unique name in case the daemon created it
+  before the call was abandoned (no ID was returned). A cancelled create is
   never followed by a start.
-- If the container exists but `ContainerStart` has not returned, do nothing
-  more. `Run` checks the pending state under the same mutex once start returns
-  and delivers the recorded signal. If the request was recorded before start
-  was called, `Run` removes the container and returns an error instead of
-  starting it.
-- If the container is running, kill it with the recorded signal.
+- If the container exists but start has not been called, `Run` returns an
+  error instead of starting it. `Terminate` also cancels `Run`'s daemon calls,
+  so a daemon that hangs during attach or wait cannot hold the job.
+- If `ContainerStart` is in flight, do nothing more. `Run` checks the pending
+  state under the same mutex once start returns and delivers the recorded
+  signal.
+- If the container is running, kill it with the recorded signal. A kill that
+  finds the container already stopped is not an error.
 
 Further rules:
 
@@ -416,10 +448,11 @@ Further rules:
   the failure at error level and returns nil. The pending state is already
   recorded, so `Cancel` proceeds to the grace period and `Terminate`, which
   retries with SIGKILL, and `Cleanup` finishes with a forced removal
-  regardless. If `Terminate`'s kill also fails, `Terminate` cancels the
-  context `Run` uses for attach, wait, and inspect, so `Run` returns an error
-  instead of waiting on a daemon that is not responding. The container may be
-  leaked at that point (see Risks).
+  regardless. If `Terminate`'s kill also fails, or the daemon accepts it but
+  `Run` is still waiting 10 s later, `Terminate` cancels the context `Run`
+  uses for attach, wait, and inspect, so `Run` returns an error instead of
+  waiting on a daemon that is not responding. The container may be leaked at
+  that point (see Risks).
 - Apply the same SIGKILL→SIGTERM downgrade as `exec`. A SIGKILL to bootstrap
   skips pre-exit hooks and loses the command's exit status.
 - Job-level timeouts work unchanged: `Cancel` writes the marker file into the
@@ -442,7 +475,7 @@ Everything the executor sets on create, in one place:
 | `Tty` | `run-in-pty` |
 | `Init` | true |
 | `SecurityOpt` | `no-new-privileges` |
-| `Tmpfs` | `/tmp/buildkite-home` with `uid=<uid>,gid=<gid>,mode=0700` |
+| `Tmpfs` | `/tmp/buildkite-home` with `exec,uid=<uid>,gid=<gid>,mode=0700` |
 | `Mounts` | see Mounts |
 | `NetworkMode` | `executor-docker-network`, when set |
 | `Platform` | `linux/<GOARCH>` |
@@ -453,6 +486,8 @@ Everything the executor sets on create, in one place:
 - `WorkingDir` matters because `exec` sets `process.Config.Dir` to `BuildPath`
   and bootstrap's shell starts in the process working directory. A bind mount
   alone does not set it.
+- `Tmpfs` sets `exec` because Docker mounts tmpfs `noexec` by default, which
+  would break tools that install binaries under `HOME`.
 - `Tty` allocates the PTY inside the container. It is not identical to the
   host PTY `process` sets up (`TERM`, fixed window size). Bootstrap's own
   `BUILDKITE_PTY` for the commands it runs is unaffected.
@@ -466,11 +501,12 @@ executor emits each key once:
    `PATH` and toolchain variables usually come from.
 2. `executor-docker-env`, resolved at agent start.
 3. The job env slice from `createEnvironment`: job env plus the agent's
-   `BUILDKITE_*` additions, including the access token, the control-plane OTLP
-   exporter variables when delivered, and `BUILDKITE_JOB_LOG_TMPFILE` when
-   enabled.
-4. Executor-owned values: `HOME=/tmp/buildkite-home` and
-   `BUILDKITE_BIN_PATH=/buildkite-agent/bin`.
+   `BUILDKITE_*` additions, including the access token and the control-plane
+   OTLP exporter variables when delivered.
+4. Executor-owned values: `HOME=/tmp/buildkite-home`,
+   `BUILDKITE_BIN_PATH=/buildkite-agent/bin`, and `BUILDKITE_JOB_LOG_TMPFILE`
+   when enabled. The executor is given the tmpfile path because it mounts the
+   file, so it sets the variable itself.
 
 Two entries from the job env slice are dropped: `BUILDKITE_AGENT_PID` (nothing
 in the job uses it, and `buildkite-agent lock` talks to the leader socket, not
@@ -484,6 +520,13 @@ want in the container beyond the job env goes through `executor-docker-env`.
 
 Operator env sits below job env for the same reason `os.Environ()` sits below
 job env in `exec` today: the job can override a default the host provides.
+
+Two consequences of leaving the agent's environment behind. Tracing and
+telemetry settings jobs used to inherit from it (`OTEL_*`, `DD_AGENT_HOST`)
+need `executor-docker-env`. And endpoints that point at `localhost` on the
+host, such as a local OTLP collector, are not reachable from the default
+bridge network: point them at a host address, or use
+`executor-docker-network=host`.
 
 The env is delivered in the create request's `Config.Env`. The control-plane
 OTLP exporter rule in `api.TracingExporter` (never written to the persisted
@@ -499,7 +542,7 @@ or plugins needs to learn a new filesystem layout:
 | Host path (from `AgentConfiguration`) | Container path | Mode |
 |---|---|---|
 | `build-path` | same | rw |
-| `plugins-path` | same | rw |
+| `plugins-path` (when set) | same | rw |
 | `git-mirrors-path` (when set) | same | rw |
 | `sockets-path` | same | rw |
 | job context dir | same | rw |
@@ -511,10 +554,13 @@ or plugins needs to learn a new filesystem layout:
 | each `executor-docker-mount` | as configured | as configured |
 
 Before create, the execution creates every rw directory that does not yet
-exist, as the agent user, and checks that every file source exists. Agent
-start only guarantees `build-path` today. If Docker is left to create a
-missing bind source, it does so as root, and a root-owned `plugins-path` or
-mirrors directory then fails the first job. All paths are passed absolute.
+exist, as the agent user. Agent start only guarantees `build-path` today. If
+Docker is left to create a missing bind source, it does so as root, and a
+root-owned `plugins-path` or mirrors directory then fails the first job.
+Read-only sources that do not exist, such as an unused default `hooks-path`,
+are left out, so bootstrap reports a missing file rather than the daemon
+failing the create. If two settings name the same path, it is mounted once.
+All paths are passed absolute.
 
 `config-path` is deliberately not mounted. It is the agent's own
 configuration, which commonly holds the registration token, and bootstrap
@@ -535,9 +581,9 @@ job-timeout marker. Bind-mounting that directory at the same path makes all
 three visible in the container with no path rewriting. Mounting the default
 `os.TempDir()` (usually `/tmp`) into the container is more than we want, so
 when `executor=docker` and the operator has not set `job-context-dir`, agent
-start defaults it to a dedicated directory such as
-`/var/lib/buildkite-agent/job-context`. This has to happen at config
-resolution time, before `NewJobRunner` creates the env files there.
+start creates a dedicated private directory under the system temp dir and
+removes it when the agent exits normally. This happens at config resolution time, before
+`NewJobRunner` creates the env files there.
 
 `sockets-path` is mounted because the host agent's local API socket lives
 there (`agentapi.DefaultSocketPath`), and `buildkite-agent lock` inside the
@@ -635,7 +681,8 @@ validated commits.
    sets `BUILDKITE_JOB_LOG_TMPFILE` with `os.Setenv`, which mutates the whole
    agent process. With `--spawn` greater than 1 a job can receive another
    job's path. Deliver it in the job env slice instead. This fixes the bug
-   for every agent and lets the Docker executor treat it as ordinary job env.
+   for every agent. The Docker executor does not depend on it, because it is
+   given the tmpfile path directly for its mount.
 1. **Extract the interface.**
    - 1a: `JobExecutor`, `JobExecution`, and `JobExecutionRequest` in `agent/`,
      the exec execution, the Kubernetes wrapper, and the `Cleanup` call in
@@ -645,16 +692,17 @@ validated commits.
      `--kubernetes-exec` normalised into it, and every reader of the boolean
      switched to the executor value. `docker` is rejected until slice 2.
 2. **Docker, minimum viable.**
-   - 2a: Docker config settings and their validation.
-   - 2b: the start-time preflight (platform, static binary, daemon ping,
-     mount and env resolution, platform-pinned pull with static registry
-     credentials, image ID resolution).
+   - 2a: the `internal/dockerexec` configuration and its validation.
+   - 2b: the start-time preflight (platform, static binary, mount and env
+     resolution, registry credentials, daemon ping, platform-pinned pull,
+     image ID resolution).
    - 2c: the container spec and environment builder, as a pure function from
      configuration and request to the create request.
    - 2d: the execution: `Run`, `Interrupt`, `Terminate`, and `Cleanup` with
-     the pending-signal state.
-   - 2e: wiring into selection, `docker` accepted as an `executor` value,
-     user-facing documentation, and the real-daemon tests.
+     the pending-signal state, and the real-daemon tests.
+   - 2e: the `executor-docker-*` settings, `docker` accepted as an `executor`
+     value, the default job context dir, preparation at agent start, and the
+     cancel reason for an executor stopped before it ran.
 
 ## Testing
 
@@ -672,8 +720,9 @@ Slice 1:
   bootstrap runs in the build path, job env overrides the agent's own
   environment, and a SIGKILL cancel signal reaches bootstrap as SIGTERM.
 
-Slice 2 runs against a fake Docker Engine API (an `httptest` server that
-records requests and scripts responses), plus a few real-daemon tests:
+Slice 2 runs against a fake implementation of the narrow client interface the
+executor uses, which simulates a container (an attach stream over `net.Pipe`,
+an exit sent on a channel), plus a few real-daemon tests:
 
 - Config validation: `executor-docker-mount` rejects relative paths and
   destinations inside executor-owned mounts, and accepts destinations inside
@@ -698,7 +747,7 @@ records requests and scripts responses), plus a few real-daemon tests:
     immediately is still mapped normally.
   - A wait error followed by an inspect showing `exited` maps the exit code,
     and one showing `running` produces a kill and a `Run` error.
-  - A hanging inspect makes `Run` return an error within the per-call timeout.
+  - A wait that has already failed before start never starts the container.
 - Cancellation:
   - An interrupt during a slow create abandons it, removes by name, never
     starts, and makes `Run` return an error.
@@ -706,17 +755,22 @@ records requests and scripts responses), plus a few real-daemon tests:
   - An interrupt recorded while start is in flight is delivered once start
     returns, exactly once.
   - The SIGKILL downgrade is applied.
-  - A failing or hanging kill makes `Interrupt` return nil, and a following
-    `Terminate` whose kill also fails makes `Run` return promptly.
+  - A failing kill makes `Interrupt` return nil, and a following `Terminate`
+    whose kill also fails makes `Run` return promptly.
+  - `Terminate` while running ends with exit 137, during start kills once
+    started, and before start unblocks a hung attach.
   - `Cleanup` removes by ID with force and volumes, and a not-found response
     is not an error.
 
-Real-daemon tests, gated behind a build tag or an env var, because a fake
-cannot check these:
+Real-daemon tests, run when `BUILDKITE_TEST_DOCKER_EXECUTOR` is set, because a
+fake cannot check these. They mount a small static stand-in for the agent
+binary:
 
-- A job runs in a stock image (for example `debian`) with the mounted agent
-  binary, as a non-root uid that can write to `HOME` and the build path.
-- Cancellation while the container is starting still stops the job.
+- A job runs in a stock image as the agent's uid and gid, in the build path,
+  with a writable `HOME`, the job env, and the exit code, with and without a
+  TTY. Files it writes in the build path are owned by the agent user, and the
+  container is gone after `Cleanup`.
+- `Interrupt` delivers SIGTERM to the process in the container.
 - Removal leaves no anonymous volume behind for an image with `VOLUME`.
 
 ## Risks
