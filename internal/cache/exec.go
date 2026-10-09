@@ -66,24 +66,30 @@ func RunExec(ctx context.Context, l logger.Logger, apiClient *api.Client, cfg Co
 	cacheConfig.TargetPaths = append(slices.Clone(cacheConfig.TargetPaths), logPath)
 	defer func() { _ = os.Remove(logPath) }()
 
-	// Headers go to stderr, so stdout holds only the command's output.
-	_, _ = fmt.Fprintln(stderr, "--- :package: Restoring cache")
 	result, err := c.Restore(ctx, name)
-	switch {
-	case err == nil:
-		l.Infof("%s", restoreReport(name, result, nil))
-		if result.CacheRestored && replay(logPath, time.Since(start), stdout, stderr) {
-			return nil
-		}
-	case cfg.FailOnError || errors.Is(err, errRestoreMutatedTargets):
+	if err != nil && (cfg.FailOnError || errors.Is(err, errRestoreMutatedTargets)) {
 		// Don't run the command against half-restored target paths.
 		l.Warnf("%s", restoreReport(name, result, err))
 		return fmt.Errorf("failed to restore cache %q: %w", name, err)
-	default:
-		l.Warnf("%s; running the command", restoreReport(name, result, err))
 	}
 
+	// Headers go to stderr, so stdout holds only the command's output. The restore report goes under the replay or
+	// run header rather than a group of its own, so a hit shows as a single group in the build log.
+	if err == nil && result.CacheRestored {
+		if ranFor, output, ok := readLog(logPath); ok {
+			_, _ = fmt.Fprintln(stderr, replayHeader(ranFor-time.Since(start)))
+			l.Infof("%s", restoreReport(name, result, nil))
+			_, _ = stdout.Write(output)
+			return nil
+		}
+	}
 	_, _ = fmt.Fprintln(stderr, "+++ :package: No cached result, running command")
+	if err != nil {
+		l.Warnf("%s; running the command", restoreReport(name, result, err))
+	} else {
+		l.Infof("%s", restoreReport(name, result, nil))
+	}
+
 	rec := &recorder{}
 	commandStart := time.Now()
 	if err := command(io.MultiWriter(stdout, rec), io.MultiWriter(stderr, rec)); err != nil {
@@ -136,21 +142,19 @@ func writeLog(ctx context.Context, redact Redactor, path string, rec *recorder, 
 	return os.WriteFile(path, append([]byte(ranFor.String()+"\n"), output...), 0o600)
 }
 
-// replay writes the restored log at path to stdout, under a header showing the time saved, and reports whether
-// the log was readable.
-func replay(path string, restoreTook time.Duration, stdout, stderr io.Writer) bool {
+// readLog returns how long the command ran and its output from the restored log at path, and whether the log was
+// readable.
+func readLog(path string) (ranFor time.Duration, output []byte, ok bool) {
 	log, err := os.ReadFile(path)
 	if err != nil {
-		return false
+		return 0, nil, false
 	}
 	first, output, _ := bytes.Cut(log, []byte("\n"))
-	ranFor, err := time.ParseDuration(string(first))
+	ranFor, err = time.ParseDuration(string(first))
 	if err != nil {
-		return false
+		return 0, nil, false
 	}
-	_, _ = fmt.Fprintln(stderr, replayHeader(ranFor-restoreTook))
-	_, _ = stdout.Write(output)
-	return true
+	return ranFor, output, true
 }
 
 // replayHeader opens the replayed output's log group, making clear the command didn't run and highlighting the
