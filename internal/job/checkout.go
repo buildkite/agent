@@ -315,12 +315,18 @@ var errCheckoutAttemptTimedOut = errors.New("checkout attempt timed out")
 // error is joined with errCheckoutAttemptTimedOut so the retry loop can
 // distinguish a timeout-kill from other signal-terminated processes.
 func (e *Executor) runDefaultCheckoutAttempt(ctx context.Context, previousAttempts int) error {
+	var reports gitErrorReports
+	// Settle the result and cancel the attempt timer before delivering
+	// observations under the parent job context. Reporting must not turn a
+	// completed Git failure into a timeout or affect mirror fallback decisions.
+	defer func() { reports.deliver(ctx, e.shell) }()
+	attemptCtx := context.WithValue(ctx, gitErrorReportsKey{}, &reports)
 	if e.GitCheckoutTimeout <= 0 {
-		return e.defaultCheckoutPhase(ctx, previousAttempts)
+		return e.defaultCheckoutPhase(attemptCtx, previousAttempts)
 	}
 
 	timeout := time.Duration(e.GitCheckoutTimeout) * time.Second
-	attemptCtx, cancel := context.WithTimeout(ctx, timeout)
+	attemptCtx, cancel := context.WithTimeout(attemptCtx, timeout)
 	defer cancel()
 
 	err := e.defaultCheckoutPhase(attemptCtx, previousAttempts)
