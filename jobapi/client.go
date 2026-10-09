@@ -34,15 +34,19 @@ type Client struct {
 
 // CaptureError sends an error to the running parent agent. It never falls
 // back to sending the payload directly to Buildkite.
-func (c *Client) CaptureError(ctx context.Context, capturedError *CapturedError) error {
+func (c *Client) CaptureError(ctx context.Context, capturedError *CapturedError) (*CapturedErrorResponse, error) {
 	body, err := json.Marshal(capturedError)
 	if err != nil {
-		return fmt.Errorf("marshalling captured error: %w", err)
+		return nil, fmt.Errorf("marshalling captured error: %w", err)
 	}
 	if len(body) > MaxCapturedErrorBody {
-		return fmt.Errorf("captured error request exceeds %d bytes after JSON encoding", MaxCapturedErrorBody)
+		return nil, fmt.Errorf("captured error request exceeds %d bytes after JSON encoding", MaxCapturedErrorBody)
 	}
-	return c.client.Do(ctx, http.MethodPost, capturedErrorsURL, json.RawMessage(body), nil)
+	var resp CapturedErrorResponse
+	if err := c.client.Do(ctx, http.MethodPost, capturedErrorsURL, json.RawMessage(body), &resp); err != nil {
+		return nil, err
+	}
+	return &resp, nil
 }
 
 // NewDefaultClient returns a new Job API Client with the default socket path
