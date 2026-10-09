@@ -101,6 +101,13 @@ type Executor struct {
 	// into the OTLP exporter.
 	stdoutTee *teeWriter
 
+	// outputTail keeps the end of the redacted child-process output, so
+	// captured errors can include what a failed hook or command printed. It is
+	// fed by outputTailRedactor, which receives only hook, command, and plugin
+	// checkout output, never the agent's own logging.
+	outputTail         outputTail
+	outputTailRedactor *replacer.Replacer
+
 	// stderrTee carries the redacted shell logger output (section headers,
 	// prompts, comments, warnings) to stderr and, when OTLP job logging is
 	// enabled, mirrors it into the OTLP exporter so the exported records match
@@ -466,12 +473,19 @@ func (e *Executor) executeHook(ctx context.Context, hookCfg HookConfig) (retErr 
 	}
 	hookName += " " + hookCfg.Name
 
+	// A command hook's failure is the command's failure, which CommandPhase
+	// captures instead.
+	if hookCfg.Name != "command" {
+		defer func() { e.captureHookError(ctx, hookCfg, hookName, retErr) }()
+	}
+
 	if !osutil.FileExists(hookCfg.Path) {
 		if e.Debug {
 			e.shell.Commentf("Skipping %s hook, no script at \"%s\"", hookName, hookCfg.Path)
 		}
 		return nil
 	}
+	e.resetRecentOutput()
 
 	e.shell.Headerf("Running %s hook", hookName)
 
@@ -532,7 +546,7 @@ func (e *Executor) runUnwrappedHook(ctx context.Context, _ string, hookCfg HookC
 	environ.Set("BUILDKITE_HOOK_PATH", hookCfg.Path)
 	environ.Set("BUILDKITE_HOOK_SCOPE", hookCfg.Scope)
 
-	err := e.shell.Command(hookCfg.Path).Run(ctx, shell.WithExtraEnv(environ))
+	err := e.shell.Command(hookCfg.Path).Run(ctx, shell.WithExtraEnv(environ), e.teeRecentOutput())
 	// Store the last hook exit code for subsequent steps, matching wrapped shell hooks.
 	e.shell.Env.Set("BUILDKITE_LAST_HOOK_EXIT_STATUS", strconv.Itoa(shell.ExitCode(err)))
 	if err != nil {
@@ -607,6 +621,16 @@ func logMissingHookInfo(l shell.Logger, hookName, wrapperPath string) {
 	l.Errorf("The %s hook failed to run - perhaps the script interpreter %q is missing", hookName, interpreter)
 }
 
+// hookExitError keeps the cause of a hook's exit, such as the signal that
+// terminated it, behind the short message shown in the job log.
+type hookExitError struct {
+	message string
+	err     error
+}
+
+func (e hookExitError) Error() string { return e.message }
+func (e hookExitError) Unwrap() error { return e.err }
+
 func (e *Executor) runWrappedShellScriptHook(ctx context.Context, hookName string, hookCfg HookConfig) error {
 	defer func() {
 		if err := e.redactors.Flush(); err != nil {
@@ -644,7 +668,7 @@ func (e *Executor) runWrappedShellScriptHook(ctx context.Context, hookName strin
 		if err != nil {
 			return err
 		}
-		return script.Run(ctx, shell.ShowPrompt(false), shell.WithExtraEnv(hookCfg.Env))
+		return script.Run(ctx, shell.ShowPrompt(false), shell.WithExtraEnv(hookCfg.Env), e.teeRecentOutput())
 	}()
 	if err != nil {
 		exitCode := shell.ExitCode(err)
@@ -655,7 +679,7 @@ func (e *Executor) runWrappedShellScriptHook(ctx context.Context, hookName strin
 		if shell.IsExitError(err) {
 			return &shell.ExitError{
 				Code: exitCode,
-				Err:  fmt.Errorf("the %s hook exited with status %d", hookName, exitCode),
+				Err:  hookExitError{message: fmt.Sprintf("the %s hook exited with status %d", hookName, exitCode), err: err},
 			}
 		}
 
@@ -937,6 +961,16 @@ func (e *Executor) executeLocalHook(ctx context.Context, name string) error {
 	}
 
 	if !localHooksEnabled {
+		// Say which setting disabled local hooks, since only the step's
+		// environment can be changed from the repository.
+		disabledBy, fix := "BUILDKITE_NO_LOCAL_HOOKS", "Remove BUILDKITE_NO_LOCAL_HOOKS from the job's environment, or remove the hook from the repository."
+		if !e.LocalHooksEnabled {
+			disabledBy, fix = "the agent's --no-local-hooks option", "Remove the hook from the repository, or run the step on agents that allow local hooks."
+		}
+		relPath, _ := filepath.Rel(e.shell.Env.GetString("BUILDKITE_BUILD_CHECKOUT_PATH", ""), localHookPath)
+		captureJobError(ctx, e.shell, "local_hook_refused", jobapi.CapturedErrorMessage(
+			fmt.Sprintf("The repository has a %s hook at %s, but %s disables local hooks, so the job failed. %s", name, filepath.ToSlash(relPath), disabledBy, fix),
+			fmt.Sprintf("The repository has a %s hook, but %s disables local hooks, so the job failed. %s", name, disabledBy, fix)))
 		return fmt.Errorf("refusing to run %s, local hooks are disabled", localHookPath)
 	}
 
@@ -1523,6 +1557,12 @@ func (e *Executor) setupRedactors(log shell.Logger, environ *env.Environment, st
 	stdoutRedactor := replacer.New(e.stdoutTee, needles, redact.Redacted)
 	stdoutRedactor.AddPrefixes(tokenPrefixes...)
 	e.redactors.Append(stdoutRedactor)
+	// Captured errors include the end of a failed command's output. Redact it
+	// as a whole stream, with the same needles as the job log, before
+	// keeping only its end.
+	e.outputTailRedactor = replacer.New(&e.outputTail, needles, redact.Redacted)
+	e.outputTailRedactor.AddPrefixes(tokenPrefixes...)
+	e.redactors.Append(e.outputTailRedactor)
 	// The shell logger writes through this redactor into stderrTee, whose
 	// primary sink is stderr. When OTLP job logging is enabled, a secondary
 	// sink is attached so the same already-redacted control output is mirrored
