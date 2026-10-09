@@ -283,3 +283,79 @@ func TestURLCredentials(t *testing.T) {
 		})
 	}
 }
+
+func TestURLCredentialsInText(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct{ input, want string }{
+		{"fatal: unable to access 'https://user:password@example.com/repo.git/': denied\n", "fatal: unable to access 'https://xxxxx@example.com/repo.git/': denied\n"},
+		{"remote: https://token@example.com,ssh://other:pass@host/repo", "remote: https://xxxxx@example.com,ssh://xxxxx@host/repo"},
+		{"https://token@example.com/a,https://other:pass@host/b", "https://xxxxx@example.com/a,https://xxxxx@host/b"},
+		{"\"HTTPS://test%40token:p%3Ass@example.com:8443/repo%20name?ref=main#tip\"", "\"https://xxxxx@example.com:8443/repo%20name?ref=main#tip\""},
+		{"failed (https://token@example.com).", "failed (https://xxxxx@example.com)."},
+		{"https://user:p'ass@example.com/repo", "https://xxxxx@example.com/repo"},
+		{"https://user:p@ss@example.com/repo", "https://xxxxx@example.com/repo"},
+		{"https://bad%zz:password@example.com/repo", "https://xxxxx@example.com/repo"},
+		{"https://user:bad#password@example.com/repo", "https://xxxxx@example.com/repo"},
+		{"//token@example.com/repo", "//xxxxx@example.com/repo"},
+		{"//bad%zz:password@example.com/repo", "//xxxxx@example.com/repo"},
+		{"https://token@[::1]:8443/repo", "https://xxxxx@[::1]:8443/repo"},
+		{"https://example.com/repo git@host:repo ../relative/ref", "https://example.com/repo git@host:repo ../relative/ref"},
+		{"fatal: unable to access 'https://user:a/b@example.com/repo/': denied", "fatal: unable to access 'https://xxxxx@example.com/repo/': denied"},
+		{"fatal: unable to access 'https://user:a/b@SUFFIX@example.com/repo/': denied", "fatal: unable to access 'https://xxxxx@example.com/repo/': denied"},
+		{"https://registry.example/@scope/pkg and https://example.com/repo@v1", "https://registry.example/@scope/pkg and https://example.com/repo@v1"},
+		{"https://[::1]/a@b and https://[::1]:8443/a@b", "https://[::1]/a@b and https://[::1]:8443/a@b"},
+		// A host with a port and an "@" in its path looks like a password
+		// containing "/", so it is masked too.
+		{"https://example.com:8443/a@b/repo", "https://xxxxx@b/repo"},
+		{"remote: plain-token is not a URL\n", "remote: plain-token is not a URL\n"},
+	} {
+		t.Run(tc.input, func(t *testing.T) {
+			if got := URLCredentialsInText(tc.input); got != tc.want {
+				t.Errorf("URLCredentialsInText() = %q, want %q", got, tc.want)
+			}
+			if got := URLCredentialsInText(tc.want); got != tc.want {
+				t.Errorf("URLCredentialsInText() is not idempotent: got %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestURLQueriesInText(t *testing.T) {
+	t.Parallel()
+	for _, test := range []struct{ in, want string }{
+		{"no URLs here", "no URLs here"},
+		{"https://example.com/path", "https://example.com/path"},
+		{
+			`PUT "https://bucket.s3.amazonaws.com/a.txt?X-Amz-Signature=abc&X-Amz-Credential=def": 403 Forbidden`,
+			`PUT "https://bucket.s3.amazonaws.com/a.txt?[REDACTED]": 403 Forbidden`,
+		},
+		{"see https://a.example/x?sig=1#frag and http://b.example/?t=2", "see https://a.example/x?[REDACTED]#frag and http://b.example/?[REDACTED]"},
+		{"a question? not a URL", "a question? not a URL"},
+		{"https://bucket.example/a'b?sig=SECRET", "https://bucket.example/a'b?[REDACTED]"},
+		{"failed (see https://a.example/x?sig=SECRET).", "failed (see https://a.example/x?[REDACTED])."},
+		{"is it https://a.example/x?", "is it https://a.example/x?"},
+		{"https://a.example/x?note='x'&access_token=SECRET", "https://a.example/x?[REDACTED]"},
+		{"fatal: unable to access 'https://a.example/x?token=SECRET': denied", "fatal: unable to access 'https://a.example/x?[REDACTED]': denied"},
+	} {
+		if got := URLQueriesInText(test.in); got != test.want {
+			t.Errorf("URLQueriesInText(%q) = %q, want %q", test.in, got, test.want)
+		}
+		if got := URLQueriesInText(test.want); got != test.want {
+			t.Errorf("URLQueriesInText() is not idempotent: got %q, want %q", got, test.want)
+		}
+	}
+}
+
+func TestURLCredentialsAndQueriesInText(t *testing.T) {
+	t.Parallel()
+	// A password containing "/" must not stop the query from being masked,
+	// whichever masking runs first.
+	const in = "fatal: unable to access 'https://u:a/b@example.com/repo?access_token=SECRET': denied"
+	const want = "fatal: unable to access 'https://xxxxx@example.com/repo?[REDACTED]': denied"
+	if got := URLQueriesInText(URLCredentialsInText(in)); got != want {
+		t.Errorf("credentials then queries = %q, want %q", got, want)
+	}
+	if got := URLCredentialsInText(URLQueriesInText(in)); got != want {
+		t.Errorf("queries then credentials = %q, want %q", got, want)
+	}
+}
