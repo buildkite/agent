@@ -84,8 +84,8 @@ the command phase and is not related to this proposal.
 Rename `jobProcess` to `JobExecution`, add `Cleanup`, and add a factory:
 
 ```go
-// JobExecutor chooses where and how bootstrap runs. One is built at agent
-// start and shared by every job the agent runs.
+// JobExecutor chooses where and how bootstrap runs. It holds configuration
+// that is the same for every job the agent runs.
 type JobExecutor interface {
 	New(ctx context.Context, req JobExecutionRequest) (JobExecution, error)
 }
@@ -105,11 +105,20 @@ type JobExecution interface {
 `JobExecutor` is a factory rather than a function because some executors carry
 state from agent start. The Docker executor holds its API client, the resolved
 image ID, and the agent binary path, all established once by the start-time
-preflight (below).
+preflight (below), so it is built at agent start and shared by every job. The
+exec and Kubernetes executors hold only configuration, so slice 1 builds them
+in `NewJobRunner`.
 
-`JobExecutionRequest` carries what `NewJobRunner` already computes:
+`Interrupt` and `Terminate` can be called at any time, including before `Run`
+and after `Cleanup`: `JobRunner.Cancel` runs independently of the job's own
+goroutines. `Cleanup` is guaranteed only once `Run` has been called, so `New`
+must not create anything that needs cleaning up.
 
-- `Job` and `AgentConfiguration`
+Configuration that is the same for every job (bootstrap script, build path,
+PTY, cancel signal and grace period, Kubernetes container start timeout) lives
+on the executor. `JobExecutionRequest` carries only the per-job values that
+`NewJobRunner` computes:
+
 - the job env slice (the output of `createEnvironment`), *without* the host
   `os.Environ()`. Today `NewJobRunner` computes
   `processEnv := append(os.Environ(), env...)` and hands it to both the exec
@@ -117,9 +126,10 @@ preflight (below).
   themselves. Docker does not.
 - the job context directory (`jobContextDir(conf)`), which holds
   `BUILDKITE_ENV_FILE`, `BUILDKITE_ENV_JSON_FILE`, and the job-timeout marker
-- the job log tmpfile path, when `enable-job-log-tmpfile` is on
 - the stdout/stderr writer (`r.jobLogs`)
-- `CancelSignal` and `CancelSignalTimeout`
+
+The Docker slice adds what it needs on top: the job ID for the container name
+and labels, and the job log tmpfile path for its mount.
 
 `Run` returning an error means "the executor failed and there is no
 trustworthy job result". `runJob` already maps that to exit -1 with
@@ -129,9 +139,10 @@ guarantee the job had no side effects: the Kubernetes runner already returns
 errors after containers have started, and Docker can lose its connection to
 the daemon after bootstrap has started.
 
-`runJob` type-asserts `r.process.(*kubernetes.Runner)` to print "unknown
+`runJob` type-asserts the Kubernetes execution to print "unknown
 container exit status" diagnostics, gated on `r.cancelled` and
-`r.agentStopping`. Slice 1 leaves that assertion alone. Hiding it behind an
+`r.agentStopping`. Slice 1 keeps that check, retargeted from
+`*kubernetes.Runner` to a one-method interface (`AnyClientIn`). Hiding it behind an
 optional interface is possible later, but the method needs the runner's
 cancelled and stopping state as input, so it is not a pure win and is not
 required for a third backend.
@@ -657,8 +668,9 @@ Slice 1:
 - Table test for executor selection, including rejection of unknown values,
   `--kubernetes-exec` normalising to `executor=kubernetes`, and rejection of
   `--kubernetes-exec` combined with `executor=docker` or `executor=exec`.
-- Parity test: the exec execution produces the same `process.Config` as the
-  current code for a fixed `JobRunnerConfig`, including the host env prepend.
+- Behaviour tests for the exec execution, which existing tests do not cover:
+  bootstrap runs in the build path, job env overrides the agent's own
+  environment, and a SIGKILL cancel signal reaches bootstrap as SIGTERM.
 
 Slice 2 runs against a fake Docker Engine API (an `httptest` server that
 records requests and scripts responses), plus a few real-daemon tests:

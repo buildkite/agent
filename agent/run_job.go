@@ -352,7 +352,9 @@ func (r *JobRunner) runJob(ctx context.Context) core.ProcessExit {
 	// Intended to capture situations where the job-exec (aka bootstrap) container did not
 	// start. Normally such errors are hidden in the Kubernetes events. Let's feed them up
 	// to the user as they may be the caused by errors in the pipeline definition.
-	k8sProcess, isK8s := r.process.(*kubernetes.Runner)
+	k8sProcess, isK8s := r.process.(interface {
+		AnyClientIn(kubernetes.ClientState) bool
+	})
 	if isK8s && !r.agentStopping.Load() {
 		switch {
 		case r.cancelled.Load() && k8sProcess.AnyClientIn(kubernetes.StateNotYetConnected):
@@ -425,6 +427,15 @@ func (r *JobRunner) cleanup(ctx context.Context, wg *sync.WaitGroup, exit core.P
 	// Wait for the routines that we spun up to finish
 	r.agentLogger.Debugf("[JobRunner] Waiting for all other routines to finish")
 	wg.Wait()
+
+	// Release anything the execution created. This must happen before
+	// FinishJob, which can hand the agent its next job. The context is
+	// detached from ctx so a cancelled job is still cleaned up.
+	cleanupCtx, cancelCleanup := context.WithTimeout(context.WithoutCancel(ctx), jobExecutionCleanupTimeout)
+	if err := r.process.Cleanup(cleanupCtx); err != nil {
+		r.agentLogger.Errorf("[JobRunner] Error cleaning up job execution: %v", err)
+	}
+	cancelCleanup()
 
 	// Remove the env file, if any
 	for _, f := range []*os.File{r.envShellFile, r.envJSONFile} {
