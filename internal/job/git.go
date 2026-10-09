@@ -67,6 +67,8 @@ type gitError struct {
 	error
 	Type       int
 	WasRetried bool
+	// Retained for reporting; callers use Type and WasRetried for retry decisions.
+	outputMatches map[string]bool
 }
 
 func (e *gitError) Unwrap() error {
@@ -160,19 +162,23 @@ func gitClone(
 	gitFlags, gitCloneFlags []string,
 	repository, dir string,
 	runOpts ...shell.RunCommandOpt,
-) error {
+) (retErr error) {
+	var output gitErrorOutput
+	defer func() { captureGitError(ctx, sh, retErr, output.String()) }()
+
 	commandArgs := append([]string{}, gitFlags...)
 	commandArgs = append(commandArgs, "clone")
 	commandArgs = append(commandArgs, gitCloneFlags...)
 	commandArgs = append(commandArgs, "--", repository, dir)
 
 	smelt := map[string]bool{gitErrStrOperationTooSlow: false}
-	runOpts = append(runOpts, shell.WithStringSearch(smelt))
+	addGitRemoteErrorPatterns(smelt)
+	runOpts = append(runOpts, shell.WithStringSearch(smelt), output.tee(sh))
 	if err := sh.Command("git", commandArgs...).Run(ctx, runOpts...); err != nil {
 		if smelt[gitErrStrOperationTooSlow] {
-			return &gitError{error: err, Type: gitErrorCloneTimeout}
+			return &gitError{error: err, Type: gitErrorCloneTimeout, outputMatches: smelt}
 		}
-		return &gitError{error: err, Type: gitErrorClone}
+		return &gitError{error: err, Type: gitErrorClone, outputMatches: smelt}
 	}
 
 	return nil
@@ -397,14 +403,6 @@ func gitFetch(ctx context.Context, args gitFetchArgs) error {
 
 	commandArgs = append(commandArgs, args.LiteralRefSpecs...)
 
-	smelt := map[string]bool{
-		gitErrStrBadObject:             false,
-		gitErrStrBadReference:          false,
-		gitErrStrBadReferencePreGit221: false,
-		gitErrStrNotOurRef:             false,
-		gitErrStrUnadvertisedObject:    false,
-	}
-
 	// The retry logic is used to handle rare cases where a commit ref is not yet available
 	// remotely (e.g. async ref creation), and retrying `git fetch` can resolve it.
 	// This is *not* always desirable—some call sites have their own retry mechanisms,
@@ -422,8 +420,20 @@ func gitFetch(ctx context.Context, args gitFetchArgs) error {
 		)
 	}
 
-	return retrier.DoWithContext(ctx, func(retrier *roko.Retrier) error {
-		runOpts := []shell.RunCommandOpt{shell.WithStringSearch(smelt)}
+	return retrier.DoWithContext(ctx, func(retrier *roko.Retrier) (retErr error) {
+		var output gitErrorOutput
+		defer func() { captureGitError(ctx, args.Shell, retErr, output.String()) }()
+
+		// Both reporting and retry decisions must describe this attempt only.
+		smelt := map[string]bool{
+			gitErrStrBadObject:             false,
+			gitErrStrBadReference:          false,
+			gitErrStrBadReferencePreGit221: false,
+			gitErrStrNotOurRef:             false,
+			gitErrStrUnadvertisedObject:    false,
+		}
+		addGitRemoteErrorPatterns(smelt)
+		runOpts := []shell.RunCommandOpt{shell.WithStringSearch(smelt), output.tee(args.Shell)}
 		if args.HidePrompt {
 			runOpts = append(runOpts, shell.AlwaysHidePrompt())
 		}
@@ -433,12 +443,12 @@ func gitFetch(ctx context.Context, args gitFetchArgs) error {
 			// that github creates asynchronously), so this case gets retried -- we don't call r.Break()
 			if smelt[gitErrStrBadReference] || smelt[gitErrStrBadReferencePreGit221] {
 				args.Shell.Commentf("%s", retrier)
-				return &gitError{error: err, Type: gitErrorFetchBadReference, WasRetried: args.Retry}
+				return &gitError{error: err, Type: gitErrorFetchBadReference, WasRetried: args.Retry, outputMatches: smelt}
 			}
 
 			if smelt[gitErrStrNotOurRef] || smelt[gitErrStrUnadvertisedObject] {
 				retrier.Break()
-				return &gitError{error: err, Type: gitErrorFetchRefNotOnRemote}
+				return &gitError{error: err, Type: gitErrorFetchRefNotOnRemote, outputMatches: smelt}
 			}
 
 			// "fatal: bad object" can happen when the local repo in the checkout
@@ -449,17 +459,17 @@ func gitFetch(ctx context.Context, args gitFetchArgs) error {
 			// See the NOTE under --shared at https://git-scm.com/docs/git-clone.
 			if smelt[gitErrStrBadObject] {
 				retrier.Break()
-				return &gitError{error: err, Type: gitErrorFetchBadObject}
+				return &gitError{error: err, Type: gitErrorFetchBadObject, outputMatches: smelt}
 			}
 
-			// 128 is extremely broad, but it seems permissions errors, network unreachable errors etc,
-			// don't result in it
+			// Exit 128 also covers authentication and network failures. Preserve
+			// the existing recovery policy independently of the reported cause.
 			if exitErr := new(exec.ExitError); errors.As(err, &exitErr) && exitErr.ExitCode() == 128 {
 				retrier.Break()
-				return &gitError{error: err, Type: gitErrorFetchRetryClean}
+				return &gitError{error: err, Type: gitErrorFetchRetryClean, outputMatches: smelt}
 			}
 
-			return &gitError{error: err, Type: gitErrorFetch, WasRetried: args.Retry}
+			return &gitError{error: err, Type: gitErrorFetch, WasRetried: args.Retry, outputMatches: smelt}
 		}
 		return nil
 	})
