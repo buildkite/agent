@@ -581,7 +581,8 @@ var AgentStartCommand = &cli.Command{
 		&cli.StringSliceFlag{
 			Name: "executor-docker-mount",
 			Usage: "An extra bind mount for docker executor job containers, as src:dst or src:dst:ro. " +
-				"Can be repeated",
+				"HOME in the container is /tmp/buildkite-home, but ssh reads its config and keys from the " +
+				"agent user's home directory in /etc/passwd, so mount ~/.ssh at that path. Can be repeated",
 			Sources: cli.EnvVars("BUILDKITE_EXECUTOR_DOCKER_MOUNT"),
 		},
 		&cli.StringSliceFlag{

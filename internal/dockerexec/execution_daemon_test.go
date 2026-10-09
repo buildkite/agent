@@ -5,6 +5,7 @@ package dockerexec
 import (
 	"context"
 	"os"
+	"os/user"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -32,6 +33,7 @@ const fakeBootstrap = `package main
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"strconv"
@@ -59,6 +61,10 @@ func main() {
 	}
 	if err := os.WriteFile(filepath.Join(wd, "built"), nil, 0o644); err != nil {
 		fmt.Println("build path not writable:", err)
+	}
+	if host := os.Getenv("SSH_CONFIG_PROBE"); host != "" {
+		out, err := exec.Command("ssh", "-G", host).CombinedOutput()
+		fmt.Printf("ssh -G err=%v\n%s", err, out)
 	}
 	if os.Getenv("WAIT_FOR_SIGTERM") != "" {
 		fmt.Println("ready")
@@ -162,6 +168,40 @@ func TestDaemon_RunsBootstrapAsTheAgentUser(t *testing.T) {
 				t.Errorf("ContainerInspect() after Cleanup error = %v, want not found", err)
 			}
 		})
+	}
+}
+
+// TestDaemon_SSHFindsConfigAtThePasswdHome checks the advice in the
+// executor-docker-mount help: ssh reads ~/.ssh from the agent user's home in
+// /etc/passwd, not from HOME, so that is where its config must be mounted.
+func TestDaemon_SSHFindsConfigAtThePasswdHome(t *testing.T) {
+	t.Parallel()
+	image := os.Getenv("BUILDKITE_TEST_DOCKER_EXECUTOR_SSH_IMAGE")
+	if image == "" {
+		t.Skip("set BUILDKITE_TEST_DOCKER_EXECUTOR_SSH_IMAGE to an image with the ssh client")
+	}
+	// The executor runs the container as the agent's uid, which is this
+	// test's uid, so the container sees the same passwd home.
+	u, err := user.Current()
+	if err != nil {
+		t.Fatalf("user.Current() error = %v", err)
+	}
+	sshDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(sshDir, "config"), []byte("Host probe\n  User from-mounted-config\n"), 0o600); err != nil {
+		t.Fatalf("os.WriteFile() error = %v", err)
+	}
+	e, _ := newDaemonExecutor(t, image, func(c *Config) {
+		c.Mounts = []string{sshDir + ":" + filepath.Join(u.HomeDir, ".ssh") + ":ro"}
+	})
+	out := &process.Buffer{}
+	x := e.NewExecution(Request{JobID: "daemon-test", Env: []string{"SSH_CONFIG_PROBE=probe"}, Output: out})
+	cleanupAfterTest(t, x)
+
+	if err := x.Run(t.Context()); err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+	if got := string(out.ReadAndTruncate()); !strings.Contains(got, "user from-mounted-config") {
+		t.Errorf("ssh -G output = %q, want it to use the mounted config", got)
 	}
 }
 

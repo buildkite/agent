@@ -163,8 +163,10 @@ func parseMount(spec string) (mount.Mount, error) {
 
 // checkMountTarget rejects a target that overlaps a reserved path in either
 // direction, because a mount over a parent would also create mount points in
-// its host source. Targets inside HOME are allowed so ssh keys and git config
-// can be mounted there, but HOME itself and its parents are not.
+// its host source. Targets inside HOME are allowed so git config and other
+// HOME-relative files can be mounted there, but HOME itself and its parents
+// are not. OpenSSH reads ~/.ssh from the passwd home directory rather than
+// HOME, so ssh config and keys belong at the agent user's home path.
 func checkMountTarget(target string, reserved []string) error {
 	if within(homeDir, target) {
 		return fmt.Errorf("target is or contains the executor's HOME (%s), mount files inside it instead", homeDir)

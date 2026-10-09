@@ -318,7 +318,39 @@ func TestExecution_TerminateKillsARunningContainer(t *testing.T) {
 	}
 }
 
-func TestExecution_TerminateDuringStartKillsOnceStarted(t *testing.T) {
+func TestExecution_TerminateDuringAHungStartKillsTheContainer(t *testing.T) {
+	t.Parallel()
+	fake, _ := newFakeDaemon(t)
+	starting := make(chan struct{})
+	// The daemon has launched the container but never answers /start.
+	fake.containerStart = func(ctx context.Context, _ string) error {
+		close(starting)
+		<-ctx.Done()
+		return ctx.Err()
+	}
+	x, _ := newTestExecution(t, fake, nil)
+
+	wait := runInBackground(t, x)
+	<-starting
+	begun := time.Now()
+	if err := x.Terminate(); err != nil {
+		t.Fatalf("Terminate() error = %v", err)
+	}
+	if err := wait(); err == nil || !strings.Contains(err.Error(), "terminated while its container was starting") {
+		t.Fatalf("Run() error = %v, want it to report the termination", err)
+	}
+	if elapsed := time.Since(begun); elapsed > time.Second {
+		t.Errorf("Run returned %v after Terminate, want well under the %v start timeout", elapsed, startTimeout)
+	}
+	if err := x.Cleanup(t.Context()); err != nil {
+		t.Fatalf("Cleanup() error = %v", err)
+	}
+	if got, want := strings.Join(fake.Calls(), ","), "ContainerCreate,ContainerAttach,ContainerWait,ContainerStart,ContainerKill SIGKILL,ContainerRemove cid"; got != want {
+		t.Errorf("daemon calls = [%s], want [%s]", got, want)
+	}
+}
+
+func TestExecution_TerminateDuringStartKillsAContainerThatStarts(t *testing.T) {
 	t.Parallel()
 	fake, _ := newFakeDaemon(t)
 	x, _ := newTestExecution(t, fake, nil)
@@ -327,14 +359,15 @@ func TestExecution_TerminateDuringStartKillsOnceStarted(t *testing.T) {
 		if err := x.Terminate(); err != nil {
 			t.Errorf("Terminate() error = %v", err)
 		}
-		return start(ctx, id)
+		// The daemon finishes starting the container regardless.
+		return start(context.WithoutCancel(ctx), id)
 	}
 
-	if err := x.Run(t.Context()); err != nil {
-		t.Fatalf("Run() error = %v", err)
+	if err := x.Run(t.Context()); err == nil || !strings.Contains(err.Error(), "terminated while its container was starting") {
+		t.Fatalf("Run() error = %v, want it to report the termination", err)
 	}
-	if got, want := x.WaitStatus().ExitStatus(), 137; got != want {
-		t.Errorf("WaitStatus().ExitStatus() = %d, want %d", got, want)
+	if got, want := strings.Join(fake.Calls(), ","), "ContainerCreate,ContainerAttach,ContainerWait,ContainerStart,ContainerKill SIGKILL,ContainerKill SIGKILL"; got != want {
+		t.Errorf("daemon calls = [%s], want [%s]", got, want)
 	}
 }
 
