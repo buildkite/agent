@@ -366,3 +366,16 @@ func connect(ctx context.Context, c *Client) error {
 	_, err := c.Connect(ctx)
 	return err
 }
+
+func TestStartTimeout(t *testing.T) {
+	runner := NewRunner(logger.Discard, RunnerConfig{
+		SocketPath:         filepath.Join(t.TempDir(), "bk.sock"),
+		ClientCount:        1,
+		ClientStartTimeout: 10 * time.Millisecond,
+	})
+	err := runner.Run(t.Context())
+	timeout := new(StartTimeoutError)
+	if !errors.As(err, &timeout) || timeout.Timeout != 10*time.Millisecond || err.Error() != "timed out waiting 10ms for all containers to connect" {
+		t.Errorf("runner.Run() = %v, want a start timeout after 10ms", err)
+	}
+}

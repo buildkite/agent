@@ -156,6 +156,16 @@ func (r *Runner) Run(ctx context.Context) error {
 	}
 }
 
+// StartTimeoutError is returned when not every container connected to the
+// agent within the start timeout.
+type StartTimeoutError struct {
+	Timeout time.Duration
+}
+
+func (e *StartTimeoutError) Error() string {
+	return fmt.Sprintf("timed out waiting %v for all containers to connect", e.Timeout)
+}
+
 // startupCheck blocks until all containers have connected, or times out.
 func (r *Runner) startupCheck(ctx context.Context) error {
 	if r.conf.ClientStartTimeout <= 0 { // check is disabled
@@ -170,7 +180,7 @@ func (r *Runner) startupCheck(ctx context.Context) error {
 			return ctx.Err()
 
 		case <-timeout:
-			return fmt.Errorf("timed out waiting %v for all containers to connect", r.conf.ClientStartTimeout)
+			return &StartTimeoutError{Timeout: r.conf.ClientStartTimeout}
 
 		case <-r.done:
 			return nil

@@ -22,6 +22,7 @@ func TestConfigAllowlisting(t *testing.T) {
 		wantExitStatus           string
 		wantSignalReason         string
 		wantLogsContain          []string
+		wantCapturedReason       string
 	}
 
 	tests := []testCase{
@@ -37,6 +38,7 @@ func TestConfigAllowlisting(t *testing.T) {
 			wantExitStatus:           "-1",
 			wantLogsContain:          []string{"failed to validate environment variables: BASH_ENV has no match in [^BUILDKITE.*$]"},
 			wantSignalReason:         agent.SignalReasonAgentRefused,
+			wantCapturedReason:       "allowed-environment-variables",
 		},
 		{
 			name: "when allowlisting environment variables, the job is accepted if all of the environment variables match the configured allowlist",
@@ -65,6 +67,7 @@ func TestConfigAllowlisting(t *testing.T) {
 			wantExitStatus:           "-1",
 			wantLogsContain:          []string{"failed to validate repo: https://github.com/crimes/cryptohaxx.exe has no match in [^.*github.com/buildkite/agent$]"},
 			wantSignalReason:         agent.SignalReasonAgentRefused,
+			wantCapturedReason:       "allowed-repositories",
 		},
 		{
 			name:     "when allowlisting repos, the job is accepted if the repo matches the configured allowlist",
@@ -133,6 +136,7 @@ func TestConfigAllowlisting(t *testing.T) {
 			wantExitStatus:           "-1",
 			wantLogsContain:          []string{"failed to validate plugins: github.com/crime-org/super-nasty-plugin#1.0.0 has no match in [^github.com/buildkite-plugins/.*$]"},
 			wantSignalReason:         agent.SignalReasonAgentRefused,
+			wantCapturedReason:       "allowed-plugins",
 		},
 		{
 			name:     "when allowlisting plugins, if the plugin source matches the configured allowlist, the job is accepted",
@@ -158,8 +162,9 @@ func TestConfigAllowlisting(t *testing.T) {
 				ChunksMaxSizeBytes: 1024,
 				ID:                 jobID,
 				Env: map[string]string{
-					"BUILDKITE":         "true",
-					"BUILDKITE_COMMAND": "echo hello",
+					"BUILDKITE":                      "true",
+					"BUILDKITE_COMMAND":              "echo hello",
+					"BUILDKITE_CAPTURE_AGENT_ERRORS": "true",
 				},
 				Token: "bkaj_job-token",
 			}
@@ -200,6 +205,17 @@ func TestConfigAllowlisting(t *testing.T) {
 
 			if got, want := finishedJob.SignalReason, tc.wantSignalReason; got != want {
 				t.Errorf("job.SignalReason = %q, want %q", got, want)
+			}
+
+			captured := e.capturedErrorsFor(t, jobID)
+			if tc.wantCapturedReason == "" {
+				if len(captured) != 0 {
+					t.Errorf("captured errors = %+v, want none", captured)
+				}
+			} else if len(captured) != 1 || captured[0].Code != "job_refused" {
+				t.Errorf("captured errors = %+v, want one job_refused", captured)
+			} else if want := "--" + tc.wantCapturedReason + " option does not allow it: "; !strings.Contains(captured[0].Message, want) || !strings.Contains(captured[0].Message, " has no match in ") {
+				t.Errorf("message = %q, want it to name the option and the refused value", captured[0].Message)
 			}
 		})
 	}
@@ -258,6 +274,74 @@ func TestRemoteMirrorAllowlistMasksAmbientEnvironment(t *testing.T) {
 			})
 			if err != nil {
 				t.Fatalf("runJob() error = %v", err)
+			}
+		})
+	}
+}
+
+func TestRefusedJobErrorsDescribeTheStep(t *testing.T) {
+	t.Parallel()
+
+	for _, test := range []struct {
+		name, code, contains, excludes string
+		env                            map[string]string
+		agentConfig                    agent.AgentConfiguration
+	}{
+		{
+			name:     "malformed plugins are a problem with the step, not the allowlist",
+			env:      map[string]string{"BUILDKITE_PLUGINS": `{"not": "a list"`},
+			code:     "plugin_definition_invalid",
+			contains: "The step's plugins could not be parsed: ",
+			excludes: "--allowed-plugins",
+		},
+		{
+			name:        "URL-shaped allowlist patterns are left as they are",
+			env:         map[string]string{"BUILDKITE_REPO": "https://example.com/other.git?access_token=unregistered-secret"},
+			agentConfig: agent.AgentConfiguration{AllowedRepositories: []*regexp.Regexp{regexp.MustCompile(`^https://example\.com/(?:team-a|team-b)/.*$`)}},
+			code:        "job_refused",
+			contains:    "https://example.com/other.git?[REDACTED] has no match in [^https://example\\.com/(?:team-a|team-b)/.*$]",
+			excludes:    "unregistered-secret",
+		},
+		{
+			name:        "a refused repository's query string is masked",
+			env:         map[string]string{"BUILDKITE_REPO": "https://example.com/repo.git?access_token=unregistered-secret"},
+			agentConfig: agent.AgentConfiguration{AllowedRepositories: []*regexp.Regexp{regexp.MustCompile(`^https://github\.com/`)}},
+			code:        "job_refused",
+			contains:    "https://example.com/repo.git?[REDACTED] has no match",
+			excludes:    "unregistered-secret",
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			job := &api.Job{
+				ChunksMaxSizeBytes: 1024,
+				ID:                 defaultJobID,
+				Env: map[string]string{
+					"BUILDKITE":                      "true",
+					"BUILDKITE_COMMAND":              "echo hello",
+					"BUILDKITE_CAPTURE_AGENT_ERRORS": "true",
+				},
+				Token: "bkaj_job-token",
+			}
+			maps.Copy(job.Env, test.env)
+			test.agentConfig.PluginsEnabled = true
+
+			e := createTestAgentEndpoint()
+			server := e.server()
+			defer server.Close()
+			mb := mockBootstrap(t)
+			mb.Expect().NotCalled()
+			defer mb.CheckAndClose(t) //nolint:errcheck // bintest logs to t
+
+			if err := runJob(t, t.Context(), testRunJobConfig{job: job, server: server, agentCfg: test.agentConfig, mockBootstrap: mb}); err != nil {
+				t.Fatalf("runJob() error = %v", err)
+			}
+			captured := e.capturedErrorsFor(t, defaultJobID)
+			if len(captured) != 1 || captured[0].Code != test.code {
+				t.Fatalf("captured errors = %+v, want one %s", captured, test.code)
+			}
+			if message := captured[0].Message; !strings.Contains(message, test.contains) || strings.Contains(message, test.excludes) {
+				t.Errorf("message = %q, want it to contain %q and not %q", message, test.contains, test.excludes)
 			}
 		})
 	}
