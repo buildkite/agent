@@ -208,9 +208,12 @@ var PipelineUploadCommand = &cli.Command{
 		// stage records how far the upload got, and failure the underlying
 		// cause when the returned error is a silent exit.
 		stage, failure := "read", error(nil)
+		// environ is the interpolation environment, which also gains the
+		// variables a pipeline's env block declares.
+		var environ *env.Environment
 		defer func() {
 			if err != nil {
-				capturePipelineUploadError(ctx, l, stage, cmp.Or(failure, err), cfg.RedactedVars)
+				capturePipelineUploadError(ctx, l, stage, cmp.Or(failure, err), cfg.RedactedVars, environ)
 			}
 		}()
 
@@ -299,7 +302,7 @@ var PipelineUploadCommand = &cli.Command{
 			}
 		}
 
-		environ := env.FromSlice(os.Environ())
+		environ = env.FromSlice(os.Environ())
 
 		if !cfg.NoInterpolation { // yes, interpolation
 			// resolve BUILDKITE_COMMIT based on the local git repo
@@ -469,7 +472,7 @@ var PipelineUploadCommand = &cli.Command{
 
 // capturePipelineUploadError reports why a pipeline upload failed. Parse and
 // API errors explain what to fix, so they are reported when they fit.
-func capturePipelineUploadError(ctx context.Context, l logger.Logger, stage string, err error, redactedVars []string) {
+func capturePipelineUploadError(ctx context.Context, l logger.Logger, stage string, err error, redactedVars []string, environ *env.Environment) {
 	// Each stage is what the upload was doing, and how to fix a failure there.
 	stages := map[string][2]string{
 		"read":             {"reading the pipeline", "Check that the pipeline file exists and is not empty."},
@@ -485,12 +488,21 @@ func capturePipelineUploadError(ctx context.Context, l logger.Logger, stage stri
 	fallback := fmt.Sprintf("`buildkite-agent pipeline upload` failed while %s. %s", doing, fix)
 	message := fmt.Sprintf("`buildkite-agent pipeline upload` failed while %s: %v. %s", doing, err, fix)
 	// The Local Job API redacts the values the agent knows of, but not a
-	// secret set only in the step's shell, which an interpolation error such
-	// as ${VAR?$SECRET} can include, so redact those here.
-	values, _, needlesErr := redact.NeedlesFromEnv(redactedVars)
+	// secret set only in the step's shell or declared in the pipeline's env
+	// block, which an interpolation error such as ${VAR?$SECRET} can include,
+	// so redact those here.
+	pairs := env.FromSlice(os.Environ()).DumpPairs()
+	if environ != nil {
+		pairs = append(pairs, environ.DumpPairs()...)
+	}
+	matched, _, needlesErr := redact.Vars(redactedVars, pairs)
 	if needlesErr != nil {
 		// Without the values to redact, send only the agent's own text.
 		message = fallback
+	}
+	values := make([]string, 0, len(matched))
+	for _, pair := range matched {
+		values = append(values, pair.Value)
 	}
 	message = redact.String(message, values)
 	captureAgentError(ctx, l, "pipeline_upload_failed", jobapi.CapturedErrorMessage(message, fallback))
