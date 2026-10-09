@@ -1,6 +1,8 @@
 package integration
 
 import (
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -51,6 +53,66 @@ func TestWhenCachePathsSetInJobStep_CachePathsEnvVarIsSet(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatalf("runJob() error = %v", err)
+	}
+}
+
+// The job log tmpfile path must reach the bootstrap through the job env, not
+// the agent process env, which is shared by every job when using --spawn.
+func TestJobLogTmpfile_PathPassedToBootstrapNotAgentEnv(t *testing.T) {
+	// Make sure the agent process env doesn't have BUILDKITE_JOB_LOG_TMPFILE
+	// (it might, if the tests run inside a job). t.Setenv restores the
+	// original value afterwards, and means this test cannot be parallel.
+	t.Setenv("BUILDKITE_JOB_LOG_TMPFILE", "")
+	if err := os.Unsetenv("BUILDKITE_JOB_LOG_TMPFILE"); err != nil {
+		t.Fatalf("os.Unsetenv(BUILDKITE_JOB_LOG_TMPFILE) = %v", err)
+	}
+
+	ctx := t.Context()
+	job := &api.Job{
+		ID:                 "job-log-tmpfile-job",
+		ChunksMaxSizeBytes: 1024,
+		Env:                map[string]string{},
+		Token:              "bkaj_job-token",
+	}
+
+	// Not t.TempDir: v3 doesn't close the job log tmpfile, so on Windows it
+	// can't be removed and t.TempDir's cleanup would fail the test.
+	jobLogPath, err := os.MkdirTemp("", "job-log-tmpfile")
+	if err != nil {
+		t.Fatalf("os.MkdirTemp() error = %v", err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(jobLogPath) })
+
+	mb := mockBootstrap(t)
+	defer mb.CheckAndClose(t) //nolint:errcheck // bintest logs to t
+
+	mb.Expect().Once().AndExitWith(0).AndCallFunc(func(c *bintest.Call) {
+		got := c.GetEnv("BUILDKITE_JOB_LOG_TMPFILE")
+		if got == "" || filepath.Dir(got) != jobLogPath {
+			t.Errorf("c.GetEnv(BUILDKITE_JOB_LOG_TMPFILE) = %q, want a file in %q", got, jobLogPath)
+		}
+		c.Exit(0)
+	})
+
+	e := createTestAgentEndpoint()
+	server := e.server()
+	defer server.Close()
+
+	err = runJob(t, ctx, testRunJobConfig{
+		job:    job,
+		server: server,
+		agentCfg: agent.AgentConfiguration{
+			EnableJobLogTmpfile: true,
+			JobLogPath:          jobLogPath,
+		},
+		mockBootstrap: mb,
+	})
+	if err != nil {
+		t.Fatalf("runJob() error = %v", err)
+	}
+
+	if got, ok := os.LookupEnv("BUILDKITE_JOB_LOG_TMPFILE"); ok {
+		t.Errorf("agent process env has BUILDKITE_JOB_LOG_TMPFILE = %q, want it unset", got)
 	}
 }
 
