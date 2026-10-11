@@ -136,7 +136,10 @@ func (r *JobRunner) verifyJob(ctx context.Context, keySet any) error {
 			}
 
 		case "plugins": // compare canonicalised JSON
-			jobPluginsJSON := jobEnv["BUILDKITE_PLUGINS"]
+			// Compare the value bootstrap will receive. On Windows, a
+			// case-variant job env key is normalized before execution, while
+			// jobEnv retains its original spelling for signed env fields.
+			jobPluginsJSON := r.conf.Job.Env["BUILDKITE_PLUGINS"]
 			// Various equivalent ways to represent "no plugins", however...
 			// jcs.Transform chokes on "" and "null", and json.Marshal encodes
 			// nil slice as "null", but zero-length slice as "[]".
