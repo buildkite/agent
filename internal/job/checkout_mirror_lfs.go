@@ -46,22 +46,6 @@ func (e *Executor) mirrorLFSCacheEnabled() bool {
 	return e.GitLFSEnabled && e.GitMirrorsLFSCache
 }
 
-// finishMirrorUpdate runs while the caller holds the mirror's clone or update
-// lock, before creating a snapshot or cloning the workspace. LFS prefetching is
-// optional: the workspace still fetches with its own configuration and retries,
-// reusing cached objects where possible.
-func (e *Executor) finishMirrorUpdate(ctx context.Context, repository, mirrorDir, lfsRef string) (string, error) {
-	if e.mirrorLFSCacheEnabled() && repository == e.Repository {
-		if err := e.prefetchMirrorLFS(ctx, mirrorDir, lfsRef); err != nil {
-			if ctx.Err() != nil {
-				return "", ctx.Err()
-			}
-			e.shell.Warningf("Unable to prefetch Git LFS objects into mirror; deferring to checkout: %v", err)
-		}
-	}
-	return e.snapshotMirror(ctx, repository, mirrorDir)
-}
-
 // mirrorLFSRef selects the job revision in a freshly cloned mirror, which has
 // no job-specific FETCH_HEAD. HEAD means the requested build ref, not the
 // mirror's default branch. Existing mirrors use the fresh fetch result instead.
