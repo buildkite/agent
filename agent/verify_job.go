@@ -114,7 +114,8 @@ func (r *JobRunner) verifyJob(ctx context.Context, keySet any) error {
 	for _, field := range signedFields {
 		switch field {
 		case "command": // compare directly
-			jobCommand := jobEnv["BUILDKITE_COMMAND"]
+			// use the normalized r.conf.Job.Env here too, so lowercase buildkite_command can’t inject an unsigned command when the signed command is empty
+			jobCommand := r.conf.Job.Env["BUILDKITE_COMMAND"]
 			if step.Command != jobCommand {
 				r.agentLogger.Debugf("failed to verifyJob: BUILDKITE_COMMAND = %q != %q = step.Command", jobCommand, step.Command)
 				return newInvalidSignatureError(ErrInvalidJob)
