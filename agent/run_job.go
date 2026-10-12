@@ -137,6 +137,18 @@ func (r *JobRunner) Run(ctx context.Context, ignoreAgentInDispatches *bool) (err
 		}
 	}
 
+	// Refuse before signature verification or allowlists look at the env,
+	// since neither can make sense of an env that failed to normalize.
+	if r.jobEnvError != nil {
+		err := fmt.Errorf("invalid job environment: %w", r.jobEnvError)
+		_, _ = fmt.Fprintln(r.jobLogs, err.Error())
+		r.agentLogger.Errorf("%v", err)
+
+		exit.Status = -1
+		exit.SignalReason = SignalReasonAgentRefused
+		return nil
+	}
+
 	if r.conf.JWKS == nil && job.Step.Signature != nil {
 		r.verificationFailureLogs(
 			VerificationBehaviourBlock,
@@ -239,7 +251,7 @@ func (r *JobRunner) validateConfigAllowlists(jobToValidate *api.Job) error {
 			return nil
 		},
 		"environment variables": func() error {
-			return validateEnv(jobToValidate.Env, r.conf.AgentConfiguration.AllowedEnvironmentVariables)
+			return validateEnv(r.signedJobEnv, r.conf.AgentConfiguration.AllowedEnvironmentVariables)
 		},
 		"plugins": r.validatePlugins,
 	}

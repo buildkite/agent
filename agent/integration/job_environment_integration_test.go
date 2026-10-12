@@ -1,6 +1,7 @@
 package integration
 
 import (
+	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -11,6 +12,7 @@ import (
 	"github.com/buildkite/agent/v4/logger"
 	"github.com/buildkite/bintest/v3"
 	"github.com/buildkite/go-pipeline"
+	"github.com/buildkite/go-pipeline/signature"
 )
 
 func TestWhenCachePathsSetInJobStep_CachePathsEnvVarIsSet(t *testing.T) {
@@ -1197,5 +1199,61 @@ func TestJobWarnings_AreWrittenToJobLog(t *testing.T) {
 		if !strings.Contains(logs, want) {
 			t.Errorf("e.logsFor(t, %q) = %q, want it to contain %q", jobID, logs, want)
 		}
+	}
+}
+
+func TestWindowsJobEnvCaseCollisionIsRefusedBeforeVerification(t *testing.T) {
+	t.Parallel()
+
+	if runtime.GOOS != "windows" {
+		t.Skip("job env names are only case-insensitive on Windows")
+	}
+
+	ctx := t.Context()
+	key := symmetricJWKFor(t, signingKeyLlamas)
+	step := pipeline.CommandStep{Command: "echo hello"}
+	if err := signature.SignSteps(ctx, pipeline.Steps{&step}, key, defaultRepositoryURL); err != nil {
+		t.Fatalf("signing step: %v", err)
+	}
+
+	// The step is validly signed, so a signature rejection would mean the
+	// collision reached verification instead of being refused first.
+	job := &api.Job{
+		ID:                 defaultJobID,
+		ChunksMaxSizeBytes: 1024,
+		Step:               step,
+		Env: map[string]string{
+			"BUILDKITE_COMMAND": step.Command,
+			"BUILDKITE_REPO":    defaultRepositoryURL,
+			"buildkite_repo":    "https://attacker.invalid/repo.git",
+		},
+		Token: "bkaj_job-token",
+	}
+
+	mb := mockBootstrap(t)
+	defer mb.CheckAndClose(t) //nolint:errcheck // bintest logs to t
+	mb.Expect().NotCalled()
+
+	e := createTestAgentEndpoint()
+	server := e.server()
+	defer server.Close()
+
+	err := runJob(t, ctx, testRunJobConfig{
+		job:              job,
+		server:           server,
+		agentCfg:         agent.AgentConfiguration{VerificationFailureBehaviour: agent.VerificationBehaviourBlock},
+		mockBootstrap:    mb,
+		verificationJWKS: jwksFromKeys(t, key),
+	})
+	if err != nil {
+		t.Fatalf("runJob() error = %v", err)
+	}
+
+	finish := e.finishesFor(t, defaultJobID)[0]
+	if got, want := finish.SignalReason, agent.SignalReasonAgentRefused; got != want {
+		t.Errorf("finish.SignalReason = %q, want %q", got, want)
+	}
+	if logs, want := e.logsFor(t, defaultJobID), "invalid job environment"; !strings.Contains(logs, want) {
+		t.Errorf("logs = %q, want them to contain %q", logs, want)
 	}
 }
