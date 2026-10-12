@@ -342,44 +342,30 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string, attem
 	}
 
 	if isMainRepository && !commitAlreadyPresent && !remoteMirrorHit {
-		var refspecs []string
-		var retry, isMergeRefspec bool
-
-		switch {
-		case e.RefSpec != "":
-			// If a custom refspec is provided, use it instead of the branch
+		// Fetch the job's custom refspec, pull request ref, or branch from the
+		// upstream repository into the mirror.
+		kind, ref := e.jobRef()
+		switch kind {
+		case refspecCustom:
 			e.shell.Commentf("Fetching and mirroring custom refspec %s", e.RefSpec)
-			refspecs = []string{e.RefSpec}
-		case e.PullRequest != "false" && strings.Contains(e.PipelineProvider, "github"):
-			var refspec string
-			if e.PullRequestUsingMergeRefspec {
-				// As in fetchSource: a missing merge ref usually means a real
-				// merge conflict, so fail fast rather than retrying for ~2m.
-				e.shell.Commentf("Fetching and mirroring pull request merge commit from GitHub")
-				refspec = fmt.Sprintf("refs/pull/%s/merge", e.PullRequest)
-				isMergeRefspec = true
-			} else {
-				e.shell.Commentf("Fetching and mirroring pull request head from GitHub. This will be retried if it fails, as the pull request head might not be available yet — GitHub creates them asynchronously")
-				refspec = fmt.Sprintf("refs/pull/%s/head", e.PullRequest)
-				retry = true
-			}
-			refspecs = []string{refspec}
-		default:
-			// Fetch the build branch from the upstream repository into the mirror.
-			refspecs = []string{e.Branch}
+		case refspecGithubPRMerge:
+			// As in fetchSource: a missing merge ref usually means a real
+			// merge conflict, so fail fast rather than retrying for ~2m.
+			e.shell.Commentf("Fetching and mirroring pull request merge commit from GitHub")
+		case refspecGithubPRHead:
+			e.shell.Commentf("Fetching and mirroring pull request head from GitHub. This will be retried if it fails, as the pull request head might not be available yet — GitHub creates them asynchronously")
 		}
 
-		// Fetch the refspecs from the upstream repository into the mirror.
 		if err := e.traceOp(ctx, "git.mirror.fetch", func(ctx context.Context) error {
 			return gitFetch(ctx, gitFetchArgs{
 				Shell:      e.shell,
 				GitFlags:   []string{"--git-dir", mirrorDir},
 				Repository: "origin",
-				RefSpecs:   refspecs,
-				Retry:      retry,
+				RefSpecs:   []string{ref},
+				Retry:      kind == refspecGithubPRHead,
 			})
 		}); err != nil {
-			return "", fmt.Errorf("%w%s", err, prMergeRefspecHint(isMergeRefspec))
+			return "", fmt.Errorf("%w%s", err, prMergeRefspecHint(kind == refspecGithubPRMerge))
 		}
 		if e.Commit == "HEAD" {
 			// Match the workspace checkout: use this fetch's resolved ref,
