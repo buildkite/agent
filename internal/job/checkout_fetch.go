@@ -41,6 +41,25 @@ const (
 	refspecCommit refspecKind = "commit"
 )
 
+// jobRef returns the ref that names the job's revision on the remote, in
+// priority order: a custom refspec, then a GitHub pull request ref
+// (refs/pull/N/merge or refs/pull/N/head), then the branch. It never returns
+// refspecCommit: whether a pinned e.Commit takes precedence differs between
+// callers, so each caller decides that itself.
+func (e *Executor) jobRef() (refspecKind, string) {
+	switch {
+	case e.RefSpec != "":
+		return refspecCustom, e.RefSpec
+	case e.PullRequest != "false" && strings.Contains(e.PipelineProvider, "github"):
+		if e.PullRequestUsingMergeRefspec {
+			return refspecGithubPRMerge, fmt.Sprintf("refs/pull/%s/merge", e.PullRequest)
+		}
+		return refspecGithubPRHead, fmt.Sprintf("refs/pull/%s/head", e.PullRequest)
+	default:
+		return refspecBranch, e.Branch
+	}
+}
+
 // fetchSource fetches the git source for the job. If GitSkipFetchExistingCommits is
 // enabled and the commit already exists locally, the fetch is skipped entirely.
 // When addBloblessFilter is true, --filter=blob:none is prepended to the fetch

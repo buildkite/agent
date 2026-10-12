@@ -53,19 +53,12 @@ func (e *Executor) mirrorLFSRef() string {
 	if e.Commit != "HEAD" {
 		return e.Commit
 	}
-	switch {
-	case e.RefSpec != "":
+	kind, ref := e.jobRef()
+	if kind == refspecCustom {
 		// Only the source side names an object in a fresh mirror.
-		ref, _, _ := strings.Cut(strings.TrimPrefix(e.RefSpec, "+"), ":")
-		return ref
-	case e.PullRequest != "false" && strings.Contains(e.PipelineProvider, "github"):
-		if e.PullRequestUsingMergeRefspec {
-			return fmt.Sprintf("refs/pull/%s/merge", e.PullRequest)
-		}
-		return fmt.Sprintf("refs/pull/%s/head", e.PullRequest)
-	default:
-		return e.Branch
+		ref, _, _ = strings.Cut(strings.TrimPrefix(ref, "+"), ":")
 	}
+	return ref
 }
 
 func (e *Executor) prefetchMirrorLFS(ctx context.Context, mirrorDir, ref string) error {
