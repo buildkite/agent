@@ -3,6 +3,8 @@ package cache
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -23,6 +25,72 @@ import (
 	"github.com/buildkite/agent/v4/internal/cache/store"
 	"github.com/buildkite/agent/v4/logger"
 )
+
+func TestDownloadCacheLocalArchiveAndCleanup(t *testing.T) {
+	content := []byte("cache archive contents")
+	sum := sha256.Sum256(content)
+	for _, outcome := range []string{"success", "unknown algorithm", "missing blob", "digest mismatch"} {
+		t.Run(outcome, func(t *testing.T) {
+			digest := api.CacheDigest{Algorithm: "sha256", Value: hex.EncodeToString(sum[:])}
+			if outcome == "unknown algorithm" {
+				// Preserve support for future digest algorithms and keep the remote
+				// object name independent of the local archive filename.
+				digest = api.CacheDigest{Algorithm: "blake3", Value: "nested/blob"}
+			}
+			storageRoot := t.TempDir()
+			tempRoot := t.TempDir()
+			for _, name := range []string{"TMPDIR", "TMP", "TEMP"} {
+				t.Setenv(name, tempRoot)
+			}
+			if outcome != "missing blob" {
+				stored := content
+				if outcome == "digest mismatch" {
+					stored = []byte("different contents")
+				}
+				storePath := filepath.Join(storageRoot, digest.Value)
+				if err := os.MkdirAll(filepath.Dir(storePath), 0o755); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(storePath, stored, 0o600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			bucketURL := (&url.URL{Scheme: "file", Path: "/" + strings.TrimPrefix(filepath.ToSlash(storageRoot), "/")}).String()
+			c := &client{}
+			tmpDir, archiveFile, _, err := c.downloadCache(t.Context(), api.CacheEntryRetrieveResp{
+				Store: store.AgentManaged,
+				Blobs: []api.CacheBlob{{Digest: digest}},
+			}, bucketURL)
+			switch outcome {
+			case "success", "unknown algorithm":
+				if err != nil {
+					t.Fatal(err)
+				}
+				t.Cleanup(func() { _ = os.RemoveAll(tmpDir) })
+				if archiveFile != filepath.Join(tmpDir, "archive") {
+					t.Fatalf("archiveFile = %q, want agent-chosen filename inside %q", archiveFile, tmpDir)
+				}
+				got, err := os.ReadFile(archiveFile)
+				if err != nil || !bytes.Equal(got, content) {
+					t.Fatalf("downloaded contents = %q, %v, want %q", got, err, content)
+				}
+				return
+			case "missing blob":
+				if !errors.Is(err, store.ErrBlobNotFound) {
+					t.Fatalf("error = %v, want ErrBlobNotFound", err)
+				}
+			case "digest mismatch":
+				if !errors.Is(err, ErrDigestMismatch) {
+					t.Fatalf("error = %v, want ErrDigestMismatch", err)
+				}
+			}
+			entries, err := os.ReadDir(tempRoot)
+			if err != nil || len(entries) != 0 {
+				t.Fatalf("failed download left temporary files: %v, %v", entries, err)
+			}
+		})
+	}
+}
 
 func TestRestoreCleanupError(t *testing.T) {
 	for _, tc := range []struct {
