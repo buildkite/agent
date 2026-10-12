@@ -545,6 +545,11 @@ func (c *client) downloadCache(ctx context.Context, retrieveResp api.CacheEntryR
 	if len(retrieveResp.Blobs) == 0 {
 		return "", "", nil, fmt.Errorf("cache entry has no blobs to download")
 	}
+	if err := validateBlobDigest(retrieveResp.Blobs[0].Digest); err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "invalid cache blob digest")
+		return "", "", nil, err
+	}
 	storeObjectName := retrieveResp.Blobs[0].Digest.Value
 
 	span.SetAttributes(

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"regexp"
 
 	"github.com/buildkite/agent/v4/api"
 	"go.opentelemetry.io/otel"
@@ -19,6 +20,22 @@ import (
 // content-addressed name it was fetched under (e.g. a corrupt or half-written
 // upload). Restore treats it as a clean miss and never unpacks the file.
 var ErrDigestMismatch = errors.New("cache blob digest mismatch")
+
+var sha256HexPattern = regexp.MustCompile(`^[0-9a-f]{64}$`)
+
+// validateBlobDigest rejects a digest from the cache API unless it is a
+// lowercase hex sha256. The digest value becomes a blob store key, so it must
+// be checked before any store sees it; otherwise a crafted value such as
+// "../other-prefix/x" could reach objects outside the configured prefix.
+func validateBlobDigest(digest api.CacheDigest) error {
+	if digest.Algorithm != "sha256" {
+		return fmt.Errorf("unsupported cache blob digest algorithm %q", digest.Algorithm)
+	}
+	if !sha256HexPattern.MatchString(digest.Value) {
+		return fmt.Errorf("invalid sha256 cache blob digest %q", digest.Value)
+	}
+	return nil
+}
 
 // verifyBlobDigest re-hashes the downloaded archive and confirms it matches
 // the content-addressed name it was fetched under.
@@ -39,8 +56,10 @@ func verifyBlobDigest(ctx context.Context, archiveFile string, digest api.CacheD
 	span.SetAttributes(attribute.String("cache.digest_algorithm", digest.Algorithm))
 
 	if digest.Algorithm != "sha256" {
-		span.SetStatus(codes.Ok, "unsupported digest algorithm, verification skipped")
-		return nil
+		err := fmt.Errorf("unsupported cache blob digest algorithm %q", digest.Algorithm)
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "unsupported digest algorithm")
+		return err
 	}
 
 	f, err := os.Open(archiveFile)

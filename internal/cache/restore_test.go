@@ -29,13 +29,13 @@ import (
 func TestDownloadCacheLocalArchiveAndCleanup(t *testing.T) {
 	content := []byte("cache archive contents")
 	sum := sha256.Sum256(content)
-	for _, outcome := range []string{"success", "unknown algorithm", "missing blob", "digest mismatch"} {
+	for _, outcome := range []string{"success", "invalid digest", "missing blob", "digest mismatch"} {
 		t.Run(outcome, func(t *testing.T) {
 			digest := api.CacheDigest{Algorithm: "sha256", Value: hex.EncodeToString(sum[:])}
-			if outcome == "unknown algorithm" {
-				// Preserve support for future digest algorithms and keep the remote
-				// object name independent of the local archive filename.
-				digest = api.CacheDigest{Algorithm: "blake3", Value: "nested/blob"}
+			if outcome == "invalid digest" {
+				// The blob exists at this key, so only up-front validation (not the
+				// post-download hash check) can produce a non-mismatch error.
+				digest = api.CacheDigest{Algorithm: "sha256", Value: "nested/blob"}
 			}
 			storageRoot := t.TempDir()
 			tempRoot := t.TempDir()
@@ -62,7 +62,7 @@ func TestDownloadCacheLocalArchiveAndCleanup(t *testing.T) {
 				Blobs: []api.CacheBlob{{Digest: digest}},
 			}, bucketURL)
 			switch outcome {
-			case "success", "unknown algorithm":
+			case "success":
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -75,6 +75,10 @@ func TestDownloadCacheLocalArchiveAndCleanup(t *testing.T) {
 					t.Fatalf("downloaded contents = %q, %v, want %q", got, err, content)
 				}
 				return
+			case "invalid digest":
+				if err == nil || errors.Is(err, ErrDigestMismatch) {
+					t.Fatalf("error = %v, want digest rejected before download", err)
+				}
 			case "missing blob":
 				if !errors.Is(err, store.ErrBlobNotFound) {
 					t.Fatalf("error = %v, want ErrBlobNotFound", err)

@@ -7,6 +7,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/buildkite/agent/v4/api"
@@ -36,12 +37,11 @@ func TestVerifyBlobDigest(t *testing.T) {
 		}
 	})
 
-	t.Run("unknown algorithm is skipped, not reported corrupt", func(t *testing.T) {
-		// A non-sha256 digest we can't verify must pass through, not be flagged as
-		// a mismatch — otherwise a future wire format breaks every restore.
-		err := verifyBlobDigest(t.Context(), archiveFile, api.CacheDigest{Algorithm: "blake3", Value: "unverifiable"})
-		if err != nil {
-			t.Errorf("verifyBlobDigest with unknown algorithm = %v, want nil (skip)", err)
+	t.Run("unknown algorithm fails closed", func(t *testing.T) {
+		// A digest we can't verify must not be treated as verified.
+		err := verifyBlobDigest(t.Context(), archiveFile, api.CacheDigest{Algorithm: "blake3", Value: digestValue})
+		if err == nil || errors.Is(err, ErrDigestMismatch) {
+			t.Errorf("verifyBlobDigest with unknown algorithm = %v, want unsupported algorithm error", err)
 		}
 	})
 
@@ -53,4 +53,27 @@ func TestVerifyBlobDigest(t *testing.T) {
 			t.Errorf("verifyBlobDigest with cancelled ctx = %v, want context.Canceled", err)
 		}
 	})
+}
+
+func TestValidateBlobDigest(t *testing.T) {
+	valid := strings.Repeat("ab", 32)
+	if err := validateBlobDigest(api.CacheDigest{Algorithm: "sha256", Value: valid}); err != nil {
+		t.Errorf("validateBlobDigest(valid sha256) = %v, want nil", err)
+	}
+
+	for _, digest := range []api.CacheDigest{
+		{Algorithm: "blake3", Value: valid},
+		{Algorithm: "", Value: valid},
+		{Algorithm: "sha256", Value: ""},
+		{Algorithm: "sha256", Value: strings.ToUpper(valid)},
+		{Algorithm: "sha256", Value: valid[:63]},
+		{Algorithm: "sha256", Value: valid + "a"},
+		{Algorithm: "sha256", Value: "../" + valid[3:]},
+		{Algorithm: "sha256", Value: valid[:62] + "/a"},
+		{Algorithm: "sha256", Value: valid + "\n"},
+	} {
+		if err := validateBlobDigest(digest); err == nil {
+			t.Errorf("validateBlobDigest(%+v) = nil, want error", digest)
+		}
+	}
 }
