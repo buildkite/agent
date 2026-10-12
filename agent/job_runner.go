@@ -28,7 +28,6 @@ import (
 	"github.com/buildkite/agent/v4/logger"
 	"github.com/buildkite/agent/v4/metrics"
 	"github.com/buildkite/agent/v4/status"
-	"github.com/buildkite/shellwords"
 )
 
 const (
@@ -79,12 +78,13 @@ type JobRunnerConfig struct {
 	// Whether to set debug HTTP Requests in the job
 	DebugHTTP bool
 
-	// KubernetesExec enables Kubernetes execution mode. When true, the job runner
-	// creates a kubernetes.Runner that listens on a UNIX socket for other agent containers
-	// to connect, rather than spawning a local bootstrap subprocess. The other agent containers
-	// containers run `kubernetes-bootstrap` which connects to this socket, receives
-	// environment variables, and executes the bootstrap phases.
-	KubernetesExec bool
+	// Executor selects how the job's bootstrap is launched: ExecutorExec (or
+	// empty) runs bootstrap-script as a local subprocess. ExecutorKubernetes
+	// creates a kubernetes.Runner that listens on a UNIX socket for other agent
+	// containers to connect. Those containers run `kubernetes-bootstrap`, which
+	// connects to this socket, receives environment variables, and executes the
+	// bootstrap phases.
+	Executor string
 
 	// KubernetesContainerStartTimeout is the maximum duration to wait for all
 	// containers in a Kubernetes pod to connect before the job is considered failed.
@@ -119,8 +119,8 @@ type JobRunner struct {
 	// The agentlib Client is used to drive some APIClient methods
 	client *core.Client
 
-	// The internal process of the job
-	process jobProcess
+	// The execution running the job's bootstrap
+	process JobExecution
 
 	// The internal buffer of the process output
 	output *process.Buffer
@@ -164,16 +164,6 @@ type JobRunner struct {
 	droppedRemoteMirrorURL string
 }
 
-// jobProcess is either a *process.Process, or a *kubernetes.Runner.
-type jobProcess interface {
-	Done() <-chan struct{}
-	Started() <-chan struct{}
-	Interrupt() error
-	Terminate() error
-	Run(ctx context.Context) error
-	WaitStatus() process.WaitStatus
-}
-
 // Initializes the job runner
 func NewJobRunner(ctx context.Context, l logger.Logger, apiClient *api.Client, conf JobRunnerConfig) (*JobRunner, error) {
 	// If the accept response has a token attached, we should use that instead of the Agent Access Token that
@@ -191,7 +181,13 @@ func NewJobRunner(ctx context.Context, l logger.Logger, apiClient *api.Client, c
 		client:      &core.Client{APIClient: apiClient, Logger: l},
 	}
 
-	var err error
+	// Select the executor before creating any files, so a bad executor name
+	// leaves nothing behind.
+	executor, err := newJobExecutor(r.agentLogger, conf)
+	if err != nil {
+		return nil, err
+	}
+
 	r.VerificationFailureBehavior, err = r.normalizeVerificationBehavior(conf.AgentConfiguration.VerificationFailureBehaviour)
 	if err != nil {
 		return nil, fmt.Errorf("setting no signature behavior: %w", err)
@@ -300,57 +296,18 @@ func NewJobRunner(ctx context.Context, l logger.Logger, apiClient *api.Client, c
 	// The writer that output from the process goes into
 	r.jobLogs = io.MultiWriter(allWriters...)
 
-	// Copy the current processes ENV and merge in the new ones. We do this
-	// so the sub process gets PATH and stuff. We merge our path in over
-	// the top of the current one so the ENV from Buildkite and the agent
-	// take precedence over the agent
-	processEnv := append(os.Environ(), env...)
-
-	// The process that will run the bootstrap script
-	if conf.KubernetesExec {
-		// Thank you Mario, but our bootstrap is in another container
-		containerCount, err := strconv.Atoi(os.Getenv("BUILDKITE_CONTAINER_COUNT"))
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse BUILDKITE_CONTAINER_COUNT: %w", err)
-		}
-		r.process = kubernetes.NewRunner(r.agentLogger, kubernetes.RunnerConfig{
-			SocketPath:         kubernetes.SocketPath(contextDir),
-			Stdout:             r.jobLogs,
-			Stderr:             r.jobLogs,
-			ClientCount:        containerCount,
-			Env:                processEnv,
-			ClientStartTimeout: conf.KubernetesContainerStartTimeout,
-			ClientLostTimeout:  30 * time.Second,
-		})
-	} else { // not Kubernetes
-		// The bootstrap-script gets parsed based on the operating system
-		cmd, err := shellwords.Split(conf.AgentConfiguration.BootstrapScript)
-		if err != nil {
-			return nil, fmt.Errorf("splitting bootstrap-script (%q) into tokens: %w", conf.AgentConfiguration.BootstrapScript, err)
-		}
-
-		// CancelSignal == SIGKILL means the user wants the command to be killed
-		// instead of signaled more gracefully (SIGTERM, SIGINT, etc).
-		// We don't send SIGKILL to the bootstrap itself as a cancel signal,
-		// because that would kill the bootstrap immediately, which would
-		// prevent capturing the exit status of the command, executing various
-		// pre-exit hooks, and other cleanup.
-		cancelSignal := conf.CancelSignal
-		if cancelSignal == process.SIGKILL {
-			cancelSignal = process.SIGTERM
-		}
-
-		r.process = process.New(r.agentLogger, process.Config{
-			Path:              cmd[0],
-			Args:              cmd[1:],
-			Dir:               conf.AgentConfiguration.BuildPath,
-			Env:               processEnv,
-			PTY:               conf.AgentConfiguration.RunInPty,
-			Stdout:            r.jobLogs,
-			Stderr:            r.jobLogs,
-			InterruptSignal:   cancelSignal,
-			SignalGracePeriod: conf.AgentConfiguration.CancelSignalTimeout,
-		})
+	req := JobExecutionRequest{
+		JobID:      conf.Job.ID,
+		Env:        env,
+		ContextDir: contextDir,
+		Output:     r.jobLogs,
+	}
+	if r.jobLogTmpFile != nil {
+		req.JobLogTmpfile = r.jobLogTmpFile.Name()
+	}
+	r.process, err = executor.New(ctx, req)
+	if err != nil {
+		return nil, err
 	}
 
 	return r, nil
@@ -459,11 +416,11 @@ func (r *JobRunner) createEnvironment(ctx context.Context) ([]string, error) {
 		}
 	}
 
-	// When in KubernetesExec mode, filter out the Kubernetes plugin,
+	// When using the Kubernetes executor, filter out the Kubernetes plugin,
 	// since it's not a real plugin. agent-stack-k8s reads it but we have no
 	// need for it. Supplying it when not using agent-stack-k8s is a mistake
 	// but not one worth preventing.
-	if pluginsJSON := env["BUILDKITE_PLUGINS"]; pluginsJSON != "" && r.conf.KubernetesExec {
+	if pluginsJSON := env["BUILDKITE_PLUGINS"]; pluginsJSON != "" && r.conf.Executor == ExecutorKubernetes {
 		filtered, err := removeKubernetesPlugin([]byte(pluginsJSON))
 		if err != nil {
 			r.agentLogger.Errorf("Invalid BUILDKITE_PLUGINS: %v", err)
@@ -1021,7 +978,7 @@ func jobContextDir(conf JobRunnerConfig) string {
 	if conf.JobContextDir != "" {
 		return conf.JobContextDir
 	}
-	if conf.KubernetesExec {
+	if conf.Executor == ExecutorKubernetes {
 		return kubernetes.DefaultContextDir
 	}
 	return os.TempDir()
