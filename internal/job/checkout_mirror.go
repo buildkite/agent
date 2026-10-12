@@ -418,6 +418,25 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string, attem
 	return e.finishMirrorUpdate(ctx, repository, mirrorDir, lfsRef)
 }
 
+// finishMirrorUpdate is the last step of every mirror clone or update path. It
+// runs while the caller holds the mirror's clone or update lock, before
+// creating a snapshot or cloning the workspace. When the Git LFS mirror cache
+// is enabled, it first prefetches the job's LFS objects (identified by lfsRef)
+// into the main repository's mirror. That prefetch is optional: on failure the
+// workspace still fetches with its own configuration and retries, reusing
+// cached objects where possible.
+func (e *Executor) finishMirrorUpdate(ctx context.Context, repository, mirrorDir, lfsRef string) (string, error) {
+	if e.mirrorLFSCacheEnabled() && repository == e.Repository {
+		if err := e.prefetchMirrorLFS(ctx, mirrorDir, lfsRef); err != nil {
+			if ctx.Err() != nil {
+				return "", ctx.Err()
+			}
+			e.shell.Warningf("Unable to prefetch Git LFS objects into mirror; deferring to checkout: %v", err)
+		}
+	}
+	return e.snapshotMirror(ctx, repository, mirrorDir)
+}
+
 // snapshotMirror creates a snapshot of the mirror. It returns the directory for
 // the rest of the checkout to use as --reference, which will be the path to a
 // snapshot, unless clean checkout is disabled, in which case it will simply
