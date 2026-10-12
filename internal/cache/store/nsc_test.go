@@ -238,6 +238,39 @@ func TestRunCommandValidation(t *testing.T) {
 	}
 }
 
+func TestNscStore_MissingCLI(t *testing.T) {
+	// No nsc on PATH, as inside a Docker plugin container on hosted agents.
+	t.Setenv("PATH", t.TempDir())
+	ctx := t.Context()
+	dir := t.TempDir()
+	src := filepath.Join(dir, "archive")
+	if err := os.WriteFile(src, []byte("data"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	store, err := NewNscStore("nsc://ns")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, uploadErr := store.Upload(ctx, src, "valid-key", time.Hour)
+	_, downloadErr := store.Download(ctx, "valid-key", filepath.Join(dir, "dest"))
+	_, statErr := store.Stat(ctx, "valid-key")
+	for name, err := range map[string]error{"Upload": uploadErr, "Download": downloadErr, "Stat": statErr} {
+		if err == nil {
+			t.Errorf("%s: expected error, got nil", name)
+			continue
+		}
+		// Users see this message, so it must explain what to do without
+		// exposing the storage implementation.
+		if !strings.Contains(err.Error(), "pre-command hook") {
+			t.Errorf("%s err = %q, want guidance on moving cache commands into hooks", name, err)
+		}
+		if strings.Contains(strings.ToLower(err.Error()), "nsc") {
+			t.Errorf("%s err = %q, must not mention nsc", name, err)
+		}
+	}
+}
+
 func TestParseNscNamespace(t *testing.T) {
 	tests := []struct {
 		name      string

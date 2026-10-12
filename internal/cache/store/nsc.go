@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/url"
@@ -36,6 +37,10 @@ func nscRetentionArg(retention time.Duration) string {
 	hours := int64((retention + time.Hour - 1) / time.Hour)
 	return fmt.Sprintf("%dh", hours)
 }
+
+var errCacheStorageUnreachable = errors.New("is this job running in a container started by the Docker plugin? " +
+	"Cache storage cannot be reached from this environment; run cache restore in a pre-command hook " +
+	"and cache save in a post-command hook, which run outside the container")
 
 // commandRunner executes an external command. It is a seam so tests can assert
 // the arguments passed to the nsc CLI without invoking the real binary.
@@ -157,6 +162,9 @@ func (n *NscStore) Upload(ctx context.Context, filePath, key string, retention t
 
 	// Execute nsc artifact upload command
 	result, err := n.run(ctx, "", n.artifactArgs("upload", filePath, key, "--expires_in", nscRetentionArg(retention))...)
+	if errors.Is(err, errCacheStorageUnreachable) {
+		return nil, err
+	}
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute nsc upload command: %w", err)
 	}
@@ -205,6 +213,9 @@ func (n *NscStore) Download(ctx context.Context, key, filePath string) (*Transfe
 
 	// Execute nsc artifact download command
 	result, err := n.run(ctx, "", n.artifactArgs("download", key, filePath)...)
+	if errors.Is(err, errCacheStorageUnreachable) {
+		return nil, err
+	}
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute nsc download command: %w", err)
 	}
@@ -254,6 +265,9 @@ func (n *NscStore) Stat(ctx context.Context, key string) (int64, error) {
 	}
 
 	result, err := n.run(ctx, "", n.artifactArgs("describe", key, "-o", "json")...)
+	if errors.Is(err, errCacheStorageUnreachable) {
+		return 0, err
+	}
 	if err != nil {
 		return 0, fmt.Errorf("failed to execute nsc describe command: %w", err)
 	}
@@ -355,6 +369,8 @@ func runCommand(ctx context.Context, workingDir string, args ...string) (*Comman
 		span.RecordError(err)
 		if exitError, ok := err.(*exec.ExitError); ok {
 			cr.ExitCode = exitError.ExitCode()
+		} else if errors.Is(err, exec.ErrNotFound) {
+			return nil, errCacheStorageUnreachable
 		} else {
 			return nil, err
 		}
