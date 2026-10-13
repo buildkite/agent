@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"crypto/rand"
+	"os"
 	"time"
 	"unicode/utf8"
 
@@ -31,7 +32,7 @@ func maskURLs(text string) string {
 // reportJobError is captureJobError for a message whose URLs are already
 // masked where needed.
 func (r *JobRunner) reportJobError(ctx context.Context, code, message string) {
-	if r.conf.Job.Env["BUILDKITE_CAPTURE_AGENT_ERRORS"] != "true" {
+	if !r.agentErrorCaptureEnabled() {
 		return
 	}
 	if runes := []rune(message); len(runes) > jobapi.MaxCapturedErrorDetail {
@@ -50,4 +51,15 @@ func (r *JobRunner) reportJobError(ctx context.Context, code, message string) {
 	if err != nil {
 		r.agentLogger.Warnf("Could not capture job error %q: %v", code, err)
 	}
+}
+
+// agentErrorCaptureEnabled reads the BUILDKITE_CAPTURE_AGENT_ERRORS opt-in as
+// the job's bootstrap would see it: from the job's env, or else from the
+// agent's own environment, such as when the agent's operator set it.
+func (r *JobRunner) agentErrorCaptureEnabled() bool {
+	optIn, ok := r.conf.Job.Env["BUILDKITE_CAPTURE_AGENT_ERRORS"]
+	if !ok {
+		optIn = os.Getenv("BUILDKITE_CAPTURE_AGENT_ERRORS")
+	}
+	return optIn == "true"
 }
