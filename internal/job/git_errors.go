@@ -111,8 +111,18 @@ func addGitRemoteErrorPatterns(smelt map[string]bool) {
 	}
 }
 
+type gitErrorCaptureSkippedKey struct{}
+
+// withoutGitErrorCapture marks Git commands whose failures are expected and
+// recovered from, such as a remote mirror that does not have the commit yet,
+// so they are not reported.
+func withoutGitErrorCapture(ctx context.Context) context.Context {
+	return context.WithValue(ctx, gitErrorCaptureSkippedKey{}, true)
+}
+
 func captureGitError(ctx context.Context, sh *shell.Shell, err error, output string) {
-	if err == nil || ctx.Err() != nil || errors.Is(err, context.Canceled) || shell.ExitCode(err) == -1 {
+	if err == nil || ctx.Err() != nil || ctx.Value(gitErrorCaptureSkippedKey{}) != nil ||
+		errors.Is(err, context.Canceled) || shell.ExitCode(err) == -1 {
 		return
 	}
 	code, message := classifyGitError(err)
