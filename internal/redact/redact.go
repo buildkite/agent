@@ -109,12 +109,14 @@ func URLCredentials(rawURL string) string {
 	return u.String()
 }
 
-// Match just the URL prefix through userinfo, leaving paths and surrounding
-// diagnostic punctuation untouched. Spaces in URL credentials must be escaped.
-// A password containing an unescaped "/" makes the URL invalid, but Git still
-// prints it, so also match "user:" followed by anything up to the last "@",
-// since the password can contain "@" too. This also
-// matches a host with a port and an "@" in its path, which is masked too.
+// urlUserinfo matches a URL from its start to the "@" that follows the
+// username and password, so only that part is replaced and the host and path
+// stay readable.
+//
+// A password containing "/" makes a URL invalid, but Git still prints it as
+// typed, such as "https://user:pa/ss@host". So after "user:", match anything
+// up to the last "@" before a space. A URL with a port and a later "@", such as
+// "https://example.com:8443/a@b", looks the same and is masked too.
 var urlUserinfo = regexp.MustCompile(`(?i)(?:[a-z][a-z0-9+.-]*:)?//(?:[^\s/<>]*|[^\s/<>@:\[]*:[^\s<>]*)@`)
 
 // URLCredentialsInText masks URL userinfo in diagnostic text, including tokens
@@ -142,10 +144,12 @@ func URLCredentialsInText(text string) string {
 	})
 }
 
-// Match a URL's query string, up to whitespace or a fragment. Quotes and
-// brackets inside it don't end it, since Git prints them raw inside its own
-// quotes, but trailing ones, and trailing punctuation, are left out. An escaped
-// character, such as a quote in a %q-quoted URL, can end the match.
+// urlQuery matches a URL's query: everything after "?" up to the next space or
+// "#". Git prints quotes and brackets inside its own quotes as is, as in
+// 'https://host/repo?note="x"&token=SECRET', so they don't end the query.
+// Quotes, brackets and punctuation at the very end are left out, since they
+// usually belong to the surrounding sentence. An escaped quote (\") from Go's
+// quoting stays part of the query.
 var urlQuery = regexp.MustCompile(`(?i)\b([a-z][a-z0-9+.-]*://[^\s?#]+)\?(?:[^\s#\\]|\\.)*(?:[^\s#"'<>.,;:!?)\]}\\]|\\.)`)
 
 // URLQueriesInText replaces URL query strings in diagnostic text, which can
@@ -154,8 +158,8 @@ func URLQueriesInText(text string) string {
 	redacted := string(Redacted(nil))
 	return urlQuery.ReplaceAllStringFunc(text, func(match string) string {
 		url, query, _ := strings.Cut(match, "?")
-		// Leave a query masked earlier alone, including its closing bracket,
-		// which the match leaves out as punctuation.
+		// Skip a query that is already [REDACTED], so masking twice gives the
+		// same result.
 		if strings.HasPrefix(redacted, query) {
 			return match
 		}
