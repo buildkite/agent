@@ -2,9 +2,10 @@
 # the Agent cluster. Uploaded unsigned by the upload-kube-mirror step in
 # pipeline.yml. Soft-fail and nothing depends on them.
 #
-# The sysbox and dind queues run the Docker Compose steps from pipeline.yml.
-# The standard queues have no Docker, so they run the same scripts directly,
-# with the toolchain installed by kube-native.sh.
+# Every queue runs the same scripts through kube-toolchain.sh. The sysbox and
+# dind queues run them in the step's image:, which the operator chart runs in
+# the runner's Docker daemon. The standard queues have no Docker, so they run
+# them in the agent container.
 
 env:
   GIT_CONFIG_COUNT: "1"
@@ -12,96 +13,12 @@ env:
   GIT_CONFIG_VALUE_0: "git@github.com:"
 
 steps:
-  - group: ":kubernetes::docker: Kube operator Docker queues"
-    steps:
-      - name: ":go::robot_face: Lint on {{matrix}}"
-        key: kube-mirror-check-code-committed
-        command: .buildkite/steps/check-code-committed.sh
-        soft_fail: true
-        agents:
-          queue: "{{matrix}}"
-        matrix: &docker_queues
-          - kube-operator-sysbox
-          - kube-operator-sysbox-ephemeral
-          - kube-operator-dind
-          - kube-operator-dind-ephemeral
-        plugins:
-          - docker-compose#v5.15.0:
-              config: .buildkite/docker-compose.yml
-              cli-version: 2
-              mount-buildkite-agent: true
-              run: lint
-              env:
-                - BUILDKITE_AGENT_ACCESS_TOKEN
-                - BUILDKITE_AGENT_CACHE_REGISTRY
-                - BUILDKITE_AGENT_CACHE_STORE_URL
-                - AWS_ACCESS_KEY_ID
-                - AWS_SECRET_ACCESS_KEY
-                - AWS_SESSION_TOKEN
-
-      - name: ":go::robot_face: Check protobuf generation on {{matrix}}"
-        key: kube-mirror-check-protobuf-generation
-        env: &protobuf_env
-          GOBIN: /root/.protobuf-tools/bin
-          GOCACHE: /root/.protobuf-tools/gocache
-          GOMODCACHE: /root/.protobuf-tools/gomodcache
-        command: .buildkite/steps/check-protobuf-generation.sh
-        soft_fail: true
-        agents:
-          queue: "{{matrix}}"
-        matrix: *docker_queues
-        plugins:
-          - docker-compose#v5.15.0:
-              config: .buildkite/docker-compose.yml
-              cli-version: 2
-              mount-buildkite-agent: true
-              run: lint
-              env:
-                - BUILDKITE_AGENT_ACCESS_TOKEN
-                - BUILDKITE_AGENT_CACHE_REGISTRY
-                - BUILDKITE_AGENT_CACHE_STORE_URL
-                - AWS_ACCESS_KEY_ID
-                - AWS_SECRET_ACCESS_KEY
-                - AWS_SESSION_TOKEN
-                - GOBIN
-                - GOCACHE
-                - GOMODCACHE
-
-      # Mirrors ":linux: Linux AMD64 Tests" without the tests plugin, whose
-      # pre-command needs curl and jq on the agent image. bktec mints its own
-      # Test Engine token with buildkite-agent oidc, and doesn't upload results
-      # unless asked, so the mirror stays out of the suite's data. A matrix
-      # can't use parallelism, so each queue runs the whole suite as one node.
-      - name: ":linux: Linux AMD64 Tests on {{matrix}}"
-        key: kube-mirror-test-linux-amd64
-        command: .buildkite/steps/tests.sh
-        soft_fail: true
-        env: &tests_env
-          BUILDKITE_TEST_ENGINE_OIDC: "true"
-          BUILDKITE_PARALLEL_JOB: "0"
-          BUILDKITE_PARALLEL_JOB_COUNT: "1"
-        agents:
-          queue: "{{matrix}}"
-        matrix: *docker_queues
-        plugins:
-          - docker-compose#v5.15.0:
-              config: .buildkite/docker-compose.yml
-              cli-version: 2
-              propagate-environment: true
-              mount-buildkite-agent: true
-              run: agent
-              env:
-                - BUILDKITE_AGENT_CACHE_REGISTRY
-                - BUILDKITE_AGENT_CACHE_STORE_URL
-                - AWS_ACCESS_KEY_ID
-                - AWS_SECRET_ACCESS_KEY
-                - AWS_SESSION_TOKEN
-
   - group: ":kubernetes: Kube operator standard queues"
     steps:
-      - name: ":go::robot_face: Lint on {{matrix}}"
+      - &lint
+        name: ":go::robot_face: Lint on {{matrix}}"
         key: kube-native-check-code-committed
-        command: .buildkite/steps/kube-native.sh .buildkite/steps/check-code-committed.sh
+        command: .buildkite/steps/kube-toolchain.sh .buildkite/steps/check-code-committed.sh
         soft_fail: true
         agents:
           queue: "{{matrix}}"
@@ -109,20 +26,54 @@ steps:
           - kube-operator-standard
           - kube-operator-standard-ephemeral
 
-      - name: ":go::robot_face: Check protobuf generation on {{matrix}}"
+      - &protobuf
+        name: ":go::robot_face: Check protobuf generation on {{matrix}}"
         key: kube-native-check-protobuf-generation
-        env: *protobuf_env
-        command: .buildkite/steps/kube-native.sh .buildkite/steps/check-protobuf-generation.sh
+        command: .buildkite/steps/kube-toolchain.sh .buildkite/steps/check-protobuf-generation.sh
+        env:
+          GOBIN: /root/.protobuf-tools/bin
+          GOCACHE: /root/.protobuf-tools/gocache
+          GOMODCACHE: /root/.protobuf-tools/gomodcache
         soft_fail: true
         agents:
           queue: "{{matrix}}"
         matrix: *standard_queues
 
-      - name: ":linux: Linux AMD64 Tests on {{matrix}}"
+      # Mirrors ":linux: Linux AMD64 Tests" without the tests plugin, whose
+      # pre-command needs curl and jq on the agent image. bktec mints its own
+      # Test Engine token with buildkite-agent oidc, and doesn't upload results
+      # unless asked, so the mirror stays out of the suite's data. A matrix
+      # can't use parallelism, so each queue runs the whole suite as one node.
+      - &tests
+        name: ":linux: Linux AMD64 Tests on {{matrix}}"
         key: kube-native-test-linux-amd64
-        env: *tests_env
-        command: .buildkite/steps/kube-native.sh .buildkite/steps/tests.sh
+        command: .buildkite/steps/kube-toolchain.sh .buildkite/steps/tests.sh
+        env:
+          KUBE_TOOLCHAIN_RUBY: "true"
+          BUILDKITE_TEST_ENGINE_OIDC: "true"
+          BUILDKITE_PARALLEL_JOB: "0"
+          BUILDKITE_PARALLEL_JOB_COUNT: "1"
         soft_fail: true
         agents:
           queue: "{{matrix}}"
         matrix: *standard_queues
+
+  # The same steps in an image:, keyed separately.
+  - group: ":kubernetes::docker: Kube operator Docker queues"
+    steps:
+      - <<: *lint
+        key: kube-mirror-check-code-committed
+        image: &image golang:1.26.5
+        matrix: &docker_queues
+          - kube-operator-sysbox
+          - kube-operator-sysbox-ephemeral
+          - kube-operator-dind
+          - kube-operator-dind-ephemeral
+      - <<: *protobuf
+        key: kube-mirror-check-protobuf-generation
+        image: *image
+        matrix: *docker_queues
+      - <<: *tests
+        key: kube-mirror-test-linux-amd64
+        image: *image
+        matrix: *docker_queues
