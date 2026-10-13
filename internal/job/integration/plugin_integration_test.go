@@ -593,6 +593,63 @@ func TestModifiedPluginWithForcePull(t *testing.T) {
 	tester2.RunAndCheck(t, env...)
 }
 
+func TestPluginPinnedToFullSHAOlderThanDefaultBranch(t *testing.T) {
+	t.Parallel()
+
+	tester, err := NewExecutorTester(mainCtx)
+	if err != nil {
+		t.Fatalf("NewExecutorTester() error = %v", err)
+	}
+	defer tester.Close()
+
+	hooks := map[string][]string{
+		"environment": {
+			"#!/usr/bin/env bash",
+			"export PLUGIN_REVISION=pinned",
+		},
+	}
+	latestHooks := map[string][]string{
+		"environment": {
+			"#!/usr/bin/env bash",
+			"export PLUGIN_REVISION=latest",
+		},
+	}
+	if runtime.GOOS == "windows" {
+		hooks = map[string][]string{
+			"environment.bat": {
+				"@echo off",
+				"set PLUGIN_REVISION=pinned",
+			},
+		}
+		latestHooks = map[string][]string{
+			"environment.bat": {
+				"@echo off",
+				"set PLUGIN_REVISION=latest",
+			},
+		}
+	}
+
+	// createTestPlugin pins versionTag to the full SHA of the first commit.
+	p := createTestPlugin(t, hooks)
+	modifyTestPlugin(t, latestHooks, p)
+
+	json, err := p.ToJSON()
+	if err != nil {
+		t.Fatalf("testPlugin.ToJSON() error = %v", err)
+	}
+
+	tester.ExpectGlobalHook("command").Once().AndExitWith(0).AndCallFunc(func(c *bintest.Call) {
+		if err := bintest.ExpectEnv(t, c.Env, "PLUGIN_REVISION=pinned"); err != nil {
+			_, _ = fmt.Fprintf(c.Stderr, "%v\n", err)
+			c.Exit(1)
+		} else {
+			c.Exit(0)
+		}
+	})
+
+	tester.RunAndCheck(t, "BUILDKITE_PLUGINS="+json)
+}
+
 type testPlugin struct {
 	*gitRepository
 
