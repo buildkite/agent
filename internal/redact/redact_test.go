@@ -283,3 +283,59 @@ func TestURLCredentials(t *testing.T) {
 		})
 	}
 }
+
+// TestURLCredentialsInText asserts that userinfo is masked in every URL within
+// text, such as a shell command, and nothing else changes.
+func TestURLCredentialsInText(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{name: "bare url", in: "https://token:secret@github.com/org/repo.git", want: "https://xxxxx@github.com/org/repo.git"},
+		{name: "embedded in shell string", in: `bash -c "git clone https://secret@example.com/repo.git && echo ok"`, want: `bash -c "git clone https://xxxxx@example.com/repo.git && echo ok"`},
+		{name: "several urls", in: "a http://u:p1@one.example b ssh://git@two.example/r", want: "a http://xxxxx@one.example b ssh://xxxxx@two.example/r"},
+		{name: "unescaped @ in password", in: "https://user:p@ss@example.com/repo", want: "https://xxxxx@example.com/repo"},
+		{name: "@ after the host", in: "https://example.com/org/repo@v1 user@example.com", want: "https://example.com/org/repo@v1 user@example.com"},
+		{name: "@ in query", in: "https://example.com?email=a@b.example", want: "https://example.com?email=a@b.example"},
+		{name: "scp-style ssh", in: "git clone git@github.com:org/repo.git", want: "git clone git@github.com:org/repo.git"},
+		{name: "no url", in: "echo hi; curl http://example.com", want: "echo hi; curl http://example.com"},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			if got := URLCredentialsInText(test.in); got != test.want {
+				t.Errorf("URLCredentialsInText(%q) = %q, want %q", test.in, got, test.want)
+			}
+		})
+	}
+}
+
+// TestURLSecret asserts that only userinfo likely to be a credential is
+// returned, so that redacting it doesn't mask ordinary usernames.
+func TestURLSecret(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		in   string
+		want string
+	}{
+		{in: "https://x-access-token:test-secret@github.com/org/repo.git", want: "test-secret"},
+		{in: "https://test-token@github.com/org/repo.git", want: "test-token"},
+		{in: "https://test-token:@github.com/org/repo.git", want: "test-token"},
+		{in: "ssh://deploy:test-secret@example.com/repo.git", want: "test-secret"},
+		{in: "ssh://deploy@example.com/repo.git", want: ""},
+		{in: "git@github.com:org/repo.git", want: ""},
+		{in: "https://github.com/org/repo.git", want: ""},
+	}
+
+	for _, test := range tests {
+		if got := URLSecret(test.in); got != test.want {
+			t.Errorf("URLSecret(%q) = %q, want %q", test.in, got, test.want)
+		}
+	}
+}

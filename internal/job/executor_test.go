@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -42,6 +43,10 @@ var repositoryNameTests = []struct {
 }{
 	{"git@github.com:acme-inc/my-project.git", "git-github-com-acme-inc-my-project-git"},
 	{"https://github.com/acme-inc/my-project.git", "https---github-com-acme-inc-my-project-git"},
+	{"ssh://git@github.com/acme-inc/my-project.git", "ssh---git-github-com-acme-inc-my-project-git"},
+	// Credentials are masked, so rotating a token keeps the same mirror.
+	{"https://x-access-token:test-secret@github.com/acme-inc/my-project.git", "https---xxxxx-github-com-acme-inc-my-project-git"},
+	{"https://test-token@github.com/acme-inc/my-project.git", "https---xxxxx-github-com-acme-inc-my-project-git"},
 }
 
 func TestDirForRepository(t *testing.T) {
@@ -51,6 +56,35 @@ func TestDirForRepository(t *testing.T) {
 		if got, want := dirForRepository(test.repositoryName), test.expected; got != want {
 			t.Errorf("dirForRepository(test.repositoryName) = %q, want %q", got, want)
 		}
+	}
+}
+
+// TestRedactorsRedactRepositoryCredentials checks that a credential embedded
+// in BUILDKITE_REPO is redacted from job output, both when the job starts and
+// after a hook changes BUILDKITE_REPO, even though the variable name doesn't
+// match redacted-vars.
+func TestRedactorsRedactRepositoryCredentials(t *testing.T) {
+	t.Parallel()
+
+	environ := env.FromMap(map[string]string{
+		"BUILDKITE_REPO": "https://x-access-token:test-secret-one@github.com/org/repo.git",
+	})
+	e := New(ExecutorConfig{RedactedVars: []string{"*_TOKEN"}})
+	var output strings.Builder
+	stdout, _ := e.setupRedactors(shell.DiscardLogger, environ, &output, io.Discard)
+	e.shell = shell.NewTestShell(t, shell.WithEnv(environ))
+
+	e.shell.Env.Set("BUILDKITE_REPO", "https://test-secret-two@github.com/org/repo.git")
+	e.addOutputRedactors()
+
+	if _, err := io.WriteString(stdout, "test-secret-one test-secret-two\n"); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.redactors.Flush(); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := output.String(), "[REDACTED] [REDACTED]\n"; got != want {
+		t.Errorf("job output = %q, want %q", got, want)
 	}
 }
 

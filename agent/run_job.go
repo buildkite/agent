@@ -278,7 +278,7 @@ func validateJobValue(allowedPatterns []*regexp.Regexp, jobValue string) error {
 		}
 	}
 
-	return fmt.Errorf("%s has no match in %s", jobValue, allowedPatterns)
+	return fmt.Errorf("%s has no match in %s", redact.URLCredentials(jobValue), allowedPatterns)
 }
 
 // validatePlugins unmarshal and validates the plugins, if the list of allowed plugins is set.

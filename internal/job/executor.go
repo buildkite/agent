@@ -759,7 +759,7 @@ func (e *Executor) applyEnvironmentChanges(changes hook.EnvChanges) {
 	for k, v := range changes.Diff.Added {
 		if _, ok := executorConfigEnvChanges[k]; ok {
 			executorConfigEnvChangesLogged[k] = true
-			e.shell.Commentf("%s is now %q", k, v)
+			e.shell.Commentf("%s is now %q", k, redact.URLCredentialsInText(v))
 		} else {
 			e.shell.Commentf("%s added", k)
 		}
@@ -767,7 +767,7 @@ func (e *Executor) applyEnvironmentChanges(changes hook.EnvChanges) {
 	for k, v := range changes.Diff.Changed {
 		if _, ok := executorConfigEnvChanges[k]; ok {
 			executorConfigEnvChangesLogged[k] = true
-			e.shell.Commentf("%s was %q and is now %q", k, v.Old, v.New)
+			e.shell.Commentf("%s was %q and is now %q", k, redact.URLCredentialsInText(v.Old), redact.URLCredentialsInText(v.New))
 		} else {
 			e.shell.Commentf("%s changed", k)
 		}
@@ -785,7 +785,7 @@ func (e *Executor) applyEnvironmentChanges(changes hook.EnvChanges) {
 	// it might not appear in the script "changes".
 	for k, v := range executorConfigEnvChanges {
 		if !executorConfigEnvChangesLogged[k] {
-			e.shell.Commentf("%s is now %q", k, v)
+			e.shell.Commentf("%s is now %q", k, redact.URLCredentialsInText(v))
 		}
 	}
 }
@@ -808,6 +808,22 @@ func (e *Executor) addOutputRedactors() {
 	for _, pair := range toRedact {
 		e.redactors.Add(pair.Value, redact.GoEscaped(pair.Value))
 	}
+	for _, secret := range repositoryCredentials(e.shell.Env) {
+		e.redactors.Add(secret, redact.GoEscaped(secret))
+	}
+}
+
+// repositoryCredentials returns credentials embedded in the repository URLs in
+// environ. The variable names don't match redacted-vars, so without this, a
+// script printing them would leak the credential to the job log.
+func repositoryCredentials(environ *env.Environment) []string {
+	var secrets []string
+	for _, name := range []string{"BUILDKITE_REPO", "BUILDKITE_GIT_REMOTE_MIRROR_URL"} {
+		if secret := redact.URLSecret(environ.GetString(name, "")); len(secret) >= redact.LengthMin {
+			secrets = append(secrets, secret)
+		}
+	}
+	return secrets
 }
 
 func (e *Executor) hasGlobalHook(name string) bool {
@@ -954,6 +970,12 @@ func dirForAgentName(agentName string) string {
 }
 
 func dirForRepository(repository string) string {
+	// Keep credentials out of the mirror directory name, which is logged and
+	// shared between jobs. Masking only URLs that carry a secret leaves
+	// existing mirror names (e.g. for ssh://git@host/repo) unchanged.
+	if redact.URLSecret(repository) != "" {
+		repository = redact.URLCredentials(repository)
+	}
 	return badCharsRE.ReplaceAllString(repository, "-")
 }
 
@@ -1507,6 +1529,7 @@ func (e *Executor) setupRedactors(log shell.Logger, environ *env.Environment, st
 	for _, pair := range varsToRedact {
 		needles = append(needles, pair.Value)
 	}
+	needles = append(needles, repositoryCredentials(environ)...)
 	needles = redact.AppendGoEscaped(needles)
 
 	// As well as the known values above, redact anything that looks like a

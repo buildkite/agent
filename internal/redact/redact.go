@@ -109,6 +109,36 @@ func URLCredentials(rawURL string) string {
 	return u.String()
 }
 
+// urlUserinfo matches the userinfo of a scheme-based URL anywhere in text. The
+// userinfo runs to the last '@' before the authority ends, as in [url.Parse],
+// so a password containing an unescaped '@' is masked entirely.
+var urlUserinfo = regexp.MustCompile(`([A-Za-z][A-Za-z0-9+.\-]*://)[^/?#\s]*@`)
+
+// URLCredentialsInText masks the userinfo of every scheme-based URL in text,
+// such as a command line, leaving the rest of the text unchanged. Use
+// [URLCredentials] for a value that is a single URL.
+func URLCredentialsInText(text string) string {
+	return urlUserinfo.ReplaceAllString(text, "${1}xxxxx@")
+}
+
+// URLSecret returns the part of a URL's userinfo that is likely to be a
+// credential, or "" if there is none: the password if present, or the username
+// of an http(s) URL without a password (as in https://TOKEN@host). Other
+// usernames, such as "git" in ssh://git@host, are not secrets.
+func URLSecret(rawURL string) string {
+	u, err := url.Parse(rawURL)
+	if err != nil || u.User == nil {
+		return ""
+	}
+	if password, _ := u.User.Password(); password != "" {
+		return password
+	}
+	if u.Scheme == "http" || u.Scheme == "https" {
+		return u.User.Username()
+	}
+	return ""
+}
+
 // String is a convenience wrapper for redacting small strings.
 // This is fine to call repeatedly with many separate strings, but avoid using
 // this to redact large streams - it requires buffering the whole input and

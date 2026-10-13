@@ -1,6 +1,7 @@
 package job
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"os/exec"
@@ -10,7 +11,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/buildkite/agent/v4/env"
 	"github.com/buildkite/agent/v4/internal/job/githttptest"
+	"github.com/buildkite/agent/v4/internal/job/hook"
 	"github.com/buildkite/agent/v4/internal/race"
 	"github.com/buildkite/agent/v4/internal/shell"
 )
@@ -523,6 +526,78 @@ func TestDefaultCheckoutPhase_MergeRefspecFailsFast(t *testing.T) {
 	const wantHint = "This is possibly due to a merge conflict, or GitHub being unable to create the merge ref automatically"
 	if !strings.Contains(err.Error(), wantHint) {
 		t.Fatalf("executor.defaultCheckoutPhase(ctx, 1) error = %q, want it to contain %q", err.Error(), wantHint)
+	}
+}
+
+// TestDefaultCheckoutPhase_MasksRepositoryCredentials checks that credentials
+// embedded in BUILDKITE_REPO don't reach the job log through the agent's own
+// output: command prompts, the mirror path, the remote URL change notice, and
+// the notice of a hook changing BUILDKITE_REPO. Output redaction is not set
+// up here, so this doesn't rely on it.
+func TestDefaultCheckoutPhase_MasksRepositoryCredentials(t *testing.T) {
+	logs := &bytes.Buffer{}
+	sh, err := shell.New(
+		shell.WithLogger(shell.NewWriterLogger(logs, false, nil)),
+		shell.WithStdout(logs),
+	)
+	if err != nil {
+		t.Fatalf("shell.New() error = %v, want nil", err)
+	}
+	mirrorsPath, err := os.MkdirTemp("", "git-mirrors-")
+	if err != nil {
+		t.Fatalf("os.MkdirTemp(git-mirrors-) error = %v, want nil", err)
+	}
+	t.Cleanup(func() {
+		os.RemoveAll(mirrorsPath) //nolint:errcheck // Best-effort cleanup.
+	})
+
+	e := New(ExecutorConfig{
+		Commit:         "HEAD",
+		Branch:         "main",
+		GitCleanFlags:  "-f -d -x",
+		GitMirrorsPath: mirrorsPath,
+	})
+	e.shell = sh
+	t.Cleanup(func() {
+		if e.checkoutRoot != nil {
+			_ = e.checkoutRoot.Close()
+		}
+	})
+	s, _ := setupCheckoutTestRepo(t, e, "credentials")
+	withCredentials := func(secret string) string {
+		return strings.Replace(s.RepoURL("credentials"), "://", "://x-access-token:"+secret+"@", 1)
+	}
+
+	// The first checkout clones; the second, with a rotated token, changes the
+	// remote URL of the existing checkout.
+	for _, secret := range []string{"test-secret-one", "test-secret-two"} {
+		e.Repository = withCredentials(secret)
+		e.shell.Env.Set("BUILDKITE_REPO", e.Repository)
+		if err := e.defaultCheckoutPhase(t.Context(), 1); err != nil {
+			t.Fatalf("e.defaultCheckoutPhase(ctx, 1) error = %v, want nil\nlogs:\n%s", err, logs)
+		}
+	}
+	e.applyEnvironmentChanges(hook.EnvChanges{Diff: env.Diff{
+		Changed: map[string]env.DiffPair{"BUILDKITE_REPO": {
+			Old: withCredentials("test-secret-two"),
+			New: withCredentials("test-secret-three"),
+		}},
+	}})
+
+	got := logs.String()
+	for _, secret := range []string{"test-secret-one", "test-secret-two", "test-secret-three"} {
+		if strings.Contains(got, secret) {
+			t.Errorf("job log contains %q:\n%s", secret, got)
+		}
+	}
+	for _, want := range []string{
+		"git clone --reference",
+		"has changed",
+		"BUILDKITE_REPO was",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("job log doesn't contain %q, so the test may not cover it:\n%s", want, got)
+		}
 	}
 }
 

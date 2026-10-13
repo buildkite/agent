@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/buildkite/agent/v4/internal/osutil"
+	"github.com/buildkite/agent/v4/internal/redact"
 	"github.com/buildkite/agent/v4/internal/shell"
 	"github.com/buildkite/agent/v4/tracetools"
 	"github.com/buildkite/shellwords"
@@ -570,7 +571,7 @@ func (e *Executor) updateRemoteURL(ctx context.Context, gitDir, repository strin
 		gd = e.shell.Getwd()
 	}
 
-	e.shell.Commentf("Remote URL for git directory %s has changed (%s -> %s)!", gd, gotURL, repository)
+	e.shell.Commentf("Remote URL for git directory %s has changed (%s -> %s)!", gd, redact.URLCredentials(gotURL), redact.URLCredentials(repository))
 	e.shell.Commentf("This is usually because the repository has been renamed.")
 	e.shell.Commentf("If this is unexpected, you may see failures.")
 
