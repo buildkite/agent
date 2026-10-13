@@ -12,13 +12,24 @@ if ! command -v mise >/dev/null; then
   curl -fsSL https://mise.run | sh
 fi
 
-# The polyglot hook tests need Ruby, which Dockerfile-compile installs.
+# The polyglot hook tests need Ruby, which Dockerfile-compile installs, and
+# the race detector needs cgo.
+apk=()
+apt=()
 if [[ "${KUBE_TOOLCHAIN_RUBY:-}" == "true" ]] && ! command -v ruby >/dev/null; then
-  echo "--- :ruby: Installing Ruby"
+  apk+=(ruby)
+  apt+=(ruby)
+fi
+if [[ "${KUBE_TOOLCHAIN_CGO:-}" == "true" ]] && ! command -v gcc >/dev/null; then
+  apk+=(gcc musl-dev)
+  apt+=(gcc libc6-dev)
+fi
+if (( ${#apk[@]} > 0 )); then
+  echo "--- :package: Installing ${apk[*]}"
   if command -v apk >/dev/null; then
-    apk add --no-cache ruby >/dev/null
+    apk add --no-cache "${apk[@]}" >/dev/null
   else
-    apt-get update -qq && apt-get install -y -qq ruby >/dev/null
+    apt-get update -qq && apt-get install -y -qq "${apt[@]}" >/dev/null
   fi
 fi
 

@@ -1,6 +1,6 @@
 # EXPERIMENT: lint and test steps mirrored onto the kube-operator queues in
 # the Agent cluster. Uploaded unsigned by the upload-kube-mirror step in
-# pipeline.yml. Soft-fail and nothing depends on them.
+# pipeline.yml. Soft-fail; only the image builds depend on other mirror steps.
 #
 # Every queue runs the same scripts through kube-toolchain.sh. The sysbox and
 # dind queues run them in the step's image:, which the operator chart runs in
@@ -53,6 +53,60 @@ steps:
           queue: "{{matrix}}"
         matrix: *standard_queues
 
+      # Mirrors ":satellite: Detect Data Races", which runs on arm64. These
+      # queues are amd64 only.
+      - &race
+        name: ":satellite: Detect Data Races on {{matrix}}"
+        key: kube-native-test-race
+        command: .buildkite/steps/kube-toolchain.sh .buildkite/steps/tests.sh -race
+        env:
+          KUBE_TOOLCHAIN_RUBY: "true"
+          KUBE_TOOLCHAIN_CGO: "true"
+          BUILDKITE_TEST_ENGINE_OIDC: "true"
+          BUILDKITE_PARALLEL_JOB: "0"
+          BUILDKITE_PARALLEL_JOB_COUNT: "1"
+        soft_fail: true
+        agents:
+          queue: "{{matrix}}"
+        matrix: *standard_queues
+
+      # Mirrors the "Binary builds" matrix, without the provenance attestation.
+      # One queue per runtime: a third matrix dimension would exceed the 12
+      # adjustments a matrix allows.
+      - name: ":{{matrix.os}}: Build {{matrix.os}} {{matrix.arch}} binary on kube-operator-standard"
+        key: kube-native-build-binary
+        command: .buildkite/steps/kube-toolchain.sh .buildkite/steps/build-binary.sh {{matrix.os}} {{matrix.arch}}
+        artifact_paths: "pkg/*"
+        soft_fail: true
+        agents:
+          queue: kube-operator-standard
+        matrix: &binary_targets
+          setup:
+            os:
+              - darwin
+              - freebsd
+              - linux
+              - openbsd
+              - windows
+            arch:
+              - "386"
+              - amd64
+              - arm64
+          adjustments:
+            - with: { os: darwin, arch: "386" }
+              skip: "macOS no longer supports x86 binaries"
+            - with: { os: dragonflybsd, arch: amd64 }
+            - with: { os: linux, arch: arm }
+            - with: { os: linux, arch: armhf }
+            - with: { os: linux, arch: ppc64 }
+            - with: { os: linux, arch: ppc64le }
+            - with: { os: linux, arch: mips64le }
+            - with: { os: linux, arch: s390x }
+            - with: { os: linux, arch: riscv64 }
+            - with: { os: netbsd, arch: amd64 }
+            - with: { os: openbsd, arch: arm64 }
+              skip: "arm64 OpenBSD is not currently supported"
+
   # The same steps in an image:, keyed separately.
   - group: ":kubernetes::docker: Kube operator Docker queues"
     steps:
@@ -72,3 +126,51 @@ steps:
         key: kube-mirror-test-linux-amd64
         image: *image
         matrix: *docker_queues
+      - <<: *race
+        key: kube-mirror-test-race
+        image: *image
+        matrix: *docker_queues
+
+      # golang:1.26.5 already has the Go that go.mod wants, so these skip
+      # kube-toolchain.sh.
+      - &docker_binary
+        name: ":{{matrix.os}}: Build {{matrix.os}} {{matrix.arch}} binary on kube-operator-sysbox"
+        key: kube-mirror-build-binary-sysbox
+        command: .buildkite/steps/build-binary.sh {{matrix.os}} {{matrix.arch}}
+        image: *image
+        artifact_paths: "pkg/*"
+        soft_fail: true
+        agents:
+          queue: kube-operator-sysbox
+        matrix: *binary_targets
+      - <<: *docker_binary
+        name: ":{{matrix.os}}: Build {{matrix.os}} {{matrix.arch}} binary on kube-operator-dind"
+        key: kube-mirror-build-binary-dind
+        agents:
+          queue: kube-operator-dind
+
+      # Mirrors ":docker: {{matrix}} image build" without pushing: passing an
+      # image tag makes build-docker-image.sh skip the ECR push. It still
+      # builds for amd64 and arm64, then loads and tests the native image.
+      # buildkite/agent:4 has bash, the Docker CLI and buildx.
+      - name: ":docker: {{matrix.variant}} image build on {{matrix.queue}}"
+        key: kube-mirror-build-docker
+        command: .buildkite/steps/build-docker-image.sh {{matrix.variant}} buildkite-agent-kube-mirror:{{matrix.variant}}
+        image: buildkite/agent:4
+        soft_fail: true
+        depends_on:
+          - kube-mirror-build-binary-sysbox
+          - kube-mirror-build-binary-dind
+        agents:
+          queue: "{{matrix.queue}}"
+        matrix:
+          setup:
+            variant:
+              - alpine
+              - alpine-k8s
+              - ubuntu-20.04
+              - ubuntu-22.04
+              - ubuntu-24.04
+              - ubuntu-26.04
+              - sidecar
+            queue: *docker_queues
