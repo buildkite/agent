@@ -157,6 +157,14 @@ type Secrets struct {
 	writers []*replacer.Replacer
 }
 
+// Writer redacts output written to it. Flush releases output withheld while a
+// possible secret was matching. Secrets are registered with [Secrets.Add], not
+// on individual writers, so every writer redacts the same values.
+type Writer interface {
+	io.Writer
+	Flush() error
+}
+
 // NewSecrets returns an empty set of secrets.
 func NewSecrets() *Secrets {
 	return &Secrets{values: make(map[string]struct{})}
@@ -198,7 +206,11 @@ func (s *Secrets) AddVars(patterns []string, environ []env.Pair) (short []string
 // including those added later, and anything that looks like a
 // Buildkite-issued token. The caller must flush it, directly or with
 // [Secrets.Flush], to release withheld output.
-func (s *Secrets) NewWriter(dst io.Writer) *replacer.Replacer {
+//
+// The writer stays registered for the life of the set: every later Add and
+// Flush reaches it. Use it only for output streams that last as long as the
+// job, and use [Secrets.Snapshot] to redact anything shorter-lived.
+func (s *Secrets) NewWriter(dst io.Writer) Writer {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -211,7 +223,7 @@ func (s *Secrets) NewWriter(dst io.Writer) *replacer.Replacer {
 // redacts the secrets registered so far, and is independent of the set:
 // [Secrets.Flush] does not flush it, so it can redact a separate value without
 // releasing or mixing with output withheld by other writers.
-func (s *Secrets) Snapshot(dst io.Writer) *replacer.Replacer {
+func (s *Secrets) Snapshot(dst io.Writer) Writer {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
