@@ -131,13 +131,21 @@ func URLCredentialsInText(text string) string {
 		// Malformed userinfo can parse as a host, path, query or fragment
 		// instead. Mask it, but keep the scheme, so the rest of the URL is still
 		// recognized, such as by URLQueriesInText.
-		return prefix[:strings.Index(prefix, "//")+2] + "xxxxx@"
+		masked = prefix[:strings.Index(prefix, "//")+2] + "xxxxx@"
+		if strings.Contains(prefix, "?") {
+			// The "@" may have been in a query, as in
+			// "https://example.com?email=u@example.net&token=SECRET", so the
+			// rest may be query too. Keep a "?" so URLQueriesInText masks it.
+			masked += "?"
+		}
+		return masked
 	})
 }
 
 // Match a URL's query string, up to whitespace, a quote, or punctuation that
-// ends the sentence around it.
-var urlQuery = regexp.MustCompile(`(?i)\b([a-z][a-z0-9+.-]*://[^\s?#"<>]+)\?[^\s#"<>]*[^\s#"'<>.,;:!?)\]}]`)
+// ends the sentence around it. An escaped character, such as a quote in a
+// %q-quoted URL, does not end it.
+var urlQuery = regexp.MustCompile(`(?i)\b([a-z][a-z0-9+.-]*://[^\s?#"<>]+)\?(?:[^\s#"<>\\]|\\.)*(?:[^\s#"'<>.,;:!?)\]}\\]|\\.)`)
 
 // URLQueriesInText replaces URL query strings in diagnostic text, which can
 // carry credentials such as the signature in a presigned storage URL.

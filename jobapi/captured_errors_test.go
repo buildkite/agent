@@ -150,6 +150,11 @@ func TestCapturedErrorRedactionResponse(t *testing.T) {
 			body:        `{"code":"x","message":"GET https://a.example/x?sig=unregistered failed"}`,
 			wantMessage: "GET https://a.example/x?[REDACTED] failed",
 		},
+		{
+			name:        "URL query containing an @ is masked",
+			body:        `{"code":"x","message":"GET https://a.example?email=u@b.example&sig=unregistered failed"}`,
+			wantMessage: "GET https://xxxxx@?[REDACTED] failed",
+		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			before := reported.Load()

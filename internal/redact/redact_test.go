@@ -336,6 +336,9 @@ func TestURLQueriesInText(t *testing.T) {
 		{"is it https://a.example/x?", "is it https://a.example/x?"},
 		{"https://a.example/x?note='x'&access_token=SECRET", "https://a.example/x?[REDACTED]"},
 		{"fatal: unable to access 'https://a.example/x?token=SECRET': denied", "fatal: unable to access 'https://a.example/x?[REDACTED]': denied"},
+		// net/http errors quote the URL with %q, escaping quotes in the query.
+		{`Get "http://127.0.0.1:1/repo?note=\"x\"&access_token=SECRET": refused`, `Get "http://127.0.0.1:1/repo?[REDACTED]": refused`},
+		{`Get "http://127.0.0.1:1/repo?note=\"x\"": refused`, `Get "http://127.0.0.1:1/repo?[REDACTED]": refused`},
 	} {
 		if got := URLQueriesInText(test.in); got != test.want {
 			t.Errorf("URLQueriesInText(%q) = %q, want %q", test.in, got, test.want)
@@ -348,14 +351,30 @@ func TestURLQueriesInText(t *testing.T) {
 
 func TestURLCredentialsAndQueriesInText(t *testing.T) {
 	t.Parallel()
-	// A password containing "/" must not stop the query from being masked,
-	// whichever masking runs first.
-	const in = "fatal: unable to access 'https://u:a/b@example.com/repo?access_token=SECRET': denied"
-	const want = "fatal: unable to access 'https://xxxxx@example.com/repo?[REDACTED]': denied"
-	if got := URLQueriesInText(URLCredentialsInText(in)); got != want {
-		t.Errorf("credentials then queries = %q, want %q", got, want)
-	}
-	if got := URLCredentialsInText(URLQueriesInText(in)); got != want {
-		t.Errorf("queries then credentials = %q, want %q", got, want)
+	// Masking credentials must not stop the query from being masked, in the
+	// order the Job API applies them.
+	for _, test := range []struct{ in, want string }{
+		{
+			// A password containing "/".
+			"fatal: unable to access 'https://u:a/b@example.com/repo?access_token=SECRET': denied",
+			"fatal: unable to access 'https://xxxxx@example.com/repo?[REDACTED]': denied",
+		},
+		{
+			// An "@" in the query looks like the end of userinfo.
+			"GET https://example.com?email=u@example.net&access_token=SECRET failed",
+			"GET https://xxxxx@?[REDACTED] failed",
+		},
+		{
+			"GET https://example.com:8443/repo?email=u@example.net&access_token=SECRET failed",
+			"GET https://xxxxx@?[REDACTED] failed",
+		},
+	} {
+		got := URLQueriesInText(URLCredentialsInText(test.in))
+		if got != test.want {
+			t.Errorf("URLQueriesInText(URLCredentialsInText(%q)) = %q, want %q", test.in, got, test.want)
+		}
+		if again := URLQueriesInText(URLCredentialsInText(got)); again != got {
+			t.Errorf("masking is not idempotent: got %q, want %q", again, got)
+		}
 	}
 }
