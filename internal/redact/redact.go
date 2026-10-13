@@ -109,6 +109,64 @@ func URLCredentials(rawURL string) string {
 	return u.String()
 }
 
+// urlUserinfo matches a URL from its start to the "@" that follows the
+// username and password, so only that part is replaced and the host and path
+// stay readable.
+//
+// A password containing "/" makes a URL invalid, but Git still prints it as
+// typed, such as "https://user:pa/ss@host". So after "user:", match anything
+// up to the last "@" before a space. A URL with a port and a later "@", such as
+// "https://example.com:8443/a@b", looks the same and is masked too.
+var urlUserinfo = regexp.MustCompile(`(?i)(?:[a-z][a-z0-9+.-]*:)?//(?:[^\s/<>]*|[^\s/<>@:\[]*:[^\s<>]*)@`)
+
+// URLCredentialsInText masks URL userinfo in diagnostic text, including tokens
+// used as usernames. It does not detect secrets in paths, queries or plain text.
+func URLCredentialsInText(text string) string {
+	return urlUserinfo.ReplaceAllStringFunc(text, func(prefix string) string {
+		masked := URLCredentials(prefix)
+		if masked != prefix && masked != "(invalid URL)" {
+			return masked
+		}
+		if u, err := url.Parse(prefix); err == nil && u.User != nil {
+			return masked // already masked
+		}
+		// Malformed userinfo can parse as a host, path, query or fragment
+		// instead. Mask it, but keep the scheme, so the rest of the URL is still
+		// recognized, such as by URLQueriesInText.
+		masked = prefix[:strings.Index(prefix, "//")+2] + "xxxxx@"
+		if strings.Contains(prefix, "?") {
+			// The "@" may have been in a query, as in
+			// "https://example.com?email=u@example.net&token=SECRET", so the
+			// rest may be query too. Keep a "?" so URLQueriesInText masks it.
+			masked += "?"
+		}
+		return masked
+	})
+}
+
+// urlQuery matches a URL's query: everything after "?" up to the next space or
+// "#". Git prints quotes and brackets inside its own quotes as is, as in
+// 'https://host/repo?note="x"&token=SECRET', so they don't end the query.
+// Quotes, brackets and punctuation at the very end are left out, since they
+// usually belong to the surrounding sentence. An escaped quote (\") from Go's
+// quoting stays part of the query.
+var urlQuery = regexp.MustCompile(`(?i)\b([a-z][a-z0-9+.-]*://[^\s?#]+)\?(?:[^\s#\\]|\\.)*(?:[^\s#"'<>.,;:!?)\]}\\]|\\.)`)
+
+// URLQueriesInText replaces URL query strings in diagnostic text, which can
+// carry credentials such as the signature in a presigned storage URL.
+func URLQueriesInText(text string) string {
+	redacted := string(Redacted(nil))
+	return urlQuery.ReplaceAllStringFunc(text, func(match string) string {
+		url, query, _ := strings.Cut(match, "?")
+		// Skip a query that is already [REDACTED], so masking twice gives the
+		// same result.
+		if strings.HasPrefix(redacted, query) {
+			return match
+		}
+		return url + "?" + redacted
+	})
+}
+
 // String is a convenience wrapper for redacting small strings.
 // This is fine to call repeatedly with many separate strings, but avoid using
 // this to redact large streams - it requires buffering the whole input and
