@@ -64,8 +64,7 @@ promisor keys. Before fetching, the agent records a credential-free digest
 marker so the next fetch repairs only the matching agent-created section and
 leaves unmarked user promisor configuration unchanged. If config for the exact
 mirror URL already exists without that marker, the agent preserves it and uses
-the canonical repository. For full requirements, caveats, and rollout
-decisions, see [`remote-git-mirrors.md`](remote-git-mirrors.md).
+the canonical repository.
 
 Remote mirror optimization requires Git 2.45.0 or newer. Initial Windows support
 is best-effort and rough-edged; the canonical checkout path remains supported.
