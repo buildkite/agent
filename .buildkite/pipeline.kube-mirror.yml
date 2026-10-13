@@ -1,10 +1,10 @@
-# EXPERIMENT: lint steps mirrored onto the kube-operator queues in the Agent
-# cluster. Uploaded unsigned by the upload-kube-mirror step in pipeline.yml.
-# Soft-fail and nothing depends on them. The standard queues have no Docker
-# and are expected to fail.
+# EXPERIMENT: lint and test steps mirrored onto the kube-operator queues in
+# the Agent cluster. Uploaded unsigned by the upload-kube-mirror step in
+# pipeline.yml. Soft-fail and nothing depends on them. The standard queues have
+# no Docker: lint is expected to fail there, and tests skip them.
 
 steps:
-  - group: ":kubernetes: Kube operator lint mirror"
+  - group: ":kubernetes: Kube operator lint and test mirror"
     steps:
       - name: ":go::robot_face: Lint on {{matrix}}"
         key: kube-mirror-check-code-committed
@@ -67,3 +67,40 @@ steps:
                 - GOBIN
                 - GOCACHE
                 - GOMODCACHE
+
+      # Mirrors ":linux: Linux AMD64 Tests" without the tests plugin, whose
+      # pre-command needs curl and jq on the agent image. bktec mints its own
+      # Test Engine token with buildkite-agent oidc, and doesn't upload results
+      # unless asked, so the mirror stays out of the suite's data. A matrix
+      # can't use parallelism, so each queue runs the whole suite as one node.
+      - name: ":linux: Linux AMD64 Tests on {{matrix}}"
+        key: kube-mirror-test-linux-amd64
+        command: .buildkite/steps/tests.sh
+        soft_fail: true
+        env:
+          BUILDKITE_TEST_ENGINE_OIDC: "true"
+          BUILDKITE_PARALLEL_JOB: "0"
+          BUILDKITE_PARALLEL_JOB_COUNT: "1"
+          GIT_CONFIG_COUNT: "1"
+          GIT_CONFIG_KEY_0: url.https://github.com/.insteadOf
+          GIT_CONFIG_VALUE_0: "git@github.com:"
+        agents:
+          queue: "{{matrix}}"
+        matrix:
+          - kube-operator-sysbox
+          - kube-operator-sysbox-ephemeral
+          - kube-operator-dind
+          - kube-operator-dind-ephemeral
+        plugins:
+          - docker-compose#v5.15.0:
+              config: .buildkite/docker-compose.yml
+              cli-version: 2
+              propagate-environment: true
+              mount-buildkite-agent: true
+              run: agent
+              env:
+                - BUILDKITE_AGENT_CACHE_REGISTRY
+                - BUILDKITE_AGENT_CACHE_STORE_URL
+                - AWS_ACCESS_KEY_ID
+                - AWS_SECRET_ACCESS_KEY
+                - AWS_SESSION_TOKEN
