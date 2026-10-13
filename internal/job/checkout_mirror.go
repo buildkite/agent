@@ -39,12 +39,12 @@ func (e *Executor) getOrUpdateMirrorDir(ctx context.Context, repository string, 
 	// Skip updating the Git mirror before using it?
 	if e.GitMirrorsSkipUpdate {
 		mirrorDir = filepath.Join(e.GitMirrorsPath, dirForRepository(repository))
-		e.shell.Commentf("Skipping update and using existing mirror for repository %s at %s.", repository, mirrorDir)
+		e.shell.Commentf("Skipping update and using existing mirror for repository %s at %s.", redact.URLCredentials(repository), mirrorDir)
 
 		// Check if specified mirrorDir exists, otherwise the clone will fail.
 		if !osutil.FileExists(mirrorDir) {
 			// Fall back to a clean clone, rather than failing the clone and therefore the build
-			e.shell.Commentf("No existing mirror found for repository %s at %s.", repository, mirrorDir)
+			e.shell.Commentf("No existing mirror found for repository %s at %s.", redact.URLCredentials(repository), mirrorDir)
 			mirrorDir = ""
 		}
 

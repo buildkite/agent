@@ -178,8 +178,8 @@ func String(input string, needles []string) string {
 // NeedlesFromEnv matches the patterns against [os.Environ]. It returns values
 // to redact and the names of env vars with "short" values.
 func NeedlesFromEnv(patterns []string) (values, short []string, err error) {
-	environ := env.FromSlice(os.Environ()).DumpPairs()
-	toRedact, short, err := Vars(patterns, environ)
+	environ := env.FromSlice(os.Environ())
+	toRedact, short, err := Vars(patterns, environ.DumpPairs())
 	if err != nil {
 		return nil, nil, fmt.Errorf("finding env vars to redact: %w", err)
 	}
@@ -188,7 +188,25 @@ func NeedlesFromEnv(patterns []string) (values, short []string, err error) {
 	for _, v := range toRedact {
 		needles[v.Value] = struct{}{}
 	}
+	for _, v := range RepositoryCredentials(environ) {
+		needles[v] = struct{}{}
+	}
 	return slices.Collect(maps.Keys(needles)), short, nil
+}
+
+// RepositoryCredentials returns credentials embedded in the repository URLs in
+// environ that are long enough to redact. The variable names don't match
+// redacted-vars, so without this, printing them would leak the credential.
+func RepositoryCredentials(environ *env.Environment) []string {
+	var secrets []string
+	for _, name := range []string{"BUILDKITE_REPO", "BUILDKITE_GIT_REMOTE_MIRROR_URL"} {
+		for _, secret := range URLSecrets(environ.GetString(name, "")) {
+			if len(secret) >= LengthMin {
+				secrets = append(secrets, secret)
+			}
+		}
+	}
+	return secrets
 }
 
 // New returns a replacer configured to write to dst, and redact all needles.

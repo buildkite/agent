@@ -1,6 +1,7 @@
 package redact
 
 import (
+	"slices"
 	"strings"
 	"testing"
 
@@ -341,5 +342,22 @@ func TestURLSecrets(t *testing.T) {
 		if diff := cmp.Diff(URLSecrets(test.in), test.want); diff != "" {
 			t.Errorf("URLSecrets(%q) diff (-got +want):\n%s", test.in, diff)
 		}
+	}
+}
+
+// TestNeedlesFromEnvIncludesRepositoryCredentials asserts that CLI commands
+// redacting with NeedlesFromEnv (annotate, meta-data set, ...) redact a
+// credential in BUILDKITE_REPO, whose name doesn't match redacted-vars.
+func TestNeedlesFromEnvIncludesRepositoryCredentials(t *testing.T) {
+	t.Setenv("BUILDKITE_REPO", "https://test-repo-token@github.com/org/repo.git")
+	t.Setenv("BUILDKITE_GIT_REMOTE_MIRROR_URL", "")
+
+	needles, _, err := NeedlesFromEnv([]string{"*_TOKEN"})
+	if err != nil {
+		t.Fatalf("NeedlesFromEnv() error = %v", err)
+	}
+	if !slices.Contains(needles, "test-repo-token") {
+		// Don't print needles: they hold the values of real secret env vars.
+		t.Errorf("NeedlesFromEnv() doesn't contain %q", "test-repo-token")
 	}
 }
