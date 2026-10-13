@@ -17,6 +17,7 @@ import (
 var (
 	errGitLFSPreflight             = errors.New("git lfs version failed")
 	errInvalidSparseCheckoutMode   = errors.New("invalid sparse checkout mode")
+	errInvalidFetchBaseBranchMode  = errors.New("invalid base branch fetch mode")
 	gitAuthenticationErrorPatterns = []string{
 		"fatal: Authentication failed",
 		"fatal: authentication failed",
@@ -226,6 +227,8 @@ func classifyGitError(err error) (string, string) {
 			return "git_lfs_preflight_failed", "Git LFS version check failed."
 		case errors.Is(err, errInvalidSparseCheckoutMode):
 			return "git_invalid_sparse_checkout_mode", "Git checkout received an invalid sparse checkout mode."
+		case errors.Is(err, errInvalidFetchBaseBranchMode):
+			return "git_invalid_fetch_base_branch_mode", "Git checkout received an invalid base branch fetch mode."
 		case errors.As(err, &lockErr):
 			return "git_checkout_lock_timeout", "Git checkout timed out waiting for a lock."
 		default:
