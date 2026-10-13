@@ -3,6 +3,7 @@ package env
 import (
 	"fmt"
 	"slices"
+	"strings"
 )
 
 type protection struct {
@@ -60,40 +61,42 @@ type protection struct {
 // protected reconfigurable vars set mutableFromWithinJob here, and checkout-
 // scoped vars are added to checkoutOverrideScope below.
 var protectedEnv = map[string]protection{
-	"BUILDKITE_ALLOWED_REPOSITORIES":        {},
-	"BUILDKITE_AGENT_ACCESS_TOKEN":          {},
-	"BUILDKITE_AGENT_DEBUG":                 {},
-	"BUILDKITE_AGENT_ENDPOINT":              {},
-	"BUILDKITE_AGENT_JOB_TIMEOUT_FILE":      {},
-	"BUILDKITE_AGENT_PID":                   {},
-	"BUILDKITE_ARTIFACT_PATHS":              {mutableFromWithinJob: true},
-	"BUILDKITE_ARTIFACT_UPLOAD_DESTINATION": {mutableFromWithinJob: true},
-	"BUILDKITE_BIN_PATH":                    {},
-	"BUILDKITE_BUILD_PATH":                  {},
-	"BUILDKITE_CHECKOUT_OVERRIDE_MODE":      {},
-	"BUILDKITE_COMMAND_EVAL":                {},
-	"BUILDKITE_CONFIG_PATH":                 {},
-	"BUILDKITE_CONTAINER_COUNT":             {},
-	"BUILDKITE_GIT_CLONE_MIRROR_FLAGS":      {},
-	"BUILDKITE_GIT_MIRRORS_LOCK_TIMEOUT":    {},
-	"BUILDKITE_GIT_MIRRORS_PATH":            {},
-	"BUILDKITE_GIT_MIRRORS_LFS_CACHE":       {},
-	"BUILDKITE_GIT_MIRRORS_SKIP_UPDATE":     {},
-	"BUILDKITE_GIT_MIRROR_CHECKOUT_MODE":    {},
-	"BUILDKITE_GIT_REMOTE_MIRROR_URL":       {},
-	"BUILDKITE_GIT_SUBMODULE_CLONE_CONFIG":  {},
-	"BUILDKITE_HOOKS_PATH":                  {},
-	"BUILDKITE_HOOKS_SHELL":                 {},
-	"BUILDKITE_JOB_CONTEXT_DIR":             {},
-	"BUILDKITE_KUBERNETES_EXEC":             {},
-	"BUILDKITE_LOCAL_HOOKS_ENABLED":         {},
-	"BUILDKITE_PLUGINS_ALWAYS_CLONE_FRESH":  {mutableFromWithinJob: true},
-	"BUILDKITE_PLUGINS_ENABLED":             {},
-	"BUILDKITE_PLUGINS_PATH":                {},
-	"BUILDKITE_REFSPEC":                     {mutableFromWithinJob: true},
-	"BUILDKITE_REPO":                        {mutableFromWithinJob: true},
-	"BUILDKITE_SHELL":                       {},
-	"BUILDKITE_SSH_KEYSCAN":                 {},
+	"BUILDKITE_ALLOWED_REPOSITORIES":           {},
+	"BUILDKITE_AGENT_ACCESS_TOKEN":             {},
+	"BUILDKITE_AGENT_DEBUG":                    {},
+	"BUILDKITE_AGENT_ENDPOINT":                 {},
+	"BUILDKITE_AGENT_JOB_TIMEOUT_FILE":         {},
+	"BUILDKITE_AGENT_PID":                      {},
+	"BUILDKITE_ARTIFACT_PATHS":                 {mutableFromWithinJob: true},
+	"BUILDKITE_ARTIFACT_UPLOAD_DESTINATION":    {mutableFromWithinJob: true},
+	"BUILDKITE_BIN_PATH":                       {},
+	"BUILDKITE_BUILD_PATH":                     {},
+	"BUILDKITE_CHECKOUT_OVERRIDE_MODE":         {},
+	"BUILDKITE_COMMAND_EVAL":                   {},
+	"BUILDKITE_CONFIG_PATH":                    {},
+	"BUILDKITE_CONTAINER_COUNT":                {},
+	"BUILDKITE_PROTECT_DANGEROUS_GIT_ENV_VARS": {},
+	"BUILDKITE_PROTECT_ENV_VARS":               {},
+	"BUILDKITE_GIT_CLONE_MIRROR_FLAGS":         {},
+	"BUILDKITE_GIT_MIRRORS_LOCK_TIMEOUT":       {},
+	"BUILDKITE_GIT_MIRRORS_PATH":               {},
+	"BUILDKITE_GIT_MIRRORS_LFS_CACHE":          {},
+	"BUILDKITE_GIT_MIRRORS_SKIP_UPDATE":        {},
+	"BUILDKITE_GIT_MIRROR_CHECKOUT_MODE":       {},
+	"BUILDKITE_GIT_REMOTE_MIRROR_URL":          {},
+	"BUILDKITE_GIT_SUBMODULE_CLONE_CONFIG":     {},
+	"BUILDKITE_HOOKS_PATH":                     {},
+	"BUILDKITE_HOOKS_SHELL":                    {},
+	"BUILDKITE_JOB_CONTEXT_DIR":                {},
+	"BUILDKITE_KUBERNETES_EXEC":                {},
+	"BUILDKITE_LOCAL_HOOKS_ENABLED":            {},
+	"BUILDKITE_PLUGINS_ALWAYS_CLONE_FRESH":     {mutableFromWithinJob: true},
+	"BUILDKITE_PLUGINS_ENABLED":                {},
+	"BUILDKITE_PLUGINS_PATH":                   {},
+	"BUILDKITE_REFSPEC":                        {mutableFromWithinJob: true},
+	"BUILDKITE_REPO":                           {mutableFromWithinJob: true},
+	"BUILDKITE_SHELL":                          {},
+	"BUILDKITE_SSH_KEYSCAN":                    {},
 }
 
 // checkoutOverrideScope contains checkout-related vars whose write-protection
@@ -141,6 +144,16 @@ var checkoutJobEnvFromJobFloor = map[string]struct{}{
 	"BUILDKITE_GIT_SPARSE_CHECKOUT_PATHS": {},
 }
 
+// dangerousGitEnv details a list of environment variables that can be used to get git
+// to do strange or dangerous things, eg setting GIT_SSH_COMMAND to any arbitrary command
+// will make git run that command any time it tries to use SSH. Many operators will
+// want to prevent their users from setting such environment variables in job environment.
+var dangerousGitEnv = []string{
+	"GIT_CONFIG", "GIT_CONFIG_*", "GIT_ASKPASS", "SSH_ASKPASS", "GIT_SSH", "GIT_SSH_COMMAND",
+	"GIT_EXEC_PATH", "GIT_EXTERNAL_DIFF", "GIT_PROXY_COMMAND", "GIT_TEMPLATE_DIR",
+	"GIT_PAGER", "PAGER", "GIT_EDITOR", "GIT_SEQUENCE_EDITOR", "EDITOR", "VISUAL",
+}
+
 // Some checkout-related vars are intentionally governed by neither the mode nor
 // checkoutOverrideScope. BUILDKITE_GIT_SSH_KEY and BUILDKITE_GIT_LFS_ENABLED are
 // in no map at all, so any source may set them in every mode: a job supplying its
@@ -150,6 +163,40 @@ var checkoutJobEnvFromJobFloor = map[string]struct{}{
 // plugins may set them even under strict, while backend job env and secrets are
 // still blocked by IsProtected. The checkout-override mode does not change any of
 // this.
+
+// ProtectedEnvPatterns validates the operator's exact names and trailing-*
+// prefixes, optionally adding the maintained Git preset. These restrictions
+// apply to job env and secret mappings, not inherited env or trusted hooks.
+// This is not a sandbox: filesystem contents and other inputs can affect Git.
+func ProtectedEnvPatterns(patterns []string, protectGit bool) ([]string, error) {
+	for _, pattern := range patterns {
+		if pattern == "" || strings.ContainsAny(strings.TrimSuffix(pattern, "*"), "*?[]=,\x00 \t\r\n") {
+			return nil, fmt.Errorf("invalid --protect-env-vars pattern %q: expected an environment variable name or a prefix followed by a single '*'", pattern)
+		}
+	}
+	patterns = slices.Clone(patterns)
+	if protectGit {
+		patterns = append(patterns, dangerousGitEnv...)
+	}
+	return patterns, nil
+}
+
+// MatchesProtectedEnv matches a name against validated ProtectedEnvPatterns.
+// Environment variable names are case-insensitive on Windows only.
+func MatchesProtectedEnv(name string, patterns []string) bool {
+	name = normalizeKeyName(name)
+	for _, pattern := range patterns {
+		pattern = normalizeKeyName(pattern)
+		if prefix, wildcard := strings.CutSuffix(pattern, "*"); wildcard {
+			if strings.HasPrefix(name, prefix) {
+				return true
+			}
+		} else if name == pattern {
+			return true
+		}
+	}
+	return false
+}
 
 // IsProtected reports whether the environment variable is write-protected when
 // the write is coming from job-level env or secrets.

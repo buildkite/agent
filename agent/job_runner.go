@@ -440,6 +440,11 @@ func (r *JobRunner) createEnvironment(ctx context.Context) ([]string, error) {
 	// them.
 	checkoutMode := r.conf.AgentConfiguration.CheckoutOverrideMode
 
+	protectedEnvPatterns, err := envutil.ProtectedEnvPatterns(r.conf.AgentConfiguration.ProtectEnvVars, r.conf.AgentConfiguration.ProtectDangerousGitEnvVars)
+	if err != nil {
+		return nil, err
+	}
+
 	// Create a clone of our jobs environment. We'll then set the
 	// environment variables provided by the agent, which will override any
 	// sent by Buildkite. The variables below should always take precedence,
@@ -450,6 +455,21 @@ func (r *JobRunner) createEnvironment(ctx context.Context) ([]string, error) {
 
 	// The agent registration token should never make it into the job environment
 	delete(env, "BUILDKITE_AGENT_TOKEN")
+
+	// Filter only job-supplied values, before injecting agent configuration or
+	// writing either env file. The process inherits the operator's environment
+	// separately, so deleting a job override preserves any trusted value.
+	// Always replace the policy itself, including case variants, so neither
+	// bootstrap nor a container consuming an env file can take it from the job.
+	var ignoredEnv []string
+	for name := range env {
+		if strings.EqualFold(name, "BUILDKITE_PROTECT_ENV_VARS") ||
+			strings.EqualFold(name, "BUILDKITE_PROTECT_DANGEROUS_GIT_ENV_VARS") ||
+			envutil.MatchesProtectedEnv(name, protectedEnvPatterns) {
+			delete(env, name)
+			ignoredEnv = append(ignoredEnv, name)
+		}
+	}
 
 	// Whether the backend job env (pipeline/step) already chose an OTLP
 	// destination, checked against the pristine job env before agent
@@ -510,13 +530,15 @@ func (r *JobRunner) createEnvironment(ctx context.Context) ([]string, error) {
 
 	// Wrap setting values in env, so that when any that were already present in
 	// supplied Job env are overwritten, they can be added to ignoredEnv.
-	var ignoredEnv []string
 	setEnv := func(name, value string) {
 		if _, exists := env[name]; exists {
 			ignoredEnv = append(ignoredEnv, name)
 		}
 		env[name] = value
 	}
+	setEnv("BUILDKITE_PROTECT_ENV_VARS", strings.Join(r.conf.AgentConfiguration.ProtectEnvVars, ","))
+	setEnv("BUILDKITE_PROTECT_DANGEROUS_GIT_ENV_VARS", fmt.Sprint(r.conf.AgentConfiguration.ProtectDangerousGitEnvVars))
+
 	// For some checkout env vars, we allow the Job env (if present) to have
 	// higher precedence than the agent configuration, unless the checkout-override
 	// mode locks them. Only checkout-scoped vars are passed here.

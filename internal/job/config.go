@@ -117,6 +117,11 @@ type ExecutorConfig struct {
 	// Intentionally has no env tag so hooks cannot relax it at runtime.
 	CheckoutOverrideMode env.CheckoutOverrideMode
 
+	// Reject pipeline secret mappings matching these exact names or prefixes.
+	// The job runner filters job env before bootstrap; inherited env is trusted.
+	// No env tag: hooks and the Job API cannot relax this policy at runtime.
+	ProtectedEnvPatterns []string
+
 	// Timeout in seconds for the git checkout phase (0 means no timeout)
 	GitCheckoutTimeout int `env:"BUILDKITE_GIT_CHECKOUT_TIMEOUT"`
 

@@ -193,6 +193,8 @@ type AgentStartConfig struct {
 
 	EnableEnvironmentVariableAllowList bool     `cli:"enable-environment-variable-allowlist"`
 	AllowedEnvironmentVariables        []string `cli:"allowed-environment-variables" normalize:"list"`
+	ProtectEnvVars                     []string `cli:"protect-env-vars" normalize:"list"`
+	ProtectDangerousGitEnvVars         bool     `cli:"protect-dangerous-git-env-vars"`
 
 	HealthCheckAddr string `cli:"health-check-addr"`
 
@@ -630,6 +632,8 @@ var AgentStartCommand = &cli.Command{
 			Usage:   "Only run jobs where all environment variables are allowed by the allowed-environment-variables option, or have been set by Buildkite (default: false)",
 			Sources: cli.EnvVars("BUILDKITE_ENABLE_ENVIRONMENT_VARIABLE_ALLOWLIST"),
 		},
+		ProtectEnvVarsFlag,
+		ProtectDangerousGitEnvVarsFlag,
 		&cli.StringSliceFlag{
 			Name:    "allowed-environment-variables",
 			Value:   nil,
@@ -976,6 +980,10 @@ var AgentStartCommand = &cli.Command{
 			l.Fatalf("allowed-environment-variables is set, but enable-environment-variable-allowlist is not set")
 		}
 
+		if _, err := env.ProtectedEnvPatterns(cfg.ProtectEnvVars, cfg.ProtectDangerousGitEnvVars); err != nil {
+			return err
+		}
+
 		var allowedEnvironmentVariables []*regexp.Regexp
 		if cfg.EnableEnvironmentVariableAllowList {
 			allowedEnvironmentVariables = append(allowedEnvironmentVariables, buildkiteSetEnvironmentVariables...)
@@ -1026,6 +1034,8 @@ var AgentStartCommand = &cli.Command{
 			PluginsAlwaysCloneFresh:         cfg.PluginsAlwaysCloneFresh,
 			LocalHooksEnabled:               !cfg.NoLocalHooks,
 			AllowedEnvironmentVariables:     allowedEnvironmentVariables,
+			ProtectEnvVars:                  cfg.ProtectEnvVars,
+			ProtectDangerousGitEnvVars:      cfg.ProtectDangerousGitEnvVars,
 			StrictSingleHooks:               cfg.StrictSingleHooks,
 			RunInPty:                        !cfg.NoPTY,
 			DisconnectAfterJob:              cfg.DisconnectAfterJob,

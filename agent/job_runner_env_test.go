@@ -5,6 +5,7 @@ import (
 	"os"
 	"regexp"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
 
@@ -14,12 +15,101 @@ import (
 	"github.com/google/go-cmp/cmp"
 )
 
+func TestCreateEnvironmentProtectedEnv(t *testing.T) {
+	t.Parallel()
+
+	for _, enabled := range []bool{false, true} {
+		t.Run(fmt.Sprint(enabled), func(t *testing.T) {
+			t.Parallel()
+			jobEnv := map[string]string{
+				"BUILDKITE_PROTECT_DANGEROUS_GIT_ENV_VARS": fmt.Sprint(!enabled),
+				"buildkite_protect_dangerous_git_env_vars": fmt.Sprint(!enabled),
+				"BUILDKITE_PROTECT_ENV_VARS":               "UNRELATED",
+				"buildkite_protect_env_vars":               "UNRELATED",
+				"GIT_AUTHOR_NAME":                          "job-author",
+				"GIT_TERMINAL_PROMPT":                      "0",
+				"GIT_LFS_SKIP_SMUDGE":                      "1",
+			}
+			blocked := []string{
+				"GIT_CONFIG", "GIT_CONFIG_COUNT", "GIT_CONFIG_KEY_12", "GIT_CONFIG_VALUE_12",
+				"GIT_CONFIG_PARAMETERS", "GIT_CONFIG_GLOBAL", "GIT_CONFIG_SYSTEM", "GIT_CONFIG_NOSYSTEM",
+				"GIT_SSH", "GIT_SSH_COMMAND", "GIT_ASKPASS", "SSH_ASKPASS", "GIT_EXEC_PATH",
+				"GIT_EXTERNAL_DIFF", "GIT_PROXY_COMMAND", "GIT_TEMPLATE_DIR", "GIT_PAGER", "PAGER",
+				"GIT_EDITOR", "GIT_SEQUENCE_EDITOR", "EDITOR", "VISUAL",
+			}
+			if runtime.GOOS == "windows" {
+				// Exercise filtering of Windows case variants too.
+				blocked = append(blocked, "git_config_value_23", "git_ssh_command")
+			}
+			for _, name := range blocked {
+				jobEnv[name] = "job-supplied-value"
+			}
+			customNames := []string{"BASH_ENV", "LD_PRELOAD", "PATH", "HOME"}
+			for _, name := range customNames {
+				jobEnv[name] = "custom-job-value"
+			}
+			r := controlPlaneTestRunner(t, jobEnv, AgentConfiguration{
+				ProtectEnvVars:             []string{"BASH_ENV", "LD_*", "PATH", "HOME"},
+				ProtectDangerousGitEnvVars: enabled,
+			})
+			got, err := r.createEnvironment(t.Context())
+			if err != nil {
+				t.Fatal(err)
+			}
+			bootstrapEnv := envutil.FromSlice(got)
+			if got := bootstrapEnv.GetString("BUILDKITE_PROTECT_DANGEROUS_GIT_ENV_VARS", ""); got != fmt.Sprint(enabled) {
+				t.Fatalf("bootstrap policy = %q, want %t", got, enabled)
+			}
+			if got := bootstrapEnv.GetString("BUILDKITE_PROTECT_ENV_VARS", ""); got != "BASH_ENV,LD_*,PATH,HOME" {
+				t.Fatalf("bootstrap custom policy = %q", got)
+			}
+			ignored := strings.Split(bootstrapEnv.GetString("BUILDKITE_IGNORED_ENV", ""), ",")
+			for _, name := range customNames {
+				if bootstrapEnv.Exists(name) || !slices.Contains(ignored, name) {
+					t.Errorf("custom protection did not ignore %s", name)
+				}
+			}
+			for _, name := range blocked {
+				if bootstrapEnv.Exists(name) == enabled {
+					t.Errorf("bootstrap contains %s = %t, want %t", name, bootstrapEnv.Exists(name), !enabled)
+				}
+				if slices.Contains(ignored, name) != enabled {
+					t.Errorf("ignored names = %v, want %s ignored = %t", ignored, name, enabled)
+				}
+			}
+			for _, name := range []string{"GIT_AUTHOR_NAME", "GIT_TERMINAL_PROMPT", "GIT_LFS_SKIP_SMUDGE"} {
+				if got := bootstrapEnv.GetString(name, ""); got != jobEnv[name] {
+					t.Errorf("%s = %q, want %q", name, got, jobEnv[name])
+				}
+			}
+			for _, path := range []string{r.envShellFile.Name(), r.envJSONFile.Name()} {
+				data, err := os.ReadFile(path)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if strings.Contains(string(data), "job-supplied-value") == enabled {
+					t.Errorf("env file %s contains filtered values = %t, want %t", path, enabled, !enabled)
+				}
+				for _, unwanted := range []string{"custom-job-value", "UNRELATED", "buildkite_protect_"} {
+					if strings.Contains(string(data), unwanted) {
+						t.Errorf("env file %s contains untrusted data %q", path, unwanted)
+					}
+				}
+			}
+			if jobEnv["GIT_SSH_COMMAND"] != "job-supplied-value" {
+				t.Fatal("filtering mutated the original job environment")
+			}
+		})
+	}
+}
+
 func TestCreateEnvironmentRepositoryAllowlist(t *testing.T) {
 	t.Setenv("BUILDKITE_ALLOWED_REPOSITORIES", "ambient-policy")
 
 	for _, patterns := range [][]string{nil, {`^https://example\.com/repo[0-9]+\.git$`, `^git@example\.com:org/.*$`}} {
 		t.Run(fmt.Sprint(patterns), func(t *testing.T) {
-			conf := AgentConfiguration{}
+			// Protection must strip job values, never the agent's own policy.
+			conf := AgentConfiguration{ProtectEnvVars: []string{"BUILDKITE_ALLOWED_REPOSITORIES"}}
 			for _, pattern := range patterns {
 				conf.AllowedRepositories = append(conf.AllowedRepositories, regexp.MustCompile(pattern))
 			}

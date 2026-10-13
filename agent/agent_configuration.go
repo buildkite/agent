@@ -43,6 +43,8 @@ type AgentConfiguration struct {
 	AllowedRepositories             []*regexp.Regexp
 	AllowedPlugins                  []*regexp.Regexp
 	AllowedEnvironmentVariables     []*regexp.Regexp
+	ProtectEnvVars                  []string
+	ProtectDangerousGitEnvVars      bool
 	SSHKeyscan                      bool
 	CommandEval                     bool
 	PluginsEnabled                  bool

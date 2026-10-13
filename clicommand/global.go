@@ -245,6 +245,18 @@ var (
 		Sources: cli.EnvVars("BUILDKITE_CHECKOUT_OVERRIDE_MODE"),
 	}
 
+	ProtectEnvVarsFlag = &cli.StringSliceFlag{
+		Name:    "protect-env-vars",
+		Usage:   "A comma-separated list of environment variable names or trailing-* prefixes to protect from job-supplied overrides (for example, 'BASH_ENV,LD_PRELOAD,GIT_CONFIG_*'). Matching job environment values are ignored and pipeline secret mappings are rejected. Agent-inherited values, hooks, plugins and the Job API remain allowed. Empty by default.",
+		Sources: cli.EnvVars("BUILDKITE_PROTECT_ENV_VARS"),
+	}
+
+	ProtectDangerousGitEnvVarsFlag = &cli.BoolFlag{
+		Name:    "protect-dangerous-git-env-vars",
+		Usage:   "Add the agent's maintained list of Git configuration and command-execution environment variables to protect-env-vars. Disabled by default.",
+		Sources: cli.EnvVars("BUILDKITE_PROTECT_DANGEROUS_GIT_ENV_VARS"),
+	}
+
 	GitCheckoutFlagsFlag = &cli.StringFlag{
 		Name:    "git-checkout-flags",
 		Value:   "-f",

@@ -95,6 +95,8 @@ type BootstrapConfig struct {
 	GitMirrorsLFSCache           bool          `cli:"git-mirrors-lfs-cache"`
 	GitSubmoduleCloneConfig      []string      `cli:"git-submodule-clone-config" normalize:"list"`
 	CheckoutOverrideMode         string        `cli:"checkout-override-mode"`
+	ProtectEnvVars               []string      `cli:"protect-env-vars" normalize:"list"`
+	ProtectDangerousGitEnvVars   bool          `cli:"protect-dangerous-git-env-vars"`
 	BinPath                      string        `cli:"bin-path" normalize:"filepath"`
 	BuildPath                    string        `cli:"build-path" normalize:"filepath"`
 	HooksPath                    string        `cli:"hooks-path" normalize:"filepath"`
@@ -268,6 +270,8 @@ var BootstrapCommand = &cli.Command{
 		// Various git related flags shared with agent start
 		SkipCheckoutFlag,
 		CheckoutOverrideModeFlag,
+		ProtectEnvVarsFlag,
+		ProtectDangerousGitEnvVarsFlag,
 		GitCheckoutFlagsFlag,
 		GitCloneFlagsFlag,
 		GitCloneMirrorFlagsFlag,
@@ -478,6 +482,11 @@ var BootstrapCommand = &cli.Command{
 			return err
 		}
 
+		protectedEnvPatterns, err := env.ProtectedEnvPatterns(cfg.ProtectEnvVars, cfg.ProtectDangerousGitEnvVars)
+		if err != nil {
+			return err
+		}
+
 		tracingBackend := tracetools.BackendNone
 		if cfg.OpenTelemetryTracing {
 			tracingBackend = tracetools.BackendOpenTelemetry
@@ -510,6 +519,7 @@ var BootstrapCommand = &cli.Command{
 			GitSkipFetchExistingCommits:  cfg.GitSkipFetchExistingCommits,
 			GitFetchBaseBranch:           cfg.GitFetchBaseBranch,
 			CheckoutOverrideMode:         checkoutMode,
+			ProtectedEnvPatterns:         protectedEnvPatterns,
 			Command:                      cfg.Command,
 			CommandEval:                  cfg.CommandEval,
 			Commit:                       cfg.Commit,
