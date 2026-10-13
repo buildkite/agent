@@ -819,8 +819,10 @@ func (e *Executor) addOutputRedactors() {
 func repositoryCredentials(environ *env.Environment) []string {
 	var secrets []string
 	for _, name := range []string{"BUILDKITE_REPO", "BUILDKITE_GIT_REMOTE_MIRROR_URL"} {
-		if secret := redact.URLSecret(environ.GetString(name, "")); len(secret) >= redact.LengthMin {
-			secrets = append(secrets, secret)
+		for _, secret := range redact.URLSecrets(environ.GetString(name, "")) {
+			if len(secret) >= redact.LengthMin {
+				secrets = append(secrets, secret)
+			}
 		}
 	}
 	return secrets
@@ -973,7 +975,7 @@ func dirForRepository(repository string) string {
 	// Keep credentials out of the mirror directory name, which is logged and
 	// shared between jobs. Masking only URLs that carry a secret leaves
 	// existing mirror names (e.g. for ssh://git@host/repo) unchanged.
-	if redact.URLSecret(repository) != "" {
+	if len(redact.URLSecrets(repository)) > 0 {
 		repository = redact.URLCredentials(repository)
 	}
 	return badCharsRE.ReplaceAllString(repository, "-")

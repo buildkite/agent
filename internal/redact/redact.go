@@ -121,22 +121,39 @@ func URLCredentialsInText(text string) string {
 	return urlUserinfo.ReplaceAllString(text, "${1}xxxxx@")
 }
 
-// URLSecret returns the part of a URL's userinfo that is likely to be a
-// credential, or "" if there is none: the password if present, or the username
-// of an http(s) URL without a password (as in https://TOKEN@host). Other
-// usernames, such as "git" in ssh://git@host, are not secrets.
-func URLSecret(rawURL string) string {
+// URLSecrets returns the parts of a URL's userinfo that are likely to be
+// credentials: the password, and for http(s) URLs the username, which often
+// holds a token (https://TOKEN@host or https://TOKEN:x-oauth-basic@host).
+// Other usernames, such as "git" in ssh://git@host, are not secrets. Each part
+// is returned both as written in rawURL and decoded, since either may be
+// printed.
+func URLSecrets(rawURL string) []string {
 	u, err := url.Parse(rawURL)
 	if err != nil || u.User == nil {
-		return ""
+		return nil
 	}
-	if password, _ := u.User.Password(); password != "" {
-		return password
+
+	// url.Parse decodes userinfo, so recover it as written: everything in the
+	// authority before its last '@', as url.Parse splits it.
+	_, authority, _ := strings.Cut(rawURL, "//")
+	if i := strings.IndexAny(authority, "/?#"); i >= 0 {
+		authority = authority[:i]
 	}
+	rawUser, rawPassword, _ := strings.Cut(authority[:strings.LastIndex(authority, "@")], ":")
+
+	password, _ := u.User.Password()
+	candidates := []string{password, rawPassword}
 	if u.Scheme == "http" || u.Scheme == "https" {
-		return u.User.Username()
+		candidates = append(candidates, u.User.Username(), rawUser)
 	}
-	return ""
+
+	var secrets []string
+	for _, c := range candidates {
+		if c != "" && !slices.Contains(secrets, c) {
+			secrets = append(secrets, c)
+		}
+	}
+	return secrets
 }
 
 // String is a convenience wrapper for redacting small strings.

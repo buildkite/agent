@@ -315,27 +315,31 @@ func TestURLCredentialsInText(t *testing.T) {
 	}
 }
 
-// TestURLSecret asserts that only userinfo likely to be a credential is
-// returned, so that redacting it doesn't mask ordinary usernames.
-func TestURLSecret(t *testing.T) {
+// TestURLSecrets asserts that only userinfo likely to be a credential is
+// returned, both as written and decoded, so that redacting it doesn't mask
+// ordinary usernames but does catch the credential however it is printed.
+func TestURLSecrets(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
 		in   string
-		want string
+		want []string
 	}{
-		{in: "https://x-access-token:test-secret@github.com/org/repo.git", want: "test-secret"},
-		{in: "https://test-token@github.com/org/repo.git", want: "test-token"},
-		{in: "https://test-token:@github.com/org/repo.git", want: "test-token"},
-		{in: "ssh://deploy:test-secret@example.com/repo.git", want: "test-secret"},
-		{in: "ssh://deploy@example.com/repo.git", want: ""},
-		{in: "git@github.com:org/repo.git", want: ""},
-		{in: "https://github.com/org/repo.git", want: ""},
+		{in: "https://x-access-token:test-secret@github.com/org/repo.git", want: []string{"test-secret", "x-access-token"}},
+		{in: "https://test-token@github.com/org/repo.git", want: []string{"test-token"}},
+		{in: "https://test-token:@github.com/org/repo.git", want: []string{"test-token"}},
+		{in: "https://test-token:x-oauth-basic@github.com/org/repo.git", want: []string{"x-oauth-basic", "test-token"}},
+		{in: "https://us%65r:test%40secret%3Ax@example.com/repo.git", want: []string{"test@secret:x", "test%40secret%3Ax", "user", "us%65r"}},
+		{in: "https://user:p@ss@example.com/a@b?c=d@e", want: []string{"p@ss", "user"}},
+		{in: "ssh://deploy:test-secret@example.com/repo.git", want: []string{"test-secret"}},
+		{in: "ssh://deploy@example.com/repo.git", want: nil},
+		{in: "git@github.com:org/repo.git", want: nil},
+		{in: "https://github.com/org/repo.git", want: nil},
 	}
 
 	for _, test := range tests {
-		if got := URLSecret(test.in); got != test.want {
-			t.Errorf("URLSecret(%q) = %q, want %q", test.in, got, test.want)
+		if diff := cmp.Diff(URLSecrets(test.in), test.want); diff != "" {
+			t.Errorf("URLSecrets(%q) diff (-got +want):\n%s", test.in, diff)
 		}
 	}
 }

@@ -67,23 +67,24 @@ func TestRedactorsRedactRepositoryCredentials(t *testing.T) {
 	t.Parallel()
 
 	environ := env.FromMap(map[string]string{
-		"BUILDKITE_REPO": "https://x-access-token:test-secret-one@github.com/org/repo.git",
+		"BUILDKITE_REPO": "https://test-token-one:x-oauth-basic@github.com/org/repo.git",
 	})
 	e := New(ExecutorConfig{RedactedVars: []string{"*_TOKEN"}})
 	var output strings.Builder
 	stdout, _ := e.setupRedactors(shell.DiscardLogger, environ, &output, io.Discard)
 	e.shell = shell.NewTestShell(t, shell.WithEnv(environ))
 
-	e.shell.Env.Set("BUILDKITE_REPO", "https://test-secret-two@github.com/org/repo.git")
+	// Scripts print the URL as written, so the encoded spelling must match too.
+	e.shell.Env.Set("BUILDKITE_REPO", "https://user:test%40secret%3Atwo@github.com/org/repo.git")
 	e.addOutputRedactors()
 
-	if _, err := io.WriteString(stdout, "test-secret-one test-secret-two\n"); err != nil {
+	if _, err := io.WriteString(stdout, "test-token-one test%40secret%3Atwo test@secret:two\n"); err != nil {
 		t.Fatal(err)
 	}
 	if err := e.redactors.Flush(); err != nil {
 		t.Fatal(err)
 	}
-	if got, want := output.String(), "[REDACTED] [REDACTED]\n"; got != want {
+	if got, want := output.String(), "[REDACTED] [REDACTED] [REDACTED]\n"; got != want {
 		t.Errorf("job output = %q, want %q", got, want)
 	}
 }
