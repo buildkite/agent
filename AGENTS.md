@@ -48,6 +48,26 @@ Go CLI application with main packages:
 - Interface types end with -er suffix where appropriate
 - Use `github.com/urfave/cli` for CLI commands
 
+## Labelling pull requests
+
+Every PR needs a category label. The [PR Labels workflow](.github/workflows/pr-labels.yml) is a required check, and it fails until the PR has at least one of `bug`, `feature`, `change`, `internal`, `dependencies` or `release`. The labels also decide where the PR appears in the release notes ([`.github/release.yml`](.github/release.yml)), so the check passing doesn't mean the label is right. A user-facing PR labelled `internal` or `dependencies` ends up under 🏠 Internal, where people reading the release notes are likely to miss it.
+
+Add the label when you create the PR, for example `gh pr create --label bug ...` or `gh pr edit <number> --add-label bug`. Choose one category based on how the change affects people who use the agent, not on how much code it touches:
+
+- `feature`: adds something new that users can use, such as a command, flag, setting or environment variable. Release notes: ✨ Added.
+- `bug`: fixes behaviour that was broken or didn't match what was documented. Release notes: 🐛 Fixed.
+- `change`: changes existing behaviour that users can see but doesn't fix a bug or add a feature, such as defaults, log or error output, or performance. Release notes: 🔧 Changed.
+- `internal`: changes nothing users can see, such as refactors, tests, CI, release tooling, agent skills, or docs kept in this repo like `AGENTS.md`. Release notes: 🏠 Internal.
+- `dependencies`: only bumps dependencies (Dependabot normally applies this itself). If the bump fixes a bug or a vulnerability users would care about, add `bug` or `security` too.
+- `release`: only for release PRs (`release: vX.Y.Z`), which leaves them out of the release notes.
+
+Add these alongside the category when they apply:
+
+- `security`: fixes a vulnerability or hardens security, for example `bug,security` or `change,security`. These PRs are listed under 🔒 Security.
+- `breaking`: changes behaviour that users might depend on (use it with `change`). This requires a major version bump, so check with the user before adding it.
+
+If a PR's scope changes after you open it, check its labels again.
+
 ## Reviewing release PRs
 
 A release PR has a title like `release: v4.2.1` and the `release` label, and usually only changes `version/VERSION`. Its body is published verbatim as the GitHub release notes, so review the body as carefully as the diff. Check it against the rules in the release skill, [`.agents/skills/buildkite-agent-release/SKILL.md`](.agents/skills/buildkite-agent-release/SKILL.md). Skip the skill's interactive steps; they're for the person cutting the release.
