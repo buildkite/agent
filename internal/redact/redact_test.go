@@ -118,6 +118,59 @@ func TestRedactString(t *testing.T) {
 	}
 }
 
+func TestSecrets(t *testing.T) {
+	t.Parallel()
+
+	secrets := NewSecrets()
+	secrets.Add("initial\tsecret")
+	short, err := secrets.AddVars([]string{"*_TOKEN"}, []env.Pair{
+		{Name: "B_TOKEN", Value: "vars-secret"},
+		{Name: "A_TOKEN", Value: "hunt"},
+		{Name: "OTHER", Value: "not-secret"},
+	})
+	if err != nil {
+		t.Fatalf("AddVars() error = %v", err)
+	}
+	if diff := cmp.Diff([]string{"A_TOKEN"}, short); diff != "" {
+		t.Errorf("AddVars() short diff (-want +got):\n%s", diff)
+	}
+
+	// The writer is created after the first secrets were registered, and
+	// starts writing part of one before more are registered.
+	var out strings.Builder
+	w := secrets.NewWriter(&out)
+	if _, err := w.Write([]byte(`quoted "initial\tsecret", hunt, not-secret, vars-sec`)); err != nil {
+		t.Fatalf("Write() error = %v", err)
+	}
+	// Explicit secrets have no minimum length.
+	secrets.Add("late-secret", "hunt")
+
+	// A snapshot redacts everything registered so far, without releasing the
+	// writer's withheld output.
+	token := "bkaa_" + strings.Repeat("x9Y8", 10)
+	var snapOut strings.Builder
+	snap := secrets.Snapshot(&snapOut)
+	if _, err := snap.Write([]byte("late-secret hunt " + token + " initial\tsecret")); err != nil {
+		t.Fatalf("Snapshot Write() error = %v", err)
+	}
+	if err := snap.Flush(); err != nil {
+		t.Fatalf("Snapshot Flush() error = %v", err)
+	}
+	if got, want := snapOut.String(), "[REDACTED] [REDACTED] [REDACTED] [REDACTED]"; got != want {
+		t.Errorf("snapshot output = %q, want %q", got, want)
+	}
+
+	if _, err := w.Write([]byte("ret late-secret hunt\n")); err != nil {
+		t.Fatalf("Write() error = %v", err)
+	}
+	if err := secrets.Flush(); err != nil {
+		t.Fatalf("Flush() error = %v", err)
+	}
+	if got, want := out.String(), `quoted "[REDACTED]", hunt, not-secret, [REDACTED] [REDACTED] [REDACTED]`+"\n"; got != want {
+		t.Errorf("writer output = %q, want %q", got, want)
+	}
+}
+
 func TestTokenPrefixes(t *testing.T) {
 	t.Parallel()
 

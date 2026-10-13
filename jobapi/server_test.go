@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net"
 	"net/http"
 	"os"
@@ -20,7 +19,6 @@ import (
 
 	"github.com/buildkite/agent/v4/env"
 	"github.com/buildkite/agent/v4/internal/redact"
-	"github.com/buildkite/agent/v4/internal/replacer"
 	"github.com/buildkite/agent/v4/internal/shell"
 	"github.com/buildkite/agent/v4/jobapi"
 	"github.com/google/go-cmp/cmp"
@@ -44,12 +42,12 @@ func testEnvironWith(key, value string) *env.Environment {
 	return e
 }
 
-func testServer(t *testing.T, e *env.Environment, mux *replacer.Mux, opts ...jobapi.ServerOpts) (*jobapi.Server, string, error) {
+func testServer(t *testing.T, e *env.Environment, secrets *redact.Secrets, opts ...jobapi.ServerOpts) (*jobapi.Server, string, error) {
 	sockName, err := jobapi.NewSocketPath(os.TempDir())
 	if err != nil {
 		return nil, "", fmt.Errorf("creating socket path: %w", err)
 	}
-	return jobapi.NewServer(shell.TestingLogger{T: t}, sockName, e, mux, opts...)
+	return jobapi.NewServer(shell.TestingLogger{T: t}, sockName, e, secrets, opts...)
 }
 
 func testSocketClient(socketPath string) *http.Client {
@@ -105,7 +103,7 @@ func TestServerStartStop(t *testing.T) {
 	t.Parallel()
 
 	env := testEnviron()
-	srv, _, err := testServer(t, env, replacer.NewMux())
+	srv, _, err := testServer(t, env, redact.NewSecrets())
 	if err != nil {
 		t.Fatalf("testServer(t, env) error = %v", err)
 	}
@@ -159,7 +157,7 @@ func TestServerStartStop_WithPreExistingSocket(t *testing.T) {
 	}
 
 	sockName := filepath.Join(os.TempDir(), "test-socket-collision.sock")
-	srv1, _, err := jobapi.NewServer(shell.TestingLogger{T: t}, sockName, env.New(), replacer.NewMux())
+	srv1, _, err := jobapi.NewServer(shell.TestingLogger{T: t}, sockName, env.New(), redact.NewSecrets())
 	if err != nil {
 		t.Fatalf("expected initial server creation to succeed, got %v", err)
 	}
@@ -175,7 +173,7 @@ func TestServerStartStop_WithPreExistingSocket(t *testing.T) {
 	}()
 
 	expectedErr := fmt.Sprintf("creating socket server: file already exists at socket path %s", sockName)
-	_, _, err = jobapi.NewServer(shell.TestingLogger{T: t}, sockName, env.New(), replacer.NewMux())
+	_, _, err = jobapi.NewServer(shell.TestingLogger{T: t}, sockName, env.New(), redact.NewSecrets())
 	if err == nil {
 		t.Fatalf("expected second server creation to fail with %s, got nil", expectedErr)
 	}
@@ -230,7 +228,7 @@ func TestDeleteEnv(t *testing.T) {
 			t.Parallel()
 
 			environ := testEnviron()
-			srv, token, err := testServer(t, environ, replacer.NewMux())
+			srv, token, err := testServer(t, environ, redact.NewSecrets())
 			if err != nil {
 				t.Fatalf("creating server: %v", err)
 			}
@@ -326,7 +324,7 @@ func TestPatchEnv(t *testing.T) {
 			t.Parallel()
 
 			environ := testEnviron()
-			srv, token, err := testServer(t, environ, replacer.NewMux())
+			srv, token, err := testServer(t, environ, redact.NewSecrets())
 			if err != nil {
 				t.Fatalf("creating server: %v", err)
 			}
@@ -369,7 +367,7 @@ func TestPatchEnvAllowsCheckoutScopedVarsUnderDefaultMode(t *testing.T) {
 	// The Job API is a within-job source, so the default mode (from-job) lets it
 	// write checkout-scoped vars; only strict blocks it.
 	environ := testEnvironWith("BUILDKITE_GIT_CLONE_FLAGS", "-v")
-	srv, token, err := testServer(t, environ, replacer.NewMux())
+	srv, token, err := testServer(t, environ, redact.NewSecrets())
 	if err != nil {
 		t.Fatalf("creating server: %v", err)
 	}
@@ -406,7 +404,7 @@ func TestPatchEnvRejectsCheckoutScopedVarsUnderStrict(t *testing.T) {
 	t.Parallel()
 
 	environ := testEnvironWith("BUILDKITE_SKIP_CHECKOUT", "false")
-	srv, token, err := testServer(t, environ, replacer.NewMux(), jobapi.WithCheckoutOverrideMode(env.CheckoutOverrideStrict))
+	srv, token, err := testServer(t, environ, redact.NewSecrets(), jobapi.WithCheckoutOverrideMode(env.CheckoutOverrideStrict))
 	if err != nil {
 		t.Fatalf("creating server: %v", err)
 	}
@@ -446,7 +444,7 @@ func TestDeleteEnvRejectsCheckoutScopedVarsUnderStrict(t *testing.T) {
 	t.Parallel()
 
 	environ := testEnvironWith("BUILDKITE_SKIP_CHECKOUT", "false")
-	srv, token, err := testServer(t, environ, replacer.NewMux(), jobapi.WithCheckoutOverrideMode(env.CheckoutOverrideStrict))
+	srv, token, err := testServer(t, environ, redact.NewSecrets(), jobapi.WithCheckoutOverrideMode(env.CheckoutOverrideStrict))
 	if err != nil {
 		t.Fatalf("creating server: %v", err)
 	}
@@ -486,7 +484,7 @@ func TestDeleteEnvAllowsCheckoutScopedVarsUnderDefaultMode(t *testing.T) {
 	// The Job API is a within-job source, so the default mode (from-job) lets it
 	// delete checkout-scoped vars; only strict blocks it.
 	environ := testEnvironWith("BUILDKITE_GIT_CLONE_FLAGS", "-v")
-	srv, token, err := testServer(t, environ, replacer.NewMux())
+	srv, token, err := testServer(t, environ, redact.NewSecrets())
 	if err != nil {
 		t.Fatalf("creating server: %v", err)
 	}
@@ -522,7 +520,7 @@ func TestPatchEnvRejectsSparseCheckoutPathsUnderStrict(t *testing.T) {
 	t.Parallel()
 
 	environ := testEnvironWith("BUILDKITE_GIT_SPARSE_CHECKOUT_PATHS", "a/b")
-	srv, token, err := testServer(t, environ, replacer.NewMux(), jobapi.WithCheckoutOverrideMode(env.CheckoutOverrideStrict))
+	srv, token, err := testServer(t, environ, redact.NewSecrets(), jobapi.WithCheckoutOverrideMode(env.CheckoutOverrideStrict))
 	if err != nil {
 		t.Fatalf("creating server: %v", err)
 	}
@@ -562,7 +560,7 @@ func TestPatchEnvRejectsSparseCheckoutModeUnderStrict(t *testing.T) {
 	t.Parallel()
 
 	environ := testEnvironWith("BUILDKITE_GIT_SPARSE_CHECKOUT_MODE", "cone")
-	srv, token, err := testServer(t, environ, replacer.NewMux(), jobapi.WithCheckoutOverrideMode(env.CheckoutOverrideStrict))
+	srv, token, err := testServer(t, environ, redact.NewSecrets(), jobapi.WithCheckoutOverrideMode(env.CheckoutOverrideStrict))
 	if err != nil {
 		t.Fatalf("creating server: %v", err)
 	}
@@ -604,7 +602,7 @@ func TestPatchEnvAllowsUnscopedVarsUnderStrict(t *testing.T) {
 	// The lock must not over-block: a normal, non-checkout var stays writable
 	// even under strict.
 	environ := testEnviron()
-	srv, token, err := testServer(t, environ, replacer.NewMux(), jobapi.WithCheckoutOverrideMode(env.CheckoutOverrideStrict))
+	srv, token, err := testServer(t, environ, redact.NewSecrets(), jobapi.WithCheckoutOverrideMode(env.CheckoutOverrideStrict))
 	if err != nil {
 		t.Fatalf("creating server: %v", err)
 	}
@@ -641,7 +639,7 @@ func TestGetEnv(t *testing.T) {
 	t.Parallel()
 
 	env := testEnviron()
-	srv, token, err := testServer(t, env, replacer.NewMux())
+	srv, token, err := testServer(t, env, redact.NewSecrets())
 	if err != nil {
 		t.Fatalf("creating server: %v", err)
 	}
@@ -701,13 +699,14 @@ func TestCreateRedaction(t *testing.T) {
 	)
 
 	writeBuf := &bytes.Buffer{}
-	rdc := replacer.New(writeBuf, []string{alreadyRedacted}, redact.Redacted)
-	mux := replacer.NewMux(rdc)
+	secrets := redact.NewSecrets()
+	secrets.Add(alreadyRedacted)
+	rdc := secrets.NewWriter(writeBuf)
 
 	env := testEnviron()
-	srv, token, err := testServer(t, env, mux)
+	srv, token, err := testServer(t, env, secrets)
 	if err != nil {
-		t.Fatalf("testServer(t, env, mux) error = %v, want nil", err)
+		t.Fatalf("testServer(t, env, secrets) error = %v, want nil", err)
 	}
 
 	// write some stuff that won't be redacted
@@ -752,8 +751,8 @@ func TestCreateRedaction(t *testing.T) {
 		t.Fatalf("rdc.Write([]byte(\"From Quito, go back to Guayaquil.\\n\")) error = %v, want nil", err)
 	}
 
-	if err := mux.Flush(); err != nil {
-		t.Fatalf("mux.Flush() = %v", err)
+	if err := secrets.Flush(); err != nil {
+		t.Fatalf("secrets.Flush() = %v", err)
 	}
 
 	if got, want := writeBuf.String(), "Go from [REDACTED], until you get to Quito.\nFrom [REDACTED], go back to [REDACTED].\n"; got != want {
@@ -764,8 +763,9 @@ func TestCreateRedaction(t *testing.T) {
 func TestRedact(t *testing.T) {
 	t.Parallel()
 
-	mux := replacer.NewMux(replacer.New(io.Discard, []string{"from-env-var"}, redact.Redacted))
-	srv, token, err := testServer(t, testEnviron(), mux)
+	secrets := redact.NewSecrets()
+	secrets.Add("from-env-var")
+	srv, token, err := testServer(t, testEnviron(), secrets)
 	if err != nil {
 		t.Fatalf("testServer() error = %v", err)
 	}
@@ -801,7 +801,7 @@ func TestRedact(t *testing.T) {
 func startPromiseFailureServer(t *testing.T, declarer jobapi.PromiseFailureDeclarer) (*http.Client, string) {
 	t.Helper()
 
-	srv, token, err := testServer(t, testEnviron(), replacer.NewMux(), jobapi.WithPromiseFailureDeclarer(declarer))
+	srv, token, err := testServer(t, testEnviron(), redact.NewSecrets(), jobapi.WithPromiseFailureDeclarer(declarer))
 	if err != nil {
 		t.Fatalf("testServer() error = %v", err)
 	}

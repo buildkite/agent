@@ -2,6 +2,7 @@
 package redact
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"maps"
@@ -12,6 +13,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/buildkite/agent/v4/env"
 	"github.com/buildkite/agent/v4/internal/replacer"
@@ -142,6 +144,101 @@ func NeedlesFromEnv(patterns []string) (values, short []string, err error) {
 		needles[v.Value] = struct{}{}
 	}
 	return slices.Collect(maps.Keys(needles)), short, nil
+}
+
+// Secrets is the set of values redacted from a job's output. Secrets are
+// registered once, wherever they are discovered, and apply to every redactor
+// created from the set, whether it was created before or after registration.
+// Secrets are never removed, so a value stays redacted after the variable that
+// held it changes. Secrets is safe for concurrent use.
+type Secrets struct {
+	mu      sync.Mutex
+	values  map[string]struct{}
+	writers []*replacer.Replacer
+}
+
+// NewSecrets returns an empty set of secrets.
+func NewSecrets() *Secrets {
+	return &Secrets{values: make(map[string]struct{})}
+}
+
+// Add registers values as secrets, along with their [GoEscaped] forms. Unlike
+// [Secrets.AddVars], values of any length are registered.
+func (s *Secrets) Add(values ...string) {
+	values = AppendGoEscaped(values)
+
+	s.mu.Lock()
+	for _, v := range values {
+		s.values[v] = struct{}{}
+	}
+	writers := slices.Clone(s.writers)
+	s.mu.Unlock()
+
+	// Writers created after the unlock already include the new values.
+	for _, w := range writers {
+		w.Add(values...)
+	}
+}
+
+// AddVars registers the values of environment variables whose names match
+// patterns. Values shorter than [LengthMin] are not registered; their names are
+// returned in short, sorted, so the caller can warn about them.
+func (s *Secrets) AddVars(patterns []string, environ []env.Pair) (short []string, err error) {
+	matched, short, err := Vars(patterns, environ)
+	values := make([]string, 0, len(matched))
+	for _, pair := range matched {
+		values = append(values, pair.Value)
+	}
+	s.Add(values...)
+	slices.Sort(short)
+	return short, err
+}
+
+// NewWriter returns a redactor that writes to dst. It redacts every secret,
+// including those added later, and anything that looks like a
+// Buildkite-issued token. The caller must flush it, directly or with
+// [Secrets.Flush], to release withheld output.
+func (s *Secrets) NewWriter(dst io.Writer) *replacer.Replacer {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	w := s.newReplacer(dst)
+	s.writers = append(s.writers, w)
+	return w
+}
+
+// Snapshot returns a redactor like [Secrets.NewWriter], except that it only
+// redacts the secrets registered so far, and is independent of the set:
+// [Secrets.Flush] does not flush it, so it can redact a separate value without
+// releasing or mixing with output withheld by other writers.
+func (s *Secrets) Snapshot(dst io.Writer) *replacer.Replacer {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	return s.newReplacer(dst)
+}
+
+func (s *Secrets) newReplacer(dst io.Writer) *replacer.Replacer {
+	r := replacer.New(dst, slices.Collect(maps.Keys(s.values)), Redacted)
+	// As well as known values, redact anything that looks like a
+	// Buildkite-issued token. Some tokens are never registered (e.g. the job
+	// acquisition token, which is only in the agent's command line) but can
+	// still end up in output, e.g. via `ps`.
+	r.AddPrefixes(TokenPrefixes()...)
+	return r
+}
+
+// Flush flushes every writer created by [Secrets.NewWriter].
+func (s *Secrets) Flush() error {
+	s.mu.Lock()
+	writers := slices.Clone(s.writers)
+	s.mu.Unlock()
+
+	errs := make([]error, 0, len(writers))
+	for _, w := range writers {
+		errs = append(errs, w.Flush())
+	}
+	return errors.Join(errs...)
 }
 
 // New returns a replacer configured to write to dst, and redact all needles.

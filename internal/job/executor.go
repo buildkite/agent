@@ -30,7 +30,6 @@ import (
 	"github.com/buildkite/agent/v4/internal/osutil"
 	"github.com/buildkite/agent/v4/internal/process"
 	"github.com/buildkite/agent/v4/internal/redact"
-	"github.com/buildkite/agent/v4/internal/replacer"
 	"github.com/buildkite/agent/v4/internal/secrets"
 	"github.com/buildkite/agent/v4/internal/shell"
 	"github.com/buildkite/agent/v4/internal/shellscript"
@@ -82,9 +81,10 @@ type Executor struct {
 	cancelCh  chan struct{}
 	cancelled bool
 
-	// redactors for the job logs. The will be populated with values both from environment variable and through the Job API.
-	// In order for the latter to happen, a reference is passed into the the Job API server as well
-	redactors *replacer.Mux
+	// redactors holds the secrets redacted from the job logs. They are
+	// registered from environment variables, fetched secrets, and the Job API,
+	// so the Job API server gets a reference as well.
+	redactors *redact.Secrets
 
 	// otlpJobLogger exports job log output as OTLP log records while job log
 	// export is enabled. The executor updates its current span context at
@@ -114,7 +114,7 @@ func New(conf ExecutorConfig) *Executor {
 		ExecutorConfig:      conf,
 		canonicalRepository: conf.Repository,
 		cancelCh:            make(chan struct{}),
-		redactors:           replacer.NewMux(),
+		redactors:           redact.NewSecrets(),
 	}
 }
 
@@ -730,7 +730,9 @@ func (e *Executor) applyEnvironmentChanges(changes hook.EnvChanges) {
 	}
 
 	e.shell.Env.Apply(changes.Diff)
-	e.addOutputRedactors()
+	// Secrets are only ever added: a value doesn't stop being a secret because
+	// the variable holding it changed.
+	e.addRedactedVars(e.shell, e.shell.Env)
 
 	// First, let see any of the environment variables are supposed
 	// to change the job configuration at run time.
@@ -790,23 +792,15 @@ func (e *Executor) applyEnvironmentChanges(changes hook.EnvChanges) {
 	}
 }
 
-// Should be called whenever we updated our e.shell.Env.
-func (e *Executor) addOutputRedactors() {
-	// reset output redactors based on new environment variable values
-	toRedact, short, err := redact.Vars(e.RedactedVars, e.shell.Env.DumpPairs())
+// addRedactedVars registers the values of variables in environ that match
+// redacted-vars, warning on log about any problems.
+func (e *Executor) addRedactedVars(log shell.Logger, environ *env.Environment) {
+	short, err := e.redactors.AddVars(e.RedactedVars, environ.DumpPairs())
 	if err != nil {
-		e.shell.OptionalWarningf("bad-redacted-vars", "Couldn't match environment variable names against redacted-vars: %v", err)
+		log.OptionalWarningf("bad-redacted-vars", "Couldn't match environment variable names against redacted-vars: %v", err)
 	}
 	if len(short) > 0 {
-		slices.Sort(short)
-		e.shell.OptionalWarningf("short-redacted-vars", "Some variables have values below minimum length (%d bytes) and will not be redacted: %s", redact.LengthMin, strings.Join(short, ", "))
-	}
-
-	// This should probably be a reset rather than a mutate.
-	// But does a particular string stop being a secret if we learn new secret strings?
-	// For produence, we use Add.
-	for _, pair := range toRedact {
-		e.redactors.Add(pair.Value, redact.GoEscaped(pair.Value))
+		log.OptionalWarningf("short-redacted-vars", "Some variables have values below minimum length (%d bytes) and will not be redacted: %s", redact.LengthMin, strings.Join(short, ", "))
 	}
 }
 
@@ -1107,7 +1101,7 @@ func (e *Executor) fetchAndSetSecrets(ctx context.Context) error {
 	for _, pipelineSecret := range pipelineSecrets {
 		if secretValue, exists := secretValuesByKey[pipelineSecret.Key]; exists {
 			// Always register the secret value for redaction regardless of env var setting
-			e.redactors.Add(secretValue, redact.GoEscaped(secretValue))
+			e.redactors.Add(secretValue)
 
 			// Set the environment variable only if environment_variable is specified and non-nil
 			if pipelineSecret.EnvironmentVariable != "" {
@@ -1478,9 +1472,8 @@ func (e *Executor) writeBatchScript(cmd string) (string, error) {
 }
 
 // setupRedactors creates new stdout and [shell.Logger] to use for a new shell,
-// that write to stdout and stderr respectively, each via a [replacer.Replacer]
-// set up as a secret redactor. References to the redactors are retained in
-// e.redactors so they can be updated with new secrets.
+// that write to stdout and stderr respectively, each via a redactor created
+// from e.redactors, so they redact every secret registered for the job.
 //
 // Pictorally:
 //
@@ -1490,47 +1483,24 @@ func (e *Executor) writeBatchScript(cmd string) (string, error) {
 //
 //	(returned shell.Logger) -> redactor 2 -> stderr
 func (e *Executor) setupRedactors(log shell.Logger, environ *env.Environment, stdout, stderr io.Writer) (io.Writer, shell.Logger) {
-	varsToRedact, short, err := redact.Vars(e.RedactedVars, environ.DumpPairs())
-	if err != nil {
-		log.OptionalWarningf("bad-redacted-vars", "Couldn't match environment variable names against redacted-vars: %v", err)
-	}
-	if len(short) > 0 {
-		slices.Sort(short)
-		log.OptionalWarningf("short-redacted-vars", "Some variables have values below minimum length (%d bytes) and will not be redacted: %s", redact.LengthMin, strings.Join(short, ", "))
-	}
+	e.addRedactedVars(log, environ)
 
 	if e.Debug {
 		log.Commentf("Enabling output redaction for values from environment variables matching: %v", e.RedactedVars)
 	}
-
-	needles := make([]string, 0, len(varsToRedact))
-	for _, pair := range varsToRedact {
-		needles = append(needles, pair.Value)
-	}
-	needles = redact.AppendGoEscaped(needles)
-
-	// As well as the known values above, redact anything that looks like a
-	// Buildkite-issued token. Some tokens are never in the job environment
-	// (e.g. the job acquisition token, which is only in the agent's command
-	// line) but can still end up in the log, e.g. via `ps`.
-	tokenPrefixes := redact.TokenPrefixes()
 
 	// Child-process output writes through this redactor into stdoutTee, whose
 	// primary sink is stdout. When OTLP job logging is enabled, a secondary
 	// sink is attached so the same already-redacted output is mirrored into
 	// the OTLP exporter.
 	e.stdoutTee = &teeWriter{primary: stdout}
-	stdoutRedactor := replacer.New(e.stdoutTee, needles, redact.Redacted)
-	stdoutRedactor.AddPrefixes(tokenPrefixes...)
-	e.redactors.Append(stdoutRedactor)
+	stdoutRedactor := e.redactors.NewWriter(e.stdoutTee)
 	// The shell logger writes through this redactor into stderrTee, whose
 	// primary sink is stderr. When OTLP job logging is enabled, a secondary
 	// sink is attached so the same already-redacted control output is mirrored
 	// into the OTLP exporter.
 	e.stderrTee = &teeWriter{primary: stderr}
-	loggerRedactor := replacer.New(e.stderrTee, needles, redact.Redacted)
-	loggerRedactor.AddPrefixes(tokenPrefixes...)
-	e.redactors.Append(loggerRedactor)
+	loggerRedactor := e.redactors.NewWriter(e.stderrTee)
 
 	logger := shell.NewWriterLogger(loggerRedactor, true, e.DisabledWarnings)
 	return stdoutRedactor, logger

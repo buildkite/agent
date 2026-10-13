@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/buildkite/agent/v4/internal/redact"
-	"github.com/buildkite/agent/v4/internal/replacer"
 	"github.com/buildkite/agent/v4/internal/shell"
 	"github.com/buildkite/agent/v4/jobapi"
 	"github.com/urfave/cli/v3"
@@ -73,12 +72,12 @@ func TestCacheExecArgumentErrors(t *testing.T) {
 }
 
 func TestCacheExecRedactor(t *testing.T) {
-	mux := replacer.NewMux(replacer.New(io.Discard, nil, redact.Redacted))
+	secrets := redact.NewSecrets()
 	sock, err := jobapi.NewSocketPath(os.TempDir())
 	if err != nil {
 		t.Fatal(err)
 	}
-	srv, token, err := jobapi.NewServer(shell.TestingLogger{T: t}, sock, nil, mux)
+	srv, token, err := jobapi.NewServer(shell.TestingLogger{T: t}, sock, nil, secrets)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -88,7 +87,7 @@ func TestCacheExecRedactor(t *testing.T) {
 	t.Cleanup(func() { _ = srv.Stop() })
 	t.Setenv("BUILDKITE_AGENT_JOB_API_SOCKET", srv.SocketPath)
 	t.Setenv("BUILDKITE_AGENT_JOB_API_TOKEN", token)
-	mux.Add("from-secret-get") // known only to the job executor
+	secrets.Add("from-secret-get") // known only to the job executor
 
 	// from-step-env stands for a variable exported in the step's command, which only exec's own scan knows.
 	got, err := cacheExecRedactor([]string{"from-step-env"})(t.Context(), []byte("from-secret-get and from-step-env\n"))

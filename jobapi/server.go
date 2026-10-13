@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/buildkite/agent/v4/env"
-	"github.com/buildkite/agent/v4/internal/replacer"
+	"github.com/buildkite/agent/v4/internal/redact"
 	"github.com/buildkite/agent/v4/internal/shell"
 	"github.com/buildkite/agent/v4/internal/socket"
 )
@@ -65,7 +65,7 @@ type Server struct {
 
 	mtx       sync.RWMutex
 	environ   *env.Environment
-	redactors *replacer.Mux
+	redactors *redact.Secrets
 
 	// pendingWorkdir holds an absolute working directory requested by a hook via
 	// the /workdir endpoint, waiting to be applied by the executor once the hook
@@ -87,7 +87,7 @@ func NewServer(
 	logger shell.Logger,
 	socketPath string,
 	environ *env.Environment,
-	redactors *replacer.Mux,
+	redactors *redact.Secrets,
 	opts ...ServerOpts,
 ) (server *Server, token string, err error) {
 	token, err = socket.GenerateToken(32)

@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/buildkite/agent/v4/internal/redact"
 	"github.com/buildkite/agent/v4/internal/socket"
 )
 
@@ -24,13 +23,8 @@ func (s *Server) redact(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.mtx.RLock()
-	needles := s.redactors.Needles()
-	s.mtx.RUnlock()
-
 	var out bytes.Buffer
-	rd := redact.New(&out, needles)
-	rd.AddPrefixes(redact.TokenPrefixes()...)
+	rd := s.redactors.Snapshot(&out)
 	_, _ = rd.Write(payload.Output) // writes to a bytes.Buffer don't fail
 	_ = rd.Flush()
 
@@ -48,9 +42,7 @@ func (s *Server) createRedaction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.mtx.Lock()
-	s.redactors.Add(payload.Redact, redact.GoEscaped(payload.Redact))
-	s.mtx.Unlock()
+	s.redactors.Add(payload.Redact)
 
 	respBody := &RedactionCreateResponse{Redacted: payload.Redact}
 	w.WriteHeader(http.StatusCreated)

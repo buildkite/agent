@@ -15,7 +15,7 @@ import (
 	"time"
 
 	"github.com/buildkite/agent/v4/env"
-	"github.com/buildkite/agent/v4/internal/replacer"
+	"github.com/buildkite/agent/v4/internal/redact"
 	"github.com/buildkite/agent/v4/internal/shell"
 	"github.com/buildkite/agent/v4/internal/socket"
 	"github.com/buildkite/agent/v4/jobapi"
@@ -145,7 +145,7 @@ func TestCapturedErrorJobCancellation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	e := &Executor{shell: sh, redactors: replacer.NewMux()}
+	e := &Executor{shell: sh, redactors: redact.NewSecrets()}
 	e.JobID = "test-job"
 	e.SocketsPath = os.TempDir()
 	sh.Env.Set("BUILDKITE_AGENT_ENDPOINT", upstream.URL)
@@ -217,7 +217,7 @@ func TestCapturedErrorAvailable(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	e := &Executor{shell: sh, redactors: replacer.NewMux()}
+	e := &Executor{shell: sh, redactors: redact.NewSecrets()}
 	e.JobID = "test-job"
 	sh.Env.Set("BUILDKITE_AGENT_ENDPOINT", upstream.URL+"/v3")
 	sh.Env.Set("BUILDKITE_AGENT_ACCESS_TOKEN", "test-job-token")
@@ -260,7 +260,7 @@ func TestCapturedErrorCapabilityAbsentAfterStartupFailure(t *testing.T) {
 		t.Fatal(err)
 	}
 	sh.Env.Set("BUILDKITE_AGENT_JOB_API_CAPTURE_ERROR", "true")
-	e := &Executor{shell: sh, redactors: replacer.NewMux()}
+	e := &Executor{shell: sh, redactors: redact.NewSecrets()}
 	e.SocketsPath = filepath.Join(t.TempDir(), "not-a-directory")
 	if err := os.WriteFile(e.SocketsPath, nil, 0o600); err != nil {
 		t.Fatal(err)

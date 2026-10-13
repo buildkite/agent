@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/buildkite/agent/v4/internal/redact"
-	"github.com/buildkite/agent/v4/internal/replacer"
 	"github.com/buildkite/agent/v4/internal/socket"
 )
 
@@ -83,7 +82,7 @@ func (s *Server) handleCapturedError(w http.ResponseWriter, r *http.Request) {
 
 	// Use the same registered values as job logs, including values added while
 	// the job is running. Redact before both forwarding and the local response.
-	if err := payload.redact(s.redactors.Needles()); err != nil {
+	if err := payload.redact(s.redactors); err != nil {
 		s.writeCapturedError(w, fmt.Errorf("redacting captured error: %w", err), http.StatusUnprocessableEntity)
 		return
 	}
@@ -108,14 +107,10 @@ func (s *Server) handleCapturedError(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (e *CapturedError) redact(needles []string) error {
-	// These needles already include the escaped forms registered for logs.
+func (e *CapturedError) redact(secrets *redact.Secrets) error {
 	// Use a separate matcher so reports cannot flush or mix with log output.
-	// Like job logs, also redact anything that looks like a Buildkite-issued
-	// token, even when its value was never registered.
 	var output strings.Builder
-	matcher := replacer.New(&output, needles, redact.Redacted)
-	matcher.AddPrefixes(redact.TokenPrefixes()...)
+	matcher := secrets.Snapshot(&output)
 	changed := false
 	replace := func(s string) string {
 		output.Reset()

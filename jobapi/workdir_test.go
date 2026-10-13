@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/buildkite/agent/v4/internal/replacer"
+	"github.com/buildkite/agent/v4/internal/redact"
 	"github.com/buildkite/agent/v4/jobapi"
 )
 
@@ -49,7 +49,7 @@ func TestSetWorkdir(t *testing.T) {
 			t.Parallel()
 
 			environ := testEnviron()
-			srv, token, err := testServer(t, environ, replacer.NewMux())
+			srv, token, err := testServer(t, environ, redact.NewSecrets())
 			if err != nil {
 				t.Fatalf("creating server: %v", err)
 			}

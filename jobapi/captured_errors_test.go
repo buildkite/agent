@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"io"
 	"net/http"
 	"strings"
 	"sync/atomic"
@@ -12,7 +11,6 @@ import (
 	"time"
 
 	"github.com/buildkite/agent/v4/internal/redact"
-	"github.com/buildkite/agent/v4/internal/replacer"
 	"github.com/buildkite/agent/v4/internal/socket"
 	"github.com/buildkite/agent/v4/jobapi"
 	"github.com/google/go-cmp/cmp"
@@ -22,7 +20,8 @@ func TestCapturedErrorRedactionResponse(t *testing.T) {
 	t.Parallel()
 
 	var reported atomic.Int32
-	redactors := replacer.NewMux(redact.New(io.Discard, []string{"alpha-secret", "beta-secret", "q"}))
+	redactors := redact.NewSecrets()
+	redactors.Add("alpha-secret", "beta-secret", "q")
 	srv, token, err := testServer(t, testEnviron(), redactors, jobapi.WithCapturedErrorReporter(func(context.Context, *jobapi.CapturedError) error {
 		reported.Add(1)
 		return nil
@@ -114,7 +113,7 @@ func TestCapturedErrorRedactsBuildkiteTokensWithoutRegisteredSecrets(t *testing.
 	t.Parallel()
 
 	var reported *jobapi.CapturedError
-	srv, token, err := testServer(t, testEnviron(), replacer.NewMux(), jobapi.WithCapturedErrorReporter(func(_ context.Context, capturedError *jobapi.CapturedError) error {
+	srv, token, err := testServer(t, testEnviron(), redact.NewSecrets(), jobapi.WithCapturedErrorReporter(func(_ context.Context, capturedError *jobapi.CapturedError) error {
 		reported = capturedError
 		return nil
 	}))
@@ -171,7 +170,7 @@ func TestCapturedErrorRedactsBuildkiteTokensWithoutRegisteredSecrets(t *testing.
 func TestCapturedErrorIsAuthenticatedAndNormalized(t *testing.T) {
 	t.Parallel()
 
-	redactors := replacer.NewMux()
+	redactors := redact.NewSecrets()
 	var reported *jobapi.CapturedError
 	srv, token, err := testServer(t, testEnviron(), redactors, jobapi.WithCapturedErrorReporter(func(_ context.Context, capturedError *jobapi.CapturedError) error {
 		reported = capturedError
@@ -230,7 +229,7 @@ func TestCapturedErrorIsAuthenticatedAndNormalized(t *testing.T) {
 func TestCapturedErrorRejectsMalformedAndUnauthenticatedRequests(t *testing.T) {
 	t.Parallel()
 
-	srv, token, err := testServer(t, testEnviron(), replacer.NewMux(), jobapi.WithCapturedErrorReporter(func(context.Context, *jobapi.CapturedError) error {
+	srv, token, err := testServer(t, testEnviron(), redact.NewSecrets(), jobapi.WithCapturedErrorReporter(func(context.Context, *jobapi.CapturedError) error {
 		return nil
 	}))
 	if err != nil {
@@ -289,7 +288,7 @@ func TestCapturedErrorBodyLimit(t *testing.T) {
 	t.Parallel()
 
 	reported := make(chan *jobapi.CapturedError, 1)
-	srv, token, err := testServer(t, testEnviron(), replacer.NewMux(), jobapi.WithCapturedErrorReporter(func(_ context.Context, payload *jobapi.CapturedError) error {
+	srv, token, err := testServer(t, testEnviron(), redact.NewSecrets(), jobapi.WithCapturedErrorReporter(func(_ context.Context, payload *jobapi.CapturedError) error {
 		reported <- payload
 		return nil
 	}))
