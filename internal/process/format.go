@@ -8,7 +8,7 @@ import (
 	"github.com/buildkite/agent/v4/internal/redact"
 )
 
-// FormatCommand formats a command amd arguments for human reading. Credentials
+// FormatCommand formats a command and arguments for human reading. Credentials
 // embedded in URLs (e.g. https://user:token@host/repo.git) are masked.
 func FormatCommand(command string, args []string) string {
 	truncate := func(s string, i int) string {
