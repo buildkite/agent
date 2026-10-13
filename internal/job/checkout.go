@@ -27,6 +27,10 @@ func (e *Executor) CheckoutPhase(ctx context.Context) (retErr error) {
 	defer func() { tracetools.FinishWithError(span, retErr) }()
 	defer e.otlpLogSpan(ctx)()
 
+	// Git error capture redacts Git's output with the job's registered secrets
+	// before keeping only its last lines.
+	ctx = withGitErrorNeedles(ctx, e.redactors.Needles)
+
 	if err := e.executeGlobalHook(ctx, "pre-checkout"); err != nil {
 		return err
 	}

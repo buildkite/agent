@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -376,5 +377,63 @@ func TestGitErrorOutputRedactsSecretsBeforeTheCut(t *testing.T) {
 				t.Errorf("message = %q, want the secret left out and suffix %q", report.Message, tc.wantSuffix)
 			}
 		})
+	}
+}
+
+// TestGitErrorCaptureThroughCheckoutPhase checks the wiring that the unit
+// tests above set up by hand: CheckoutPhase gives capture the job's secrets for
+// redacting Git's output, and each attempt holds its reports until its timeout
+// no longer applies.
+func TestGitErrorCaptureThroughCheckoutPhase(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Git fixture uses a POSIX shell")
+	}
+	realGit, err := exec.LookPath("git")
+	if err != nil {
+		t.Skip("git not found")
+	}
+	// The Agent API never responds, so each delivery takes its full two seconds.
+	_, e, reports := gitErrorCaptureServer(t, true, 0)
+	_, commit := setupCheckoutTestRepo(t, e, "git-error-capture")
+	e.Commit = commit
+	e.Branch = "feature-branch"
+	e.GitCleanFlags = "-fdq"
+	e.CheckoutAttempts = 1
+	// Delivering inside the attempt would outlast this timeout.
+	e.GitCheckoutTimeout = 2
+	t.Cleanup(func() {
+		if e.checkoutRoot != nil {
+			_ = e.checkoutRoot.Close()
+		}
+	})
+
+	// A registered multi-line secret whose first line is too long to keep:
+	// cutting Git's output before redacting it would leave its last line.
+	secret := strings.Repeat("A", maxGitErrorMessage) + "\nPRIVATE_CREDENTIAL_SUFFIX"
+	e.redactors.Append(redact.New(io.Discard, []string{secret}))
+
+	// Wrap Git so that `git clean` prints the secret and fails.
+	dir := t.TempDir()
+	output := filepath.Join(dir, "output")
+	if err := os.WriteFile(output, []byte("remote: "+secret+"\nfatal: unable to read from remote\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	script := fmt.Sprintf("#!/bin/sh\nif [ \"$1\" = clean ]; then cat %q >&2; exit 1; fi\nexec %q \"$@\"\n", output, realGit)
+	if err := os.WriteFile(filepath.Join(dir, "git"), []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	e.shell.Env.Set("PATH", dir+string(os.PathListSeparator)+e.shell.Env.GetString("PATH", ""))
+
+	err = e.CheckoutPhase(t.Context())
+	var gitErr *gitError
+	if !errors.As(err, &gitErr) || gitErr.Type != gitErrorClean || errors.Is(err, errCheckoutAttemptTimedOut) {
+		t.Fatalf("CheckoutPhase() error = %v, want the Git clean failure, not a timeout", err)
+	}
+	if len(reports) != 1 {
+		t.Fatalf("reports = %d, want 1", len(reports))
+	}
+	report := <-reports
+	if want := "remote: [REDACTED]\nfatal: unable to read from remote\n"; report.Code != "git_clean_failed" || strings.Contains(report.Message, "PRIVATE_CREDENTIAL_SUFFIX") || !strings.HasSuffix(report.Message, want) {
+		t.Fatalf("report = %#v, want git_clean_failed with the secret redacted and suffix %q", report, want)
 	}
 }
