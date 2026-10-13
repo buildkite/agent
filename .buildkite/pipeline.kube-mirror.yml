@@ -72,11 +72,14 @@ steps:
 
       # Mirrors the "Binary builds" matrix, without the provenance attestation.
       # One queue per runtime: a third matrix dimension would exceed the 12
-      # adjustments a matrix allows.
-      - name: ":{{matrix.os}}: Build {{matrix.os}} {{matrix.arch}} binary on kube-operator-standard"
+      # adjustments a matrix allows. Only the sysbox builds upload artifacts:
+      # the image builds download pkg/ by path, which must be unique.
+      - &binary
+        name: ":{{matrix.os}}: Build {{matrix.os}} {{matrix.arch}} binary on kube-operator-standard"
         key: kube-native-build-binary
         command: .buildkite/steps/kube-toolchain.sh .buildkite/steps/build-binary.sh {{matrix.os}} {{matrix.arch}}
-        artifact_paths: "pkg/*"
+        env:
+          KUBE_TOOLCHAIN_GO_LICENSES: "true"
         soft_fail: true
         agents:
           queue: kube-operator-standard
@@ -131,21 +134,17 @@ steps:
         image: *image
         matrix: *docker_queues
 
-      # golang:1.26.5 already has the Go that go.mod wants, so these skip
-      # kube-toolchain.sh.
-      - &docker_binary
+      - <<: *binary
         name: ":{{matrix.os}}: Build {{matrix.os}} {{matrix.arch}} binary on kube-operator-sysbox"
         key: kube-mirror-build-binary-sysbox
-        command: .buildkite/steps/build-binary.sh {{matrix.os}} {{matrix.arch}}
         image: *image
         artifact_paths: "pkg/*"
-        soft_fail: true
         agents:
           queue: kube-operator-sysbox
-        matrix: *binary_targets
-      - <<: *docker_binary
+      - <<: *binary
         name: ":{{matrix.os}}: Build {{matrix.os}} {{matrix.arch}} binary on kube-operator-dind"
         key: kube-mirror-build-binary-dind
+        image: *image
         agents:
           queue: kube-operator-dind
 
@@ -158,9 +157,7 @@ steps:
         command: .buildkite/steps/build-docker-image.sh {{matrix.variant}} buildkite-agent-kube-mirror:{{matrix.variant}}
         image: buildkite/agent:4
         soft_fail: true
-        depends_on:
-          - kube-mirror-build-binary-sysbox
-          - kube-mirror-build-binary-dind
+        depends_on: kube-mirror-build-binary-sysbox
         agents:
           queue: "{{matrix.queue}}"
         matrix:

@@ -51,4 +51,15 @@ export MISE_IGNORED_CONFIG_PATHS="${PWD}/mise.toml"
 
 echo "--- :go: Installing ${tools[*]}"
 mise install --quiet "${tools[@]}"
+
+# Binary builds need go-licenses, which Dockerfile-compile installs. Left to
+# itself, generate-acknowledgements.sh installs it with the target's GOOS and
+# GOARCH set, which puts it somewhere it doesn't look, so install it for the
+# host before the build sets them.
+if [[ "${KUBE_TOOLCHAIN_GO_LICENSES:-}" == "true" ]] && ! command -v go-licenses >/dev/null; then
+  echo "--- :scroll: Installing go-licenses"
+  GOBIN="${HOME}/.local/bin" mise exec "${tools[@]}" -- \
+    go install "github.com/google/go-licenses@$(cat .buildkite/go-licenses-version)"
+fi
+
 exec mise exec "${tools[@]}" -- "$@"
