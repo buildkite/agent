@@ -142,10 +142,11 @@ func URLCredentialsInText(text string) string {
 	})
 }
 
-// Match a URL's query string, up to whitespace, a quote, or punctuation that
-// ends the sentence around it. An escaped character, such as a quote in a
-// %q-quoted URL, does not end it.
-var urlQuery = regexp.MustCompile(`(?i)\b([a-z][a-z0-9+.-]*://[^\s?#"<>]+)\?(?:[^\s#"<>\\]|\\.)*(?:[^\s#"'<>.,;:!?)\]}\\]|\\.)`)
+// Match a URL's query string, up to whitespace or a fragment. Quotes and
+// brackets inside it don't end it, since Git prints them raw inside its own
+// quotes, but trailing ones, and trailing punctuation, are left out. An escaped
+// character, such as a quote in a %q-quoted URL, can end the match.
+var urlQuery = regexp.MustCompile(`(?i)\b([a-z][a-z0-9+.-]*://[^\s?#]+)\?(?:[^\s#\\]|\\.)*(?:[^\s#"'<>.,;:!?)\]}\\]|\\.)`)
 
 // URLQueriesInText replaces URL query strings in diagnostic text, which can
 // carry credentials such as the signature in a presigned storage URL.

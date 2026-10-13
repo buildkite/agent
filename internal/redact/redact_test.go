@@ -339,6 +339,9 @@ func TestURLQueriesInText(t *testing.T) {
 		// net/http errors quote the URL with %q, escaping quotes in the query.
 		{`Get "http://127.0.0.1:1/repo?note=\"x\"&access_token=SECRET": refused`, `Get "http://127.0.0.1:1/repo?[REDACTED]": refused`},
 		{`Get "http://127.0.0.1:1/repo?note=\"x\"": refused`, `Get "http://127.0.0.1:1/repo?[REDACTED]": refused`},
+		// Git prints quotes and brackets in the URL raw inside its own quotes.
+		{`fatal: unable to access 'http://127.0.0.1:1/repo?note="x"&access_token=SECRET/': refused`, `fatal: unable to access 'http://127.0.0.1:1/repo?[REDACTED]': refused`},
+		{`fatal: unable to access 'http://127.0.0.1:1/re"po?note=<x>&access_token=SECRET/': refused`, `fatal: unable to access 'http://127.0.0.1:1/re"po?[REDACTED]': refused`},
 	} {
 		if got := URLQueriesInText(test.in); got != test.want {
 			t.Errorf("URLQueriesInText(%q) = %q, want %q", test.in, got, test.want)
