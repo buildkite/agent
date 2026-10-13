@@ -41,6 +41,21 @@ const (
 	refspecCommit refspecKind = "commit"
 )
 
+// qualifiedBranchRefspec qualifies a branch name as an explicit refs/heads/
+// refspec. Git resolves a bare name against refs/tags/ before refs/heads/, so
+// a tag sharing the branch's name would shadow the branch: the fetch would
+// succeed while FETCH_HEAD — which the checkout then resolves — points at the
+// tag tip instead of the branch head, and the fetched files would not match
+// the branch the pipeline asked for. Pinning the source to refs/heads/ keeps
+// the fetch in the branch namespace; a name that is already fully qualified
+// (e.g. refs/heads/x from a custom configuration) passes through unchanged.
+func qualifiedBranchRefspec(branch string) string {
+	if strings.HasPrefix(branch, "refs/") {
+		return branch
+	}
+	return "+refs/heads/" + branch
+}
+
 // fetchSource fetches the git source for the job. If GitSkipFetchExistingCommits is
 // enabled and the commit already exists locally, the fetch is skipped entirely.
 // When addBloblessFilter is true, --filter=blob:none is prepended to the fetch
@@ -201,7 +216,17 @@ func (e *Executor) fetchSource(ctx context.Context, addBloblessFilter bool, atte
 			Shell:         e.shell,
 			GitFetchFlags: gitFetchFlags,
 			Repository:    "origin",
-			RefSpecs:      []string{e.Branch},
+			// LiteralRefSpecs, not RefSpecs: gitFetch word-splits RefSpecs, and a
+			// quote is legal in a git ref name — a branch called release'candidate
+			// would be split into releasecandidate and fetch the wrong ref (or fail
+			// to parse at all). gitFetch builds its argv for RefSpecs by splitting,
+			// so pass the branch refspec as a single literal argument instead. The
+			// same refspec qualification also keeps a same-named tag from shadowing
+			// the branch: git resolves a bare name against refs/tags/ first, so the
+			// fetch could otherwise report success while FETCH_HEAD ends up at the
+			// tag tip. Same hazard and fix as the base-branch fetch in
+			// checkout_fetch_base_branch.go and the fetch in commit_verification.go.
+			LiteralRefSpecs: []string{qualifiedBranchRefspec(e.Branch)},
 		}); err != nil {
 			return fmt.Errorf("fetching branch %q: %w", e.Branch, err)
 		}

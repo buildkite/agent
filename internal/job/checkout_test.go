@@ -230,6 +230,138 @@ func TestDefaultCheckoutPhase(t *testing.T) {
 	}
 }
 
+// A branch whose name shares a tag's name must still check out the branch tip:
+// git resolves a bare branch name against refs/tags/ before refs/heads/, so the
+// fetch (and the FETCH_HEAD checkout that follows it) would otherwise land on
+// the tag tip. The refspecBranch fetch pins the source to refs/heads/<branch>.
+func TestDefaultCheckoutPhaseWithSameNamedBranchAndTag(t *testing.T) {
+	ctx := t.Context()
+
+	sh, err := shell.New()
+	if err != nil {
+		t.Fatalf("shell.New() error = %v, want nil", err)
+	}
+
+	e := &Executor{
+		shell: sh,
+		ExecutorConfig: ExecutorConfig{
+			Commit:        "HEAD",
+			Branch:        "release",
+			CleanCheckout: false,
+			GitCleanFlags: "-f -d -x",
+		},
+	}
+	const projectName = "project-branch-tag-collision"
+	s, firstCommit := setupCheckoutTestRepo(t, e, projectName)
+
+	// Advance the "release" branch with a fresh commit, then add a same-named
+	// tag pointing at the older initial commit. A bare-name fetch would resolve
+	// the tag, so the checkout would end up at the tag tip instead of the
+	// branch head.
+	workDir := t.TempDir()
+	runGit := func(args ...string) string {
+		t.Helper()
+		cmd := exec.Command("git", args...)
+		cmd.Dir = workDir
+		cmd.Env = append(os.Environ(),
+			"GIT_AUTHOR_NAME=Buildkite Agent", "GIT_AUTHOR_EMAIL=agent@example.com",
+			"GIT_COMMITTER_NAME=Buildkite Agent", "GIT_COMMITTER_EMAIL=agent@example.com",
+		)
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("git %v error = %v, output: %s", args, err, out)
+		}
+		return strings.TrimSpace(string(out))
+	}
+	runGit("clone", s.RepoURL(projectName), workDir)
+	runGit("-C", workDir, "checkout", "-b", "release")
+	if err := os.WriteFile(filepath.Join(workDir, "advance.txt"), []byte("advance release\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	runGit("-C", workDir, "add", "advance.txt")
+	runGit("-C", workDir, "commit", "-m", "advance release")
+	runGit("-C", workDir, "push", "origin", "release")
+	branchTip := runGit("-C", workDir, "rev-parse", "HEAD")
+
+	if out, err := s.CreateRef(projectName, "refs/tags/release", firstCommit); err != nil {
+		t.Fatalf("s.CreateRef() error = %v, output: %s", err, out)
+	}
+
+	if err := e.defaultCheckoutPhase(ctx, 1); err != nil {
+		t.Fatalf("e.defaultCheckoutPhase(ctx, 1) error = %v, want nil", err)
+	}
+
+	checkoutDir, ok := e.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH")
+	if !ok || checkoutDir == "" {
+		t.Fatal("BUILDKITE_BUILD_CHECKOUT_PATH not set on executor shell env")
+	}
+	headCmd := exec.Command("git", "rev-parse", "HEAD")
+	headCmd.Dir = checkoutDir
+	head, err := headCmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("git rev-parse HEAD error = %v, output: %s", err, head)
+	}
+	if got := strings.TrimSpace(string(head)); got != branchTip {
+		t.Errorf("checkout HEAD = %q, want branch tip %q (same-named tag shadows the branch)", got, branchTip)
+	}
+}
+
+// A branch name containing a quote is legal in git (git check-ref-format
+// accepts it), and must survive the fetch intact: gitFetch word-splits RefSpec
+// entries, which would turn release'candidate into releasecandidate and fetch
+// the wrong ref. The refspecBranch fetch passes the refspec literally.
+func TestDefaultCheckoutPhaseWithQuoteInBranchName(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("quotes are not legal in ref names on Windows")
+	}
+
+	ctx := t.Context()
+
+	sh, err := shell.New()
+	if err != nil {
+		t.Fatalf("shell.New() error = %v, want nil", err)
+	}
+
+	const branch = "release'candidate"
+	e := &Executor{
+		shell: sh,
+		ExecutorConfig: ExecutorConfig{
+			Commit:        "HEAD",
+			Branch:        branch,
+			CleanCheckout: false,
+			GitCleanFlags: "-f -d -x",
+		},
+	}
+	const projectName = "project-quoted-branch"
+	s, _ := setupCheckoutTestRepo(t, e, projectName)
+
+	branchTip, _, err := s.PushBranch(projectName, branch)
+	if err != nil {
+		t.Fatalf("s.PushBranch(%q) error = %v", branch, err)
+	}
+
+	if err := e.defaultCheckoutPhase(ctx, 1); err != nil {
+		t.Fatalf("e.defaultCheckoutPhase(ctx, 1) error = %v, want nil", err)
+	}
+
+	checkoutDir, ok := e.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH")
+	if !ok || checkoutDir == "" {
+		t.Fatal("BUILDKITE_BUILD_CHECKOUT_PATH not set on executor shell env")
+	}
+	// The checkout must have actually happened: HEAD resolves to a real commit.
+	// A mangled refspec that word-split into two arguments would have failed the
+	// fetch above, and a fetch of the wrong (nonexistent) ref name would too.
+	lsCmd := exec.Command("git", "rev-parse", "HEAD")
+	lsCmd.Dir = checkoutDir
+	out, err := lsCmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("git rev-parse HEAD in checkout error = %v, output: %s", err, out)
+	}
+	if got := strings.TrimSpace(string(out)); got != branchTip {
+		t.Errorf("checkout HEAD = %q, want branch tip %q for branch %q", got, branchTip, branch)
+	}
+}
+
 func TestCommitSecondParent(t *testing.T) {
 	t.Parallel()
 
