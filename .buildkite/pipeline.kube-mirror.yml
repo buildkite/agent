@@ -7,11 +7,6 @@
 # the runner's Docker daemon. The standard queues have no Docker, so they run
 # them in the agent container.
 
-env:
-  GIT_CONFIG_COUNT: "1"
-  GIT_CONFIG_KEY_0: url.https://github.com/.insteadOf
-  GIT_CONFIG_VALUE_0: "git@github.com:"
-
 steps:
   - group: ":kubernetes: Kube operator standard queues"
     steps:
