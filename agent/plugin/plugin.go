@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/buildkite/agent/v4/env"
+	"github.com/buildkite/agent/v4/internal/redact"
 )
 
 var (
@@ -48,7 +49,7 @@ func CreatePlugin(location string, config map[string]any) (*Plugin, error) {
 
 	u, err := url.Parse(location)
 	if err != nil {
-		return nil, err
+		return nil, redact.URLError(err)
 	}
 
 	plugin.Scheme = u.Scheme

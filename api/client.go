@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/buildkite/agent/v4/internal/agenthttp"
+	"github.com/buildkite/agent/v4/internal/redact"
 	"github.com/buildkite/agent/v4/logger"
 	"github.com/google/go-querystring/query"
 )
@@ -445,7 +446,7 @@ func newUndecodableResponseError(r *http.Response, head string, err error) *Unde
 
 	if r.Request != nil {
 		e.Method = r.Request.Method
-		e.URL = r.Request.URL.String()
+		e.URL = redact.URLCredentials(r.Request.URL.String())
 	}
 
 	// A body that didn't claim to be JSON came from something that isn't the

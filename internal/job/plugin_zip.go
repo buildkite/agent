@@ -18,6 +18,7 @@ import (
 
 	"github.com/buildkite/agent/v4/agent/plugin"
 	"github.com/buildkite/agent/v4/internal/agenthttp"
+	"github.com/buildkite/agent/v4/internal/redact"
 	"github.com/buildkite/agent/v4/version"
 	"github.com/buildkite/roko"
 )
@@ -139,13 +140,13 @@ func constructZipPluginURL(p *plugin.Plugin) (string, error) {
 // downloadZipPlugin downloads a zip file from the given URL
 func (e *Executor) downloadZipPlugin(ctx context.Context, downloadURL, destPath, wantSHA256 string) (string, error) {
 	if e.Debug {
-		e.shell.Commentf("Downloading from %s", downloadURL)
+		e.shell.Commentf("Downloading from %s", redact.URLCredentials(downloadURL))
 	}
 
 	// Parse URL to get scheme
 	u, err := url.Parse(downloadURL)
 	if err != nil {
-		return "", fmt.Errorf("invalid download URL: %w", err)
+		return "", fmt.Errorf("invalid download URL: %w", redact.URLError(err))
 	}
 
 	switch u.Scheme {
@@ -191,7 +192,7 @@ func (e *Executor) downloadZipPlugin(ctx context.Context, downloadURL, destPath,
 func (e *Executor) downloadZipPluginHTTP(ctx context.Context, downloadURL, destPath string) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, downloadURL, nil)
 	if err != nil {
-		return err
+		return redact.URLError(err)
 	}
 
 	req.Header.Set("User-Agent", version.UserAgent())
@@ -200,7 +201,7 @@ func (e *Executor) downloadZipPluginHTTP(ctx context.Context, downloadURL, destP
 
 	resp, err := client.Do(req)
 	if err != nil {
-		return fmt.Errorf("HTTP request failed: %w", err)
+		return fmt.Errorf("HTTP request failed: %w", redact.URLError(err))
 	}
 	defer func() { _ = resp.Body.Close() }()
 

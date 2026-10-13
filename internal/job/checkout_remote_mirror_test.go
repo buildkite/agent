@@ -478,6 +478,16 @@ func TestFormatDebugEnvironmentVariableRedactsRepositoryCredentials(t *testing.T
 	}
 }
 
+func TestFormatDebugEnvironmentVariableRedactsPluginCredentials(t *testing.T) {
+	t.Parallel()
+
+	got := formatDebugEnvironmentVariable(`BUILDKITE_PLUGINS=[{"https://test-token@github.com/org/a-plugin#v1":{}},{"https://user:test-secret@github.com/org/b-plugin#v2":null}]`)
+	want := `BUILDKITE_PLUGINS=[{"https://xxxxx@github.com/org/a-plugin#v1":{}},{"https://xxxxx@github.com/org/b-plugin#v2":null}]`
+	if got != want {
+		t.Errorf("formatDebugEnvironmentVariable() = %q, want %q", got, want)
+	}
+}
+
 func TestRemoteMirrorBulkGitFlags(t *testing.T) {
 	t.Parallel()
 

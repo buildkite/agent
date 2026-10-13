@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/buildkite/agent/v4/api"
+	"github.com/buildkite/agent/v4/internal/redact"
 	"github.com/buildkite/agent/v4/status"
 )
 
@@ -255,7 +256,7 @@ func (a *AgentWorker) Ping(ctx context.Context) (jobID, action string, err error
 		// valid. If it is, switch and carry on, otherwise ignore the switch
 		newPing, _, err := newAPIClient.Ping(ctx)
 		if err != nil {
-			a.logger.Warnf("Failed to ping the new endpoint %s - ignoring switch for now (%s)", ping.Endpoint, err)
+			a.logger.Warnf("Failed to ping the new endpoint %s - ignoring switch for now (%s)", redact.URLCredentials(ping.Endpoint), err)
 		} else {
 			// Replace the APIClient and process the new ping
 			a.apiClient = newAPIClient

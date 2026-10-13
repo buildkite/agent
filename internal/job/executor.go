@@ -808,24 +808,9 @@ func (e *Executor) addOutputRedactors() {
 	for _, pair := range toRedact {
 		e.redactors.Add(pair.Value, redact.GoEscaped(pair.Value))
 	}
-	for _, secret := range repositoryCredentials(e.shell.Env) {
+	for _, secret := range redact.RepositoryCredentials(e.shell.Env) {
 		e.redactors.Add(secret, redact.GoEscaped(secret))
 	}
-}
-
-// repositoryCredentials returns credentials embedded in the repository URLs in
-// environ. The variable names don't match redacted-vars, so without this, a
-// script printing them would leak the credential to the job log.
-func repositoryCredentials(environ *env.Environment) []string {
-	var secrets []string
-	for _, name := range []string{"BUILDKITE_REPO", "BUILDKITE_GIT_REMOTE_MIRROR_URL"} {
-		for _, secret := range redact.URLSecrets(environ.GetString(name, "")) {
-			if len(secret) >= redact.LengthMin {
-				secrets = append(secrets, secret)
-			}
-		}
-	}
-	return secrets
 }
 
 func (e *Executor) hasGlobalHook(name string) bool {
@@ -1077,6 +1062,8 @@ func formatDebugEnvironmentVariable(envar string) string {
 		value = "******************"
 	case "BUILDKITE_REPO", "BUILDKITE_GIT_REMOTE_MIRROR_URL":
 		value = redact.URLCredentials(value)
+	case "BUILDKITE_PLUGINS":
+		value = redact.URLCredentialsInText(value)
 	}
 	return name + "=" + strings.ReplaceAll(value, "\n", "\\n")
 }
@@ -1432,7 +1419,7 @@ func (e *Executor) defaultCommandPhase(ctx context.Context) (retErr error) {
 	if e.Debug {
 		e.shell.Promptf("%s", process.FormatCommand(cmd[0], cmd[1:]))
 	} else {
-		e.shell.Promptf("%s", cmdToExec)
+		e.shell.Promptf("%s", redact.URLCredentialsInText(cmdToExec))
 	}
 
 	err = e.shell.Command(cmd[0], cmd[1:]...).Run(ctx, shell.ShowPrompt(false))
@@ -1531,7 +1518,7 @@ func (e *Executor) setupRedactors(log shell.Logger, environ *env.Environment, st
 	for _, pair := range varsToRedact {
 		needles = append(needles, pair.Value)
 	}
-	needles = append(needles, repositoryCredentials(environ)...)
+	needles = append(needles, redact.RepositoryCredentials(environ)...)
 	needles = redact.AppendGoEscaped(needles)
 
 	// As well as the known values above, redact anything that looks like a

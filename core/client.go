@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/buildkite/agent/v4/api"
+	"github.com/buildkite/agent/v4/internal/redact"
 	"github.com/buildkite/agent/v4/internal/system"
 	"github.com/buildkite/agent/v4/logger"
 	"github.com/buildkite/agent/v4/version"
@@ -294,7 +295,7 @@ func (c *Client) Register(ctx context.Context, req api.AgentRegisterRequest) (*a
 	c.Logger.Debugf("Heartbeat interval: %ds", registered.HeartbeatInterval)
 
 	if registered.Endpoint != "" {
-		c.Logger.Debugf("Endpoint: %s", registered.Endpoint)
+		c.Logger.Debugf("Endpoint: %s", redact.URLCredentials(registered.Endpoint))
 	}
 
 	return registered, nil

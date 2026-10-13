@@ -16,6 +16,7 @@ import (
 	"github.com/buildkite/agent/v4/agent/plugin"
 	"github.com/buildkite/agent/v4/internal/experiments"
 	"github.com/buildkite/agent/v4/internal/job/hook"
+	"github.com/buildkite/agent/v4/internal/redact"
 	"github.com/buildkite/roko"
 	"github.com/buildkite/shellwords"
 )
@@ -51,7 +52,7 @@ func (e *Executor) preparePlugins() error {
 	e.shell.Headerf("Preparing plugins")
 
 	if e.Debug {
-		e.shell.Commentf("Plugin JSON is %s", e.Plugins)
+		e.shell.Commentf("Plugin JSON is %s", redact.URLCredentialsInText(e.Plugins))
 	}
 
 	// Check if we can run plugins (disabled via --no-plugins)

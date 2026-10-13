@@ -1,6 +1,10 @@
 package redact
 
 import (
+	"errors"
+	"fmt"
+	"net/url"
+	"slices"
 	"strings"
 	"testing"
 
@@ -341,5 +345,37 @@ func TestURLSecrets(t *testing.T) {
 		if diff := cmp.Diff(URLSecrets(test.in), test.want); diff != "" {
 			t.Errorf("URLSecrets(%q) diff (-got +want):\n%s", test.in, diff)
 		}
+	}
+}
+
+// TestURLError asserts that the URL quoted by a *url.Error is masked,
+// including a token held in the username, which net/http leaves unmasked.
+func TestURLError(t *testing.T) {
+	t.Parallel()
+
+	inner := errors.New("connection refused")
+	err := fmt.Errorf("HTTP request failed: %w", URLError(&url.Error{Op: "Get", URL: "https://test-token@example.com/plugin.zip", Err: inner}))
+
+	if want := `HTTP request failed: Get "https://xxxxx@example.com/plugin.zip": connection refused`; err.Error() != want {
+		t.Errorf("err.Error() = %q, want %q", err.Error(), want)
+	}
+	if !errors.Is(err, inner) {
+		t.Errorf("errors.Is(err, inner) = false, want true")
+	}
+}
+
+// TestNeedlesFromEnvIncludesRepositoryCredentials asserts that CLI commands
+// redacting with NeedlesFromEnv (annotate, meta-data set, ...) redact a
+// credential in BUILDKITE_REPO, whose name doesn't match redacted-vars.
+func TestNeedlesFromEnvIncludesRepositoryCredentials(t *testing.T) {
+	t.Setenv("BUILDKITE_REPO", "https://test-repo-token@github.com/org/repo.git")
+	t.Setenv("BUILDKITE_GIT_REMOTE_MIRROR_URL", "")
+
+	needles, _, err := NeedlesFromEnv([]string{"*_TOKEN"})
+	if err != nil {
+		t.Fatalf("NeedlesFromEnv() error = %v", err)
+	}
+	if !slices.Contains(needles, "test-repo-token") {
+		t.Errorf("NeedlesFromEnv() = %q, want it to contain %q", needles, "test-repo-token")
 	}
 }
