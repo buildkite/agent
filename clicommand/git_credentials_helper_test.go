@@ -1,6 +1,7 @@
 package clicommand
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -214,21 +215,22 @@ func TestGitCredentialsHelperRedaction(t *testing.T) {
 	}))
 	t.Cleanup(upstream.Close)
 	for _, tc := range []struct {
-		mode      string
-		gitErrors bool
+		mode, optIn string
 	}{
-		{"registered", true},
-		{"registration rejected", true},
-		{"socket missing", true},
+		{"registered", "BUILDKITE_CAPTURE_GIT_ERRORS"},
+		{"registration rejected", "BUILDKITE_CAPTURE_GIT_ERRORS"},
+		{"socket missing", "BUILDKITE_CAPTURE_GIT_ERRORS"},
+		{"socket missing", "BUILDKITE_CAPTURE_AGENT_ERRORS"},
 		// Without Git error capture, a failed registration doesn't fail the checkout.
-		{"registration rejected", false},
-		{"socket missing", false},
+		{"registration rejected", ""},
+		{"socket missing", ""},
 	} {
 		mode := tc.mode
-		t.Run(fmt.Sprintf("%s/git errors %t", mode, tc.gitErrors), func(t *testing.T) {
+		t.Run(mode+"/"+cmp.Or(tc.optIn, "no opt-in"), func(t *testing.T) {
 			t.Setenv("BUILDKITE_CAPTURE_GIT_ERRORS", "")
-			if tc.gitErrors {
-				t.Setenv("BUILDKITE_CAPTURE_GIT_ERRORS", "true")
+			t.Setenv("BUILDKITE_CAPTURE_AGENT_ERRORS", "")
+			if tc.optIn != "" {
+				t.Setenv(tc.optIn, "true")
 			}
 			var reported *jobapi.CapturedError
 			startCaptureErrorTestServer(t, func(_ context.Context, report *jobapi.CapturedError) error {
@@ -250,7 +252,7 @@ func TestGitCredentialsHelperRedaction(t *testing.T) {
 			}
 			output, err := runGitCredentialsHelperCommand(t, upstream.URL, "get", "protocol=https\nhost=example.com\npath=repo.git\n")
 			if mode != "registered" {
-				if !tc.gitErrors {
+				if tc.optIn == "" {
 					if err != nil || output != "username=token\npassword="+secret+"\n\n" {
 						t.Fatalf("output=%q, error=%v; want repository credentials despite the registration failure", output, err)
 					}
