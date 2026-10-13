@@ -10,6 +10,7 @@ import (
 	"math/rand/v2"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strconv"
 	"strings"
@@ -162,6 +163,17 @@ type JobRunner struct {
 	// bootstrap environment because it did not match --allowed-repositories.
 	// createEnvironment runs before jobLogs exists, so Run emits the warning.
 	droppedRemoteMirrorURL string
+
+	// jobEnvError means the job env couldn't be normalized (case-colliding
+	// names on Windows). NewJobRunner runs before jobLogs exists, so Run
+	// refuses the job before anything reads the env.
+	jobEnvError error
+
+	// signedJobEnv is the job env exactly as the backend sent it. Only
+	// signature verification and the env-name allowlist should read it, since
+	// both match names as they were written. Everything else uses
+	// r.conf.Job.Env, which holds the names the OS will actually resolve.
+	signedJobEnv map[string]string
 }
 
 // jobProcess is either a *process.Process, or a *kubernetes.Runner.
@@ -176,6 +188,14 @@ type jobProcess interface {
 
 // Initializes the job runner
 func NewJobRunner(ctx context.Context, l logger.Logger, apiClient *api.Client, conf JobRunnerConfig) (*JobRunner, error) {
+	// Normalize before either validation or agent overrides can observe the
+	// job, while keeping the names as sent for signature checks.
+	signedJobEnv := conf.Job.Env
+	normalizedJob := *conf.Job
+	var jobEnvError error
+	normalizedJob.Env, jobEnvError = normalizeJobEnv(signedJobEnv, runtime.GOOS)
+	conf.Job = &normalizedJob
+
 	// If the accept response has a token attached, we should use that instead of the Agent Access Token that
 	// our current apiClient is using
 	if conf.Job.Token != "" {
@@ -185,10 +205,12 @@ func NewJobRunner(ctx context.Context, l logger.Logger, apiClient *api.Client, c
 	}
 
 	r := &JobRunner{
-		agentLogger: l,
-		conf:        conf,
-		apiClient:   apiClient,
-		client:      &core.Client{APIClient: apiClient, Logger: l},
+		agentLogger:  l,
+		conf:         conf,
+		apiClient:    apiClient,
+		client:       &core.Client{APIClient: apiClient, Logger: l},
+		jobEnvError:  jobEnvError,
+		signedJobEnv: signedJobEnv,
 	}
 
 	var err error
@@ -861,6 +883,28 @@ BUILDKITE_AGENT_JWKS_KEY_ID`
 	}
 
 	return envSlice, nil
+}
+
+// normalizeJobEnv returns the job env with names spelled the way goos will
+// resolve them, or an error if two names would resolve to the same variable.
+func normalizeJobEnv(jobEnv map[string]string, goos string) (map[string]string, error) {
+	switch goos {
+	case "windows":
+		normalized := make(map[string]string, len(jobEnv))
+		originalNames := make(map[string]string, len(jobEnv))
+		for name, value := range jobEnv {
+			key := strings.ToUpper(name) // Matches env.Environment's Windows key handling.
+			if previous, exists := originalNames[key]; exists {
+				return nil, fmt.Errorf("job environment contains case-colliding names %q and %q", previous, name)
+			}
+			originalNames[key] = name
+			normalized[key] = value
+		}
+		return normalized, nil
+
+	default:
+		return maps.Clone(jobEnv), nil
+	}
 }
 
 // truncateEnv cuts environment variable `key` down to `max` length, such that
