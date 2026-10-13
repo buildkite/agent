@@ -336,9 +336,11 @@ func describeCheckout(sh *shell.Shell) string {
 		what = append(what, "refspec "+refspec)
 	}
 	repository := value("BUILDKITE_REPO", false)
-	if redact.URLCredentials(repository) == "(invalid URL)" {
-		// A URL that does not parse can hide credentials from masking, such as
-		// a password containing a space.
+	// The Job API masks credentials in URLs, but its masking stops at
+	// whitespace, "<" and ">". Leave out a repository that contains them, or
+	// that does not parse, since its password may not be masked, such as
+	// "https://user:123#pass word@host" or "https://user:pass word@host".
+	if strings.ContainsAny(repository, " \t\n\f\r<>") || redact.URLCredentials(repository) == "(invalid URL)" {
 		repository = ""
 	}
 	switch {

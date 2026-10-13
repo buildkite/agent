@@ -890,6 +890,37 @@ func TestGitErrorCaptureIdentifiesTheCheckout(t *testing.T) {
 			want:   summary + ` The checkout was of branch "feature/missing", commit "HEAD".`,
 		},
 		{
+			// These parse, with the password in a fragment, query or path, and masking stops at the space.
+			name:   "a password after a port and a space is left out",
+			repo:   "https://user:123#private password@github.com/acme/widgets.git",
+			branch: "feature/missing",
+			want:   summary + ` The checkout was of branch "feature/missing", commit "HEAD".`,
+		},
+		{
+			name:   "a password after a port and a space in a query is left out",
+			repo:   "https://user:123?private password@github.com/acme/widgets.git",
+			branch: "feature/missing",
+			want:   summary + ` The checkout was of branch "feature/missing", commit "HEAD".`,
+		},
+		{
+			name:   "a password after a port and a space in a path is left out",
+			repo:   "https://user:123/private password@github.com/acme/widgets.git",
+			branch: "feature/missing",
+			want:   summary + ` The checkout was of branch "feature/missing", commit "HEAD".`,
+		},
+		{
+			name:   "a password after an empty port and a space is left out",
+			repo:   "https://user:/private password@github.com/acme/widgets.git",
+			branch: "feature/missing",
+			want:   summary + ` The checkout was of branch "feature/missing", commit "HEAD".`,
+		},
+		{
+			name:   "a password containing < is left out",
+			repo:   "https://user:1#pri<vate@github.com/acme/widgets.git",
+			branch: "feature/missing",
+			want:   summary + ` The checkout was of branch "feature/missing", commit "HEAD".`,
+		},
+		{
 			name:   "control characters are quoted",
 			branch: "feature/\x1b[31m",
 			want:   summary + ` The checkout was of branch "feature/\x1b[31m", commit "HEAD" from https://xxxxx@github.com/acme/widgets.git.`,
