@@ -13,69 +13,71 @@ agents:
   queue: "$AGENT_RUNNERS_LINUX_QUEUE"
 
 steps:
-  - name: ":go::robot_face: Lint"
-    key: check-code-committed
-    command: .buildkite/steps/check-code-committed.sh
-    if_changed:
-      - go.{mod,sum}
-      - "**.go"
-      - .buildkite/Dockerfile-lint
-      - .buildkite/steps/check-code-committed.sh
-      - .buildkite/cache.yml
-      - .buildkite/docker-compose.yml
-      - .buildkite/pipeline.yml
-    plugins:
-      - &assume_cache_role
-        aws-assume-role-with-web-identity#v1.4.0:
-          role_arn: "arn:aws:iam::445615400570:role/pipeline-buildkite-agent"
-          session-tags:
-            - organization_slug
-            - organization_id
-            - pipeline_slug
-      - docker-compose#v4.14.0:
-          config: .buildkite/docker-compose.yml
-          cli-version: 2
-          mount-buildkite-agent: true
-          run: lint
-          env:
-            - BUILDKITE_AGENT_ACCESS_TOKEN
-            - BUILDKITE_AGENT_CACHE_REGISTRY
-            - BUILDKITE_AGENT_CACHE_STORE_URL
-            - AWS_ACCESS_KEY_ID
-            - AWS_SECRET_ACCESS_KEY
-            - AWS_SESSION_TOKEN
+  # EXPERIMENT: everything except the kube-operator mirror upload is commented
+  # out while we iterate on the mirror. Restore before merging.
+#   - name: ":go::robot_face: Lint"
+#     key: check-code-committed
+#     command: .buildkite/steps/check-code-committed.sh
+#     if_changed:
+#       - go.{mod,sum}
+#       - "**.go"
+#       - .buildkite/Dockerfile-lint
+#       - .buildkite/steps/check-code-committed.sh
+#       - .buildkite/cache.yml
+#       - .buildkite/docker-compose.yml
+#       - .buildkite/pipeline.yml
+#     plugins:
+#       - &assume_cache_role
+#         aws-assume-role-with-web-identity#v1.4.0:
+#           role_arn: "arn:aws:iam::445615400570:role/pipeline-buildkite-agent"
+#           session-tags:
+#             - organization_slug
+#             - organization_id
+#             - pipeline_slug
+#       - docker-compose#v4.14.0:
+#           config: .buildkite/docker-compose.yml
+#           cli-version: 2
+#           mount-buildkite-agent: true
+#           run: lint
+#           env:
+#             - BUILDKITE_AGENT_ACCESS_TOKEN
+#             - BUILDKITE_AGENT_CACHE_REGISTRY
+#             - BUILDKITE_AGENT_CACHE_STORE_URL
+#             - AWS_ACCESS_KEY_ID
+#             - AWS_SECRET_ACCESS_KEY
+#             - AWS_SESSION_TOKEN
 
-  - name: ":go::robot_face: Check protobuf generation"
-    key: check-protobuf-genreation
-    env:
-      GOBIN: /root/.protobuf-tools/bin
-      GOCACHE: /root/.protobuf-tools/gocache
-      GOMODCACHE: /root/.protobuf-tools/gomodcache
-    command: .buildkite/steps/check-protobuf-generation.sh
-    if_changed:
-      - api/proto/**
-      - .buildkite/steps/check-protobuf-generation.sh
-      - .buildkite/steps/protobuf-tool-versions.sh
-      - .buildkite/cache.yml
-      - .buildkite/docker-compose.yml
-      - .buildkite/pipeline.yml
-    plugins:
-      - *assume_cache_role
-      - docker-compose#v4.14.0:
-          config: .buildkite/docker-compose.yml
-          cli-version: 2
-          mount-buildkite-agent: true
-          run: lint
-          env:
-            - BUILDKITE_AGENT_ACCESS_TOKEN
-            - BUILDKITE_AGENT_CACHE_REGISTRY
-            - BUILDKITE_AGENT_CACHE_STORE_URL
-            - AWS_ACCESS_KEY_ID
-            - AWS_SECRET_ACCESS_KEY
-            - AWS_SESSION_TOKEN
-            - GOBIN
-            - GOCACHE
-            - GOMODCACHE
+#   - name: ":go::robot_face: Check protobuf generation"
+#     key: check-protobuf-genreation
+#     env:
+#       GOBIN: /root/.protobuf-tools/bin
+#       GOCACHE: /root/.protobuf-tools/gocache
+#       GOMODCACHE: /root/.protobuf-tools/gomodcache
+#     command: .buildkite/steps/check-protobuf-generation.sh
+#     if_changed:
+#       - api/proto/**
+#       - .buildkite/steps/check-protobuf-generation.sh
+#       - .buildkite/steps/protobuf-tool-versions.sh
+#       - .buildkite/cache.yml
+#       - .buildkite/docker-compose.yml
+#       - .buildkite/pipeline.yml
+#     plugins:
+#       - *assume_cache_role
+#       - docker-compose#v4.14.0:
+#           config: .buildkite/docker-compose.yml
+#           cli-version: 2
+#           mount-buildkite-agent: true
+#           run: lint
+#           env:
+#             - BUILDKITE_AGENT_ACCESS_TOKEN
+#             - BUILDKITE_AGENT_CACHE_REGISTRY
+#             - BUILDKITE_AGENT_CACHE_STORE_URL
+#             - AWS_ACCESS_KEY_ID
+#             - AWS_SECRET_ACCESS_KEY
+#             - AWS_SESSION_TOKEN
+#             - GOBIN
+#             - GOCACHE
+#             - GOMODCACHE
 
   # EXPERIMENT: mirror the lint steps onto the kube-operator queues. The
   # kube-operator runners have no verification JWKS, so these steps are
@@ -86,503 +88,503 @@ steps:
       env -u BUILDKITE_AGENT_JWKS_FILE -u BUILDKITE_AGENT_JWKS_KEY_ID
       buildkite-agent pipeline upload .buildkite/pipeline.kube-mirror.yml
 
-  # Send git commit metadata to the Test Engine plan-metadata pipeline on
-  # every build. Plan output is discarded -- the Tests and Coverage group
-  # below continues to use its declared parallelism. This step has no
-  # depends_on and no dependents, and is soft_fail, so a Test Engine API
-  # hiccup never blocks the build.
-  #
-  # Runs inside the `agent` compose service so bktec's gotest runner has
-  # `go` on PATH (needed for `go list ./...` package discovery) and the
-  # Test Engine API token is forwarded (declared in docker-compose.yml).
-  # See TE-5828.
-  - name: ":test_tube: Collect commit metadata"
-    key: collect-commit-metadata
-    command: .buildkite/steps/collect-commit-metadata.sh
-    soft_fail: true
-    env:
-      BUILDKITE_TEST_ENGINE_SUITE_SLUG: buildkite-agent
-      BUILDKITE_TEST_ENGINE_TEST_RUNNER: gotest
-      # Test Engine API rejects parallelism = 0 even on metadata-only plan
-      # requests. See TE-5766 verification on bk/bk-rspec.
-      BUILDKITE_TEST_ENGINE_MAX_PARALLELISM: "2"
-      BUILDKITE_TEST_ENGINE_TARGET_TIME: "1m"
-    plugins:
-      - docker-compose#v4.14.0:
-          config: .buildkite/docker-compose.yml
-          cli-version: 2
-          propagate-environment: true
-          # bktec requests an OIDC token via the agent when no API token is set.
-          mount-buildkite-agent: true
-          run: agent
+#   # Send git commit metadata to the Test Engine plan-metadata pipeline on
+#   # every build. Plan output is discarded -- the Tests and Coverage group
+#   # below continues to use its declared parallelism. This step has no
+#   # depends_on and no dependents, and is soft_fail, so a Test Engine API
+#   # hiccup never blocks the build.
+#   #
+#   # Runs inside the `agent` compose service so bktec's gotest runner has
+#   # `go` on PATH (needed for `go list ./...` package discovery) and the
+#   # Test Engine API token is forwarded (declared in docker-compose.yml).
+#   # See TE-5828.
+#   - name: ":test_tube: Collect commit metadata"
+#     key: collect-commit-metadata
+#     command: .buildkite/steps/collect-commit-metadata.sh
+#     soft_fail: true
+#     env:
+#       BUILDKITE_TEST_ENGINE_SUITE_SLUG: buildkite-agent
+#       BUILDKITE_TEST_ENGINE_TEST_RUNNER: gotest
+#       # Test Engine API rejects parallelism = 0 even on metadata-only plan
+#       # requests. See TE-5766 verification on bk/bk-rspec.
+#       BUILDKITE_TEST_ENGINE_MAX_PARALLELISM: "2"
+#       BUILDKITE_TEST_ENGINE_TARGET_TIME: "1m"
+#     plugins:
+#       - docker-compose#v4.14.0:
+#           config: .buildkite/docker-compose.yml
+#           cli-version: 2
+#           propagate-environment: true
+#           # bktec requests an OIDC token via the agent when no API token is set.
+#           mount-buildkite-agent: true
+#           run: agent
 
-  - group: ":go::scientist: Tests and Coverage"
-    if_changed:
-      - go.{mod,sum}
-      - "**.go"
-      - "**/fixtures/**"
-      - .buildkite/steps/{tests,test-coverage-report}.sh
-      - .buildkite/cache.yml
-      - .buildkite/docker-compose.yml
-      - .buildkite/pipeline.yml
-    steps:
-      - name: ":linux: Linux AMD64 Tests"
-        key: test-linux-amd64
-        command: ".buildkite/steps/tests.sh"
-        parallelism: 2
-        artifact_paths:
-          - junit-*.xml
-          - "coverage-*/**"
-        plugins:
-          - *assume_cache_role
-          - tests#v1.0.0:
-              suite-slug: buildkite-agent
-              test-runner: gotest
-              result-path: junit.xml
-              install-client: false
-              upload-results: true
-              oidc-lifetime: 7200
-              tags:
-                - "os=linux"
-                - "arch=amd64"
-                - "race=false"
-          - docker-compose#v4.14.0:
-              config: .buildkite/docker-compose.yml
-              cli-version: 2
-              propagate-environment: true
-              mount-buildkite-agent: true
-              run: agent
-              env:
-                - BUILDKITE_AGENT_CACHE_REGISTRY
-                - BUILDKITE_AGENT_CACHE_STORE_URL
-                - AWS_ACCESS_KEY_ID
-                - AWS_SECRET_ACCESS_KEY
-                - AWS_SESSION_TOKEN
+#   - group: ":go::scientist: Tests and Coverage"
+#     if_changed:
+#       - go.{mod,sum}
+#       - "**.go"
+#       - "**/fixtures/**"
+#       - .buildkite/steps/{tests,test-coverage-report}.sh
+#       - .buildkite/cache.yml
+#       - .buildkite/docker-compose.yml
+#       - .buildkite/pipeline.yml
+#     steps:
+#       - name: ":linux: Linux AMD64 Tests"
+#         key: test-linux-amd64
+#         command: ".buildkite/steps/tests.sh"
+#         parallelism: 2
+#         artifact_paths:
+#           - junit-*.xml
+#           - "coverage-*/**"
+#         plugins:
+#           - *assume_cache_role
+#           - tests#v1.0.0:
+#               suite-slug: buildkite-agent
+#               test-runner: gotest
+#               result-path: junit.xml
+#               install-client: false
+#               upload-results: true
+#               oidc-lifetime: 7200
+#               tags:
+#                 - "os=linux"
+#                 - "arch=amd64"
+#                 - "race=false"
+#           - docker-compose#v4.14.0:
+#               config: .buildkite/docker-compose.yml
+#               cli-version: 2
+#               propagate-environment: true
+#               mount-buildkite-agent: true
+#               run: agent
+#               env:
+#                 - BUILDKITE_AGENT_CACHE_REGISTRY
+#                 - BUILDKITE_AGENT_CACHE_STORE_URL
+#                 - AWS_ACCESS_KEY_ID
+#                 - AWS_SECRET_ACCESS_KEY
+#                 - AWS_SESSION_TOKEN
 
-      - name: ":linux: Linux ARM64 Tests"
-        key: test-linux-arm64
-        command: ".buildkite/steps/tests.sh"
-        parallelism: 2
-        artifact_paths:
-          - junit-*.xml
-          - "coverage-*/**"
-        agents:
-          queue: $AGENT_RUNNERS_LINUX_ARM64_QUEUE
-        plugins:
-          - *assume_cache_role
-          - tests#v1.0.0:
-              suite-slug: buildkite-agent
-              test-runner: gotest
-              result-path: junit.xml
-              install-client: false
-              upload-results: true
-              oidc-lifetime: 7200
-              tags:
-                - "os=linux"
-                - "arch=arm64"
-                - "race=false"
-          - docker-compose#v4.14.0:
-              config: .buildkite/docker-compose.yml
-              cli-version: 2
-              propagate-environment: true
-              mount-buildkite-agent: true
-              run: agent
-              env:
-                - BUILDKITE_AGENT_CACHE_REGISTRY
-                - BUILDKITE_AGENT_CACHE_STORE_URL
-                - AWS_ACCESS_KEY_ID
-                - AWS_SECRET_ACCESS_KEY
-                - AWS_SESSION_TOKEN
+#       - name: ":linux: Linux ARM64 Tests"
+#         key: test-linux-arm64
+#         command: ".buildkite/steps/tests.sh"
+#         parallelism: 2
+#         artifact_paths:
+#           - junit-*.xml
+#           - "coverage-*/**"
+#         agents:
+#           queue: $AGENT_RUNNERS_LINUX_ARM64_QUEUE
+#         plugins:
+#           - *assume_cache_role
+#           - tests#v1.0.0:
+#               suite-slug: buildkite-agent
+#               test-runner: gotest
+#               result-path: junit.xml
+#               install-client: false
+#               upload-results: true
+#               oidc-lifetime: 7200
+#               tags:
+#                 - "os=linux"
+#                 - "arch=arm64"
+#                 - "race=false"
+#           - docker-compose#v4.14.0:
+#               config: .buildkite/docker-compose.yml
+#               cli-version: 2
+#               propagate-environment: true
+#               mount-buildkite-agent: true
+#               run: agent
+#               env:
+#                 - BUILDKITE_AGENT_CACHE_REGISTRY
+#                 - BUILDKITE_AGENT_CACHE_STORE_URL
+#                 - AWS_ACCESS_KEY_ID
+#                 - AWS_SECRET_ACCESS_KEY
+#                 - AWS_SESSION_TOKEN
 
-      - name: ":mac: macOS ARM64 Tests"
-        key: test-macos
-        command: ".buildkite/steps/tests.sh"
-        parallelism: 2
-        artifact_paths:
-          - junit-*.xml
-          - "coverage-*/**"
-        agents:
-          queue: $AGENT_RUNNERS_MACOS_QUEUE
-        plugins:
-          - *assume_cache_role
-          - tests#v1.0.0:
-              suite-slug: buildkite-agent
-              test-runner: gotest
-              result-path: junit.xml
-              install-client: false
-              upload-results: true
-              oidc-lifetime: 7200
-              tags:
-                - "os=darwin"
-                - "arch=arm64"
-                - "race=false"
+#       - name: ":mac: macOS ARM64 Tests"
+#         key: test-macos
+#         command: ".buildkite/steps/tests.sh"
+#         parallelism: 2
+#         artifact_paths:
+#           - junit-*.xml
+#           - "coverage-*/**"
+#         agents:
+#           queue: $AGENT_RUNNERS_MACOS_QUEUE
+#         plugins:
+#           - *assume_cache_role
+#           - tests#v1.0.0:
+#               suite-slug: buildkite-agent
+#               test-runner: gotest
+#               result-path: junit.xml
+#               install-client: false
+#               upload-results: true
+#               oidc-lifetime: 7200
+#               tags:
+#                 - "os=darwin"
+#                 - "arch=arm64"
+#                 - "race=false"
 
-      - name: ":windows: Windows AMD64 Tests"
-        key: test-windows
-        command: "bash .buildkite\\steps\\tests.sh"
-        parallelism: 2
-        retry:
-          automatic:
-            - exit_status: 1
-              limit: 3
-        artifact_paths:
-          - junit-*.xml
-          - "coverage-*/**"
-        agents:
-          queue: $AGENT_RUNNERS_WINDOWS_QUEUE
-        plugins:
-          - *assume_cache_role
-          - tests#v1.0.0:
-              suite-slug: buildkite-agent
-              test-runner: gotest
-              result-path: junit.xml
-              install-client: false
-              upload-results: true
-              oidc-lifetime: 7200
-              tags:
-                - "os=windows"
-                - "arch=amd64"
-                - "race=false"
+#       - name: ":windows: Windows AMD64 Tests"
+#         key: test-windows
+#         command: "bash .buildkite\\steps\\tests.sh"
+#         parallelism: 2
+#         retry:
+#           automatic:
+#             - exit_status: 1
+#               limit: 3
+#         artifact_paths:
+#           - junit-*.xml
+#           - "coverage-*/**"
+#         agents:
+#           queue: $AGENT_RUNNERS_WINDOWS_QUEUE
+#         plugins:
+#           - *assume_cache_role
+#           - tests#v1.0.0:
+#               suite-slug: buildkite-agent
+#               test-runner: gotest
+#               result-path: junit.xml
+#               install-client: false
+#               upload-results: true
+#               oidc-lifetime: 7200
+#               tags:
+#                 - "os=windows"
+#                 - "arch=amd64"
+#                 - "race=false"
 
-      - name: ":satellite: Detect Data Races"
-        key: test-race-linux-arm64
-        command: ".buildkite/steps/tests.sh -race"
-        # Extra parallelism because this data race test is slow
-        parallelism: 3
-        artifact_paths:
-          - junit-*.xml
-          - "coverage-*/**"
-        agents:
-          queue: $AGENT_RUNNERS_LINUX_ARM64_QUEUE
-        plugins:
-          - *assume_cache_role
-          - tests#v1.0.0:
-              suite-slug: buildkite-agent
-              test-runner: gotest
-              result-path: junit.xml
-              install-client: false
-              upload-results: true
-              oidc-lifetime: 7200
-              tags:
-                - "os=linux"
-                - "arch=arm64"
-                - "race=true"
-          - docker-compose#v4.14.0:
-              config: .buildkite/docker-compose.yml
-              cli-version: 2
-              propagate-environment: true
-              mount-buildkite-agent: true
-              run: agent
-              env:
-                - BUILDKITE_AGENT_CACHE_REGISTRY
-                - BUILDKITE_AGENT_CACHE_STORE_URL
-                - AWS_ACCESS_KEY_ID
-                - AWS_SECRET_ACCESS_KEY
-                - AWS_SESSION_TOKEN
+#       - name: ":satellite: Detect Data Races"
+#         key: test-race-linux-arm64
+#         command: ".buildkite/steps/tests.sh -race"
+#         # Extra parallelism because this data race test is slow
+#         parallelism: 3
+#         artifact_paths:
+#           - junit-*.xml
+#           - "coverage-*/**"
+#         agents:
+#           queue: $AGENT_RUNNERS_LINUX_ARM64_QUEUE
+#         plugins:
+#           - *assume_cache_role
+#           - tests#v1.0.0:
+#               suite-slug: buildkite-agent
+#               test-runner: gotest
+#               result-path: junit.xml
+#               install-client: false
+#               upload-results: true
+#               oidc-lifetime: 7200
+#               tags:
+#                 - "os=linux"
+#                 - "arch=arm64"
+#                 - "race=true"
+#           - docker-compose#v4.14.0:
+#               config: .buildkite/docker-compose.yml
+#               cli-version: 2
+#               propagate-environment: true
+#               mount-buildkite-agent: true
+#               run: agent
+#               env:
+#                 - BUILDKITE_AGENT_CACHE_REGISTRY
+#                 - BUILDKITE_AGENT_CACHE_STORE_URL
+#                 - AWS_ACCESS_KEY_ID
+#                 - AWS_SECRET_ACCESS_KEY
+#                 - AWS_SESSION_TOKEN
 
-      - name: ":coverage: Test coverage report Linux ARM64"
-        key: test-coverage-linux-arm64
-        command: ".buildkite/steps/test-coverage-report.sh coverage-linux-arm64"
-        artifact_paths:
-          - "cover.html"
-          - "cover.out"
-        depends_on:
-          - test-linux-arm64
-        plugins:
-          - docker-compose#v4.14.0:
-              config: .buildkite/docker-compose.yml
-              cli-version: 2
-              run: agent
-          - artifacts#v1.9.4:
-              download: "coverage-linux-arm64/**"
+#       - name: ":coverage: Test coverage report Linux ARM64"
+#         key: test-coverage-linux-arm64
+#         command: ".buildkite/steps/test-coverage-report.sh coverage-linux-arm64"
+#         artifact_paths:
+#           - "cover.html"
+#           - "cover.out"
+#         depends_on:
+#           - test-linux-arm64
+#         plugins:
+#           - docker-compose#v4.14.0:
+#               config: .buildkite/docker-compose.yml
+#               cli-version: 2
+#               run: agent
+#           - artifacts#v1.9.4:
+#               download: "coverage-linux-arm64/**"
 
-      - name: ":coverage: Test coverage report Linux AMD64"
-        key: test-coverage-linux-amd64
-        command: ".buildkite/steps/test-coverage-report.sh coverage-linux-amd64"
-        artifact_paths:
-          - "cover.html"
-          - "cover.out"
-        depends_on:
-          - test-linux-amd64
-        plugins:
-          - docker-compose#v4.14.0:
-              config: .buildkite/docker-compose.yml
-              cli-version: 2
-              run: agent
-          - artifacts#v1.9.4:
-              download: "coverage-linux-amd64/**"
+#       - name: ":coverage: Test coverage report Linux AMD64"
+#         key: test-coverage-linux-amd64
+#         command: ".buildkite/steps/test-coverage-report.sh coverage-linux-amd64"
+#         artifact_paths:
+#           - "cover.html"
+#           - "cover.out"
+#         depends_on:
+#           - test-linux-amd64
+#         plugins:
+#           - docker-compose#v4.14.0:
+#               config: .buildkite/docker-compose.yml
+#               cli-version: 2
+#               run: agent
+#           - artifacts#v1.9.4:
+#               download: "coverage-linux-amd64/**"
 
-      - name: ":coverage: Test coverage report Linux ARM64 Race"
-        key: test-coverage-linux-arm64-race
-        command: ".buildkite/steps/test-coverage-report.sh coverage-linux-arm64-race"
-        artifact_paths:
-          - "cover.html"
-          - "cover.out"
-        depends_on:
-          - test-race-linux-arm64
-        plugins:
-          - docker-compose#v4.14.0:
-              config: .buildkite/docker-compose.yml
-              cli-version: 2
-              run: agent
-          - artifacts#v1.9.4:
-              download: "coverage-linux-arm64-race/**"
+#       - name: ":coverage: Test coverage report Linux ARM64 Race"
+#         key: test-coverage-linux-arm64-race
+#         command: ".buildkite/steps/test-coverage-report.sh coverage-linux-arm64-race"
+#         artifact_paths:
+#           - "cover.html"
+#           - "cover.out"
+#         depends_on:
+#           - test-race-linux-arm64
+#         plugins:
+#           - docker-compose#v4.14.0:
+#               config: .buildkite/docker-compose.yml
+#               cli-version: 2
+#               run: agent
+#           - artifacts#v1.9.4:
+#               download: "coverage-linux-arm64-race/**"
 
-      - label: ":writing_hand: Annotate with Test Failures"
-        depends_on:
-          - test-linux-amd64
-          - test-race-linux-arm64
-          - test-linux-arm64
-          - test-macos
-          - test-windows
-        allow_dependency_failure: true
-        plugins:
-          - junit-annotate#v1.6.0:
-              artifacts: junit-*.xml
+#       - label: ":writing_hand: Annotate with Test Failures"
+#         depends_on:
+#           - test-linux-amd64
+#           - test-race-linux-arm64
+#           - test-linux-arm64
+#           - test-macos
+#           - test-windows
+#         allow_dependency_failure: true
+#         plugins:
+#           - junit-annotate#v1.6.0:
+#               artifacts: junit-*.xml
 
-  # --- end Tests and Coverage ---
+#   # --- end Tests and Coverage ---
 
-  - group: ":hammer_and_wrench: Binary builds"
-    steps:
-      - name: ":{{matrix.os}}: Build {{matrix.os}} {{matrix.arch}} binary"
-        command: ".buildkite/steps/build-binary.sh {{matrix.os}} {{matrix.arch}}"
-        key: build-binary
-        depends_on:
-          # don't wait for slower windows tests
-          - test-linux-amd64
-          - test-linux-arm64
-        artifact_paths: "pkg/*"
-        plugins:
-          - *assume_cache_role
-          - docker-compose#v4.14.0:
-              config: .buildkite/docker-compose.yml
-              cli-version: 2
-              mount-buildkite-agent: true
-              run: agent
-              env:
-                - BUILDKITE_AGENT_CACHE_REGISTRY
-                - BUILDKITE_AGENT_CACHE_STORE_URL
-                - AWS_ACCESS_KEY_ID
-                - AWS_SECRET_ACCESS_KEY
-                - AWS_SESSION_TOKEN
-          - generate-provenance-attestation#v1.1.0:
-              artifacts: "pkg/*"
-              attestation_name: "buildkite-agent-{{matrix.os}}-{{matrix.arch}}.build-attestation.json"
-        matrix:
-          setup:
-            os:
-              - darwin
-              - freebsd
-              - linux
-              - openbsd
-              - windows
-            arch:
-              - "386"
-              - amd64
-              - arm64
-          adjustments:
-            - with: { os: darwin, arch: "386" }
-              skip: "macOS no longer supports x86 binaries"
+#   - group: ":hammer_and_wrench: Binary builds"
+#     steps:
+#       - name: ":{{matrix.os}}: Build {{matrix.os}} {{matrix.arch}} binary"
+#         command: ".buildkite/steps/build-binary.sh {{matrix.os}} {{matrix.arch}}"
+#         key: build-binary
+#         depends_on:
+#           # don't wait for slower windows tests
+#           - test-linux-amd64
+#           - test-linux-arm64
+#         artifact_paths: "pkg/*"
+#         plugins:
+#           - *assume_cache_role
+#           - docker-compose#v4.14.0:
+#               config: .buildkite/docker-compose.yml
+#               cli-version: 2
+#               mount-buildkite-agent: true
+#               run: agent
+#               env:
+#                 - BUILDKITE_AGENT_CACHE_REGISTRY
+#                 - BUILDKITE_AGENT_CACHE_STORE_URL
+#                 - AWS_ACCESS_KEY_ID
+#                 - AWS_SECRET_ACCESS_KEY
+#                 - AWS_SESSION_TOKEN
+#           - generate-provenance-attestation#v1.1.0:
+#               artifacts: "pkg/*"
+#               attestation_name: "buildkite-agent-{{matrix.os}}-{{matrix.arch}}.build-attestation.json"
+#         matrix:
+#           setup:
+#             os:
+#               - darwin
+#               - freebsd
+#               - linux
+#               - openbsd
+#               - windows
+#             arch:
+#               - "386"
+#               - amd64
+#               - arm64
+#           adjustments:
+#             - with: { os: darwin, arch: "386" }
+#               skip: "macOS no longer supports x86 binaries"
 
-            - with: { os: dragonflybsd, arch: amd64 }
+#             - with: { os: dragonflybsd, arch: amd64 }
 
-            - with: { os: linux, arch: arm }
-            - with: { os: linux, arch: armhf }
-            - with: { os: linux, arch: ppc64 }
-            - with: { os: linux, arch: ppc64le }
-            - with: { os: linux, arch: mips64le }
-            - with: { os: linux, arch: s390x }
-            - with: { os: linux, arch: riscv64 }
+#             - with: { os: linux, arch: arm }
+#             - with: { os: linux, arch: armhf }
+#             - with: { os: linux, arch: ppc64 }
+#             - with: { os: linux, arch: ppc64le }
+#             - with: { os: linux, arch: mips64le }
+#             - with: { os: linux, arch: s390x }
+#             - with: { os: linux, arch: riscv64 }
 
-            - with: { os: netbsd, arch: amd64 }
+#             - with: { os: netbsd, arch: amd64 }
 
-            - with: { os: openbsd, arch: arm64 }
-              skip: "arm64 OpenBSD is not currently supported"
+#             - with: { os: openbsd, arch: arm64 }
+#               skip: "arm64 OpenBSD is not currently supported"
 
-  # --- end Binary builds ---
+#   # --- end Binary builds ---
 
-  - label: ":end::two::end: E2E Testing"
-    key: e2e-tests
-    depends_on: build-binary
-    trigger: agent-e2e-tests
-    async: false
-    build:
-      message: "${BUILDKITE_MESSAGE}"
-      commit: "${BUILDKITE_COMMIT}"
-      branch: "${BUILDKITE_BRANCH}"
-      env:
-        BUILDKITE_PULL_REQUEST: "${BUILDKITE_PULL_REQUEST}"
-        BUILDKITE_PULL_REQUEST_BASE_BRANCH: "${BUILDKITE_PULL_REQUEST_BASE_BRANCH}"
-        BUILDKITE_PULL_REQUEST_REPO: "${BUILDKITE_PULL_REQUEST_REPO}"
+#   - label: ":end::two::end: E2E Testing"
+#     key: e2e-tests
+#     depends_on: build-binary
+#     trigger: agent-e2e-tests
+#     async: false
+#     build:
+#       message: "${BUILDKITE_MESSAGE}"
+#       commit: "${BUILDKITE_COMMIT}"
+#       branch: "${BUILDKITE_BRANCH}"
+#       env:
+#         BUILDKITE_PULL_REQUEST: "${BUILDKITE_PULL_REQUEST}"
+#         BUILDKITE_PULL_REQUEST_BASE_BRANCH: "${BUILDKITE_PULL_REQUEST_BASE_BRANCH}"
+#         BUILDKITE_PULL_REQUEST_REPO: "${BUILDKITE_PULL_REQUEST_REPO}"
 
-  - label: ":bathtub: Check version string is clean"
-    key: check-version-string
-    depends_on: build-binary
-    command: .buildkite/steps/check-version-string.sh
+#   - label: ":bathtub: Check version string is clean"
+#     key: check-version-string
+#     depends_on: build-binary
+#     command: .buildkite/steps/check-version-string.sh
 
-  - name: ":mag: Extract Agent Version Metadata"
-    key: set-metadata
-    command: ".buildkite/steps/extract-agent-version-metadata.sh"
+#   - name: ":mag: Extract Agent Version Metadata"
+#     key: set-metadata
+#     command: ".buildkite/steps/extract-agent-version-metadata.sh"
 
-  - group: ":docker: Docker Image Builds"
-    steps:
-      - name: ":docker: {{matrix}} image build"
-        key: build-docker
-        plugins:
-          - aws-assume-role-with-web-identity#v1.4.0:
-              role_arn: "arn:aws:iam::${BUILD_AWS_ACCOUNT_ID}:role/${BUILD_AWS_ROLE_NAME}"
-              session-tags:
-                - organization_slug
-                - organization_id
-                - pipeline_slug
-          - ecr#v2.9.0:
-              login: true
-              account_ids: "${BUILD_AWS_ACCOUNT_ID}"
-              region: "us-east-1"
-        agents:
-          queue: $AGENT_BUILDERS_QUEUE
-        depends_on:
-          - build-binary
-          - set-metadata
-        command: ".buildkite/steps/build-docker-image.sh {{matrix}}"
-        matrix:
-          setup:
-            - "alpine"
-            - "alpine-k8s"
-            - "ubuntu-20.04"
-            - "ubuntu-22.04"
-            - "ubuntu-24.04"
-            - "ubuntu-26.04"
-            - "sidecar"
+#   - group: ":docker: Docker Image Builds"
+#     steps:
+#       - name: ":docker: {{matrix}} image build"
+#         key: build-docker
+#         plugins:
+#           - aws-assume-role-with-web-identity#v1.4.0:
+#               role_arn: "arn:aws:iam::${BUILD_AWS_ACCOUNT_ID}:role/${BUILD_AWS_ROLE_NAME}"
+#               session-tags:
+#                 - organization_slug
+#                 - organization_id
+#                 - pipeline_slug
+#           - ecr#v2.9.0:
+#               login: true
+#               account_ids: "${BUILD_AWS_ACCOUNT_ID}"
+#               region: "us-east-1"
+#         agents:
+#           queue: $AGENT_BUILDERS_QUEUE
+#         depends_on:
+#           - build-binary
+#           - set-metadata
+#         command: ".buildkite/steps/build-docker-image.sh {{matrix}}"
+#         matrix:
+#           setup:
+#             - "alpine"
+#             - "alpine-k8s"
+#             - "ubuntu-20.04"
+#             - "ubuntu-22.04"
+#             - "ubuntu-24.04"
+#             - "ubuntu-26.04"
+#             - "sidecar"
 
-  - group: ":docker: Docker Image Tests"
-    steps:
-      - name: ":docker: {{matrix.variant}} amd64 image test"
-        key: test-docker-amd64
-        agents:
-          queue: $AGENT_BUILDERS_QUEUE
-        depends_on:
-          - build-docker
-        command: .buildkite/steps/test-docker-image.sh {{matrix.variant}}
-        plugins:
-          - aws-assume-role-with-web-identity#v1.4.0:
-              role_arn: "arn:aws:iam::${BUILD_AWS_ACCOUNT_ID}:role/${BUILD_AWS_ROLE_NAME}"
-              session-tags:
-                - organization_slug
-                - organization_id
-                - pipeline_slug
-          - ecr#v2.9.0:
-              login: true
-              account_ids: "${BUILD_AWS_ACCOUNT_ID}"
-              region: "us-east-1"
-        matrix:
-          setup:
-            variant:
-              - alpine
-              - alpine-k8s
-              - ubuntu-20.04
-              - ubuntu-22.04
-              - ubuntu-24.04
-              - ubuntu-26.04
-              - sidecar
+#   - group: ":docker: Docker Image Tests"
+#     steps:
+#       - name: ":docker: {{matrix.variant}} amd64 image test"
+#         key: test-docker-amd64
+#         agents:
+#           queue: $AGENT_BUILDERS_QUEUE
+#         depends_on:
+#           - build-docker
+#         command: .buildkite/steps/test-docker-image.sh {{matrix.variant}}
+#         plugins:
+#           - aws-assume-role-with-web-identity#v1.4.0:
+#               role_arn: "arn:aws:iam::${BUILD_AWS_ACCOUNT_ID}:role/${BUILD_AWS_ROLE_NAME}"
+#               session-tags:
+#                 - organization_slug
+#                 - organization_id
+#                 - pipeline_slug
+#           - ecr#v2.9.0:
+#               login: true
+#               account_ids: "${BUILD_AWS_ACCOUNT_ID}"
+#               region: "us-east-1"
+#         matrix:
+#           setup:
+#             variant:
+#               - alpine
+#               - alpine-k8s
+#               - ubuntu-20.04
+#               - ubuntu-22.04
+#               - ubuntu-24.04
+#               - ubuntu-26.04
+#               - sidecar
 
-      - name: ":docker: {{matrix.variant}} arm64 image test"
-        plugins:
-          - aws-assume-role-with-web-identity#v1.4.0:
-              role_arn: "arn:aws:iam::${BUILD_AWS_ACCOUNT_ID}:role/${BUILD_AWS_ROLE_NAME}"
-              session-tags:
-                - organization_slug
-                - organization_id
-                - pipeline_slug
-          - ecr#v2.9.0:
-              login: true
-              account_ids: "${BUILD_AWS_ACCOUNT_ID}"
-              region: "us-east-1"
-        key: test-docker-arm64
-        agents:
-          queue: $AGENT_BUILDERS_ARM64_QUEUE
-        depends_on:
-          - build-docker
-        command: .buildkite/steps/test-docker-image.sh {{matrix.variant}}
-        matrix:
-          setup:
-            variant:
-              - alpine
-              - alpine-k8s
-              - ubuntu-20.04
-              - ubuntu-22.04
-              - ubuntu-24.04
-              - ubuntu-26.04
-              - sidecar
+#       - name: ":docker: {{matrix.variant}} arm64 image test"
+#         plugins:
+#           - aws-assume-role-with-web-identity#v1.4.0:
+#               role_arn: "arn:aws:iam::${BUILD_AWS_ACCOUNT_ID}:role/${BUILD_AWS_ROLE_NAME}"
+#               session-tags:
+#                 - organization_slug
+#                 - organization_id
+#                 - pipeline_slug
+#           - ecr#v2.9.0:
+#               login: true
+#               account_ids: "${BUILD_AWS_ACCOUNT_ID}"
+#               region: "us-east-1"
+#         key: test-docker-arm64
+#         agents:
+#           queue: $AGENT_BUILDERS_ARM64_QUEUE
+#         depends_on:
+#           - build-docker
+#         command: .buildkite/steps/test-docker-image.sh {{matrix.variant}}
+#         matrix:
+#           setup:
+#             variant:
+#               - alpine
+#               - alpine-k8s
+#               - ubuntu-20.04
+#               - ubuntu-22.04
+#               - ubuntu-24.04
+#               - ubuntu-26.04
+#               - sidecar
 
-  # --- end Docker Image tests ---
+#   # --- end Docker Image tests ---
 
-  - name: ":debian: Debian package build"
-    key: build-debian-packages
-    depends_on:
-      - build-binary
-      - set-metadata
-    command: ".buildkite/steps/build-debian-packages.sh"
-    artifact_paths: "deb/**/*"
+#   - name: ":debian: Debian package build"
+#     key: build-debian-packages
+#     depends_on:
+#       - build-binary
+#       - set-metadata
+#     command: ".buildkite/steps/build-debian-packages.sh"
+#     artifact_paths: "deb/**/*"
 
-  - name: ":redhat: RPM Package build"
-    key: build-rpm-packages
-    depends_on:
-      - build-binary
-      - set-metadata
-    command: ".buildkite/steps/build-rpm-packages.sh"
-    artifact_paths: "rpm/**/*"
+#   - name: ":redhat: RPM Package build"
+#     key: build-rpm-packages
+#     depends_on:
+#       - build-binary
+#       - set-metadata
+#     command: ".buildkite/steps/build-rpm-packages.sh"
+#     artifact_paths: "rpm/**/*"
 
-  - name: ":github: Build Github Release"
-    key: build-github-release
-    depends_on:
-      - build-binary
-      - set-metadata
-    command: ".buildkite/steps/build-github-release.sh"
-    artifact_paths: "releases/**/*"
-    plugins:
-      - docker-compose#v4.14.0:
-          config: .buildkite/docker-compose.release.yml
-          run: github-release
-      - generate-provenance-attestation#v1.1.0:
-          artifacts: "releases/*.tar.gz;releases/*.zip"
-          attestation_name: "buildkite-agent-github-releases.attestation.json"
+#   - name: ":github: Build Github Release"
+#     key: build-github-release
+#     depends_on:
+#       - build-binary
+#       - set-metadata
+#     command: ".buildkite/steps/build-github-release.sh"
+#     artifact_paths: "releases/**/*"
+#     plugins:
+#       - docker-compose#v4.14.0:
+#           config: .buildkite/docker-compose.release.yml
+#           run: github-release
+#       - generate-provenance-attestation#v1.1.0:
+#           artifacts: "releases/*.tar.gz;releases/*.zip"
+#           attestation_name: "buildkite-agent-github-releases.attestation.json"
 
-  - name: ":docker: Build release tools image"
-    key: build-release-image
-    command: ".buildkite/steps/build-release-image.sh"
-    agents:
-      queue: $AGENT_BUILDERS_QUEUE
-    plugins:
-      - aws-assume-role-with-web-identity#v1.4.0:
-          role_arn: "arn:aws:iam::${BUILD_AWS_ACCOUNT_ID}:role/${BUILD_AWS_ROLE_NAME}"
-          session-tags:
-            - organization_slug
-            - organization_id
-            - pipeline_slug
-      - ecr#v2.9.0:
-          login: true
-          account_ids: "${BUILD_AWS_ACCOUNT_ID}"
-          region: "us-east-1"
+#   - name: ":docker: Build release tools image"
+#     key: build-release-image
+#     command: ".buildkite/steps/build-release-image.sh"
+#     agents:
+#       queue: $AGENT_BUILDERS_QUEUE
+#     plugins:
+#       - aws-assume-role-with-web-identity#v1.4.0:
+#           role_arn: "arn:aws:iam::${BUILD_AWS_ACCOUNT_ID}:role/${BUILD_AWS_ROLE_NAME}"
+#           session-tags:
+#             - organization_slug
+#             - organization_id
+#             - pipeline_slug
+#       - ecr#v2.9.0:
+#           login: true
+#           account_ids: "${BUILD_AWS_ACCOUNT_ID}"
+#           region: "us-east-1"
 
-  - name: ":memo: Trigger docs draft"
-    if: build.branch == "main"
-    soft_fail: true
-    command: .buildkite/steps/trigger-docs-draft.sh
+#   - name: ":memo: Trigger docs draft"
+#     if: build.branch == "main"
+#     soft_fail: true
+#     command: .buildkite/steps/trigger-docs-draft.sh
 
-  - name: ":pipeline: Upload Release Pipeline"
-    key: upload-release-steps
-    depends_on:
-      - build-debian-packages
-      - build-github-release
-      - build-release-image
-      - build-rpm-packages
-      - check-code-committed
-      - check-version-string
-      - e2e-tests
-      - test-docker-amd64
-      - test-docker-arm64
-      - test-macos
-      - test-windows
-    command: ".buildkite/steps/upload-release-steps.sh"
-    if: build.env("DRY_RUN") == "true" || build.branch =~ /^(main|.*-.*-stable|v\d+)$$/
+#   - name: ":pipeline: Upload Release Pipeline"
+#     key: upload-release-steps
+#     depends_on:
+#       - build-debian-packages
+#       - build-github-release
+#       - build-release-image
+#       - build-rpm-packages
+#       - check-code-committed
+#       - check-version-string
+#       - e2e-tests
+#       - test-docker-amd64
+#       - test-docker-arm64
+#       - test-macos
+#       - test-windows
+#     command: ".buildkite/steps/upload-release-steps.sh"
+#     if: build.env("DRY_RUN") == "true" || build.branch =~ /^(main|.*-.*-stable|v\d+)$$/
