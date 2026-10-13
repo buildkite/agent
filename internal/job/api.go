@@ -107,7 +107,6 @@ func (e *Executor) reportCapturedError(ctx context.Context, capturedError *jobap
 		Message:        capturedError.Message,
 		Timestamp:      *capturedError.Timestamp,
 		IdempotencyKey: capturedError.IdempotencyKey,
-		Context:        capturedError.Context,
 	})
 	return err
 }

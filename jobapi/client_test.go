@@ -186,7 +186,6 @@ func TestClientCaptureErrorUsesAuthenticatedLocalTransport(t *testing.T) {
 	want := CapturedError{
 		Code:    "image_pull_failed",
 		Message: "registry denied access",
-		Context: map[string]any{"exit_status": json.Number("17"), "id": json.Number("9007199254740993")},
 	}
 	if err := cli.CaptureError(t.Context(), &want); err != nil {
 		t.Fatalf("CaptureError() error = %v", err)
@@ -209,7 +208,7 @@ func TestClientCaptureErrorBodyLimit(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Include the JSON envelope, not just message or context bytes.
+	// Include the JSON envelope, not just message bytes.
 	message := strings.Repeat("x", (32<<10)-len(`{"code":"x","message":""}`))
 	for _, test := range []struct {
 		name    string
@@ -218,7 +217,7 @@ func TestClientCaptureErrorBodyLimit(t *testing.T) {
 	}{
 		{"at limit", CapturedError{Code: "x", Message: message}, false},
 		{"one byte over", CapturedError{Code: "x", Message: message + "x"}, true},
-		{"escaping expands context", CapturedError{Code: "x", Message: "failure", Context: map[string]any{"log": strings.Repeat("<", 6<<10)}}, true},
+		{"escaping expands message", CapturedError{Code: "x", Message: strings.Repeat("<", 6<<10)}, true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			before := len(svr.captured)

@@ -20,33 +20,6 @@ import (
 // adds a timestamp and idempotency key.
 const MaxCapturedErrorBody = 32 << 10
 
-// UnmarshalJSON distinguishes omitted context from explicit null and preserves
-// JSON numbers on both the CLI and parent sides of the local transport.
-func (e *CapturedError) UnmarshalJSON(data []byte) error {
-	type capturedError CapturedError
-	var wire struct {
-		capturedError
-		Context json.RawMessage `json:"context"`
-	}
-	dec := json.NewDecoder(bytes.NewReader(data))
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(&wire); err != nil {
-		return err
-	}
-	if len(wire.Context) != 0 {
-		if bytes.Equal(bytes.TrimSpace(wire.Context), []byte("null")) {
-			return errors.New("context must be an object")
-		}
-		dec := json.NewDecoder(bytes.NewReader(wire.Context))
-		dec.UseNumber()
-		if err := dec.Decode(&wire.capturedError.Context); err != nil {
-			return err
-		}
-	}
-	*e = CapturedError(wire.capturedError)
-	return nil
-}
-
 func (s *Server) handleCapturedError(w http.ResponseWriter, r *http.Request) {
 	if s.reportCapturedError == nil {
 		s.writeCapturedError(w, errors.New("error capture is unavailable on the parent agent"), http.StatusNotFound)
@@ -67,7 +40,6 @@ func (s *Server) handleCapturedError(w http.ResponseWriter, r *http.Request) {
 	payload := new(CapturedError)
 	dec := json.NewDecoder(bytes.NewReader(body))
 	dec.DisallowUnknownFields()
-	dec.UseNumber()
 	if err := dec.Decode(payload); err != nil {
 		s.writeCapturedError(w, fmt.Errorf("failed to decode request body: %w", err), http.StatusBadRequest)
 		return
@@ -132,13 +104,6 @@ func (e *CapturedError) redact(needles []string) error {
 	}
 	e.Code = replace(e.Code)
 	e.Message = replace(e.Message)
-	if e.Context != nil {
-		context, err := redactCapturedErrorValue(e.Context, replace)
-		if err != nil {
-			return err
-		}
-		e.Context = context.(map[string]any)
-	}
 	if !changed {
 		return nil
 	}
@@ -155,43 +120,6 @@ func (e *CapturedError) redact(needles []string) error {
 		return fmt.Errorf("captured error exceeds %d bytes after redaction", MaxCapturedErrorBody)
 	}
 	return nil
-}
-
-// Redact decoded data rather than JSON syntax: a secret can contain characters
-// escaped by JSON, and replacing serialized text can break keys or numbers.
-func redactCapturedErrorValue(value any, replace func(string) string) (any, error) {
-	switch v := value.(type) {
-	case string:
-		return replace(v), nil
-	case json.Number:
-		if redacted := replace(v.String()); redacted != v.String() {
-			// A numeric secret needs a string replacement to remain valid JSON.
-			return redacted, nil
-		}
-	case []any:
-		for i, item := range v {
-			redacted, err := redactCapturedErrorValue(item, replace)
-			if err != nil {
-				return nil, err
-			}
-			v[i] = redacted
-		}
-	case map[string]any:
-		redacted := make(map[string]any, len(v))
-		for key, item := range v {
-			key = replace(key)
-			if _, exists := redacted[key]; exists {
-				return nil, errors.New("context keys collide after redaction")
-			}
-			item, err := redactCapturedErrorValue(item, replace)
-			if err != nil {
-				return nil, err
-			}
-			redacted[key] = item
-		}
-		return redacted, nil
-	}
-	return value, nil
 }
 
 func requireJSONEOF(dec *json.Decoder) error {

@@ -32,7 +32,6 @@ func TestCaptureJobError(t *testing.T) {
 				want := map[string]any{
 					"code": "image_pull_failed", "message": "Failed to pull image",
 					"timestamp": "2026-09-09T10:30:00.123456Z", "idempotency_key": "attempt-1",
-					"context": map[string]any{"exit_status": float64(17)},
 				}
 				if !reflect.DeepEqual(body, want) {
 					t.Errorf("body = %#v, want %#v", body, want)
@@ -47,7 +46,7 @@ func TestCaptureJobError(t *testing.T) {
 			resp, err := client.CaptureJobError(t.Context(), "job-id", &api.JobCapturedError{
 				Code: "image_pull_failed", Message: "Failed to pull image",
 				Timestamp:      time.Date(2026, 9, 9, 10, 30, 0, 123456000, time.UTC),
-				IdempotencyKey: "attempt-1", Context: map[string]any{"exit_status": 17},
+				IdempotencyKey: "attempt-1",
 			})
 			if (err != nil) != (status != 201) {
 				t.Errorf("error = %v for status %d", err, status)

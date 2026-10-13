@@ -1,12 +1,9 @@
 package clicommand
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"strings"
 
 	"github.com/buildkite/agent/v4/jobapi"
@@ -15,7 +12,7 @@ import (
 
 const jobCaptureErrorHelpDescription = `Usage:
 
-    buildkite-agent job capture-error <error-code> --message <message> [--context '<json>']
+    buildkite-agent job capture-error <error-code> --message <message>
 
 Description:
 
@@ -25,21 +22,19 @@ and API. Requires the Local Job API.
 The error code is a string identifying the kind of error, such as
 image_pull_failed, not necessarily an HTTP status or command exit code.
 
-Optionally include additional details as a JSON object using --context, or use
---context - to read them from standard input.
+Include all important details in the message.
 
-Values registered for job-log redaction are redacted from the code, message,
-and context, including context keys, before the report is sent to Buildkite.
-As in job logs, values that look like Buildkite-issued tokens are also redacted.
-Register dynamically obtained secrets with buildkite-agent redactor add before
-reporting them. This does not automatically detect other sensitive information.
+Values registered for job-log redaction are redacted from the code and message
+before the report is sent to Buildkite. As in job logs, values that look like
+Buildkite-issued tokens are also redacted. Register dynamically obtained secrets
+with buildkite-agent redactor add before reporting them. This does not
+automatically detect other sensitive information.
 
-Redacted numbers become strings. Reports are rejected if redaction causes
-duplicate context keys, an invalid error code, or an oversized payload.
+Reports are rejected if redaction causes an invalid error code or an oversized
+payload.
 
 This command limits error reports to 32 KiB, including JSON encoding.
-If a report is too large, shorten the message or reduce the context.
-Context input is also limited to 32 KiB before parsing.
+If a report is too large, shorten the message.
 
 Note: This feature is currently in development and subject to change. It is not
 yet available to all customers.`
@@ -48,7 +43,6 @@ type JobCaptureErrorConfig struct {
 	GlobalConfig
 	ErrorCode string `cli:"arg:0" label:"error code"`
 	Message   string `cli:"message"`
-	Context   string `cli:"context"`
 }
 
 var JobCaptureErrorCommand = &cli.Command{
@@ -60,10 +54,6 @@ var JobCaptureErrorCommand = &cli.Command{
 		&cli.StringFlag{
 			Name: "message", Usage: "A human-readable description of the error", Required: true,
 			Sources: cli.EnvVars("BUILDKITE_AGENT_JOB_CAPTURE_ERROR_MESSAGE"),
-		},
-		&cli.StringFlag{
-			Name: "context", Usage: "Additional error context as a JSON object, or - to read from standard input",
-			Sources: cli.EnvVars("BUILDKITE_AGENT_JOB_CAPTURE_ERROR_CONTEXT"),
 		},
 	),
 	Action: func(ctx context.Context, c *cli.Command) error {
@@ -82,29 +72,6 @@ var JobCaptureErrorCommand = &cli.Command{
 		}
 
 		capturedError := jobapi.CapturedError{Code: cfg.ErrorCode, Message: cfg.Message}
-		if cfg.Context != "" {
-			var input io.Reader = strings.NewReader(cfg.Context)
-			if cfg.Context == "-" {
-				input = c.Root().Reader
-			}
-			data, err := io.ReadAll(io.LimitReader(input, jobapi.MaxCapturedErrorBody+1))
-			if err != nil {
-				return fmt.Errorf("reading context JSON: %w", err)
-			}
-			if len(data) > jobapi.MaxCapturedErrorBody {
-				return fmt.Errorf("raw context JSON exceeds %d bytes", jobapi.MaxCapturedErrorBody)
-			}
-			dec := json.NewDecoder(bytes.NewReader(data))
-			dec.UseNumber()
-			if err := dec.Decode(&capturedError.Context); err != nil {
-				return fmt.Errorf("invalid context JSON: %w", err)
-			}
-			var extra any
-			if err := dec.Decode(&extra); !errors.Is(err, io.EOF) || capturedError.Context == nil {
-				return errors.New("invalid context JSON: context must contain exactly one object")
-			}
-		}
-
 		if err := client.CaptureError(ctx, &capturedError); err != nil {
 			return fmt.Errorf("failed to capture error through the Local Job API: %w", err)
 		}
