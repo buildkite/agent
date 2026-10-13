@@ -31,6 +31,7 @@ type Job struct {
 	TraceParent           string                     `json:"traceparent"`
 	TraceState            string                     `json:"tracestate"`
 	Priority              int                        `json:"priority"`
+	Warnings              []Warning                  `json:"warnings,omitempty"`
 }
 
 // JobURL returns the URL that deep-links to a specific job on its build page,

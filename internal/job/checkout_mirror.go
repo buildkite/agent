@@ -169,7 +169,7 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string, attem
 				return "", err
 			}
 			if hit {
-				return e.snapshotMirror(ctx, repository, mirrorDir)
+				return e.finishMirrorUpdate(ctx, repository, mirrorDir, e.mirrorLFSRef())
 			}
 		}
 
@@ -194,9 +194,10 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string, attem
 				)
 			}
 			if err == nil {
-				// C16: agents predating remote mirrors may share this mirror.
-				// Canonicalize the temporary repository before atomically
-				// publishing it to the shared mixed-version cache.
+				// Agents predating remote mirrors may share this mirror volume,
+				// so remote.origin.url must always be canonical. Canonicalize the
+				// temporary repository before atomically publishing it to the
+				// shared mixed-version cache.
 				err = e.shell.Command(
 					"git", "--git-dir", tempMirrorDir,
 					"remote", "set-url", "origin", repository,
@@ -222,7 +223,7 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string, attem
 					// --reference clone transfers only the missing delta.
 					attempt.outcome = remoteMirrorOutcomeMiss
 				}
-				return e.snapshotMirror(ctx, repository, mirrorDir)
+				return e.finishMirrorUpdate(ctx, repository, mirrorDir, e.mirrorLFSRef())
 			}
 
 			if stagingCleanupErr == nil && tempMirrorDir != "" {
@@ -251,7 +252,7 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string, attem
 			}
 			return "", err
 		}
-		return e.snapshotMirror(ctx, repository, mirrorDir)
+		return e.finishMirrorUpdate(ctx, repository, mirrorDir, e.mirrorLFSRef())
 	}
 
 	// If it exists, immediately release the clone lock.
@@ -286,14 +287,17 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string, attem
 		}
 	}()
 
+	lfsRef := e.mirrorLFSRef()
 	commitAlreadyPresent := false
 	if isMainRepository {
 		// Another process may have fetched the commit while we waited for the lock.
 		//
-		// Presence-only by design (C22): proving the object is also reachable from a
+		// Presence-only by design: proving the object is also reachable from a
 		// mirror ref requires a global `for-each-ref --contains` scan, which costs
 		// minutes on large mirrors. An unpinned object pruned by mirror gc fails one
-		// job with a retryable git error that the retry-clean path heals.
+		// job with a retryable git error that the retry-clean path heals. Do not add
+		// a global reachability scan here; if stronger pinning is ever needed, check
+		// only the expected refs.
 		if hasGitCommit(ctx, e.shell, mirrorDir, e.Commit) {
 			e.shell.Commentf("Commit %q exists in mirror", e.Commit)
 			commitAlreadyPresent = true
@@ -327,9 +331,11 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string, attem
 				return "", err
 			}
 			if hit {
-				// C2: the helper requires both a successful ref write and
-				// local object presence. Keep going through rename
-				// maintenance instead of returning early.
+				// The helper requires both a successful ref write and local
+				// object presence: a fetch can succeed while its ref write fails,
+				// leaving unreferenced objects that mirror gc may prune from under
+				// --reference checkouts. Keep going through rename maintenance
+				// instead of returning early.
 				remoteMirrorHit = true
 			}
 		}
@@ -375,6 +381,11 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string, attem
 		}); err != nil {
 			return "", fmt.Errorf("%w%s", err, prMergeRefspecHint(isMergeRefspec))
 		}
+		if e.Commit == "HEAD" {
+			// Match the workspace checkout: use this fetch's resolved ref,
+			// even when a custom refspec did not update a local branch.
+			lfsRef = "FETCH_HEAD"
+		}
 	}
 	if !isMainRepository {
 		// This is a mirror of a submodule.
@@ -404,6 +415,25 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string, attem
 		}
 	}
 
+	return e.finishMirrorUpdate(ctx, repository, mirrorDir, lfsRef)
+}
+
+// finishMirrorUpdate is the last step of every mirror clone or update path. It
+// runs while the caller holds the mirror's clone or update lock, before
+// creating a snapshot or cloning the workspace. When the Git LFS mirror cache
+// is enabled, it first prefetches the job's LFS objects (identified by lfsRef)
+// into the main repository's mirror. That prefetch is optional: on failure the
+// workspace still fetches with its own configuration and retries, reusing
+// cached objects where possible.
+func (e *Executor) finishMirrorUpdate(ctx context.Context, repository, mirrorDir, lfsRef string) (string, error) {
+	if e.mirrorLFSCacheEnabled() && repository == e.Repository {
+		if err := e.prefetchMirrorLFS(ctx, mirrorDir, lfsRef); err != nil {
+			if ctx.Err() != nil {
+				return "", ctx.Err()
+			}
+			e.shell.Warningf("Unable to prefetch Git LFS objects into mirror; deferring to checkout: %v", err)
+		}
+	}
 	return e.snapshotMirror(ctx, repository, mirrorDir)
 }
 

@@ -22,6 +22,7 @@ type AgentConfiguration struct {
 	GitMirrorCheckoutMode           string
 	GitMirrorsLockTimeout           int
 	GitMirrorsSkipUpdate            bool
+	GitMirrorsLFSCache              bool
 	PluginsPath                     string
 	GitCheckoutFlags                string
 	GitCheckoutTimeout              int
@@ -36,6 +37,7 @@ type AgentConfiguration struct {
 	GitSubmoduleCloneConfig         []string
 	SkipCheckout                    bool
 	GitSkipFetchExistingCommits     bool
+	GitFetchBaseBranch              string
 	CheckoutOverrideMode            env.CheckoutOverrideMode
 	CheckoutAttempts                int
 	AllowedRepositories             []*regexp.Regexp

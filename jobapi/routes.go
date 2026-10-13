@@ -32,6 +32,7 @@ func (s *Server) router() chi.Router {
 
 		r.Put("/workdir", s.setWorkdir)
 
+		r.Post("/redact", s.redact)
 		r.Post("/redactions", s.createRedaction)
 
 		r.Post("/promise-failure", s.handlePromiseFailure)

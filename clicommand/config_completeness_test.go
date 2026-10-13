@@ -28,6 +28,7 @@ var commandConfigPairs = []configCommandPair{
 	{Config: ArtifactUploadConfig{}, Command: ArtifactUploadCommand},
 	{Config: BuildCancelConfig{}, Command: BuildCancelCommand},
 	{Config: BootstrapConfig{}, Command: BootstrapCommand},
+	{Config: CacheExecConfig{}, Command: CacheExecCommand},
 	{Config: CacheRestoreConfig{}, Command: CacheRestoreCommand},
 	{Config: CacheSaveConfig{}, Command: CacheSaveCommand},
 	{Config: EnvDumpConfig{}, Command: EnvDumpCommand},

@@ -70,6 +70,16 @@ type RedactionCreateResponse struct {
 	Redacted string `json:"redacted"`
 }
 
+// RedactRequest is the request body for the POST /redact endpoint
+type RedactRequest struct {
+	Output []byte `json:"output"`
+}
+
+// RedactResponse is the response body for the POST /redact endpoint
+type RedactResponse struct {
+	Redacted []byte `json:"redacted"`
+}
+
 // PromiseFailureRequest is the request body for the POST /promise-failure endpoint
 type PromiseFailureRequest struct {
 	ExitStatus int    `json:"exit_status"`

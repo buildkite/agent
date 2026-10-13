@@ -46,6 +46,10 @@ address it is not overwritten unless --force is specified:
 Force replaces the entire cache at the same save address, without merging files
 or bypassing registry access policies. Concurrent saves are last-write-wins.
 
+Archives are stored under a digest of their contents. If the store already holds
+an archive with the same digest and size, the entry is saved without uploading
+it again. --force always uploads.
+
 Configuration File Format:
 
 The cache configuration file should be in YAML format. cache_key is an ordered

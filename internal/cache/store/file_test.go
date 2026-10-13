@@ -584,3 +584,34 @@ func TestNewBlobStoreAgentManagedFile(t *testing.T) {
 		t.Errorf("expected LocalFileBlob type, got %T", blob)
 	}
 }
+
+func TestLocalFileBlobStat(t *testing.T) {
+	ctx := t.Context()
+	tmpDir := t.TempDir()
+
+	blob, err := NewLocalFileBlob(ctx, fileURL(filepath.Join(tmpDir, "cache-root")))
+	if err != nil {
+		t.Fatalf("NewLocalFileBlob: %v", err)
+	}
+
+	if _, err := blob.Stat(ctx, "missing-key"); !errors.Is(err, ErrBlobNotFound) {
+		t.Errorf("Stat(missing) err = %v, want ErrBlobNotFound", err)
+	}
+
+	srcFile := filepath.Join(tmpDir, "src.txt")
+	content := []byte("some cached bytes")
+	if err := os.WriteFile(srcFile, content, 0o600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	if _, err := blob.Upload(ctx, srcFile, "stored-key", 0); err != nil {
+		t.Fatalf("Upload: %v", err)
+	}
+
+	size, err := blob.Stat(ctx, "stored-key")
+	if err != nil {
+		t.Fatalf("Stat(stored): %v", err)
+	}
+	if size != int64(len(content)) {
+		t.Errorf("Stat(stored) size = %d, want %d", size, len(content))
+	}
+}

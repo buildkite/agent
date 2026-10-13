@@ -110,6 +110,64 @@ func TestCapturedErrorRedactionResponse(t *testing.T) {
 	}
 }
 
+func TestCapturedErrorRedactsBuildkiteTokensWithoutRegisteredSecrets(t *testing.T) {
+	t.Parallel()
+
+	var reported *jobapi.CapturedError
+	srv, token, err := testServer(t, testEnviron(), replacer.NewMux(), jobapi.WithCapturedErrorReporter(func(_ context.Context, capturedError *jobapi.CapturedError) error {
+		reported = capturedError
+		return nil
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := srv.Start(); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = srv.Stop() })
+
+	bkToken := "bkua_" + strings.Repeat("x9Y8", 10)
+	body, err := json.Marshal(map[string]any{
+		"code":    "x",
+		"message": "Request failed with " + bkToken,
+		"context": map[string]any{
+			"details":    []any{"token: " + bkToken},
+			bkToken:      "rejected",
+			"short_body": "bkua_encoded-token",
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	req, err := http.NewRequest(http.MethodPost, "http://job/api/current-job/v0/errors", bytes.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	resp, err := testSocketClient(srv.SocketPath).Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusCreated)
+	}
+	if reported == nil {
+		t.Fatal("reporter was not called")
+	}
+	if got, want := reported.Message, "Request failed with [REDACTED]"; got != want {
+		t.Errorf("reported message = %q, want %q", got, want)
+	}
+	wantContext := map[string]any{
+		"details":    []any{"token: [REDACTED]"},
+		"[REDACTED]": "rejected",
+		"short_body": "bkua_encoded-token",
+	}
+	if diff := cmp.Diff(wantContext, reported.Context); diff != "" {
+		t.Errorf("reported context diff (-want +got):\n%s", diff)
+	}
+}
+
 func TestCapturedErrorIsAuthenticatedAndNormalized(t *testing.T) {
 	t.Parallel()
 

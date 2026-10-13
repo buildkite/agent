@@ -206,42 +206,61 @@ func stripShallowFetchFlags(flags []string) []string {
 	return out
 }
 
-// stripRefSuppressingFetchFlags removes git-fetch modes that make a fetch skip
-// or redirect the ref update checkCommitOnBranch relies on: --dry-run performs
-// no fetch and writes no ref, --prefetch rewrites the destination under
-// refs/prefetch/, and --negotiate-only fetches no packfile. Left in
-// BUILDKITE_GIT_FETCH_FLAGS, any of them would leave the branch-tip ref
-// unwritten, so rev-parse fails and the check degrades to "unavailable" (a pass
-// under strict). None of them belong in the verification probe.
-//
-// Unambiguous prefixes are matched too: git accepts --dry for --dry-run and
-// --prefe for --prefetch, so a token is dropped when one of the mode names
-// begins with it. Stripping tokens keeps this version-safe, unlike appending the
-// --no-* forms: --prefetch (git 2.29) and --negotiate-only (2.32) postdate the
-// oldest git the agent runs on, so --no-prefetch/--no-negotiate-only would break
-// fetches there. Legitimate flags like --prune and --negotiation-tip are not
-// prefixes of these names, so they survive.
+// stripRefSuppressingFetchFlags removes the git-fetch modes that would leave the
+// branch-tip ref unwritten, so rev-parse fails and the check degrades to
+// "unavailable" (a pass under strict). None of them belong in the verification
+// probe.
 func stripRefSuppressingFetchFlags(flags []string) []string {
-	modes := []string{"dry-run", "prefetch", "negotiate-only"}
 	out := make([]string, 0, len(flags))
 	for _, f := range flags {
-		name, isLong := strings.CutPrefix(f, "--")
-		name, _, _ = strings.Cut(name, "=")
-		suppressing := false
-		if isLong && name != "" {
-			for _, m := range modes {
-				if strings.HasPrefix(m, name) {
-					suppressing = true
-					break
-				}
-			}
-		}
-		if suppressing {
+		if isRefSuppressingFetchFlag(f) {
 			continue
 		}
 		out = append(out, f)
 	}
 	return out
+}
+
+// refSuppressingFetchFlags returns the flags isRefSuppressingFetchFlag matches,
+// for callers that report the conflict rather than resolving it.
+func refSuppressingFetchFlags(flags []string) []string {
+	var out []string
+	for _, f := range flags {
+		if isRefSuppressingFetchFlag(f) {
+			out = append(out, f)
+		}
+	}
+	return out
+}
+
+// isRefSuppressingFetchFlag reports whether a git-fetch flag makes the fetch
+// skip or redirect the remote-tracking ref update: --dry-run performs no fetch
+// and writes no ref, --prefetch rewrites the destination under refs/prefetch/,
+// and --negotiate-only fetches no packfile. git still exits zero for all three,
+// so a fetch configured with any of them succeeds without the ref landing.
+//
+// Unambiguous prefixes match too: git accepts --dry for --dry-run and --prefe
+// for --prefetch, so a token matches when one of the mode names begins with it.
+// Matching tokens keeps callers version-safe, unlike appending the --no-* forms:
+// --prefetch (git 2.29) and --negotiate-only (2.32) postdate the oldest git the
+// agent runs on, so --no-prefetch/--no-negotiate-only would break fetches there.
+// Legitimate flags like --prune and --negotiation-tip are not prefixes of these
+// names, so they do not match.
+func isRefSuppressingFetchFlag(flag string) bool {
+	name, isLong := strings.CutPrefix(flag, "--")
+	if !isLong {
+		return false
+	}
+	name, _, _ = strings.Cut(name, "=")
+	if name == "" {
+		return false
+	}
+	for _, mode := range []string{"dry-run", "prefetch", "negotiate-only"} {
+		if strings.HasPrefix(mode, name) {
+			return true
+		}
+	}
+	return false
 }
 
 // verifyCommit ensures that the commit we are asked to build exists and is

@@ -868,9 +868,40 @@ func (e *Executor) executeGlobalHook(ctx context.Context, name string) error {
 
 // Returns the absolute path to a local hook, or os.ErrNotExist if none is found
 func (e *Executor) localHookPath(name string) (string, error) {
-	// The local hooks dir must exist within the checkout root.
-	dir := filepath.Join(".buildkite", "hooks")
-	return hook.Find(e.checkoutRoot, dir, name)
+	// A job can fail before checkout and still attempt pre-exit hooks.
+	if e.checkoutRoot == nil {
+		return "", os.ErrNotExist
+	}
+
+	// Prefer hooks in the working directory, but the original checkout remains
+	// their boundary even if a hook changes BUILDKITE_BUILD_CHECKOUT_PATH.
+	// Resolve both paths so symlink aliases (e.g. after cd -P) compare equally.
+	checkoutPath, err := filepath.EvalSymlinks(e.checkoutRoot.Name())
+	if err != nil {
+		return "", os.ErrNotExist
+	}
+	// Root.Name may be relative, while the shell's working directory is absolute.
+	checkoutPath, err = filepath.Abs(checkoutPath)
+	if err != nil {
+		return "", os.ErrNotExist
+	}
+	workdir, err := filepath.EvalSymlinks(e.shell.Getwd())
+	if err != nil {
+		return "", os.ErrNotExist
+	}
+	rel, err := filepath.Rel(checkoutPath, workdir)
+	if err != nil || !filepath.IsLocal(rel) {
+		return "", os.ErrNotExist
+	}
+	dir := filepath.Join(rel, ".buildkite", "hooks")
+	// Keep lookup rooted so symlinks cannot escape the checkout.
+	hookPath, err := hook.Find(e.checkoutRoot, dir, name)
+	if !errors.Is(err, os.ErrNotExist) || rel == "." {
+		return hookPath, err
+	}
+
+	// Preserve shared root hooks when the working directory has no matching hook.
+	return hook.Find(e.checkoutRoot, filepath.Join(".buildkite", "hooks"), name)
 }
 
 func (e *Executor) hasLocalHook(name string) bool {

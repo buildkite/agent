@@ -3,6 +3,8 @@ package cache
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -23,6 +25,72 @@ import (
 	"github.com/buildkite/agent/v4/internal/cache/store"
 	"github.com/buildkite/agent/v4/logger"
 )
+
+func TestDownloadCacheLocalArchiveAndCleanup(t *testing.T) {
+	content := []byte("cache archive contents")
+	sum := sha256.Sum256(content)
+	for _, outcome := range []string{"success", "unknown algorithm", "missing blob", "digest mismatch"} {
+		t.Run(outcome, func(t *testing.T) {
+			digest := api.CacheDigest{Algorithm: "sha256", Value: hex.EncodeToString(sum[:])}
+			if outcome == "unknown algorithm" {
+				// Preserve support for future digest algorithms and keep the remote
+				// object name independent of the local archive filename.
+				digest = api.CacheDigest{Algorithm: "blake3", Value: "nested/blob"}
+			}
+			storageRoot := t.TempDir()
+			tempRoot := t.TempDir()
+			for _, name := range []string{"TMPDIR", "TMP", "TEMP"} {
+				t.Setenv(name, tempRoot)
+			}
+			if outcome != "missing blob" {
+				stored := content
+				if outcome == "digest mismatch" {
+					stored = []byte("different contents")
+				}
+				storePath := filepath.Join(storageRoot, digest.Value)
+				if err := os.MkdirAll(filepath.Dir(storePath), 0o755); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(storePath, stored, 0o600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			bucketURL := (&url.URL{Scheme: "file", Path: "/" + strings.TrimPrefix(filepath.ToSlash(storageRoot), "/")}).String()
+			c := &client{}
+			tmpDir, archiveFile, _, err := c.downloadCache(t.Context(), api.CacheEntryRetrieveResp{
+				Store: store.AgentManaged,
+				Blobs: []api.CacheBlob{{Digest: digest}},
+			}, bucketURL)
+			switch outcome {
+			case "success", "unknown algorithm":
+				if err != nil {
+					t.Fatal(err)
+				}
+				t.Cleanup(func() { _ = os.RemoveAll(tmpDir) })
+				if archiveFile != filepath.Join(tmpDir, "archive") {
+					t.Fatalf("archiveFile = %q, want agent-chosen filename inside %q", archiveFile, tmpDir)
+				}
+				got, err := os.ReadFile(archiveFile)
+				if err != nil || !bytes.Equal(got, content) {
+					t.Fatalf("downloaded contents = %q, %v, want %q", got, err, content)
+				}
+				return
+			case "missing blob":
+				if !errors.Is(err, store.ErrBlobNotFound) {
+					t.Fatalf("error = %v, want ErrBlobNotFound", err)
+				}
+			case "digest mismatch":
+				if !errors.Is(err, ErrDigestMismatch) {
+					t.Fatalf("error = %v, want ErrDigestMismatch", err)
+				}
+			}
+			entries, err := os.ReadDir(tempRoot)
+			if err != nil || len(entries) != 0 {
+				t.Fatalf("failed download left temporary files: %v, %v", entries, err)
+			}
+		})
+	}
+}
 
 func TestRestoreCleanupError(t *testing.T) {
 	for _, tc := range []struct {
@@ -224,6 +292,70 @@ func TestInvalidateStaleEntry_ExistedFalseIsNotReportedAsInvalidated(t *testing.
 	}
 }
 
+// resavedEntry sets up the race where another job re-saved the address between
+// this restore's retrieve and a later expire or confirm. The re-save has the
+// same blob, as it usually will (deterministic archive of the same inputs), so
+// only the upload ID distinguishes it.
+func resavedEntry(mockClient *mockAPIClient) (api.CacheEntryRetrieveResp, *mockCacheEntry) {
+	targetPaths := []string{"node_modules"}
+	cacheKey := []api.CacheKeyPart{{Value: "v1-test-key", Mandatory: true}}
+	blobs := []api.CacheBlob{{Digest: api.CacheDigest{Algorithm: "sha256", Value: "same"}}}
+
+	retrieveResp := api.CacheEntryRetrieveResp{
+		TargetPaths: targetPaths,
+		CacheKey:    cacheKey,
+		Blobs:       blobs,
+		UploadID:    "stale-upload",
+	}
+	resaved := &mockCacheEntry{
+		targetPaths: targetPaths,
+		cacheKey:    cacheKey,
+		blobs:       blobs,
+		uploadID:    "fresh-upload",
+		committed:   true,
+	}
+	mockClient.registries["~"].cache[cacheAddr(targetPaths, cacheKey)] = resaved
+	return retrieveResp, resaved
+}
+
+func TestInvalidateStaleEntry_SkipsEntryResavedSinceRetrieve(t *testing.T) {
+	mockClient := newMockAPIClient("s3")
+	c := &client{api: mockClient, registry: "~"}
+	retrieveResp, resaved := resavedEntry(mockClient)
+
+	if c.invalidateStaleEntry(t.Context(), retrieveResp) {
+		t.Error("invalidateStaleEntry() = true, want false when the entry was re-saved")
+	}
+	if len(mockClient.expireCalls) != 1 {
+		t.Fatalf("expire calls = %d, want 1", len(mockClient.expireCalls))
+	}
+	if got := mockClient.expireCalls[0].UploadID; got != "stale-upload" {
+		t.Errorf("expire request upload_id = %q, want %q", got, "stale-upload")
+	}
+	addr := cacheAddr(retrieveResp.TargetPaths, retrieveResp.CacheKey)
+	if mockClient.registries["~"].cache[addr] != resaved {
+		t.Error("re-saved entry was deleted, want it to survive")
+	}
+}
+
+func TestConfirmRestoreSucceeded_DoesNotRefreshEntryResavedSinceRetrieve(t *testing.T) {
+	mockClient := newMockAPIClient("s3")
+	c := &client{api: mockClient, registry: "~"}
+	retrieveResp, resaved := resavedEntry(mockClient)
+
+	c.confirmRestoreSucceeded(t.Context(), retrieveResp, nil)
+
+	if len(mockClient.confirmCalls) != 1 {
+		t.Fatalf("confirm calls = %d, want 1", len(mockClient.confirmCalls))
+	}
+	if got := mockClient.confirmCalls[0].UploadID; got != "stale-upload" {
+		t.Errorf("confirm request upload_id = %q, want %q", got, "stale-upload")
+	}
+	if !resaved.expiresAt.IsZero() {
+		t.Errorf("re-saved entry retention refreshed to %v, want untouched", resaved.expiresAt)
+	}
+}
+
 func TestConfirmRestoreSucceeded_EchoesScopesFromRetrieve(t *testing.T) {
 	mockClient := newMockAPIClient("s3")
 	c := &client{api: mockClient, registry: "~"}
@@ -331,7 +463,7 @@ func TestMissCompleteMessage(t *testing.T) {
 	if got, want := missCompleteMessage("missing blob", true), "Cache miss (missing blob, invalidated stale entry)"; got != want {
 		t.Errorf("missCompleteMessage(invalidated=true) = %q, want %q", got, want)
 	}
-	if got, want := missCompleteMessage("missing blob", false), "Cache miss (missing blob, stale entry could not be invalidated)"; got != want {
+	if got, want := missCompleteMessage("missing blob", false), "Cache miss (missing blob, entry may already have been removed or replaced by a newer save)"; got != want {
 		t.Errorf("missCompleteMessage(invalidated=false) = %q, want %q", got, want)
 	}
 }
@@ -615,6 +747,10 @@ func (f *fakeRefreshingBlob) Download(_ context.Context, _, _ string) (*store.Tr
 	return nil, nil
 }
 
+func (f *fakeRefreshingBlob) Stat(_ context.Context, _ string) (int64, error) {
+	return 0, nil
+}
+
 func (f *fakeRefreshingBlob) RefreshRetention(_ context.Context, key string, retention time.Duration) {
 	f.refreshCalls = append(f.refreshCalls, key)
 	f.refreshRetentions = append(f.refreshRetentions, retention)
@@ -630,6 +766,10 @@ func (f *fakeNonRefreshingBlob) Upload(_ context.Context, _, _ string, _ time.Du
 
 func (f *fakeNonRefreshingBlob) Download(_ context.Context, _, _ string) (*store.TransferInfo, error) {
 	return nil, nil
+}
+
+func (f *fakeNonRefreshingBlob) Stat(_ context.Context, _ string) (int64, error) {
+	return 0, nil
 }
 
 func TestMaybeRefreshRetention(t *testing.T) {

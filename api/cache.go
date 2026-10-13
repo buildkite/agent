@@ -96,7 +96,11 @@ type CacheEntryRetrieveResp struct {
 	// e.g. {"branch": "main"}. Echo these back on CacheEntryExpireReq to
 	// invalidate this exact entry — its scope may no longer match what the
 	// registry's current policy would resolve.
-	Scopes             map[string]string        `json:"scopes"`
+	Scopes map[string]string `json:"scopes"`
+	// UploadID identifies the save that wrote this entry; a re-save under the
+	// same address gets a new one. Empty for entries saved before the registry
+	// recorded it.
+	UploadID           string                   `json:"upload_id,omitempty"`
 	RestoreDiagnostics *CacheRestoreDiagnostics `json:"restore_diagnostics,omitempty"`
 }
 
@@ -126,12 +130,17 @@ type CacheEntryExpireReq struct {
 	// resolved this entry, not recomputed — omit only when the entry was
 	// retrieved unscoped.
 	Scopes map[string]string `json:"scopes,omitempty"`
+	// UploadID should be copied verbatim from the CacheEntryRetrieveResp that
+	// resolved this entry. When set, the registry only expires the entry if it
+	// hasn't been re-saved since, even with identical content.
+	UploadID string `json:"upload_id,omitempty"`
 }
 
 // CacheEntryExpireResp acknowledges an expire request. Existed distinguishes
 // an actual deletion from an idempotent no-op (e.g. the entry was already
-// gone, or the supplied address/scopes didn't match anything) — callers must
-// not assume a 2xx response means something was deleted.
+// gone, the supplied address/scopes didn't match anything, or the entry was
+// re-saved since UploadID) — callers must not assume a 2xx response
+// means something was deleted.
 type CacheEntryExpireResp struct {
 	Message string `json:"message"`
 	Existed bool   `json:"existed"`
@@ -147,6 +156,10 @@ type CacheEntryConfirmReq struct {
 	// resolved this entry, not recomputed — omit only when the entry was
 	// retrieved unscoped.
 	Scopes map[string]string `json:"scopes,omitempty"`
+	// UploadID should be copied verbatim from the CacheEntryRetrieveResp that
+	// resolved this entry. When set, the registry only refreshes retention if
+	// the entry hasn't been re-saved since.
+	UploadID string `json:"upload_id,omitempty"`
 	// Stats reports how the restore performed. Informational only.
 	Stats *CacheStats `json:"stats,omitempty"`
 }

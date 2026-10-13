@@ -24,11 +24,6 @@ if [[ "${GH_TOKEN}" == "" ]]; then
   exit 1
 fi
 
-echo '--- Installing gh CLI'
-GH_VERSION=2.96.0
-curl -fsSL "https://github.com/cli/cli/releases/download/v${GH_VERSION}/gh_${GH_VERSION}_linux_amd64.tar.gz" \
-  | tar -xz -C /tmp
-install "/tmp/gh_${GH_VERSION}_linux_amd64/bin/gh" /usr/local/bin/gh
 gh --version
 
 echo '--- Getting agent version from build meta data'

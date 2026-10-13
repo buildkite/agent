@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -570,6 +571,184 @@ func TestCheckingOutFiresCorrectHooks(t *testing.T) {
 	tester.ExpectLocalHook("pre-exit").Once()
 
 	tester.RunAndCheck(t)
+}
+
+func TestRepositoryHooksFollowPostCheckoutWorkingDirectory(t *testing.T) {
+	t.Parallel()
+
+	phases := []string{"pre-command", "command", "post-command", "pre-exit"}
+	for _, test := range []struct {
+		name          string
+		servicePhases []string
+	}{
+		{"service hooks override root", phases},
+		{"missing service hooks use root", nil},
+		{"each hook falls back independently", []string{"command"}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			tester, err := NewExecutorTester(mainCtx)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer tester.Close()
+
+			// Keep the service directory in the checkout even when it has no hooks.
+			serviceDir := filepath.Join(tester.Repo.Path, "services", "api")
+			if err := os.MkdirAll(serviceDir, 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(serviceDir, "test.txt"), []byte("service\n"), 0o644); err != nil {
+				t.Fatal(err)
+			}
+
+			// A service hook overrides the corresponding root hook. Other hooks
+			// continue to run from the root after post-checkout selects the service.
+			for _, scope := range []struct{ name, dir string }{
+				{"root", "."},
+				{"service", "services/api"},
+			} {
+				for _, phase := range phases {
+					serviceHasHook := slices.Contains(test.servicePhases, phase)
+					if scope.name == "service" && !serviceHasHook {
+						continue
+					}
+					hooksDir := filepath.Join(tester.Repo.Path, scope.dir, ".buildkite", "hooks")
+					if _, err := tester.writeHookScript(tester.hookMock, phase, hooksDir, scope.name, phase); err != nil {
+						t.Fatal(err)
+					}
+					expect := tester.hookMock.Expect(scope.name, phase)
+					if scope.name == "root" && serviceHasHook {
+						expect.NotCalled()
+					} else {
+						expect.Once().AndExitWith(0)
+					}
+				}
+			}
+
+			name := "post-checkout"
+			script := "#!/bin/sh\nexport BUILDKITE_BUILD_CHECKOUT_PATH=\"$BUILDKITE_BUILD_CHECKOUT_PATH/services/api\"\n"
+			if runtime.GOOS == "windows" {
+				name += ".bat"
+				script = "@echo off\r\nset \"BUILDKITE_BUILD_CHECKOUT_PATH=%BUILDKITE_BUILD_CHECKOUT_PATH%\\services\\api\"\r\n"
+			}
+			if err := os.WriteFile(filepath.Join(tester.Repo.Path, ".buildkite", "hooks", name), []byte(script), 0o700); err != nil {
+				t.Fatal(err)
+			}
+			if err := tester.Repo.Add("."); err != nil {
+				t.Fatal(err)
+			}
+			if err := tester.Repo.Commit("Add root and service hooks"); err != nil {
+				t.Fatal(err)
+			}
+
+			tester.RunAndCheck(t)
+		})
+	}
+}
+
+func TestRepositoryHooksWithSymlinkedBuildPath(t *testing.T) {
+	t.Parallel()
+	if runtime.GOOS == "windows" {
+		t.Skip("requires POSIX shell physical directory commands")
+	}
+
+	for _, test := range []struct{ name, hook, script, dir string }{
+		{
+			name:   "pre-command resolves the working directory",
+			hook:   "pre-command",
+			script: "cd -P .",
+			dir:    ".",
+		},
+		{
+			name:   "post-checkout selects a physical service directory",
+			hook:   "post-checkout",
+			script: "export BUILDKITE_BUILD_CHECKOUT_PATH=\"$(pwd -P)/services/api\"",
+			dir:    "services/api",
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			tester, err := NewExecutorTester(mainCtx)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer tester.Close()
+
+			buildPath := filepath.Join(t.TempDir(), "builds")
+			if err := os.Symlink(tester.BuildDir, buildPath); err != nil {
+				t.Fatal(err)
+			}
+
+			for _, phase := range []string{"command", "post-command", "pre-exit"} {
+				hooksDir := filepath.Join(tester.Repo.Path, test.dir, ".buildkite", "hooks")
+				if _, err := tester.writeHookScript(tester.hookMock, phase, hooksDir, "local", phase); err != nil {
+					t.Fatal(err)
+				}
+				tester.hookMock.Expect("local", phase).Once().AndExitWith(0)
+			}
+			if err := os.MkdirAll(filepath.Join(tester.Repo.Path, ".buildkite", "hooks"), 0o700); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(tester.Repo.Path, ".buildkite", "hooks", test.hook), []byte("#!/bin/sh\n"+test.script+"\n"), 0o700); err != nil {
+				t.Fatal(err)
+			}
+			if err := tester.Repo.Add("."); err != nil {
+				t.Fatal(err)
+			}
+			if err := tester.Repo.Commit("Add hooks using physical checkout paths"); err != nil {
+				t.Fatal(err)
+			}
+
+			tester.RunAndCheck(t, "BUILDKITE_BUILD_PATH="+buildPath)
+		})
+	}
+}
+
+func TestRepositoryHooksWithRelativeCheckoutPath(t *testing.T) {
+	tester, err := NewExecutorTester(mainCtx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(tester.Close)
+
+	for _, phase := range []string{"pre-command", "command", "post-command", "pre-exit"} {
+		tester.ExpectLocalHook(phase).Once().AndExitWith(0)
+	}
+
+	// Start beside the repository so the relative path also works when the source
+	// checkout and the temporary repository are on different Windows drives.
+	t.Chdir(filepath.Dir(tester.Repo.Path))
+
+	// Skipping checkout preserves the relative checkout root, while the shell
+	// changes to its absolute path. Hooks must still run in the existing checkout.
+	tester.RunAndCheck(t,
+		"BUILDKITE_SKIP_CHECKOUT=true",
+		"BUILDKITE_BUILD_CHECKOUT_PATH="+filepath.Base(tester.Repo.Path),
+	)
+}
+
+func TestRepositoryHooksWithSeparateCommandPhase(t *testing.T) {
+	t.Parallel()
+
+	tester, err := NewExecutorTester(mainCtx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tester.Close()
+
+	for _, phase := range []string{"pre-command", "command", "post-command", "pre-exit"} {
+		tester.ExpectLocalHook(phase).Once().AndExitWith(0)
+	}
+
+	// Kubernetes runs the command phase in a separate bootstrap process against
+	// an existing checkout. Repository hooks must still be discovered there.
+	tester.RunAndCheck(t,
+		"BUILDKITE_BOOTSTRAP_PHASES=command",
+		"BUILDKITE_BUILD_CHECKOUT_PATH="+tester.Repo.Path,
+	)
 }
 
 func TestReplacingCheckoutHook(t *testing.T) {

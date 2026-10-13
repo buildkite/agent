@@ -30,6 +30,7 @@ Optionally include additional details as a JSON object using --context, or use
 
 Values registered for job-log redaction are redacted from the code, message,
 and context, including context keys, before the report is sent to Buildkite.
+As in job logs, values that look like Buildkite-issued tokens are also redacted.
 Register dynamically obtained secrets with buildkite-agent redactor add before
 reporting them. This does not automatically detect other sensitive information.
 

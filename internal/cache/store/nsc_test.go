@@ -238,6 +238,39 @@ func TestRunCommandValidation(t *testing.T) {
 	}
 }
 
+func TestNscStore_MissingCLI(t *testing.T) {
+	// No nsc on PATH, as inside a Docker plugin container on hosted agents.
+	t.Setenv("PATH", t.TempDir())
+	ctx := t.Context()
+	dir := t.TempDir()
+	src := filepath.Join(dir, "archive")
+	if err := os.WriteFile(src, []byte("data"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	store, err := NewNscStore("nsc://ns")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, uploadErr := store.Upload(ctx, src, "valid-key", time.Hour)
+	_, downloadErr := store.Download(ctx, "valid-key", filepath.Join(dir, "dest"))
+	_, statErr := store.Stat(ctx, "valid-key")
+	for name, err := range map[string]error{"Upload": uploadErr, "Download": downloadErr, "Stat": statErr} {
+		if err == nil {
+			t.Errorf("%s: expected error, got nil", name)
+			continue
+		}
+		// Users see this message, so it must explain what to do without
+		// exposing the storage implementation.
+		if !strings.Contains(err.Error(), "pre-command hook") {
+			t.Errorf("%s err = %q, want guidance on moving cache commands into hooks", name, err)
+		}
+		if strings.Contains(strings.ToLower(err.Error()), "nsc") {
+			t.Errorf("%s err = %q, must not mention nsc", name, err)
+		}
+	}
+}
+
 func TestParseNscNamespace(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -611,6 +644,61 @@ func TestNscStore_DownloadNotFound(t *testing.T) {
 		}
 		if errors.Is(err, ErrBlobNotFound) {
 			t.Errorf("Download err = %v, should not be ErrBlobNotFound", err)
+		}
+	})
+}
+
+func TestNscStore_Stat(t *testing.T) {
+	stat := func(t *testing.T, result *CommandResult) (int64, []string, error) {
+		t.Helper()
+		var calls [][]string
+		store := &NscStore{namespace: "ns", run: recordingRunner(&calls, func([]string) (*CommandResult, error) {
+			return result, nil
+		})}
+		size, err := store.Stat(t.Context(), "valid-key")
+		if len(calls) != 1 {
+			t.Fatalf("nsc calls = %d, want 1", len(calls))
+		}
+		return size, calls[0], err
+	}
+
+	t.Run("returns the size of an available artifact", func(t *testing.T) {
+		size, args, err := stat(t, &CommandResult{Stdout: `{"path":"valid-key","namespace":"ns","size":4096,"status":"LIVE"}`})
+		if err != nil {
+			t.Fatalf("Stat: %v", err)
+		}
+		if size != 4096 {
+			t.Errorf("Stat size = %d, want 4096", size)
+		}
+		want := []string{"nsc", "artifact", "describe", "valid-key", "-o", "json", "--namespace", "ns"}
+		if diff := cmp.Diff(want, args); diff != "" {
+			t.Errorf("nsc args diff (-want +got):\n%s", diff)
+		}
+	})
+
+	// nsc prints the not-found error to stdout and exits 2, for missing and
+	// expired artifacts alike.
+	t.Run("missing artifact maps to ErrBlobNotFound", func(t *testing.T) {
+		_, _, err := stat(t, &CommandResult{
+			ExitCode: 2,
+			Stdout:   `{"error":"valid-key doesn't exist","path":"valid-key","namespace":"ns"}`,
+		})
+		if !errors.Is(err, ErrBlobNotFound) {
+			t.Errorf("Stat err = %v, want ErrBlobNotFound", err)
+		}
+	})
+
+	t.Run("an artifact that is not live is an error", func(t *testing.T) {
+		_, _, err := stat(t, &CommandResult{Stdout: `{"size":4096,"status":"STATE_UNKNOWN"}`})
+		if err == nil || errors.Is(err, ErrBlobNotFound) {
+			t.Errorf("Stat err = %v, want a non-ErrBlobNotFound error", err)
+		}
+	})
+
+	t.Run("an older CLI without describe is an error", func(t *testing.T) {
+		_, _, err := stat(t, &CommandResult{ExitCode: 1, Stderr: `unknown command "describe" for "nsc artifact"`})
+		if err == nil || errors.Is(err, ErrBlobNotFound) {
+			t.Errorf("Stat err = %v, want a non-ErrBlobNotFound error", err)
 		}
 	})
 }

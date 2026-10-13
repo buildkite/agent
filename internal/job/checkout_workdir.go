@@ -121,17 +121,21 @@ func (e *Executor) prepareCheckoutWorkdir(
 	}
 	if isFreshCloneRemoteMirrorAttempt(attempt) {
 		started := time.Now()
-		// C3: a mirror without filter support silently performs a full
-		// transfer. Preserve Git's clone semantics and expose the cost through
-		// telemetry rather than reconstructing clone capability negotiation.
+		// A mirror that cannot serve --filter (no uploadpack.allowFilter) only
+		// warns, exits 0 and transfers every object, so a sparse checkout can
+		// silently lose the saving. Unlike --depth, this does not fail loudly.
+		// Preserve Git's clone semantics and expose the cost through telemetry
+		// rather than reconstructing clone capability negotiation.
 		cloneErr := cloneCheckout(
 			remoteMirrorBulkGitFlags(ctx),
 			attempt.url,
 			shell.AlwaysHidePrompt(),
 		)
 		if cloneErr == nil {
-			// C1/C14: refs initially reflect the mirror, but durable origin is
-			// canonical and a killed process self-heals on the next checkout.
+			// Refs and tags from this clone are the mirror's snapshot and may lag
+			// canonical; the built commit is still the backend's exact object
+			// ID. Durable origin is canonical. If the job is killed before this
+			// set-url, the next checkout's remote URL reconciliation repairs it.
 			cloneErr = e.shell.Command(
 				"git", "remote", "set-url", "origin", e.Repository,
 			).Run(ctx)
@@ -163,9 +167,11 @@ func (e *Executor) prepareCheckoutWorkdir(
 			alternateObjects := ambientAlternates != "" ||
 				osutil.FileExists(filepath.Join(e.shell.Getwd(), ".git", "objects", "info", "alternates"))
 			if hasCommit && (!shallowClone || !alternateObjects) {
-				// C1: a shallow hit keeps the mirror snapshot's boundary even
-				// if canonical has advanced. Re-cloning every hit would discard
-				// the optimization for the shallow workloads it targets.
+				// A shallow hit keeps the mirror snapshot's shallow boundary even
+				// if canonical has advanced, so the build commit's parents may be
+				// unavailable where a canonical clone would have them. Re-cloning
+				// every hit would discard the optimization for the shallow
+				// workloads it targets.
 				attempt.outcome = remoteMirrorOutcomeHit
 				return nil
 			}

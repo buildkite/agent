@@ -10,11 +10,16 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 )
 
 type Server struct {
 	*httptest.Server
 	repositories string
+
+	// failNext is the number of requests still to be rejected before the server
+	// starts serving git again. See FailNextRequests.
+	failNext atomic.Int64
 }
 
 func NewServer() *Server {
@@ -32,8 +37,29 @@ func NewServer() *Server {
 	mux.HandleFunc("/{repository}/git-receive-pack", s.handleGitReceivePack)
 	mux.HandleFunc("/{repository}/info/refs", s.handleGitInfoRefs)
 
-	s.Server = httptest.NewServer(mux)
+	s.Server = httptest.NewServer(s.rejectWhileFailing(mux))
 	return s
+}
+
+// FailNextRequests makes the next n requests fail with 503 before the server
+// serves git again, so a caller can exercise what a client does against a remote
+// that is briefly unavailable. Each git operation makes more than one request
+// (the ref advertisement, then the pack), so n counts requests, not operations.
+func (s *Server) FailNextRequests(n int) {
+	s.failNext.Store(int64(n))
+}
+
+func (s *Server) rejectWhileFailing(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		remaining := s.failNext.Add(-1)
+		if remaining >= 0 {
+			http.Error(w, "githttptest: injected failure", http.StatusServiceUnavailable)
+			return
+		}
+		// Don't let the counter run away below zero over a long run.
+		s.failNext.CompareAndSwap(remaining, 0)
+		next.ServeHTTP(w, r)
+	})
 }
 
 func (s *Server) Close() {

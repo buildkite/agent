@@ -33,6 +33,8 @@ type Config struct {
 	// merging files or bypassing registry access policies, even if an entry
 	// already exists there.
 	Force bool
+	// Redact strips secrets from the command output cache exec saves.
+	Redact Redactor
 }
 
 // cacheOps is the subset of *client used by saveWithClient and restoreWithClient.
@@ -212,6 +214,12 @@ func saveWithClient(ctx context.Context, l logger.Logger, c cacheOps, cacheIDs [
 					}
 
 					switch {
+					case result.UploadSkipped:
+						l.WithFields(
+							logger.StringField("cache_id", cacheID),
+							logger.StringField("cache_key", result.Key),
+							logger.StringField("archive_size", humanize.Bytes(uint64(result.Archive.Size))),
+						).Infof("Cache saved (archive already in store, upload skipped)")
 					case result.CacheEntryCreated:
 						l.WithFields(
 							logger.StringField("cache_id", cacheID),

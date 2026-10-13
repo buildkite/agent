@@ -367,6 +367,44 @@ func TestDefaultWorkingDirFromSystem(t *testing.T) {
 	}
 }
 
+// TestAbsolutePathReturnsAlreadyAbsolutePathUnchanged exercises
+// Shell.AbsolutePath's fast path: an already-absolute path must be returned
+// as-is, without going through LookPath (which requires the file to exist).
+//
+// filepath.Join(t.TempDir(), ...) yields a path that is absolute in whatever
+// OS the test runs on (e.g. "/tmp/..." on Unix, `C:\Users\...\...` on
+// Windows), and the file it names is never created. This catches a
+// regression where the "is this already absolute?" check used the POSIX-only
+// path package (which only recognises a leading "/") instead of the
+// OS-aware filepath package: on Windows that bug made an absolute path look
+// relative, sending it through LookPath's os.Stat and failing because the
+// file doesn't exist. On Unix both packages agree, so this test can't catch
+// the regression there, but it still guards the fast path's behaviour.
+//
+// The filename carries a ".exe" extension: on Windows, AbsolutePath's fast
+// path only applies to an absolute path that already has an extension (an
+// extensionless one is routed through LookPath for PATHEXT resolution), so
+// an extensionless name here would deliberately miss the fast path and fail
+// because the file doesn't exist.
+func TestAbsolutePathReturnsAlreadyAbsolutePathUnchanged(t *testing.T) {
+	t.Parallel()
+
+	sh, err := shell.New()
+	if err != nil {
+		t.Fatalf("shell.New() error = %v", err)
+	}
+
+	want := filepath.Join(t.TempDir(), "does-not-exist-and-does-not-need-to.exe")
+
+	got, err := sh.AbsolutePath(want)
+	if err != nil {
+		t.Fatalf("sh.AbsolutePath(%q) error = %v, want nil", want, err)
+	}
+	if got != want {
+		t.Fatalf("sh.AbsolutePath(%q) = %q, want %q", want, got, want)
+	}
+}
+
 func TestWorkingDir(t *testing.T) {
 	t.Parallel()
 	ctx := t.Context()

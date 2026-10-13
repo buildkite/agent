@@ -6,6 +6,7 @@ import (
 	"iter"
 	"os"
 	"reflect"
+	"slices"
 	"strconv"
 	"time"
 
@@ -198,6 +199,25 @@ var (
 	}
 )
 
+// gitFetchBaseBranchModes are the accepted --git-fetch-base-branch values,
+// strictest first.
+var gitFetchBaseBranchModes = []string{
+	job.GitFetchBaseBranchStrict,
+	job.GitFetchBaseBranchOptimistic,
+	job.GitFetchBaseBranchOff,
+}
+
+func validateGitFetchBaseBranch(value string) error {
+	if !slices.Contains(gitFetchBaseBranchModes, value) {
+		return fmt.Errorf(
+			"invalid value for --git-fetch-base-branch: %q (must be one of %v)",
+			value,
+			gitFetchBaseBranchModes,
+		)
+	}
+	return nil
+}
+
 func validateGitCommitVerification(value string) error {
 	if value != job.GitCommitVerificationStrict && value != job.GitCommitVerificationOff {
 		return fmt.Errorf(
@@ -314,6 +334,12 @@ var (
 		Sources: cli.EnvVars("BUILDKITE_GIT_MIRRORS_SKIP_UPDATE"),
 	}
 
+	GitMirrorsLFSCacheFlag = &cli.BoolFlag{
+		Name:    "git-mirrors-lfs-cache",
+		Usage:   "Cache Git LFS objects in the Git mirror when Git LFS is enabled for the checkout. The job's LFS objects are fetched into the mirror while its update lock is held, and each checkout reuses them instead of downloading from the LFS server again. Opt-in because it grows the mirror on disk without pruning, extends the time the mirror lock is held, and may not be faster than downloading from the LFS server when the mirror is on a slow or shared network volume. Requires --git-mirrors-path (default: false)",
+		Sources: cli.EnvVars("BUILDKITE_GIT_MIRRORS_LFS_CACHE"),
+	}
+
 	GitSubmoduleCloneConfigFlag = &cli.StringSliceFlag{
 		Name:    "git-submodule-clone-config",
 		Value:   nil,
@@ -332,6 +358,15 @@ var (
 		Name:    "git-skip-fetch-existing-commits",
 		Usage:   "Skip git fetch if the commit already exists in the local git directory (default: false)",
 		Sources: cli.EnvVars("BUILDKITE_GIT_SKIP_FETCH_EXISTING_COMMITS"),
+	}
+
+	GitFetchBaseBranchFlag = &cli.StringFlag{
+		Name:             "git-fetch-base-branch",
+		Value:            job.GitFetchBaseBranchOff,
+		Usage:            fmt.Sprintf("Also fetch the base branch during checkout, so every command in the job can diff against its current tip; one of %v. ′optimistic′ warns and carries on when the fetch fails, ′strict′ fails the job, and ′off′ (default) skips the fetch. A transient failure is retried briefly under ′optimistic′ and on the same budget as the job's own fetch under ′strict′; a base branch the remote does not have fails without retrying. The base branch is the first non-empty value of {$BUILDKITE_PULL_REQUEST_BASE_BRANCH, $BUILDKITE_PIPELINE_DEFAULT_BRANCH}; nothing is fetched when it is the branch being built, and under ′strict′ a job with neither set fails. ′strict′ also rejects a $BUILDKITE_GIT_FETCH_FLAGS that asks for a fetch writing no ref (--dry-run, --prefetch, --negotiate-only), which git reports as success", gitFetchBaseBranchModes),
+		Sources:          cli.EnvVars("BUILDKITE_GIT_FETCH_BASE_BRANCH"),
+		ValidateDefaults: true,
+		Validator:        validateGitFetchBaseBranch,
 	}
 
 	CheckoutAttemptsFlag = &cli.IntFlag{

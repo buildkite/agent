@@ -794,6 +794,45 @@ func TestCheckoutScopedJobEnvOverrideHonorsCheckoutOverrideMode(t *testing.T) {
 			wantEnvValue:       "off",
 			wantIgnoredEnvVars: []string{"BUILDKITE_GIT_COMMIT_VERIFICATION"},
 		},
+		// The base branch fetch is an enum whose off side is silent: the agent emits
+		// it only when it has the fetch on, so a job may still opt in when the agent
+		// has not, and strict closes that side like the toggles above.
+		{
+			name:    "from_job_locks_fetch_base_branch_to_agent_config",
+			varName: "BUILDKITE_GIT_FETCH_BASE_BRANCH",
+			jobEnv: map[string]string{
+				"BUILDKITE_GIT_FETCH_BASE_BRANCH": "off",
+			},
+			agentCfg: agent.AgentConfiguration{
+				GitFetchBaseBranch:   "strict",
+				CheckoutOverrideMode: env.CheckoutOverrideFromJob,
+			},
+			wantEnvValue:       "strict",
+			wantIgnoredEnvVars: []string{"BUILDKITE_GIT_FETCH_BASE_BRANCH"},
+		},
+		{
+			name:    "from_job_allows_job_env_fetch_base_branch_when_agent_default_off",
+			varName: "BUILDKITE_GIT_FETCH_BASE_BRANCH",
+			jobEnv: map[string]string{
+				"BUILDKITE_GIT_FETCH_BASE_BRANCH": "optimistic",
+			},
+			agentCfg: agent.AgentConfiguration{
+				CheckoutOverrideMode: env.CheckoutOverrideFromJob,
+			},
+			wantEnvValue: "optimistic",
+		},
+		{
+			name:    "strict_locks_fetch_base_branch_off_to_agent_config",
+			varName: "BUILDKITE_GIT_FETCH_BASE_BRANCH",
+			jobEnv: map[string]string{
+				"BUILDKITE_GIT_FETCH_BASE_BRANCH": "strict",
+			},
+			agentCfg: agent.AgentConfiguration{
+				CheckoutOverrideMode: env.CheckoutOverrideStrict,
+			},
+			wantEnvValue:       "off",
+			wantIgnoredEnvVars: []string{"BUILDKITE_GIT_FETCH_BASE_BRANCH"},
+		},
 		{
 			// from-job (the default) keeps the agent authoritative over the backend
 			// job env, matching the other checkout vars: only none opens it up.
@@ -877,9 +916,9 @@ func TestCheckoutInfraVarsAreAgentAuthoritative(t *testing.T) {
 	t.Parallel()
 
 	// SSH_KEYSCAN, GIT_MIRRORS_PATH, GIT_MIRRORS_LOCK_TIMEOUT,
-	// GIT_MIRROR_CHECKOUT_MODE, GIT_CLONE_MIRROR_FLAGS and GIT_MIRRORS_SKIP_UPDATE
-	// are agent-only: job env cannot override them even under the most permissive
-	// checkout-override mode (none).
+	// GIT_MIRROR_CHECKOUT_MODE, GIT_CLONE_MIRROR_FLAGS, GIT_MIRRORS_SKIP_UPDATE
+	// and GIT_MIRRORS_LFS_CACHE are agent-only: job env cannot override them even
+	// under the most permissive checkout-override mode (none).
 	tests := []struct {
 		name         string
 		varName      string
@@ -927,6 +966,13 @@ func TestCheckoutInfraVarsAreAgentAuthoritative(t *testing.T) {
 			varName:      "BUILDKITE_GIT_MIRRORS_SKIP_UPDATE",
 			jobEnvValue:  "true",
 			agentCfg:     agent.AgentConfiguration{GitMirrorsSkipUpdate: false, CheckoutOverrideMode: env.CheckoutOverrideNone},
+			wantEnvValue: "false",
+		},
+		{
+			name:         "git_mirrors_lfs_cache",
+			varName:      "BUILDKITE_GIT_MIRRORS_LFS_CACHE",
+			jobEnvValue:  "true",
+			agentCfg:     agent.AgentConfiguration{GitMirrorsLFSCache: false, CheckoutOverrideMode: env.CheckoutOverrideNone},
 			wantEnvValue: "false",
 		},
 	}
@@ -1106,5 +1152,50 @@ func TestArtifactUploadConcurrencyFromJobEnvIsPreservedWhenAgentConfigUnset(t *t
 	})
 	if err != nil {
 		t.Fatalf("runJob() error = %v", err)
+	}
+}
+
+func TestJobWarnings_AreWrittenToJobLog(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	jobID := "job-with-warnings"
+	job := &api.Job{
+		ID:                 jobID,
+		ChunksMaxSizeBytes: 1024,
+		Token:              "bkaj_job-token",
+		Warnings: []api.Warning{
+			{Message: "buildkite-agent v3.90.0 is unsupported."},
+			{Message: "Another warning."},
+		},
+	}
+
+	mb := mockBootstrap(t)
+	defer mb.CheckAndClose(t) //nolint:errcheck // bintest logs to t
+	mb.Expect().Once().AndExitWith(0)
+
+	e := createTestAgentEndpoint()
+	server := e.server()
+	defer server.Close()
+
+	err := runJob(t, ctx, testRunJobConfig{
+		job:           job,
+		server:        server,
+		agentCfg:      agent.AgentConfiguration{},
+		mockBootstrap: mb,
+	})
+	if err != nil {
+		t.Fatalf("runJob() error = %v", err)
+	}
+
+	logs := e.logsFor(t, jobID)
+	for _, want := range []string{
+		"+++ ⚠️ Warnings from Buildkite\n",
+		"buildkite-agent v3.90.0 is unsupported.\n",
+		"Another warning.\n",
+	} {
+		if !strings.Contains(logs, want) {
+			t.Errorf("e.logsFor(t, %q) = %q, want it to contain %q", jobID, logs, want)
+		}
 	}
 }

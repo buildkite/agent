@@ -39,6 +39,7 @@ trigger_step() {
         agent-is-prerelease: "${agent_is_prerelease}"
       env:
         DRY_RUN: "${DRY_RUN:-false}"
+        RELEASE_TOOLS_IMAGE: "${release_tools_image}"
 YAML
 }
 
@@ -106,6 +107,7 @@ agent_docker_image_ubuntu_resolute=$(buildkite-agent meta-data get "agent-docker
 
 agent_docker_image_sidecar=$(buildkite-agent meta-data get "agent-docker-image-sidecar")
 agent_is_prerelease=$(buildkite-agent meta-data get "agent-is-prerelease")
+release_tools_image=$(buildkite-agent meta-data get "agent-release-tools-image")
 
 edge_steps_yaml | buildkite-agent pipeline upload
 

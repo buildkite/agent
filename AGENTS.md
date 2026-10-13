@@ -48,6 +48,13 @@ Go CLI application with main packages:
 - Interface types end with -er suffix where appropriate
 - Use `github.com/urfave/cli` for CLI commands
 
+## Reviewing release PRs
+
+A release PR has a title like `release: v4.2.1` and the `release` label, and usually only changes `version/VERSION`. Its body is published verbatim as the GitHub release notes, so review the body as carefully as the diff. Check it against the rules in the release skill, [`.agents/skills/buildkite-agent-release/SKILL.md`](.agents/skills/buildkite-agent-release/SKILL.md). Skip the skill's interactive steps; they're for the person cutting the release.
+
+- **Version bump:** find the previous release on the same line (PRs against `main` are v4, PRs against `v3` are v3) and classify the changes using the SemVer rules in step 4 of the skill. One ✨ Added entry, or a 🔧 Changed entry that changes existing behaviour, makes the release at least a minor. Read the PRs behind 🏠 Internal entries too, since user-facing changes sometimes end up there. If the bump is too small, request changes and list the PRs that need the bigger bump. For v3, flag anything that would make the release a minor instead of accepting a minor bump.
+- **Release notes:** check that entries are in the right category and are written for people who use the Buildkite Agent, following step 7 of the skill. Entries shouldn't have ticket IDs or conventional-commit prefixes, should name the command, flag or setting involved, and should describe the effect rather than the implementation. Dependabot PRs should be grouped into a single bullet. Check that the "Full Changelog" link compares the previous release with the new tag. Suggest rewrites for entries that would read poorly to someone outside Buildkite. Dropping minor entries is fine, but flag any missing user-facing change.
+
 ## Development environment notes
 
 This is a single Go CLI application (the Buildkite Agent). There is no long-running
