@@ -985,6 +985,9 @@ func TestPluginFailuresAreCaptured(t *testing.T) {
 	}
 
 	failingHook := map[string][]string{"environment": {"#!/usr/bin/env bash", "echo 'registry login failed'", "exit 5"}}
+	// Parse errors can quote credentials that masking cannot find, so they are
+	// left out.
+	const invalidPlugins = "The step's plugins could not be parsed. Fix the plugins in the step; the job log has the parse error."
 
 	for _, test := range []struct {
 		name     string
@@ -1003,9 +1006,10 @@ func TestPluginFailuresAreCaptured(t *testing.T) {
 			message: "The step uses plugins, but this agent was started with `--no-plugins`, which disables them. Remove the plugins from the step, or run it on agents that allow plugins, such as another queue.",
 		},
 		{
-			name: "invalid definition",
-			env:  func(t *testing.T) []string { return []string{`BUILDKITE_PLUGINS={"not":"a list"}`} },
-			code: "plugin_definition_invalid",
+			name:    "invalid definition",
+			env:     func(t *testing.T) []string { return []string{`BUILDKITE_PLUGINS={"not":"a list"}`} },
+			code:    "plugin_definition_invalid",
+			message: invalidPlugins,
 		},
 		{
 			name: "invalid plugin URL",
@@ -1013,8 +1017,36 @@ func TestPluginFailuresAreCaptured(t *testing.T) {
 				return []string{`BUILDKITE_PLUGINS=[{"https://user:my password@example.com/org/plugin.git#v1":{}}]`}
 			},
 			code:     "plugin_definition_invalid",
-			contains: "The step's plugins could not be parsed: a plugin's URL is invalid: ",
+			message:  invalidPlugins,
 			excludes: "my password",
+		},
+		{
+			name: "configuration that is not a hash",
+			env: func(t *testing.T) []string {
+				return []string{`BUILDKITE_PLUGINS=[{"https://user:my password@example.com/org/plugin.git#v1":"oops"}]`}
+			},
+			code:     "plugin_definition_invalid",
+			message:  invalidPlugins,
+			excludes: "my password",
+		},
+		{
+			name: "unknown plugin definition type",
+			env: func(t *testing.T) []string {
+				return []string{`BUILDKITE_PLUGINS=[["https://user:my password@example.com/org/plugin.git#v1"]]`}
+			},
+			code:     "plugin_definition_invalid",
+			message:  invalidPlugins,
+			excludes: "my password",
+		},
+		{
+			// A password containing "/" is quoted without its URL, so masking cannot find it.
+			name: "password containing a slash",
+			env: func(t *testing.T) []string {
+				return []string{`BUILDKITE_PLUGINS=[{"https://x-access-token:ab12XYsecret/cd34@github.com/org/plugin.git#v1":{}}]`}
+			},
+			code:     "plugin_definition_invalid",
+			message:  invalidPlugins,
+			excludes: "ab12XYsecret",
 		},
 		{
 			name: "checkout failure",
