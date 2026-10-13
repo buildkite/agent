@@ -2,12 +2,14 @@ package clicommand
 
 import (
 	"context"
+	"io"
 	"os"
 	"slices"
 	"strings"
 	"testing"
 
 	"github.com/buildkite/agent/v4/env"
+	"github.com/buildkite/agent/v4/internal/redact"
 	"github.com/buildkite/agent/v4/internal/replacer"
 	"github.com/buildkite/agent/v4/internal/shell"
 	"github.com/buildkite/agent/v4/jobapi"
@@ -33,7 +35,8 @@ func startCaptureErrorTestServer(t *testing.T, report func(context.Context, *job
 	if err != nil {
 		t.Fatalf("NewSocketPath() error = %v", err)
 	}
-	server, token, err := jobapi.NewServer(shell.TestingLogger{T: t}, socketPath, env.New(), replacer.NewMux(), jobapi.WithCapturedErrorReporter(report))
+	redactors := replacer.NewMux(redact.New(io.Discard, nil))
+	server, token, err := jobapi.NewServer(shell.TestingLogger{T: t}, socketPath, env.New(), redactors, jobapi.WithCapturedErrorReporter(report))
 	if err != nil {
 		t.Fatalf("NewServer() error = %v", err)
 	}
@@ -90,6 +93,57 @@ func TestJobCaptureErrorRejectsInvalidArgumentsBeforeTransport(t *testing.T) {
 		if err == nil || !strings.Contains(err.Error(), test.want) {
 			t.Errorf("args %v: error = %v, want %q", test.args, err, test.want)
 		}
+	}
+}
+
+func TestJobCaptureErrorWarnsWhenMessageIsTruncated(t *testing.T) {
+	var reported *jobapi.CapturedError
+	startCaptureErrorTestServer(t, func(_ context.Context, payload *jobapi.CapturedError) error {
+		reported = payload
+		return nil
+	})
+	client, err := jobapi.NewDefaultClient(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := client.RedactionCreate(t.Context(), "q"); err != nil {
+		t.Fatal(err)
+	}
+	for _, test := range []struct {
+		name, message, wantMessage string
+		wantWarning                bool
+	}{
+		{"at limit", strings.Repeat("🧪", 1000), strings.Repeat("🧪", 1000), false},
+		{"over limit", strings.Repeat("🧪", 1001), strings.Repeat("🧪", 988) + "…[truncated]", true},
+		{"redaction expands message", strings.Repeat("é", 991) + "q", strings.Repeat("é", 988) + "…[truncated]", true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			stderr, err := os.CreateTemp(t.TempDir(), "stderr")
+			if err != nil {
+				t.Fatal(err)
+			}
+			originalStderr := os.Stderr
+			os.Stderr = stderr
+			t.Cleanup(func() {
+				os.Stderr = originalStderr
+				_ = stderr.Close()
+			})
+			err = captureErrorTestApp().Run(t.Context(), []string{"buildkite-agent", "capture-error", "x", "--message", test.message})
+			if err != nil {
+				t.Fatalf("capture-error error = %v, want success", err)
+			}
+			if reported == nil || reported.Message != test.wantMessage {
+				t.Fatalf("reported = %+v, want message %q", reported, test.wantMessage)
+			}
+			output, err := os.ReadFile(stderr.Name())
+			if err != nil {
+				t.Fatal(err)
+			}
+			const warning = "Captured error message was truncated to 1000 characters. Put detailed output in an annotation or artifact."
+			if got := strings.Contains(string(output), warning); got != test.wantWarning {
+				t.Errorf("stderr = %q, want warning = %t", output, test.wantWarning)
+			}
+		})
 	}
 }
 

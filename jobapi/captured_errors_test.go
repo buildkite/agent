@@ -35,11 +35,13 @@ func TestCapturedErrorRedactionResponse(t *testing.T) {
 	t.Cleanup(func() { _ = srv.Stop() })
 
 	for _, test := range []struct {
-		name, body, wantError string
+		name, body, wantError, wantMessage string
+		wantWarning                        bool
 	}{
 		{
-			name: "response is also redacted",
-			body: `{"code":"x","message":"Failed alpha-secret"}`,
+			name:        "response is also redacted",
+			body:        `{"code":"x","message":"Failed alpha-secret"}`,
+			wantMessage: "Failed [REDACTED]",
 		},
 		{
 			name:      "redaction expands code beyond schema limit",
@@ -47,9 +49,37 @@ func TestCapturedErrorRedactionResponse(t *testing.T) {
 			wantError: "redacting captured error: code must be a nonblank string of at most 255 bytes without NUL",
 		},
 		{
-			name:      "redaction expands report beyond body limit",
-			body:      `{"code":"x","message":"` + strings.Repeat("q", 3300) + `"}`,
-			wantError: "redacting captured error: captured error exceeds 32768 bytes after redaction",
+			name:        "redaction leaves exactly 1000 characters",
+			body:        `{"code":"x","message":"` + strings.Repeat("é", 990) + `q"}`,
+			wantMessage: strings.Repeat("é", 990) + "[REDACTED]",
+		},
+		{
+			name:        "redaction pushes the message over 1000 characters",
+			body:        `{"code":"x","message":"` + strings.Repeat("é", 991) + `q"}`,
+			wantMessage: strings.Repeat("é", 988) + "…[truncated]",
+			wantWarning: true,
+		},
+		{
+			name:        "redaction shrinks an overlong message below the limit",
+			body:        `{"code":"x","message":"` + strings.Repeat("alpha-secret", 90) + `"}`,
+			wantMessage: strings.Repeat("[REDACTED]", 90),
+		},
+		{
+			name:        "secret crossing the cut is redacted before truncation",
+			body:        `{"code":"x","message":"` + strings.Repeat("x", 985) + "alpha-secret" + strings.Repeat("z", 30) + `"}`,
+			wantMessage: strings.Repeat("x", 985) + "[RE…[truncated]",
+			wantWarning: true,
+		},
+		{
+			name:        "redaction expansion is shortened before forwarding",
+			body:        `{"code":"x","message":"` + strings.Repeat("q", 4000) + `"}`,
+			wantMessage: strings.Repeat("[REDACTED]", 98) + "[REDACTE…[truncated]",
+			wantWarning: true,
+		},
+		{
+			name:        "redacting the code does not reduce the message allowance",
+			body:        `{"code":"q","message":"` + strings.Repeat("x", 1000) + `"}`,
+			wantMessage: strings.Repeat("x", 1000),
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
@@ -80,12 +110,15 @@ func TestCapturedErrorRedactionResponse(t *testing.T) {
 					t.Errorf("error = %q, want %q", response.Error, test.wantError)
 				}
 			} else {
-				var response jobapi.CapturedError
+				var response jobapi.CapturedErrorResponse
 				if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
 					t.Fatal(err)
 				}
-				if response.Message != "Failed [REDACTED]" {
-					t.Errorf("response not redacted: %+v", response)
+				if response.Message != test.wantMessage {
+					t.Errorf("message = %q, want %q", response.Message, test.wantMessage)
+				}
+				if (response.Warning != "") != test.wantWarning {
+					t.Errorf("warning = %q, want warning = %t", response.Warning, test.wantWarning)
 				}
 			}
 			wantCalls := int32(1)
@@ -219,7 +252,7 @@ func TestCapturedErrorRejectsMalformedAndUnauthenticatedRequests(t *testing.T) {
 		{name: "UTC year underflow", body: `{"code":"x","message":"diagnostic","timestamp":"0001-01-01T00:00:00+01:00"}`, token: token, want: http.StatusBadRequest},
 		{name: "UTC year overflow", body: `{"code":"x","message":"diagnostic","timestamp":"9999-12-31T23:59:59-01:00"}`, token: token, want: http.StatusBadRequest},
 		{name: "future timestamp", body: `{"code":"x","message":"diagnostic","timestamp":"9999-12-31T23:59:59Z"}`, token: token, want: http.StatusCreated},
-		{name: "long message", body: `{"code":"x","message":"` + strings.Repeat("x", 4097) + `"}`, token: token, want: http.StatusCreated},
+		{name: "NUL in discarded tail", body: `{"code":"x","message":"` + strings.Repeat("x", 1001) + `\u0000"}`, token: token, want: http.StatusBadRequest},
 		{name: "context is unsupported", body: `{"code":"x","message":"diagnostic","context":{"detail":"x"}}`, token: token, want: http.StatusBadRequest},
 		{name: "oversized body", body: `{"code":"x","message":"` + strings.Repeat("x", 32<<10) + `"}`, token: token, want: http.StatusRequestEntityTooLarge},
 		{name: "missing message", body: `{"code":"x"}`, token: token, want: http.StatusBadRequest},
@@ -249,6 +282,76 @@ func TestCapturedErrorRejectsMalformedAndUnauthenticatedRequests(t *testing.T) {
 	}
 }
 
+func TestCapturedErrorMessageCharacterLimit(t *testing.T) {
+	t.Parallel()
+
+	reported := make(chan *jobapi.CapturedError, 1)
+	srv, token, err := testServer(t, testEnviron(), replacer.NewMux(), jobapi.WithCapturedErrorReporter(func(_ context.Context, payload *jobapi.CapturedError) error {
+		reported <- payload
+		return nil
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := srv.Start(); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = srv.Stop() })
+
+	message := strings.Repeat("🧪", 1000)
+	for _, test := range []struct {
+		name, code, message, wantMessage string
+	}{
+		{"999 characters", "x", strings.Repeat("🧪", 999), strings.Repeat("🧪", 999)},
+		{"1000 characters", "x", message, message},
+		{"1001 characters", "x", message + "🧪", strings.Repeat("🧪", 988) + "…[truncated]"},
+		{"1001 ASCII characters", "x", strings.Repeat("x", 1001), strings.Repeat("x", 988) + "…[truncated]"},
+		{"code has a separate allowance", strings.Repeat("é", 127) + "x", message, message},
+		{"JSON escapes do not count as extra characters", "x", strings.Repeat("\n", 999) + "x", strings.Repeat("\n", 999) + "x"},
+		{"combining marks each count as a character", "x", strings.Repeat("e\u0301", 500), strings.Repeat("e\u0301", 500)},
+		{"1001 code points despite fewer visible characters", "x", strings.Repeat("e\u0301", 500) + "x", strings.Repeat("e\u0301", 494) + "…[truncated]"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			request := map[string]any{"code": test.code, "message": test.message}
+			body, err := json.Marshal(request)
+			if err != nil {
+				t.Fatal(err)
+			}
+			req, err := http.NewRequest(http.MethodPost, "http://job/api/current-job/v0/errors", bytes.NewReader(body))
+			if err != nil {
+				t.Fatal(err)
+			}
+			req.Header.Set("Authorization", "Bearer "+token)
+			resp, err := testSocketClient(srv.SocketPath).Do(req)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer func() { _ = resp.Body.Close() }()
+			if resp.StatusCode != http.StatusCreated {
+				t.Fatalf("status = %d, want 201", resp.StatusCode)
+			}
+			var response jobapi.CapturedErrorResponse
+			if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
+				t.Fatal(err)
+			}
+			if response.Message != test.wantMessage {
+				t.Errorf("response message = %q, want %q", response.Message, test.wantMessage)
+			}
+			if wantWarning := test.message != test.wantMessage; (response.Warning != "") != wantWarning {
+				t.Errorf("warning = %q, want warning = %t", response.Warning, wantWarning)
+			}
+			select {
+			case payload := <-reported:
+				if payload.Code != test.code || payload.Message != test.wantMessage {
+					t.Errorf("forwarded report = %+v, want code %q and message %q", payload, test.code, test.wantMessage)
+				}
+			default:
+				t.Error("report was not forwarded")
+			}
+		})
+	}
+}
+
 func TestCapturedErrorBodyLimit(t *testing.T) {
 	t.Parallel()
 
@@ -265,9 +368,7 @@ func TestCapturedErrorBodyLimit(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = srv.Stop() })
 
-	// A 20 KiB message must be forwarded unchanged. Multibyte text makes the
-	// byte-versus-character limit observable.
-	message := strings.Repeat("é", 10<<10)
+	message := strings.Repeat("é", 700)
 	body := `{"code":"x","message":"` + message + `"}`
 	for _, test := range []struct {
 		name string

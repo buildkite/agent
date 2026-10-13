@@ -87,7 +87,7 @@ func TestCapturedErrorRedactsJobSecrets(t *testing.T) {
 			Code:    "failure." + secret,
 			Message: "Failed using " + secret,
 		}
-		if err := client.CaptureError(ctx, payload); err != nil {
+		if _, err := client.CaptureError(ctx, payload); err != nil {
 			t.Fatal(err)
 		}
 		got := <-reports
@@ -147,7 +147,8 @@ func TestCapturedErrorJobCancellation(t *testing.T) {
 	}
 	result := make(chan error, 1)
 	go func() {
-		result <- client.CaptureError(t.Context(), &jobapi.CapturedError{Code: "container_process_failed", Message: "Container failed"})
+		_, err := client.CaptureError(t.Context(), &jobapi.CapturedError{Code: "container_process_failed", Message: "Container failed"})
+		result <- err
 	}()
 	select {
 	case <-started:
@@ -170,7 +171,7 @@ func TestCapturedErrorJobCancellation(t *testing.T) {
 	}
 	// A hook may start reporting after the job was already cancelled. It must
 	// fail locally without starting a fresh upstream request.
-	if err := client.CaptureError(t.Context(), &jobapi.CapturedError{Code: "container_process_failed", Message: "Container failed"}); err == nil {
+	if _, err := client.CaptureError(t.Context(), &jobapi.CapturedError{Code: "container_process_failed", Message: "Container failed"}); err == nil {
 		t.Fatal("report succeeded for an already cancelled job")
 	}
 	if got := calls.Load(); got != 1 {
