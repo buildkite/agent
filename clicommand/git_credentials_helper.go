@@ -118,7 +118,13 @@ var GitCredentialsHelperCommand = &cli.Command{
 			}
 			if err != nil {
 				// Do not log the transport error: it may contain the secret.
-				return handleAuthError(c, l, errors.New("failed to register repository credential for redaction"))
+				// A job that reports Git errors must not send the token in
+				// them, so it fails closed. Other jobs never registered the
+				// token before, so they carry on rather than fail the checkout.
+				if os.Getenv("BUILDKITE_CAPTURE_GIT_ERRORS") == "true" {
+					return handleAuthError(c, l, errors.New("failed to register repository credential for redaction"))
+				}
+				l.Warnf("Could not register the repository credential for redaction; continuing without it")
 			}
 		}
 

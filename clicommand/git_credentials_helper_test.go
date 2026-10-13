@@ -213,8 +213,23 @@ func TestGitCredentialsHelperRedaction(t *testing.T) {
 		_, _ = fmt.Fprintf(w, `{"token":%q}`, secret)
 	}))
 	t.Cleanup(upstream.Close)
-	for _, mode := range []string{"registered", "registration rejected", "socket missing"} {
-		t.Run(mode, func(t *testing.T) {
+	for _, tc := range []struct {
+		mode      string
+		gitErrors bool
+	}{
+		{"registered", true},
+		{"registration rejected", true},
+		{"socket missing", true},
+		// Without Git error capture, a failed registration doesn't fail the checkout.
+		{"registration rejected", false},
+		{"socket missing", false},
+	} {
+		mode := tc.mode
+		t.Run(fmt.Sprintf("%s/git errors %t", mode, tc.gitErrors), func(t *testing.T) {
+			t.Setenv("BUILDKITE_CAPTURE_GIT_ERRORS", "")
+			if tc.gitErrors {
+				t.Setenv("BUILDKITE_CAPTURE_GIT_ERRORS", "true")
+			}
 			var reported *jobapi.CapturedError
 			startCaptureErrorTestServer(t, func(_ context.Context, report *jobapi.CapturedError) error {
 				reported = report
@@ -235,6 +250,12 @@ func TestGitCredentialsHelperRedaction(t *testing.T) {
 			}
 			output, err := runGitCredentialsHelperCommand(t, upstream.URL, "get", "protocol=https\nhost=example.com\npath=repo.git\n")
 			if mode != "registered" {
+				if !tc.gitErrors {
+					if err != nil || output != "username=token\npassword="+secret+"\n\n" {
+						t.Fatalf("output=%q, error=%v; want repository credentials despite the registration failure", output, err)
+					}
+					return
+				}
 				if err == nil || output != "username=fail\npassword=fail\n\n" {
 					t.Fatalf("output=%q, error=%v; want dummy credentials on registration failure", output, err)
 				}
