@@ -2,6 +2,7 @@ package job
 
 import (
 	"io"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -86,5 +87,37 @@ func TestRecentOutputRedaction(t *testing.T) {
 	}
 	if got := e.outputTail.tail(100); got != "next" {
 		t.Errorf("tail after reset = %q, want %q", got, "next")
+	}
+}
+
+func TestRecentOutputOnlyForJobsThatReportAgentErrors(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("uses sh")
+	}
+	t.Parallel()
+
+	e := New(ExecutorConfig{})
+	e.shell = shell.NewTestShell(t)
+	e.setupRedactors(shell.DiscardLogger, env.New(), io.Discard, io.Discard)
+	run := func() string {
+		t.Helper()
+		e.resetRecentOutput()
+		if err := e.shell.Command("sh", "-c", "echo hook output").Run(t.Context(), e.teeRecentOutput()); err != nil {
+			t.Fatal(err)
+		}
+		if err := e.outputTailRedactor.Flush(); err != nil {
+			t.Fatal(err)
+		}
+		return e.outputTail.tail(100)
+	}
+
+	e.shell.Env.Remove("BUILDKITE_CAPTURE_AGENT_ERRORS")
+	e.shell.Env.Set("BUILDKITE_AGENT_JOB_API_CAPTURE_ERROR", "true")
+	if got := run(); got != "" {
+		t.Errorf("tail without the opt-in = %q, want no output kept", got)
+	}
+	e.shell.Env.Set("BUILDKITE_CAPTURE_AGENT_ERRORS", "true")
+	if got := run(); got != "hook output" {
+		t.Errorf("tail with the opt-in = %q, want %q", got, "hook output")
 	}
 }

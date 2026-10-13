@@ -91,9 +91,10 @@ func (e *Executor) resetRecentOutput() {
 	e.outputTail.reset()
 }
 
-// teeRecentOutput copies a command's output into the redacted output tail.
+// teeRecentOutput copies a command's output into the redacted output tail,
+// only for a job that reports agent errors, so other jobs don't pay for it.
 func (e *Executor) teeRecentOutput() shell.RunCommandOpt {
-	if e.outputTailRedactor == nil {
+	if e.outputTailRedactor == nil || !agentErrorCaptureEnabled(e.shell.Env) {
 		return shell.TeeOutput(nil)
 	}
 	return shell.TeeOutput(e.outputTailRedactor)

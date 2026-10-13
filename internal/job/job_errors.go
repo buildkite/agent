@@ -41,7 +41,8 @@ func captureJobError(ctx context.Context, sh *shell.Shell, code, message string)
 // captureHookError reports a hook that failed or could not be run, with the
 // end of its output, so the report explains the failure without the job log.
 func (e *Executor) captureHookError(ctx context.Context, hookCfg HookConfig, hookName string, err error) {
-	if err == nil {
+	// Skip building the report, which flushes the redactors, when it won't be sent.
+	if err == nil || !agentErrorCaptureEnabled(e.shell.Env) {
 		return
 	}
 	path, inCheckout := e.hookDisplayPath(hookCfg)
