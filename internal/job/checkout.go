@@ -186,6 +186,7 @@ func (e *Executor) checkout(ctx context.Context) error {
 			return err
 		}
 		if _, err := parseGitFetchBaseBranchMode(e.GitFetchBaseBranch); err != nil {
+			captureCheckoutError(ctx, e.shell, errors.Join(errInvalidFetchBaseBranchMode, err))
 			return err
 		}
 

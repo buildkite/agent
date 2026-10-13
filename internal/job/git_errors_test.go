@@ -807,3 +807,36 @@ func TestGitErrorCaptureThroughCheckoutPhase(t *testing.T) {
 		t.Fatalf("report = %#v, want buildkite.git_clean_failed with the secret redacted and suffix %q", report, want)
 	}
 }
+
+func TestCheckoutPhaseReportsInvalidCheckoutSettings(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name, sparse, baseBranch, code string
+	}{
+		{"sparse checkout mode", "sometimes", "", "git_invalid_sparse_checkout_mode"},
+		{"base branch fetch mode", "", "sometimes", "git_invalid_fetch_base_branch_mode"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			ctx, e, reports := gitErrorCaptureServer(t, true, http.StatusCreated)
+			e.Repository = "https://example.com/repo.git"
+			e.shell.Env.Set("BUILDKITE_BUILD_CHECKOUT_PATH", t.TempDir())
+			t.Cleanup(func() {
+				if e.checkoutRoot != nil {
+					_ = e.checkoutRoot.Close()
+				}
+			})
+			e.GitSparseCheckoutMode = tc.sparse
+			e.GitFetchBaseBranch = tc.baseBranch
+			if err := e.CheckoutPhase(ctx); err == nil {
+				t.Fatal("CheckoutPhase() error = nil, want an invalid setting error")
+			}
+			if len(reports) != 1 {
+				t.Fatalf("reports = %d, want 1", len(reports))
+			}
+			if report := <-reports; report.Code != tc.code {
+				t.Errorf("report code = %q, want %q", report.Code, tc.code)
+			}
+		})
+	}
+}
