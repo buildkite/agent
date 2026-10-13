@@ -113,8 +113,9 @@ func relativePath(dir, path string) (string, bool) {
 // captureCommandError reports a command that failed or could not be run,
 // whether run by default or by a command hook, with the end of its output.
 func (e *Executor) captureCommandError(ctx context.Context, err error) {
-	// A refused repository command hook was reported when it was refused.
-	if errors.As(err, new(localHookRefusedError)) {
+	// Skip building the report, which flushes the redactors, when it won't be
+	// sent. A refused repository command hook was reported when it was refused.
+	if !agentErrorCaptureEnabled(e.shell.Env) || errors.As(err, new(localHookRefusedError)) {
 		return
 	}
 	// Quote short, single-line commands. Longer scripts are in the step.
