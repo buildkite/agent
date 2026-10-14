@@ -38,11 +38,10 @@ We'll continue to run your job, but you won't be able to use the Job API`)
 	jobAPIOpts := []jobapi.ServerOpts{
 		jobapi.WithPromiseFailureDeclarer(e.declarePromiseFailure),
 	}
-	// Each report is its own API request, and server-side quotas only apply
-	// once a request arrives. Bound the requests one job can make, so a script
-	// calling capture-error in a loop can't flood the API.
-	var requests atomic.Int64
-	var quotaFull atomic.Bool
+	// Each report is its own API request. Once the API has refused a report
+	// for good, later ones would be refused too, so stop sending them; a
+	// script calling capture-error in a loop then can't keep hitting the API.
+	var refused atomic.Bool
 	reporter := func(requestCtx context.Context, capturedError *jobapi.CapturedError) error {
 		// Reporting must not keep a cancelled job alive through its grace period.
 		reportCtx, cancel := context.WithCancel(requestCtx)
@@ -54,18 +53,15 @@ We'll continue to run your job, but you won't be able to use the Job API`)
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		if quotaFull.Load() {
-			return errors.New("the job or build has reached its captured error limit; not sent to Buildkite")
-		}
-		// Reserve before sending, so concurrent reports can't exceed the cap.
-		if requests.Add(1) > maxCapturedErrorRequests {
-			return fmt.Errorf("this job has already sent %d captured errors; not sent to Buildkite", maxCapturedErrorRequests)
+		if refused.Load() {
+			return errors.New("not sent: Buildkite refused an earlier captured error for this job because its error limit was reached or error capture is unavailable")
 		}
 		err := e.reportCapturedError(reportCtx, capturedError)
-		// The API returns 422 only when the job or build quota is full. Later
-		// reports would be rejected too, so stop sending them.
-		if api.IsErrHavingStatus(err, http.StatusUnprocessableEntity) {
-			quotaFull.Store(true)
+		// 422 means the job or build quota is full; 404 means error capture
+		// isn't available for this job. Neither changes during the job. Rate
+		// limits (429) and other failures are transient, so keep sending.
+		if api.IsErrHavingStatus(err, http.StatusUnprocessableEntity) || api.IsErrHavingStatus(err, http.StatusNotFound) {
+			refused.Store(true)
 		}
 		return err
 	}
@@ -114,9 +110,6 @@ We'll continue to run your job, but you won't be able to use the Job API`)
 		}
 	}, nil
 }
-
-// maxCapturedErrorRequests matches the API's per-job quota of stored errors.
-const maxCapturedErrorRequests = 100
 
 func (e *Executor) reportCapturedError(ctx context.Context, capturedError *jobapi.CapturedError) error {
 	apiClient := api.NewClient(logger.Discard, api.Config{

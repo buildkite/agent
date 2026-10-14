@@ -252,10 +252,11 @@ func TestCapturedErrorRequestLimit(t *testing.T) {
 		requests int // reaching the API
 		accepted int
 	}{
-		{name: "per-job cap", reports: maxCapturedErrorRequests + 2, requests: maxCapturedErrorRequests, accepted: maxCapturedErrorRequests},
-		// A 503 is transient and must not stop forwarding; a 422 means a quota
-		// is full, so no later report should reach the API.
-		{name: "quota full", statuses: []int{201, 503, 201, 422}, reports: 7, requests: 4, accepted: 2},
+		// Transient failures must not stop forwarding; a 422 (quota full) or
+		// 404 (capture unavailable) means no later report should reach the API.
+		{name: "quota full", statuses: []int{201, 503, 429, 201, 422}, reports: 8, requests: 5, accepted: 2},
+		{name: "capture unavailable", statuses: []int{404}, reports: 5, requests: 1, accepted: 0},
+		{name: "accepted", reports: 150, requests: 150, accepted: 150},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
