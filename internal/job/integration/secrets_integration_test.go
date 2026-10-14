@@ -694,8 +694,8 @@ func TestSecretsIntegration_ProtectedEnv(t *testing.T) {
 		{name: "enabled", enabled: true, variable: "GIT_SSH_COMMAND", wantErr: true},
 		{name: "config_entry", enabled: true, variable: "GIT_CONFIG_VALUE_0", wantErr: true},
 		{name: "safe_variable", enabled: true, variable: "GIT_AUTHOR_NAME"},
-		{name: "policy_override", enabled: true, variable: "BUILDKITE_PROTECT_DANGEROUS_GIT_ENV_VARS", wantErr: true},
-		{name: "custom_policy_override", variable: "BUILDKITE_PROTECT_ENV_VARS", wantErr: true},
+		{name: "policy_override", enabled: true, variable: "BUILDKITE_PROTECT_DANGEROUS_GIT_ENVIRONMENT_VARIABLES", wantErr: true},
+		{name: "custom_policy_override", variable: "BUILDKITE_PROTECTED_ENVIRONMENT_VARIABLES", wantErr: true},
 		{name: "custom_exact", patterns: "BASH_ENV,LD_PRELOAD", variable: "BASH_ENV", wantErr: true},
 		{name: "custom_prefix", patterns: "LD_*", variable: "LD_PRELOAD", wantErr: true},
 		{name: "both_custom", enabled: true, patterns: "BASH_ENV", variable: "BASH_ENV", wantErr: true},
@@ -727,8 +727,8 @@ func TestSecretsIntegration_ProtectedEnv(t *testing.T) {
 			err = tester.Run(t,
 				"BUILDKITE_SECRETS_CONFIG="+string(secretsJSON),
 				"BUILDKITE_AGENT_ENDPOINT="+apiServer.URL,
-				fmt.Sprintf("BUILDKITE_PROTECT_DANGEROUS_GIT_ENV_VARS=%t", tc.enabled),
-				"BUILDKITE_PROTECT_ENV_VARS="+tc.patterns,
+				fmt.Sprintf("BUILDKITE_PROTECT_DANGEROUS_GIT_ENVIRONMENT_VARIABLES=%t", tc.enabled),
+				"BUILDKITE_PROTECTED_ENVIRONMENT_VARIABLES="+tc.patterns,
 			)
 			if (err != nil) != tc.wantErr {
 				t.Fatalf("Run() error = %v, want error = %t; output: %s", err, tc.wantErr, tester.Output)

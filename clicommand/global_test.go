@@ -16,7 +16,7 @@ import (
 func TestProtectedEnvConfigurationSources(t *testing.T) {
 	for _, source := range []string{"default", "flags", "environment", "config"} {
 		t.Run(source, func(t *testing.T) {
-			for _, name := range []string{"BUILDKITE_PROTECT_ENV_VARS", "BUILDKITE_PROTECT_DANGEROUS_GIT_ENV_VARS"} {
+			for _, name := range []string{"BUILDKITE_PROTECTED_ENVIRONMENT_VARIABLES", "BUILDKITE_PROTECT_DANGEROUS_GIT_ENVIRONMENT_VARIABLES"} {
 				t.Setenv(name, "")
 				if err := os.Unsetenv(name); err != nil {
 					t.Fatal(err)
@@ -25,13 +25,13 @@ func TestProtectedEnvConfigurationSources(t *testing.T) {
 			args := []string{"start", "--token=test-token", "--build-path=" + t.TempDir()}
 			switch source {
 			case "flags":
-				args = append(args, "--protect-env-vars=BASH_ENV,LD_*", "--protect-env-vars=HOME", "--protect-dangerous-git-env-vars")
+				args = append(args, "--protected-environment-variables=BASH_ENV,LD_*", "--protected-environment-variables=HOME", "--protect-dangerous-git-environment-variables")
 			case "environment":
-				t.Setenv("BUILDKITE_PROTECT_ENV_VARS", "BASH_ENV, LD_*,HOME")
-				t.Setenv("BUILDKITE_PROTECT_DANGEROUS_GIT_ENV_VARS", "true")
+				t.Setenv("BUILDKITE_PROTECTED_ENVIRONMENT_VARIABLES", "BASH_ENV, LD_*,HOME")
+				t.Setenv("BUILDKITE_PROTECT_DANGEROUS_GIT_ENVIRONMENT_VARIABLES", "true")
 			case "config":
 				path := filepath.Join(t.TempDir(), "agent.cfg")
-				if err := os.WriteFile(path, []byte("protect-env-vars=BASH_ENV, LD_*,HOME\nprotect-dangerous-git-env-vars=true\n"), 0o600); err != nil {
+				if err := os.WriteFile(path, []byte("protected-environment-variables=BASH_ENV, LD_*,HOME\nprotect-dangerous-git-environment-variables=true\n"), 0o600); err != nil {
 					t.Fatal(err)
 				}
 				args = append(args, "--config", path)
@@ -40,8 +40,8 @@ func TestProtectedEnvConfigurationSources(t *testing.T) {
 			cmd := &cli.Command{
 				Name: "start",
 				Flags: []cli.Flag{
-					&cli.StringSliceFlag{Name: ProtectEnvVarsFlag.Name, Sources: ProtectEnvVarsFlag.Sources},
-					&cli.BoolFlag{Name: ProtectDangerousGitEnvVarsFlag.Name, Sources: ProtectDangerousGitEnvVarsFlag.Sources},
+					&cli.StringSliceFlag{Name: ProtectedEnvironmentVariablesFlag.Name, Sources: ProtectedEnvironmentVariablesFlag.Sources},
+					&cli.BoolFlag{Name: ProtectDangerousGitEnvironmentVariablesFlag.Name, Sources: ProtectDangerousGitEnvironmentVariablesFlag.Sources},
 					&cli.StringFlag{Name: "config"},
 					&cli.StringFlag{Name: "token"},
 					&cli.StringFlag{Name: "build-path"},
@@ -54,7 +54,7 @@ func TestProtectedEnvConfigurationSources(t *testing.T) {
 				if _, err := loader.Load(); err != nil {
 					return err
 				}
-				patterns, err := env.ProtectedEnvPatterns(cfg.ProtectEnvVars, cfg.ProtectDangerousGitEnvVars)
+				patterns, err := env.ProtectedEnvPatterns(cfg.ProtectedEnvironmentVariables, cfg.ProtectDangerousGitEnvironmentVariables)
 				if err != nil {
 					return err
 				}

@@ -48,14 +48,14 @@ func TestProtectedEnvVarsBeforeBootstrap(t *testing.T) {
 				BootstrapScript: fmt.Sprintf("%q --noprofile --norc -c 'echo BOOTSTRAP_STARTED'", bash),
 			}
 			if protect {
-				conf.ProtectEnvVars = []string{"BASH_ENV"}
+				conf.ProtectedEnvironmentVariables = []string{"BASH_ENV"}
 			}
 			if err := runJob(t, t.Context(), testRunJobConfig{
 				job: &api.Job{
 					ID: defaultJobID, ChunksMaxSizeBytes: 1024, Token: "bkaj_job-token",
 					Env: map[string]string{
-						"BASH_ENV":                   jobScript,
-						"BUILDKITE_PROTECT_ENV_VARS": "",
+						"BASH_ENV": jobScript,
+						"BUILDKITE_PROTECTED_ENVIRONMENT_VARIABLES": "",
 					},
 				},
 				server: server, agentCfg: conf,
@@ -115,33 +115,33 @@ func TestDangerousGitEnvVarsCheckout(t *testing.T) {
 			j := &api.Job{
 				ID: defaultJobID, ChunksMaxSizeBytes: 1024, Token: "bkaj_job-token",
 				Env: map[string]string{
-					"BUILDKITE_JOB_ID":                                  defaultJobID,
-					"BUILDKITE_AGENT_NAME":                              "test-agent",
-					"BUILDKITE_REPO":                                    repo,
-					"BUILDKITE_BUILD_CHECKOUT_PATH":                     checkout,
-					"BUILDKITE_COMMIT":                                  "HEAD",
-					"BUILDKITE_BRANCH":                                  "main",
-					"BUILDKITE_ORGANIZATION_SLUG":                       "test",
-					"BUILDKITE_PIPELINE_SLUG":                           "test",
-					"BUILDKITE_PIPELINE_PROVIDER":                       "custom",
-					"BUILDKITE_PROTECT_DANGEROUS_GIT_ENV_VARS":          fmt.Sprint(!enabled),
-					"BUILDKITE_USE_REPOSITORY_PROVIDER_GIT_CREDENTIALS": "false",
-					"BUILDKITE_USE_GITHUB_APP_GIT_CREDENTIALS":          "false",
-					"GIT_CONFIG_VALUE_0":                                `echo executed > '` + jobMarker + `'`,
-					"GIT_SSH_COMMAND":                                   "ssh -F job-config",
+					"BUILDKITE_JOB_ID":                                      defaultJobID,
+					"BUILDKITE_AGENT_NAME":                                  "test-agent",
+					"BUILDKITE_REPO":                                        repo,
+					"BUILDKITE_BUILD_CHECKOUT_PATH":                         checkout,
+					"BUILDKITE_COMMIT":                                      "HEAD",
+					"BUILDKITE_BRANCH":                                      "main",
+					"BUILDKITE_ORGANIZATION_SLUG":                           "test",
+					"BUILDKITE_PIPELINE_SLUG":                               "test",
+					"BUILDKITE_PIPELINE_PROVIDER":                           "custom",
+					"BUILDKITE_PROTECT_DANGEROUS_GIT_ENVIRONMENT_VARIABLES": fmt.Sprint(!enabled),
+					"BUILDKITE_USE_REPOSITORY_PROVIDER_GIT_CREDENTIALS":     "false",
+					"BUILDKITE_USE_GITHUB_APP_GIT_CREDENTIALS":              "false",
+					"GIT_CONFIG_VALUE_0":                                    `echo executed > '` + jobMarker + `'`,
+					"GIT_SSH_COMMAND":                                       "ssh -F job-config",
 				},
 			}
 			if err := runJob(t, t.Context(), testRunJobConfig{
 				job: j, server: server,
 				agentCfg: agent.AgentConfiguration{
-					BootstrapScript:            fmt.Sprintf("%q bootstrap --phases checkout --no-job-api --cancel-signal SIGTERM", executable),
-					BuildPath:                  root,
-					GitCommitVerification:      "off",
-					GitMirrorCheckoutMode:      "reference",
-					GitCheckoutFlags:           "-f",
-					GitCleanFlags:              "-fdx",
-					CheckoutAttempts:           1,
-					ProtectDangerousGitEnvVars: enabled,
+					BootstrapScript:                         fmt.Sprintf("%q bootstrap --phases checkout --no-job-api --cancel-signal SIGTERM", executable),
+					BuildPath:                               root,
+					GitCommitVerification:                   "off",
+					GitMirrorCheckoutMode:                   "reference",
+					GitCheckoutFlags:                        "-f",
+					GitCleanFlags:                           "-fdx",
+					CheckoutAttempts:                        1,
+					ProtectDangerousGitEnvironmentVariables: enabled,
 				},
 			}); err != nil {
 				t.Fatal(err)

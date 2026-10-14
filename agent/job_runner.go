@@ -440,7 +440,7 @@ func (r *JobRunner) createEnvironment(ctx context.Context) ([]string, error) {
 	// them.
 	checkoutMode := r.conf.AgentConfiguration.CheckoutOverrideMode
 
-	protectedEnvPatterns, err := envutil.ProtectedEnvPatterns(r.conf.AgentConfiguration.ProtectEnvVars, r.conf.AgentConfiguration.ProtectDangerousGitEnvVars)
+	protectedEnvPatterns, err := envutil.ProtectedEnvPatterns(r.conf.AgentConfiguration.ProtectedEnvironmentVariables, r.conf.AgentConfiguration.ProtectDangerousGitEnvironmentVariables)
 	if err != nil {
 		return nil, err
 	}
@@ -463,8 +463,8 @@ func (r *JobRunner) createEnvironment(ctx context.Context) ([]string, error) {
 	// bootstrap nor a container consuming an env file can take it from the job.
 	var ignoredEnv []string
 	for name := range env {
-		if strings.EqualFold(name, "BUILDKITE_PROTECT_ENV_VARS") ||
-			strings.EqualFold(name, "BUILDKITE_PROTECT_DANGEROUS_GIT_ENV_VARS") ||
+		if strings.EqualFold(name, "BUILDKITE_PROTECTED_ENVIRONMENT_VARIABLES") ||
+			strings.EqualFold(name, "BUILDKITE_PROTECT_DANGEROUS_GIT_ENVIRONMENT_VARIABLES") ||
 			envutil.MatchesProtectedEnv(name, protectedEnvPatterns) {
 			delete(env, name)
 			ignoredEnv = append(ignoredEnv, name)
@@ -536,8 +536,8 @@ func (r *JobRunner) createEnvironment(ctx context.Context) ([]string, error) {
 		}
 		env[name] = value
 	}
-	setEnv("BUILDKITE_PROTECT_ENV_VARS", strings.Join(r.conf.AgentConfiguration.ProtectEnvVars, ","))
-	setEnv("BUILDKITE_PROTECT_DANGEROUS_GIT_ENV_VARS", fmt.Sprint(r.conf.AgentConfiguration.ProtectDangerousGitEnvVars))
+	setEnv("BUILDKITE_PROTECTED_ENVIRONMENT_VARIABLES", strings.Join(r.conf.AgentConfiguration.ProtectedEnvironmentVariables, ","))
+	setEnv("BUILDKITE_PROTECT_DANGEROUS_GIT_ENVIRONMENT_VARIABLES", fmt.Sprint(r.conf.AgentConfiguration.ProtectDangerousGitEnvironmentVariables))
 
 	// For some checkout env vars, we allow the Job env (if present) to have
 	// higher precedence than the agent configuration, unless the checkout-override

@@ -1116,7 +1116,7 @@ func (e *Executor) fetchAndSetSecrets(ctx context.Context) error {
 					return fmt.Errorf("secret %q cannot set protected environment variable %q", pipelineSecret.Key, pipelineSecret.EnvironmentVariable)
 				}
 				if env.MatchesProtectedEnv(pipelineSecret.EnvironmentVariable, e.ProtectedEnvPatterns) {
-					return fmt.Errorf("secret %q cannot set environment variable %q protected by --protect-env-vars or --protect-dangerous-git-env-vars", pipelineSecret.Key, pipelineSecret.EnvironmentVariable)
+					return fmt.Errorf("secret %q cannot set environment variable %q protected by --protected-environment-variables or --protect-dangerous-git-environment-variables", pipelineSecret.Key, pipelineSecret.EnvironmentVariable)
 				}
 				if env.IsCheckoutLockedForSecrets(pipelineSecret.EnvironmentVariable, e.CheckoutOverrideMode) {
 					return fmt.Errorf("secret %q cannot set checkout-locked environment variable %q while BUILDKITE_CHECKOUT_OVERRIDE_MODE=%s", pipelineSecret.Key, pipelineSecret.EnvironmentVariable, e.CheckoutOverrideMode)
