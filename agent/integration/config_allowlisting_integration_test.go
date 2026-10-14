@@ -395,6 +395,14 @@ func TestRefusedJobErrorsDescribeTheStep(t *testing.T) {
 			contains:    "https://example.com/repo.git?[REDACTED] has no match",
 			excludes:    "unregistered-secret",
 		},
+		{
+			name:        "a refused repository whose password masking can't find is left out",
+			env:         map[string]string{"BUILDKITE_REPO": "https://user:private password@example.com/repo.git"},
+			agentConfig: agent.AgentConfiguration{AllowedRepositories: []*regexp.Regexp{regexp.MustCompile(`^https://github\.com/`)}},
+			code:        "job_refused",
+			contains:    "its --allowed-repositories option does not allow it. Run the step",
+			excludes:    "private password",
+		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
