@@ -342,7 +342,7 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string, attem
 	}
 
 	if isMainRepository && !commitAlreadyPresent && !remoteMirrorHit {
-		var refspecs []string
+		var refspecs, literalRefspecs []string
 		var retry, isMergeRefspec bool
 
 		switch {
@@ -366,17 +366,19 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string, attem
 			refspecs = []string{refspec}
 		default:
 			// Fetch the build branch from the upstream repository into the mirror.
-			refspecs = []string{e.Branch}
+			// Literal, because a quote is legal in a git ref name.
+			literalRefspecs = []string{e.Branch}
 		}
 
 		// Fetch the refspecs from the upstream repository into the mirror.
 		if err := e.traceOp(ctx, "git.mirror.fetch", func(ctx context.Context) error {
 			return gitFetch(ctx, gitFetchArgs{
-				Shell:      e.shell,
-				GitFlags:   []string{"--git-dir", mirrorDir},
-				Repository: "origin",
-				RefSpecs:   refspecs,
-				Retry:      retry,
+				Shell:           e.shell,
+				GitFlags:        []string{"--git-dir", mirrorDir},
+				Repository:      "origin",
+				RefSpecs:        refspecs,
+				LiteralRefSpecs: literalRefspecs,
+				Retry:           retry,
 			})
 		}); err != nil {
 			return "", fmt.Errorf("%w%s", err, prMergeRefspecHint(isMergeRefspec))

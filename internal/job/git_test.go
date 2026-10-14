@@ -600,14 +600,17 @@ func TestGitFetch(t *testing.T) {
 		GitFetchFlags: "--foo --bar",
 		Repository:    "repo",
 		RefSpecs:      []string{"ref1", "ref2"},
+		// Passed through unsplit; an empty entry adds no argument, as it would
+		// in RefSpecs, rather than asking git for the remote's HEAD.
+		LiteralRefSpecs: []string{"he'll'o", ""},
 	}); err != nil {
-		t.Fatalf(`gitFetch(ctx, gitFetchArgs{Shell: sh, GitFetchFlags: "--foo --bar", Remote: "repo", RefSpecs: []string{"ref1", "ref2"}} = %v`, err)
+		t.Fatalf("gitFetch(ctx, ...) = %v", err)
 	}
 
 	wantLog := [][]string{{
 		absoluteGit,
 		"-c", "credential.helper=/path with spaces/helper",
-		"fetch", "--foo", "--bar", "--", "repo", "ref1", "ref2",
+		"fetch", "--foo", "--bar", "--", "repo", "ref1", "ref2", "he'll'o",
 	}}
 	if diff := cmp.Diff(gotLog, wantLog); diff != "" {
 		t.Errorf("executed commands diff (-got +want):\n%s", diff)

@@ -257,7 +257,13 @@ func gitFetch(ctx context.Context, args gitFetchArgs) error {
 		commandArgs = append(commandArgs, individualRefSpecs...)
 	}
 
-	commandArgs = append(commandArgs, args.LiteralRefSpecs...)
+	for _, r := range args.LiteralRefSpecs {
+		// Skip empty entries, as splitting does for RefSpecs: an empty refspec
+		// argument fetches the remote's HEAD rather than its configured refspecs.
+		if r != "" {
+			commandArgs = append(commandArgs, r)
+		}
+	}
 
 	smelt := map[string]bool{
 		gitErrStrBadObject:             false,
