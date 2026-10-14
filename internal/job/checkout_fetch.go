@@ -224,16 +224,11 @@ func (e *Executor) fetchSource(ctx context.Context, addBloblessFilter bool, atte
 	return nil
 }
 
-// headBuildRefs returns the refs that can name what a Commit=HEAD build
-// builds, in the order to try them. A bare name is ambiguous, and git resolves
-// it against refs/tags/ before refs/heads/, so a tag would shadow a branch with
-// the same name.
-//
-// Buildkite sets BUILDKITE_TAG only when it knows the build is of a tag, so
-// that names the tag even when a branch shares its name. Otherwise the branch
-// comes first, then the bare name: API, trigger and scheduled builds can name
-// a tag in BUILDKITE_BRANCH without setting BUILDKITE_TAG, and those builds
-// rely on the bare name finding it.
+// headBuildRefs returns the refs a Commit=HEAD build may name, in fetch order.
+// git resolves a bare name in refs/tags/ before refs/heads/, so a tag would
+// shadow a same-named branch. BUILDKITE_TAG is set only for known tag builds.
+// Otherwise try the branch, then the bare name, which API, trigger and
+// scheduled builds rely on when BUILDKITE_BRANCH names a tag.
 func (e *Executor) headBuildRefs() []string {
 	switch {
 	case e.Tag != "":
@@ -246,14 +241,13 @@ func (e *Executor) headBuildRefs() []string {
 	}
 }
 
-// gitFetchHeadRef fetches the first of headBuildRefs that the remote has,
-// leaving it in FETCH_HEAD. The refs are passed literally because a quote is
-// legal in a git ref name, and word-splitting would fetch he'll'o as hello.
+// gitFetchHeadRef fetches the first of headBuildRefs the remote has into
+// FETCH_HEAD. Refs are passed unsplit, as quotes are legal in ref names.
 func (e *Executor) gitFetchHeadRef(ctx context.Context, args gitFetchArgs) error {
 	refs := e.headBuildRefs()
 	first := args
 	first.LiteralRefSpecs = refs[:1]
-	// Whether to fall back depends on recognising "couldn't find remote ref".
+	// The fallback relies on matching git's "couldn't find remote ref".
 	first.CLocale = len(refs) > 1
 	err := gitFetch(ctx, first)
 	if gerr := new(gitError); len(refs) > 1 && errors.As(err, &gerr) && gerr.Type == gitErrorFetchBadReference {

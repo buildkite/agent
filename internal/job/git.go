@@ -219,11 +219,7 @@ type gitFetchArgs struct {
 	Retry         bool         // Whether to retry the fetch on certain errors
 	RefSpecs      []string     // Refspecs to fetch, word-split like a shell would
 	HidePrompt    bool         // Never log argv, including in shell debug mode
-
-	// CLocale runs git with LC_ALL=C so it doesn't translate its messages,
-	// for callers whose control flow depends on the error type below: it is
-	// found by matching git's English error text.
-	CLocale bool
+	CLocale       bool         // Run git with LC_ALL=C, so errors match its English text
 
 	// LiteralRefSpecs are refspecs passed to git exactly as given, one argument
 	// each. RefSpecs is word-split because it carries operator-supplied strings
