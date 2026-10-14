@@ -202,8 +202,12 @@ func (e *Executor) fetchSource(ctx context.Context, addBloblessFilter bool, atte
 			GitFetchFlags: gitFetchFlags,
 			Repository:    "origin",
 			// LiteralRefSpecs, not RefSpecs: a quote is legal in a git ref name,
-			// and word-splitting would fetch he'll'o as hello.
-			LiteralRefSpecs: []string{e.Branch},
+			// and word-splitting would fetch he'll'o as hello. Qualifying the
+			// branch as refs/heads/<name> also keeps a same-named tag from
+			// shadowing the branch: git resolves a bare name against refs/tags/
+			// first, so the fetch could otherwise report success while
+			// FETCH_HEAD ends up at the tag tip.
+			LiteralRefSpecs: []string{qualifiedBranchRefspec(e.Branch)},
 		}); err != nil {
 			return fmt.Errorf("fetching branch %q: %w", e.Branch, err)
 		}
@@ -255,6 +259,13 @@ func (e *Executor) validateGithubPRMergeHead(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+// qualifiedBranchRefspec qualifies a branch name as an explicit refs/heads/
+// refspec, so a branch named like an existing tag still fetches the branch:
+// git resolves a bare name against refs/tags/ before refs/heads/.
+func qualifiedBranchRefspec(branch string) string {
+	return "refs/heads/" + branch
 }
 
 func commitSecondParent(commit string) (string, bool) {
