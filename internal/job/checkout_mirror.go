@@ -169,7 +169,7 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string, attem
 				return "", err
 			}
 			if hit {
-				return e.finishMirrorUpdate(ctx, repository, mirrorDir, e.mirrorLFSRef())
+				return e.finishMirrorUpdate(ctx, repository, mirrorDir, e.mirrorLFSRefs())
 			}
 		}
 
@@ -223,7 +223,7 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string, attem
 					// --reference clone transfers only the missing delta.
 					attempt.outcome = remoteMirrorOutcomeMiss
 				}
-				return e.finishMirrorUpdate(ctx, repository, mirrorDir, e.mirrorLFSRef())
+				return e.finishMirrorUpdate(ctx, repository, mirrorDir, e.mirrorLFSRefs())
 			}
 
 			if stagingCleanupErr == nil && tempMirrorDir != "" {
@@ -252,7 +252,7 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string, attem
 			}
 			return "", err
 		}
-		return e.finishMirrorUpdate(ctx, repository, mirrorDir, e.mirrorLFSRef())
+		return e.finishMirrorUpdate(ctx, repository, mirrorDir, e.mirrorLFSRefs())
 	}
 
 	// If it exists, immediately release the clone lock.
@@ -287,7 +287,7 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string, attem
 		}
 	}()
 
-	lfsRef := e.mirrorLFSRef()
+	lfsRefs := e.mirrorLFSRefs()
 	commitAlreadyPresent := false
 	if isMainRepository {
 		// Another process may have fetched the commit while we waited for the lock.
@@ -342,8 +342,9 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string, attem
 	}
 
 	if isMainRepository && !commitAlreadyPresent && !remoteMirrorHit {
-		var refspecs, literalRefspecs []string
+		var refspecs []string
 		var retry, isMergeRefspec bool
+		fetch := gitFetch
 
 		switch {
 		case e.RefSpec != "":
@@ -365,20 +366,20 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string, attem
 			}
 			refspecs = []string{refspec}
 		default:
-			// Fetch the build branch from the upstream repository into the mirror.
-			// Literal, because a quote is legal in a git ref name.
-			literalRefspecs = []string{e.Branch}
+			// Fetch the build's branch, or tag, into the mirror the way a HEAD
+			// build's workspace fetch does, so a tag cannot shadow a branch
+			// with the same name.
+			fetch = e.gitFetchHeadRef
 		}
 
 		// Fetch the refspecs from the upstream repository into the mirror.
 		if err := e.traceOp(ctx, "git.mirror.fetch", func(ctx context.Context) error {
-			return gitFetch(ctx, gitFetchArgs{
-				Shell:           e.shell,
-				GitFlags:        []string{"--git-dir", mirrorDir},
-				Repository:      "origin",
-				RefSpecs:        refspecs,
-				LiteralRefSpecs: literalRefspecs,
-				Retry:           retry,
+			return fetch(ctx, gitFetchArgs{
+				Shell:      e.shell,
+				GitFlags:   []string{"--git-dir", mirrorDir},
+				Repository: "origin",
+				RefSpecs:   refspecs,
+				Retry:      retry,
 			})
 		}); err != nil {
 			return "", fmt.Errorf("%w%s", err, prMergeRefspecHint(isMergeRefspec))
@@ -386,7 +387,7 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string, attem
 		if e.Commit == "HEAD" {
 			// Match the workspace checkout: use this fetch's resolved ref,
 			// even when a custom refspec did not update a local branch.
-			lfsRef = "FETCH_HEAD"
+			lfsRefs = []string{"FETCH_HEAD"}
 		}
 	}
 	if !isMainRepository {
@@ -417,19 +418,19 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string, attem
 		}
 	}
 
-	return e.finishMirrorUpdate(ctx, repository, mirrorDir, lfsRef)
+	return e.finishMirrorUpdate(ctx, repository, mirrorDir, lfsRefs)
 }
 
 // finishMirrorUpdate is the last step of every mirror clone or update path. It
 // runs while the caller holds the mirror's clone or update lock, before
 // creating a snapshot or cloning the workspace. When the Git LFS mirror cache
-// is enabled, it first prefetches the job's LFS objects (identified by lfsRef)
-// into the main repository's mirror. That prefetch is optional: on failure the
-// workspace still fetches with its own configuration and retries, reusing
-// cached objects where possible.
-func (e *Executor) finishMirrorUpdate(ctx context.Context, repository, mirrorDir, lfsRef string) (string, error) {
+// is enabled, it first prefetches the job's LFS objects (identified by the
+// first of lfsRefs that resolves) into the main repository's mirror. That
+// prefetch is optional: on failure the workspace still fetches with its own
+// configuration and retries, reusing cached objects where possible.
+func (e *Executor) finishMirrorUpdate(ctx context.Context, repository, mirrorDir string, lfsRefs []string) (string, error) {
 	if e.mirrorLFSCacheEnabled() && repository == e.Repository {
-		if err := e.prefetchMirrorLFS(ctx, mirrorDir, lfsRef); err != nil {
+		if err := e.prefetchMirrorLFS(ctx, mirrorDir, lfsRefs); err != nil {
 			if ctx.Err() != nil {
 				return "", ctx.Err()
 			}

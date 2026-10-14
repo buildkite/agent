@@ -291,6 +291,90 @@ func TestDefaultCheckoutPhaseWithQuoteInBranchName(t *testing.T) {
 	}
 }
 
+// git resolves a bare name against refs/tags/ before refs/heads/, so a
+// Commit=HEAD build fetching its bare branch name would build a tag that shares
+// the name. A branch build must get the branch, a tag build (BUILDKITE_TAG) the
+// tag, and a build naming a tag in BUILDKITE_BRANCH alone must still find it.
+func TestDefaultCheckoutPhaseWithSameNamedBranchAndTag(t *testing.T) {
+	for _, test := range []struct {
+		name    string
+		tag     string // BUILDKITE_TAG
+		branch  bool   // whether refs/heads/release exists; refs/tags/release always does
+		wantTag bool   // whether the build should check out the tag rather than the branch
+	}{
+		{name: "branch with same-named tag", branch: true},
+		{name: "tag build", tag: "release", wantTag: true},
+		{name: "tag build with same-named branch", tag: "release", branch: true, wantTag: true},
+		{name: "tag named by branch", wantTag: true},
+	} {
+		for _, mirrors := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/mirrors=%t", test.name, mirrors), func(t *testing.T) {
+				sh, err := shell.New()
+				if err != nil {
+					t.Fatalf("shell.New() error = %v, want nil", err)
+				}
+				e := &Executor{
+					shell: sh,
+					ExecutorConfig: ExecutorConfig{
+						Commit:                "HEAD",
+						Branch:                "release",
+						Tag:                   test.tag,
+						GitCleanFlags:         "-f -d -x",
+						GitMirrorsLockTimeout: 30,
+					},
+				}
+				const projectName = "project-branch-and-tag"
+				s, branchTip := setupCheckoutTestRepo(t, e, projectName)
+
+				var mirror string
+				if mirrors {
+					// Mirror the repository before the refs exist, so only the
+					// job's mirror update can bring them in.
+					e.GitMirrorsPath = shortTempDir(t)
+					mirror = expectedOnHostMirrorDir(e)
+					runGitForMirrorTest(t, "", "clone", "--mirror", e.Repository, mirror)
+				}
+
+				tagTip, _, _ := strings.Cut(gitOutputForRemoteCheckoutTest(t, "", "ls-remote", e.Repository, "refs/heads/main"), "\t")
+				refs := map[string]string{"refs/tags/release": tagTip}
+				if test.branch {
+					refs["refs/heads/release"] = branchTip
+				}
+				for ref, commit := range refs {
+					if out, err := s.CreateRef(projectName, ref, commit); err != nil {
+						t.Fatalf("s.CreateRef(%q, %q) error = %v, output: %s", ref, commit, err, out)
+					}
+				}
+
+				if err := e.defaultCheckoutPhase(t.Context(), 1); err != nil {
+					t.Fatalf("e.defaultCheckoutPhase(ctx, 1) error = %v, want nil", err)
+				}
+
+				want := branchTip
+				if test.wantTag {
+					want = tagTip
+				}
+				checkoutDir, _ := e.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH")
+				if got := gitOutputForRemoteCheckoutTest(t, checkoutDir, "rev-parse", "HEAD"); got != want {
+					t.Errorf("checkout HEAD = %q, want %q (branch = %q, tag = %q)", got, want, branchTip, tagTip)
+				}
+				if mirrors {
+					// The mirror's FETCH_HEAD names the commit whose LFS objects
+					// the mirror prefetches.
+					if got := gitOutputForMirrorTest(t, mirror, "rev-parse", "FETCH_HEAD"); got != want {
+						t.Errorf("mirror FETCH_HEAD = %q, want %q (branch = %q, tag = %q)", got, want, branchTip, tagTip)
+					}
+					if !test.wantTag {
+						if got := gitOutputForMirrorTest(t, mirror, "rev-parse", "refs/heads/release"); got != branchTip {
+							t.Errorf("mirror refs/heads/release = %q, want %q", got, branchTip)
+						}
+					}
+				}
+			})
+		}
+	}
+}
+
 func TestCommitSecondParent(t *testing.T) {
 	t.Parallel()
 

@@ -812,7 +812,7 @@ func TestSecretsIntegration_CheckoutScopedSecretReachesCheckout(t *testing.T) {
 	git.ExpectAll([][]any{
 		{"clone", "--verbose", "--", tester.Repo.Path, "."},
 		{"clean", "-fdq"},
-		{"fetch", "-v", "--", "origin", "main"},
+		{"fetch", "-v", "--", "origin", "refs/heads/main"},
 		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
 		{"clean", "-fdq"},
 		{"rev-parse", "HEAD"},
