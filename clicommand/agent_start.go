@@ -191,8 +191,10 @@ type AgentStartConfig struct {
 	AllowedRepositories     []string `cli:"allowed-repositories" normalize:"list"`
 	AllowedPlugins          []string `cli:"allowed-plugins" normalize:"list"`
 
-	EnableEnvironmentVariableAllowList bool     `cli:"enable-environment-variable-allowlist"`
-	AllowedEnvironmentVariables        []string `cli:"allowed-environment-variables" normalize:"list"`
+	EnableEnvironmentVariableAllowList      bool     `cli:"enable-environment-variable-allowlist"`
+	AllowedEnvironmentVariables             []string `cli:"allowed-environment-variables" normalize:"list"`
+	ProtectedEnvironmentVariables           []string `cli:"protected-environment-variables" normalize:"list"`
+	ProtectDangerousGitEnvironmentVariables bool     `cli:"protect-dangerous-git-environment-variables"`
 
 	HealthCheckAddr string `cli:"health-check-addr"`
 
@@ -630,6 +632,8 @@ var AgentStartCommand = &cli.Command{
 			Usage:   "Only run jobs where all environment variables are allowed by the allowed-environment-variables option, or have been set by Buildkite (default: false)",
 			Sources: cli.EnvVars("BUILDKITE_ENABLE_ENVIRONMENT_VARIABLE_ALLOWLIST"),
 		},
+		ProtectedEnvironmentVariablesFlag,
+		ProtectDangerousGitEnvironmentVariablesFlag,
 		&cli.StringSliceFlag{
 			Name:    "allowed-environment-variables",
 			Value:   nil,
@@ -976,6 +980,10 @@ var AgentStartCommand = &cli.Command{
 			l.Fatalf("allowed-environment-variables is set, but enable-environment-variable-allowlist is not set")
 		}
 
+		if _, err := env.ProtectedEnvPatterns(cfg.ProtectedEnvironmentVariables, cfg.ProtectDangerousGitEnvironmentVariables); err != nil {
+			return err
+		}
+
 		var allowedEnvironmentVariables []*regexp.Regexp
 		if cfg.EnableEnvironmentVariableAllowList {
 			allowedEnvironmentVariables = append(allowedEnvironmentVariables, buildkiteSetEnvironmentVariables...)
@@ -992,64 +1000,66 @@ var AgentStartCommand = &cli.Command{
 
 		// AgentConfiguration is the runtime configuration for an agent
 		agentConf := agent.AgentConfiguration{
-			BootstrapScript:                 cfg.BootstrapScript,
-			BuildPath:                       cfg.BuildPath,
-			SocketsPath:                     cfg.SocketsPath,
-			GitMirrorsPath:                  cfg.GitMirrorsPath,
-			GitMirrorCheckoutMode:           cfg.GitMirrorCheckoutMode,
-			GitMirrorsLockTimeout:           cfg.GitMirrorsLockTimeout,
-			GitMirrorsSkipUpdate:            cfg.GitMirrorsSkipUpdate,
-			GitMirrorsLFSCache:              cfg.GitMirrorsLFSCache,
-			HooksPath:                       cfg.HooksPath,
-			AdditionalHooksPaths:            cfg.AdditionalHooksPaths,
-			PluginsPath:                     cfg.PluginsPath,
-			GitCheckoutFlags:                cfg.GitCheckoutFlags,
-			GitCheckoutTimeout:              cfg.GitCheckoutTimeout,
-			GitCloneFlags:                   cfg.GitCloneFlags,
-			GitCloneMirrorFlags:             cfg.GitCloneMirrorFlags,
-			GitCleanFlags:                   cfg.GitCleanFlags,
-			GitCommitVerification:           cfg.GitCommitVerification,
-			GitFetchFlags:                   cfg.GitFetchFlags,
-			GitSparseCheckoutPaths:          cfg.GitSparseCheckoutPaths,
-			GitSparseCheckoutMode:           sparseCheckoutMode,
-			GitSubmodules:                   !cfg.NoGitSubmodules,
-			GitSubmoduleCloneConfig:         cfg.GitSubmoduleCloneConfig,
-			SkipCheckout:                    cfg.SkipCheckout,
-			GitSkipFetchExistingCommits:     cfg.GitSkipFetchExistingCommits,
-			GitFetchBaseBranch:              cfg.GitFetchBaseBranch,
-			CheckoutOverrideMode:            checkoutMode,
-			CheckoutAttempts:                cfg.CheckoutAttempts,
-			SSHKeyscan:                      !cfg.NoSSHKeyscan,
-			CommandEval:                     !cfg.NoCommandEval,
-			PluginsEnabled:                  !cfg.NoPlugins,
-			PluginValidation:                !cfg.NoPluginValidation,
-			PluginsAlwaysCloneFresh:         cfg.PluginsAlwaysCloneFresh,
-			LocalHooksEnabled:               !cfg.NoLocalHooks,
-			AllowedEnvironmentVariables:     allowedEnvironmentVariables,
-			StrictSingleHooks:               cfg.StrictSingleHooks,
-			RunInPty:                        !cfg.NoPTY,
-			DisconnectAfterJob:              cfg.DisconnectAfterJob,
-			DisconnectAfterIdleTimeout:      time.Duration(cfg.DisconnectAfterIdleTimeout) * time.Second,
-			DisconnectAfterUptime:           time.Duration(cfg.DisconnectAfterUptime) * time.Second,
-			CancelSignalTimeout:             cfg.CancelSignalTimeout,
-			CancelCleanupTimeout:            cfg.CancelCleanupTimeout,
-			EnableJobLogTmpfile:             cfg.EnableJobLogTmpfile,
-			JobLogPath:                      cfg.JobLogPath,
-			WriteJobLogsToStdout:            cfg.WriteJobLogsToStdout,
-			JobLogsOTLP:                     cfg.JobLogsOTLP,
-			LogFormat:                       cfg.LogFormat,
-			Shell:                           cfg.Shell,
-			HooksShell:                      cfg.HooksShell,
-			RedactedVars:                    cfg.RedactedVars,
-			AcquireJob:                      cfg.AcquireJob,
-			OpenTelemetryTracing:            cfg.OpenTelemetryTracing,
-			TelemetryServiceName:            cfg.TelemetryServiceName,
-			AllowMultipartArtifactUpload:    !cfg.NoMultipartArtifactUpload,
-			ArtifactUploadConcurrency:       cfg.ArtifactUploadConcurrency,
-			KubernetesExec:                  cfg.KubernetesExec,
-			KubernetesContainerStartTimeout: cfg.KubernetesContainerStartTimeout,
-			JobContextDir:                   cfg.JobContextDir,
-			PingMode:                        cfg.PingMode,
+			BootstrapScript:                         cfg.BootstrapScript,
+			BuildPath:                               cfg.BuildPath,
+			SocketsPath:                             cfg.SocketsPath,
+			GitMirrorsPath:                          cfg.GitMirrorsPath,
+			GitMirrorCheckoutMode:                   cfg.GitMirrorCheckoutMode,
+			GitMirrorsLockTimeout:                   cfg.GitMirrorsLockTimeout,
+			GitMirrorsSkipUpdate:                    cfg.GitMirrorsSkipUpdate,
+			GitMirrorsLFSCache:                      cfg.GitMirrorsLFSCache,
+			HooksPath:                               cfg.HooksPath,
+			AdditionalHooksPaths:                    cfg.AdditionalHooksPaths,
+			PluginsPath:                             cfg.PluginsPath,
+			GitCheckoutFlags:                        cfg.GitCheckoutFlags,
+			GitCheckoutTimeout:                      cfg.GitCheckoutTimeout,
+			GitCloneFlags:                           cfg.GitCloneFlags,
+			GitCloneMirrorFlags:                     cfg.GitCloneMirrorFlags,
+			GitCleanFlags:                           cfg.GitCleanFlags,
+			GitCommitVerification:                   cfg.GitCommitVerification,
+			GitFetchFlags:                           cfg.GitFetchFlags,
+			GitSparseCheckoutPaths:                  cfg.GitSparseCheckoutPaths,
+			GitSparseCheckoutMode:                   sparseCheckoutMode,
+			GitSubmodules:                           !cfg.NoGitSubmodules,
+			GitSubmoduleCloneConfig:                 cfg.GitSubmoduleCloneConfig,
+			SkipCheckout:                            cfg.SkipCheckout,
+			GitSkipFetchExistingCommits:             cfg.GitSkipFetchExistingCommits,
+			GitFetchBaseBranch:                      cfg.GitFetchBaseBranch,
+			CheckoutOverrideMode:                    checkoutMode,
+			CheckoutAttempts:                        cfg.CheckoutAttempts,
+			SSHKeyscan:                              !cfg.NoSSHKeyscan,
+			CommandEval:                             !cfg.NoCommandEval,
+			PluginsEnabled:                          !cfg.NoPlugins,
+			PluginValidation:                        !cfg.NoPluginValidation,
+			PluginsAlwaysCloneFresh:                 cfg.PluginsAlwaysCloneFresh,
+			LocalHooksEnabled:                       !cfg.NoLocalHooks,
+			AllowedEnvironmentVariables:             allowedEnvironmentVariables,
+			ProtectedEnvironmentVariables:           cfg.ProtectedEnvironmentVariables,
+			ProtectDangerousGitEnvironmentVariables: cfg.ProtectDangerousGitEnvironmentVariables,
+			StrictSingleHooks:                       cfg.StrictSingleHooks,
+			RunInPty:                                !cfg.NoPTY,
+			DisconnectAfterJob:                      cfg.DisconnectAfterJob,
+			DisconnectAfterIdleTimeout:              time.Duration(cfg.DisconnectAfterIdleTimeout) * time.Second,
+			DisconnectAfterUptime:                   time.Duration(cfg.DisconnectAfterUptime) * time.Second,
+			CancelSignalTimeout:                     cfg.CancelSignalTimeout,
+			CancelCleanupTimeout:                    cfg.CancelCleanupTimeout,
+			EnableJobLogTmpfile:                     cfg.EnableJobLogTmpfile,
+			JobLogPath:                              cfg.JobLogPath,
+			WriteJobLogsToStdout:                    cfg.WriteJobLogsToStdout,
+			JobLogsOTLP:                             cfg.JobLogsOTLP,
+			LogFormat:                               cfg.LogFormat,
+			Shell:                                   cfg.Shell,
+			HooksShell:                              cfg.HooksShell,
+			RedactedVars:                            cfg.RedactedVars,
+			AcquireJob:                              cfg.AcquireJob,
+			OpenTelemetryTracing:                    cfg.OpenTelemetryTracing,
+			TelemetryServiceName:                    cfg.TelemetryServiceName,
+			AllowMultipartArtifactUpload:            !cfg.NoMultipartArtifactUpload,
+			ArtifactUploadConcurrency:               cfg.ArtifactUploadConcurrency,
+			KubernetesExec:                          cfg.KubernetesExec,
+			KubernetesContainerStartTimeout:         cfg.KubernetesContainerStartTimeout,
+			JobContextDir:                           cfg.JobContextDir,
+			PingMode:                                cfg.PingMode,
 
 			SigningJWKSFile:  cfg.SigningJWKSFile,
 			SigningJWKSKeyID: cfg.SigningJWKSKeyID,

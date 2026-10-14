@@ -1,6 +1,10 @@
 package integration
 
 import (
+	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"runtime"
 	"slices"
 	"strings"
@@ -14,6 +18,153 @@ import (
 	"github.com/buildkite/go-pipeline"
 	"github.com/buildkite/go-pipeline/signature"
 )
+
+func TestProtectedEnvVarsBeforeBootstrap(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("tests Unix Bash startup")
+	}
+	bash, err := exec.LookPath("bash")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, protect := range []bool{false, true} {
+		t.Run(fmt.Sprint(protect), func(t *testing.T) {
+			root := t.TempDir()
+			operatorScript := filepath.Join(root, "operator.sh")
+			jobScript := filepath.Join(root, "job.sh")
+			for path, text := range map[string]string{
+				operatorScript: "echo OPERATOR_STARTUP",
+				jobScript:      "echo JOB_STARTUP",
+			} {
+				if err := os.WriteFile(path, []byte(text), 0o600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			t.Setenv("BASH_ENV", operatorScript)
+			e := createTestAgentEndpoint()
+			server := e.server()
+			defer server.Close()
+			conf := agent.AgentConfiguration{
+				BootstrapScript: fmt.Sprintf("%q --noprofile --norc -c 'echo BOOTSTRAP_STARTED'", bash),
+			}
+			if protect {
+				conf.ProtectedEnvironmentVariables = []string{"BASH_ENV"}
+			}
+			if err := runJob(t, t.Context(), testRunJobConfig{
+				job: &api.Job{
+					ID: defaultJobID, ChunksMaxSizeBytes: 1024, Token: "bkaj_job-token",
+					Env: map[string]string{
+						"BASH_ENV": jobScript,
+						"BUILDKITE_PROTECTED_ENVIRONMENT_VARIABLES": "",
+					},
+				},
+				server: server, agentCfg: conf,
+			}); err != nil {
+				t.Fatal(err)
+			}
+			logs := e.logsFor(t, defaultJobID)
+			if finish := e.finishesFor(t, defaultJobID)[0]; finish.ExitStatus != "0" {
+				t.Fatalf("bootstrap failed: %+v\n%s", finish, logs)
+			}
+			if !strings.Contains(logs, "BOOTSTRAP_STARTED") ||
+				strings.Contains(logs, "JOB_STARTUP") == protect ||
+				strings.Contains(logs, "OPERATOR_STARTUP") != protect {
+				t.Errorf("protect=%t: unexpected startup output: %s", protect, logs)
+			}
+		})
+	}
+}
+
+func TestDangerousGitEnvVarsCheckout(t *testing.T) {
+	// Run real Git through the job runner and bootstrap, not just a filtered
+	// map. In particular, dropping COUNT alone would leave a job-supplied
+	// VALUE_0 able to override the operator's inherited config pair.
+	executable, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, enabled := range []bool{false, true} {
+		t.Run(fmt.Sprint(enabled), func(t *testing.T) {
+			root := t.TempDir()
+			repo := filepath.Join(root, "repo")
+			checkout := filepath.Join(root, "checkout")
+			git := func(args ...string) {
+				t.Helper()
+				if out, err := exec.Command("git", args...).CombinedOutput(); err != nil {
+					t.Fatalf("git %v: %v\n%s", args, err, out)
+				}
+			}
+			git("init", "--initial-branch=main", repo)
+			if err := os.WriteFile(filepath.Join(repo, "tracked.txt"), []byte("tracked\n"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			git("-C", repo, "add", ".")
+			git("-C", repo, "-c", "user.name=Test", "-c", "user.email=test@example.com", "-c", "commit.gpgsign=false", "commit", "-m", "Initial")
+			git("clone", repo, checkout)
+
+			jobMarker := filepath.ToSlash(filepath.Join(root, "job-payload"))
+			operatorMarker := filepath.ToSlash(filepath.Join(root, "operator-payload"))
+			// Git invokes fsmonitor through its POSIX shell, including on Windows.
+			t.Setenv("GIT_CONFIG_COUNT", "1")
+			t.Setenv("GIT_CONFIG_KEY_0", "core.fsmonitor")
+			t.Setenv("GIT_CONFIG_VALUE_0", `printf '%s' "$GIT_SSH_COMMAND" > '`+operatorMarker+`'`)
+			t.Setenv("GIT_SSH_COMMAND", "ssh -F operator-config")
+			e := createTestAgentEndpoint()
+			server := e.server()
+			defer server.Close()
+			j := &api.Job{
+				ID: defaultJobID, ChunksMaxSizeBytes: 1024, Token: "bkaj_job-token",
+				Env: map[string]string{
+					"BUILDKITE_JOB_ID":                                      defaultJobID,
+					"BUILDKITE_AGENT_NAME":                                  "test-agent",
+					"BUILDKITE_REPO":                                        repo,
+					"BUILDKITE_BUILD_CHECKOUT_PATH":                         checkout,
+					"BUILDKITE_COMMIT":                                      "HEAD",
+					"BUILDKITE_BRANCH":                                      "main",
+					"BUILDKITE_ORGANIZATION_SLUG":                           "test",
+					"BUILDKITE_PIPELINE_SLUG":                               "test",
+					"BUILDKITE_PIPELINE_PROVIDER":                           "custom",
+					"BUILDKITE_PROTECT_DANGEROUS_GIT_ENVIRONMENT_VARIABLES": fmt.Sprint(!enabled),
+					"BUILDKITE_USE_REPOSITORY_PROVIDER_GIT_CREDENTIALS":     "false",
+					"BUILDKITE_USE_GITHUB_APP_GIT_CREDENTIALS":              "false",
+					"GIT_CONFIG_VALUE_0":                                    `echo executed > '` + jobMarker + `'`,
+					"GIT_SSH_COMMAND":                                       "ssh -F job-config",
+				},
+			}
+			if err := runJob(t, t.Context(), testRunJobConfig{
+				job: j, server: server,
+				agentCfg: agent.AgentConfiguration{
+					BootstrapScript:                         fmt.Sprintf("%q bootstrap --phases checkout --no-job-api --cancel-signal SIGTERM", executable),
+					BuildPath:                               root,
+					GitCommitVerification:                   "off",
+					GitMirrorCheckoutMode:                   "reference",
+					GitCheckoutFlags:                        "-f",
+					GitCleanFlags:                           "-fdx",
+					CheckoutAttempts:                        1,
+					ProtectDangerousGitEnvironmentVariables: enabled,
+				},
+			}); err != nil {
+				t.Fatal(err)
+			}
+			logs := e.logsFor(t, defaultJobID)
+			if finish := e.finishesFor(t, defaultJobID)[0]; finish.ExitStatus != "0" {
+				t.Fatalf("checkout failed: %+v\n%s", finish, logs)
+			}
+			if _, err := os.Stat(jobMarker); enabled && !os.IsNotExist(err) || !enabled && err != nil {
+				t.Errorf("job payload marker: %v, want exists = %t", err, !enabled)
+			}
+			if enabled {
+				data, err := os.ReadFile(operatorMarker)
+				if err != nil || !strings.HasPrefix(string(data), "ssh -F operator-config") {
+					t.Errorf("operator Git config/SSH value wasn't preserved: %q, %v", data, err)
+				}
+				if !strings.Contains(logs, "Ignored GIT_CONFIG_VALUE_0") || strings.Contains(logs, jobMarker) {
+					t.Errorf("expected warning with name but not payload: %s", logs)
+				}
+			}
+		})
+	}
+}
 
 func TestWhenCachePathsSetInJobStep_CachePathsEnvVarIsSet(t *testing.T) {
 	t.Parallel()
