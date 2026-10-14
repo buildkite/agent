@@ -239,6 +239,14 @@ func (r *JobRunner) Run(ctx context.Context, ignoreAgentInDispatches *bool) (err
 					fmt.Sprintf("This agent refused the job because its --%s option does not allow it: %v. %s", option.option, option.err, fix), fallback))
 				break
 			}
+			// URL masking stops at whitespace, "<" and ">", so it can't mask
+			// a password containing them, such as "https://user:pass word@host".
+			// Leave out a value that contains them or doesn't parse, as
+			// describeCheckout does in the job's checkout errors.
+			if strings.ContainsAny(noMatch.value, " \t\n\f\r<>") || redact.URLCredentials(noMatch.value) == "(invalid URL)" {
+				r.reportJobError(ctx, "job_refused", fallback)
+				break
+			}
 			// Mask URLs in the refused value from the job, but not in the
 			// operator's patterns, which masking would corrupt. Mask before
 			// sizing, because masking can shorten the value.
