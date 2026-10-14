@@ -297,15 +297,18 @@ func TestDefaultCheckoutPhaseWithQuoteInBranchName(t *testing.T) {
 // tag, and a build naming a tag in BUILDKITE_BRANCH alone must still find it.
 func TestDefaultCheckoutPhaseWithSameNamedBranchAndTag(t *testing.T) {
 	for _, test := range []struct {
-		name    string
-		tag     string // BUILDKITE_TAG
-		branch  bool   // whether refs/heads/release exists; refs/tags/release always does
-		wantTag bool   // whether the build should check out the tag rather than the branch
+		name       string
+		tag        string // BUILDKITE_TAG
+		branch     bool   // whether refs/heads/release exists; refs/tags/release always does
+		wantTag    bool   // whether the build should check out the tag rather than the branch
+		translated bool   // whether git translates its messages
 	}{
 		{name: "branch with same-named tag", branch: true},
 		{name: "tag build", tag: "release", wantTag: true},
 		{name: "tag build with same-named branch", tag: "release", branch: true, wantTag: true},
 		{name: "tag named by branch", wantTag: true},
+		// Finding no branch is recognised by git's English error text.
+		{name: "tag named by branch with translated git", wantTag: true, translated: true},
 	} {
 		for _, mirrors := range []bool{false, true} {
 			t.Run(fmt.Sprintf("%s/mirrors=%t", test.name, mirrors), func(t *testing.T) {
@@ -343,6 +346,23 @@ func TestDefaultCheckoutPhaseWithSameNamedBranchAndTag(t *testing.T) {
 				for ref, commit := range refs {
 					if out, err := s.CreateRef(projectName, ref, commit); err != nil {
 						t.Fatalf("s.CreateRef(%q, %q) error = %v, output: %s", ref, commit, err, out)
+					}
+				}
+
+				if test.translated {
+					// LANGUAGE has no effect in the C locale, but does in C.UTF-8.
+					translated := []string{"LC_ALL=C.UTF-8", "LANGUAGE=fr"}
+					scratch := shortTempDir(t)
+					runGitForMirrorTest(t, "", "init", "--quiet", scratch)
+					cmd := exec.Command("git", "fetch", e.Repository, "refs/heads/release")
+					cmd.Dir = scratch
+					cmd.Env = append(os.Environ(), translated...)
+					if out, _ := cmd.CombinedOutput(); strings.Contains(string(out), "couldn't find remote ref") {
+						t.Skipf("git does not translate its messages here: %s", out)
+					}
+					for _, kv := range translated {
+						name, value, _ := strings.Cut(kv, "=")
+						e.shell.Env.Set(name, value)
 					}
 				}
 

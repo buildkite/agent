@@ -251,8 +251,11 @@ func (e *Executor) headBuildRefs() []string {
 // legal in a git ref name, and word-splitting would fetch he'll'o as hello.
 func (e *Executor) gitFetchHeadRef(ctx context.Context, args gitFetchArgs) error {
 	refs := e.headBuildRefs()
-	args.LiteralRefSpecs = refs[:1]
-	err := gitFetch(ctx, args)
+	first := args
+	first.LiteralRefSpecs = refs[:1]
+	// Whether to fall back depends on recognising "couldn't find remote ref".
+	first.CLocale = len(refs) > 1
+	err := gitFetch(ctx, first)
 	if gerr := new(gitError); len(refs) > 1 && errors.As(err, &gerr) && gerr.Type == gitErrorFetchBadReference {
 		e.shell.Commentf("The remote has no %s, fetching %q instead", refs[0], refs[1])
 		args.LiteralRefSpecs = refs[1:]
