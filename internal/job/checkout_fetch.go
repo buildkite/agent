@@ -201,7 +201,9 @@ func (e *Executor) fetchSource(ctx context.Context, addBloblessFilter bool, atte
 			Shell:         e.shell,
 			GitFetchFlags: gitFetchFlags,
 			Repository:    "origin",
-			RefSpecs:      []string{e.Branch},
+			// LiteralRefSpecs, not RefSpecs: a quote is legal in a git ref name,
+			// and word-splitting would fetch he'll'o as hello.
+			LiteralRefSpecs: []string{e.Branch},
 		}); err != nil {
 			return fmt.Errorf("fetching branch %q: %w", e.Branch, err)
 		}

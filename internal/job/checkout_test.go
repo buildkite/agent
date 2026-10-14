@@ -230,6 +230,67 @@ func TestDefaultCheckoutPhase(t *testing.T) {
 	}
 }
 
+// Quotes are legal in git ref names, so a Commit=HEAD build must fetch its
+// branch name as given. Word-splitting turns he'll'o into hello, which exists
+// here at a different commit, and fails to parse release'candidate at all.
+func TestDefaultCheckoutPhaseWithQuoteInBranchName(t *testing.T) {
+	for _, branch := range []string{"he'll'o", "release'candidate"} {
+		for _, mirrors := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/mirrors=%t", branch, mirrors), func(t *testing.T) {
+				sh, err := shell.New()
+				if err != nil {
+					t.Fatalf("shell.New() error = %v, want nil", err)
+				}
+				e := &Executor{
+					shell: sh,
+					ExecutorConfig: ExecutorConfig{
+						Commit:                "HEAD",
+						Branch:                branch,
+						GitCleanFlags:         "-f -d -x",
+						GitMirrorsLockTimeout: 30,
+					},
+				}
+				const projectName = "project-quoted-branch"
+				s, branchTip := setupCheckoutTestRepo(t, e, projectName)
+
+				var mirror string
+				if mirrors {
+					// Mirror the repository before the branch exists, so only
+					// the job's mirror update can bring it in.
+					e.GitMirrorsPath = shortTempDir(t)
+					mirror = expectedOnHostMirrorDir(e)
+					runGitForMirrorTest(t, "", "clone", "--mirror", e.Repository, mirror)
+				}
+
+				mainTip, _, _ := strings.Cut(gitOutputForRemoteCheckoutTest(t, "", "ls-remote", e.Repository, "refs/heads/main"), "\t")
+				refs := map[string]string{
+					"refs/heads/" + branch:                              branchTip,
+					"refs/heads/" + strings.ReplaceAll(branch, "'", ""): mainTip,
+				}
+				for ref, commit := range refs {
+					if out, err := s.CreateRef(projectName, ref, commit); err != nil {
+						t.Fatalf("s.CreateRef(%q, %q) error = %v, output: %s", ref, commit, err, out)
+					}
+				}
+
+				if err := e.defaultCheckoutPhase(t.Context(), 1); err != nil {
+					t.Fatalf("e.defaultCheckoutPhase(ctx, 1) error = %v, want nil", err)
+				}
+
+				checkoutDir, _ := e.shell.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH")
+				if got := gitOutputForRemoteCheckoutTest(t, checkoutDir, "rev-parse", "HEAD"); got != branchTip {
+					t.Errorf("checkout HEAD = %q, want %q (main = %q)", got, branchTip, mainTip)
+				}
+				if mirrors {
+					if got := gitOutputForMirrorTest(t, mirror, "rev-parse", "refs/heads/"+branch); got != branchTip {
+						t.Errorf("mirror refs/heads/%s = %q, want %q", branch, got, branchTip)
+					}
+				}
+			})
+		}
+	}
+}
+
 func TestCommitSecondParent(t *testing.T) {
 	t.Parallel()
 
