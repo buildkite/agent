@@ -219,6 +219,7 @@ type gitFetchArgs struct {
 	Retry         bool         // Whether to retry the fetch on certain errors
 	RefSpecs      []string     // Refspecs to fetch, word-split like a shell would
 	HidePrompt    bool         // Never log argv, including in shell debug mode
+	CLocale       bool         // Run git with LC_ALL=C, so errors match its English text
 
 	// LiteralRefSpecs are refspecs passed to git exactly as given, one argument
 	// each. RefSpecs is word-split because it carries operator-supplied strings
@@ -294,6 +295,9 @@ func gitFetch(ctx context.Context, args gitFetchArgs) error {
 		runOpts := []shell.RunCommandOpt{shell.WithStringSearch(smelt)}
 		if args.HidePrompt {
 			runOpts = append(runOpts, shell.AlwaysHidePrompt())
+		}
+		if args.CLocale {
+			runOpts = append(runOpts, shell.WithExtraEnv(env.FromSlice([]string{"LC_ALL=C"})))
 		}
 		if err := args.Shell.Command("git", commandArgs...).Run(ctx, runOpts...); err != nil {
 			// "fatal: [Cc]ouldn't find remote ref" happens when the remote ref does not exist (e.g. a branch that was deleted)

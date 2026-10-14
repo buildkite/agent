@@ -90,7 +90,7 @@ func TestCheckingOutLocalGitProject_WithGitMirrors(t *testing.T) {
 		{"clone", "--mirror", "--config", "pack.threads=35", "--", tester.Repo.Path, matchSubDir(tester.GitMirrorsDir)},
 		{"clone", "-v", "--reference", matchSubDir(tester.GitMirrorsDir), "--", tester.Repo.Path, "."},
 		{"clean", "-fdq"},
-		{"fetch", "-v", "--", "origin", "main"},
+		{"fetch", "-v", "--", "origin", "refs/heads/main"},
 		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
 		{"clean", "-fdq"},
 		{"rev-parse", "HEAD"},
@@ -138,7 +138,7 @@ func TestCheckingOutLocalGitProjectWithSparseCheckoutInKubernetesWithGitMirrors(
 		{"--version"},
 		{"clone", "-v", "--reference", matchSubDir(tester.GitMirrorsDir), "--sparse", "--", tester.Repo.Path, "."},
 		{"clean", "-fdq"},
-		{"fetch", "-v", "--", "origin", "main"},
+		{"fetch", "-v", "--", "origin", "refs/heads/main"},
 		{"sparse-checkout", "set", "--cone", "--", ".buildkite/", "src/"},
 		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
 		{"clean", "-fdq"},
@@ -191,7 +191,7 @@ func TestCheckingOutLocalGitProjectWithSparseCheckoutWithReferenceGitMirrors(t *
 		{"--version"},
 		{"clone", "-v", "--reference", matchSubDir(tester.GitMirrorsDir), "--sparse", "--", tester.Repo.Path, "."},
 		{"clean", "-fdq"},
-		{"fetch", "-v", "--", "origin", "main"},
+		{"fetch", "-v", "--", "origin", "refs/heads/main"},
 		{"sparse-checkout", "set", "--cone", "--", ".buildkite/", "src/"},
 		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
 		{"clean", "-fdq"},
@@ -244,7 +244,7 @@ func TestCheckingOutLocalGitProjectWithSparseCheckoutNoCone_WithGitMirrors(t *te
 		{"--version"},
 		{"clone", "-v", "--filter=blob:none", "--sparse", "--reference", matchSubDir(tester.GitMirrorsDir), "--", tester.Repo.Path, "."},
 		{"clean", "-fdq"},
-		{"fetch", "-v", "--filter=blob:none", "--", "origin", "main"},
+		{"fetch", "-v", "--filter=blob:none", "--", "origin", "refs/heads/main"},
 		{"sparse-checkout", "set", "--no-cone", "--", "/*", "!/docs/"},
 		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
 		{"clean", "-fdq"},
@@ -319,7 +319,7 @@ func TestCheckingOutLocalGitProjectWithSubmodules_WithGitMirrors(t *testing.T) {
 		{"clone", "-v", "--reference", matchSubDir(tester.GitMirrorsDir), "--", tester.Repo.Path, "."},
 		{"clean", "-fdq"},
 		{"submodule", "foreach", "--recursive", "git clean -fdq"},
-		{"fetch", "-v", "--", "origin", "main"},
+		{"fetch", "-v", "--", "origin", "refs/heads/main"},
 		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
 		{"submodule", "sync", "--recursive"},
 		{"config", "--file", ".gitmodules", "--null", "--get-regexp", "submodule\\..+\\.url"},
@@ -377,7 +377,7 @@ func TestCheckingOutLocalGitProjectWithRelativeSubmoduleURL_WithGitMirrors(t *te
 		{"clone", "-v", "--reference", matchSubDir(tester.GitMirrorsDir), "--", superprojectRepo.Path, "."},
 		{"clean", "-fdq"},
 		{"submodule", "foreach", "--recursive", "git clean -fdq"},
-		{"fetch", "-v", "--", "origin", "main"},
+		{"fetch", "-v", "--", "origin", "refs/heads/main"},
 		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
 		{"submodule", "sync", "--recursive"},
 		{"config", "--file", ".gitmodules", "--null", "--get-regexp", "submodule\\..+\\.url"},
@@ -446,7 +446,7 @@ func TestCheckingOutLocalGitProjectWithRelativeSubmoduleURLFallsBackWhenMirrorFa
 	expect("clone", "-v", "--reference", matchSubDir(tester.GitMirrorsDir), "--", superprojectRepo.Path, ".")
 	expect("clean", "-fdq")
 	expect("submodule", "foreach", "--recursive", "git clean -fdq")
-	expect("fetch", "-v", "--", "origin", "main")
+	expect("fetch", "-v", "--", "origin", "refs/heads/main")
 	expect("-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD")
 	expect("submodule", "sync", "--recursive")
 	expect("config", "--file", ".gitmodules", "--null", "--get-regexp", "submodule\\..+\\.url")
@@ -592,7 +592,7 @@ func TestCheckingOutLocalGitProjectWithSubmodulesDisabled_WithGitMirrors(t *test
 		{"clone", "-v", "--reference", matchSubDir(tester.GitMirrorsDir), "--", tester.Repo.Path, "."},
 		{"clean", "-fdq"},
 		{"submodule", "foreach", "--recursive", "git clean -fdq"},
-		{"fetch", "-v", "--", "origin", "main"},
+		{"fetch", "-v", "--", "origin", "refs/heads/main"},
 		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
 		{"clean", "-fdq"},
 		{"rev-parse", "HEAD"},
@@ -637,7 +637,7 @@ func TestCheckingOutShallowCloneOfLocalGitProject_WithGitMirrors(t *testing.T) {
 		{"clone", "--mirror", "--bare", "--", tester.Repo.Path, matchSubDir(tester.GitMirrorsDir)},
 		{"clone", "--depth=1", "--reference", matchSubDir(tester.GitMirrorsDir), "--", tester.Repo.Path, "."},
 		{"clean", "-fdq"},
-		{"fetch", "--depth=1", "--", "origin", "main"},
+		{"fetch", "--depth=1", "--", "origin", "refs/heads/main"},
 		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
 		{"clean", "-fdq"},
 		{"rev-parse", "HEAD"},
@@ -1015,7 +1015,7 @@ func TestGitMirrorEnv(t *testing.T) {
 		{"clone", "--mirror", "--bare", "--", tester.Repo.Path, matchSubDir(tester.GitMirrorsDir)},
 		{"clone", "-v", "--reference", matchSubDir(tester.GitMirrorsDir), "--", tester.Repo.Path, "."},
 		{"clean", "-fdq"},
-		{"fetch", "-v", "--", "origin", "main"},
+		{"fetch", "-v", "--", "origin", "refs/heads/main"},
 		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
 		{"clean", "-fdq"},
 		{"rev-parse", "HEAD"},
