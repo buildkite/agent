@@ -80,7 +80,14 @@ func couldNotStart(err error) bool {
 // plugins directory, which is how a pipeline author finds them. It reports
 // whether the hook is in the checkout.
 func (e *Executor) hookDisplayPath(hookCfg HookConfig) (string, bool) {
-	if rel, ok := relativePath(e.shell.Env.GetString("BUILDKITE_BUILD_CHECKOUT_PATH", ""), hookCfg.Path); ok {
+	// A post-checkout hook can move BUILDKITE_BUILD_CHECKOUT_PATH into a
+	// subdirectory, but repository and vendored plugin hooks stay in the
+	// checkout root. Before the checkout, only the environment has the path.
+	checkout := e.shell.Env.GetString("BUILDKITE_BUILD_CHECKOUT_PATH", "")
+	if e.checkoutRoot != nil {
+		checkout = e.checkoutRoot.Name()
+	}
+	if rel, ok := relativePath(checkout, hookCfg.Path); ok {
 		return rel, true
 	}
 	if hookCfg.Scope == HookScopePlugin {

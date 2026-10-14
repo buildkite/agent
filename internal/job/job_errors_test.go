@@ -112,6 +112,26 @@ func TestHookDisplayPath(t *testing.T) {
 	}
 }
 
+// A post-checkout hook can move BUILDKITE_BUILD_CHECKOUT_PATH into a
+// subdirectory, but vendored plugins stay in the checkout root.
+func TestHookDisplayPathAfterCheckoutPathMoves(t *testing.T) {
+	t.Parallel()
+	checkout := t.TempDir()
+	root, err := os.OpenRoot(checkout)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = root.Close() })
+	e := &Executor{shell: shell.NewTestShell(t), checkoutRoot: root}
+	e.shell.Env.Set("BUILDKITE_BUILD_CHECKOUT_PATH", filepath.Join(checkout, "services", "api"))
+
+	hook := filepath.Join(checkout, ".buildkite", "plugins", "lint", "hooks", "pre-command")
+	path, inCheckout := e.hookDisplayPath(HookConfig{Scope: HookScopePlugin, Path: hook})
+	if want := ".buildkite/plugins/lint/hooks/pre-command"; path != want || !inCheckout {
+		t.Errorf("hookDisplayPath() = %q, %t; want %q, true", path, inCheckout, want)
+	}
+}
+
 func TestDescribeExitSeesThroughHookErrors(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("signals are POSIX")
