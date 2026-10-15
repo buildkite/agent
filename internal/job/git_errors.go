@@ -220,9 +220,9 @@ func classifyGitError(err error) (string, string) {
 	var code, message string
 	switch gitErr.Type {
 	case gitErrorCheckout:
-		code, message = "git_checkout_failed", "Git checkout failed."
+		code, message = "buildkite.git_checkout_failed", "Git checkout failed."
 	case gitErrorCheckoutReferenceIsNotATree:
-		code, message = "git_reference_not_a_tree", "Git checkout could not resolve the reference to a tree."
+		code, message = "buildkite.git_ref_not_a_tree", "Git checkout could not resolve the reference to a tree."
 	case gitErrorCheckoutRetryClean:
 		code, message = "git_checkout_unclassified", "Git checkout failed with an unclassified error."
 	case gitErrorClone:
@@ -240,13 +240,13 @@ func classifyGitError(err error) (string, string) {
 	case gitErrorFetchRefNotOnRemote:
 		code, message = "git_ref_not_on_remote", "Git fetch requested an object the remote does not have or advertise."
 	case gitErrorClean:
-		code, message = "git_clean_failed", "Git clean failed."
+		code, message = "buildkite.git_clean_failed", "Git clean failed."
 	case gitErrorCleanSubmodules:
-		code, message = "git_submodule_clean_failed", "Git submodule clean failed."
+		code, message = "buildkite.git_submodule_clean_failed", "Git submodule clean failed."
 	case gitErrorRepack:
-		code, message = "git_repack_failed", "Git repack failed."
+		code, message = "buildkite.git_repack_failed", "Git repack failed."
 	case gitErrorLFS:
-		code, message = "git_lfs_failed", "Git LFS fetch or checkout failed."
+		code, message = "buildkite.git_lfs_failed", "Git LFS fetch or checkout failed."
 	default:
 		return "", ""
 	}
