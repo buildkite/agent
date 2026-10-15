@@ -620,7 +620,7 @@ func TestFetchCommitFromRemoteMirrorTimeout(t *testing.T) {
 			if len(reports) != 1 {
 				t.Fatalf("reports = %v, want one mirror timeout", reports)
 			}
-			if report := reports[0]; report.Code != "git_remote_mirror_timeout" || report.Message != "The remote Git mirror probe timed out." {
+			if report := reports[0]; report.Code != "buildkite.git_remote_mirror_timed_out" || report.Message != "The remote Git mirror probe timed out, so the checkout fell back to the repository. This didn't fail the job on its own." {
 				t.Errorf("report = %#v, want mirror timeout code and fixed message", report)
 			}
 		})
