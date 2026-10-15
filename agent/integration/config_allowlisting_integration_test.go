@@ -297,8 +297,8 @@ func TestConfigAllowlisting(t *testing.T) {
 				if len(captured) != 0 {
 					t.Errorf("captured errors = %+v, want none", captured)
 				}
-			} else if len(captured) != 1 || captured[0].Code != "job_refused" {
-				t.Errorf("captured errors = %+v, want one job_refused", captured)
+			} else if len(captured) != 1 || captured[0].Code != "buildkite.job_rejected" {
+				t.Errorf("captured errors = %+v, want one buildkite.job_rejected", captured)
 			} else if want := "--" + tc.wantCapturedReason + " option does not allow it: "; !strings.Contains(captured[0].Message, want) || !strings.Contains(captured[0].Message, " has no match in ") {
 				t.Errorf("message = %q, want it to name the option and the refused value", captured[0].Message)
 			}
@@ -375,7 +375,7 @@ func TestRefusedJobErrorsDescribeTheStep(t *testing.T) {
 		{
 			name:     "malformed plugins are a problem with the step, not the allowlist",
 			env:      map[string]string{"BUILDKITE_PLUGINS": `{"not": "a list"`},
-			code:     "plugin_definition_invalid",
+			code:     "buildkite.job_rejected",
 			contains: "The step's plugins could not be parsed: ",
 			excludes: "--allowed-plugins",
 		},
@@ -383,7 +383,7 @@ func TestRefusedJobErrorsDescribeTheStep(t *testing.T) {
 			name:        "URL-shaped allowlist patterns are left as they are",
 			env:         map[string]string{"BUILDKITE_REPO": "https://example.com/other.git?access_token=unregistered-secret"},
 			agentConfig: agent.AgentConfiguration{AllowedRepositories: []*regexp.Regexp{regexp.MustCompile(`^https://example\.com/(?:team-a|team-b)/.*$`)}},
-			code:        "job_refused",
+			code:        "buildkite.job_rejected",
 			contains:    "https://example.com/other.git?[REDACTED] has no match in [^https://example\\.com/(?:team-a|team-b)/.*$]",
 			excludes:    "unregistered-secret",
 		},
@@ -391,7 +391,7 @@ func TestRefusedJobErrorsDescribeTheStep(t *testing.T) {
 			name:        "a refused repository's query string is masked",
 			env:         map[string]string{"BUILDKITE_REPO": "https://example.com/repo.git?access_token=unregistered-secret"},
 			agentConfig: agent.AgentConfiguration{AllowedRepositories: []*regexp.Regexp{regexp.MustCompile(`^https://github\.com/`)}},
-			code:        "job_refused",
+			code:        "buildkite.job_rejected",
 			contains:    "https://example.com/repo.git?[REDACTED] has no match",
 			excludes:    "unregistered-secret",
 		},
@@ -399,7 +399,7 @@ func TestRefusedJobErrorsDescribeTheStep(t *testing.T) {
 			name:        "a refused repository whose password masking can't find is left out",
 			env:         map[string]string{"BUILDKITE_REPO": "https://user:private password@example.com/repo.git"},
 			agentConfig: agent.AgentConfiguration{AllowedRepositories: []*regexp.Regexp{regexp.MustCompile(`^https://github\.com/`)}},
-			code:        "job_refused",
+			code:        "buildkite.job_rejected",
 			contains:    "its --allowed-repositories option does not allow it. Run the step",
 			excludes:    "private password",
 		},

@@ -82,8 +82,8 @@ func TestKubernetesStartTimeoutIsCaptured(t *testing.T) {
 				}
 				return
 			}
-			if len(reports) != 1 || reports[0].Code != "kubernetes_container_not_connected" || !strings.Contains(reports[0].Message, "within 5m0s") {
-				t.Fatalf("reports = %+v, want one kubernetes_container_not_connected report naming the timeout", reports)
+			if len(reports) != 1 || reports[0].Code != "buildkite.kubernetes_container_not_connected" || !strings.Contains(reports[0].Message, "within 5m0s") {
+				t.Fatalf("reports = %+v, want one buildkite.kubernetes_container_not_connected report naming the timeout", reports)
 			}
 		})
 	}
