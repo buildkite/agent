@@ -1158,7 +1158,7 @@ func (e *Executor) fetchAndSetSecrets(ctx context.Context) error {
 		if len(failedKeys) > 0 {
 			fallback = fmt.Sprintf("Could not fetch these secrets for the job: %s. %s", secrets.ListKeys(failedKeys, 5), secrets.FetchErrorFix)
 		}
-		captureJobError(ctx, e.shell, "secrets_fetch_failed", jobapi.CapturedErrorMessage(detail, fallback))
+		captureJobError(ctx, e.shell, "buildkite.secrets_fetch_failed", jobapi.CapturedErrorMessage(detail, fallback))
 		return errors.New(errorMsg.String())
 	}
 
@@ -1185,7 +1185,7 @@ func (e *Executor) fetchAndSetSecrets(ctx context.Context) error {
 				}
 				if rejected != nil {
 					message := jobapi.CapturedErrorMessage(rejected.Error()+". Map the secret to a different environment_variable in the step.", "A secret cannot set this protected or checkout-locked environment variable. Map it to a different environment_variable in the step.")
-					captureJobError(ctx, e.shell, "secret_environment_variable_rejected", message)
+					captureJobError(ctx, e.shell, "buildkite.secret_environment_variable_rejected", message)
 					return rejected
 				}
 
