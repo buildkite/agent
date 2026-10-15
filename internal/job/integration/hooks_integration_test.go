@@ -1259,12 +1259,12 @@ func TestHookFailuresAreCaptured(t *testing.T) {
 		if err := tester.Run(t, agentAPI.env()...); err == nil {
 			t.Fatalf("tester.Run() = nil, want command hook failure")
 		}
-		if slices.Contains(agentAPI.codes(), "hook_failed") {
+		if slices.Contains(agentAPI.codes(), "buildkite.hook_failed") {
 			t.Errorf("captured codes = %v, want the command hook left to command capture", agentAPI.codes())
 		}
 		want := "The agent command hook, which runs instead of the step's command, exited with status 5."
-		if report := agentAPI.report(t, "command_failed"); !strings.HasPrefix(report.Message, want) {
-			t.Errorf("command_failed message = %q, want it to start with %q", report.Message, want)
+		if report := agentAPI.report(t, "buildkite.command_hook_failed"); !strings.HasPrefix(report.Message, want) {
+			t.Errorf("buildkite.command_hook_failed message = %q, want it to start with %q", report.Message, want)
 		}
 	})
 
