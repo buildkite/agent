@@ -49,7 +49,7 @@ func TestCapturedErrorURLCredentials(t *testing.T) {
 				t.Fatal(err)
 			}
 			t.Cleanup(func() { _ = srv.Stop() })
-			body, err := json.Marshal(jobapi.CapturedError{Code: "git_fetch_failed", Message: tc.message})
+			body, err := json.Marshal(jobapi.CapturedError{Code: "buildkite.git_fetch_failed", Message: tc.message})
 			if err != nil {
 				t.Fatal(err)
 			}
