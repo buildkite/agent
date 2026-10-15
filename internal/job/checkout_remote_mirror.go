@@ -286,9 +286,13 @@ func (e *Executor) fetchCommitFromRemoteMirror(
 	mirrorCtx, cancel := context.WithTimeout(ctx, remoteMirrorProbeTimeout)
 	defer cancel()
 
-	gitFlags := make([]string, 0, len(remoteMirrorGitFlags(ctx))+2)
-	if gitDir != "" {
-		gitFlags = append(gitFlags, "--git-dir", gitDir)
+	var gitFlags []string
+	switch {
+	case attempt.site == remoteMirrorSiteOnHostMirror:
+		// gitDir is the shared on-host mirror.
+		gitFlags = mirrorGitFlags(gitDir)
+	case gitDir != "":
+		gitFlags = []string{"--git-dir", gitDir}
 	}
 	gitFlags = append(gitFlags, remoteMirrorGitFlags(ctx)...)
 
