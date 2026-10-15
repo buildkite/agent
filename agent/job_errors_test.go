@@ -31,6 +31,7 @@ func TestKubernetesStartTimeoutIsCaptured(t *testing.T) {
 	for _, tc := range []struct {
 		name               string
 		jobOptIn, agentEnv string
+		protected          []string
 		stopping           bool
 		want               bool
 	}{
@@ -38,6 +39,9 @@ func TestKubernetesStartTimeoutIsCaptured(t *testing.T) {
 		{name: "agent opted in", agentEnv: "true", want: true},
 		{name: "job opted out on an agent that opted in", jobOptIn: "false", agentEnv: "true"},
 		{name: "not opted in"},
+		// Bootstrap never sees a job's value for a protected name.
+		{name: "job opted in on an agent that protects the opt-in", jobOptIn: "true", agentEnv: "false", protected: []string{"BUILDKITE_CAPTURE_AGENT_ERRORS"}},
+		{name: "job opted out on an agent that protects an opt-in it set", jobOptIn: "false", agentEnv: "true", protected: []string{"BUILDKITE_CAPTURE_*"}, want: true},
 		// Containers that never connect are expected while the agent stops.
 		{name: "agent stopping", jobOptIn: "true", stopping: true},
 	} {
@@ -62,7 +66,10 @@ func TestKubernetesStartTimeoutIsCaptured(t *testing.T) {
 				env["BUILDKITE_CAPTURE_AGENT_ERRORS"] = tc.jobOptIn
 			}
 			r := &JobRunner{
-				conf:        JobRunnerConfig{Job: &api.Job{ID: "job-id", Env: env}},
+				conf: JobRunnerConfig{
+					Job:                &api.Job{ID: "job-id", Env: env},
+					AgentConfiguration: AgentConfiguration{ProtectedEnvironmentVariables: tc.protected},
+				},
 				agentLogger: logger.Discard,
 				apiClient:   api.NewClient(logger.Discard, api.Config{Endpoint: upstream.URL + "/", Token: "job-token"}),
 				process:     failedJobProcess{err: &kubernetes.StartTimeoutError{Timeout: 5 * time.Minute}},

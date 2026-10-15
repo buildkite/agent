@@ -8,6 +8,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/buildkite/agent/v4/api"
+	envutil "github.com/buildkite/agent/v4/env"
 	"github.com/buildkite/agent/v4/internal/redact"
 	"github.com/buildkite/agent/v4/jobapi"
 )
@@ -55,11 +56,18 @@ func (r *JobRunner) reportJobError(ctx context.Context, code, message string) {
 
 // agentErrorCaptureEnabled reads the BUILDKITE_CAPTURE_AGENT_ERRORS opt-in as
 // the job's bootstrap would see it: from the job's env, or else from the
-// agent's own environment, such as when the agent's operator set it.
+// agent's own environment, such as when the agent's operator set it or
+// protected the name from jobs, which makes createEnvironment drop the job's
+// value.
 func (r *JobRunner) agentErrorCaptureEnabled() bool {
-	optIn, ok := r.conf.Job.Env["BUILDKITE_CAPTURE_AGENT_ERRORS"]
+	const name = "BUILDKITE_CAPTURE_AGENT_ERRORS"
+	optIn, ok := r.conf.Job.Env[name]
+	agentConf := r.conf.AgentConfiguration
+	if patterns, err := envutil.ProtectedEnvPatterns(agentConf.ProtectedEnvironmentVariables, agentConf.ProtectDangerousGitEnvironmentVariables); err == nil && envutil.MatchesProtectedEnv(name, patterns) {
+		ok = false
+	}
 	if !ok {
-		optIn = os.Getenv("BUILDKITE_CAPTURE_AGENT_ERRORS")
+		optIn = os.Getenv(name)
 	}
 	return optIn == "true"
 }
