@@ -2,7 +2,10 @@ package job
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"net/http"
+	"sync/atomic"
 
 	"github.com/buildkite/agent/v4/api"
 	"github.com/buildkite/agent/v4/internal/redact"
@@ -35,6 +38,10 @@ We'll continue to run your job, but you won't be able to use the Job API`)
 	jobAPIOpts := []jobapi.ServerOpts{
 		jobapi.WithPromiseFailureDeclarer(e.declarePromiseFailure),
 	}
+	// Each report is its own API request. Once the API has refused a report
+	// for good, later ones would be refused too, so stop sending them; a
+	// script calling capture-error in a loop then can't keep hitting the API.
+	var refused atomic.Bool
 	reporter := func(requestCtx context.Context, capturedError *jobapi.CapturedError) error {
 		// Reporting must not keep a cancelled job alive through its grace period.
 		reportCtx, cancel := context.WithCancel(requestCtx)
@@ -46,7 +53,17 @@ We'll continue to run your job, but you won't be able to use the Job API`)
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		return e.reportCapturedError(reportCtx, capturedError)
+		if refused.Load() {
+			return errors.New("not sent: Buildkite refused an earlier captured error for this job because its error limit was reached or error capture is unavailable")
+		}
+		err := e.reportCapturedError(reportCtx, capturedError)
+		// 422 means the job or build quota is full; 404 means error capture
+		// isn't available for this job. Neither changes during the job. Rate
+		// limits (429) and other failures are transient, so keep sending.
+		if api.IsErrHavingStatus(err, http.StatusUnprocessableEntity) || api.IsErrHavingStatus(err, http.StatusNotFound) {
+			refused.Store(true)
+		}
+		return err
 	}
 	jobAPIOpts = append(jobAPIOpts, jobapi.WithCapturedErrorReporter(reporter))
 	if e.Debug {
