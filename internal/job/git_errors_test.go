@@ -939,8 +939,8 @@ func TestGitErrorCaptureIdentifiesTheCheckout(t *testing.T) {
 				t.Fatalf("reports = %d, want 1", len(reports))
 			}
 			report := <-reports
-			if report.Code != "git_ref_not_found" || report.Message != test.want {
-				t.Errorf("report = %q %q, want git_ref_not_found %q", report.Code, report.Message, test.want)
+			if report.Code != "buildkite.git_ref_not_found" || report.Message != test.want {
+				t.Errorf("report = %q %q, want buildkite.git_ref_not_found %q", report.Code, report.Message, test.want)
 			}
 		})
 	}

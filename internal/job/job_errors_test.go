@@ -34,14 +34,14 @@ func TestCaptureJobErrorOptIn(t *testing.T) {
 			e.shell.Env.Set("BUILDKITE_CAPTURE_AGENT_ERRORS", tc.optIn)
 			e.shell.Env.Set("BUILDKITE_AGENT_JOB_API_CAPTURE_ERROR", tc.capability)
 
-			captureJobError(ctx, e.shell, "hook_failed", "The hook failed.")
+			captureJobError(ctx, e.shell, "buildkite.hook_failed", "The hook failed.")
 
 			if got := len(reports) == 1; got != tc.want {
 				t.Fatalf("captured = %t, want %t", got, tc.want)
 			}
 			if tc.want {
 				report := <-reports
-				if report.Code != "hook_failed" || report.Message != "The hook failed." {
+				if report.Code != "buildkite.hook_failed" || report.Message != "The hook failed." {
 					t.Errorf("report = %+v", report)
 				}
 			}
@@ -55,7 +55,7 @@ func TestCaptureJobErrorSkipsCancelledJobs(t *testing.T) {
 	ctx, cancel := context.WithCancel(ctx)
 	cancel()
 
-	captureJobError(ctx, e.shell, "hook_failed", "The hook failed.")
+	captureJobError(ctx, e.shell, "buildkite.hook_failed", "The hook failed.")
 
 	if len(reports) != 0 {
 		t.Fatalf("reports = %d, want none after cancellation", len(reports))
@@ -69,7 +69,7 @@ func TestCaptureJobErrorSkipsJobsMarkedCancelled(t *testing.T) {
 	ctx, e, reports := agentErrorCaptureServer(t)
 	e.shell.Env.Set("BUILDKITE_JOB_CANCELLED", "true")
 
-	captureJobError(ctx, e.shell, "hook_failed", "The hook failed.")
+	captureJobError(ctx, e.shell, "buildkite.hook_failed", "The hook failed.")
 
 	if len(reports) != 0 {
 		t.Fatalf("reports = %d, want none for a cancelled job", len(reports))

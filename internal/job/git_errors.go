@@ -300,7 +300,7 @@ func captureCheckoutError(ctx context.Context, sh *shell.Shell, err error) {
 			// Git commands capture their own failures. Other checkout operations
 			// reuse these error types for recovery, not to identify a failed command.
 			gitErr.captured = true
-			captureError(ctx, sh, "git_checkout_phase_failed", withCheckout("The default checkout phase failed.", describeCheckout(sh)))
+			captureError(ctx, sh, "buildkite.checkout_phase_failed", withCheckout("The default checkout phase failed.", describeCheckout(sh)))
 			return
 		}
 	}
