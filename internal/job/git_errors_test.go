@@ -418,7 +418,7 @@ func TestCheckoutErrorCaptureFromExecutor(t *testing.T) {
 	if len(reports) != 1 {
 		t.Fatalf("reports = %d, want 1", len(reports))
 	}
-	if r := <-reports; r.Code != "git_checkout_phase_failed" || r.Message != "The default checkout phase failed." {
+	if r := <-reports; r.Code != "buildkite.checkout_phase_failed" || r.Message != "The default checkout phase failed." {
 		t.Fatalf("unexpected checkout report: %#v", r)
 	}
 }
@@ -461,7 +461,7 @@ exit 0
 			if len(reports) != 1 {
 				t.Fatalf("reports = %d, want 1", len(reports))
 			}
-			if report := <-reports; report.Code != "git_checkout_phase_failed" || report.Message != "The default checkout phase failed." {
+			if report := <-reports; report.Code != "buildkite.checkout_phase_failed" || report.Message != "The default checkout phase failed." {
 				t.Fatalf("unexpected submodule report: %#v", report)
 			}
 		})
@@ -479,14 +479,14 @@ func TestCheckoutPreflightErrorCapture(t *testing.T) {
 			name:       "missing git-lfs",
 			lfsEnabled: true,
 			wantError:  "BUILDKITE_GIT_LFS_ENABLED=true but `git lfs version` failed; git-lfs may not be installed or not resolvable by git: exit status 1",
-			code:       "git_lfs_preflight_failed",
+			code:       "buildkite.git_lfs_preflight_failed",
 			message:    "Git LFS version check failed.",
 		},
 		{
 			name:       "invalid sparse checkout mode",
 			sparseMode: "secret-mode",
 			wantError:  `invalid sparse checkout mode "secret-mode", must be one of [cone no-cone]`,
-			code:       "git_invalid_sparse_checkout_mode",
+			code:       "buildkite.git_sparse_checkout_mode_invalid",
 			message:    "Git checkout received an invalid sparse checkout mode.",
 		},
 	} {
@@ -524,13 +524,13 @@ func TestCheckoutErrorCapture(t *testing.T) {
 		name, code string
 		err        error
 	}{
-		{"invalid ref", "git_invalid_ref", fmt.Errorf("secret-ref: %w", errInvalidRef)},
-		{"verification", "git_commit_verification_failed", fmt.Errorf("secret-ref: %w", ErrCommitVerificationFailed)},
-		{"timeout", "git_checkout_timeout", errors.Join(errCheckoutAttemptTimedOut, &gitError{error: &shell.ExitError{Code: -1}, Type: gitErrorClone})},
-		{"setup", "git_checkout_phase_failed", errors.New("secret-path")},
-		{"merge head validation", "git_checkout_phase_failed", &gitError{error: errors.New("unexpected merge head secret-ref"), Type: gitErrorFetch}},
-		{"mirror state repair", "git_checkout_phase_failed", &gitError{error: &shell.ExitError{Code: 128}, Type: gitErrorFetchRetryClean}},
-		{"lock timeout", "git_checkout_lock_timeout", fmt.Errorf("secret-path: %w", ErrTimedOutAcquiringLock{Name: "secret-lock", Err: context.DeadlineExceeded})},
+		{"invalid ref", "buildkite.git_ref_invalid", fmt.Errorf("secret-ref: %w", errInvalidRef)},
+		{"verification", "buildkite.git_commit_verification_failed", fmt.Errorf("secret-ref: %w", ErrCommitVerificationFailed)},
+		{"timeout", "buildkite.git_checkout_timed_out", errors.Join(errCheckoutAttemptTimedOut, &gitError{error: &shell.ExitError{Code: -1}, Type: gitErrorClone})},
+		{"setup", "buildkite.checkout_phase_failed", errors.New("secret-path")},
+		{"merge head validation", "buildkite.checkout_phase_failed", &gitError{error: errors.New("unexpected merge head secret-ref"), Type: gitErrorFetch}},
+		{"mirror state repair", "buildkite.checkout_phase_failed", &gitError{error: &shell.ExitError{Code: 128}, Type: gitErrorFetchRetryClean}},
+		{"lock timeout", "buildkite.git_checkout_lock_timed_out", fmt.Errorf("secret-path: %w", ErrTimedOutAcquiringLock{Name: "secret-lock", Err: context.DeadlineExceeded})},
 		{"cancelled preflight", "", errors.Join(errGitLFSPreflight, context.Canceled)},
 		{"signalled preflight", "", errors.Join(errGitLFSPreflight, &shell.ExitError{Code: -1})},
 		{"cancelled", "", &gitError{error: context.Canceled, Type: gitErrorFetch}},
@@ -563,7 +563,7 @@ func TestCheckoutErrorCapture(t *testing.T) {
 			if r.Code != tc.code || strings.Contains(r.Message, "secret-") {
 				t.Fatalf("unexpected report: %#v", r)
 			}
-			if tc.code == "git_checkout_phase_failed" && r.Message != "The default checkout phase failed." {
+			if tc.code == "buildkite.checkout_phase_failed" && r.Message != "The default checkout phase failed." {
 				t.Fatalf("message = %q, want neutral checkout summary", r.Message)
 			}
 		})
@@ -669,8 +669,8 @@ func TestCheckoutErrorCaptureGenuineTimeout(t *testing.T) {
 	if len(reports) != 1 {
 		t.Fatalf("reports = %d, want one timeout report", len(reports))
 	}
-	if report := <-reports; report.Code != "git_checkout_timeout" {
-		t.Fatalf("report code = %q, want git_checkout_timeout", report.Code)
+	if report := <-reports; report.Code != "buildkite.git_checkout_timed_out" {
+		t.Fatalf("report code = %q, want buildkite.git_checkout_timed_out", report.Code)
 	}
 }
 
@@ -813,8 +813,8 @@ func TestCheckoutPhaseReportsInvalidCheckoutSettings(t *testing.T) {
 	for _, tc := range []struct {
 		name, sparse, baseBranch, code string
 	}{
-		{"sparse checkout mode", "sometimes", "", "git_invalid_sparse_checkout_mode"},
-		{"base branch fetch mode", "", "sometimes", "git_invalid_fetch_base_branch_mode"},
+		{"sparse checkout mode", "sometimes", "", "buildkite.git_sparse_checkout_mode_invalid"},
+		{"base branch fetch mode", "", "sometimes", "buildkite.git_fetch_base_branch_mode_invalid"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
