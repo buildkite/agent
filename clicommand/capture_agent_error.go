@@ -2,9 +2,12 @@ package clicommand
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"os"
 	"time"
 
+	"github.com/buildkite/agent/v4/internal/redact"
 	"github.com/buildkite/agent/v4/jobapi"
 	"github.com/buildkite/agent/v4/logger"
 )
@@ -29,4 +32,27 @@ func captureAgentError(ctx context.Context, l logger.Logger, code, message strin
 		// Transport errors can contain upstream response bodies or socket paths.
 		l.Warnf("Could not capture job error %q", code)
 	}
+}
+
+// storageErrorText describes err for a captured error without URL query
+// strings, which can carry presigned credentials.
+func storageErrorText(err error) string {
+	return redact.URLQueriesInText(err.Error())
+}
+
+// uploadErrorText is storageErrorText for a failed artifact upload, which
+// joins the errors of each failed file. It describes the first and counts the
+// others, so one cause fits in the message.
+func uploadErrorText(err error) string {
+	var joined interface{ Unwrap() []error }
+	if errors.As(err, &joined) {
+		if errs := joined.Unwrap(); len(errs) > 1 {
+			more := "errors"
+			if len(errs) == 2 {
+				more = "error"
+			}
+			return fmt.Sprintf("%s (and %d more %s)", storageErrorText(errs[0]), len(errs)-1, more)
+		}
+	}
+	return storageErrorText(err)
 }

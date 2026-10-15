@@ -16,6 +16,9 @@ import (
 	"github.com/buildkite/agent/v4/logger"
 )
 
+// ErrNoArtifactsFound is returned when a download query matches no artifacts.
+var ErrNoArtifactsFound = errors.New("no artifacts found for downloading")
+
 type DownloaderConfig struct {
 	// The ID of the Build
 	BuildID string
@@ -81,7 +84,7 @@ func (a *Downloader) Download(ctx context.Context) error {
 	artifactCount := len(artifacts)
 
 	if artifactCount == 0 {
-		return errors.New("no artifacts found for downloading")
+		return ErrNoArtifactsFound
 	}
 
 	a.logger.Infof("Found %d artifacts. Starting to download to: %s", artifactCount, destination)
@@ -139,7 +142,7 @@ func (a *Downloader) Download(ctx context.Context) error {
 				if err := dler.Start(ctx); err != nil {
 					a.logger.Errorf("Failed to download artifact: %s", err)
 					select {
-					case errorsCh <- err:
+					case errorsCh <- fmt.Errorf("%s: %w", artifact.Path, err):
 						// error sent
 					case <-ctx.Done():
 						return
@@ -172,7 +175,8 @@ func (a *Downloader) Download(ctx context.Context) error {
 	select {
 	case errors := <-errorsOutCh:
 		if len(errors) > 0 {
-			return fmt.Errorf("there were errors downloading some of the artifacts")
+			// Name one cause, so a report of the failure can say why.
+			return fmt.Errorf("there were errors downloading %d of %d artifacts, including %w", len(errors), len(artifacts), errors[0])
 		}
 
 	case <-ctx.Done():
