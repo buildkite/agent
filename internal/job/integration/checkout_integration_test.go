@@ -155,7 +155,7 @@ func TestCheckingOutLocalGitProject(t *testing.T) {
 	git.ExpectAll([][]any{
 		{"clone", "-v", "--", tester.Repo.Path, "."},
 		{"clean", "-fdq"},
-		{"fetch", "-v", "--", "origin", "main"},
+		{"fetch", "-v", "--", "origin", "refs/heads/main"},
 		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
 		{"clean", "-fdq"},
 		{"rev-parse", "HEAD"},
@@ -227,7 +227,7 @@ func TestCheckingOutLocalGitProjectWithSparseCheckoutFallsBackOnOldGit(t *testin
 	// this sequence is what proves the fallback worked.
 	expect("clone", "-v", "--sparse", "--", tester.Repo.Path, ".")
 	expect("clean", "-fdq")
-	expect("fetch", "-v", "--", "origin", "main")
+	expect("fetch", "-v", "--", "origin", "refs/heads/main")
 	expect("config", "--get", "core.sparseCheckout")
 	expect("sparse-checkout", "disable")
 	expect("config", "--worktree", "--list")
@@ -305,7 +305,7 @@ func TestCheckingOutLocalGitProjectWithSparseCheckoutPinsConeOnOldGit(t *testing
 
 	expect("clone", "-v", "--filter=blob:none", "--sparse", "--", tester.Repo.Path, ".")
 	expect("clean", "-fdq")
-	expect("fetch", "-v", "--filter=blob:none", "--", "origin", "main")
+	expect("fetch", "-v", "--filter=blob:none", "--", "origin", "refs/heads/main")
 	// The mode is pinned through config, and `set` is called without the option
 	// this git would misread as a pattern.
 	expect("sparse-checkout", "init", "--cone")
@@ -369,7 +369,7 @@ func TestCheckingOutLocalGitProjectWithSparseCheckoutAutoAddsBlobNoneFilter(t *t
 		{"--version"},
 		{"clone", "-v", "--sparse", "--filter=blob:none", "--", tester.Repo.Path, "."},
 		{"clean", "-fdq"},
-		{"fetch", "--filter=blob:none", "-v", "--", "origin", "main"},
+		{"fetch", "--filter=blob:none", "-v", "--", "origin", "refs/heads/main"},
 		{"sparse-checkout", "set", "--cone", "--", ".buildkite/", "src/"},
 		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
 		{"clean", "-fdq"},
@@ -415,7 +415,7 @@ func TestCheckingOutLocalGitProjectWithSparseCheckoutInKubernetesDoesNotAddBlobN
 		{"--version"},
 		{"clone", "-v", "--sparse", "--", tester.Repo.Path, "."},
 		{"clean", "-fdq"},
-		{"fetch", "-v", "--", "origin", "main"},
+		{"fetch", "-v", "--", "origin", "refs/heads/main"},
 		{"sparse-checkout", "set", "--cone", "--", ".buildkite/", "src/"},
 		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
 		{"clean", "-fdq"},
@@ -473,7 +473,7 @@ func TestCheckingOutLocalGitProjectWithSparseCheckoutInKubernetesPreservesUserFi
 		{"clean", "-fdq"},
 		// Fetch does NOT get --filter=blob:none prepended — the user's
 		// tree:0 filter is already stored in repo config and inherited here.
-		{"fetch", "-v", "--", "origin", "main"},
+		{"fetch", "-v", "--", "origin", "refs/heads/main"},
 		{"sparse-checkout", "set", "--cone", "--", ".buildkite/", "src/"},
 		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
 		{"clean", "-fdq"},
@@ -518,7 +518,7 @@ func TestCheckingOutLocalGitProjectWithSparseCheckout(t *testing.T) {
 		{"--version"},
 		{"clone", "-v", "--filter=blob:none", "--sparse", "--", tester.Repo.Path, "."},
 		{"clean", "-fdq"},
-		{"fetch", "-v", "--filter=blob:none", "--", "origin", "main"},
+		{"fetch", "-v", "--filter=blob:none", "--", "origin", "refs/heads/main"},
 		{"sparse-checkout", "set", "--cone", "--", ".buildkite/", "src/"},
 		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
 		{"clean", "-fdq"},
@@ -566,7 +566,7 @@ func TestCheckingOutLocalGitProjectWithSparseCheckoutNoCone(t *testing.T) {
 		{"--version"},
 		{"clone", "-v", "--filter=blob:none", "--sparse", "--", tester.Repo.Path, "."},
 		{"clean", "-fdq"},
-		{"fetch", "-v", "--filter=blob:none", "--", "origin", "main"},
+		{"fetch", "-v", "--filter=blob:none", "--", "origin", "refs/heads/main"},
 		{"sparse-checkout", "set", "--no-cone", "--", "/*", "!/docs/"},
 		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
 		{"clean", "-fdq"},
@@ -622,7 +622,7 @@ func TestCheckingOutLocalGitProjectSwitchingSparseCheckoutModes(t *testing.T) {
 		{"--version"},
 		{"clone", "-v", "--filter=blob:none", "--sparse", "--", tester.Repo.Path, "."},
 		{"clean", "-fdq"},
-		{"fetch", "-v", "--filter=blob:none", "--", "origin", "main"},
+		{"fetch", "-v", "--filter=blob:none", "--", "origin", "refs/heads/main"},
 		{"sparse-checkout", "set", "--cone", "--", "src/"},
 		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
 		{"clean", "-fdq"},
@@ -646,7 +646,7 @@ func TestCheckingOutLocalGitProjectSwitchingSparseCheckoutModes(t *testing.T) {
 		{"--version"},
 		{"config", "--get-all", "remote.origin.url"},
 		{"clean", "-fdq"},
-		{"fetch", "-v", "--filter=blob:none", "--", "origin", "main"},
+		{"fetch", "-v", "--filter=blob:none", "--", "origin", "refs/heads/main"},
 		{"sparse-checkout", "set", "--no-cone", "--", "/*", "!/docs/"},
 		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
 		{"clean", "-fdq"},
@@ -666,7 +666,7 @@ func TestCheckingOutLocalGitProjectSwitchingSparseCheckoutModes(t *testing.T) {
 		{"--version"},
 		{"config", "--get-all", "remote.origin.url"},
 		{"clean", "-fdq"},
-		{"fetch", "-v", "--filter=blob:none", "--", "origin", "main"},
+		{"fetch", "-v", "--filter=blob:none", "--", "origin", "refs/heads/main"},
 		{"sparse-checkout", "set", "--cone", "--", "docs/"},
 		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
 		{"clean", "-fdq"},
@@ -729,7 +729,7 @@ func TestCheckingOutLocalGitProjectWithFlagShapedSparseCheckoutPath(t *testing.T
 		{"--version"},
 		{"clone", "-v", "--filter=blob:none", "--sparse", "--", tester.Repo.Path, "."},
 		{"clean", "-fdq"},
-		{"fetch", "-v", "--filter=blob:none", "--", "origin", "main"},
+		{"fetch", "-v", "--filter=blob:none", "--", "origin", "refs/heads/main"},
 		{"sparse-checkout", "set", "--cone", "--", flagShapedDir},
 		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
 		{"clean", "-fdq"},
@@ -856,7 +856,7 @@ func TestCheckingOutLocalGitProjectWithSparseCheckoutReconfiguresExistingGitDir(
 		{"--version"},
 		{"clone", "-v", "--filter=blob:none", "--sparse", "--", tester.Repo.Path, "."},
 		{"clean", "-fdq"},
-		{"fetch", "-v", "--filter=blob:none", "--", "origin", "main"},
+		{"fetch", "-v", "--filter=blob:none", "--", "origin", "refs/heads/main"},
 		{"sparse-checkout", "set", "--cone", "--", "src/"},
 		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
 		{"clean", "-fdq"},
@@ -876,7 +876,7 @@ func TestCheckingOutLocalGitProjectWithSparseCheckoutReconfiguresExistingGitDir(
 		{"--version"},
 		{"config", "--get-all", "remote.origin.url"},
 		{"clean", "-fdq"},
-		{"fetch", "-v", "--filter=blob:none", "--", "origin", "main"},
+		{"fetch", "-v", "--filter=blob:none", "--", "origin", "refs/heads/main"},
 		{"sparse-checkout", "set", "--cone", "--", ".buildkite/"},
 		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
 		{"clean", "-fdq"},
@@ -894,7 +894,7 @@ func TestCheckingOutLocalGitProjectWithSparseCheckoutReconfiguresExistingGitDir(
 	git.ExpectAll([][]any{
 		{"config", "--get-all", "remote.origin.url"},
 		{"clean", "-fdq"},
-		{"fetch", "-v", "--filter=blob:none", "--", "origin", "main"},
+		{"fetch", "-v", "--filter=blob:none", "--", "origin", "refs/heads/main"},
 		{"config", "--get", "core.sparseCheckout"},
 		{"sparse-checkout", "disable"},
 		{"config", "--worktree", "--list"},
@@ -960,7 +960,7 @@ func TestCheckingOutLocalGitProjectWithSubmodules(t *testing.T) {
 		{"clone", "-v", "--", tester.Repo.Path, "."},
 		{"clean", "-fdq"},
 		{"submodule", "foreach", "--recursive", "git clean -fdq"},
-		{"fetch", "-v", "--", "origin", "main"},
+		{"fetch", "-v", "--", "origin", "refs/heads/main"},
 		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
 		{"submodule", "sync", "--recursive"},
 		{"config", "--file", ".gitmodules", "--null", "--get-regexp", "submodule\\..+\\.url"},
@@ -1028,7 +1028,7 @@ func TestCheckingOutLocalGitProjectWithSparseCheckoutSkipsSubmodules(t *testing.
 		{"clone", "-v", "--sparse", "--filter=blob:none", "--", tester.Repo.Path, "."},
 		{"clean", "-fdq"},
 		{"submodule", "foreach", "--recursive", "git clean -fdq"},
-		{"fetch", "--filter=blob:none", "-v", "--", "origin", "main"},
+		{"fetch", "--filter=blob:none", "-v", "--", "origin", "refs/heads/main"},
 		{"sparse-checkout", "set", "--cone", "--", "src/"},
 		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
 		{"clean", "-fdq"},
@@ -1093,7 +1093,7 @@ func TestCheckingOutLocalGitProjectWithSubmodulesDisabled(t *testing.T) {
 		{"clone", "-v", "--", tester.Repo.Path, "."},
 		{"clean", "-fdq"},
 		{"submodule", "foreach", "--recursive", "git clean -fdq"},
-		{"fetch", "-v", "--", "origin", "main"},
+		{"fetch", "-v", "--", "origin", "refs/heads/main"},
 		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
 		{"clean", "-fdq"},
 		{"rev-parse", "HEAD"},
@@ -1133,7 +1133,7 @@ func TestCheckingOutShallowCloneOfLocalGitProject(t *testing.T) {
 	git.ExpectAll([][]any{
 		{"clone", "--depth=1", "--", tester.Repo.Path, "."},
 		{"clean", "-fdq"},
-		{"fetch", "--depth=1", "--", "origin", "main"},
+		{"fetch", "--depth=1", "--", "origin", "refs/heads/main"},
 		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
 		{"clean", "-fdq"},
 		{"rev-parse", "HEAD"},
@@ -1745,11 +1745,11 @@ func TestCheckoutErrorIsRetried(t *testing.T) {
 	git.ExpectAll([][]any{
 		{"config", "--get-all", "remote.origin.url"},
 		{"clean", "-fdq"},
-		{"fetch", "-v", "--", "origin", "main"},
+		{"fetch", "-v", "--", "origin", "refs/heads/main"},
 		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
 		{"clone", "-v", "--", tester.Repo.Path, "."},
 		{"clean", "-fdq"},
-		{"fetch", "-v", "--", "origin", "main"},
+		{"fetch", "-v", "--", "origin", "refs/heads/main"},
 		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
 		{"clean", "-fdq"},
 		{"rev-parse", "HEAD"},
@@ -1809,10 +1809,10 @@ func TestFetchErrorIsRetried(t *testing.T) {
 	git.ExpectAll([][]any{
 		{"config", "--get-all", "remote.origin.url"},
 		{"clean", "-ffxdq"},
-		{"fetch", "-v", "--prune", "--depth=1", "--", "origin", "main"},
+		{"fetch", "-v", "--prune", "--depth=1", "--", "origin", "refs/heads/main"},
 		{"clone", "-v", "--depth=1", "--", tester.Repo.Path, "."},
 		{"clean", "-ffxdq"},
-		{"fetch", "-v", "--prune", "--depth=1", "--", "origin", "main"},
+		{"fetch", "-v", "--prune", "--depth=1", "--", "origin", "refs/heads/main"},
 		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
 		{"clean", "-ffxdq"},
 		{"rev-parse", "HEAD"},
@@ -2151,7 +2151,7 @@ func TestGitCheckoutWithCommitResolved(t *testing.T) {
 	git.ExpectAll([][]any{
 		{"clone", "-v", "--", tester.Repo.Path, "."},
 		{"clean", "-ffxdq"},
-		{"fetch", "-v", "--prune", "--", "origin", "main"},
+		{"fetch", "-v", "--prune", "--", "origin", "refs/heads/main"},
 		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
 		{"clean", "-ffxdq"},
 		{"rev-parse", "HEAD"},
@@ -2179,7 +2179,7 @@ func TestGitCheckoutWithoutCommitResolved(t *testing.T) {
 	git.ExpectAll([][]any{
 		{"clone", "-v", "--", tester.Repo.Path, "."},
 		{"clean", "-ffxdq"},
-		{"fetch", "-v", "--prune", "--", "origin", "main"},
+		{"fetch", "-v", "--prune", "--", "origin", "refs/heads/main"},
 		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
 		{"clean", "-ffxdq"},
 		{"rev-parse", "HEAD"},
@@ -2207,7 +2207,7 @@ func TestGitCheckoutWithoutCommitResolvedAndNoMetaData(t *testing.T) {
 	git.ExpectAll([][]any{
 		{"clone", "-v", "--", tester.Repo.Path, "."},
 		{"clean", "-ffxdq"},
-		{"fetch", "-v", "--prune", "--", "origin", "main"},
+		{"fetch", "-v", "--prune", "--", "origin", "refs/heads/main"},
 		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
 		{"clean", "-ffxdq"},
 		{"rev-parse", "HEAD"},
@@ -2264,7 +2264,7 @@ func TestMultipleRemoteURLsFallsBackToGetURL(t *testing.T) {
 		{"config", "--get-all", "remote.origin.url"},
 		{"remote", "get-url", "origin"},
 		{"clean", "-fdq"},
-		{"fetch", "-v", "--", "origin", "main"},
+		{"fetch", "-v", "--", "origin", "refs/heads/main"},
 		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
 		{"clean", "-fdq"},
 		{"rev-parse", "HEAD"},
