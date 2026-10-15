@@ -229,14 +229,14 @@ func (r *JobRunner) Run(ctx context.Context, ignoreAgentInDispatches *bool) (err
 			if errors.As(invalid.err, new(*json.SyntaxError)) {
 				message = jobapi.CapturedErrorMessage(fmt.Sprintf("The step's plugins could not be parsed: %v. %s", invalid.err, fix), message)
 			}
-			r.captureJobError(ctx, "buildkite.plugin_definition_invalid", message)
+			r.captureJobError(ctx, "buildkite.job_rejected", message)
 		case errors.As(err, &option):
 			fix := "Run the step on agents that allow it, or ask the agent's operator to change the option."
-			fallback := fmt.Sprintf("This agent refused the job because its --%s option does not allow it. %s", option.option, fix)
+			fallback := fmt.Sprintf("This agent rejected the job because its --%s option does not allow it. %s", option.option, fix)
 			noMatch := new(noMatchError)
 			if !errors.As(option.err, &noMatch) {
 				r.captureJobError(ctx, "buildkite.job_rejected", jobapi.CapturedErrorMessage(
-					fmt.Sprintf("This agent refused the job because its --%s option does not allow it: %v. %s", option.option, option.err, fix), fallback))
+					fmt.Sprintf("This agent rejected the job because its --%s option does not allow it: %v. %s", option.option, option.err, fix), fallback))
 				break
 			}
 			// URL masking stops at whitespace, "<" and ">", so it can't mask
@@ -250,7 +250,7 @@ func (r *JobRunner) Run(ctx context.Context, ignoreAgentInDispatches *bool) (err
 			// Mask URLs in the refused value from the job, but not in the
 			// operator's patterns, which masking would corrupt. Mask before
 			// sizing, because masking can shorten the value.
-			detail := fmt.Sprintf("This agent refused the job because its --%s option does not allow it: %s has no match in %s. %s",
+			detail := fmt.Sprintf("This agent rejected the job because its --%s option does not allow it: %s has no match in %s. %s",
 				option.option, maskURLs(noMatch.value), noMatch.patterns, fix)
 			r.reportJobError(ctx, "buildkite.job_rejected", jobapi.CapturedErrorMessage(detail, fallback))
 		}
@@ -280,7 +280,7 @@ func (r *JobRunner) Run(ctx context.Context, ignoreAgentInDispatches *bool) (err
 			// Like the job log, the report leaves the hook's reasons to the
 			// agent logs.
 			r.captureJobError(ctx, "buildkite.job_rejected",
-				"This agent's pre-bootstrap hook refused the job. The hook's output is in the agent's logs, not the job log. Run the step on other agents, or ask the agent's operator why the hook refused it.")
+				"This agent's pre-bootstrap hook rejected the job. The hook's output is in the agent's logs, not the job log. Run the step on other agents, or ask the agent's operator why the hook rejected it.")
 
 			exit.Status = -1
 			exit.SignalReason = SignalReasonAgentRefused

@@ -375,7 +375,7 @@ func TestRefusedJobErrorsDescribeTheStep(t *testing.T) {
 		{
 			name:     "malformed plugins are a problem with the step, not the allowlist",
 			env:      map[string]string{"BUILDKITE_PLUGINS": `{"not": "a list"`},
-			code:     "buildkite.plugin_definition_invalid",
+			code:     "buildkite.job_rejected",
 			contains: "The step's plugins could not be parsed: ",
 			excludes: "--allowed-plugins",
 		},
