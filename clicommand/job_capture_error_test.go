@@ -147,6 +147,48 @@ func TestJobCaptureErrorWarnsWhenMessageIsTruncated(t *testing.T) {
 	}
 }
 
+func TestJobCaptureErrorWarnsAboutReservedCodes(t *testing.T) {
+	var reported *jobapi.CapturedError
+	startCaptureErrorTestServer(t, func(_ context.Context, payload *jobapi.CapturedError) error {
+		reported = payload
+		return nil
+	})
+	for _, test := range []struct {
+		code        string
+		wantWarning bool
+	}{
+		{"buildkite.git_clone_failed", true},
+		{"buildkite_deploy_failed", false},
+		{"acme.buildkite.deploy_failed", false},
+	} {
+		t.Run(test.code, func(t *testing.T) {
+			stderr, err := os.CreateTemp(t.TempDir(), "stderr")
+			if err != nil {
+				t.Fatal(err)
+			}
+			originalStderr := os.Stderr
+			os.Stderr = stderr
+			t.Cleanup(func() {
+				os.Stderr = originalStderr
+				_ = stderr.Close()
+			})
+			if err := captureErrorTestApp().Run(t.Context(), []string{"buildkite-agent", "capture-error", test.code, "--message", "failure"}); err != nil {
+				t.Fatalf("capture-error error = %v, want success", err)
+			}
+			if reported == nil || reported.Code != test.code {
+				t.Fatalf("reported = %+v, want code %q", reported, test.code)
+			}
+			output, err := os.ReadFile(stderr.Name())
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := strings.Contains(string(output), "Error codes starting with buildkite. are reserved"); got != test.wantWarning {
+				t.Errorf("stderr = %q, want warning = %t", output, test.wantWarning)
+			}
+		})
+	}
+}
+
 func TestJobCaptureErrorDoesNotFallbackWithoutLocalJobAPI(t *testing.T) {
 	t.Setenv("BUILDKITE_AGENT_JOB_API_SOCKET", "")
 	err := captureErrorTestApp().Run(t.Context(), []string{"buildkite-agent", "capture-error", "x", "--message", "raw customer diagnostic"})

@@ -595,12 +595,16 @@ func TestFetchCommitFromRemoteMirrorTimeout(t *testing.T) {
 		t.Run(mode, func(t *testing.T) {
 			commit := strings.Repeat("a", 40)
 			e := newRemoteMirrorShimExecutor(t, commit, mode)
+			e.shell.Env.Set("BUILDKITE_CAPTURE_GIT_ERRORS", "true")
+			e.shell.Env.Set("BUILDKITE_AGENT_JOB_API_CAPTURE_ERROR", "true")
+			var reports gitErrorReports
+			ctx := context.WithValue(t.Context(), gitErrorReportsKey{}, &reports)
 			attempt := remoteMirrorAttempt{
 				site: remoteMirrorSiteExistingCheckout,
 				url:  "https://mirror.example/acme/widgets.git",
 			}
 
-			hit, err := e.fetchCommitFromRemoteMirror(t.Context(), &attempt, ".git", "", commit)
+			hit, err := e.fetchCommitFromRemoteMirror(ctx, &attempt, ".git", "", commit)
 			if err != nil {
 				t.Fatalf("fetchCommitFromRemoteMirror() error = %v", err)
 			}
@@ -609,6 +613,15 @@ func TestFetchCommitFromRemoteMirrorTimeout(t *testing.T) {
 			}
 			if attempt.outcome != remoteMirrorOutcomeTimeout {
 				t.Errorf("outcome = %q, want timeout", attempt.outcome)
+			}
+			if err := ctx.Err(); err != nil {
+				t.Fatalf("checkout context expired: %v", err)
+			}
+			if len(reports) != 1 {
+				t.Fatalf("reports = %v, want one mirror timeout", reports)
+			}
+			if report := reports[0]; report.Code != "buildkite.git_remote_mirror_timed_out" || report.Message != "The remote Git mirror probe timed out, so the checkout fell back to the repository. This didn't fail the job on its own." {
+				t.Errorf("report = %#v, want mirror timeout code and fixed message", report)
 			}
 		})
 	}
@@ -621,12 +634,16 @@ func TestFetchCommitFromRemoteMirrorPropagatesCancellationDuringConfirmation(t *
 
 	commit := strings.Repeat("a", 40)
 	e := newRemoteMirrorShimExecutor(t, commit, "cancel-confirmation")
+	e.shell.Env.Set("BUILDKITE_CAPTURE_GIT_ERRORS", "true")
+	e.shell.Env.Set("BUILDKITE_AGENT_JOB_API_CAPTURE_ERROR", "true")
 	revStarted, _ := e.shell.Env.Get("REV_STARTED")
 	attempt := remoteMirrorAttempt{
 		site: remoteMirrorSiteExistingCheckout,
 		url:  "https://mirror.example/acme/widgets.git",
 	}
-	ctx, cancel := context.WithCancel(t.Context())
+	var reports gitErrorReports
+	ctx := context.WithValue(t.Context(), gitErrorReportsKey{}, &reports)
+	ctx, cancel := context.WithCancel(ctx)
 	t.Cleanup(cancel)
 	go func() {
 		for {
@@ -647,6 +664,9 @@ func TestFetchCommitFromRemoteMirrorPropagatesCancellationDuringConfirmation(t *
 	}
 	if attempt.outcome != remoteMirrorOutcomeNotReached {
 		t.Errorf("outcome = %q, want not reached", attempt.outcome)
+	}
+	if len(reports) != 0 {
+		t.Errorf("reports = %v, want none after cancellation", reports)
 	}
 }
 

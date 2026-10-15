@@ -943,3 +943,62 @@ func TestSecretsIntegration_SecretEnabledLFSSetsSkipSmudge(t *testing.T) {
 		t.Fatalf("expected GIT_LFS_SKIP_SMUDGE=1 before checkout after a secret enabled LFS, got: %s", tester.Output)
 	}
 }
+
+func TestSecretsIntegration_FailuresAreCaptured(t *testing.T) {
+	t.Parallel()
+
+	for _, test := range []struct {
+		name    string
+		secrets []pipeline.Secret
+		env     []string
+		code    string
+		message string
+	}{
+		{
+			name:    "fetch failure",
+			secrets: []pipeline.Secret{{Key: "VALID_SECRET"}, {Key: "MISSING_SECRET"}},
+			code:    "buildkite.secrets_fetch_failed",
+			message: "- MISSING_SECRET: 404 Not Found: Not Found: method = GET",
+		},
+		{
+			name:    "protected environment variable",
+			secrets: []pipeline.Secret{{Key: "VALID_SECRET", EnvironmentVariable: "BUILDKITE_AGENT_ACCESS_TOKEN"}},
+			code:    "buildkite.secret_environment_variable_rejected",
+			message: `secret "VALID_SECRET" cannot set protected environment variable "BUILDKITE_AGENT_ACCESS_TOKEN". Map the secret to a different environment_variable in the step.`,
+		},
+		{
+			name:    "environment variable protected by the agent's options",
+			secrets: []pipeline.Secret{{Key: "VALID_SECRET", EnvironmentVariable: "GIT_SSH_COMMAND"}},
+			env:     []string{"BUILDKITE_PROTECT_DANGEROUS_GIT_ENVIRONMENT_VARIABLES=true"},
+			code:    "buildkite.secret_environment_variable_rejected",
+			message: `secret "VALID_SECRET" cannot set environment variable "GIT_SSH_COMMAND" protected by --protected-environment-variables or --protect-dangerous-git-environment-variables. Map the secret to a different environment_variable in the step.`,
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			tester, err := NewExecutorTester(mainCtx)
+			if err != nil {
+				t.Fatalf("setting up executor tester: %v", err)
+			}
+			defer tester.Close()
+
+			secretsAPI := setupSecretsAPIServer(t, map[string]string{"VALID_SECRET": "valid-secret-value"})
+			defer secretsAPI.Close()
+			agentAPI := newJobErrorsAPI(t, secretsAPI.Config.Handler)
+
+			secretsJSON, err := json.Marshal(test.secrets)
+			if err != nil {
+				t.Fatalf("marshaling secrets: %v", err)
+			}
+			env := append(agentAPI.env(), "BUILDKITE_SECRETS_CONFIG="+string(secretsJSON))
+			if err := tester.Run(t, append(env, test.env...)...); err == nil {
+				t.Fatalf("expected job to fail. Full output: %s", tester.Output)
+			}
+
+			report := agentAPI.report(t, test.code)
+			if !strings.Contains(report.Message, test.message) || strings.Contains(report.Message, "valid-secret-value") {
+				t.Errorf("message = %q, want it to contain %q and no secret value", report.Message, test.message)
+			}
+		})
+	}
+}

@@ -101,6 +101,17 @@ type Executor struct {
 	// into the OTLP exporter.
 	stdoutTee *teeWriter
 
+	// outputTail keeps the end of the redacted child-process output, so
+	// captured errors can include what a failed hook or command printed. It is
+	// fed by outputTailRedactor, which receives only hook, command, and plugin
+	// checkout output, never the agent's own logging.
+	outputTail         outputTail
+	outputTailRedactor *replacer.Replacer
+
+	// commandHook describes the command hook that ran instead of the step's
+	// command, such as "The agent command hook", if any.
+	commandHook string
+
 	// stderrTee carries the redacted shell logger output (section headers,
 	// prompts, comments, warnings) to stderr and, when OTLP job logging is
 	// enabled, mirrors it into the OTLP exporter so the exported records match
@@ -259,7 +270,7 @@ func (e *Executor) Run(ctx context.Context) (exitCode int) {
 	var phaseErr error
 
 	if e.includePhase("plugin") {
-		phaseErr = e.preparePlugins()
+		phaseErr = e.preparePlugins(ctx)
 
 		if phaseErr == nil {
 			phaseErr = e.PluginPhase(ctx)
@@ -466,11 +477,29 @@ func (e *Executor) executeHook(ctx context.Context, hookCfg HookConfig) (retErr 
 	}
 	hookName += " " + hookCfg.Name
 
+	// A command hook's failure is the command's failure, which CommandPhase
+	// captures instead.
+	if hookCfg.Name != "command" {
+		defer func() { e.captureHookError(ctx, hookCfg, hookName, retErr) }()
+	}
+
 	if !osutil.FileExists(hookCfg.Path) {
 		if e.Debug {
 			e.shell.Commentf("Skipping %s hook, no script at \"%s\"", hookName, hookCfg.Path)
 		}
 		return nil
+	}
+	e.resetRecentOutput()
+
+	// Record which command hook runs, so a failure is attributed to it rather
+	// than to the step's command. Several plugins' command hooks can run, and
+	// the last to run is the one that failed.
+	if hookCfg.Name == "command" {
+		e.commandHook = map[string]string{
+			HookScopeAgent:      "The agent command hook",
+			HookScopeRepository: "The repository command hook",
+			HookScopePlugin:     fmt.Sprintf("The %s plugin's command hook", hookCfg.PluginName),
+		}[hookCfg.Scope]
 	}
 
 	e.shell.Headerf("Running %s hook", hookName)
@@ -532,7 +561,7 @@ func (e *Executor) runUnwrappedHook(ctx context.Context, _ string, hookCfg HookC
 	environ.Set("BUILDKITE_HOOK_PATH", hookCfg.Path)
 	environ.Set("BUILDKITE_HOOK_SCOPE", hookCfg.Scope)
 
-	err := e.shell.Command(hookCfg.Path).Run(ctx, shell.WithExtraEnv(environ))
+	err := e.shell.Command(hookCfg.Path).Run(ctx, shell.WithExtraEnv(environ), e.teeRecentOutput())
 	// Store the last hook exit code for subsequent steps, matching wrapped shell hooks.
 	e.shell.Env.Set("BUILDKITE_LAST_HOOK_EXIT_STATUS", strconv.Itoa(shell.ExitCode(err)))
 	if err != nil {
@@ -607,6 +636,16 @@ func logMissingHookInfo(l shell.Logger, hookName, wrapperPath string) {
 	l.Errorf("The %s hook failed to run - perhaps the script interpreter %q is missing", hookName, interpreter)
 }
 
+// hookExitError keeps the cause of a hook's exit, such as the signal that
+// terminated it, behind the short message shown in the job log.
+type hookExitError struct {
+	message string
+	err     error
+}
+
+func (e hookExitError) Error() string { return e.message }
+func (e hookExitError) Unwrap() error { return e.err }
+
 func (e *Executor) runWrappedShellScriptHook(ctx context.Context, hookName string, hookCfg HookConfig) error {
 	defer func() {
 		if err := e.redactors.Flush(); err != nil {
@@ -644,7 +683,7 @@ func (e *Executor) runWrappedShellScriptHook(ctx context.Context, hookName strin
 		if err != nil {
 			return err
 		}
-		return script.Run(ctx, shell.ShowPrompt(false), shell.WithExtraEnv(hookCfg.Env))
+		return script.Run(ctx, shell.ShowPrompt(false), shell.WithExtraEnv(hookCfg.Env), e.teeRecentOutput())
 	}()
 	if err != nil {
 		exitCode := shell.ExitCode(err)
@@ -655,7 +694,7 @@ func (e *Executor) runWrappedShellScriptHook(ctx context.Context, hookName strin
 		if shell.IsExitError(err) {
 			return &shell.ExitError{
 				Code: exitCode,
-				Err:  fmt.Errorf("the %s hook exited with status %d", hookName, exitCode),
+				Err:  hookExitError{message: fmt.Sprintf("the %s hook exited with status %d", hookName, exitCode), err: err},
 			}
 		}
 
@@ -937,7 +976,17 @@ func (e *Executor) executeLocalHook(ctx context.Context, name string) error {
 	}
 
 	if !localHooksEnabled {
-		return fmt.Errorf("refusing to run %s, local hooks are disabled", localHookPath)
+		// Say which setting disabled local hooks, since only the step's
+		// environment can be changed from the repository.
+		disabledBy, fix := "BUILDKITE_NO_LOCAL_HOOKS", "Remove BUILDKITE_NO_LOCAL_HOOKS from the job's environment, or remove the hook from the repository."
+		if !e.LocalHooksEnabled {
+			disabledBy, fix = "the agent's --no-local-hooks option", "Remove the hook from the repository, or run the step on agents that allow local hooks."
+		}
+		relPath, _ := filepath.Rel(e.shell.Env.GetString("BUILDKITE_BUILD_CHECKOUT_PATH", ""), localHookPath)
+		captureJobError(ctx, e.shell, "buildkite.local_hook_rejected", jobapi.CapturedErrorMessage(
+			fmt.Sprintf("The repository has a %s hook at %s, but %s disables local hooks, so the job failed. %s", name, filepath.ToSlash(relPath), disabledBy, fix),
+			fmt.Sprintf("The repository has a %s hook, but %s disables local hooks, so the job failed. %s", name, disabledBy, fix)))
+		return localHookRefusedError{path: localHookPath}
 	}
 
 	return e.executeHook(ctx, HookConfig{
@@ -945,6 +994,15 @@ func (e *Executor) executeLocalHook(ctx context.Context, name string) error {
 		Name:  name,
 		Path:  localHookPath,
 	})
+}
+
+// localHookRefusedError is returned for a repository hook the agent refused
+// to run because local hooks are disabled. The refusal is captured where it
+// happens, so it is not captured again as a failure of the command.
+type localHookRefusedError struct{ path string }
+
+func (e localHookRefusedError) Error() string {
+	return fmt.Sprintf("refusing to run %s, local hooks are disabled", e.path)
 }
 
 var badCharsRE = regexp.MustCompile("[[:^alnum:]]")
@@ -1095,6 +1153,12 @@ func (e *Executor) fetchAndSetSecrets(ctx context.Context) error {
 		for _, err := range errs {
 			fmt.Fprintf(&errorMsg, "\n   %s", err)
 		}
+		failedKeys, detail := secrets.DescribeFetchErrors("Could not fetch these secrets for the job:", errs)
+		fallback := "Could not fetch the job's secrets. " + secrets.FetchErrorFix
+		if len(failedKeys) > 0 {
+			fallback = fmt.Sprintf("Could not fetch these secrets for the job: %s. %s", secrets.ListKeys(failedKeys, 5), secrets.FetchErrorFix)
+		}
+		captureJobError(ctx, e.shell, "buildkite.secrets_fetch_failed", jobapi.CapturedErrorMessage(detail, fallback))
 		return errors.New(errorMsg.String())
 	}
 
@@ -1112,14 +1176,19 @@ func (e *Executor) fetchAndSetSecrets(ctx context.Context) error {
 			// Set the environment variable only if environment_variable is specified and non-nil
 			if pipelineSecret.EnvironmentVariable != "" {
 				// Check if the environment variable is protected
-				if env.IsProtected(pipelineSecret.EnvironmentVariable) {
-					return fmt.Errorf("secret %q cannot set protected environment variable %q", pipelineSecret.Key, pipelineSecret.EnvironmentVariable)
+				var rejected error
+				switch {
+				case env.IsProtected(pipelineSecret.EnvironmentVariable):
+					rejected = fmt.Errorf("secret %q cannot set protected environment variable %q", pipelineSecret.Key, pipelineSecret.EnvironmentVariable)
+				case env.MatchesProtectedEnv(pipelineSecret.EnvironmentVariable, e.ProtectedEnvPatterns):
+					rejected = fmt.Errorf("secret %q cannot set environment variable %q protected by --protected-environment-variables or --protect-dangerous-git-environment-variables", pipelineSecret.Key, pipelineSecret.EnvironmentVariable)
+				case env.IsCheckoutLockedForSecrets(pipelineSecret.EnvironmentVariable, e.CheckoutOverrideMode):
+					rejected = fmt.Errorf("secret %q cannot set checkout-locked environment variable %q while BUILDKITE_CHECKOUT_OVERRIDE_MODE=%s", pipelineSecret.Key, pipelineSecret.EnvironmentVariable, e.CheckoutOverrideMode)
 				}
-				if env.MatchesProtectedEnv(pipelineSecret.EnvironmentVariable, e.ProtectedEnvPatterns) {
-					return fmt.Errorf("secret %q cannot set environment variable %q protected by --protected-environment-variables or --protect-dangerous-git-environment-variables", pipelineSecret.Key, pipelineSecret.EnvironmentVariable)
-				}
-				if env.IsCheckoutLockedForSecrets(pipelineSecret.EnvironmentVariable, e.CheckoutOverrideMode) {
-					return fmt.Errorf("secret %q cannot set checkout-locked environment variable %q while BUILDKITE_CHECKOUT_OVERRIDE_MODE=%s", pipelineSecret.Key, pipelineSecret.EnvironmentVariable, e.CheckoutOverrideMode)
+				if rejected != nil {
+					message := jobapi.CapturedErrorMessage(rejected.Error()+". Map the secret to a different environment_variable in the step.", "A secret cannot set this protected or checkout-locked environment variable. Map it to a different environment_variable in the step.")
+					captureJobError(ctx, e.shell, "buildkite.secret_environment_variable_rejected", message)
+					return rejected
 				}
 
 				var alreadySet bool
@@ -1266,6 +1335,8 @@ func (e *Executor) CommandPhase(ctx context.Context) (hookErr, commandErr error)
 	// Expand the job log header from the command to surface the error
 	e.shell.Printf("^^^ +++")
 
+	e.captureCommandError(ctx, commandErr)
+
 	isExitError := shell.IsExitError(commandErr)
 	isExitSignaled := shell.IsExitSignaled(commandErr)
 
@@ -1286,6 +1357,12 @@ func (e *Executor) CommandPhase(ctx context.Context) (hookErr, commandErr error)
 	}
 }
 
+var (
+	errNoCommand                = errors.New("the command phase has no `command` to execute; provide a `command` field in your step configuration or define a `command` hook in a step plugin, your repository `.buildkite/hooks`, or the agent `hooks-path`")
+	errCommandEvalDisabled      = errors.New("this agent is not allowed to evaluate console commands; to allow this, re-run the agent without the `--no-command-eval` option or specify a script within your repository to run instead (such as scripts/test.sh)")
+	errCommandOutsideRepository = errors.New("this agent is only allowed to run scripts within your repository; to allow this, re-run the agent without the `--no-command-eval` option or specify a script within your repository to run instead (such as scripts/test.sh)")
+)
+
 // defaultCommandPhase is executed if there is no global or plugin command hook
 func (e *Executor) defaultCommandPhase(ctx context.Context) (retErr error) {
 	span, ctx := tracetools.StartSpanFromContext(ctx, "default command hook", e.TracingBackend)
@@ -1304,9 +1381,11 @@ func (e *Executor) defaultCommandPhase(ctx context.Context) (retErr error) {
 		}
 	}()
 
+	e.resetRecentOutput()
+
 	// Make sure we actually have a command to run
 	if strings.TrimSpace(e.Command) == "" {
-		return fmt.Errorf("the command phase has no `command` to execute; provide a `command` field in your step configuration or define a `command` hook in a step plugin, your repository `.buildkite/hooks`, or the agent `hooks-path`")
+		return errNoCommand
 	}
 
 	scriptFileName := strings.ReplaceAll(e.Command, "\n", "")
@@ -1319,14 +1398,14 @@ func (e *Executor) defaultCommandPhase(ctx context.Context) (retErr error) {
 	// check that the agent is allowed to eval commands.
 	if !commandIsScript && !e.CommandEval {
 		e.shell.Commentf("No such file: \"%s\"", scriptFileName)
-		return fmt.Errorf("this agent is not allowed to evaluate console commands; to allow this, re-run the agent without the `--no-command-eval` option or specify a script within your repository to run instead (such as scripts/test.sh)")
+		return errCommandEvalDisabled
 	}
 
 	// Also make sure that the script we've resolved is definitely within this
 	// repository checkout and isn't elsewhere on the system.
 	if commandIsScript && !e.CommandEval && !strings.HasPrefix(pathToCommand, e.shell.Getwd()+string(os.PathSeparator)) {
 		e.shell.Commentf("No such file: \"%s\"", scriptFileName)
-		return fmt.Errorf("this agent is only allowed to run scripts within your repository; to allow this, re-run the agent without the `--no-command-eval` option or specify a script within your repository to run instead (such as scripts/test.sh)")
+		return errCommandOutsideRepository
 	}
 
 	var cmdToExec string
@@ -1414,7 +1493,7 @@ func (e *Executor) defaultCommandPhase(ctx context.Context) (retErr error) {
 		e.shell.Promptf("%s", cmdToExec)
 	}
 
-	err = e.shell.Command(cmd[0], cmd[1:]...).Run(ctx, shell.ShowPrompt(false))
+	err = e.shell.Command(cmd[0], cmd[1:]...).Run(ctx, shell.ShowPrompt(false), e.teeRecentOutput())
 	return err
 }
 
@@ -1526,6 +1605,12 @@ func (e *Executor) setupRedactors(log shell.Logger, environ *env.Environment, st
 	stdoutRedactor := replacer.New(e.stdoutTee, needles, redact.Redacted)
 	stdoutRedactor.AddPrefixes(tokenPrefixes...)
 	e.redactors.Append(stdoutRedactor)
+	// Captured errors include the end of a failed command's output. Redact it
+	// as a whole stream, with the same needles as the job log, before
+	// keeping only its end.
+	e.outputTailRedactor = replacer.New(&e.outputTail, needles, redact.Redacted)
+	e.outputTailRedactor.AddPrefixes(tokenPrefixes...)
+	e.redactors.Append(e.outputTailRedactor)
 	// The shell logger writes through this redactor into stderrTee, whose
 	// primary sink is stderr. When OTLP job logging is enabled, a secondary
 	// sink is attached so the same already-redacted control output is mirrored

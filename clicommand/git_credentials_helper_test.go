@@ -1,6 +1,7 @@
 package clicommand
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -95,6 +96,7 @@ func TestGitCredentialsHelperCommand(t *testing.T) {
 		wantRepo   string
 		wantOutput string
 		wantError  bool
+		wantReason string
 	}{
 		{
 			name:       "GitHub URL",
@@ -134,6 +136,7 @@ func TestGitCredentialsHelperCommand(t *testing.T) {
 			wantRepo:   "https://acme.code.storage/team/widgets.git",
 			wantOutput: "username=fail\npassword=fail\n\n",
 			wantError:  true,
+			wantReason: "Buildkite's response contained invalid characters.",
 		},
 		{
 			name:       "malformed input",
@@ -141,6 +144,7 @@ func TestGitCredentialsHelperCommand(t *testing.T) {
 			input:      "protocol=https\nhost=git.example.com\n",
 			wantOutput: "username=fail\npassword=fail\n\n",
 			wantError:  true,
+			wantReason: "Git's credential request did not name an HTTPS repository",
 		},
 		{
 			name:       "HTTP failure",
@@ -150,6 +154,7 @@ func TestGitCredentialsHelperCommand(t *testing.T) {
 			wantRepo:   "https://git.example.com/acme/widgets.git",
 			wantOutput: "username=fail\npassword=fail\n\n",
 			wantError:  true,
+			wantReason: "The request to Buildkite failed: POST ",
 		},
 		{
 			name:       "empty token",
@@ -159,6 +164,7 @@ func TestGitCredentialsHelperCommand(t *testing.T) {
 			wantRepo:   "https://git.example.com/acme/widgets.git",
 			wantOutput: "username=fail\npassword=fail\n\n",
 			wantError:  true,
+			wantReason: "Buildkite returned an empty token.",
 		},
 		{
 			name:   "non-get action is a no-op",
@@ -189,6 +195,7 @@ func TestGitCredentialsHelperCommand(t *testing.T) {
 			}))
 			t.Cleanup(server.Close)
 
+			reports := startAgentErrorTestServer(t)
 			output, err := runGitCredentialsHelperCommand(t, server.URL, test.action, test.input)
 			if (err != nil) != test.wantError {
 				t.Fatalf("error = %v, wantError %t", err, test.wantError)
@@ -203,6 +210,19 @@ func TestGitCredentialsHelperCommand(t *testing.T) {
 			if requests != wantRequests {
 				t.Errorf("requests = %d, want %d", requests, wantRequests)
 			}
+			if test.wantReason == "" {
+				if len(*reports) != 0 {
+					t.Errorf("reports = %+v, want none", *reports)
+				}
+				return
+			}
+			const lead = "The Git credential helper could not get repository credentials, so Git authentication will fail. "
+			if len(*reports) != 1 || (*reports)[0].Code != "buildkite.repository_credentials_failed" || !strings.HasPrefix((*reports)[0].Message, lead+test.wantReason) {
+				t.Fatalf("reports = %+v, want buildkite.repository_credentials_failed with reason %q", *reports, test.wantReason)
+			}
+			if message := (*reports)[0].Message; strings.Contains(message, "pierre-jwt") || strings.HasPrefix(test.wantReason, "The request") != strings.Contains(message, "400 Bad Request") {
+				t.Errorf("message = %q, want only an HTTP failure's response and never a token", message)
+			}
 		})
 	}
 }
@@ -214,21 +234,22 @@ func TestGitCredentialsHelperRedaction(t *testing.T) {
 	}))
 	t.Cleanup(upstream.Close)
 	for _, tc := range []struct {
-		mode      string
-		gitErrors bool
+		mode, optIn string
 	}{
-		{"registered", true},
-		{"registration rejected", true},
-		{"socket missing", true},
+		{"registered", "BUILDKITE_CAPTURE_GIT_ERRORS"},
+		{"registration rejected", "BUILDKITE_CAPTURE_GIT_ERRORS"},
+		{"socket missing", "BUILDKITE_CAPTURE_GIT_ERRORS"},
+		{"socket missing", "BUILDKITE_CAPTURE_AGENT_ERRORS"},
 		// Without Git error capture, a failed registration doesn't fail the checkout.
-		{"registration rejected", false},
-		{"socket missing", false},
+		{"registration rejected", ""},
+		{"socket missing", ""},
 	} {
 		mode := tc.mode
-		t.Run(fmt.Sprintf("%s/git errors %t", mode, tc.gitErrors), func(t *testing.T) {
+		t.Run(mode+"/"+cmp.Or(tc.optIn, "no opt-in"), func(t *testing.T) {
 			t.Setenv("BUILDKITE_CAPTURE_GIT_ERRORS", "")
-			if tc.gitErrors {
-				t.Setenv("BUILDKITE_CAPTURE_GIT_ERRORS", "true")
+			t.Setenv("BUILDKITE_CAPTURE_AGENT_ERRORS", "")
+			if tc.optIn != "" {
+				t.Setenv(tc.optIn, "true")
 			}
 			var reported *jobapi.CapturedError
 			startCaptureErrorTestServer(t, func(_ context.Context, report *jobapi.CapturedError) error {
@@ -250,7 +271,7 @@ func TestGitCredentialsHelperRedaction(t *testing.T) {
 			}
 			output, err := runGitCredentialsHelperCommand(t, upstream.URL, "get", "protocol=https\nhost=example.com\npath=repo.git\n")
 			if mode != "registered" {
-				if !tc.gitErrors {
+				if tc.optIn == "" {
 					if err != nil || output != "username=token\npassword="+secret+"\n\n" {
 						t.Fatalf("output=%q, error=%v; want repository credentials despite the registration failure", output, err)
 					}

@@ -48,6 +48,21 @@ Go CLI application with main packages:
 - Interface types end with -er suffix where appropriate
 - Use `github.com/urfave/cli` for CLI commands
 
+## Job error codes
+
+Errors the agent reports on a job (see `captureJobError` in
+[`internal/job/job_errors.go`](internal/job/job_errors.go)) use codes named
+`buildkite.<subject>_<outcome>`, such as `buildkite.git_clone_failed`. The
+`buildkite.` root is reserved for the agent, official Buildkite plugins and the
+backend; customers use any other code. When adding a code:
+
+- Put what failed first and the outcome last: `git_ref_invalid`, not `git_invalid_ref`.
+- Prefer the outcome words `failed`, `timed_out`, `invalid`, `not_found`, `rejected` and `lost`. Use another word only when it's clearer, such as Git's own `not_a_tree`.
+- Use one code for each kind of failure, and give each code one meaning. If one code would cover two different failures, add a code.
+- Put details, such as file paths, refs and output, in the message, not the code.
+
+Codes are matched by people, coding agents and automation, so don't rename one after it's released. The `job capture-error` help text in [`clicommand/job_capture_error.go`](clicommand/job_capture_error.go) states the same convention for customers.
+
 ## Labelling pull requests
 
 Every PR needs a category label. The [PR Labels workflow](.github/workflows/pr-labels.yml) is a required check, and it fails until the PR has at least one of `bug`, `feature`, `change`, `internal`, `dependencies` or `release`. The labels also decide where the PR appears in the release notes ([`.github/release.yml`](.github/release.yml)), so the check passing doesn't mean the label is right. A user-facing PR labelled `internal` or `dependencies` ends up under 🏠 Internal, where people reading the release notes are likely to miss it.

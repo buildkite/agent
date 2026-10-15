@@ -6,6 +6,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"runtime"
 	"strings"
 	"sync/atomic"
@@ -343,5 +344,48 @@ func TestFetchSecrets_NoRetryOnNonRetryableStatus(t *testing.T) {
 	// Should have only attempted once since 404 is not retryable
 	if got := attempts.Load(); got != 1 {
 		t.Errorf("expected 1 attempt (no retries for 404), got %d", got)
+	}
+}
+
+func TestDescribeFetchErrors(t *testing.T) {
+	t.Parallel()
+
+	notFound := &api.ErrorResponse{
+		Response: &http.Response{Status: "404 Not Found", Request: &http.Request{Method: "GET", URL: &url.URL{Path: "/jobs/1/secrets"}}},
+		Message:  "Secret not found or access denied",
+	}
+	keys, message := DescribeFetchErrors("Could not fetch these secrets for the job:", []error{
+		&SecretError{Key: "DEPLOY_KEY", Err: notFound},
+		&SecretError{Key: "NPM_TOKEN", Err: errors.New("dial tcp: connection refused")},
+		errors.New("failed to acquire semaphore"),
+	})
+
+	if diff := cmp.Diff([]string{"DEPLOY_KEY", "NPM_TOKEN"}, keys); diff != "" {
+		t.Errorf("failed keys diff (-want +got):\n%s", diff)
+	}
+	want := "Could not fetch these secrets for the job:\n" +
+		"- DEPLOY_KEY: 404 Not Found: Secret not found or access denied\n" +
+		"- NPM_TOKEN: dial tcp: connection refused\n" +
+		"- (all secrets): failed to acquire semaphore\n" +
+		"Check that each secret exists in the job's cluster and that this pipeline is allowed to use it."
+	if message != want {
+		t.Errorf("message = %q, want %q", message, want)
+	}
+}
+
+func TestListKeys(t *testing.T) {
+	t.Parallel()
+	for _, test := range []struct {
+		keys []string
+		want string
+	}{
+		{[]string{"A"}, "A"},
+		{[]string{"A", "B"}, "A, B"},
+		{[]string{"A", "B", "C", "D"}, "A, B, and 2 more"},
+		{[]string{strings.Repeat("K", 70)}, strings.Repeat("K", 59) + "…"},
+	} {
+		if got := ListKeys(test.keys, 2); got != test.want {
+			t.Errorf("ListKeys(%q, 2) = %q, want %q", test.keys, got, test.want)
+		}
 	}
 }

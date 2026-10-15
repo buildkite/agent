@@ -19,10 +19,21 @@ Description:
 Reports a structured error on the current job for display in the Buildkite UI
 and API. Requires the Local Job API.
 
-The error code is a string identifying the kind of error, such as
-image_pull_failed, not necessarily an HTTP status or command exit code.
+The error code is a string identifying the kind of error, not necessarily an
+HTTP status or command exit code. Name it <subject>_<outcome> in lowercase
+snake_case, with what failed first and the outcome last, such as
+smoke_test_failed or deploy_timed_out. Prefer these outcome words: failed,
+timed_out, invalid, not_found, rejected and lost. Use one code for each kind of
+failure, and give each code one meaning.
 
-Include all important details in the message.
+Codes starting with buildkite. are reserved for errors reported by the
+Buildkite Agent, official Buildkite plugins and Buildkite itself, such as
+buildkite.git_clone_failed. Use any other code for your own errors. Plugins can
+prefix their codes with the plugin name. The command warns about, but still
+reports, a code starting with buildkite.
+
+Include all important details in the message, such as the test, file or line
+that failed. Don't put them in the code.
 
 Values registered for job-log redaction are redacted from the code and message
 before the report is sent to Buildkite. As in job logs, values that look like
@@ -72,6 +83,11 @@ var JobCaptureErrorCommand = &cli.Command{
 		}
 		if strings.TrimSpace(cfg.Message) == "" {
 			return errors.New("message must not be blank")
+		}
+		// Official plugins report buildkite. codes through this command too,
+		// and the backend can't tell senders apart, so warn rather than refuse.
+		if strings.HasPrefix(cfg.ErrorCode, "buildkite.") {
+			l.Warnf("Error codes starting with buildkite. are reserved for errors reported by Buildkite, its agent and official plugins. Use a different code for your own errors.")
 		}
 		client, err := jobapi.NewDefaultClient(ctx)
 		if err != nil {
