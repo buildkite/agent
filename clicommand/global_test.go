@@ -2,12 +2,80 @@ package clicommand
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"slices"
 	"testing"
 
+	"github.com/buildkite/agent/v4/cliconfig"
+	"github.com/buildkite/agent/v4/env"
 	"github.com/google/go-cmp/cmp"
 	"github.com/urfave/cli/v3"
 )
+
+func TestProtectedEnvConfigurationSources(t *testing.T) {
+	for _, source := range []string{"default", "flags", "environment", "config"} {
+		t.Run(source, func(t *testing.T) {
+			for _, name := range []string{"BUILDKITE_PROTECTED_ENVIRONMENT_VARIABLES", "BUILDKITE_PROTECT_DANGEROUS_GIT_ENVIRONMENT_VARIABLES"} {
+				t.Setenv(name, "")
+				if err := os.Unsetenv(name); err != nil {
+					t.Fatal(err)
+				}
+			}
+			args := []string{"start", "--token=test-token", "--build-path=" + t.TempDir()}
+			switch source {
+			case "flags":
+				args = append(args, "--protected-environment-variables=BASH_ENV,LD_*", "--protected-environment-variables=HOME", "--protect-dangerous-git-environment-variables")
+			case "environment":
+				t.Setenv("BUILDKITE_PROTECTED_ENVIRONMENT_VARIABLES", "BASH_ENV, LD_*,HOME")
+				t.Setenv("BUILDKITE_PROTECT_DANGEROUS_GIT_ENVIRONMENT_VARIABLES", "true")
+			case "config":
+				path := filepath.Join(t.TempDir(), "agent.cfg")
+				if err := os.WriteFile(path, []byte("protected-environment-variables=BASH_ENV, LD_*,HOME\nprotect-dangerous-git-environment-variables=true\n"), 0o600); err != nil {
+					t.Fatal(err)
+				}
+				args = append(args, "--config", path)
+			}
+			// Use fresh flags: cli flags retain parse state between runs.
+			cmd := &cli.Command{
+				Name: "start",
+				Flags: []cli.Flag{
+					&cli.StringSliceFlag{Name: ProtectedEnvironmentVariablesFlag.Name, Sources: ProtectedEnvironmentVariablesFlag.Sources},
+					&cli.BoolFlag{Name: ProtectDangerousGitEnvironmentVariablesFlag.Name, Sources: ProtectDangerousGitEnvironmentVariablesFlag.Sources},
+					&cli.StringFlag{Name: "config"},
+					&cli.StringFlag{Name: "token"},
+					&cli.StringFlag{Name: "build-path"},
+					&cli.StringFlag{Name: "endpoint", Value: "https://agent.invalid"},
+				},
+			}
+			cmd.Action = func(_ context.Context, c *cli.Command) error {
+				var cfg AgentStartConfig
+				loader := cliconfig.Loader{CLI: c, Config: &cfg}
+				if _, err := loader.Load(); err != nil {
+					return err
+				}
+				patterns, err := env.ProtectedEnvPatterns(cfg.ProtectedEnvironmentVariables, cfg.ProtectDangerousGitEnvironmentVariables)
+				if err != nil {
+					return err
+				}
+				for _, name := range []string{"BASH_ENV", "LD_PRELOAD", "HOME", "GIT_CONFIG_KEY_6"} {
+					if got, want := env.MatchesProtectedEnv(name, patterns), source != "default"; got != want {
+						t.Errorf("%s protected = %t, want %t", name, got, want)
+					}
+				}
+				for _, name := range []string{"BASH_ENV_SUFFIX", "GIT_AUTHOR_NAME"} {
+					if env.MatchesProtectedEnv(name, patterns) {
+						t.Errorf("unexpected protection of %s", name)
+					}
+				}
+				return nil
+			}
+			if err := cmd.Run(t.Context(), args); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}
 
 func TestAllFlagEnvs(t *testing.T) {
 	// This is testing allFlagEnvs, not EnvDumpCommand, but it will certainly

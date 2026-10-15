@@ -90,7 +90,7 @@ func TestCheckingOutLocalGitProject_WithGitMirrors(t *testing.T) {
 		{"clone", "--mirror", "--config", "pack.threads=35", "--", tester.Repo.Path, matchSubDir(tester.GitMirrorsDir)},
 		{"clone", "-v", "--reference", matchSubDir(tester.GitMirrorsDir), "--", tester.Repo.Path, "."},
 		{"clean", "-fdq"},
-		{"fetch", "-v", "--", "origin", "main"},
+		{"fetch", "-v", "--", "origin", "refs/heads/main"},
 		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
 		{"clean", "-fdq"},
 		{"rev-parse", "HEAD"},
@@ -138,7 +138,7 @@ func TestCheckingOutLocalGitProjectWithSparseCheckoutInKubernetesWithGitMirrors(
 		{"--version"},
 		{"clone", "-v", "--reference", matchSubDir(tester.GitMirrorsDir), "--sparse", "--", tester.Repo.Path, "."},
 		{"clean", "-fdq"},
-		{"fetch", "-v", "--", "origin", "main"},
+		{"fetch", "-v", "--", "origin", "refs/heads/main"},
 		{"sparse-checkout", "set", "--cone", "--", ".buildkite/", "src/"},
 		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
 		{"clean", "-fdq"},
@@ -191,7 +191,7 @@ func TestCheckingOutLocalGitProjectWithSparseCheckoutWithReferenceGitMirrors(t *
 		{"--version"},
 		{"clone", "-v", "--reference", matchSubDir(tester.GitMirrorsDir), "--sparse", "--", tester.Repo.Path, "."},
 		{"clean", "-fdq"},
-		{"fetch", "-v", "--", "origin", "main"},
+		{"fetch", "-v", "--", "origin", "refs/heads/main"},
 		{"sparse-checkout", "set", "--cone", "--", ".buildkite/", "src/"},
 		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
 		{"clean", "-fdq"},
@@ -244,7 +244,7 @@ func TestCheckingOutLocalGitProjectWithSparseCheckoutNoCone_WithGitMirrors(t *te
 		{"--version"},
 		{"clone", "-v", "--filter=blob:none", "--sparse", "--reference", matchSubDir(tester.GitMirrorsDir), "--", tester.Repo.Path, "."},
 		{"clean", "-fdq"},
-		{"fetch", "-v", "--filter=blob:none", "--", "origin", "main"},
+		{"fetch", "-v", "--filter=blob:none", "--", "origin", "refs/heads/main"},
 		{"sparse-checkout", "set", "--no-cone", "--", "/*", "!/docs/"},
 		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
 		{"clean", "-fdq"},
@@ -319,7 +319,7 @@ func TestCheckingOutLocalGitProjectWithSubmodules_WithGitMirrors(t *testing.T) {
 		{"clone", "-v", "--reference", matchSubDir(tester.GitMirrorsDir), "--", tester.Repo.Path, "."},
 		{"clean", "-fdq"},
 		{"submodule", "foreach", "--recursive", "git clean -fdq"},
-		{"fetch", "-v", "--", "origin", "main"},
+		{"fetch", "-v", "--", "origin", "refs/heads/main"},
 		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
 		{"submodule", "sync", "--recursive"},
 		{"config", "--file", ".gitmodules", "--null", "--get-regexp", "submodule\\..+\\.url"},
@@ -377,7 +377,7 @@ func TestCheckingOutLocalGitProjectWithRelativeSubmoduleURL_WithGitMirrors(t *te
 		{"clone", "-v", "--reference", matchSubDir(tester.GitMirrorsDir), "--", superprojectRepo.Path, "."},
 		{"clean", "-fdq"},
 		{"submodule", "foreach", "--recursive", "git clean -fdq"},
-		{"fetch", "-v", "--", "origin", "main"},
+		{"fetch", "-v", "--", "origin", "refs/heads/main"},
 		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
 		{"submodule", "sync", "--recursive"},
 		{"config", "--file", ".gitmodules", "--null", "--get-regexp", "submodule\\..+\\.url"},
@@ -446,7 +446,7 @@ func TestCheckingOutLocalGitProjectWithRelativeSubmoduleURLFallsBackWhenMirrorFa
 	expect("clone", "-v", "--reference", matchSubDir(tester.GitMirrorsDir), "--", superprojectRepo.Path, ".")
 	expect("clean", "-fdq")
 	expect("submodule", "foreach", "--recursive", "git clean -fdq")
-	expect("fetch", "-v", "--", "origin", "main")
+	expect("fetch", "-v", "--", "origin", "refs/heads/main")
 	expect("-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD")
 	expect("submodule", "sync", "--recursive")
 	expect("config", "--file", ".gitmodules", "--null", "--get-regexp", "submodule\\..+\\.url")
@@ -592,7 +592,7 @@ func TestCheckingOutLocalGitProjectWithSubmodulesDisabled_WithGitMirrors(t *test
 		{"clone", "-v", "--reference", matchSubDir(tester.GitMirrorsDir), "--", tester.Repo.Path, "."},
 		{"clean", "-fdq"},
 		{"submodule", "foreach", "--recursive", "git clean -fdq"},
-		{"fetch", "-v", "--", "origin", "main"},
+		{"fetch", "-v", "--", "origin", "refs/heads/main"},
 		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
 		{"clean", "-fdq"},
 		{"rev-parse", "HEAD"},
@@ -637,7 +637,7 @@ func TestCheckingOutShallowCloneOfLocalGitProject_WithGitMirrors(t *testing.T) {
 		{"clone", "--mirror", "--bare", "--", tester.Repo.Path, matchSubDir(tester.GitMirrorsDir)},
 		{"clone", "--depth=1", "--reference", matchSubDir(tester.GitMirrorsDir), "--", tester.Repo.Path, "."},
 		{"clean", "-fdq"},
-		{"fetch", "--depth=1", "--", "origin", "main"},
+		{"fetch", "--depth=1", "--", "origin", "refs/heads/main"},
 		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
 		{"clean", "-fdq"},
 		{"rev-parse", "HEAD"},
@@ -1015,7 +1015,7 @@ func TestGitMirrorEnv(t *testing.T) {
 		{"clone", "--mirror", "--bare", "--", tester.Repo.Path, matchSubDir(tester.GitMirrorsDir)},
 		{"clone", "-v", "--reference", matchSubDir(tester.GitMirrorsDir), "--", tester.Repo.Path, "."},
 		{"clean", "-fdq"},
-		{"fetch", "-v", "--", "origin", "main"},
+		{"fetch", "-v", "--", "origin", "refs/heads/main"},
 		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
 		{"clean", "-fdq"},
 		{"rev-parse", "HEAD"},
@@ -1031,6 +1031,70 @@ func TestGitMirrorEnv(t *testing.T) {
 
 	if !strings.HasPrefix(gitMirrorPath, tester.GitMirrorsDir) {
 		t.Errorf("gitMirrorPath = %q, want prefix %q", gitMirrorPath, tester.GitMirrorsDir)
+	}
+}
+
+func TestUpdatingGitMirrorDoesNotRunMirrorHooks(t *testing.T) {
+	t.Parallel()
+
+	if runtime.GOOS == "windows" {
+		t.Skip("hook fixture is a shell script")
+	}
+
+	tester, err := NewExecutorTester(mainCtx)
+	if err != nil {
+		t.Fatalf("NewExecutorTester() error = %v", err)
+	}
+	defer tester.Close()
+
+	if err := tester.EnableGitMirrors(); err != nil {
+		t.Fatalf("EnableGitMirrors() error = %v", err)
+	}
+
+	// Both jobs check for commit metadata.
+	agent := tester.MockAgent(t)
+	agent.Expect("meta-data", "exists", job.CommitMetadataKey).AtLeastOnce().AndExitWith(0)
+
+	// The first job creates the mirror.
+	tester.RunAndCheck(t)
+
+	// Another job or user sharing the mirror plants a hook in it, both in the
+	// default hooks directory and somewhere core.hooksPath points.
+	mirrorDirs, err := filepath.Glob(filepath.Join(tester.GitMirrorsDir, "*", "hooks"))
+	if err != nil || len(mirrorDirs) != 1 {
+		t.Fatalf("filepath.Glob(mirror hooks) = %v, %v; want exactly one mirror", mirrorDirs, err)
+	}
+	mirrorDir := filepath.Dir(mirrorDirs[0])
+	marker := filepath.Join(t.TempDir(), "hook-ran")
+	hook := fmt.Sprintf("#!/bin/sh\necho \"$0\" >> %q\n", marker)
+	redirectedHooks := t.TempDir()
+	for _, dir := range []string{filepath.Join(mirrorDir, "hooks"), redirectedHooks} {
+		if err := os.WriteFile(filepath.Join(dir, "reference-transaction"), []byte(hook), 0o755); err != nil {
+			t.Fatalf("os.WriteFile(reference-transaction) error = %v", err)
+		}
+	}
+	if out, err := exec.Command("git", "--git-dir", mirrorDir, "config", "core.hooksPath", redirectedHooks).CombinedOutput(); err != nil {
+		t.Fatalf("git config core.hooksPath error = %v\nout = %s", err, out)
+	}
+
+	// A new upstream commit makes the next job fetch into the mirror.
+	if _, err := tester.Repo.Execute("commit", "--allow-empty", "-m", "Another commit"); err != nil {
+		t.Fatalf("tester.Repo.Execute(commit) error = %v", err)
+	}
+	commit, err := tester.Repo.RevParse("HEAD")
+	if err != nil {
+		t.Fatalf("tester.Repo.RevParse(HEAD) error = %v", err)
+	}
+
+	// Debug is off because the commit presence check fails with hidden stderr,
+	// which trips a data race in the debug-only stderr logger under -race.
+	tester.RunAndCheck(t, "BUILDKITE_COMMIT="+strings.TrimSpace(commit), "BUILDKITE_AGENT_DEBUG=false")
+
+	if !strings.Contains(tester.Output, "Updating existing repository mirror") {
+		t.Fatalf("tester.Output does not show a mirror update:\n%s", tester.Output)
+	}
+	if ran, err := os.ReadFile(marker); !os.IsNotExist(err) {
+		t.Errorf("mirror hook ran during the mirror update: %s (err = %v)", ran, err)
 	}
 }
 

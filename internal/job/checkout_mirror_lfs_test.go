@@ -46,6 +46,7 @@ func TestCheckoutMirrorLFSCache(t *testing.T) {
 		refSpec           string
 		prRef             string
 		existingMirror    bool
+		sameNamedTag      bool // tag the old main commit with the job branch's name
 		advanceBranch     bool
 		sparseMode        SparseCheckoutMode
 		paths             []string
@@ -65,6 +66,8 @@ func TestCheckoutMirrorLFSCache(t *testing.T) {
 		{name: "workspace conditional LFS config", mode: "reference", conditionalConfig: true},
 		{name: "HEAD fresh mirror", mode: "reference", commitRef: "HEAD"},
 		{name: "HEAD existing mirror", mode: "reference", commitRef: "HEAD", existingMirror: true},
+		{name: "HEAD fresh mirror same-named tag", mode: "reference", commitRef: "HEAD", sameNamedTag: true},
+		{name: "HEAD existing mirror same-named tag", mode: "reference", commitRef: "HEAD", existingMirror: true, sameNamedTag: true},
 		{name: "HEAD custom refspec fresh mirror", mode: "reference", commitRef: "HEAD", refSpec: "+refs/heads/feature:refs/buildkite/job"},
 		{name: "HEAD custom refspec existing mirror", mode: "reference", commitRef: "HEAD", refSpec: "+refs/heads/feature:refs/buildkite/job", existingMirror: true},
 		{name: "HEAD PR fresh mirror", mode: "reference", commitRef: "HEAD", prRef: "head"},
@@ -138,6 +141,10 @@ func TestCheckoutMirrorLFSCache(t *testing.T) {
 			}
 			if test.commitRef == "v1" {
 				runGitForMirrorTest(t, canonical, "tag", "v1", commit)
+			}
+			if test.sameNamedTag {
+				// A bare "feature" resolves to this tag before the branch.
+				runGitForMirrorTest(t, canonical, "tag", "feature", "refs/heads/main")
 			}
 			if test.refSpec != "" {
 				e.RefSpec = test.refSpec

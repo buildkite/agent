@@ -62,6 +62,8 @@ Classify each change using SemVer, applied to what users of the agent can observ
 
 The highest classification of any change wins. One ✨ Added entry makes the whole release a minor. A change being experimental or hidden doesn't make it a patch; it's still new surface area, it's just a "patchier" minor. When a change sits on the boundary, round up to minor. Minor version numbers are cheap, and under-classifying hides new behaviour from people reading version numbers.
 
+Experimental surface has no compatibility promise, so breaking it isn't a major change. Removing or changing something that's explicitly experimental, such as an experiment from `--experiment` or a hidden command or flag whose help text says it's experimental, is a minor change. List it under 🔧 Changed so anyone using it knows to update. Being hidden isn't enough on its own: hidden flags are often deprecated aliases kept so existing configs keep working, and removing one of those is still major.
+
 Don't just ask "minor or patch?". Present a recommendation and your reasoning, then have the user confirm or override it:
 
 * the recommended version, e.g. `4.0.8` → `4.1.0`

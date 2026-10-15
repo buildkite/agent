@@ -176,7 +176,9 @@ func (t *testAgentEndpoint) chunksHandler() http.HandlerFunc {
 			return
 		}
 
+		t.mtx.Lock()
 		t.logChunks[seqNo] = string(uz)
+		t.mtx.Unlock()
 		rw.WriteHeader(http.StatusCreated)
 	}
 }
