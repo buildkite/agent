@@ -217,8 +217,8 @@ func TestGitCredentialsHelperCommand(t *testing.T) {
 				return
 			}
 			const lead = "The Git credential helper could not get repository credentials, so Git authentication will fail. "
-			if len(*reports) != 1 || (*reports)[0].Code != "repository_credentials_failed" || !strings.HasPrefix((*reports)[0].Message, lead+test.wantReason) {
-				t.Fatalf("reports = %+v, want repository_credentials_failed with reason %q", *reports, test.wantReason)
+			if len(*reports) != 1 || (*reports)[0].Code != "buildkite.repository_credentials_failed" || !strings.HasPrefix((*reports)[0].Message, lead+test.wantReason) {
+				t.Fatalf("reports = %+v, want buildkite.repository_credentials_failed with reason %q", *reports, test.wantReason)
 			}
 			if message := (*reports)[0].Message; strings.Contains(message, "pierre-jwt") || strings.HasPrefix(test.wantReason, "The request") != strings.Contains(message, "400 Bad Request") {
 				t.Errorf("message = %q, want only an HTTP failure's response and never a token", message)

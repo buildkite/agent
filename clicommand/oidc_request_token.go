@@ -180,7 +180,7 @@ var OIDCRequestTokenCommand = &cli.Command{
 			if oidcTokenRefused(err) {
 				fix = "Buildkite refused the request, so check the audience, claims, and lifetime passed to `buildkite-agent oidc request-token`."
 			}
-			captureAgentError(ctx, l, "oidc_token_request_failed",
+			captureAgentError(ctx, l, "buildkite.oidc_token_request_failed",
 				jobapi.CapturedErrorMessage(err.Error()+". "+fix, "Could not obtain an OIDC token. "+fix))
 			if oidcTokenRefused(err) {
 				return NewExitError(OIDCTokenRefusedExitStatus, err)

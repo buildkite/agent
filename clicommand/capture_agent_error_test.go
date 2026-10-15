@@ -37,14 +37,14 @@ func TestCaptureAgentErrorOptIn(t *testing.T) {
 			t.Setenv("BUILDKITE_CAPTURE_AGENT_ERRORS", test.optIn)
 			t.Setenv("BUILDKITE_AGENT_JOB_API_CAPTURE_ERROR", test.capability)
 
-			captureAgentError(t.Context(), logger.Discard, "artifact_upload_failed", "Failed to upload artifacts.")
+			captureAgentError(t.Context(), logger.Discard, "buildkite.artifact_upload_failed", "Failed to upload artifacts.")
 
 			if got := len(*reports) == 1; got != test.want {
 				t.Fatalf("captured = %t, want %t", got, test.want)
 			}
 			if test.want {
 				report := (*reports)[0]
-				if report.Code != "artifact_upload_failed" || report.Message != "Failed to upload artifacts." {
+				if report.Code != "buildkite.artifact_upload_failed" || report.Message != "Failed to upload artifacts." {
 					t.Errorf("report = %+v", report)
 				}
 			}
@@ -57,7 +57,7 @@ func TestCaptureAgentErrorSkipsCancelledCommands(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 
-	captureAgentError(ctx, logger.Discard, "artifact_upload_failed", "Failed to upload artifacts.")
+	captureAgentError(ctx, logger.Discard, "buildkite.artifact_upload_failed", "Failed to upload artifacts.")
 
 	if len(*reports) != 0 {
 		t.Fatalf("reports = %d, want none after cancellation", len(*reports))
