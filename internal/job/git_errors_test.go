@@ -125,34 +125,34 @@ func TestGitErrorCapture(t *testing.T) {
 		operation, diagnostic, code string
 		exit, errorType             int
 	}{
-		{"fetch", "fatal: couldn't find remote ref secret-ref", "git_ref_not_found", 128, gitErrorFetchBadReference},
-		{"fetch", "fatal: Couldn't find remote ref secret-ref", "git_ref_not_found", 128, gitErrorFetchBadReference},
-		{"fetch", "fatal: remote error: upload-pack: not our ref secret-ref", "git_ref_not_on_remote", 128, gitErrorFetchRefNotOnRemote},
-		{"fetch", "error: Server does not allow request for unadvertised object secret-ref", "git_ref_not_on_remote", 128, gitErrorFetchRefNotOnRemote},
-		{"fetch", "fatal: bad object secret-ref", "git_bad_object", 128, gitErrorFetchBadObject},
-		{"checkout", "fatal: reference is not a tree: secret-ref", "git_reference_not_a_tree", 128, gitErrorCheckoutReferenceIsNotATree},
-		{"clone", "fatal: unable to access secret-url: Operation too slow", "git_clone_timeout", 128, gitErrorCloneTimeout},
-		{"checkout", "error: secret-path", "git_checkout_failed", 1, gitErrorCheckout},
-		{"checkout", "fatal: secret-path", "git_checkout_unclassified", 128, gitErrorCheckoutRetryClean},
-		{"clone", "fatal: authentication failed secret-token", "git_authentication_failed", 128, gitErrorClone},
-		{"clone", "fatal: unable to access 'secret-url': Could not resolve host: secret-host", "git_network_failed", 128, gitErrorClone},
-		{"fetch", "fatal: Authentication failed for 'secret-url'", "git_authentication_failed", 128, gitErrorFetchRetryClean},
-		{"fetch", "secret-user@secret-host: Permission denied (publickey).", "git_authentication_failed", 128, gitErrorFetchRetryClean},
-		{"fetch", "secret-user@secret-host: Permission denied (password,keyboard-interactive).", "git_authentication_failed", 128, gitErrorFetchRetryClean},
-		{"fetch", "fatal: unable to access 'secret-url': Could not resolve host: secret-host", "git_network_failed", 128, gitErrorFetchRetryClean},
-		{"fetch", "fatal: unable to access 'secret-url': Could not resolve proxy: secret-proxy", "git_network_failed", 128, gitErrorFetchRetryClean},
-		{"fetch", "ssh: Could not resolve hostname secret-host: Name or service not known", "git_network_failed", 128, gitErrorFetchRetryClean},
-		{"fetch", "fatal: unable to access 'secret-url': Failed to connect to secret-host port 443 after 100 ms: Couldn't connect to server", "git_network_failed", 128, gitErrorFetchRetryClean},
-		{"fetch", "ssh: connect to host secret-host port 22: Connection refused", "git_network_failed", 128, gitErrorFetchRetryClean},
-		{"fetch", "error: cannot open 'secret-path': Permission denied", "git_fetch_unclassified", 128, gitErrorFetchRetryClean},
-		{"fetch", "error: secret-url", "git_fetch_failed", 1, gitErrorFetch},
-		{"fetch", "fatal: secret-url", "git_fetch_unclassified", 128, gitErrorFetchRetryClean},
-		{"fetch", "fatal: unable to access 'secret-url': The requested URL returned error: 500", "git_fetch_unclassified", 128, gitErrorFetchRetryClean},
-		{"clean", "warning: secret-path", "git_clean_failed", 1, gitErrorClean},
-		{"submodules", "warning: secret-path", "git_submodule_clean_failed", 1, gitErrorCleanSubmodules},
-		{"repack", "fatal: secret-path", "git_repack_failed", 1, gitErrorRepack},
-		{"lfs", "error: secret-url", "git_lfs_failed", 2, gitErrorLFS},
-		{"lfs-checkout", "error: unable to write secret-path", "git_lfs_failed", 2, gitErrorLFS},
+		{"fetch", "fatal: couldn't find remote ref secret-ref", "buildkite.git_ref_not_found", 128, gitErrorFetchBadReference},
+		{"fetch", "fatal: Couldn't find remote ref secret-ref", "buildkite.git_ref_not_found", 128, gitErrorFetchBadReference},
+		{"fetch", "fatal: remote error: upload-pack: not our ref secret-ref", "buildkite.git_commit_not_found", 128, gitErrorFetchRefNotOnRemote},
+		{"fetch", "error: Server does not allow request for unadvertised object secret-ref", "buildkite.git_commit_not_found", 128, gitErrorFetchRefNotOnRemote},
+		{"fetch", "fatal: bad object secret-ref", "buildkite.git_bad_object", 128, gitErrorFetchBadObject},
+		{"checkout", "fatal: reference is not a tree: secret-ref", "buildkite.git_ref_not_a_tree", 128, gitErrorCheckoutReferenceIsNotATree},
+		{"clone", "fatal: unable to access secret-url: Operation too slow", "buildkite.git_clone_timed_out", 128, gitErrorCloneTimeout},
+		{"checkout", "error: secret-path", "buildkite.git_checkout_failed", 1, gitErrorCheckout},
+		{"checkout", "fatal: secret-path", "buildkite.git_checkout_failed", 128, gitErrorCheckoutRetryClean},
+		{"clone", "fatal: authentication failed secret-token", "buildkite.git_authentication_failed", 128, gitErrorClone},
+		{"clone", "fatal: unable to access 'secret-url': Could not resolve host: secret-host", "buildkite.git_network_failed", 128, gitErrorClone},
+		{"fetch", "fatal: Authentication failed for 'secret-url'", "buildkite.git_authentication_failed", 128, gitErrorFetchRetryClean},
+		{"fetch", "secret-user@secret-host: Permission denied (publickey).", "buildkite.git_authentication_failed", 128, gitErrorFetchRetryClean},
+		{"fetch", "secret-user@secret-host: Permission denied (password,keyboard-interactive).", "buildkite.git_authentication_failed", 128, gitErrorFetchRetryClean},
+		{"fetch", "fatal: unable to access 'secret-url': Could not resolve host: secret-host", "buildkite.git_network_failed", 128, gitErrorFetchRetryClean},
+		{"fetch", "fatal: unable to access 'secret-url': Could not resolve proxy: secret-proxy", "buildkite.git_network_failed", 128, gitErrorFetchRetryClean},
+		{"fetch", "ssh: Could not resolve hostname secret-host: Name or service not known", "buildkite.git_network_failed", 128, gitErrorFetchRetryClean},
+		{"fetch", "fatal: unable to access 'secret-url': Failed to connect to secret-host port 443 after 100 ms: Couldn't connect to server", "buildkite.git_network_failed", 128, gitErrorFetchRetryClean},
+		{"fetch", "ssh: connect to host secret-host port 22: Connection refused", "buildkite.git_network_failed", 128, gitErrorFetchRetryClean},
+		{"fetch", "error: cannot open 'secret-path': Permission denied", "buildkite.git_fetch_failed", 128, gitErrorFetchRetryClean},
+		{"fetch", "error: secret-url", "buildkite.git_fetch_failed", 1, gitErrorFetch},
+		{"fetch", "fatal: secret-url", "buildkite.git_fetch_failed", 128, gitErrorFetchRetryClean},
+		{"fetch", "fatal: unable to access 'secret-url': The requested URL returned error: 500", "buildkite.git_fetch_failed", 128, gitErrorFetchRetryClean},
+		{"clean", "warning: secret-path", "buildkite.git_clean_failed", 1, gitErrorClean},
+		{"submodules", "warning: secret-path", "buildkite.git_submodule_clean_failed", 1, gitErrorCleanSubmodules},
+		{"repack", "fatal: secret-path", "buildkite.git_repack_failed", 1, gitErrorRepack},
+		{"lfs", "error: secret-url", "buildkite.git_lfs_failed", 2, gitErrorLFS},
+		{"lfs-checkout", "error: unable to write secret-path", "buildkite.git_lfs_failed", 2, gitErrorLFS},
 		{"fetch", "Fetched successfully", "", 0, -1},
 		{"fetch", "fatal: bad object secret-ref", "", 0, -1},
 		{"fetch", "fatal: Authentication failed for 'secret-url'", "", 0, -1},
@@ -238,8 +238,8 @@ func TestGitErrorCaptureRetries(t *testing.T) {
 		operation, code                  string
 		failUntil, attempts, reportCount int
 	}{
-		{"fetch", "git_ref_not_found", 2, 3, 2},
-		{"lfs", "git_lfs_failed", 5, 5, 1},
+		{"fetch", "buildkite.git_ref_not_found", 2, 3, 2},
+		{"lfs", "buildkite.git_lfs_failed", 5, 5, 1},
 	} {
 		t.Run(tc.operation, func(t *testing.T) {
 			t.Parallel()
@@ -354,10 +354,10 @@ esac
 		t.Fatalf("reports = %d, want 4", len(reports))
 	}
 	for _, want := range []struct{ code, message string }{
-		{"git_ref_not_found", "fatal: couldn't find remote ref secret-ref\n"},
-		{"git_authentication_failed", "fatal: Authentication failed for 'secret-url'\n"},
-		{"git_network_failed", "fatal: unable to access 'secret-url': Could not resolve host: secret-host\n"},
-		{"git_fetch_unclassified", "fatal: unable to access 'secret-url': The requested URL returned error: 500\n"},
+		{"buildkite.git_ref_not_found", "fatal: couldn't find remote ref secret-ref\n"},
+		{"buildkite.git_authentication_failed", "fatal: Authentication failed for 'secret-url'\n"},
+		{"buildkite.git_network_failed", "fatal: unable to access 'secret-url': Could not resolve host: secret-host\n"},
+		{"buildkite.git_fetch_failed", "fatal: unable to access 'secret-url': The requested URL returned error: 500\n"},
 	} {
 		if report := <-reports; report.Code != want.code || !strings.HasSuffix(report.Message, "\nLast lines of Git output:\n"+want.message) {
 			t.Fatalf("report = %#v, want %q with message %q", report, want.code, want.message)
@@ -400,7 +400,7 @@ func TestGitHTTPAuthenticationErrorCapture(t *testing.T) {
 			if len(reports) != 1 {
 				t.Fatalf("reports = %d, want 1", len(reports))
 			}
-			if report := <-reports; report.Code != "git_authentication_failed" || !strings.Contains(report.Message, "fatal: Authentication failed for") || strings.Contains(report.Message, "secret-") {
+			if report := <-reports; report.Code != "buildkite.git_authentication_failed" || !strings.Contains(report.Message, "fatal: Authentication failed for") || strings.Contains(report.Message, "secret-") {
 				t.Fatalf("unexpected authentication report: %#v", report)
 			}
 		})
@@ -424,7 +424,7 @@ func TestCheckoutErrorCaptureFromExecutor(t *testing.T) {
 	if len(reports) != 1 {
 		t.Fatalf("reports = %d, want 1", len(reports))
 	}
-	if r := <-reports; r.Code != "git_checkout_phase_failed" || r.Message != "The default checkout phase failed." {
+	if r := <-reports; r.Code != "buildkite.checkout_phase_failed" || r.Message != "The default checkout phase failed." {
 		t.Fatalf("unexpected checkout report: %#v", r)
 	}
 }
@@ -467,7 +467,7 @@ exit 0
 			if len(reports) != 1 {
 				t.Fatalf("reports = %d, want 1", len(reports))
 			}
-			if report := <-reports; report.Code != "git_checkout_phase_failed" || report.Message != "The default checkout phase failed." {
+			if report := <-reports; report.Code != "buildkite.checkout_phase_failed" || report.Message != "The default checkout phase failed." {
 				t.Fatalf("unexpected submodule report: %#v", report)
 			}
 		})
@@ -485,14 +485,14 @@ func TestCheckoutPreflightErrorCapture(t *testing.T) {
 			name:       "missing git-lfs",
 			lfsEnabled: true,
 			wantError:  "BUILDKITE_GIT_LFS_ENABLED=true but `git lfs version` failed; git-lfs may not be installed or not resolvable by git: exit status 1",
-			code:       "git_lfs_preflight_failed",
+			code:       "buildkite.git_lfs_preflight_failed",
 			message:    "Git LFS version check failed.",
 		},
 		{
 			name:       "invalid sparse checkout mode",
 			sparseMode: "secret-mode",
 			wantError:  `invalid sparse checkout mode "secret-mode", must be one of [cone no-cone]`,
-			code:       "git_invalid_sparse_checkout_mode",
+			code:       "buildkite.git_sparse_checkout_mode_invalid",
 			message:    "Git checkout received an invalid sparse checkout mode.",
 		},
 	} {
@@ -530,13 +530,13 @@ func TestCheckoutErrorCapture(t *testing.T) {
 		name, code string
 		err        error
 	}{
-		{"invalid ref", "git_invalid_ref", fmt.Errorf("secret-ref: %w", errInvalidRef)},
-		{"verification", "git_commit_verification_failed", fmt.Errorf("secret-ref: %w", ErrCommitVerificationFailed)},
-		{"timeout", "git_checkout_timeout", errors.Join(errCheckoutAttemptTimedOut, &gitError{error: &shell.ExitError{Code: -1}, Type: gitErrorClone})},
-		{"setup", "git_checkout_phase_failed", errors.New("secret-path")},
-		{"merge head validation", "git_checkout_phase_failed", &gitError{error: errors.New("unexpected merge head secret-ref"), Type: gitErrorFetch}},
-		{"mirror state repair", "git_checkout_phase_failed", &gitError{error: &shell.ExitError{Code: 128}, Type: gitErrorFetchRetryClean}},
-		{"lock timeout", "git_checkout_lock_timeout", fmt.Errorf("secret-path: %w", ErrTimedOutAcquiringLock{Name: "secret-lock", Err: context.DeadlineExceeded})},
+		{"invalid ref", "buildkite.git_ref_invalid", fmt.Errorf("secret-ref: %w", errInvalidRef)},
+		{"verification", "buildkite.git_commit_verification_failed", fmt.Errorf("secret-ref: %w", ErrCommitVerificationFailed)},
+		{"timeout", "buildkite.git_checkout_timed_out", errors.Join(errCheckoutAttemptTimedOut, &gitError{error: &shell.ExitError{Code: -1}, Type: gitErrorClone})},
+		{"setup", "buildkite.checkout_phase_failed", errors.New("secret-path")},
+		{"merge head validation", "buildkite.checkout_phase_failed", &gitError{error: errors.New("unexpected merge head secret-ref"), Type: gitErrorFetch}},
+		{"mirror state repair", "buildkite.checkout_phase_failed", &gitError{error: &shell.ExitError{Code: 128}, Type: gitErrorFetchRetryClean}},
+		{"lock timeout", "buildkite.git_checkout_lock_timed_out", fmt.Errorf("secret-path: %w", ErrTimedOutAcquiringLock{Name: "secret-lock", Err: context.DeadlineExceeded})},
 		{"cancelled preflight", "", errors.Join(errGitLFSPreflight, context.Canceled)},
 		{"signalled preflight", "", errors.Join(errGitLFSPreflight, &shell.ExitError{Code: -1})},
 		{"cancelled", "", &gitError{error: context.Canceled, Type: gitErrorFetch}},
@@ -569,7 +569,7 @@ func TestCheckoutErrorCapture(t *testing.T) {
 			if r.Code != tc.code || strings.Contains(r.Message, "secret-") {
 				t.Fatalf("unexpected report: %#v", r)
 			}
-			if tc.code == "git_checkout_phase_failed" && r.Message != "The default checkout phase failed." {
+			if tc.code == "buildkite.checkout_phase_failed" && r.Message != "The default checkout phase failed." {
 				t.Fatalf("message = %q, want neutral checkout summary", r.Message)
 			}
 		})
@@ -647,8 +647,8 @@ func TestCheckoutErrorCaptureDeliveryDoesNotCauseTimeout(t *testing.T) {
 	if len(reports) != 1 {
 		t.Fatalf("reports = %d, want one missing-ref report", len(reports))
 	}
-	if report := <-reports; report.Code != "git_ref_not_found" {
-		t.Fatalf("report code = %q, want git_ref_not_found", report.Code)
+	if report := <-reports; report.Code != "buildkite.git_ref_not_found" {
+		t.Fatalf("report code = %q, want buildkite.git_ref_not_found", report.Code)
 	}
 }
 
@@ -675,16 +675,16 @@ func TestCheckoutErrorCaptureGenuineTimeout(t *testing.T) {
 	if len(reports) != 1 {
 		t.Fatalf("reports = %d, want one timeout report", len(reports))
 	}
-	if report := <-reports; report.Code != "git_checkout_timeout" {
-		t.Fatalf("report code = %q, want git_checkout_timeout", report.Code)
+	if report := <-reports; report.Code != "buildkite.git_checkout_timed_out" {
+		t.Fatalf("report code = %q, want buildkite.git_checkout_timed_out", report.Code)
 	}
 }
 
 func TestGitErrorOutputCapture(t *testing.T) {
 	t.Parallel()
-	const fallback = "Git checkout failed with an unclassified error."
+	const fallback = "Git checkout exited with a fatal error. The agent cleans the checkout after this error, so any retry starts from a fresh clone."
 	const heading = "\n\nLast lines of Git output:\n"
-	// Each numbered line is 9 characters, so 91 of them fit after the summary.
+	// Each numbered line is 9 characters, so 82 of them fit after the summary.
 	var numbered []string
 	for i := range 200 {
 		numbered = append(numbered, fmt.Sprintf("line %03d\n", i))
@@ -695,7 +695,7 @@ func TestGitErrorOutputCapture(t *testing.T) {
 	}{
 		{"empty", fallback, nil},
 		{"whitespace", fallback, []string{" \n\t"}},
-		{"keeps the last lines that fit", fallback + heading + strings.Join(numbered[109:], ""), numbered},
+		{"keeps the last lines that fit", fallback + heading + strings.Join(numbered[118:], ""), numbered},
 		{"single line too long for the report", fallback, []string{"fatal: " + strings.Repeat("x", maxGitErrorMessage) + "\n"}},
 		{"long earlier line is dropped", fallback + heading + "fatal: later output", []string{strings.Repeat("x", maxGitErrorMessage) + "\n", "fatal: later output"}},
 		{"output beyond the buffer", fallback + "\n\n" + gitOutputOmitted, []string{strings.Repeat("x", maxGitErrorOutput), "secret", "-suffix\n", "fatal: later output\n"}},
@@ -722,8 +722,8 @@ func TestGitErrorOutputCapture(t *testing.T) {
 			if len(reports) != 1 {
 				t.Fatalf("reports = %d, want 1", len(reports))
 			}
-			if report := <-reports; report.Code != "git_checkout_unclassified" || report.Message != tc.want {
-				t.Fatalf("report = %#v, want unclassified code and message %q", report, tc.want)
+			if report := <-reports; report.Code != "buildkite.git_checkout_failed" || report.Message != tc.want {
+				t.Fatalf("report = %#v, want git_checkout_failed and message %q", report, tc.want)
 			}
 		})
 	}
@@ -809,8 +809,8 @@ func TestGitErrorCaptureThroughCheckoutPhase(t *testing.T) {
 		t.Fatalf("reports = %d, want 1", len(reports))
 	}
 	report := <-reports
-	if want := "remote: [REDACTED]\nfatal: unable to read from remote\n"; report.Code != "git_clean_failed" || strings.Contains(report.Message, "PRIVATE_CREDENTIAL_SUFFIX") || !strings.HasSuffix(report.Message, want) {
-		t.Fatalf("report = %#v, want git_clean_failed with the secret redacted and suffix %q", report, want)
+	if want := "remote: [REDACTED]\nfatal: unable to read from remote\n"; report.Code != "buildkite.git_clean_failed" || strings.Contains(report.Message, "PRIVATE_CREDENTIAL_SUFFIX") || !strings.HasSuffix(report.Message, want) {
+		t.Fatalf("report = %#v, want buildkite.git_clean_failed with the secret redacted and suffix %q", report, want)
 	}
 }
 
@@ -819,8 +819,8 @@ func TestCheckoutPhaseReportsInvalidCheckoutSettings(t *testing.T) {
 	for _, tc := range []struct {
 		name, sparse, baseBranch, code string
 	}{
-		{"sparse checkout mode", "sometimes", "", "git_invalid_sparse_checkout_mode"},
-		{"base branch fetch mode", "", "sometimes", "git_invalid_fetch_base_branch_mode"},
+		{"sparse checkout mode", "sometimes", "", "buildkite.git_sparse_checkout_mode_invalid"},
+		{"base branch fetch mode", "", "sometimes", "buildkite.git_fetch_base_branch_mode_invalid"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
@@ -939,8 +939,8 @@ func TestGitErrorCaptureIdentifiesTheCheckout(t *testing.T) {
 				t.Fatalf("reports = %d, want 1", len(reports))
 			}
 			report := <-reports
-			if report.Code != "git_ref_not_found" || report.Message != test.want {
-				t.Errorf("report = %q %q, want git_ref_not_found %q", report.Code, report.Message, test.want)
+			if report.Code != "buildkite.git_ref_not_found" || report.Message != test.want {
+				t.Errorf("report = %q %q, want buildkite.git_ref_not_found %q", report.Code, report.Message, test.want)
 			}
 		})
 	}

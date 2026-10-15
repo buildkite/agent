@@ -231,7 +231,7 @@ func TestSecretGetFailureIsCaptured(t *testing.T) {
 	want := "`buildkite-agent secret get` could not fetch these secrets:\n" +
 		"- deploy_key: 404 Not Found: secret not found\n" +
 		"Check that each secret exists in the job's cluster and that this pipeline is allowed to use it."
-	if report.Code != "secrets_fetch_failed" || report.Message != want {
-		t.Errorf("report = %q %q, want secrets_fetch_failed %q", report.Code, report.Message, want)
+	if report.Code != "buildkite.secrets_fetch_failed" || report.Message != want {
+		t.Errorf("report = %q %q, want buildkite.secrets_fetch_failed %q", report.Code, report.Message, want)
 	}
 }

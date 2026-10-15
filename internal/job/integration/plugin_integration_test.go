@@ -1002,13 +1002,13 @@ func TestPluginFailuresAreCaptured(t *testing.T) {
 			env: func(t *testing.T) []string {
 				return []string{`BUILDKITE_PLUGINS=[{"docker#v5.0.0":{}}]`, "BUILDKITE_PLUGINS_ENABLED=false"}
 			},
-			code:    "plugins_disabled",
+			code:    "buildkite.plugins_rejected",
 			message: "The step uses plugins, but this agent was started with `--no-plugins`, which disables them. Remove the plugins from the step, or run it on agents that allow plugins, such as another queue.",
 		},
 		{
 			name:    "invalid definition",
 			env:     func(t *testing.T) []string { return []string{`BUILDKITE_PLUGINS={"not":"a list"}`} },
-			code:    "plugin_definition_invalid",
+			code:    "buildkite.plugin_definition_invalid",
 			message: invalidPlugins,
 		},
 		{
@@ -1016,7 +1016,7 @@ func TestPluginFailuresAreCaptured(t *testing.T) {
 			env: func(t *testing.T) []string {
 				return []string{`BUILDKITE_PLUGINS=[{"https://user:my password@example.com/org/plugin.git#v1":{}}]`}
 			},
-			code:     "plugin_definition_invalid",
+			code:     "buildkite.plugin_definition_invalid",
 			message:  invalidPlugins,
 			excludes: "my password",
 		},
@@ -1025,7 +1025,7 @@ func TestPluginFailuresAreCaptured(t *testing.T) {
 			env: func(t *testing.T) []string {
 				return []string{`BUILDKITE_PLUGINS=[{"https://user:my password@example.com/org/plugin.git#v1":"oops"}]`}
 			},
-			code:     "plugin_definition_invalid",
+			code:     "buildkite.plugin_definition_invalid",
 			message:  invalidPlugins,
 			excludes: "my password",
 		},
@@ -1034,7 +1034,7 @@ func TestPluginFailuresAreCaptured(t *testing.T) {
 			env: func(t *testing.T) []string {
 				return []string{`BUILDKITE_PLUGINS=[["https://user:my password@example.com/org/plugin.git#v1"]]`}
 			},
-			code:     "plugin_definition_invalid",
+			code:     "buildkite.plugin_definition_invalid",
 			message:  invalidPlugins,
 			excludes: "my password",
 		},
@@ -1044,7 +1044,7 @@ func TestPluginFailuresAreCaptured(t *testing.T) {
 			env: func(t *testing.T) []string {
 				return []string{`BUILDKITE_PLUGINS=[{"https://x-access-token:ab12XYsecret/cd34@github.com/org/plugin.git#v1":{}}]`}
 			},
-			code:     "plugin_definition_invalid",
+			code:     "buildkite.plugin_definition_invalid",
 			message:  invalidPlugins,
 			excludes: "ab12XYsecret",
 		},
@@ -1053,7 +1053,7 @@ func TestPluginFailuresAreCaptured(t *testing.T) {
 			env: func(t *testing.T) []string {
 				return []string{`BUILDKITE_PLUGINS=[{"file:///does-not-exist/missing-plugin#v1.2.3":{}}]`}
 			},
-			code:     "plugin_checkout_failed",
+			code:     "buildkite.plugin_checkout_failed",
 			message:  "Git could not check out plugin missing-plugin from /does-not-exist/missing-plugin at version \"v1.2.3\". Check that the repository exists, this agent can access it, and the version is a tag, branch, or commit in it.\n\nLast lines of output:\n",
 			contains: "fatal: repository '/does-not-exist/missing-plugin' does not exist",
 		},
@@ -1062,7 +1062,7 @@ func TestPluginFailuresAreCaptured(t *testing.T) {
 			env: func(t *testing.T) []string {
 				return pluginWithDefinition(t, "name: test\nconfiguration:\n  properties:\n    settings:\n      type: integer\n")
 			},
-			code:     "plugin_configuration_invalid",
+			code:     "buildkite.plugin_configuration_invalid",
 			contains: `does not match the plugin's schema: /settings: type should be integer, got string. Fix the configuration in the step.`,
 			// The schema library cuts values short, so a secret could escape
 			// redaction.
@@ -1074,7 +1074,7 @@ func TestPluginFailuresAreCaptured(t *testing.T) {
 			env: func(t *testing.T) []string {
 				return pluginWithDefinition(t, "name: test\nconfiguration:\n  properties:\n    settings:\n      type: string\n      maxLength: 2\n")
 			},
-			code:     "plugin_configuration_invalid",
+			code:     "buildkite.plugin_configuration_invalid",
 			contains: `does not match the plugin's schema: /settings: max length of 2 characters exceeded. Fix the configuration in the step.`,
 			excludes: "blah",
 		},
@@ -1083,7 +1083,7 @@ func TestPluginFailuresAreCaptured(t *testing.T) {
 			env: func(t *testing.T) []string {
 				return pluginWithDefinition(t, "name: test\nrequirements:\n  - definitely-not-a-command\n")
 			},
-			code:     "plugin_requirement_missing",
+			code:     "buildkite.plugin_requirement_not_found",
 			contains: `needs commands that are not in this agent's PATH: "definitely-not-a-command". Install them on the agent`,
 		},
 		{
@@ -1091,7 +1091,7 @@ func TestPluginFailuresAreCaptured(t *testing.T) {
 			env: func(t *testing.T) []string {
 				return []string{`BUILDKITE_PLUGINS=[{"./.buildkite/plugins/missing":{}}]`}
 			},
-			code:    "vendored_plugin_invalid",
+			code:    "buildkite.vendored_plugin_invalid",
 			message: "The step uses vendored plugin missing, but ./.buildkite/plugins/missing is not a directory in the checked-out repository. Commit the plugin at that path, or fix the path in the step.",
 		},
 		{
@@ -1103,7 +1103,7 @@ func TestPluginFailuresAreCaptured(t *testing.T) {
 				}
 				return []string{"BUILDKITE_PLUGINS=" + json}
 			},
-			code:     "hook_failed",
+			code:     "buildkite.hook_failed",
 			contains: "/hooks/environment exited with status 5. It is part of the plugin, not the repository.\n\nLast lines of output:\nregistry login failed",
 		},
 	} {
@@ -1154,7 +1154,7 @@ func TestFailingPluginCommandHookIsNamed(t *testing.T) {
 	if err := tester.Run(t, append(agentAPI.env(), "BUILDKITE_PLUGINS="+string(plugins))...); err == nil {
 		t.Fatalf("tester.Run() = nil, want command hook failure")
 	}
-	report := agentAPI.report(t, "command_failed")
+	report := agentAPI.report(t, "buildkite.command_hook_failed")
 	name := filepath.Base(failing.Path)
 	if !strings.Contains(report.Message, name+" plugin's command hook") || strings.Contains(report.Message, filepath.Base(passing.Path)) || !strings.HasSuffix(report.Message, "second plugin failed") {
 		t.Errorf("message = %q, want it to name plugin %s and show its output", report.Message, name)

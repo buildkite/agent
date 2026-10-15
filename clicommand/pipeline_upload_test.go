@@ -1134,8 +1134,8 @@ func TestPipelineUploadFailuresAreCaptured(t *testing.T) {
 			if test.fallback {
 				want = "`buildkite-agent pipeline upload` failed while " + test.doing + ". "
 			}
-			if report.Code != "pipeline_upload_failed" || !strings.HasPrefix(report.Message, want) {
-				t.Errorf("report = %q %q, want pipeline_upload_failed starting %q", report.Code, report.Message, want)
+			if report.Code != "buildkite.pipeline_upload_failed" || !strings.HasPrefix(report.Message, want) {
+				t.Errorf("report = %q %q, want buildkite.pipeline_upload_failed starting %q", report.Code, report.Message, want)
 			}
 			if !strings.Contains(report.Message, test.message) || strings.Contains(report.Message, "a-very-secret-value") || (test.excludes != "" && strings.Contains(report.Message, test.excludes)) {
 				t.Errorf("message = %q, want it to contain %q and no secret value", report.Message, test.message)

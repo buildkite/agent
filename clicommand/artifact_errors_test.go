@@ -41,14 +41,14 @@ func TestArtifactFailuresAreCaptured(t *testing.T) {
 			name:    "upload",
 			command: ArtifactUploadCommand,
 			args:    []string{"upload", "--job", "job-id", "report.txt"},
-			code:    "artifact_upload_failed",
+			code:    "buildkite.artifact_upload_failed",
 			message: `Failed to upload artifacts matching "report.txt" to Buildkite: POST ` + agentAPI.URL + `/jobs/job-id/artifacts: 403 Forbidden: denied https://bucket.example/a?[REDACTED]`,
 		},
 		{
 			name:    "download with no matches",
 			command: ArtifactDownloadCommand,
 			args:    []string{"download", "--build", "build-id", "missing/*.txt", dir},
-			code:    "artifact_download_failed",
+			code:    "buildkite.artifact_not_found",
 			message: `No artifacts uploaded to build build-id matched "missing/*.txt". Check that the pattern matches the uploaded paths, and that the step uploading them finishes before this one starts, for example by adding depends_on.`,
 		},
 	} {

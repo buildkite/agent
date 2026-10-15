@@ -180,7 +180,7 @@ var ArtifactUploadCommand = &cli.Command{
 			summary := fmt.Sprintf("Failed to upload artifacts matching %q to %s", cfg.UploadPaths, destination)
 			message := jobapi.CapturedErrorMessage(summary+": "+uploadErrorText(err),
 				jobapi.CapturedErrorMessage(summary+".", "Failed to upload artifacts."))
-			captureAgentError(ctx, l, "artifact_upload_failed", message)
+			captureAgentError(ctx, l, "buildkite.artifact_upload_failed", message)
 			return fmt.Errorf("failed to upload artifacts: %w", err)
 		}
 

@@ -125,12 +125,14 @@ var ArtifactDownloadCommand = &cli.Command{
 			summary := fmt.Sprintf("Failed to download artifacts matching %q from %s", cfg.Query, where)
 			detail := summary + ": " + storageErrorText(err)
 			fallback := jobapi.CapturedErrorMessage(summary+".", "Failed to download artifacts.")
+			code := "buildkite.artifact_download_failed"
 			if errors.Is(err, artifact.ErrNoArtifactsFound) {
+				code = "buildkite.artifact_not_found"
 				fix := "Check that the pattern matches the uploaded paths, and that the step uploading them finishes before this one starts, for example by adding depends_on."
 				detail = fmt.Sprintf("No artifacts uploaded to %s matched %q. %s", where, cfg.Query, fix)
 				fallback = "No uploaded artifacts matched the download pattern. " + fix
 			}
-			captureAgentError(ctx, l, "artifact_download_failed", jobapi.CapturedErrorMessage(detail, fallback))
+			captureAgentError(ctx, l, code, jobapi.CapturedErrorMessage(detail, fallback))
 			return fmt.Errorf("failed to download artifacts: %w", err)
 		}
 

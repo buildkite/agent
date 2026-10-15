@@ -195,8 +195,8 @@ func TestPreBootstrapHookRefusesJob(t *testing.T) {
 	}
 
 	captured := e.capturedErrorsFor(t, jobID)
-	if len(captured) != 1 || captured[0].Code != "job_refused" || !strings.HasPrefix(captured[0].Message, "This agent's pre-bootstrap hook refused the job.") {
-		t.Errorf("captured errors = %+v, want job_refused by the pre-bootstrap hook", captured)
+	if len(captured) != 1 || captured[0].Code != "buildkite.job_rejected" || !strings.HasPrefix(captured[0].Message, "This agent's pre-bootstrap hook refused the job.") {
+		t.Errorf("captured errors = %+v, want buildkite.job_rejected by the pre-bootstrap hook", captured)
 	}
 }
 

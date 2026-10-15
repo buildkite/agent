@@ -153,7 +153,7 @@ func handleAuthError(ctx context.Context, c *cli.Command, l logger.Logger, reaso
 	// other error text can echo credential input or a rejected token.
 	// Only a reason that includes Buildkite's response can be too long.
 	const lead = "The Git credential helper could not get repository credentials, so Git authentication will fail. "
-	captureAgentError(ctx, l, "repository_credentials_failed",
+	captureAgentError(ctx, l, "buildkite.repository_credentials_failed",
 		jobapi.CapturedErrorMessage(lead+reason, lead+"The request to Buildkite failed."))
 	_, _ = fmt.Fprintln(c.Root().Writer, "username=fail")
 	_, _ = fmt.Fprintln(c.Root().Writer, "password=fail")

@@ -101,7 +101,7 @@ func TestCacheSaveForce(t *testing.T) {
 			var wantReports []jobapi.CapturedError
 			if test.denied {
 				wantReports = []jobapi.CapturedError{{
-					Code:    "cache_save_failed",
+					Code:    "buildkite.cache_save_failed",
 					Message: `Failed to save cache "rubocop" to registry "test": failed to save cache "rubocop": failed to create cache entry: failed to save: 403 Forbidden`,
 				}}
 			}

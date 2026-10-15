@@ -238,8 +238,8 @@ func TestOIDCRequestTokenFailureIsCaptured(t *testing.T) {
 	}
 	report := (*reports)[0]
 	for _, want := range []string{"for audience sts.example.com", "403 Forbidden: audience not allowed", "Buildkite refused the request"} {
-		if report.Code != "oidc_token_request_failed" || !strings.Contains(report.Message, want) {
-			t.Errorf("report = %q %q, want oidc_token_request_failed containing %q", report.Code, report.Message, want)
+		if report.Code != "buildkite.oidc_token_request_failed" || !strings.Contains(report.Message, want) {
+			t.Errorf("report = %q %q, want buildkite.oidc_token_request_failed containing %q", report.Code, report.Message, want)
 		}
 	}
 }

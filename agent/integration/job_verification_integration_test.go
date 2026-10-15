@@ -896,8 +896,8 @@ func TestJobVerificationFailuresAreCaptured(t *testing.T) {
 				}
 				return
 			}
-			if len(captured) != 1 || captured[0].Code != "job_signature_rejected" || !strings.Contains(captured[0].Message, tc.wantReason) {
-				t.Errorf("captured errors = %+v, want job_signature_rejected saying %q", captured, tc.wantReason)
+			if len(captured) != 1 || captured[0].Code != "buildkite.job_signature_rejected" || !strings.Contains(captured[0].Message, tc.wantReason) {
+				t.Errorf("captured errors = %+v, want buildkite.job_signature_rejected saying %q", captured, tc.wantReason)
 			}
 		})
 	}
