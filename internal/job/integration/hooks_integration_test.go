@@ -1215,7 +1215,7 @@ func TestHookFailuresAreCaptured(t *testing.T) {
 				t.Fatalf("tester.Run() = nil, want hook failure")
 			}
 
-			report := agentAPI.report(t, "hook_failed")
+			report := agentAPI.report(t, "buildkite.hook_failed")
 			path := filepath.Join(tester.HooksDir, hookFileName(hook))
 			if want := "The agent " + hook + " hook at " + path + " exited with status 5. It is installed on the agent, not in the repository."; report.Message != want {
 				t.Errorf("message = %q, want %q", report.Message, want)
@@ -1240,7 +1240,7 @@ func TestHookFailuresAreCaptured(t *testing.T) {
 		if err := tester.Run(t, agentAPI.env()...); err == nil {
 			t.Fatalf("tester.Run() = nil, want hook failure")
 		}
-		report := agentAPI.report(t, "hook_failed")
+		report := agentAPI.report(t, "buildkite.hook_failed")
 		if want := "exited with status 3. It is installed on the agent, not in the repository.\n\nLast lines of output:\nchecking the cache\nerror: the cache bucket is unreachable"; !strings.HasSuffix(report.Message, want) {
 			t.Errorf("message = %q, want it to end with %q", report.Message, want)
 		}
@@ -1281,7 +1281,7 @@ func TestHookFailuresAreCaptured(t *testing.T) {
 		if err := tester.Run(t, agentAPI.env()...); err == nil {
 			t.Fatalf("tester.Run() = nil, want hook failure")
 		}
-		report := agentAPI.report(t, "hook_failed")
+		report := agentAPI.report(t, "buildkite.hook_failed")
 		if want := "The repository pre-command hook at .buildkite/hooks/" + hookFileName("pre-command") + " exited with status 5."; report.Message != want {
 			t.Errorf("message = %q, want %q", report.Message, want)
 		}
@@ -1300,7 +1300,7 @@ func TestHookFailuresAreCaptured(t *testing.T) {
 		if err := tester.Run(t, append(agentAPI.env(), "BUILDKITE_NO_LOCAL_HOOKS=true")...); err == nil {
 			t.Fatalf("tester.Run() = nil, want local hook refusal")
 		}
-		report := agentAPI.report(t, "local_hook_refused")
+		report := agentAPI.report(t, "buildkite.local_hook_rejected")
 		path := ".buildkite/hooks/" + hookFileName("pre-command")
 		if want := "The repository has a pre-command hook at " + path + ", but BUILDKITE_NO_LOCAL_HOOKS disables local hooks, so the job failed. Remove BUILDKITE_NO_LOCAL_HOOKS from the job's environment, or remove the hook from the repository."; report.Message != want {
 			t.Errorf("message = %q, want %q", report.Message, want)

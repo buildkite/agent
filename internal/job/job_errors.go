@@ -65,7 +65,7 @@ func (e *Executor) captureHookError(ctx context.Context, hookCfg HookConfig, hoo
 		message = fmt.Sprintf("The %s hook at %s could not be run because a program it needs was not found, usually the interpreter on its #! line, such as bash.%s", hookName, path, where)
 	}
 	message = jobapi.CapturedErrorMessage(message, fmt.Sprintf("The %s hook failed.%s", hookName, where))
-	captureJobError(ctx, e.shell, "hook_failed", e.withRecentOutput(message))
+	captureJobError(ctx, e.shell, "buildkite.hook_failed", e.withRecentOutput(message))
 }
 
 // couldNotStart reports whether err is from starting a process, such as
