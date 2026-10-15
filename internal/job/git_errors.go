@@ -215,68 +215,68 @@ func withGitOutput(summary, output string) string {
 // checkout log formats, which include operation and retry details.
 func classifyGitError(err error) (string, string) {
 	if errors.Is(err, errCheckoutAttemptTimedOut) {
-		return "git_checkout_timeout", "The Git checkout attempt timed out."
+		return "buildkite.git_checkout_timed_out", "The Git checkout attempt timed out."
 	}
 	var gitErr *gitError
 	if !errors.As(err, &gitErr) {
 		var lockErr ErrTimedOutAcquiringLock
 		switch {
 		case errors.Is(err, errInvalidRef):
-			return "git_invalid_ref", "Git checkout received an invalid reference."
+			return "buildkite.git_ref_invalid", "Git checkout received an invalid reference."
 		case errors.Is(err, ErrCommitVerificationFailed):
-			return "git_commit_verification_failed", "Git commit verification failed."
+			return "buildkite.git_commit_verification_failed", "Git commit verification failed."
 		case errors.Is(err, errGitLFSPreflight):
-			return "git_lfs_preflight_failed", "Git LFS version check failed."
+			return "buildkite.git_lfs_preflight_failed", "Git LFS version check failed."
 		case errors.Is(err, errInvalidSparseCheckoutMode):
-			return "git_invalid_sparse_checkout_mode", "Git checkout received an invalid sparse checkout mode."
+			return "buildkite.git_sparse_checkout_mode_invalid", "Git checkout received an invalid sparse checkout mode."
 		case errors.Is(err, errInvalidFetchBaseBranchMode):
-			return "git_invalid_fetch_base_branch_mode", "Git checkout received an invalid base branch fetch mode."
+			return "buildkite.git_fetch_base_branch_mode_invalid", "Git checkout received an invalid base branch fetch mode."
 		case errors.As(err, &lockErr):
-			return "git_checkout_lock_timeout", "Git checkout timed out waiting for a lock."
+			return "buildkite.git_checkout_lock_timed_out", "Git checkout timed out waiting for a lock."
 		default:
-			return "git_checkout_phase_failed", "The default checkout phase failed."
+			return "buildkite.checkout_phase_failed", "The default checkout phase failed."
 		}
 	}
 	for _, pattern := range gitAuthenticationErrorPatterns {
 		if gitErr.outputMatches[pattern] {
-			return "git_authentication_failed", "Git reported an authentication failure."
+			return "buildkite.git_authentication_failed", "Git reported an authentication failure."
 		}
 	}
 	for _, pattern := range gitNetworkErrorPatterns {
 		if gitErr.outputMatches[pattern] {
-			return "git_network_failed", "Git reported a network connection failure."
+			return "buildkite.git_network_failed", "Git reported a network connection failure."
 		}
 	}
 	var code, message string
 	switch gitErr.Type {
 	case gitErrorCheckout:
-		code, message = "git_checkout_failed", "Git checkout failed."
+		code, message = "buildkite.git_checkout_failed", "Git checkout failed."
 	case gitErrorCheckoutReferenceIsNotATree:
-		code, message = "git_reference_not_a_tree", "Git checkout could not resolve the reference to a tree."
+		code, message = "buildkite.git_ref_not_a_tree", "Git checkout could not resolve the reference to a tree."
 	case gitErrorCheckoutRetryClean:
-		code, message = "git_checkout_unclassified", "Git checkout failed with an unclassified error."
+		code, message = "buildkite.git_checkout_failed", "Git checkout exited with a fatal error. The agent cleans the checkout after this error, so any retry starts from a fresh clone."
 	case gitErrorClone:
-		code, message = "git_clone_failed", "Git clone failed."
+		code, message = "buildkite.git_clone_failed", "Git clone failed."
 	case gitErrorCloneTimeout:
-		code, message = "git_clone_timeout", "Git clone failed because the transfer was too slow."
+		code, message = "buildkite.git_clone_timed_out", "Git clone failed because the transfer was too slow."
 	case gitErrorFetch:
-		code, message = "git_fetch_failed", "Git fetch failed."
+		code, message = "buildkite.git_fetch_failed", "Git fetch failed."
 	case gitErrorFetchRetryClean:
-		code, message = "git_fetch_unclassified", "Git fetch failed with an unclassified error."
+		code, message = "buildkite.git_fetch_failed", "Git fetch exited with a fatal error. The agent cleans the checkout after this error, so any retry starts from a fresh clone."
 	case gitErrorFetchBadObject:
-		code, message = "git_bad_object", "Git fetch encountered a bad object."
+		code, message = "buildkite.git_bad_object", "Git fetch encountered a bad object."
 	case gitErrorFetchBadReference:
-		code, message = "git_ref_not_found", "Git fetch could not find the remote reference."
+		code, message = "buildkite.git_ref_not_found", "Git fetch could not find the remote reference."
 	case gitErrorFetchRefNotOnRemote:
-		code, message = "git_ref_not_on_remote", "Git fetch requested an object the remote does not have or advertise."
+		code, message = "buildkite.git_commit_not_found", "Git fetch requested an object the remote does not have or advertise."
 	case gitErrorClean:
-		code, message = "git_clean_failed", "Git clean failed."
+		code, message = "buildkite.git_clean_failed", "Git clean failed."
 	case gitErrorCleanSubmodules:
-		code, message = "git_submodule_clean_failed", "Git submodule clean failed."
+		code, message = "buildkite.git_submodule_clean_failed", "Git submodule clean failed."
 	case gitErrorRepack:
-		code, message = "git_repack_failed", "Git repack failed."
+		code, message = "buildkite.git_repack_failed", "Git repack failed."
 	case gitErrorLFS:
-		code, message = "git_lfs_failed", "Git LFS fetch or checkout failed."
+		code, message = "buildkite.git_lfs_failed", "Git LFS fetch or checkout failed."
 	default:
 		return "", ""
 	}
@@ -300,7 +300,7 @@ func captureCheckoutError(ctx context.Context, sh *shell.Shell, err error) {
 			// Git commands capture their own failures. Other checkout operations
 			// reuse these error types for recovery, not to identify a failed command.
 			gitErr.captured = true
-			captureError(ctx, sh, "git_checkout_phase_failed", withCheckout("The default checkout phase failed.", describeCheckout(sh)))
+			captureError(ctx, sh, "buildkite.checkout_phase_failed", withCheckout("The default checkout phase failed.", describeCheckout(sh)))
 			return
 		}
 	}
