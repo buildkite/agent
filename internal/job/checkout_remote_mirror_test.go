@@ -519,10 +519,19 @@ func TestFetchCommitFromRemoteMirrorOutcomes(t *testing.T) {
 				site: remoteMirrorSiteExistingCheckout,
 				url:  "https://mirror.example/acme/widgets.git",
 			}
+			// The canonical fallback reports a real failure, so the probe's own
+			// miss or error is not reported, even when the job reports Git errors.
+			e.shell.Env.Set("BUILDKITE_CAPTURE_GIT_ERRORS", "true")
+			e.shell.Env.Set("BUILDKITE_AGENT_JOB_API_CAPTURE_ERROR", "true")
+			var reports gitErrorReports
+			ctx := context.WithValue(t.Context(), gitErrorReportsKey{}, &reports)
 
-			got, err := e.fetchCommitFromRemoteMirror(t.Context(), &attempt, ".git", "", commit)
+			got, err := e.fetchCommitFromRemoteMirror(ctx, &attempt, ".git", "", commit)
 			if err != nil {
 				t.Fatalf("fetchCommitFromRemoteMirror() error = %v", err)
+			}
+			if len(reports) != 0 {
+				t.Errorf("reports = %+v, want none for the mirror probe", reports)
 			}
 			if got != tc.wantHit {
 				t.Errorf("hit = %t, want %t", got, tc.wantHit)

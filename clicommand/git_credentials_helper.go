@@ -8,8 +8,10 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/buildkite/agent/v4/api"
+	"github.com/buildkite/agent/v4/jobapi"
 	"github.com/buildkite/agent/v4/logger"
 	"github.com/urfave/cli/v3"
 )
@@ -103,6 +105,27 @@ var GitCredentialsHelperCommand = &cli.Command{
 		}
 		if strings.ContainsAny(username+credentials.Token, "\r\n\x00") {
 			return handleAuthError(c, l, errors.New("repository credential response contained invalid characters"))
+		}
+
+		// Register before Git can echo the token in logs or captured errors.
+		// Preserve support for environments where the Job API is not configured.
+		if os.Getenv("BUILDKITE_AGENT_JOB_API_SOCKET") != "" || os.Getenv("BUILDKITE_AGENT_JOB_API_TOKEN") != "" {
+			redactCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+			defer cancel()
+			jobClient, err := jobapi.NewDefaultClient(redactCtx)
+			if err == nil {
+				err = AddToRedactor(redactCtx, l, jobClient, credentials.Token)
+			}
+			if err != nil {
+				// Do not log the transport error: it may contain the secret.
+				// A job that reports Git errors must not send the token in
+				// them, so it fails closed. Other jobs never registered the
+				// token before, so they carry on rather than fail the checkout.
+				if os.Getenv("BUILDKITE_CAPTURE_GIT_ERRORS") == "true" {
+					return handleAuthError(c, l, errors.New("failed to register repository credential for redaction"))
+				}
+				l.Warnf("Could not register the repository credential for redaction; continuing without it")
+			}
 		}
 
 		_, _ = fmt.Fprintln(c.Root().Writer, "username="+username)

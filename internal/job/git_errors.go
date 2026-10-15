@@ -14,6 +14,22 @@ import (
 	"github.com/buildkite/agent/v4/jobapi"
 )
 
+var (
+	gitAuthenticationErrorPatterns = []string{
+		"fatal: Authentication failed",
+		"fatal: authentication failed",
+		"Permission denied (publickey",
+		"Permission denied (password",
+	}
+	gitNetworkErrorPatterns = []string{
+		"Could not resolve host:",
+		"Could not resolve proxy:",
+		"ssh: Could not resolve hostname",
+		"Failed to connect to",
+		"ssh: connect to host",
+	}
+)
+
 type gitErrorReportsKey struct{}
 
 // maxGitErrorOutput bounds the Git output kept while a command runs. The
@@ -85,8 +101,28 @@ func (reports gitErrorReports) deliver(ctx context.Context, sh *shell.Shell) {
 	}
 }
 
+// addGitRemoteErrorPatterns adds reporting-only patterns to a command's search.
+func addGitRemoteErrorPatterns(smelt map[string]bool) {
+	for _, pattern := range gitAuthenticationErrorPatterns {
+		smelt[pattern] = false
+	}
+	for _, pattern := range gitNetworkErrorPatterns {
+		smelt[pattern] = false
+	}
+}
+
+type gitErrorCaptureSkippedKey struct{}
+
+// withoutGitErrorCapture marks Git commands whose failures are expected and
+// recovered from, such as a remote mirror that does not have the commit yet,
+// so they are not reported.
+func withoutGitErrorCapture(ctx context.Context) context.Context {
+	return context.WithValue(ctx, gitErrorCaptureSkippedKey{}, true)
+}
+
 func captureGitError(ctx context.Context, sh *shell.Shell, err error, output string) {
-	if err == nil || ctx.Err() != nil || errors.Is(err, context.Canceled) || shell.ExitCode(err) == -1 {
+	if err == nil || ctx.Err() != nil || ctx.Value(gitErrorCaptureSkippedKey{}) != nil ||
+		errors.Is(err, context.Canceled) || shell.ExitCode(err) == -1 {
 		return
 	}
 	code, message := classifyGitError(err)
@@ -171,6 +207,16 @@ func classifyGitError(err error) (string, string) {
 	if !errors.As(err, &gitErr) {
 		return "", ""
 	}
+	for _, pattern := range gitAuthenticationErrorPatterns {
+		if gitErr.outputMatches[pattern] {
+			return "buildkite.git_authentication_failed", "Git reported an authentication failure."
+		}
+	}
+	for _, pattern := range gitNetworkErrorPatterns {
+		if gitErr.outputMatches[pattern] {
+			return "buildkite.git_network_failed", "Git reported a network connection failure."
+		}
+	}
 	var code, message string
 	switch gitErr.Type {
 	case gitErrorCheckout:
@@ -179,6 +225,20 @@ func classifyGitError(err error) (string, string) {
 		code, message = "buildkite.git_ref_not_a_tree", "Git checkout could not resolve the reference to a tree."
 	case gitErrorCheckoutRetryClean:
 		code, message = "buildkite.git_checkout_failed", "Git checkout exited with a fatal error. The agent cleans the checkout after this error, so any retry starts from a fresh clone."
+	case gitErrorClone:
+		code, message = "buildkite.git_clone_failed", "Git clone failed."
+	case gitErrorCloneTimeout:
+		code, message = "buildkite.git_clone_timed_out", "Git clone failed because the transfer was too slow."
+	case gitErrorFetch:
+		code, message = "buildkite.git_fetch_failed", "Git fetch failed."
+	case gitErrorFetchRetryClean:
+		code, message = "buildkite.git_fetch_failed", "Git fetch exited with a fatal error. The agent cleans the checkout after this error, so any retry starts from a fresh clone."
+	case gitErrorFetchBadObject:
+		code, message = "buildkite.git_bad_object", "Git fetch encountered a bad object."
+	case gitErrorFetchBadReference:
+		code, message = "buildkite.git_ref_not_found", "Git fetch could not find the remote reference."
+	case gitErrorFetchRefNotOnRemote:
+		code, message = "buildkite.git_commit_not_found", "Git fetch requested an object the remote does not have or advertise."
 	case gitErrorClean:
 		code, message = "buildkite.git_clean_failed", "Git clean failed."
 	case gitErrorCleanSubmodules:

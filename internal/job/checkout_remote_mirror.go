@@ -296,7 +296,9 @@ func (e *Executor) fetchCommitFromRemoteMirror(
 	}
 	gitFlags = append(gitFlags, remoteMirrorGitFlags(ctx)...)
 
-	err := gitFetch(mirrorCtx, gitFetchArgs{
+	// A miss or error falls back to the canonical repository, whose fetch is
+	// reported if it fails too, so the probe's failure is not reported.
+	err := gitFetch(withoutGitErrorCapture(mirrorCtx), gitFetchArgs{
 		Shell:         e.shell,
 		GitFlags:      gitFlags,
 		GitFetchFlags: gitFetchFlags,
