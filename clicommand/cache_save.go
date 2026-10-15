@@ -125,7 +125,7 @@ var CacheSaveCommand = &cli.Command{
 		// Perform cache save (logging happens inside)
 		if err := cache.RunSave(ctx, l, apiClient, cacheCfg); err != nil {
 			summary := fmt.Sprintf("Failed to save %s to registry %q", cacheNames(cfg.Names), cfg.Registry)
-			captureAgentError(ctx, l, "cache_save_failed", jobapi.CapturedErrorMessage(summary+": "+storageErrorText(err),
+			captureAgentError(ctx, l, "buildkite.cache_save_failed", jobapi.CapturedErrorMessage(summary+": "+storageErrorText(err),
 				jobapi.CapturedErrorMessage(summary+".", "Failed to save caches.")))
 			return err
 		}

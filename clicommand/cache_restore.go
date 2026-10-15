@@ -128,7 +128,7 @@ var CacheRestoreCommand = &cli.Command{
 		// Perform cache restore (logging happens inside)
 		if err := cache.RunRestore(ctx, l, apiClient, cacheCfg); err != nil {
 			summary := fmt.Sprintf("Failed to restore %s from registry %q", cacheNames(cfg.Names), cfg.Registry)
-			captureAgentError(ctx, l, "cache_restore_failed", jobapi.CapturedErrorMessage(summary+": "+storageErrorText(err),
+			captureAgentError(ctx, l, "buildkite.cache_restore_failed", jobapi.CapturedErrorMessage(summary+": "+storageErrorText(err),
 				jobapi.CapturedErrorMessage(summary+".", "Failed to restore caches.")))
 			return err
 		}
