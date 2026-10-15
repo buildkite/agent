@@ -197,13 +197,10 @@ func (e *Executor) fetchSource(ctx context.Context, addBloblessFilter bool, atte
 		// If the commit is "HEAD" then we can't do a commit-specific fetch and will
 		// need to fetch the remote head and checkout the fetched head explicitly.
 		e.shell.Commentf("Fetch and checkout remote branch HEAD commit")
-		if err := gitFetch(ctx, gitFetchArgs{
+		if err := e.gitFetchHeadRef(ctx, gitFetchArgs{
 			Shell:         e.shell,
 			GitFetchFlags: gitFetchFlags,
 			Repository:    "origin",
-			// LiteralRefSpecs, not RefSpecs: a quote is legal in a git ref name,
-			// and word-splitting would fetch he'll'o as hello.
-			LiteralRefSpecs: []string{e.Branch},
 		}); err != nil {
 			return fmt.Errorf("fetching branch %q: %w", e.Branch, err)
 		}
@@ -225,6 +222,40 @@ func (e *Executor) fetchSource(ctx context.Context, addBloblessFilter bool, atte
 	}
 
 	return nil
+}
+
+// headBuildRefs returns the refs a Commit=HEAD build may name, in fetch order.
+// git resolves a bare name in refs/tags/ before refs/heads/, so a tag would
+// shadow a same-named branch. BUILDKITE_TAG is set only for known tag builds.
+// Otherwise try the branch, then the bare name, which API, trigger and
+// scheduled builds rely on when BUILDKITE_BRANCH names a tag.
+func (e *Executor) headBuildRefs() []string {
+	switch {
+	case e.Tag != "":
+		return []string{"refs/tags/" + e.Tag}
+	case e.Branch == "":
+		// gitFetch drops an empty refspec, fetching the configured refspecs.
+		return []string{""}
+	default:
+		return []string{"refs/heads/" + e.Branch, e.Branch}
+	}
+}
+
+// gitFetchHeadRef fetches the first of headBuildRefs the remote has into
+// FETCH_HEAD. Refs are passed unsplit, as quotes are legal in ref names.
+func (e *Executor) gitFetchHeadRef(ctx context.Context, args gitFetchArgs) error {
+	refs := e.headBuildRefs()
+	first := args
+	first.LiteralRefSpecs = refs[:1]
+	// The fallback relies on matching git's "couldn't find remote ref".
+	first.CLocale = len(refs) > 1
+	err := gitFetch(ctx, first)
+	if gerr := new(gitError); len(refs) > 1 && errors.As(err, &gerr) && gerr.Type == gitErrorFetchBadReference {
+		e.shell.Commentf("The remote has no %s, fetching %q instead", refs[0], refs[1])
+		args.LiteralRefSpecs = refs[1:]
+		err = gitFetch(ctx, args)
+	}
+	return err
 }
 
 func (e *Executor) validateGithubPRMergeHead(ctx context.Context) error {

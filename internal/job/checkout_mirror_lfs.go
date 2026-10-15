@@ -46,43 +46,55 @@ func (e *Executor) mirrorLFSCacheEnabled() bool {
 	return e.GitLFSEnabled && e.GitMirrorsLFSCache
 }
 
-// mirrorLFSRef selects the job revision in a freshly cloned mirror, which has
+// mirrorLFSRefs selects the job revision in a freshly cloned mirror, which has
 // no job-specific FETCH_HEAD. HEAD means the requested build ref, not the
 // mirror's default branch. Existing mirrors use the fresh fetch result instead.
-func (e *Executor) mirrorLFSRef() string {
+// The first of the returned refs that resolves names the revision.
+func (e *Executor) mirrorLFSRefs() []string {
 	if e.Commit != "HEAD" {
-		return e.Commit
+		return []string{e.Commit}
 	}
 	switch {
 	case e.RefSpec != "":
 		// Only the source side names an object in a fresh mirror.
 		ref, _, _ := strings.Cut(strings.TrimPrefix(e.RefSpec, "+"), ":")
-		return ref
+		return []string{ref}
 	case e.PullRequest != "false" && strings.Contains(e.PipelineProvider, "github"):
 		if e.PullRequestUsingMergeRefspec {
-			return fmt.Sprintf("refs/pull/%s/merge", e.PullRequest)
+			return []string{fmt.Sprintf("refs/pull/%s/merge", e.PullRequest)}
 		}
-		return fmt.Sprintf("refs/pull/%s/head", e.PullRequest)
+		return []string{fmt.Sprintf("refs/pull/%s/head", e.PullRequest)}
 	default:
-		return e.Branch
+		// A fresh mirror has every remote ref, so resolving these in order
+		// picks the ref the workspace fetch will.
+		return e.headBuildRefs()
 	}
 }
 
-func (e *Executor) prefetchMirrorLFS(ctx context.Context, mirrorDir, ref string) error {
-	if ref == "" {
-		return nil
-	}
+func (e *Executor) prefetchMirrorLFS(ctx context.Context, mirrorDir string, refs []string) error {
 	// Resolve once while the mirror lock is held, then use the same commit
 	// for both configuration and objects. Unresolvable refs defer to
 	// the workspace, which may also see a newer tip if the ref moves later.
-	commit, err := e.shell.Command("git", "--git-dir", mirrorDir, "rev-parse", "--verify", ref+"^{commit}").RunAndCaptureStdout(ctx,
-		shell.ShowStderr(false),
-		shell.WithExtraEnv(env.FromSlice([]string{"GIT_NO_LAZY_FETCH=1"})),
-	)
-	if err != nil {
-		return ctx.Err()
+	var commit string
+	for _, ref := range refs {
+		if ref == "" {
+			continue
+		}
+		out, err := e.shell.Command("git", "--git-dir", mirrorDir, "rev-parse", "--verify", ref+"^{commit}").RunAndCaptureStdout(ctx,
+			shell.ShowStderr(false),
+			shell.WithExtraEnv(env.FromSlice([]string{"GIT_NO_LAZY_FETCH=1"})),
+		)
+		if err == nil {
+			commit = strings.TrimSpace(out)
+			break
+		}
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
 	}
-	commit = strings.TrimSpace(commit)
+	if commit == "" {
+		return nil
+	}
 
 	storage, err := e.shell.Command("git", "--git-dir", mirrorDir, "config", "--get", "--default", "", "lfs.storage").RunAndCaptureStdout(ctx)
 	if err != nil {

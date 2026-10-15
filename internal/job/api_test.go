@@ -242,6 +242,71 @@ func TestCapturedErrorAvailable(t *testing.T) {
 	}
 }
 
+func TestCapturedErrorRequestLimit(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		statuses []int // upstream response for each request, then 201
+		reports  int
+		requests int // reaching the API
+		accepted int
+	}{
+		// Transient failures must not stop forwarding; a 422 (quota full) or
+		// 404 (capture unavailable) means no later report should reach the API.
+		{name: "quota full", statuses: []int{201, 503, 429, 201, 422}, reports: 8, requests: 5, accepted: 2},
+		{name: "capture unavailable", statuses: []int{404}, reports: 5, requests: 1, accepted: 0},
+		{name: "accepted", reports: 150, requests: 150, accepted: 150},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			var calls atomic.Int32
+			upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				_, _ = io.Copy(io.Discard, r.Body)
+				status := http.StatusCreated
+				if n := int(calls.Add(1)); n <= len(test.statuses) {
+					status = test.statuses[n-1]
+				}
+				w.WriteHeader(status)
+				_, _ = w.Write([]byte(`{"message":"upstream"}`))
+			}))
+			defer upstream.Close()
+			sh, err := shell.New(shell.WithEnv(env.New()), shell.WithLogger(shell.TestingLogger{T: t}))
+			if err != nil {
+				t.Fatal(err)
+			}
+			e := &Executor{shell: sh, redactors: replacer.NewMux()}
+			e.JobID = "test-job"
+			e.SocketsPath = os.TempDir()
+			sh.Env.Set("BUILDKITE_AGENT_ENDPOINT", upstream.URL)
+			cleanup, err := e.startJobAPI(t.Context())
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer cleanup()
+			client, err := jobapi.NewClient(t.Context(), e.jobAPI.SocketPath, sh.Env.GetString("BUILDKITE_AGENT_JOB_API_TOKEN", ""))
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			accepted := 0
+			for range test.reports {
+				if _, err := client.CaptureError(t.Context(), &jobapi.CapturedError{Code: "looping_failure", Message: "Failed again"}); err == nil {
+					accepted++
+				}
+			}
+			if got := int(calls.Load()); got != test.requests {
+				t.Errorf("upstream requests = %d, want %d", got, test.requests)
+			}
+			if accepted != test.accepted {
+				t.Errorf("accepted reports = %d, want %d", accepted, test.accepted)
+			}
+		})
+	}
+}
+
 func TestCapturedErrorCapabilityAbsentAfterStartupFailure(t *testing.T) {
 	sh, err := shell.New(shell.WithEnv(env.New()), shell.WithLogger(shell.TestingLogger{T: t}))
 	if err != nil {
