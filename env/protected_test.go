@@ -5,6 +5,43 @@ import (
 	"testing"
 )
 
+func TestProtectedEnvPatterns(t *testing.T) {
+	t.Parallel()
+	for _, git := range []bool{false, true} {
+		patterns, err := ProtectedEnvPatterns([]string{"PATH", "LD_*", "App.Version"}, git)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, tc := range []struct {
+			name string
+			want bool
+		}{
+			{"PATH", true},
+			{"PATH_EXTRA", false},
+			{"MY_PATH", false},
+			{"LD_PRELOAD", true},
+			{"LD_", true},
+			{"LD", false},
+			{"App.Version", true},
+			{"AppXVersion", false},
+			{"path", runtime.GOOS == "windows"},
+			{"ld_preload", runtime.GOOS == "windows"},
+			{"GIT_SSH_COMMAND", git},
+			{"GIT_CONFIG_VALUE_23", git},
+			{"GIT_AUTHOR_NAME", false},
+		} {
+			if got := MatchesProtectedEnv(tc.name, patterns); got != tc.want {
+				t.Errorf("MatchesProtectedEnv(%q), git=%t: got %t, want %t", tc.name, git, got, tc.want)
+			}
+		}
+	}
+	for _, pattern := range []string{"", "*PATH", "GIT_*_KEY", "GIT_**", "PATH?", "[PATH]", "PATH=foo", "PATH,HOME", "PA TH", "PATH\x00"} {
+		if _, err := ProtectedEnvPatterns([]string{pattern}, false); err == nil {
+			t.Errorf("ProtectedEnvPatterns(%q) accepted an invalid pattern", pattern)
+		}
+	}
+}
+
 func TestProtectedEnv(t *testing.T) {
 	// Test that ProtectedEnv contains the expected variables
 	expectedProtected := []string{
@@ -19,6 +56,8 @@ func TestProtectedEnv(t *testing.T) {
 		"BUILDKITE_CONFIG_PATH",
 		"BUILDKITE_CHECKOUT_OVERRIDE_MODE",
 		"BUILDKITE_CONTAINER_COUNT",
+		"BUILDKITE_PROTECT_DANGEROUS_GIT_ENVIRONMENT_VARIABLES",
+		"BUILDKITE_PROTECTED_ENVIRONMENT_VARIABLES",
 		"BUILDKITE_GIT_CLONE_MIRROR_FLAGS",
 		"BUILDKITE_GIT_MIRRORS_LOCK_TIMEOUT",
 		"BUILDKITE_GIT_MIRRORS_PATH",

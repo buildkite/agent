@@ -680,6 +680,70 @@ func TestSecretsIntegration_ProtectedCheckoutInfraRejection(t *testing.T) {
 	}
 }
 
+func TestSecretsIntegration_ProtectedEnv(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct {
+		name     string
+		enabled  bool
+		patterns string
+		variable string
+		wantErr  bool
+	}{
+		{name: "disabled", variable: "GIT_SSH_COMMAND"},
+		{name: "enabled", enabled: true, variable: "GIT_SSH_COMMAND", wantErr: true},
+		{name: "config_entry", enabled: true, variable: "GIT_CONFIG_VALUE_0", wantErr: true},
+		{name: "safe_variable", enabled: true, variable: "GIT_AUTHOR_NAME"},
+		{name: "policy_override", enabled: true, variable: "BUILDKITE_PROTECT_DANGEROUS_GIT_ENVIRONMENT_VARIABLES", wantErr: true},
+		{name: "custom_policy_override", variable: "BUILDKITE_PROTECTED_ENVIRONMENT_VARIABLES", wantErr: true},
+		{name: "custom_exact", patterns: "BASH_ENV,LD_PRELOAD", variable: "BASH_ENV", wantErr: true},
+		{name: "custom_prefix", patterns: "LD_*", variable: "LD_PRELOAD", wantErr: true},
+		{name: "both_custom", enabled: true, patterns: "BASH_ENV", variable: "BASH_ENV", wantErr: true},
+		{name: "both_git", enabled: true, patterns: "BASH_ENV", variable: "GIT_SSH_COMMAND", wantErr: true},
+		{name: "exact_not_prefix", patterns: "MY_VAR", variable: "MY_VAR_SUFFIX"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			tester, err := NewExecutorTester(mainCtx)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer tester.Close()
+			const secretValue = "secret-git-value"
+			apiServer := setupSecretsAPIServer(t, map[string]string{"GIT_SECRET": secretValue})
+			defer apiServer.Close()
+			secretsJSON, err := json.Marshal([]pipeline.Secret{{Key: "GIT_SECRET", EnvironmentVariable: tc.variable}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !tc.wantErr {
+				tester.ExpectGlobalHook("command").AndCallFunc(func(c *bintest.Call) {
+					if got := c.GetEnv(tc.variable); got != secretValue {
+						t.Errorf("%s = %q, want %q", tc.variable, got, secretValue)
+					}
+					c.Exit(0)
+				})
+			}
+			err = tester.Run(t,
+				"BUILDKITE_SECRETS_CONFIG="+string(secretsJSON),
+				"BUILDKITE_AGENT_ENDPOINT="+apiServer.URL,
+				fmt.Sprintf("BUILDKITE_PROTECT_DANGEROUS_GIT_ENVIRONMENT_VARIABLES=%t", tc.enabled),
+				"BUILDKITE_PROTECTED_ENVIRONMENT_VARIABLES="+tc.patterns,
+			)
+			if (err != nil) != tc.wantErr {
+				t.Fatalf("Run() error = %v, want error = %t; output: %s", err, tc.wantErr, tester.Output)
+			}
+			if tc.wantErr && (!strings.Contains(tester.Output, "cannot set") || !strings.Contains(tester.Output, tc.variable)) {
+				t.Fatalf("missing secret rejection in output: %s", tester.Output)
+			}
+			if strings.Contains(tester.Output, secretValue) {
+				t.Fatal("secret value leaked into job log")
+			}
+			tester.CheckMocks(t)
+		})
+	}
+}
+
 func TestSecretsIntegration_CheckoutOverrideMode(t *testing.T) {
 	t.Parallel()
 
@@ -812,7 +876,7 @@ func TestSecretsIntegration_CheckoutScopedSecretReachesCheckout(t *testing.T) {
 	git.ExpectAll([][]any{
 		{"clone", "--verbose", "--", tester.Repo.Path, "."},
 		{"clean", "-fdq"},
-		{"fetch", "-v", "--", "origin", "main"},
+		{"fetch", "-v", "--", "origin", "refs/heads/main"},
 		{"-c", "advice.detachedHead=false", "checkout", "-f", "FETCH_HEAD"},
 		{"clean", "-fdq"},
 		{"rev-parse", "HEAD"},
@@ -886,6 +950,7 @@ func TestSecretsIntegration_FailuresAreCaptured(t *testing.T) {
 	for _, test := range []struct {
 		name    string
 		secrets []pipeline.Secret
+		env     []string
 		code    string
 		message string
 	}{
@@ -900,6 +965,13 @@ func TestSecretsIntegration_FailuresAreCaptured(t *testing.T) {
 			secrets: []pipeline.Secret{{Key: "VALID_SECRET", EnvironmentVariable: "BUILDKITE_AGENT_ACCESS_TOKEN"}},
 			code:    "buildkite.secret_environment_variable_rejected",
 			message: `secret "VALID_SECRET" cannot set protected environment variable "BUILDKITE_AGENT_ACCESS_TOKEN". Map the secret to a different environment_variable in the step.`,
+		},
+		{
+			name:    "environment variable protected by the agent's options",
+			secrets: []pipeline.Secret{{Key: "VALID_SECRET", EnvironmentVariable: "GIT_SSH_COMMAND"}},
+			env:     []string{"BUILDKITE_PROTECT_DANGEROUS_GIT_ENVIRONMENT_VARIABLES=true"},
+			code:    "buildkite.secret_environment_variable_rejected",
+			message: `secret "VALID_SECRET" cannot set environment variable "GIT_SSH_COMMAND" protected by --protected-environment-variables or --protect-dangerous-git-environment-variables. Map the secret to a different environment_variable in the step.`,
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
@@ -918,7 +990,8 @@ func TestSecretsIntegration_FailuresAreCaptured(t *testing.T) {
 			if err != nil {
 				t.Fatalf("marshaling secrets: %v", err)
 			}
-			if err := tester.Run(t, append(agentAPI.env(), "BUILDKITE_SECRETS_CONFIG="+string(secretsJSON))...); err == nil {
+			env := append(agentAPI.env(), "BUILDKITE_SECRETS_CONFIG="+string(secretsJSON))
+			if err := tester.Run(t, append(env, test.env...)...); err == nil {
 				t.Fatalf("expected job to fail. Full output: %s", tester.Output)
 			}
 
