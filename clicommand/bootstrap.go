@@ -50,83 +50,85 @@ Example:
     $ buildkite-agent bootstrap --build-path builds`
 
 type BootstrapConfig struct {
-	Command                      string        `cli:"command"`
-	JobID                        string        `cli:"job" validate:"required"`
-	Repository                   string        `cli:"repository" validate:"required"`
-	AllowedRepositories          []string      `cli:"allowed-repositories" normalize:"list"`
-	Commit                       string        `cli:"commit" validate:"required"`
-	Branch                       string        `cli:"branch" validate:"required"`
-	Tag                          string        `cli:"tag"`
-	RefSpec                      string        `cli:"refspec"`
-	Plugins                      string        `cli:"plugins"`
-	Secrets                      string        `cli:"secrets"`
-	PullRequest                  string        `cli:"pullrequest"`
-	PullRequestHeadCommit        string        `cli:"pull-request-head-commit"`
-	PullRequestUsingMergeRefspec bool          `cli:"pull-request-using-merge-refspec"`
-	GitSubmodules                bool          `cli:"git-submodules"`
-	GitLFSEnabled                bool          `cli:"git-lfs-enabled"`
-	SSHKeyscan                   bool          `cli:"ssh-keyscan"`
-	AgentName                    string        `cli:"agent" validate:"required"`
-	Queue                        string        `cli:"queue"`
-	OrganizationSlug             string        `cli:"organization" validate:"required"`
-	PipelineSlug                 string        `cli:"pipeline" validate:"required"`
-	PipelineProvider             string        `cli:"pipeline-provider" validate:"required"`
-	AutomaticArtifactUploadPaths string        `cli:"artifact-upload-paths"`
-	ArtifactUploadDestination    string        `cli:"artifact-upload-destination"`
-	CleanCheckout                bool          `cli:"clean-checkout"`
-	SkipCheckout                 bool          `cli:"skip-checkout"`
-	GitCheckoutTimeout           int           `cli:"git-checkout-timeout"`
-	GitSkipFetchExistingCommits  bool          `cli:"git-skip-fetch-existing-commits"`
-	GitFetchBaseBranch           string        `cli:"git-fetch-base-branch"`
-	GitCheckoutFlags             string        `cli:"git-checkout-flags"`
-	GitCloneFlags                string        `cli:"git-clone-flags"`
-	GitFetchFlags                string        `cli:"git-fetch-flags"`
-	GitSparseCheckoutPaths       []string      `cli:"git-sparse-checkout-paths" normalize:"list"`
-	GitSparseCheckoutMode        string        `cli:"git-sparse-checkout-mode"`
-	GitCloneMirrorFlags          string        `cli:"git-clone-mirror-flags"`
-	GitCleanFlags                string        `cli:"git-clean-flags"`
-	GitSSHKey                    string        `cli:"git-ssh-key"`
-	GitCommitVerification        string        `cli:"git-commit-verification"`
-	GitRemoteMirrorURL           string        `cli:"git-remote-mirror-url"`
-	GitMirrorsPath               string        `cli:"git-mirrors-path" normalize:"filepath"`
-	GitMirrorCheckoutMode        string        `cli:"git-mirror-checkout-mode"`
-	GitMirrorsLockTimeout        int           `cli:"git-mirrors-lock-timeout"`
-	GitMirrorsSkipUpdate         bool          `cli:"git-mirrors-skip-update"`
-	GitMirrorsLFSCache           bool          `cli:"git-mirrors-lfs-cache"`
-	GitSubmoduleCloneConfig      []string      `cli:"git-submodule-clone-config" normalize:"list"`
-	CheckoutOverrideMode         string        `cli:"checkout-override-mode"`
-	BinPath                      string        `cli:"bin-path" normalize:"filepath"`
-	BuildPath                    string        `cli:"build-path" normalize:"filepath"`
-	HooksPath                    string        `cli:"hooks-path" normalize:"filepath"`
-	AdditionalHooksPaths         []string      `cli:"additional-hooks-paths" normalize:"list"`
-	SocketsPath                  string        `cli:"sockets-path" normalize:"filepath"`
-	PluginsPath                  string        `cli:"plugins-path" normalize:"filepath"`
-	CommandEval                  bool          `cli:"command-eval"`
-	PluginsEnabled               bool          `cli:"plugins-enabled"`
-	PluginValidation             bool          `cli:"plugin-validation"`
-	PluginsAlwaysCloneFresh      bool          `cli:"plugins-always-clone-fresh"`
-	LocalHooksEnabled            bool          `cli:"local-hooks-enabled"`
-	StrictSingleHooks            bool          `cli:"strict-single-hooks"`
-	PTY                          bool          `cli:"pty"`
-	LogLevel                     string        `cli:"log-level"`
-	Debug                        bool          `cli:"debug"`
-	Shell                        string        `cli:"shell"`
-	HooksShell                   string        `cli:"hooks-shell"`
-	Experiments                  []string      `cli:"experiment" normalize:"list"`
-	Phases                       []string      `cli:"phases" normalize:"list"`
-	Profile                      string        `cli:"profile"`
-	CancelSignal                 string        `cli:"cancel-signal"`
-	CancelSignalTimeout          time.Duration `cli:"cancel-signal-timeout"`
-	CancelCleanupTimeout         time.Duration `cli:"cancel-cleanup-timeout"`
-	RedactedVars                 []string      `cli:"redacted-vars" normalize:"list"`
-	OpenTelemetryTracing         bool          `cli:"opentelemetry-tracing"`
-	TelemetryServiceName         string        `cli:"telemetry-service-name"`
-	TracingTraceParent           string        `cli:"tracing-traceparent"`
-	TracingTraceState            string        `cli:"tracing-tracestate"`
-	NoJobAPI                     bool          `cli:"no-job-api"`
-	JobLogsOTLP                  bool          `cli:"job-logs-otlp"`
-	DisableWarningsFor           []string      `cli:"disable-warnings-for" normalize:"list"`
-	CheckoutAttempts             int           `cli:"checkout-attempts"`
+	Command                                 string        `cli:"command"`
+	JobID                                   string        `cli:"job" validate:"required"`
+	Repository                              string        `cli:"repository" validate:"required"`
+	AllowedRepositories                     []string      `cli:"allowed-repositories" normalize:"list"`
+	Commit                                  string        `cli:"commit" validate:"required"`
+	Branch                                  string        `cli:"branch" validate:"required"`
+	Tag                                     string        `cli:"tag"`
+	RefSpec                                 string        `cli:"refspec"`
+	Plugins                                 string        `cli:"plugins"`
+	Secrets                                 string        `cli:"secrets"`
+	PullRequest                             string        `cli:"pullrequest"`
+	PullRequestHeadCommit                   string        `cli:"pull-request-head-commit"`
+	PullRequestUsingMergeRefspec            bool          `cli:"pull-request-using-merge-refspec"`
+	GitSubmodules                           bool          `cli:"git-submodules"`
+	GitLFSEnabled                           bool          `cli:"git-lfs-enabled"`
+	SSHKeyscan                              bool          `cli:"ssh-keyscan"`
+	AgentName                               string        `cli:"agent" validate:"required"`
+	Queue                                   string        `cli:"queue"`
+	OrganizationSlug                        string        `cli:"organization" validate:"required"`
+	PipelineSlug                            string        `cli:"pipeline" validate:"required"`
+	PipelineProvider                        string        `cli:"pipeline-provider" validate:"required"`
+	AutomaticArtifactUploadPaths            string        `cli:"artifact-upload-paths"`
+	ArtifactUploadDestination               string        `cli:"artifact-upload-destination"`
+	CleanCheckout                           bool          `cli:"clean-checkout"`
+	SkipCheckout                            bool          `cli:"skip-checkout"`
+	GitCheckoutTimeout                      int           `cli:"git-checkout-timeout"`
+	GitSkipFetchExistingCommits             bool          `cli:"git-skip-fetch-existing-commits"`
+	GitFetchBaseBranch                      string        `cli:"git-fetch-base-branch"`
+	GitCheckoutFlags                        string        `cli:"git-checkout-flags"`
+	GitCloneFlags                           string        `cli:"git-clone-flags"`
+	GitFetchFlags                           string        `cli:"git-fetch-flags"`
+	GitSparseCheckoutPaths                  []string      `cli:"git-sparse-checkout-paths" normalize:"list"`
+	GitSparseCheckoutMode                   string        `cli:"git-sparse-checkout-mode"`
+	GitCloneMirrorFlags                     string        `cli:"git-clone-mirror-flags"`
+	GitCleanFlags                           string        `cli:"git-clean-flags"`
+	GitSSHKey                               string        `cli:"git-ssh-key"`
+	GitCommitVerification                   string        `cli:"git-commit-verification"`
+	GitRemoteMirrorURL                      string        `cli:"git-remote-mirror-url"`
+	GitMirrorsPath                          string        `cli:"git-mirrors-path" normalize:"filepath"`
+	GitMirrorCheckoutMode                   string        `cli:"git-mirror-checkout-mode"`
+	GitMirrorsLockTimeout                   int           `cli:"git-mirrors-lock-timeout"`
+	GitMirrorsSkipUpdate                    bool          `cli:"git-mirrors-skip-update"`
+	GitMirrorsLFSCache                      bool          `cli:"git-mirrors-lfs-cache"`
+	GitSubmoduleCloneConfig                 []string      `cli:"git-submodule-clone-config" normalize:"list"`
+	CheckoutOverrideMode                    string        `cli:"checkout-override-mode"`
+	ProtectedEnvironmentVariables           []string      `cli:"protected-environment-variables" normalize:"list"`
+	ProtectDangerousGitEnvironmentVariables bool          `cli:"protect-dangerous-git-environment-variables"`
+	BinPath                                 string        `cli:"bin-path" normalize:"filepath"`
+	BuildPath                               string        `cli:"build-path" normalize:"filepath"`
+	HooksPath                               string        `cli:"hooks-path" normalize:"filepath"`
+	AdditionalHooksPaths                    []string      `cli:"additional-hooks-paths" normalize:"list"`
+	SocketsPath                             string        `cli:"sockets-path" normalize:"filepath"`
+	PluginsPath                             string        `cli:"plugins-path" normalize:"filepath"`
+	CommandEval                             bool          `cli:"command-eval"`
+	PluginsEnabled                          bool          `cli:"plugins-enabled"`
+	PluginValidation                        bool          `cli:"plugin-validation"`
+	PluginsAlwaysCloneFresh                 bool          `cli:"plugins-always-clone-fresh"`
+	LocalHooksEnabled                       bool          `cli:"local-hooks-enabled"`
+	StrictSingleHooks                       bool          `cli:"strict-single-hooks"`
+	PTY                                     bool          `cli:"pty"`
+	LogLevel                                string        `cli:"log-level"`
+	Debug                                   bool          `cli:"debug"`
+	Shell                                   string        `cli:"shell"`
+	HooksShell                              string        `cli:"hooks-shell"`
+	Experiments                             []string      `cli:"experiment" normalize:"list"`
+	Phases                                  []string      `cli:"phases" normalize:"list"`
+	Profile                                 string        `cli:"profile"`
+	CancelSignal                            string        `cli:"cancel-signal"`
+	CancelSignalTimeout                     time.Duration `cli:"cancel-signal-timeout"`
+	CancelCleanupTimeout                    time.Duration `cli:"cancel-cleanup-timeout"`
+	RedactedVars                            []string      `cli:"redacted-vars" normalize:"list"`
+	OpenTelemetryTracing                    bool          `cli:"opentelemetry-tracing"`
+	TelemetryServiceName                    string        `cli:"telemetry-service-name"`
+	TracingTraceParent                      string        `cli:"tracing-traceparent"`
+	TracingTraceState                       string        `cli:"tracing-tracestate"`
+	NoJobAPI                                bool          `cli:"no-job-api"`
+	JobLogsOTLP                             bool          `cli:"job-logs-otlp"`
+	DisableWarningsFor                      []string      `cli:"disable-warnings-for" normalize:"list"`
+	CheckoutAttempts                        int           `cli:"checkout-attempts"`
 }
 
 // checkoutOverrideMode resolves the configured mode, forcing strict when command-eval is off.
@@ -268,6 +270,8 @@ var BootstrapCommand = &cli.Command{
 		// Various git related flags shared with agent start
 		SkipCheckoutFlag,
 		CheckoutOverrideModeFlag,
+		ProtectedEnvironmentVariablesFlag,
+		ProtectDangerousGitEnvironmentVariablesFlag,
 		GitCheckoutFlagsFlag,
 		GitCloneFlagsFlag,
 		GitCloneMirrorFlagsFlag,
@@ -478,6 +482,11 @@ var BootstrapCommand = &cli.Command{
 			return err
 		}
 
+		protectedEnvPatterns, err := env.ProtectedEnvPatterns(cfg.ProtectedEnvironmentVariables, cfg.ProtectDangerousGitEnvironmentVariables)
+		if err != nil {
+			return err
+		}
+
 		tracingBackend := tracetools.BackendNone
 		if cfg.OpenTelemetryTracing {
 			tracingBackend = tracetools.BackendOpenTelemetry
@@ -510,6 +519,7 @@ var BootstrapCommand = &cli.Command{
 			GitSkipFetchExistingCommits:  cfg.GitSkipFetchExistingCommits,
 			GitFetchBaseBranch:           cfg.GitFetchBaseBranch,
 			CheckoutOverrideMode:         checkoutMode,
+			ProtectedEnvPatterns:         protectedEnvPatterns,
 			Command:                      cfg.Command,
 			CommandEval:                  cfg.CommandEval,
 			Commit:                       cfg.Commit,
