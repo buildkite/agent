@@ -119,14 +119,14 @@ func TestGitErrorCapture(t *testing.T) {
 		operation, diagnostic, code string
 		exit, errorType             int
 	}{
-		{"checkout", "fatal: reference is not a tree: secret-ref", "git_reference_not_a_tree", 128, gitErrorCheckoutReferenceIsNotATree},
-		{"checkout", "error: secret-path", "git_checkout_failed", 1, gitErrorCheckout},
-		{"checkout", "fatal: secret-path", "git_checkout_unclassified", 128, gitErrorCheckoutRetryClean},
-		{"clean", "warning: secret-path", "git_clean_failed", 1, gitErrorClean},
-		{"submodules", "warning: secret-path", "git_submodule_clean_failed", 1, gitErrorCleanSubmodules},
-		{"repack", "fatal: secret-path", "git_repack_failed", 1, gitErrorRepack},
-		{"lfs", "error: secret-url", "git_lfs_failed", 2, gitErrorLFS},
-		{"lfs-checkout", "error: unable to write secret-path", "git_lfs_failed", 2, gitErrorLFS},
+		{"checkout", "fatal: reference is not a tree: secret-ref", "buildkite.git_ref_not_a_tree", 128, gitErrorCheckoutReferenceIsNotATree},
+		{"checkout", "error: secret-path", "buildkite.git_checkout_failed", 1, gitErrorCheckout},
+		{"checkout", "fatal: secret-path", "buildkite.git_checkout_failed", 128, gitErrorCheckoutRetryClean},
+		{"clean", "warning: secret-path", "buildkite.git_clean_failed", 1, gitErrorClean},
+		{"submodules", "warning: secret-path", "buildkite.git_submodule_clean_failed", 1, gitErrorCleanSubmodules},
+		{"repack", "fatal: secret-path", "buildkite.git_repack_failed", 1, gitErrorRepack},
+		{"lfs", "error: secret-url", "buildkite.git_lfs_failed", 2, gitErrorLFS},
+		{"lfs-checkout", "error: unable to write secret-path", "buildkite.git_lfs_failed", 2, gitErrorLFS},
 	} {
 		t.Run(tc.operation+"/"+tc.diagnostic, func(t *testing.T) {
 			t.Parallel()
@@ -204,7 +204,7 @@ func TestGitErrorCaptureRetries(t *testing.T) {
 		operation, code                  string
 		failUntil, attempts, reportCount int
 	}{
-		{"lfs", "git_lfs_failed", 5, 5, 1},
+		{"lfs", "buildkite.git_lfs_failed", 5, 5, 1},
 	} {
 		t.Run(tc.operation, func(t *testing.T) {
 			t.Parallel()
@@ -306,9 +306,9 @@ func TestGitCaptureDeadline(t *testing.T) {
 
 func TestGitErrorOutputCapture(t *testing.T) {
 	t.Parallel()
-	const fallback = "Git checkout failed with an unclassified error."
+	const fallback = "Git checkout exited with a fatal error. The agent cleans the checkout after this error, so any retry starts from a fresh clone."
 	const heading = "\n\nLast lines of Git output:\n"
-	// Each numbered line is 9 characters, so 91 of them fit after the summary.
+	// Each numbered line is 9 characters, so 82 of them fit after the summary.
 	var numbered []string
 	for i := range 200 {
 		numbered = append(numbered, fmt.Sprintf("line %03d\n", i))
@@ -319,7 +319,7 @@ func TestGitErrorOutputCapture(t *testing.T) {
 	}{
 		{"empty", fallback, nil},
 		{"whitespace", fallback, []string{" \n\t"}},
-		{"keeps the last lines that fit", fallback + heading + strings.Join(numbered[109:], ""), numbered},
+		{"keeps the last lines that fit", fallback + heading + strings.Join(numbered[118:], ""), numbered},
 		{"single line too long for the report", fallback, []string{"fatal: " + strings.Repeat("x", maxGitErrorMessage) + "\n"}},
 		{"long earlier line is dropped", fallback + heading + "fatal: later output", []string{strings.Repeat("x", maxGitErrorMessage) + "\n", "fatal: later output"}},
 		{"output beyond the buffer", fallback + "\n\n" + gitOutputOmitted, []string{strings.Repeat("x", maxGitErrorOutput), "secret", "-suffix\n", "fatal: later output\n"}},
@@ -346,8 +346,8 @@ func TestGitErrorOutputCapture(t *testing.T) {
 			if len(reports) != 1 {
 				t.Fatalf("reports = %d, want 1", len(reports))
 			}
-			if report := <-reports; report.Code != "git_checkout_unclassified" || report.Message != tc.want {
-				t.Fatalf("report = %#v, want unclassified code and message %q", report, tc.want)
+			if report := <-reports; report.Code != "buildkite.git_checkout_failed" || report.Message != tc.want {
+				t.Fatalf("report = %#v, want git_checkout_failed and message %q", report, tc.want)
 			}
 		})
 	}
@@ -433,7 +433,7 @@ func TestGitErrorCaptureThroughCheckoutPhase(t *testing.T) {
 		t.Fatalf("reports = %d, want 1", len(reports))
 	}
 	report := <-reports
-	if want := "remote: [REDACTED]\nfatal: unable to read from remote\n"; report.Code != "git_clean_failed" || strings.Contains(report.Message, "PRIVATE_CREDENTIAL_SUFFIX") || !strings.HasSuffix(report.Message, want) {
-		t.Fatalf("report = %#v, want git_clean_failed with the secret redacted and suffix %q", report, want)
+	if want := "remote: [REDACTED]\nfatal: unable to read from remote\n"; report.Code != "buildkite.git_clean_failed" || strings.Contains(report.Message, "PRIVATE_CREDENTIAL_SUFFIX") || !strings.HasSuffix(report.Message, want) {
+		t.Fatalf("report = %#v, want buildkite.git_clean_failed with the secret redacted and suffix %q", report, want)
 	}
 }
