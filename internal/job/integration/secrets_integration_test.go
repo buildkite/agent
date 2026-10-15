@@ -892,13 +892,13 @@ func TestSecretsIntegration_FailuresAreCaptured(t *testing.T) {
 		{
 			name:    "fetch failure",
 			secrets: []pipeline.Secret{{Key: "VALID_SECRET"}, {Key: "MISSING_SECRET"}},
-			code:    "secrets_fetch_failed",
+			code:    "buildkite.secrets_fetch_failed",
 			message: "- MISSING_SECRET: 404 Not Found: Not Found: method = GET",
 		},
 		{
 			name:    "protected environment variable",
 			secrets: []pipeline.Secret{{Key: "VALID_SECRET", EnvironmentVariable: "BUILDKITE_AGENT_ACCESS_TOKEN"}},
-			code:    "secret_environment_variable_rejected",
+			code:    "buildkite.secret_environment_variable_rejected",
 			message: `secret "VALID_SECRET" cannot set protected environment variable "BUILDKITE_AGENT_ACCESS_TOKEN". Map the secret to a different environment_variable in the step.`,
 		},
 	} {

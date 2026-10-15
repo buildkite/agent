@@ -286,7 +286,7 @@ func TestGitCredentialsHelperRedaction(t *testing.T) {
 				t.Fatalf("output=%q, error=%v; want repository credentials", output, err)
 			}
 			if _, err := client.CaptureError(t.Context(), &jobapi.CapturedError{
-				Code: "git_authentication_failed", Message: fmt.Sprintf("remote echoed %s and %q", secret, secret),
+				Code: "buildkite.git_authentication_failed", Message: fmt.Sprintf("remote echoed %s and %q", secret, secret),
 			}); err != nil {
 				t.Fatal(err)
 			}

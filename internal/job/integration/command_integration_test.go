@@ -92,37 +92,37 @@ func TestCommandFailuresAreCaptured(t *testing.T) {
 		{
 			name:    "exit status",
 			env:     []string{"BUILDKITE_COMMAND=echo 'Running the test suite'; exit 3"},
-			code:    "command_failed",
+			code:    "buildkite.command_failed",
 			message: "The command `echo 'Running the test suite'; exit 3` exited with status 3.\n\nLast lines of output:\nRunning the test suite",
 		},
 		{
 			name:    "signal",
 			env:     []string{"BUILDKITE_COMMAND=kill -KILL $$"},
-			code:    "command_failed",
+			code:    "buildkite.command_failed",
 			message: "The command `kill -KILL $$` was terminated by signal SIGKILL. The operating system may have killed it for using too much memory.",
 		},
 		{
 			name: "missing command",
 			env:  []string{"BUILDKITE_COMMAND="},
-			code: "command_missing",
+			code: "buildkite.command_not_configured",
 		},
 		{
 			name:    "command eval disabled",
 			env:     []string{"BUILDKITE_COMMAND=echo hello", "BUILDKITE_COMMAND_EVAL=false"},
-			code:    "command_eval_disabled",
+			code:    "buildkite.command_eval_rejected",
 			message: "this agent is not allowed to evaluate console commands; to allow this, re-run the agent without the `--no-command-eval` option or specify a script within your repository to run instead (such as scripts/test.sh). The step's command is `echo hello`.",
 		},
 		{
 			// The hook did not exist when the agent chose what to run.
 			name:    "command that creates a command hook",
 			env:     []string{"BUILDKITE_COMMAND=mkdir -p .buildkite/hooks && touch .buildkite/hooks/command && exit 4"},
-			code:    "command_failed",
+			code:    "buildkite.command_failed",
 			message: "The command `mkdir -p .buildkite/hooks && touch .buildkite/hooks/command && exit 4` exited with status 4.",
 		},
 		{
 			name:    "command not run",
 			env:     []string{"BUILDKITE_COMMAND=echo hello", `BUILDKITE_SHELL=/bin/bash "-c`},
-			code:    "command_not_run",
+			code:    "buildkite.command_start_failed",
 			message: "The command `echo hello` could not be run: failed to split shell (\"/bin/bash \\\"-c\") into tokens: expected closing quote \" at offset 12, got EOF.",
 		},
 	} {
@@ -160,9 +160,9 @@ func TestRefusedCommandHookIsCapturedOnce(t *testing.T) {
 	if err := tester.Run(t, append(agentAPI.env(), "BUILDKITE_NO_LOCAL_HOOKS=true")...); err == nil {
 		t.Fatalf("tester.Run() = nil, want local hook refusal")
 	}
-	agentAPI.report(t, "local_hook_refused")
+	agentAPI.report(t, "buildkite.local_hook_rejected")
 	if codes := agentAPI.codes(); len(codes) != 1 {
-		t.Errorf("captured codes = %v, want only local_hook_refused", codes)
+		t.Errorf("captured codes = %v, want only buildkite.local_hook_rejected", codes)
 	}
 }
 
