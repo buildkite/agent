@@ -237,44 +237,44 @@ func classifyGitError(err error) (string, string) {
 	}
 	for _, pattern := range gitAuthenticationErrorPatterns {
 		if gitErr.outputMatches[pattern] {
-			return "git_authentication_failed", "Git reported an authentication failure."
+			return "buildkite.git_authentication_failed", "Git reported an authentication failure."
 		}
 	}
 	for _, pattern := range gitNetworkErrorPatterns {
 		if gitErr.outputMatches[pattern] {
-			return "git_network_failed", "Git reported a network connection failure."
+			return "buildkite.git_network_failed", "Git reported a network connection failure."
 		}
 	}
 	var code, message string
 	switch gitErr.Type {
 	case gitErrorCheckout:
-		code, message = "git_checkout_failed", "Git checkout failed."
+		code, message = "buildkite.git_checkout_failed", "Git checkout failed."
 	case gitErrorCheckoutReferenceIsNotATree:
-		code, message = "git_reference_not_a_tree", "Git checkout could not resolve the reference to a tree."
+		code, message = "buildkite.git_ref_not_a_tree", "Git checkout could not resolve the reference to a tree."
 	case gitErrorCheckoutRetryClean:
-		code, message = "git_checkout_unclassified", "Git checkout failed with an unclassified error."
+		code, message = "buildkite.git_checkout_failed", "Git checkout exited with a fatal error. The agent cleans the checkout after this error, so any retry starts from a fresh clone."
 	case gitErrorClone:
-		code, message = "git_clone_failed", "Git clone failed."
+		code, message = "buildkite.git_clone_failed", "Git clone failed."
 	case gitErrorCloneTimeout:
-		code, message = "git_clone_timeout", "Git clone failed because the transfer was too slow."
+		code, message = "buildkite.git_clone_timed_out", "Git clone failed because the transfer was too slow."
 	case gitErrorFetch:
-		code, message = "git_fetch_failed", "Git fetch failed."
+		code, message = "buildkite.git_fetch_failed", "Git fetch failed."
 	case gitErrorFetchRetryClean:
-		code, message = "git_fetch_unclassified", "Git fetch failed with an unclassified error."
+		code, message = "buildkite.git_fetch_failed", "Git fetch exited with a fatal error. The agent cleans the checkout after this error, so any retry starts from a fresh clone."
 	case gitErrorFetchBadObject:
-		code, message = "git_bad_object", "Git fetch encountered a bad object."
+		code, message = "buildkite.git_bad_object", "Git fetch encountered a bad object."
 	case gitErrorFetchBadReference:
-		code, message = "git_ref_not_found", "Git fetch could not find the remote reference."
+		code, message = "buildkite.git_ref_not_found", "Git fetch could not find the remote reference."
 	case gitErrorFetchRefNotOnRemote:
-		code, message = "git_ref_not_on_remote", "Git fetch requested an object the remote does not have or advertise."
+		code, message = "buildkite.git_commit_not_found", "Git fetch requested an object the remote does not have or advertise."
 	case gitErrorClean:
-		code, message = "git_clean_failed", "Git clean failed."
+		code, message = "buildkite.git_clean_failed", "Git clean failed."
 	case gitErrorCleanSubmodules:
-		code, message = "git_submodule_clean_failed", "Git submodule clean failed."
+		code, message = "buildkite.git_submodule_clean_failed", "Git submodule clean failed."
 	case gitErrorRepack:
-		code, message = "git_repack_failed", "Git repack failed."
+		code, message = "buildkite.git_repack_failed", "Git repack failed."
 	case gitErrorLFS:
-		code, message = "git_lfs_failed", "Git LFS fetch or checkout failed."
+		code, message = "buildkite.git_lfs_failed", "Git LFS fetch or checkout failed."
 	default:
 		return "", ""
 	}
