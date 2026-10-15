@@ -213,26 +213,26 @@ func withGitOutput(summary, output string) string {
 // checkout log formats, which include operation and retry details.
 func classifyGitError(err error) (string, string) {
 	if errors.Is(err, errCheckoutAttemptTimedOut) {
-		return "git_checkout_timeout", "The Git checkout attempt timed out."
+		return "buildkite.git_checkout_timed_out", "The Git checkout attempt timed out."
 	}
 	var gitErr *gitError
 	if !errors.As(err, &gitErr) {
 		var lockErr ErrTimedOutAcquiringLock
 		switch {
 		case errors.Is(err, errInvalidRef):
-			return "git_invalid_ref", "Git checkout received an invalid reference."
+			return "buildkite.git_ref_invalid", "Git checkout received an invalid reference."
 		case errors.Is(err, ErrCommitVerificationFailed):
-			return "git_commit_verification_failed", "Git commit verification failed."
+			return "buildkite.git_commit_verification_failed", "Git commit verification failed."
 		case errors.Is(err, errGitLFSPreflight):
-			return "git_lfs_preflight_failed", "Git LFS version check failed."
+			return "buildkite.git_lfs_preflight_failed", "Git LFS version check failed."
 		case errors.Is(err, errInvalidSparseCheckoutMode):
-			return "git_invalid_sparse_checkout_mode", "Git checkout received an invalid sparse checkout mode."
+			return "buildkite.git_sparse_checkout_mode_invalid", "Git checkout received an invalid sparse checkout mode."
 		case errors.Is(err, errInvalidFetchBaseBranchMode):
-			return "git_invalid_fetch_base_branch_mode", "Git checkout received an invalid base branch fetch mode."
+			return "buildkite.git_fetch_base_branch_mode_invalid", "Git checkout received an invalid base branch fetch mode."
 		case errors.As(err, &lockErr):
-			return "git_checkout_lock_timeout", "Git checkout timed out waiting for a lock."
+			return "buildkite.git_checkout_lock_timed_out", "Git checkout timed out waiting for a lock."
 		default:
-			return "git_checkout_phase_failed", "The default checkout phase failed."
+			return "buildkite.checkout_phase_failed", "The default checkout phase failed."
 		}
 	}
 	for _, pattern := range gitAuthenticationErrorPatterns {
@@ -298,7 +298,7 @@ func captureCheckoutError(ctx context.Context, sh *shell.Shell, err error) {
 			// Git commands capture their own failures. Other checkout operations
 			// reuse these error types for recovery, not to identify a failed command.
 			gitErr.captured = true
-			captureError(ctx, sh, "git_checkout_phase_failed", "The default checkout phase failed.")
+			captureError(ctx, sh, "buildkite.checkout_phase_failed", "The default checkout phase failed.")
 			return
 		}
 	}

@@ -312,7 +312,7 @@ func (e *Executor) fetchCommitFromRemoteMirror(
 	if errors.Is(mirrorCtx.Err(), context.DeadlineExceeded) {
 		attempt.outcome = remoteMirrorOutcomeTimeout
 		// The probe expired, not the checkout: retain the observation before fallback.
-		captureError(ctx, e.shell, "git_remote_mirror_timeout", "The remote Git mirror probe timed out.")
+		captureError(ctx, e.shell, "buildkite.git_remote_mirror_timed_out", "The remote Git mirror probe timed out, so the checkout fell back to the repository. This didn't fail the job on its own.")
 		return false, nil
 	}
 	if err != nil {
@@ -330,7 +330,7 @@ func (e *Executor) fetchCommitFromRemoteMirror(
 	}
 	if errors.Is(mirrorCtx.Err(), context.DeadlineExceeded) {
 		attempt.outcome = remoteMirrorOutcomeTimeout
-		captureError(ctx, e.shell, "git_remote_mirror_timeout", "The remote Git mirror probe timed out.")
+		captureError(ctx, e.shell, "buildkite.git_remote_mirror_timed_out", "The remote Git mirror probe timed out, so the checkout fell back to the repository. This didn't fail the job on its own.")
 		return false, nil
 	}
 	if !hasCommit {
