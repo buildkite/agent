@@ -8,6 +8,7 @@ import (
 	"reflect"
 	"slices"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/buildkite/agent/v4/api"
@@ -253,7 +254,7 @@ var (
 
 	ProtectDangerousGitEnvironmentVariablesFlag = &cli.BoolFlag{
 		Name:    "protect-dangerous-git-environment-variables",
-		Usage:   "Add the agent's maintained list of Git configuration and command-execution environment variables to protected-environment-variables. Disabled by default.",
+		Usage:   fmt.Sprintf("Add the agent's maintained preset to protected-environment-variables to protect against job-supplied overrides. The preset covers Git environment variables that can select executables, inject Git configuration or enable command-running transports: %s. This preset is not exhaustive; use protected-environment-variables to protect additional names or trailing-* prefixes. Disabled by default.", strings.Join(env.DangerousGitEnvPatterns(), ", ")),
 		Sources: cli.EnvVars("BUILDKITE_PROTECT_DANGEROUS_GIT_ENVIRONMENT_VARIABLES"),
 	}
 
