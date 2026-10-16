@@ -23,7 +23,7 @@ func (c *Client) StreamPings(ctx context.Context, agentID string, opts ...connec
 	u.Path = "/"
 
 	cl := agentedgev1connect.NewAgentEdgeServiceClient(
-		c.client,
+		c.streamingClient,
 		u.String(),
 		connect.WithGRPC(),
 		connect.WithClientOptions(opts...),
