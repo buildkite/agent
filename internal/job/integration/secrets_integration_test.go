@@ -693,6 +693,7 @@ func TestSecretsIntegration_ProtectedEnv(t *testing.T) {
 		{name: "disabled", variable: "GIT_SSH_COMMAND"},
 		{name: "enabled", enabled: true, variable: "GIT_SSH_COMMAND", wantErr: true},
 		{name: "config_entry", enabled: true, variable: "GIT_CONFIG_VALUE_0", wantErr: true},
+		{name: "allow_protocol", enabled: true, variable: "GIT_ALLOW_PROTOCOL", wantErr: true},
 		{name: "safe_variable", enabled: true, variable: "GIT_AUTHOR_NAME"},
 		{name: "policy_override", enabled: true, variable: "BUILDKITE_PROTECT_DANGEROUS_GIT_ENVIRONMENT_VARIABLES", wantErr: true},
 		{name: "custom_policy_override", variable: "BUILDKITE_PROTECTED_ENVIRONMENT_VARIABLES", wantErr: true},

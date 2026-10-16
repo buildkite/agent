@@ -144,14 +144,18 @@ var checkoutJobEnvFromJobFloor = map[string]struct{}{
 	"BUILDKITE_GIT_SPARSE_CHECKOUT_PATHS": {},
 }
 
-// dangerousGitEnv details a list of environment variables that can be used to get git
-// to do strange or dangerous things, eg setting GIT_SSH_COMMAND to any arbitrary command
-// will make git run that command any time it tries to use SSH. Many operators will
-// want to prevent their users from setting such environment variables in job environment.
-var dangerousGitEnv = []string{
-	"GIT_CONFIG", "GIT_CONFIG_*", "GIT_ASKPASS", "SSH_ASKPASS", "GIT_SSH", "GIT_SSH_COMMAND",
-	"GIT_EXEC_PATH", "GIT_EXTERNAL_DIFF", "GIT_PROXY_COMMAND", "GIT_TEMPLATE_DIR",
-	"GIT_PAGER", "PAGER", "GIT_EDITOR", "GIT_SEQUENCE_EDITOR", "EDITOR", "VISUAL",
+// DangerousGitEnvPatterns returns a fresh copy of the maintained Git preset.
+// It covers variables that inject configuration, select executables, or enable
+// command-running transports. For example, GIT_SSH_COMMAND selects the command
+// Git runs for SSH, and GIT_ALLOW_PROTOCOL can enable the ext transport.
+// This is not an exhaustive list of variables that can influence Git.
+func DangerousGitEnvPatterns() []string {
+	return []string{
+		"GIT_CONFIG", "GIT_CONFIG_*", "GIT_ASKPASS", "SSH_ASKPASS", "GIT_SSH", "GIT_SSH_COMMAND",
+		"GIT_EXEC_PATH", "GIT_EXTERNAL_DIFF", "GIT_PROXY_COMMAND", "GIT_TEMPLATE_DIR",
+		"GIT_PAGER", "PAGER", "GIT_EDITOR", "GIT_SEQUENCE_EDITOR", "EDITOR", "VISUAL",
+		"GIT_ALLOW_PROTOCOL",
+	}
 }
 
 // Some checkout-related vars are intentionally governed by neither the mode nor
@@ -176,7 +180,7 @@ func ProtectedEnvPatterns(patterns []string, protectGit bool) ([]string, error) 
 	}
 	patterns = slices.Clone(patterns)
 	if protectGit {
-		patterns = append(patterns, dangerousGitEnv...)
+		patterns = append(patterns, DangerousGitEnvPatterns()...)
 	}
 	return patterns, nil
 }
