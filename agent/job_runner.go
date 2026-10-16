@@ -948,6 +948,9 @@ func truncateEnv(l logger.Logger, env map[string]string, key string, max int) er
 	return nil
 }
 
+// removeKubernetesPlugin removes the Kubernetes plugin from a BUILDKITE_PLUGINS
+// JSON value. It returns nil if no plugins remain, so callers can unset the
+// variable rather than leave an empty list that still counts as having plugins.
 func removeKubernetesPlugin(pluginsJSON []byte) ([]byte, error) {
 	var plugins []map[string]json.RawMessage
 	if err := json.Unmarshal(pluginsJSON, &plugins); err != nil {
@@ -957,6 +960,9 @@ func removeKubernetesPlugin(pluginsJSON []byte) ([]byte, error) {
 		_, isK8sPlugin := plugin["github.com/buildkite-plugins/kubernetes-buildkite-plugin"]
 		return isK8sPlugin
 	})
+	if len(plugins) == 0 {
+		return nil, nil
+	}
 	return json.Marshal(plugins)
 }
 
