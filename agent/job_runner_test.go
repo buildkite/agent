@@ -158,3 +158,27 @@ func TestCancelReasonString(t *testing.T) {
 		}
 	}
 }
+
+func TestRemoveKubernetesPlugin(t *testing.T) {
+	const k8s = `{"github.com/buildkite-plugins/kubernetes-buildkite-plugin":{"podTemplate":"example"}}`
+	const other = `{"github.com/buildkite-plugins/docker-buildkite-plugin#v5":{"image":"alpine"}}`
+
+	tests := []struct {
+		name, in, want string
+	}{
+		{"only kubernetes plugin", "[" + k8s + "]", ""},
+		{"kubernetes and other plugin", "[" + k8s + "," + other + "]", "[" + other + "]"},
+		{"no kubernetes plugin", "[" + other + "]", "[" + other + "]"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			got, err := removeKubernetesPlugin([]byte(test.in))
+			if err != nil {
+				t.Fatalf("removeKubernetesPlugin(%q) error = %v", test.in, err)
+			}
+			if string(got) != test.want {
+				t.Errorf("removeKubernetesPlugin(%q) = %q, want %q", test.in, got, test.want)
+			}
+		})
+	}
+}
