@@ -126,7 +126,7 @@ func withoutGitErrorCapture(ctx context.Context) context.Context {
 
 func captureGitError(ctx context.Context, sh *shell.Shell, err error, output string) {
 	if err == nil || ctx.Err() != nil || ctx.Value(gitErrorCaptureSkippedKey{}) != nil ||
-		errors.Is(err, context.Canceled) || shell.ExitCode(err) == -1 {
+		errors.Is(err, context.Canceled) || shell.IsExitSignaled(err) {
 		return
 	}
 	var gitErr *gitError
@@ -289,7 +289,7 @@ func captureCheckoutError(ctx context.Context, sh *shell.Shell, err error) {
 	}
 	// The attempt deadline kills Git with a signal, but is not job cancellation.
 	if !errors.Is(err, errCheckoutAttemptTimedOut) {
-		if shell.ExitCode(err) == -1 {
+		if shell.IsExitSignaled(err) {
 			return
 		}
 		var gitErr *gitError

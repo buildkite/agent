@@ -706,7 +706,17 @@ func ExitCode(err error) int {
 	}
 
 	if cause := new(exec.ExitError); errors.As(err, &cause) {
-		return cause.ExitCode()
+		code := cause.ExitCode()
+		// ExitCode is -1 for a process killed by a signal, which loses the
+		// signal entirely (and surfaces as 255 if it becomes a process exit
+		// status, since those are truncated to 8 bits). Report 128+N, the
+		// same convention shells use, e.g. 143 for SIGTERM.
+		if code == -1 {
+			if status, ok := cause.Sys().(syscall.WaitStatus); ok && status.Signaled() {
+				return 128 + int(status.Signal())
+			}
+		}
+		return code
 	}
 	return 1
 }
@@ -716,6 +726,12 @@ func ExitCode(err error) int {
 func IsExitSignaled(err error) bool {
 	if err == nil {
 		return false
+	}
+	// A shell ExitError carrying -1 represents a signal-terminated process:
+	// real exit codes are unsigned 8-bit, so -1 can only mean "no exit
+	// status", i.e. death by signal.
+	if cause := new(ExitError); errors.As(err, &cause) && cause.Code == -1 {
+		return true
 	}
 	if exitErr := new(exec.ExitError); errors.As(err, &exitErr) {
 		if status, ok := exitErr.Sys().(syscall.WaitStatus); ok {

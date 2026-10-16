@@ -601,17 +601,23 @@ var BootstrapCommand = &cli.Command{
 		// Listen for signals in the background and cancel the bootstrap
 		go func() {
 			sig := <-signals
+
+			// Record the cancellation before cancelling the bootstrap: the
+			// signal was most likely delivered to the whole process group,
+			// so the command may die from it and Run may return before
+			// Cancel below has finished. If the state were only recorded
+			// after Cancel returned, the main goroutine could observe the
+			// signalled command exit with cancelled == false and exit with
+			// the command's status instead of re-signalling itself.
 			signalMu.Lock()
-			defer signalMu.Unlock()
+			cancelled = true
+			received = sig
+			signalMu.Unlock()
 
 			// Cancel the bootstrap
 			if err := bootstrap.Cancel(); err != nil {
 				l.Debugf("Failed to cancel bootstrap: %v", err)
 			}
-
-			// Track the state and signal used
-			cancelled = true
-			received = sig
 
 			// Remove our signal handler so subsequent signals kill
 			signal.Stop(signals)
@@ -622,6 +628,18 @@ var BootstrapCommand = &cli.Command{
 
 		signalMu.Lock()
 		defer signalMu.Unlock()
+
+		// The signal goroutine may not have been scheduled yet even though a
+		// signal is already queued (the channel is buffered). Pick it up here
+		// so a cancelled job still takes the re-signal path below.
+		if !cancelled {
+			select {
+			case sig := <-signals:
+				cancelled = true
+				received = sig
+			default:
+			}
+		}
 
 		// If cancelled and our child process returns a non-zero, we should terminate
 		// ourselves with the same signal so that our caller can detect and handle appropriately

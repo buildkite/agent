@@ -1,7 +1,10 @@
 package integration
 
 import (
+	"errors"
+	"os/exec"
 	"runtime"
+	"syscall"
 	"testing"
 	"time"
 
@@ -42,6 +45,118 @@ func TestMultilineCommandRunUnderBatch(t *testing.T) {
 	}
 
 	tester.RunAndCheck(t, env...)
+}
+
+func TestSignalledCommandExitStatus(t *testing.T) {
+	t.Parallel()
+
+	if runtime.GOOS == "windows" {
+		t.Skip("kill -TERM needs a POSIX shell")
+	}
+
+	tester, err := NewExecutorTester(mainCtx)
+	if err != nil {
+		t.Fatalf("NewExecutorTester() error = %v", err)
+	}
+	defer tester.Close()
+
+	assertExitStatus := func(c *bintest.Call) {
+		if got, want := c.GetEnv("BUILDKITE_COMMAND_EXIT_STATUS"), "143"; got != want {
+			t.Errorf("c.GetEnv(BUILDKITE_COMMAND_EXIT_STATUS) = %q, want %q", got, want)
+		}
+		c.Exit(0)
+	}
+	tester.ExpectGlobalHook("pre-exit").Once().AndCallFunc(assertExitStatus)
+	tester.ExpectLocalHook("pre-exit").Once().AndCallFunc(assertExitStatus)
+
+	// The command kills itself with SIGTERM. A signalled command has no exit
+	// status of its own, so the bootstrap should exit 128+N (143) rather
+	// than 255, which is how Go's -1 signalled sentinel survives os.Exit's
+	// 8-bit truncation.
+	err = tester.Run(t, `BUILDKITE_COMMAND=kill -TERM $$`)
+
+	var exitErr *exec.ExitError
+	if !errors.As(err, &exitErr) {
+		t.Fatalf("tester.Run() error = %v, want *exec.ExitError", err)
+	}
+	if got, want := exitErr.ExitCode(), 143; got != want {
+		t.Errorf("bootstrap exit code = %d, want %d", got, want)
+	}
+
+	tester.CheckMocks(t)
+}
+
+func TestCancelledCommandExitStatus(t *testing.T) {
+	t.Parallel()
+
+	// Same constraints as TestPreExitHooksFireAfterCancel.
+	if runtime.GOOS == "windows" || runtime.GOOS == "darwin" {
+		t.Skip()
+	}
+
+	tester, err := NewExecutorTester(mainCtx)
+	if err != nil {
+		t.Fatalf("NewExecutorTester() error = %v", err)
+	}
+	defer tester.Close()
+
+	assertExitStatus := func(c *bintest.Call) {
+		if got, want := c.GetEnv("BUILDKITE_COMMAND_EXIT_STATUS"), "143"; got != want {
+			t.Errorf("c.GetEnv(BUILDKITE_COMMAND_EXIT_STATUS) = %q, want %q", got, want)
+		}
+		c.Exit(0)
+	}
+	tester.ExpectGlobalHook("pre-exit").Once().AndCallFunc(assertExitStatus)
+	tester.ExpectLocalHook("pre-exit").Once().AndCallFunc(assertExitStatus)
+
+	commandStarted := make(chan struct{})
+	commandFinished := make(chan struct{})
+	tester.MustMock(t, "blocking-command").Expect().Once().AndCallFunc(func(*bintest.Call) {
+		close(commandStarted)
+		<-commandFinished
+	})
+
+	runDone := make(chan error, 1)
+	go func() {
+		runDone <- tester.Run(t, "BUILDKITE_COMMAND=blocking-command")
+	}()
+
+	select {
+	case <-commandStarted:
+	case err := <-runDone:
+		close(commandFinished)
+		t.Fatalf("tester.Run() finished before command started: %v", err)
+	case <-time.After(30 * time.Second):
+		close(commandFinished)
+		_ = tester.Cancel()
+		t.Fatal("timed out waiting for command to start")
+	}
+
+	if err := tester.Cancel(); err != nil {
+		t.Errorf("tester.Cancel() = %v", err)
+	}
+
+	select {
+	case err := <-runDone:
+		// After cancellation the bootstrap re-signals itself with the
+		// received signal, so the run ends with death by SIGINT rather than
+		// a plain exit status.
+		var exitErr *exec.ExitError
+		if !errors.As(err, &exitErr) {
+			t.Errorf("tester.Run() error = %v, want *exec.ExitError", err)
+			break
+		}
+		ws, ok := exitErr.Sys().(syscall.WaitStatus)
+		if !ok || !ws.Signaled() || ws.Signal() != syscall.SIGINT {
+			t.Errorf("bootstrap wait status = %v, want signalled with SIGINT", exitErr)
+		}
+	case <-time.After(30 * time.Second):
+		close(commandFinished)
+		t.Fatal("timed out waiting for command to finish after cancel")
+	}
+	close(commandFinished)
+
+	tester.CheckMocks(t)
 }
 
 func TestPreExitHooksRunsAfterCommandFails(t *testing.T) {
