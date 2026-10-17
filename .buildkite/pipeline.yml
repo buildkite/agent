@@ -333,6 +333,43 @@ steps:
 
   # --- end Tests and Coverage ---
 
+  # Runs `buildkite-agent cache exec` end to end against a fake cache registry,
+  # inside real bootstrap jobs. Needs no secrets or network access, so the
+  # container gets neither the agent binary nor the build's environment.
+  - name: ":package: Cache exec end-to-end tests"
+    key: test-cache-exec-e2e
+    command: ./test/cache-exec-e2e/run.sh
+    if_changed:
+      - go.{mod,sum}
+      - "**.go"
+      - test/cache-exec-e2e/**
+      - .buildkite/Dockerfile-compile
+      - .buildkite/docker-compose.yml
+      - .buildkite/pipeline.yml
+    plugins:
+      - docker-compose#v4.14.0:
+          config: .buildkite/docker-compose.yml
+          cli-version: 2
+          run: agent
+
+  # Shows the time `buildkite-agent cache exec` saves: the same slow step run three
+  # times (miss, hit, then a miss after a source change). See test/cache-exec-e2e/demo.sh.
+  - name: ":zap: Cache exec demo"
+    key: cache-exec-demo
+    command: ./test/cache-exec-e2e/demo.sh
+    if_changed:
+      - go.{mod,sum}
+      - "**.go"
+      - test/cache-exec-e2e/**
+      - .buildkite/Dockerfile-compile
+      - .buildkite/docker-compose.yml
+      - .buildkite/pipeline.yml
+    plugins:
+      - docker-compose#v4.14.0:
+          config: .buildkite/docker-compose.yml
+          cli-version: 2
+          run: agent
+
   - group: ":hammer_and_wrench: Binary builds"
     steps:
       - name: ":{{matrix.os}}: Build {{matrix.os}} {{matrix.arch}} binary"
