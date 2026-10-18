@@ -57,7 +57,6 @@ var BuildkiteAgentCommands = []*cli.Command{
 		Name:     "cache",
 		Category: categoryJobCommands,
 		Usage:    "Manage build caches",
-		Hidden:   true, // currently in experimental phase
 		Commands: []*cli.Command{
 			CacheSaveCommand,
 			CacheRestoreCommand,
