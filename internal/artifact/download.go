@@ -160,13 +160,15 @@ func newDownloadFile(ctx context.Context, path, destination string) (_ *download
 }
 
 func (f *downloadFile) cleanup() {
+	// Best-effort: after a successful commit, Close and Remove are expected to fail.
 	_ = f.file.Close()
 	_ = f.root.Remove(f.tempPath)
 	_ = f.root.Close()
 }
 
 func (f *downloadFile) commit() error {
-	// Restore historical download permissions, restricted by the process umask.
+	// The temp file is private while downloading; give the finished file the
+	// usual 0o666 minus umask, since umask isn't applied by Chmod.
 	if err := f.file.Chmod(0o666 &^ osutil.Umask); err != nil {
 		return fmt.Errorf("setting file permissions: %w", err)
 	}
