@@ -1325,6 +1325,12 @@ func (e *Executor) CommandPhase(ctx context.Context) (hookErr, commandErr error)
 		return preCommandErr, nil
 	}
 
+	if e.GitCommitVerification == GitCommitVerificationFailClosed && !e.commitVerified {
+		preCommandErr = fmt.Errorf("%w: fail-closed mode requires successful verification in the checkout phase", ErrCommitVerificationUnavailable)
+		captureCheckoutError(ctx, e.shell, preCommandErr)
+		return preCommandErr, nil
+	}
+
 	// Run the command
 	commandErr = e.runCommand(ctx)
 
