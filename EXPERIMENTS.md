@@ -81,6 +81,14 @@ The experiment also sets `BUILDKITE_PROGRAM_STATUS=true` in the job environment,
 
 `buildkite-agent pipeline upload` and `buildkite-agent artifact upload` send their own reports, with `app=buildkite-agent`, following the same `BUILDKITE_PROGRAM_STATUS` rules as `bk`. `artifact upload` reports its progress as the percentage of files uploaded.
 
+The agent also reports the job's own progress, on records with these ids, so they don't overwrite reports from programs the job runs:
+
+- `checkout`, `command` and `artifacts` for those parts of the job.
+- `hook/agent/<hook>` and `hook/repository/<hook>` for agent and repository hooks, such as `hook/agent/pre-command`.
+- `hook/plugin/<plugin>/<hook>` for plugin hooks, such as `hook/plugin/docker/pre-command`.
+
+These reports don't add a line to the log, because the log already has a header for each of them. When the job ends, the agent clears the records that finished successfully, except `command`.
+
 **Status:** Experimental. The agent doesn't reply to the protocol's feature detection query yet.
 
 ### `interpolation-prefers-runtime-env`
