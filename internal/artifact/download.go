@@ -3,6 +3,7 @@ package artifact
 import (
 	"cmp"
 	"context"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
@@ -118,9 +119,70 @@ func targetPath(_ context.Context, dlPath, destPath string) string {
 	return filepath.Join(destPath, dlPath)
 }
 
+// downloadFile keeps directory creation, temporary files, cleanup, and rename
+// confined to the requested destination, including when parents are symlinks.
+type downloadFile struct {
+	file       *os.File
+	root       *os.Root
+	targetPath string
+	tempPath   string
+}
+
+func newDownloadFile(ctx context.Context, path, destination string) (_ *downloadFile, err error) {
+	// Preserve targetPath's path merging, but root operations must use paths
+	// relative to the original destination, not its parent or the target directory.
+	target, err := filepath.Rel(cmp.Or(destination, "."), targetPath(ctx, path, destination))
+	if err != nil {
+		return nil, fmt.Errorf("resolving download path: %w", err)
+	}
+	root, err := os.OpenRoot(cmp.Or(destination, "."))
+	if err != nil {
+		return nil, fmt.Errorf("opening download destination: %w", err)
+	}
+	defer func() {
+		if err != nil {
+			_ = root.Close()
+		}
+	}()
+
+	// Permissions are reduced by umask, as with the previous os.MkdirAll.
+	if err := root.MkdirAll(filepath.Dir(target), 0o777); err != nil {
+		return nil, fmt.Errorf("creating directory for %s: %w", target, err)
+	}
+	// os.Root has no CreateTemp. Use an unpredictable name and exclusive creation
+	// within the root; never reopen a root-relative path with an ordinary os call.
+	tempPath := filepath.Join(filepath.Dir(target), ".buildkite-artifact-"+rand.Text())
+	file, err := root.OpenFile(tempPath, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0o600)
+	if err != nil {
+		return nil, fmt.Errorf("creating temp file: %w", err)
+	}
+	return &downloadFile{file: file, root: root, targetPath: target, tempPath: tempPath}, nil
+}
+
+func (f *downloadFile) cleanup() {
+	_ = f.file.Close()
+	_ = f.root.Remove(f.tempPath)
+	_ = f.root.Close()
+}
+
+func (f *downloadFile) commit() error {
+	// Restore historical download permissions, restricted by the process umask.
+	if err := f.file.Chmod(0o666 &^ osutil.Umask); err != nil {
+		return fmt.Errorf("setting file permissions: %w", err)
+	}
+	if err := f.file.Close(); err != nil {
+		return fmt.Errorf("closing temp file: %w", err)
+	}
+	// Replace the target only after the download and any checksum verification
+	// succeed. Both names are in the same directory and relative to the root.
+	if err := f.root.Rename(f.tempPath, f.targetPath); err != nil {
+		return fmt.Errorf("renaming temp file to target: %w", err)
+	}
+	return nil
+}
+
 func (d Download) try(ctx context.Context) error {
 	targetPath := targetPath(ctx, d.conf.Path, d.conf.Destination)
-	targetDirectory, targetFile := filepath.Split(targetPath)
 
 	// Show a nice message that we're starting to download the file
 	d.logger.Debugf("Downloading %s to %s", d.conf.URL, targetPath)
@@ -158,40 +220,20 @@ func (d Download) try(ctx context.Context) error {
 		return &downloadError{response.Status}
 	}
 
-	// Now make the folder for our file
-	// Actual file permissions will be reduced by umask, and won't be 0o777 unless the user has manually changed the umask to 000
-	if err := os.MkdirAll(targetDirectory, 0o777); err != nil {
-		return fmt.Errorf("creating directory for %s (%T: %w)", targetPath, err, err)
-	}
-
-	// Create a temporary file to write to.
-	temp, err := os.CreateTemp(targetDirectory, targetFile)
+	temp, err := newDownloadFile(ctx, d.conf.Path, d.conf.Destination)
 	if err != nil {
-		return fmt.Errorf("creating temp file (%T: %w)", err, err)
+		return err
 	}
-	defer os.Remove(temp.Name()) //nolint:errcheck // Best-effort cleanup
-	defer temp.Close()           //nolint:errcheck // Best-effort cleanup - primary Close checked below.
+	defer temp.cleanup()
 
 	// Create a SHA256 to hash the download as we go.
 	hash := sha256.New()
-	out := io.MultiWriter(hash, temp)
+	out := io.MultiWriter(hash, temp.file)
 
 	// Copy the data to the file (and hash).
 	bytes, err := io.Copy(out, response.Body)
 	if err != nil {
 		return fmt.Errorf("copying data to temp file (%T: %w)", err, err)
-	}
-
-	// os.CreateTemp uses 0o600 permissions, but in the past we used os.Create
-	// which uses 0x666. Since these are set at open time, they are restricted
-	// by umask.
-	if err := temp.Chmod(0o666 &^ osutil.Umask); err != nil {
-		return fmt.Errorf("setting file permissions (%T: %w)", err, err)
-	}
-
-	// close must succeed for the file to be considered properly written.
-	if err := temp.Close(); err != nil {
-		return fmt.Errorf("closing temp file (%T: %w)", err, err)
 	}
 
 	gotSHA256 := hex.EncodeToString(hash.Sum(nil))
@@ -201,11 +243,8 @@ func (d Download) try(ctx context.Context) error {
 		return fmt.Errorf("checksum of downloaded content %s != uploaded checksum %s", gotSHA256, d.conf.WantSHA256)
 	}
 
-	// Rename the temp file to its intended name within the same directory.
-	// On Unix-like platforms this is generally an "atomic replace".
-	// Caveats: https://pkg.go.dev/os#Rename
-	if err := os.Rename(temp.Name(), targetPath); err != nil {
-		return fmt.Errorf("renaming temp file to target (%T: %w)", err, err)
+	if err := temp.commit(); err != nil {
+		return err
 	}
 
 	d.logger.Infof("Successfully downloaded %q %s with SHA256 %s", d.conf.Path, humanize.IBytes(uint64(bytes)), gotSHA256)
