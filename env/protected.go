@@ -108,7 +108,7 @@ var protectedEnv = map[string]protection{
 // Locking matters because git is riddled with shell injections, so letting a job
 // set git flags would otherwise be a way to bypass protections like
 // no-command-eval (which is why disabling command-eval forces the mode to
-// strict). BUILDKITE_GIT_COMMIT_VERIFICATION ("strict", "off") and
+// strict). BUILDKITE_GIT_COMMIT_VERIFICATION ("strict", "fail-closed", "off") and
 // BUILDKITE_GIT_FETCH_BASE_BRANCH ("off", "optimistic", "strict") are enums, not
 // injection vectors, but the backend exposes them under `checkout:` alongside the
 // flag vars, so they're governed by the mode too: only none lets the backend job

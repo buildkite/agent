@@ -63,6 +63,9 @@ type Executor struct {
 	// The checkout directory root
 	checkoutRoot *os.Root
 
+	// Only a successful ancestry check sets this, not a skipped or unavailable check.
+	commitVerified bool
+
 	// Whether keyscan should be skipped for the primary repository because its
 	// SSH URL is rewritten to HTTPS. Plugins and submodules still use SSHKeyscan.
 	skipRepositorySSHKeyscan bool
@@ -296,6 +299,10 @@ func (e *Executor) Run(ctx context.Context) (exitCode int) {
 			e.checkoutRoot = root
 			runtime.AddCleanup(e, func(r *os.Root) { _ = r.Close() }, root)
 		}
+	}
+
+	if phaseErr == nil && e.GitCommitVerification == GitCommitVerificationFailClosed && !e.commitVerified {
+		phaseErr = fmt.Errorf("%w: fail-closed mode requires successful verification in the checkout phase", ErrCommitVerificationUnavailable)
 	}
 
 	if phaseErr == nil && e.includePhase("plugin") {

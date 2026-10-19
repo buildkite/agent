@@ -137,6 +137,21 @@ func (e *Executor) validateRepositoryAllowedForCheckout(repository string) error
 
 // checkout runs checkout hook or default checkout logic
 func (e *Executor) checkout(ctx context.Context) error {
+	if e.GitCommitVerification == GitCommitVerificationFailClosed {
+		reason := e.commitVerificationSkipReason()
+		switch {
+		case e.SkipCheckout:
+			reason = "checkout is skipped"
+		case e.hasPluginHook("checkout"), e.hasGlobalHook("checkout"):
+			reason = "custom checkout hook is configured"
+		case e.Repository == "":
+			reason = "no repository specified"
+		}
+		if reason != "" {
+			return fmt.Errorf("%w: %s (fail-closed mode)", ErrCommitVerificationUnavailable, reason)
+		}
+	}
+
 	if e.SkipCheckout {
 		e.shell.Commentf("Skipping checkout, BUILDKITE_SKIP_CHECKOUT is set")
 		return nil

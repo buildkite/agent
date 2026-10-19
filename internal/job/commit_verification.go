@@ -18,12 +18,14 @@ var ErrCommitVerificationFailed = errors.New("commit verification failed")
 
 // ErrCommitVerificationUnavailable indicates that git was unable to perform
 // the ancestry check (e.g. due to repo corruption, misconfigured remotes, etc).
-// This is NOT evidence of an attack — it's an infrastructure problem.
+// It also covers checkout paths that bypass the check.
 var ErrCommitVerificationUnavailable = errors.New("commit verification unavailable")
 
 const (
 	// GitCommitVerificationStrict checks branch ancestry and blocks a definitive mismatch.
 	GitCommitVerificationStrict = "strict"
+	// GitCommitVerificationFailClosed requires branch ancestry verification to succeed.
+	GitCommitVerificationFailClosed = "fail-closed"
 	// GitCommitVerificationOff skips branch ancestry verification entirely.
 	GitCommitVerificationOff = "off"
 )
@@ -270,67 +272,56 @@ func (e *Executor) verifyCommit(ctx context.Context) error {
 	case GitCommitVerificationOff:
 		e.shell.Commentf("Skipping commit verification: mode is off")
 		return nil
-	case GitCommitVerificationStrict, "":
+	case GitCommitVerificationStrict, GitCommitVerificationFailClosed, "":
 		// The zero value is treated as strict for programmatic ExecutorConfig
 		// consumers. The CLI rejects empty values, and only explicit off skips.
 		// Continue below.
 	default:
 		return fmt.Errorf(
-			"invalid git commit verification mode %q (must be %q or %q)",
+			"invalid git commit verification mode %q (must be %q, %q or %q)",
 			e.GitCommitVerification,
 			GitCommitVerificationStrict,
+			GitCommitVerificationFailClosed,
 			GitCommitVerificationOff,
 		)
 	}
 
-	// Skip if commit is HEAD (nothing to verify)
-	if e.Commit == "HEAD" {
-		e.shell.Commentf("Skipping commit verification: commit is HEAD")
+	if reason := e.commitVerificationSkipReason(); reason != "" {
+		if e.GitCommitVerification == GitCommitVerificationFailClosed {
+			return fmt.Errorf("%w: %s (fail-closed mode)", ErrCommitVerificationUnavailable, reason)
+		}
+		e.shell.Commentf("Skipping commit verification: %s", reason)
 		return nil
 	}
 
-	// Skip if we haven't been given a branch - e.g. it's a tag push event
-	if e.Branch == "" {
-		e.shell.Commentf("Skipping commit verification: no branch specified")
-		return nil
-	}
-
-	// Skip if this is a tag build — tags are not branch-specific
-	if e.Tag != "" {
-		e.shell.Commentf("Skipping commit verification: tag build (%s)", e.Tag)
-		return nil
-	}
-
-	// Skip if this is a PR build: the commit may be on a merge ref, not the target
-	// branch. BUILDKITE_PULL_REQUEST is the string "false" (not empty) on non-PR builds.
-	if e.PullRequest != "" && e.PullRequest != "false" {
-		e.shell.Commentf("Skipping commit verification: pull request build (#%s)", e.PullRequest)
-		return nil
-	}
-
-	// Skip if a custom refspec is set — the fetch may not populate standard branch refs,
-	// making ancestry verification unreliable
-	if e.RefSpec != "" {
-		e.shell.Commentf("Skipping commit verification: custom refspec is set (%s)", e.RefSpec)
-		return nil
-	}
-
-	// Perform the verification
 	err := e.checkCommitOnBranch(ctx)
-
-	// Verification passed
 	if err == nil {
+		e.commitVerified = true
 		return nil
 	}
 
-	// Definitive failure — commit is provably not on the branch
-	if errors.Is(err, ErrCommitVerificationFailed) {
+	if errors.Is(err, ErrCommitVerificationFailed) || e.GitCommitVerification == GitCommitVerificationFailClosed {
 		return err
 	}
 
-	// Verification unavailable — infrastructure issue, not a definitive mismatch.
-	// We always warn but never block, even in strict mode.
-	// err already begins with "commit verification unavailable", so log it as-is.
+	// Strict preserves the availability-first behavior for inconclusive checks.
 	e.shell.Warningf("%s", err)
 	return nil
+}
+
+func (e *Executor) commitVerificationSkipReason() string {
+	switch {
+	case e.Commit == "HEAD":
+		return "commit is HEAD"
+	case e.Branch == "":
+		return "no branch specified"
+	case e.Tag != "":
+		return fmt.Sprintf("tag build (%s)", e.Tag)
+	case e.PullRequest != "" && e.PullRequest != "false":
+		return fmt.Sprintf("pull request build (#%s)", e.PullRequest)
+	case e.RefSpec != "":
+		return fmt.Sprintf("custom refspec is set (%s)", e.RefSpec)
+	default:
+		return ""
+	}
 }
