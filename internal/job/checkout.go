@@ -148,7 +148,9 @@ func (e *Executor) checkout(ctx context.Context) error {
 			reason = "no repository specified"
 		}
 		if reason != "" {
-			return fmt.Errorf("%w: %s (fail-closed mode)", ErrCommitVerificationUnavailable, reason)
+			err := fmt.Errorf("%w: %s (fail-closed mode)", ErrCommitVerificationUnavailable, reason)
+			captureCheckoutError(ctx, e.shell, err)
+			return err
 		}
 	}
 
@@ -226,11 +228,12 @@ func (e *Executor) checkout(ctx context.Context) error {
 
 			switch {
 			case errors.Is(err, ErrCommitVerificationFailed),
+				errors.Is(err, ErrCommitVerificationUnavailable),
 				errors.Is(err, errNoBaseBranchToFetch),
 				errors.Is(err, errBaseBranchFetchWritesNoRef):
-				// A commit that is provably not on its branch, a job that names no base
-				// branch to fetch, and fetch flags that write no ref are all settled
-				// answers, so fail fast instead of re-cloning through the whole backoff.
+				// Verification failures and invalid base-branch fetch configurations
+				// should not restart checkout. Verification already retries branch-tip
+				// fetches internally, so re-cloning adds no useful recovery here.
 				e.shell.Warningf("Checkout failed! %s", err)
 				r.Break()
 

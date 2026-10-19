@@ -2606,14 +2606,25 @@ func TestCommitVerificationFailClosed(t *testing.T) {
 				commit = strings.TrimSpace(commit)
 				commandMarker := filepath.Join(t.TempDir(), "command-ran")
 				hookMarker := filepath.Join(t.TempDir(), "hook-ran")
+				api := newJobErrorsAPI(t, nil)
 				env := []string{
 					"BUILDKITE_GIT_COMMIT_VERIFICATION=" + mode,
 					"BUILDKITE_COMMIT=" + commit,
 					"BUILDKITE_PULL_REQUEST=false",
 					"BUILDKITE_COMMAND=" + fmt.Sprintf("echo ran > %q", commandMarker),
-					"BUILDKITE_CHECKOUT_ATTEMPTS=1",
 				}
+				env = append(env, api.env()...)
 				env = append(env, tc.env...)
+				var clones atomic.Int32
+				if tc.name == "unavailable branch" {
+					git := tester.MustMock(t, "git").PassthroughToLocalCommand().Before(func(i bintest.Invocation) error {
+						if i.Args[0] == "clone" {
+							clones.Add(1)
+						}
+						return nil
+					})
+					git.Expect().AtLeastOnce().WithAnyArguments()
+				}
 				if tc.phases != "" {
 					tester.Args = append(tester.Args, "--phases", tc.phases)
 				}
@@ -2653,6 +2664,20 @@ func TestCommitVerificationFailClosed(t *testing.T) {
 				}
 				if wantFail && !strings.Contains(tester.Output, tc.wantError) {
 					t.Errorf("expected rejection containing %q; output:\n%s", tc.wantError, tester.Output)
+				}
+				if tc.name == "unavailable branch" && clones.Load() != 1 {
+					t.Errorf("unavailable verification caused %d clones, want 1", clones.Load())
+				}
+				var wantCodes []string
+				if wantFail {
+					if tc.strictFail {
+						wantCodes = []string{"buildkite.git_commit_verification_failed"}
+					} else {
+						wantCodes = []string{"buildkite.git_commit_verification_unavailable"}
+					}
+				}
+				if got := api.codes(); !slices.Equal(got, wantCodes) {
+					t.Errorf("captured error codes = %v, want %v", got, wantCodes)
 				}
 				contents, err := os.ReadFile(commandMarker)
 				if wantFail {

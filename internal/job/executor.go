@@ -303,6 +303,7 @@ func (e *Executor) Run(ctx context.Context) (exitCode int) {
 
 	if phaseErr == nil && e.GitCommitVerification == GitCommitVerificationFailClosed && !e.commitVerified {
 		phaseErr = fmt.Errorf("%w: fail-closed mode requires successful verification in the checkout phase", ErrCommitVerificationUnavailable)
+		captureCheckoutError(ctx, e.shell, phaseErr)
 	}
 
 	if phaseErr == nil && e.includePhase("plugin") {
