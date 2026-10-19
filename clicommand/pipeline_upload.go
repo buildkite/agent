@@ -220,18 +220,12 @@ var PipelineUploadCommand = &cli.Command{
 
 		// Report program status for the whole command. A dry run uploads
 		// nothing, so it doesn't report.
-		var status *programstatus.Reporter
+		var reporter *programstatus.Reporter
 		if !cfg.DryRun {
-			status = programstatus.FromEnvironment()
+			reporter = programstatus.FromEnvironment()
 		}
-		uploaded := 0
-		defer func() {
-			doneMsg := fmt.Sprintf("Uploaded %d pipelines", uploaded)
-			if uploaded == 1 {
-				doneMsg = "Uploaded 1 pipeline"
-			}
-			status.Finish("", cmp.Or(failure, err), doneMsg, "Pipeline upload failed")
-		}()
+		status := newUploadStatus(reporter, "pipeline", "", "Pipeline upload failed")
+		defer func() { status.finish(cmp.Or(failure, err)) }()
 
 		// Find the pipeline either from STDIN or the non-flag arguments
 		type input struct {
@@ -461,7 +455,7 @@ var PipelineUploadCommand = &cli.Command{
 				}
 
 				stage = "upload"
-				status.Working("", -1, "Uploading pipeline from "+input.name)
+				status.start("Uploading pipeline from " + input.name)
 				uploader := &agent.PipelineUploader{
 					Client: api.NewClient(l, loadAPIClientConfig(cfg, "AgentAccessToken")),
 					JobID:  cfg.Job,
@@ -480,7 +474,7 @@ var PipelineUploadCommand = &cli.Command{
 
 				l.Infof("Successfully parsed and uploaded pipeline #%d from %q", count, input.name)
 				count++
-				uploaded++
+				status.uploadedOne()
 			}
 		}
 

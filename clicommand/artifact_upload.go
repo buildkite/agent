@@ -152,17 +152,7 @@ var ArtifactUploadCommand = &cli.Command{
 		// Create the API client
 		client := api.NewClient(l, loadAPIClientConfig(cfg, "AgentAccessToken"))
 
-		// Report progress as whole percentages, so uploading thousands of
-		// files doesn't send thousands of reports.
-		status := programstatus.FromEnvironment()
-		total, percent := 0, -1
-		onProgress := func(uploaded, n int) {
-			total = n
-			if p := uploaded * 100 / n; p != percent {
-				percent = p
-				status.Working("", p, fmt.Sprintf("Uploading %d %s", n, pluralArtifacts(n)))
-			}
-		}
+		status := newUploadStatus(programstatus.FromEnvironment(), "artifact", "No artifacts matched", "Artifact upload failed")
 
 		// Setup the uploader
 		uploader := artifact.NewUploader(l, client, artifact.UploaderConfig{
@@ -177,7 +167,7 @@ var ArtifactUploadCommand = &cli.Command{
 			Literal:           cfg.Literal,
 			Delimiter:         cfg.Delimiter,
 			UploadConcurrency: cfg.UploadConcurrency,
-			OnProgress:        onProgress,
+			OnProgress:        status.progress,
 
 			GlobResolveFollowSymlinks: cfg.GlobResolveFollowSymlinks,
 			UploadSkipSymlinks:        cfg.UploadSkipSymlinks,
@@ -185,11 +175,7 @@ var ArtifactUploadCommand = &cli.Command{
 
 		// Upload the artifacts
 		err := uploader.Upload(ctx)
-		doneMsg := "No artifacts matched"
-		if total > 0 {
-			doneMsg = fmt.Sprintf("Uploaded %d %s", total, pluralArtifacts(total))
-		}
-		status.Finish("", err, doneMsg, "Artifact upload failed")
+		status.finish(err)
 		if err != nil {
 			destination := "Buildkite"
 			if cfg.Destination != "" {
@@ -206,11 +192,4 @@ var ArtifactUploadCommand = &cli.Command{
 
 		return nil
 	},
-}
-
-func pluralArtifacts(n int) string {
-	if n == 1 {
-		return "artifact"
-	}
-	return "artifacts"
 }
