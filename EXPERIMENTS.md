@@ -79,6 +79,8 @@ The report itself stays in the log unchanged. Reports that repeat the previous r
 
 The experiment also sets `BUILDKITE_PROGRAM_STATUS=true` in the job environment, unless the job already sets it. Tools such as the Buildkite CLI (`bk`) only send reports in a Buildkite job when it's `true`. Set it to `false` in the job to turn them off.
 
+`buildkite-agent pipeline upload` and `buildkite-agent artifact upload` send their own reports, with `app=buildkite-agent`, following the same `BUILDKITE_PROGRAM_STATUS` rules as `bk`. `artifact upload` reports its progress as the percentage of files uploaded.
+
 **Status:** Experimental. The agent doesn't reply to the protocol's feature detection query yet.
 
 ### `interpolation-prefers-runtime-env`

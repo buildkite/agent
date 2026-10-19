@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -611,5 +613,57 @@ func (*uploadConcurrencyAPIClient) SearchArtifacts(context.Context, string, *api
 }
 
 func (*uploadConcurrencyAPIClient) UpdateArtifacts(context.Context, string, []api.ArtifactState) (*api.Response, error) {
+	return nil, nil
+}
+
+func TestUploadReportsProgress(t *testing.T) {
+	storage := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+	t.Cleanup(storage.Close)
+
+	dir := t.TempDir()
+	for _, name := range []string{"a.txt", "b.txt", "c.txt"} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(name), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Chdir(dir)
+
+	var got [][2]int
+	uploader := NewUploader(logger.Discard, &progressAPIClient{storageURL: storage.URL}, UploaderConfig{
+		JobID:             "job-id",
+		Paths:             "*.txt",
+		UploadConcurrency: 1,
+		OnProgress:        func(uploaded, total int) { got = append(got, [2]int{uploaded, total}) },
+	})
+	if err := uploader.Upload(t.Context()); err != nil {
+		t.Fatalf("uploader.Upload() error = %v", err)
+	}
+
+	want := [][2]int{{0, 3}, {1, 3}, {2, 3}, {3, 3}}
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Errorf("OnProgress calls diff (-want +got):\n%s", diff)
+	}
+}
+
+// progressAPIClient creates artifacts that upload to a form at storageURL.
+type progressAPIClient struct{ storageURL string }
+
+func (c *progressAPIClient) CreateArtifacts(_ context.Context, _ string, batch *api.ArtifactBatch) (*api.ArtifactBatchCreateResponse, *api.Response, error) {
+	resp := &api.ArtifactBatchCreateResponse{
+		InstructionsTemplate: &api.ArtifactUploadInstructions{
+			Action: api.ArtifactUploadAction{URL: c.storageURL, Method: "POST", FileInput: "file"},
+		},
+	}
+	for i := range batch.Artifacts {
+		resp.ArtifactIDs = append(resp.ArtifactIDs, fmt.Sprintf("artifact-%d", i))
+	}
+	return resp, nil, nil
+}
+
+func (*progressAPIClient) SearchArtifacts(context.Context, string, *api.ArtifactSearchOptions) ([]*api.Artifact, *api.Response, error) {
+	return nil, nil, errors.New("unexpected SearchArtifacts call")
+}
+
+func (*progressAPIClient) UpdateArtifacts(context.Context, string, []api.ArtifactState) (*api.Response, error) {
 	return nil, nil
 }

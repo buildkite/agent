@@ -7,6 +7,7 @@ import (
 
 	"github.com/buildkite/agent/v4/api"
 	"github.com/buildkite/agent/v4/internal/artifact"
+	"github.com/buildkite/agent/v4/internal/programstatus"
 	"github.com/buildkite/agent/v4/internal/redact"
 	"github.com/buildkite/agent/v4/jobapi"
 	"github.com/urfave/cli/v3"
@@ -151,6 +152,18 @@ var ArtifactUploadCommand = &cli.Command{
 		// Create the API client
 		client := api.NewClient(l, loadAPIClientConfig(cfg, "AgentAccessToken"))
 
+		// Report progress as whole percentages, so uploading thousands of
+		// files doesn't send thousands of reports.
+		status := programstatus.FromEnvironment()
+		total, percent := 0, -1
+		onProgress := func(uploaded, n int) {
+			total = n
+			if p := uploaded * 100 / n; p != percent {
+				percent = p
+				status.Working("", p, fmt.Sprintf("Uploading %d %s", n, pluralArtifacts(n)))
+			}
+		}
+
 		// Setup the uploader
 		uploader := artifact.NewUploader(l, client, artifact.UploaderConfig{
 			JobID:             cfg.Job,
@@ -164,13 +177,20 @@ var ArtifactUploadCommand = &cli.Command{
 			Literal:           cfg.Literal,
 			Delimiter:         cfg.Delimiter,
 			UploadConcurrency: cfg.UploadConcurrency,
+			OnProgress:        onProgress,
 
 			GlobResolveFollowSymlinks: cfg.GlobResolveFollowSymlinks,
 			UploadSkipSymlinks:        cfg.UploadSkipSymlinks,
 		})
 
 		// Upload the artifacts
-		if err := uploader.Upload(ctx); err != nil {
+		err := uploader.Upload(ctx)
+		doneMsg := "No artifacts matched"
+		if total > 0 {
+			doneMsg = fmt.Sprintf("Uploaded %d %s", total, pluralArtifacts(total))
+		}
+		status.Finish("", err, doneMsg, "Artifact upload failed")
+		if err != nil {
 			destination := "Buildkite"
 			if cfg.Destination != "" {
 				// A destination can carry a credential in its query string,
@@ -186,4 +206,11 @@ var ArtifactUploadCommand = &cli.Command{
 
 		return nil
 	},
+}
+
+func pluralArtifacts(n int) string {
+	if n == 1 {
+		return "artifact"
+	}
+	return "artifacts"
 }

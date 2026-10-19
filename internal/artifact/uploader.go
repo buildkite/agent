@@ -66,6 +66,11 @@ type UploaderConfig struct {
 	// How many upload operations to run concurrently. When zero, defaults to
 	// DefaultUploadConcurrency.
 	UploadConcurrency int
+
+	// OnProgress, if set, is called with the number of artifacts uploaded so
+	// far and the total: once before the uploads start, then each time an
+	// artifact finishes uploading. It isn't called if no files match.
+	OnProgress func(uploaded, total int)
 }
 
 type Uploader struct {
@@ -77,6 +82,9 @@ type Uploader struct {
 
 	// The APIClient that will be used when uploading jobs
 	apiClient APIClient
+
+	// How many artifacts have been uploaded, of how many, for OnProgress.
+	uploaded, total int
 }
 
 type artifactUploadTimings struct {
@@ -182,6 +190,8 @@ func (a *Uploader) Upload(ctx context.Context) error {
 
 	a.logger.Infof("Found %d files that match %q", len(artifacts), a.conf.Paths)
 	timings.addArtifacts(artifacts)
+	a.total = len(artifacts)
+	a.progress(0)
 
 	// Determine what uploader to use
 	uploader, err := a.createUploader(ctx)
@@ -225,6 +235,16 @@ func (a *Uploader) Upload(ctx context.Context) error {
 	timings.logSummary(a.logger)
 
 	return nil
+}
+
+// progress counts n more artifacts as uploaded and calls OnProgress. Batches
+// upload one after another, and only the state updater goroutine of each
+// batch calls it, so it doesn't need a lock.
+func (a *Uploader) progress(n int) {
+	a.uploaded += n
+	if a.conf.OnProgress != nil {
+		a.conf.OnProgress(a.uploaded, a.total)
+	}
 }
 
 func isSymlink(path string) bool {
@@ -834,6 +854,7 @@ selectLoop:
 			// Add it to the next batch of states to upload.
 			tracker.State = "finished"
 			a.logger.Debugf("Artifact %s has entered state %s", tracker.ID, tracker.State)
+			a.progress(1)
 		}
 	}
 
