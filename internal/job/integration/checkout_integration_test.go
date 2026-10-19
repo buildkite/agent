@@ -2556,6 +2556,60 @@ func TestCommitVerificationPassesForCommitOnNonDefaultBranch(t *testing.T) {
 	}
 }
 
+func TestCommitVerificationFailClosedRetriesCheckoutTimeout(t *testing.T) {
+	t.Parallel()
+	if runtime.GOOS == "windows" {
+		t.Skip("Git timeout fixture uses a POSIX shell")
+	}
+
+	tester, err := NewExecutorTester(mainCtx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tester.Close()
+	commit, err := tester.Repo.RevParse("main")
+	if err != nil {
+		t.Fatal(err)
+	}
+	commandMarker := filepath.Join(t.TempDir(), "command-ran")
+	api := newJobErrorsAPI(t, nil)
+	realGit, err := exec.LookPath("git")
+	if err != nil {
+		t.Fatal(err)
+	}
+	fetchMarker := filepath.Join(t.TempDir(), "fetch-started")
+	script := fmt.Sprintf(`#!/bin/sh
+case "$*" in
+  fetch*refs/buildkite-agent/commit-verification-branch-tip*)
+    if [ ! -f %q ]; then
+      touch %q
+      sleep 3
+    fi
+    ;;
+esac
+exec %q "$@"
+`, fetchMarker, fetchMarker, realGit)
+	if err := os.WriteFile(filepath.Join(tester.PathDir, "git"), []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	env := append(api.env(),
+		"BUILDKITE_GIT_COMMIT_VERIFICATION=fail-closed",
+		"BUILDKITE_COMMIT="+strings.TrimSpace(commit),
+		"BUILDKITE_GIT_CHECKOUT_TIMEOUT=2",
+		"BUILDKITE_CHECKOUT_ATTEMPTS=2",
+		"BUILDKITE_COMMAND="+fmt.Sprintf("echo ran > %q", commandMarker),
+	)
+	if err := tester.Run(t, env...); err != nil {
+		t.Fatalf("bootstrap did not recover from the verification timeout: %v; output:\n%s", err, tester.Output)
+	}
+	if contents, err := os.ReadFile(commandMarker); err != nil || strings.TrimSpace(string(contents)) != "ran" {
+		t.Errorf("command did not run after verified retry: contents = %q, error = %v", contents, err)
+	}
+	if got := api.codes(); !slices.Equal(got, []string{"buildkite.git_checkout_timed_out"}) {
+		t.Errorf("captured error codes = %v, want one checkout timeout", got)
+	}
+}
+
 func TestCommitVerificationFailClosed(t *testing.T) {
 	t.Parallel()
 

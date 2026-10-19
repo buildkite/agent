@@ -228,12 +228,11 @@ func (e *Executor) checkout(ctx context.Context) error {
 
 			switch {
 			case errors.Is(err, ErrCommitVerificationFailed),
-				errors.Is(err, ErrCommitVerificationUnavailable),
 				errors.Is(err, errNoBaseBranchToFetch),
 				errors.Is(err, errBaseBranchFetchWritesNoRef):
-				// Verification failures and invalid base-branch fetch configurations
-				// should not restart checkout. Verification already retries branch-tip
-				// fetches internally, so re-cloning adds no useful recovery here.
+				// A commit that is provably not on its branch, a job that names no base
+				// branch to fetch, and fetch flags that write no ref are all settled
+				// answers, so fail fast instead of re-cloning through the whole backoff.
 				e.shell.Warningf("Checkout failed! %s", err)
 				r.Break()
 
@@ -250,6 +249,12 @@ func (e *Executor) checkout(ctx context.Context) error {
 				if err := e.createCheckoutDir(); err != nil {
 					return err
 				}
+
+			case errors.Is(err, ErrCommitVerificationUnavailable):
+				// Verification already retries branch-tip fetches. A per-attempt
+				// timeout needs a fresh budget, so the timeout case takes precedence.
+				e.shell.Warningf("Checkout failed! %s", err)
+				r.Break()
 
 			case shell.IsExitError(err) && shell.ExitCode(err) == -1:
 				e.shell.Warningf("Checkout was interrupted by a signal")
