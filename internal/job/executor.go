@@ -159,6 +159,13 @@ func (e *Executor) Run(ctx context.Context) (exitCode int) {
 	// they will be flushed at the end of each hook
 	preRedactedStdout, preRedactedLogger := e.setupRedactors(tempLog, environ, stdout, stderr)
 
+	// Describe OSC 7501 program status reports in the job log. This must
+	// happen before redaction: the report's message is base64-encoded, so
+	// the redactor can only find secrets in it once it has been decoded.
+	if experiments.IsEnabled(ctx, experiments.ProgramStatus) {
+		preRedactedStdout = process.NewProgramStatusWriter(preRedactedStdout) // shell -> program status -> redactor
+	}
+
 	// Check if not nil to allow for tests to overwrite shell.
 	if e.shell == nil {
 		sh, err := shell.New(

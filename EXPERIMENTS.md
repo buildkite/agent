@@ -67,6 +67,20 @@ the PTY to modify the stream. (Or do we? That's why this is an experiment)
 
 **Status:** Experimental for some opt-in testing before being promoted to always-on.
 
+### `program-status`
+
+Shows [OSC 7501 program status](https://www.superlogical.com/rex/docs/build/program-status) reports in the job log. Programs send these escape sequences to say whether they're working, blocked, done or failed. The Buildkite log viewer hides escape sequences it doesn't recognise, so with this experiment the agent writes a line after each report, such as:
+
+```
+# Program status: state=working id=build progress=40 app=cargo msg="Compiling"
+```
+
+The report itself stays in the log unchanged. Reports that repeat the previous report for the same `id`, or only change its `progress`, don't add a line. Messages and titles are decoded before secret redaction, so redacted values are removed from them.
+
+The experiment also sets `BUILDKITE_PROGRAM_STATUS=true` in the job environment, unless the job already sets it. Tools such as the Buildkite CLI (`bk`) only send reports in a Buildkite job when it's `true`. Set it to `false` in the job to turn them off.
+
+**Status:** Experimental. The agent doesn't reply to the protocol's feature detection query yet.
+
 ### `interpolation-prefers-runtime-env`
 
 When interpolating the pipeline level environment block, a pipeline level environment variable could take precedence over environment variables depending on the ordering. This may contravene Buildkite's [documentation](https://buildkite.com/docs/pipelines/environment-variables#environment-variable-precedence) that suggests the Job runtime environment takes precedence over that defined by combining environment variables defined in a pipeline.
