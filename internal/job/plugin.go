@@ -385,6 +385,7 @@ func (e *Executor) executePluginHook(ctx context.Context, name string, checkouts
 			Path:       hookPath,
 			Env:        envMap,
 			PluginName: p.DisplayName(),
+			PluginID:   p.Plugin.Name(),
 			SpanAttributes: map[string]string{
 				"plugin.name":        p.Plugin.Name(),
 				"plugin.version":     p.Version,

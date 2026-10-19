@@ -81,9 +81,9 @@ func hookStatusID(hookCfg HookConfig) string {
 	if hookCfg.Scope != HookScopePlugin {
 		return "hook/" + hookCfg.Scope + "/" + hookCfg.Name
 	}
-	// Plugin names only contain [a-z0-9-], but an id segment can be at most
-	// 32 bytes long.
-	name := hookCfg.PluginName
+	// Short plugin names only contain [a-z0-9-], but an id segment can be at
+	// most 32 bytes long.
+	name := hookCfg.PluginID
 	if len(name) > 32 {
 		name = name[:32]
 	}

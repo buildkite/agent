@@ -472,6 +472,10 @@ type HookConfig struct {
 	Env            *env.Environment
 	SpanAttributes map[string]string
 	PluginName     string
+
+	// PluginID is the plugin's short name, such as docker-compose, for
+	// program status record ids.
+	PluginID string
 }
 
 // executeHook runs a hook script with the hookRunner
