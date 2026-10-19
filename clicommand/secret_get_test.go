@@ -7,9 +7,14 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 
+	"github.com/buildkite/agent/v4/internal/redact"
+	"github.com/buildkite/agent/v4/internal/replacer"
+	"github.com/buildkite/agent/v4/internal/shell"
+	"github.com/buildkite/agent/v4/jobapi"
 	"github.com/buildkite/agent/v4/logger"
 	"github.com/google/go-cmp/cmp"
 )
@@ -208,6 +213,76 @@ func TestSecretGet(t *testing.T) {
 			}
 		}
 	})
+}
+
+func TestSecretGetEnvRedaction(t *testing.T) {
+	for _, test := range []struct {
+		name       string
+		value      string
+		wantOutput string
+		wantLog    string
+	}{
+		{
+			name:       "ordinary value",
+			value:      "shhsecret",
+			wantOutput: "DEPLOY_KEY='shhsecret'\n",
+			wantLog:    "DEPLOY_KEY='[REDACTED]'\n",
+		},
+		{
+			name:       "embedded apostrophe",
+			value:      "pa'ssword",
+			wantOutput: `DEPLOY_KEY='pa'\''ssword'` + "\n",
+			wantLog:    "DEPLOY_KEY=[REDACTED]\n",
+		},
+		{
+			name:       "leading trailing and repeated apostrophes",
+			value:      "'se''cret'",
+			wantOutput: `DEPLOY_KEY=''\''se'\'''\''cret'\'''` + "\n",
+			wantLog:    "DEPLOY_KEY=[REDACTED]\n",
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			var log bytes.Buffer
+			rd := redact.New(&log, nil)
+			socketPath, err := jobapi.NewSocketPath(os.TempDir())
+			if err != nil {
+				t.Fatal(err)
+			}
+			jobServer, token, err := jobapi.NewServer(shell.TestingLogger{T: t}, socketPath, nil, replacer.NewMux(rd))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := jobServer.Start(); err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { _ = jobServer.Stop() })
+			t.Setenv("BUILDKITE_AGENT_JOB_API_SOCKET", socketPath)
+			t.Setenv("BUILDKITE_AGENT_JOB_API_TOKEN", token)
+
+			server := newSecretGetTestServer(t, map[string]string{"deploy_key": test.value})
+			defer server.Close()
+			cfg := baseSecretGetConfig(server.URL, []string{"deploy_key"}, "env")
+			cfg.SkipRedaction = false
+
+			var out bytes.Buffer
+			if err := secretGet(t.Context(), cfg, io.MultiWriter(&out, rd), logger.NewBuffer()); err != nil {
+				t.Fatalf("secretGet() error = %v", err)
+			}
+			if got := out.String(); got != test.wantOutput {
+				t.Errorf("output = %q, want %q", got, test.wantOutput)
+			}
+			// Registering the formatted value must not replace raw-value redaction.
+			if _, err := fmt.Fprintf(rd, "raw: %s\n", test.value); err != nil {
+				t.Fatal(err)
+			}
+			if err := rd.Flush(); err != nil {
+				t.Fatal(err)
+			}
+			if got, want := log.String(), test.wantLog+"raw: [REDACTED]\n"; got != want {
+				t.Errorf("log = %q, want %q", got, want)
+			}
+		})
+	}
 }
 
 func TestSecretGetFailureIsCaptured(t *testing.T) {
