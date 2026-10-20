@@ -1,0 +1,34 @@
+# Create a separate Buildkite pipeline that uploads this file from main:
+#   buildkite-agent pipeline upload .buildkite/pipeline.close-stale.yml
+# Disable webhook-triggered builds and add a daily schedule in Buildkite:
+#   cron: 0 3 * * *
+#   timezone: Etc/UTC
+#   branch: main
+# Start with the default dry run, then set STALE_DRY_RUN=false on the schedule.
+# Set STALE_MONTHS on the schedule to override the default 12-month cutoff.
+# Create the AGENT_STALE_GITHUB_TOKEN Buildkite secret, scoped to this pipeline.
+# Its fine-grained GitHub token needs access to buildkite/agent with Issues and
+# Pull requests read/write permissions. Never run this pipeline on PR branches.
+
+agents:
+  queue: agent-runners-linux-amd64
+
+steps:
+  - label: ":broom: Close stale issues and PRs"
+    if: build.branch == "main" && build.pull_request.id == null
+    concurrency: 1
+    concurrency_group: agent-close-stale
+    timeout_in_minutes: 30
+    env:
+      STALE_DRY_RUN: "${STALE_DRY_RUN:-true}"
+      STALE_MONTHS: "${STALE_MONTHS:-12}"
+    secrets:
+      GH_TOKEN: AGENT_STALE_GITHUB_TOKEN
+    plugins:
+      - docker#v5.14.0:
+          image: golang:1.26.5
+          environment:
+            - GH_TOKEN
+            - STALE_DRY_RUN
+            - STALE_MONTHS
+    command: go run ./scripts/close-stale -months="$${STALE_MONTHS}" -dry-run="$${STALE_DRY_RUN}"
