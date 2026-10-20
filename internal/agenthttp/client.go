@@ -7,8 +7,6 @@ import (
 	"net/http"
 	"sync"
 	"time"
-
-	"golang.org/x/net/http2"
 )
 
 // NewClient creates a HTTP client. Note that the default timeout is 60 seconds;
@@ -71,11 +69,14 @@ type ClientOption = func(*clientConfig)
 func newTransport(conf *clientConfig) *http.Transport {
 	// Base any modifications on the default transport.
 	transport := http.DefaultTransport.(*http.Transport).Clone()
-	// Allow override of TLSConfig. This must be set prior to calling
-	// http2.ConfigureTransports.
+	// Allow override of TLSConfig.
 	if conf.TLSConfig != nil {
 		transport.TLSClientConfig = conf.TLSConfig
 	}
+
+	transport.Protocols = new(http.Protocols)
+	transport.Protocols.SetHTTP1(true)
+	transport.Protocols.SetHTTP2(conf.AllowHTTP2)
 
 	if conf.AllowHTTP2 {
 		// Ensure that we send HTTP/2 PING frames to help keep streaming connections (like streaming pings) open
@@ -85,30 +86,12 @@ func newTransport(conf *clientConfig) *http.Transport {
 		}
 		transport.HTTP2.SendPingTimeout = 10 * time.Second
 		transport.HTTP2.PingTimeout = 5 * time.Second
-		// There is a bug in http2 on Linux regarding using dead connections.
-		// This is a workaround. See https://github.com/golang/go/issues/59690
-		//
-		// Note that http2.ConfigureTransports alters its argument in order to
-		// supply http2 functionality, and the http2.Transport does not support
-		// HTTP/1.1 as a protocol, so we get slightly odd-looking code where
-		// we use `transport` later on instead of the just-returned `tr2`.
-		// tr2 is needed merely to configure the http2 option.
-		_, err := http2.ConfigureTransports(transport)
-		if err != nil {
-			// ConfigureTransports is documented to only return an error if
-			// the transport arg was already HTTP2-enabled, which it should not
-			// have been...
-			panic("http2.ConfigureTransports: " + err.Error())
-		}
 	} else {
-		transport.TLSNextProto = make(map[string]func(string, *tls.Conn) http.RoundTripper)
-		// Ensure TLSClientConfig is not nil, to set NextProtos.
+		// Go 1.26 does not remove h2 from NextProtos when HTTP/2 is disabled.
+		// The cloned default transport or custom TLS config may advertise it.
 		if transport.TLSClientConfig == nil {
 			transport.TLSClientConfig = new(tls.Config)
 		}
-		// The default TLSClientConfig has h2 in NextProtos, so the
-		// negotiated TLS connection will assume h2 support.
-		// see https://github.com/golang/go/issues/50571
 		transport.TLSClientConfig.NextProtos = []string{"http/1.1"}
 	}
 
