@@ -203,9 +203,8 @@ func TestS3Downloader_MultipartDownload_VerifyChecksumMismatch(t *testing.T) {
 	if _, err := os.Stat(targetPath); !errors.Is(err, fs.ErrNotExist) {
 		t.Errorf("target path %q exists after checksum mismatch (Stat err = %v)", targetPath, err)
 	}
-	leftovers, _ := filepath.Glob(filepath.Join(tempDir, "obj.bin*"))
-	if len(leftovers) != 0 {
-		t.Errorf("found leftover files in temp dir: %v", leftovers)
+	if entries, err := os.ReadDir(tempDir); err != nil || len(entries) != 0 {
+		t.Errorf("temp dir contains %d entries, %v; want empty", len(entries), err)
 	}
 }
 
@@ -332,8 +331,7 @@ func TestS3Downloader_MultipartDownload_CleansUpOnDownloadError(t *testing.T) {
 	if _, err := os.Stat(targetPath); !errors.Is(err, fs.ErrNotExist) {
 		t.Errorf("target path %q exists after download error (Stat err = %v)", targetPath, err)
 	}
-	leftovers, _ := filepath.Glob(filepath.Join(tempDir, "obj.bin*"))
-	if len(leftovers) != 0 {
-		t.Errorf("found leftover files in temp dir: %v", leftovers)
+	if entries, err := os.ReadDir(tempDir); err != nil || len(entries) != 0 {
+		t.Errorf("temp dir contains %d entries, %v; want empty", len(entries), err)
 	}
 }

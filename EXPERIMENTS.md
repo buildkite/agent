@@ -85,6 +85,8 @@ However, it is possible to upload artifacts using glob patterns containing one o
 
 Leaving this experiment disabled prevents `..` components in artifact paths from traversing up from the destination path. Enabling this experiment permits the less-secure behaviour of allowing artifact paths containing `..` to traverse up the destination path.
 
+By default, downloads also reject directory symlinks that lead outside the destination and absolute directory symlinks beneath it. Enabling this experiment disables these symlink restrictions too.
+
 For example, if an artifact was uploaded with the path `../../foo.txt`, then the command:
 
 ```shell
