@@ -69,7 +69,8 @@ type UploaderConfig struct {
 
 	// OnProgress, if set, is called with the number of artifacts uploaded so
 	// far and the total: once before the uploads start, then each time an
-	// artifact finishes uploading. It isn't called if no files match.
+	// artifact finishes uploading. It isn't called if no files match. Calls
+	// happen one at a time, and none happen after Upload returns.
 	OnProgress func(uploaded, total int)
 }
 
@@ -239,7 +240,8 @@ func (a *Uploader) Upload(ctx context.Context) error {
 
 // progress counts n more artifacts as uploaded and calls OnProgress. Batches
 // upload one after another, and only the state updater goroutine of each
-// batch calls it, so it doesn't need a lock.
+// batch calls it, which has finished by the time upload returns, so it
+// doesn't need a lock.
 func (a *Uploader) progress(n int) {
 	a.uploaded += n
 	if a.conf.OnProgress != nil {
@@ -707,12 +709,17 @@ func (a *Uploader) upload(ctx context.Context, artifacts []*api.Artifact, upload
 
 	// Send the work units for each artifact to the workers.
 	// This must happen after creating worker goroutines listening on workUnitsCh.
+	// If the context is cancelled first, stop sending, but still wait for the
+	// goroutines below, so none of them is running when this returns.
 	uploadStart := time.Now()
+	cancelled := false
+send:
 	for _, tracker := range worker.trackers {
 		for _, workUnit := range tracker.work {
 			select {
 			case <-ctx.Done():
-				return stats, ctx.Err()
+				cancelled = true
+				break send
 			case unitsCh <- workUnit:
 			}
 		}
@@ -734,7 +741,11 @@ func (a *Uploader) upload(ctx context.Context, artifacts []*api.Artifact, upload
 	a.logger.Debugf("Uploads complete, waiting for upload status to be sent to Buildkite...")
 
 	// Wait for the statuses to finish uploading
-	if err := <-errCh; err != nil {
+	err := <-errCh
+	if cancelled {
+		return stats, ctx.Err()
+	}
+	if err != nil {
 		stats.stateUpdateDuration = worker.stateUpdateDuration
 		stats.stateUpdateCount = worker.stateUpdateCount
 		return stats, fmt.Errorf("errors uploading artifacts: %w", err)
