@@ -1,0 +1,39 @@
+# Pipeline and daily schedule: buildkite/saas-iac, critical-tf/pipelines.tf.
+# The schedule starts disabled and in dry-run mode on main at 03:00 UTC.
+# Change enabled, STALE_DRY_RUN and STALE_MONTHS there through Terraform.
+# AWS role: buildkite/aws-buildkite-dev, oidc-buildkite-agent-close-stale.tf.
+# GitHub access: buildkite/ops, github-tf/exchange-lambda.tf. Exchange grants
+# Issues and Pull requests write access only to buildkite/agent on verified main
+# builds. Apply both permissions changes before running this pipeline.
+# just-works exports a short-lived GH_TOKEN; no stored GitHub token is needed.
+# Never run this pipeline on PR branches.
+
+agents:
+  queue: agent-runners-linux-amd64
+
+steps:
+  - label: ":broom: Close stale issues and PRs"
+    if: build.branch == "main" && build.pull_request.id == null
+    concurrency: 1
+    concurrency_group: agent-close-stale
+    timeout_in_minutes: 30
+    env:
+      STALE_DRY_RUN: "${STALE_DRY_RUN:-true}"
+      STALE_MONTHS: "${STALE_MONTHS:-12}"
+    plugins:
+      - buildkite/just-works#v0.1.0:
+          role-arn: arn:aws:iam::445615400570:role/pipeline-buildkite-agent-close-stale
+          ecr:
+            enabled: false
+          ssm:
+            enabled: false
+          github:
+            changes-enabled: true
+            organization: buildkite
+      - docker#v5.14.0:
+          image: golang:1.26.5
+          environment:
+            - GH_TOKEN
+            - STALE_DRY_RUN
+            - STALE_MONTHS
+    command: go run ./scripts/close-stale -months="$${STALE_MONTHS}" -dry-run="$${STALE_DRY_RUN}"
