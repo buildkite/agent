@@ -166,9 +166,9 @@ func TestRemoveKubernetesPlugin(t *testing.T) {
 	tests := []struct {
 		name, in, want string
 	}{
-		{"only kubernetes plugin", "[" + k8s + "]", ""},
-		{"kubernetes and other plugin", "[" + k8s + "," + other + "]", "[" + other + "]"},
-		{"no kubernetes plugin", "[" + other + "]", "[" + other + "]"},
+		{"only kubernetes plugin", fmt.Sprintf("[%s]", k8s), ""},
+		{"kubernetes and other plugin", fmt.Sprintf("[%s,%s]", k8s, other), fmt.Sprintf("[%s]", other)},
+		{"no kubernetes plugin", fmt.Sprintf("[%s]", other), fmt.Sprintf("[%s]", other)},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
