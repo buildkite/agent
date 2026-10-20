@@ -1,6 +1,7 @@
 package process
 
 import (
+	"cmp"
 	"io"
 	"strconv"
 	"strings"
@@ -28,6 +29,7 @@ type ProgramStatusWriter struct {
 	out     lineTracker
 	scanner osc7501.Scanner
 	logged  map[string]osc7501.Report // last report described, by record id
+	lineErr error                     // from writing a report's line
 }
 
 // NewProgramStatusWriter returns a ProgramStatusWriter that writes to out.
@@ -44,7 +46,9 @@ func NewProgramStatusWriter(out io.Writer) *ProgramStatusWriter {
 func (w *ProgramStatusWriter) Write(p []byte) (int, error) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	return w.scanner.Write(p)
+	n, err := w.scanner.Write(p)
+	err, w.lineErr = cmp.Or(err, w.lineErr), nil
+	return n, err
 }
 
 // describe is called by the scanner after a report has been written to out.
@@ -81,9 +85,10 @@ func (w *ProgramStatusWriter) describe(r osc7501.Report) {
 	}
 	line.WriteString("\x1b[0m\n")
 
-	// The scanner ignores errors from this callback, and a failing out also
-	// fails the next Write.
-	_, _ = io.WriteString(&w.out, line.String())
+	// The scanner can't return errors from this callback, so Write does.
+	if _, err := io.WriteString(&w.out, line.String()); err != nil {
+		w.lineErr = err
+	}
 }
 
 // remember records r as the latest report for its record and reports whether

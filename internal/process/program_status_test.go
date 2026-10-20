@@ -2,6 +2,7 @@ package process_test
 
 import (
 	"bytes"
+	"errors"
 	"testing"
 
 	"github.com/buildkite/agent/v4/internal/process"
@@ -77,4 +78,27 @@ func TestProgramStatusWriterRepeatedClear(t *testing.T) {
 	if diff := cmp.Diff(want, out.String()); diff != "" {
 		t.Errorf("output diff (-want +got):\n%s", diff)
 	}
+}
+
+func TestProgramStatusWriterLineError(t *testing.T) {
+	t.Parallel()
+
+	wantErr := errors.New("disk full")
+	w := process.NewProgramStatusWriter(failingLineWriter{err: wantErr})
+
+	// The report is the last output, so only this Write can return the error.
+	if _, err := w.Write([]byte("\x1b]7501;state=done\x07")); !errors.Is(err, wantErr) {
+		t.Errorf("w.Write(report) error = %v, want %v", err, wantErr)
+	}
+}
+
+// failingLineWriter fails to write program status lines, and accepts
+// everything else.
+type failingLineWriter struct{ err error }
+
+func (f failingLineWriter) Write(p []byte) (int, error) {
+	if bytes.Contains(p, []byte("# Program status:")) {
+		return 0, f.err
+	}
+	return len(p), nil
 }
