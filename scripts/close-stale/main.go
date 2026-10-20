@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -25,10 +26,11 @@ func main() {
 		log.Fatal("GH_TOKEN is required")
 	}
 
-	client := githubClient{
-		baseURL: "https://api.github.com/repos/buildkite/agent",
-		token:   token,
-		http:    &http.Client{Timeout: time.Minute},
+	client := &githubClient{
+		baseURL:          "https://api.github.com/repos/buildkite/agent",
+		token:            token,
+		http:             &http.Client{Timeout: time.Minute},
+		mutationInterval: time.Second,
 	}
 	if err := run(context.Background(), client, time.Now().UTC(), *months, *dryRun); err != nil {
 		log.Fatal(err)
@@ -39,9 +41,32 @@ type githubClient struct {
 	baseURL string
 	token   string
 	http    *http.Client
+
+	mutationMu       sync.Mutex
+	mutationInterval time.Duration
+	nextMutation     time.Time
 }
 
-func (c githubClient) request(ctx context.Context, method, path, body string, result any) error {
+func (c *githubClient) request(ctx context.Context, method, path, body string, result any) error {
+	if method == http.MethodPatch || method == http.MethodPost {
+		// Share one queue across closures and comments, leaving reads concurrent.
+		c.mutationMu.Lock()
+		defer c.mutationMu.Unlock()
+
+		if delay := time.Until(c.nextMutation); delay > 0 {
+			timer := time.NewTimer(delay)
+			defer timer.Stop()
+
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-timer.C:
+			}
+		}
+
+		defer func() { c.nextMutation = time.Now().Add(c.mutationInterval) }()
+	}
+
 	req, err := http.NewRequestWithContext(ctx, method, c.baseURL+path, strings.NewReader(body))
 	if err != nil {
 		return err
@@ -85,7 +110,7 @@ func (i item) stale(cutoff time.Time) bool {
 	return i.State == "open" && i.UpdatedAt.Before(cutoff)
 }
 
-func run(ctx context.Context, client githubClient, now time.Time, months int, dryRun bool) (err error) {
+func run(ctx context.Context, client *githubClient, now time.Time, months int, dryRun bool) (err error) {
 	if months <= 0 {
 		return fmt.Errorf("months must be positive, got %d", months)
 	}

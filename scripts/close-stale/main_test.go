@@ -94,7 +94,7 @@ func TestRun(t *testing.T) {
 				}
 			}))
 			defer server.Close()
-			client := githubClient{baseURL: server.URL, token: "test-token", http: server.Client()}
+			client := &githubClient{baseURL: server.URL, token: "test-token", http: server.Client()}
 			now := time.Date(tc.year, tc.month, 20, 3, 0, 0, 0, time.UTC)
 			if err := run(t.Context(), client, now, tc.months, dryRun); err != nil {
 				t.Fatal(err)
@@ -170,7 +170,7 @@ func TestRunPagination(t *testing.T) {
 		_, _ = io.WriteString(w, `{"state":"open","updated_at":"2020-01-01T00:00:00Z"}`)
 	}))
 	defer server.Close()
-	client := githubClient{baseURL: server.URL, http: server.Client()}
+	client := &githubClient{baseURL: server.URL, http: server.Client()}
 	if err := run(t.Context(), client, time.Date(2026, 10, 20, 3, 0, 0, 0, time.UTC), 12, false); err != nil {
 		t.Fatal(err)
 	}
@@ -195,7 +195,7 @@ func TestRunCalendarMonths(t *testing.T) {
 				_, _ = fmt.Fprintf(w, `[{"number":1,"state":"open","updated_at":"%d-03-01T00:00:00Z"}]`, year-1)
 			}))
 			defer server.Close()
-			client := githubClient{baseURL: server.URL, http: server.Client()}
+			client := &githubClient{baseURL: server.URL, http: server.Client()}
 			if err := run(t.Context(), client, time.Date(year, 8, 31, 3, 0, 0, 0, time.UTC), 18, false); err != nil {
 				t.Fatal(err)
 			}
@@ -208,7 +208,7 @@ func TestRunAPIFailure(t *testing.T) {
 		http.Error(w, "rate limited", http.StatusForbidden)
 	}))
 	defer server.Close()
-	client := githubClient{baseURL: server.URL, http: server.Client()}
+	client := &githubClient{baseURL: server.URL, http: server.Client()}
 	if err := run(t.Context(), client, time.Now().UTC(), 12, false); err == nil {
 		t.Fatal("expected API failure to fail the build")
 	}
@@ -216,7 +216,7 @@ func TestRunAPIFailure(t *testing.T) {
 
 func TestRunInvalidMonths(t *testing.T) {
 	for _, months := range []int{0, -1} {
-		if err := run(t.Context(), githubClient{}, time.Now().UTC(), months, false); err == nil {
+		if err := run(t.Context(), &githubClient{}, time.Now().UTC(), months, false); err == nil {
 			t.Errorf("expected months=%d to be rejected before making API requests", months)
 		}
 	}
@@ -238,7 +238,7 @@ func TestRunSummaryAfterCommentFailure(t *testing.T) {
 		}
 	}))
 	defer server.Close()
-	client := githubClient{baseURL: server.URL, http: server.Client()}
+	client := &githubClient{baseURL: server.URL, http: server.Client()}
 	if err := run(t.Context(), client, time.Now().UTC(), 12, false); err == nil {
 		t.Fatal("expected comment failure to fail the build")
 	}
@@ -271,7 +271,7 @@ func TestRunConcurrency(t *testing.T) {
 			if err := json.NewEncoder(w).Encode(items); err != nil {
 				t.Error(err)
 			}
-		case r.Method == http.MethodPatch:
+		case r.Method == http.MethodGet:
 			n := active.Add(1)
 			for old := peak.Load(); n > old; old = peak.Load() {
 				if peak.CompareAndSwap(old, n) {
@@ -282,6 +282,8 @@ func TestRunConcurrency(t *testing.T) {
 			started <- struct{}{}
 			<-release
 			active.Add(-1)
+			_, _ = io.WriteString(w, `{"state":"open","updated_at":"2020-01-01T00:00:00Z"}`)
+		case r.Method == http.MethodPatch:
 			closed.Add(1)
 			_, _ = io.WriteString(w, `{}`)
 		case r.Method == http.MethodPost:
@@ -289,24 +291,24 @@ func TestRunConcurrency(t *testing.T) {
 			w.WriteHeader(http.StatusCreated)
 			_, _ = io.WriteString(w, `{}`)
 		default:
-			_, _ = io.WriteString(w, `{"state":"open","updated_at":"2020-01-01T00:00:00Z"}`)
+			t.Errorf("unexpected method: %s", r.Method)
 		}
 	}))
 	t.Cleanup(server.Close)
-	client := githubClient{baseURL: server.URL, http: server.Client()}
+	client := &githubClient{baseURL: server.URL, http: server.Client()}
 	done := make(chan error, 1)
 	go func() { done <- run(t.Context(), client, time.Now().UTC(), 12, false) }()
 	for range 15 {
 		select {
 		case <-started:
 		case <-time.After(5 * time.Second):
-			t.Fatal("didn't reach 15 concurrent closures")
+			t.Fatal("didn't reach 15 concurrent activity checks")
 		}
 	}
 
 	select {
 	case <-started:
-		t.Error("started a 16th closure while the first 15 were still blocked")
+		t.Error("started a 16th activity check while the first 15 were still blocked")
 	case <-time.After(100 * time.Millisecond):
 	}
 
@@ -317,5 +319,57 @@ func TestRunConcurrency(t *testing.T) {
 
 	if peak.Load() != 15 || closed.Load() != 31 || comments.Load() != 31 {
 		t.Errorf("peak=%d closed=%d comments=%d; want 15, 31, 31", peak.Load(), closed.Load(), comments.Load())
+	}
+}
+
+func TestRunMutationPacing(t *testing.T) {
+	var mu sync.Mutex
+	var lastFinished time.Time
+	var mutations int
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet {
+			if r.URL.Path == "/issues" {
+				_, _ = io.WriteString(w, `[
+					{"number":1,"state":"open","updated_at":"2020-01-01T00:00:00Z"},
+					{"number":2,"state":"open","updated_at":"2020-01-01T00:00:00Z"}
+				]`)
+			} else {
+				_, _ = io.WriteString(w, `{"state":"open","updated_at":"2020-01-01T00:00:00Z"}`)
+			}
+
+			return
+		}
+
+		if !mu.TryLock() {
+			t.Error("mutations overlapped")
+			mu.Lock()
+		}
+
+		defer mu.Unlock()
+
+		if !lastFinished.IsZero() && time.Since(lastFinished) < time.Second {
+			t.Errorf("mutation arrived %s after the previous one finished; want at least 1s", time.Since(lastFinished))
+		}
+
+		mutations++
+		if mutations == 1 {
+			// A slow response must not allow another mutation to start in parallel.
+			time.Sleep(1100 * time.Millisecond)
+		}
+
+		_, _ = io.WriteString(w, `{}`)
+		lastFinished = time.Now()
+	}))
+	defer server.Close()
+	client := &githubClient{baseURL: server.URL, http: server.Client(), mutationInterval: time.Second}
+	if err := run(t.Context(), client, time.Now().UTC(), 12, false); err != nil {
+		t.Fatal(err)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+
+	if mutations != 4 {
+		t.Errorf("got %d mutations, want 2 closures and 2 comments", mutations)
 	}
 }
