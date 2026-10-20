@@ -22,32 +22,56 @@ const commandStatusID = "command"
 // programs the job runs can report on the root record without overwriting
 // them. A nil jobStatus does nothing.
 type jobStatus struct {
-	r    *programstatus.Reporter
-	done []string // records whose last report was done
+	r         *programstatus.Reporter
+	cancelled <-chan struct{} // closed when the job is cancelled
+	done      []string        // records whose last report was done
+
+	// afterCancel holds the records started after the job was cancelled,
+	// such as the pre-exit hook. They weren't interrupted, so their errors
+	// are errors.
+	afterCancel map[string]bool
 }
 
 // newJobStatus returns a jobStatus that writes to w, or nil if the
 // program-status experiment or BUILDKITE_PROGRAM_STATUS turn reports off.
-func newJobStatus(ctx context.Context, w io.Writer) *jobStatus {
+// cancelled is closed when the job is cancelled.
+func newJobStatus(ctx context.Context, w io.Writer, cancelled <-chan struct{}) *jobStatus {
 	if !experiments.IsEnabled(ctx, experiments.ProgramStatus) ||
 		!programstatus.Enabled(os.LookupEnv, term.IsTerminal(int(os.Stdout.Fd()))) {
 		return nil
 	}
-	return &jobStatus{r: programstatus.New(w)}
+	return &jobStatus{r: programstatus.New(w), cancelled: cancelled, afterCancel: make(map[string]bool)}
+}
+
+func (s *jobStatus) isCancelled() bool {
+	select {
+	case <-s.cancelled:
+		return true
+	default:
+		return false
+	}
 }
 
 // start reports that the record id is running.
 func (s *jobStatus) start(id, msg string) {
-	if s != nil {
-		s.r.Working(id, -1, msg)
+	if s == nil {
+		return
 	}
+	s.afterCancel[id] = s.isCancelled()
+	s.r.Working(id, -1, msg)
 }
 
 // finish reports how the record id ended. what describes it in an error
-// message, such as "The command".
+// message, such as "The command". A record that fails because the job was
+// cancelled while it ran ends idle, as the spec asks of cancelled programs.
 func (s *jobStatus) finish(id string, err error, what string) {
 	if s == nil {
 		return
+	}
+	if err != nil && !s.afterCancel[id] && s.isCancelled() {
+		// Cancelling interrupts the process, so err is usually its exit
+		// status rather than context.Canceled.
+		err = context.Canceled
 	}
 	errorMsg := what + " failed"
 	if shell.IsExitError(err) {

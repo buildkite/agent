@@ -5,9 +5,11 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/buildkite/agent/v4/agent/plugin"
 	"github.com/buildkite/agent/v4/internal/experiments"
+	"github.com/buildkite/bintest/v3"
 	"github.com/google/go-cmp/cmp"
 	"github.com/wolfeidau/osc7501"
 )
@@ -77,5 +79,58 @@ func TestProgramStatusReportsPhasesAndHooks(t *testing.T) {
 	// The agent's own reports already have a header in the log.
 	if strings.Contains(tester.Output, "# Program status:") {
 		t.Errorf("output describes the agent's own reports. Full output: %s", tester.Output)
+	}
+}
+
+func TestProgramStatusCancelledCommandIsIdle(t *testing.T) {
+	t.Parallel()
+	if runtime.GOOS == "windows" {
+		t.Skip("cancellation uses SIGINT")
+	}
+
+	ctx, _ := experiments.Enable(mainCtx, experiments.ProgramStatus)
+	tester, err := NewExecutorTester(ctx)
+	if err != nil {
+		t.Fatalf("NewExecutorTester() error = %v", err)
+	}
+	defer tester.Close()
+
+	started := make(chan struct{})
+	release := make(chan struct{})
+	defer close(release)
+	tester.MustMock(t, "blocking-command").Expect().Once().AndCallFunc(func(c *bintest.Call) {
+		close(started)
+		<-release
+		c.Exit(1)
+	})
+
+	runDone := make(chan error, 1)
+	go func() {
+		runDone <- tester.Run(t, "BUILDKITE_COMMAND=blocking-command", "BUILDKITE_PROGRAM_STATUS=true")
+	}()
+	select {
+	case <-started:
+	case <-time.After(30 * time.Second):
+		t.Fatal("timed out waiting for command to start")
+	}
+	if err := tester.Cancel(); err != nil {
+		t.Fatalf("tester.Cancel() = %v", err)
+	}
+	select {
+	case <-runDone:
+	case <-time.After(30 * time.Second):
+		t.Fatal("timed out waiting for cancelled job to finish")
+	}
+
+	states := make(map[string]string) // id -> last state
+	scanner := osc7501.Scanner{W: io.Discard, OnReport: func(r osc7501.Report) {
+		if r.App == "buildkite-agent" {
+			states[r.ID] = r.State
+		}
+	}}
+	_, _ = scanner.Write([]byte(tester.Output))
+
+	if got := states["command"]; got != osc7501.StateIdle {
+		t.Errorf("command record ended %q, want %q. Full output: %s", got, osc7501.StateIdle, tester.Output)
 	}
 }

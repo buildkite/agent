@@ -164,7 +164,7 @@ func (e *Executor) Run(ctx context.Context) (exitCode int) {
 
 	// The agent's own program status reports already have a header in the
 	// log, so they skip the program status writer below.
-	e.status = newJobStatus(ctx, preRedactedStdout)
+	e.status = newJobStatus(ctx, preRedactedStdout, e.cancelCh)
 
 	// Describe OSC 7501 program status reports in the job log. This must
 	// happen before redaction: the report's message is base64-encoded, so
