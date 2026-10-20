@@ -79,8 +79,10 @@ func newTransport(conf *clientConfig) *http.Transport {
 	transport.Protocols.SetHTTP2(conf.AllowHTTP2)
 
 	if conf.AllowHTTP2 {
-		// Ensure that we send HTTP/2 PING frames to help keep streaming connections (like streaming pings) open
-		// Pings will also ensure that stale connections get properly cleaned up
+		// Send HTTP/2 PINGs to keep streaming connections alive and detect
+		// connections that silently stop responding. Without these health checks,
+		// requests can repeatedly stall on a dead connection.
+		// See https://github.com/golang/go/issues/59690.
 		if transport.HTTP2 == nil {
 			transport.HTTP2 = &http.HTTP2Config{}
 		}
