@@ -426,6 +426,16 @@ func TestCreateEnvironmentProgramStatus(t *testing.T) {
 			if got := envutil.FromSlice(got).GetString("BUILDKITE_PROGRAM_STATUS", ""); got != test.want {
 				t.Errorf("BUILDKITE_PROGRAM_STATUS = %q, want %q", got, test.want)
 			}
+
+			// Docker steps that propagate the environment read the names to
+			// pass through from the env file.
+			data, err := os.ReadFile(r.envShellFile.Name())
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !slices.Contains(strings.Split(string(data), "\n"), "BUILDKITE_PROGRAM_STATUS") {
+				t.Errorf("env file doesn't list BUILDKITE_PROGRAM_STATUS:\n%s", data)
+			}
 		})
 	}
 }
