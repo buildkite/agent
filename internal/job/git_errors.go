@@ -225,6 +225,8 @@ func classifyGitError(err error) (string, string) {
 			return "buildkite.git_ref_invalid", "Git checkout received an invalid reference."
 		case errors.Is(err, ErrCommitVerificationFailed):
 			return "buildkite.git_commit_verification_failed", "Git commit verification failed."
+		case errors.Is(err, ErrCommitVerificationUnavailable):
+			return "buildkite.git_commit_verification_unavailable", "Git commit verification could not complete."
 		case errors.Is(err, errGitLFSPreflight):
 			return "buildkite.git_lfs_preflight_failed", "Git LFS version check failed."
 		case errors.Is(err, errInvalidSparseCheckoutMode):

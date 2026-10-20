@@ -173,6 +173,11 @@ func TestGitCommitVerificationFlag(t *testing.T) {
 			args: []string{"--git-commit-verification", "off"},
 			want: "off",
 		},
+		{
+			name: "can require successful verification",
+			args: []string{"--git-commit-verification", "fail-closed"},
+			want: "fail-closed",
+		},
 	}
 
 	for _, test := range tests {

@@ -150,8 +150,9 @@ func setupTagBranchCollisionRepo(t *testing.T, ctx context.Context) (repoURL, of
 func TestVerifyCommit(t *testing.T) {
 	// Table-driven tests for the skip conditions — these don't need a real git repo
 	skipTests := []struct {
-		name   string
-		config ExecutorConfig
+		name    string
+		config  ExecutorConfig
+		wantErr error
 	}{
 		{
 			name: "skips when verification is off",
@@ -176,6 +177,14 @@ func TestVerifyCommit(t *testing.T) {
 				Commit:                "abc123",
 				Branch:                "",
 			},
+		},
+		{
+			name: "fails closed when branch is empty",
+			config: ExecutorConfig{
+				GitCommitVerification: GitCommitVerificationFailClosed,
+				Commit:                "abc123",
+			},
+			wantErr: ErrCommitVerificationUnavailable,
 		},
 		{
 			name: "skips for PR builds",
@@ -217,8 +226,8 @@ func TestVerifyCommit(t *testing.T) {
 				ExecutorConfig: tt.config,
 			}
 			err = e.verifyCommit(t.Context())
-			if err != nil {
-				t.Errorf("verifyCommit() error = %v, want nil", err)
+			if !errors.Is(err, tt.wantErr) {
+				t.Errorf("verifyCommit() error = %v, want %v", err, tt.wantErr)
 			}
 		})
 	}

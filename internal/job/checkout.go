@@ -137,6 +137,23 @@ func (e *Executor) validateRepositoryAllowedForCheckout(repository string) error
 
 // checkout runs checkout hook or default checkout logic
 func (e *Executor) checkout(ctx context.Context) error {
+	if e.GitCommitVerification == GitCommitVerificationFailClosed {
+		reason := e.commitVerificationSkipReason()
+		switch {
+		case e.SkipCheckout:
+			reason = "checkout is skipped"
+		case e.hasPluginHook("checkout"), e.hasGlobalHook("checkout"):
+			reason = "custom checkout hook is configured"
+		case e.Repository == "":
+			reason = "no repository specified"
+		}
+		if reason != "" {
+			err := fmt.Errorf("%w: %s (fail-closed mode)", ErrCommitVerificationUnavailable, reason)
+			captureCheckoutError(ctx, e.shell, err)
+			return err
+		}
+	}
+
 	if e.SkipCheckout {
 		e.shell.Commentf("Skipping checkout, BUILDKITE_SKIP_CHECKOUT is set")
 		return nil
@@ -232,6 +249,12 @@ func (e *Executor) checkout(ctx context.Context) error {
 				if err := e.createCheckoutDir(); err != nil {
 					return err
 				}
+
+			case errors.Is(err, ErrCommitVerificationUnavailable):
+				// Verification already retries branch-tip fetches. A per-attempt
+				// timeout needs a fresh budget, so the timeout case takes precedence.
+				e.shell.Warningf("Checkout failed! %s", err)
+				r.Break()
 
 			case shell.IsExitError(err) && shell.ExitCode(err) == -1:
 				e.shell.Warningf("Checkout was interrupted by a signal")
