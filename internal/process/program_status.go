@@ -91,17 +91,19 @@ func (w *ProgramStatusWriter) describe(r osc7501.Report) {
 func (w *ProgramStatusWriter) remember(r osc7501.Report) bool {
 	key := r
 	key.Progress = 0
-	if prev, ok := w.logged[r.ID]; ok && prev == key {
-		return false
-	}
+	prev, seen := w.logged[r.ID]
 
 	if r.State == osc7501.StateClear {
-		// Clearing a record also clears the records beneath it.
+		// Clearing a record also clears the records beneath it, even if this
+		// clear repeats the last one: they may have been reported since.
 		for id := range w.logged {
-			if r.ID == "" || strings.HasPrefix(id, r.ID+"/") {
+			if id != r.ID && (r.ID == "" || strings.HasPrefix(id, r.ID+"/")) {
 				delete(w.logged, id)
 			}
 		}
+	}
+	if seen && prev == key {
+		return false
 	}
 	if len(w.logged) >= maxProgramStatusRecords {
 		clear(w.logged)
