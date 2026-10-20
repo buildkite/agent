@@ -6,10 +6,11 @@
 # Issues and Pull requests write access only to buildkite/agent on verified main
 # builds. Apply both permissions changes before running this pipeline.
 # just-works exports a short-lived GH_TOKEN; no stored GitHub token is needed.
+# Main cluster runners supply the credentials to clone the internal plugin.
 # Never run this pipeline on PR branches.
 
 agents:
-  queue: agent-runners-linux-amd64
+  queue: elastic-runners
 
 steps:
   - label: ":broom: Close stale issues and PRs"
