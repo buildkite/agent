@@ -29,6 +29,7 @@ import (
 	"github.com/buildkite/agent/v4/internal/job/hook"
 	"github.com/buildkite/agent/v4/internal/osutil"
 	"github.com/buildkite/agent/v4/internal/process"
+	"github.com/buildkite/agent/v4/internal/programstatus"
 	"github.com/buildkite/agent/v4/internal/redact"
 	"github.com/buildkite/agent/v4/internal/replacer"
 	"github.com/buildkite/agent/v4/internal/secrets"
@@ -41,6 +42,7 @@ import (
 	"github.com/buildkite/go-pipeline"
 	"github.com/buildkite/shellwords"
 	"go.opentelemetry.io/otel/attribute"
+	"golang.org/x/term"
 )
 
 // Executor represents the phases of execution in a Buildkite Job. It's run as
@@ -162,9 +164,14 @@ func (e *Executor) Run(ctx context.Context) (exitCode int) {
 	// they will be flushed at the end of each hook
 	preRedactedStdout, preRedactedLogger := e.setupRedactors(tempLog, environ, stdout, stderr)
 
-	// The agent's own program status reports already have a header in the
-	// log, so they skip the program status writer below.
-	e.status = newJobStatus(ctx, preRedactedStdout, e.cancelCh)
+	// Report the job's phases and hooks as program status records, if the
+	// experiment and BUILDKITE_PROGRAM_STATUS turn reports on. The agent's
+	// own reports already have a header in the log, so they skip the program
+	// status writer below.
+	if experiments.IsEnabled(ctx, experiments.ProgramStatus) &&
+		programstatus.Enabled(environ.Get, term.IsTerminal(int(os.Stdout.Fd()))) {
+		e.status = newJobStatus(preRedactedStdout, e.cancelCh)
+	}
 
 	// Describe OSC 7501 program status reports in the job log. This must
 	// happen before redaction: the report's message is base64-encoded, so

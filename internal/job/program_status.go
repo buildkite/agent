@@ -4,13 +4,10 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"os"
 	"slices"
 
-	"github.com/buildkite/agent/v4/internal/experiments"
 	"github.com/buildkite/agent/v4/internal/programstatus"
 	"github.com/buildkite/agent/v4/internal/shell"
-	"golang.org/x/term"
 )
 
 // commandStatusID is the record for the step's command. It's left behind
@@ -32,14 +29,9 @@ type jobStatus struct {
 	afterCancel map[string]bool
 }
 
-// newJobStatus returns a jobStatus that writes to w, or nil if the
-// program-status experiment or BUILDKITE_PROGRAM_STATUS turn reports off.
-// cancelled is closed when the job is cancelled.
-func newJobStatus(ctx context.Context, w io.Writer, cancelled <-chan struct{}) *jobStatus {
-	if !experiments.IsEnabled(ctx, experiments.ProgramStatus) ||
-		!programstatus.Enabled(os.LookupEnv, term.IsTerminal(int(os.Stdout.Fd()))) {
-		return nil
-	}
+// newJobStatus returns a jobStatus that writes to w. cancelled is closed when
+// the job is cancelled.
+func newJobStatus(w io.Writer, cancelled <-chan struct{}) *jobStatus {
 	return &jobStatus{r: programstatus.New(w), cancelled: cancelled, afterCancel: make(map[string]bool)}
 }
 
