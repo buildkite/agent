@@ -1,6 +1,6 @@
 module github.com/buildkite/agent/v3
 
-go 1.26.5
+go 1.26.10
 
 require (
 	cloud.google.com/go/compute/metadata v0.10.0
