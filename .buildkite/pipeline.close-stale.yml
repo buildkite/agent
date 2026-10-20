@@ -1,14 +1,12 @@
-# Create a separate Buildkite pipeline that uploads this file from main:
-#   buildkite-agent pipeline upload .buildkite/pipeline.close-stale.yml
-# Disable webhook-triggered builds and add a daily schedule in Buildkite:
-#   cron: 0 3 * * *
-#   timezone: Etc/UTC
-#   branch: main
-# Start with the default dry run, then set STALE_DRY_RUN=false on the schedule.
-# Set STALE_MONTHS on the schedule to override the default 12-month cutoff.
-# Create the AGENT_STALE_GITHUB_TOKEN Buildkite secret, scoped to this pipeline.
-# Its fine-grained GitHub token needs access to buildkite/agent with Issues and
-# Pull requests read/write permissions. Never run this pipeline on PR branches.
+# Pipeline and daily schedule: buildkite/saas-iac, critical-tf/pipelines.tf.
+# The schedule starts disabled and in dry-run mode on main at 03:00 UTC.
+# Change enabled, STALE_DRY_RUN and STALE_MONTHS there through Terraform.
+# AWS role: buildkite/aws-buildkite-dev, oidc-buildkite-agent-close-stale.tf.
+# GitHub access: buildkite/ops, github-tf/exchange-lambda.tf. Exchange grants
+# Issues and Pull requests write access only to buildkite/agent on verified main
+# builds. Apply both permissions changes before running this pipeline.
+# just-works exports a short-lived GH_TOKEN; no stored GitHub token is needed.
+# Never run this pipeline on PR branches.
 
 agents:
   queue: agent-runners-linux-amd64
@@ -22,9 +20,16 @@ steps:
     env:
       STALE_DRY_RUN: "${STALE_DRY_RUN:-true}"
       STALE_MONTHS: "${STALE_MONTHS:-12}"
-    secrets:
-      GH_TOKEN: AGENT_STALE_GITHUB_TOKEN
     plugins:
+      - buildkite/just-works#v0.1.0:
+          role-arn: arn:aws:iam::445615400570:role/pipeline-buildkite-agent-close-stale
+          ecr:
+            enabled: false
+          ssm:
+            enabled: false
+          github:
+            changes-enabled: true
+            organization: buildkite
       - docker#v5.14.0:
           image: golang:1.26.5
           environment:
