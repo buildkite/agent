@@ -6,8 +6,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
-	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -16,7 +14,6 @@ import (
 	tmtypes "github.com/aws/aws-sdk-go-v2/feature/s3/transfermanager/types"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/buildkite/agent/v4/internal/agenthttp"
-	"github.com/buildkite/agent/v4/internal/osutil"
 	"github.com/buildkite/agent/v4/logger"
 	"github.com/dustin/go-humanize"
 )
@@ -125,18 +122,12 @@ func (d S3Downloader) startSingle(ctx context.Context) error {
 // uploader-provided SHA-256 when one is available.
 func (d S3Downloader) startMultipart(ctx context.Context) error {
 	targetPath := targetPath(ctx, d.conf.Path, d.conf.Destination)
-	targetDirectory, targetFile := filepath.Split(targetPath)
 
-	if err := os.MkdirAll(targetDirectory, 0o777); err != nil {
-		return fmt.Errorf("creating directory for %s: %w", targetPath, err)
-	}
-
-	temp, err := os.CreateTemp(targetDirectory, targetFile)
+	temp, err := newDownloadFile(ctx, d.conf.Path, d.conf.Destination)
 	if err != nil {
-		return fmt.Errorf("creating temp file: %w", err)
+		return err
 	}
-	defer os.Remove(temp.Name()) //nolint:errcheck // Best-effort cleanup.
-	defer temp.Close()           //nolint:errcheck // Primary Close checked below.
+	defer temp.cleanup()
 
 	d.logger.Debugf("Multipart downloading s3://%s/%s to %s", d.BucketName(), d.BucketFileLocation(), targetPath)
 
@@ -153,24 +144,20 @@ func (d S3Downloader) startMultipart(ctx context.Context) error {
 	out, err := tmClient.DownloadObject(ctx, &transfermanager.DownloadObjectInput{
 		Bucket:   aws.String(d.BucketName()),
 		Key:      aws.String(d.BucketFileLocation()),
-		WriterAt: temp,
+		WriterAt: temp.file,
 	})
 	if err != nil {
 		return fmt.Errorf("multipart S3 download of %s failed: %w", d.conf.S3Path, err)
 	}
 	bytes := aws.ToInt64(out.ContentLength)
 
-	if err := temp.Chmod(0o666 &^ osutil.Umask); err != nil {
-		return fmt.Errorf("setting file permissions: %w", err)
-	}
-
 	// Seek rewinds the file's read/write cursor to byte 0; without this, io.Copy
 	// below would read from wherever the SDK left the cursor and hash garbage.
-	if _, err := temp.Seek(0, io.SeekStart); err != nil {
+	if _, err := temp.file.Seek(0, io.SeekStart); err != nil {
 		return fmt.Errorf("seeking temp file for hash: %w", err)
 	}
 	hash := sha256.New()
-	if _, err := io.Copy(hash, temp); err != nil {
+	if _, err := io.Copy(hash, temp.file); err != nil {
 		return fmt.Errorf("hashing temp file: %w", err)
 	}
 	gotSHA256 := hex.EncodeToString(hash.Sum(nil))
@@ -179,12 +166,8 @@ func (d S3Downloader) startMultipart(ctx context.Context) error {
 		return fmt.Errorf("checksum of downloaded content %s != uploaded checksum %s", gotSHA256, d.conf.ExpectedSHA256)
 	}
 
-	if err := temp.Close(); err != nil {
-		return fmt.Errorf("closing temp file: %w", err)
-	}
-
-	if err := os.Rename(temp.Name(), targetPath); err != nil {
-		return fmt.Errorf("renaming temp file to target: %w", err)
+	if err := temp.commit(); err != nil {
+		return err
 	}
 
 	d.logger.Infof("Successfully downloaded %q %s with SHA256 %s", d.conf.Path, humanize.IBytes(uint64(bytes)), gotSHA256)
