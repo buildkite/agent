@@ -132,7 +132,12 @@ func secretGet(ctx context.Context, cfg SecretGetConfig, w io.Writer, l logger.L
 		}
 
 		for _, secret := range fetchedSecrets {
-			if err := AddToRedactor(ctx, l, jobClient, secret.Value); err != nil {
+			values := []string{secret.Value}
+			if cfg.Format == "env" && strings.Contains(secret.Value, "'") {
+				// Shell quoting splits apostrophes across escapes, so the raw value no longer matches.
+				values = append(values, shellQuote(secret.Value))
+			}
+			if err := AddToRedactor(ctx, l, jobClient, values...); err != nil {
 				if cfg.Debug {
 					return err
 				}

@@ -2556,6 +2556,295 @@ func TestCommitVerificationPassesForCommitOnNonDefaultBranch(t *testing.T) {
 	}
 }
 
+func TestCommitVerificationFailClosedRetriesCheckoutTimeout(t *testing.T) {
+	t.Parallel()
+	if runtime.GOOS == "windows" {
+		t.Skip("Git timeout fixture uses a POSIX shell")
+	}
+
+	tester, err := NewExecutorTester(mainCtx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tester.Close()
+	commit, err := tester.Repo.RevParse("main")
+	if err != nil {
+		t.Fatal(err)
+	}
+	commandMarker := filepath.Join(t.TempDir(), "command-ran")
+	api := newJobErrorsAPI(t, nil)
+	realGit, err := exec.LookPath("git")
+	if err != nil {
+		t.Fatal(err)
+	}
+	fetchMarker := filepath.Join(t.TempDir(), "fetch-started")
+	script := fmt.Sprintf(`#!/bin/sh
+case "$*" in
+  fetch*refs/buildkite-agent/commit-verification-branch-tip*)
+    if [ ! -f %q ]; then
+      touch %q
+      sleep 3
+    fi
+    ;;
+esac
+exec %q "$@"
+`, fetchMarker, fetchMarker, realGit)
+	if err := os.WriteFile(filepath.Join(tester.PathDir, "git"), []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	env := append(api.env(),
+		"BUILDKITE_GIT_COMMIT_VERIFICATION=fail-closed",
+		"BUILDKITE_COMMIT="+strings.TrimSpace(commit),
+		"BUILDKITE_GIT_CHECKOUT_TIMEOUT=2",
+		"BUILDKITE_CHECKOUT_ATTEMPTS=2",
+		"BUILDKITE_COMMAND="+fmt.Sprintf("echo ran > %q", commandMarker),
+	)
+	if err := tester.Run(t, env...); err != nil {
+		t.Fatalf("bootstrap did not recover from the verification timeout: %v; output:\n%s", err, tester.Output)
+	}
+	if contents, err := os.ReadFile(commandMarker); err != nil || strings.TrimSpace(string(contents)) != "ran" {
+		t.Errorf("command did not run after verified retry: contents = %q, error = %v", contents, err)
+	}
+	if got := api.codes(); !slices.Equal(got, []string{"buildkite.git_checkout_timed_out"}) {
+		t.Errorf("captured error codes = %v, want one checkout timeout", got)
+	}
+}
+
+func TestCommitVerificationFailClosedEnabledByPreCommandHook(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct {
+		name     string
+		args     []string
+		env      []string
+		wantFail bool
+		wantMode string
+	}{
+		{name: "checkout phase omitted", args: []string{"--phases", "command"}, wantFail: true},
+		{name: "skip checkout", env: []string{"BUILDKITE_SKIP_CHECKOUT=true"}, wantFail: true},
+		{name: "unavailable branch", env: []string{"BUILDKITE_BRANCH=deleted-branch"}, wantFail: true},
+		{name: "verified checkout", wantMode: "fail-closed"},
+		{name: "locked strict", args: []string{"--phases", "command", "--checkout-override-mode", "strict"}, wantMode: "strict"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			tester, err := NewExecutorTester(mainCtx)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer tester.Close()
+			commit, err := tester.Repo.RevParse("main")
+			if err != nil {
+				t.Fatal(err)
+			}
+			preCommandMarker := filepath.Join(t.TempDir(), "pre-command-ran")
+			commandMarker := filepath.Join(t.TempDir(), "command-ran")
+			postCommandMarker := filepath.Join(t.TempDir(), "post-command-ran")
+			preCommand := fmt.Sprintf("#!/bin/sh\nexport BUILDKITE_GIT_COMMIT_VERIFICATION=fail-closed\necho ran > %q\n", preCommandMarker)
+			postCommand := fmt.Sprintf("#!/bin/sh\necho ran > %q\n", postCommandMarker)
+			command := fmt.Sprintf("echo $BUILDKITE_GIT_COMMIT_VERIFICATION > %q", commandMarker)
+			if runtime.GOOS == "windows" {
+				preCommand = fmt.Sprintf("@echo off\nset BUILDKITE_GIT_COMMIT_VERIFICATION=fail-closed\necho ran > %q\n", preCommandMarker)
+				postCommand = fmt.Sprintf("@echo off\necho ran > %q\n", postCommandMarker)
+				command = fmt.Sprintf("echo %%BUILDKITE_GIT_COMMIT_VERIFICATION%% > %q", commandMarker)
+			}
+			for name, script := range map[string]string{"pre-command": preCommand, "post-command": postCommand} {
+				if err := os.WriteFile(filepath.Join(tester.HooksDir, hookFileName(name)), []byte(script), 0o700); err != nil {
+					t.Fatal(err)
+				}
+			}
+			api := newJobErrorsAPI(t, nil)
+			env := append(api.env(),
+				"BUILDKITE_GIT_COMMIT_VERIFICATION=strict",
+				"BUILDKITE_COMMIT="+strings.TrimSpace(commit),
+				"BUILDKITE_COMMAND="+command,
+			)
+			env = append(env, tc.env...)
+			tester.Args = append(tester.Args, tc.args...)
+			err = tester.Run(t, env...)
+			if (err != nil) != tc.wantFail {
+				t.Errorf("bootstrap error = %v, want failure = %t; output:\n%s", err, tc.wantFail, tester.Output)
+			}
+			if contents, err := os.ReadFile(preCommandMarker); err != nil || strings.TrimSpace(string(contents)) != "ran" {
+				t.Fatalf("pre-command hook did not run: contents = %q, error = %v", contents, err)
+			}
+			var wantCodes []string
+			if tc.wantFail {
+				wantCodes = []string{"buildkite.git_commit_verification_unavailable"}
+			}
+			if got := api.codes(); !slices.Equal(got, wantCodes) {
+				t.Errorf("captured error codes = %v, want %v", got, wantCodes)
+			}
+			for name, marker := range map[string]string{"command": commandMarker, "post-command": postCommandMarker} {
+				contents, err := os.ReadFile(marker)
+				if tc.wantFail {
+					if !errors.Is(err, os.ErrNotExist) {
+						t.Errorf("%s ran without successful verification: contents = %q, error = %v", name, contents, err)
+					}
+					continue
+				}
+				want := "ran"
+				if name == "command" {
+					want = tc.wantMode
+				}
+				if err != nil || strings.TrimSpace(string(contents)) != want {
+					t.Errorf("%s marker = %q, want %q; error = %v", name, contents, want, err)
+				}
+			}
+		})
+	}
+}
+
+func TestCommitVerificationFailClosed(t *testing.T) {
+	t.Parallel()
+
+	for _, mode := range []string{"strict", "fail-closed"} {
+		for _, tc := range []struct {
+			name       string
+			commitRef  string
+			env        []string
+			emptyEnv   string
+			hook       string
+			phases     string
+			wantError  string
+			strictFail bool
+		}{
+			{name: "verified tip"},
+			{name: "verified ancestor", env: []string{"BUILDKITE_BRANCH=update-test-txt"}},
+			{name: "off branch", commitRef: "update-test-txt", wantError: "is not on branch", strictFail: true},
+			{name: "unavailable branch", env: []string{"BUILDKITE_BRANCH=deleted-branch"}, wantError: "unable to fetch branch"},
+			{name: "HEAD", env: []string{"BUILDKITE_COMMIT=HEAD"}, wantError: "commit is HEAD"},
+			{name: "tag", env: []string{"BUILDKITE_TAG=v1.0.0"}, wantError: "tag build"},
+			{name: "pull request", env: []string{"BUILDKITE_PULL_REQUEST=123"}, wantError: "pull request build"},
+			{name: "custom refspec", env: []string{"BUILDKITE_REFSPEC=refs/heads/main"}, wantError: "custom refspec"},
+			{name: "skip checkout", env: []string{"BUILDKITE_SKIP_CHECKOUT=true"}, wantError: "checkout is skipped"},
+			{name: "no repository", emptyEnv: "BUILDKITE_REPO", wantError: "no repository specified"},
+			{name: "agent checkout hook", hook: "agent", wantError: "custom checkout hook"},
+			{name: "plugin checkout hook", hook: "plugin", wantError: "custom checkout hook"},
+			{name: "checkout phase omitted", phases: "command", wantError: "requires successful verification in the checkout phase"},
+		} {
+			t.Run(mode+"/"+tc.name, func(t *testing.T) {
+				t.Parallel()
+				if tc.emptyEnv != "" && runtime.GOOS == "windows" {
+					t.Skip("cmd.exe unsets empty variables, which does not clear the executor config")
+				}
+				tester, err := NewExecutorTester(mainCtx)
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer tester.Close()
+
+				ref := tc.commitRef
+				if ref == "" {
+					ref = "main"
+				}
+				commit, err := tester.Repo.RevParse(ref)
+				if err != nil {
+					t.Fatal(err)
+				}
+				commit = strings.TrimSpace(commit)
+				commandMarker := filepath.Join(t.TempDir(), "command-ran")
+				hookMarker := filepath.Join(t.TempDir(), "hook-ran")
+				api := newJobErrorsAPI(t, nil)
+				env := []string{
+					"BUILDKITE_GIT_COMMIT_VERIFICATION=" + mode,
+					"BUILDKITE_COMMIT=" + commit,
+					"BUILDKITE_PULL_REQUEST=false",
+					"BUILDKITE_COMMAND=" + fmt.Sprintf("echo ran > %q", commandMarker),
+				}
+				env = append(env, api.env()...)
+				env = append(env, tc.env...)
+				var clones atomic.Int32
+				if tc.name == "unavailable branch" {
+					git := tester.MustMock(t, "git").PassthroughToLocalCommand().Before(func(i bintest.Invocation) error {
+						if i.Args[0] == "clone" {
+							clones.Add(1)
+						}
+						return nil
+					})
+					git.Expect().AtLeastOnce().WithAnyArguments()
+				}
+				if tc.phases != "" {
+					tester.Args = append(tester.Args, "--phases", tc.phases)
+				}
+				if tc.emptyEnv != "" {
+					// Bootstrap requires these values initially, but hooks can clear them.
+					script := "#!/bin/sh\nexport " + tc.emptyEnv + "=\n"
+					if err := os.WriteFile(filepath.Join(tester.HooksDir, "environment"), []byte(script), 0o700); err != nil {
+						t.Fatal(err)
+					}
+				}
+				if tc.hook != "" {
+					hookName := "checkout"
+					script := []string{"#!/bin/sh", fmt.Sprintf("echo ran > %q", hookMarker)}
+					if runtime.GOOS == "windows" {
+						hookName += ".bat"
+						script[0] = "@echo off"
+					}
+					if tc.hook == "agent" {
+						if err := os.WriteFile(filepath.Join(tester.HooksDir, hookName), []byte(strings.Join(script, "\n")), 0o700); err != nil {
+							t.Fatal(err)
+						}
+					} else {
+						p := createTestPlugin(t, map[string][]string{hookName: script})
+						defer p.Close()
+						plugins, err := p.ToJSON()
+						if err != nil {
+							t.Fatal(err)
+						}
+						env = append(env, "BUILDKITE_PLUGINS="+plugins)
+					}
+				}
+
+				wantFail := tc.strictFail || (mode == "fail-closed" && tc.wantError != "")
+				err = tester.Run(t, env...)
+				if (err != nil) != wantFail {
+					t.Fatalf("bootstrap error = %v, want failure = %t; output:\n%s", err, wantFail, tester.Output)
+				}
+				if wantFail && !strings.Contains(tester.Output, tc.wantError) {
+					t.Errorf("expected rejection containing %q; output:\n%s", tc.wantError, tester.Output)
+				}
+				if tc.name == "unavailable branch" && clones.Load() != 1 {
+					t.Errorf("unavailable verification caused %d clones, want 1", clones.Load())
+				}
+				var wantCodes []string
+				if wantFail {
+					if tc.strictFail {
+						wantCodes = []string{"buildkite.git_commit_verification_failed"}
+					} else {
+						wantCodes = []string{"buildkite.git_commit_verification_unavailable"}
+					}
+				}
+				if got := api.codes(); !slices.Equal(got, wantCodes) {
+					t.Errorf("captured error codes = %v, want %v", got, wantCodes)
+				}
+				contents, err := os.ReadFile(commandMarker)
+				if wantFail {
+					if !errors.Is(err, os.ErrNotExist) {
+						t.Errorf("command ran without successful verification: contents = %q, error = %v", contents, err)
+					}
+				} else if err != nil || strings.TrimSpace(string(contents)) != "ran" {
+					t.Errorf("command did not run: contents = %q, error = %v; output:\n%s", contents, err, tester.Output)
+				}
+				if tc.hook != "" {
+					_, err := os.Stat(hookMarker)
+					if mode == "fail-closed" && !errors.Is(err, os.ErrNotExist) {
+						t.Errorf("custom checkout hook ran in fail-closed mode: %v", err)
+					} else if mode == "strict" && err != nil {
+						t.Errorf("strict mode did not run the custom checkout hook: %v", err)
+					}
+				}
+				if tc.wantError == "" {
+					checkedOut, err := tester.Repo.Execute("-C", tester.CheckoutDir(), "rev-parse", "HEAD")
+					if err != nil || strings.TrimSpace(checkedOut) != commit {
+						t.Errorf("checked out %q, want %q; error = %v", checkedOut, commit, err)
+					}
+				}
+			})
+		}
+	}
+}
+
 type subDirMatcher struct {
 	dir string
 }

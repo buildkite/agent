@@ -37,6 +37,10 @@ You can also change working directory to the intended destination and use a
 <destination> of '.' to always create a directory hierarchy matching the
 artifact paths.
 
+Artifact paths may traverse relative directory symlinks only when they stay
+within <destination>. Absolute directory symlinks beneath <destination> are
+not followed.
+
 Example:
 
     $ buildkite-agent artifact download "pkg/*.tar.gz" . --build xxx
