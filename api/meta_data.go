@@ -10,6 +10,7 @@ import (
 type MetaData struct {
 	Key   string `json:"key,omitempty"`
 	Value string `json:"value,omitempty"`
+	Scope string `json:"scope,omitempty"`
 }
 
 // MetaDataExists represents a Buildkite Agent API MetaData Exists check
@@ -21,6 +22,7 @@ type MetaDataExists struct {
 // MetaDataBatch represents a batch of key/value pairs for the set-batch endpoint.
 type MetaDataBatch struct {
 	Items []MetaData `json:"items"`
+	Scope string     `json:"scope,omitempty"`
 }
 
 // Sets the meta data value
@@ -48,14 +50,15 @@ func (c *Client) SetMetaDataBatch(ctx context.Context, jobId string, batch *Meta
 	return c.doRequest(req, nil)
 }
 
-// Gets the meta data value
-func (c *Client) GetMetaData(ctx context.Context, scope, id, key string) (*MetaData, *Response, error) {
-	if scope != "job" && scope != "build" {
+// GetMetaData reads a value. targetScope selects the job or build URL;
+// metadataScope selects the store (empty means build, "job" means job).
+func (c *Client) GetMetaData(ctx context.Context, targetScope, id, key, metadataScope string) (*MetaData, *Response, error) {
+	if targetScope != "job" && targetScope != "build" {
 		return nil, nil, errors.New("scope must either be job or build")
 	}
 
-	u := fmt.Sprintf("%ss/%s/data/get", scope, railsPathEscape(id))
-	m := &MetaData{Key: key}
+	u := fmt.Sprintf("%ss/%s/data/get", targetScope, railsPathEscape(id))
+	m := &MetaData{Key: key, Scope: metadataScope}
 
 	req, err := c.newRequest(ctx, "POST", u, m)
 	if err != nil {
@@ -70,14 +73,15 @@ func (c *Client) GetMetaData(ctx context.Context, scope, id, key string) (*MetaD
 	return m, resp, err
 }
 
-// Returns true if the meta data key has been set, false if it hasn't.
-func (c *Client) ExistsMetaData(ctx context.Context, scope, id, key string) (*MetaDataExists, *Response, error) {
-	if scope != "job" && scope != "build" {
+// ExistsMetaData checks whether a key has been set. targetScope selects the
+// job or build URL; metadataScope selects the store (empty means build).
+func (c *Client) ExistsMetaData(ctx context.Context, targetScope, id, key, metadataScope string) (*MetaDataExists, *Response, error) {
+	if targetScope != "job" && targetScope != "build" {
 		return nil, nil, errors.New("scope must either be job or build")
 	}
 
-	u := fmt.Sprintf("%ss/%s/data/exists", scope, railsPathEscape(id))
-	m := &MetaData{Key: key}
+	u := fmt.Sprintf("%ss/%s/data/exists", targetScope, railsPathEscape(id))
+	m := &MetaData{Key: key, Scope: metadataScope}
 
 	req, err := c.newRequest(ctx, "POST", u, m)
 	if err != nil {
@@ -93,14 +97,20 @@ func (c *Client) ExistsMetaData(ctx context.Context, scope, id, key string) (*Me
 	return e, resp, err
 }
 
-func (c *Client) MetaDataKeys(ctx context.Context, scope, id string) ([]string, *Response, error) {
-	if scope != "job" && scope != "build" {
+// MetaDataKeys lists keys. targetScope selects the job or build URL;
+// metadataScope selects the store (empty means build, "job" means job).
+func (c *Client) MetaDataKeys(ctx context.Context, targetScope, id, metadataScope string) ([]string, *Response, error) {
+	if targetScope != "job" && targetScope != "build" {
 		return nil, nil, errors.New("scope must either be job or build")
 	}
 
-	u := fmt.Sprintf("%ss/%s/data/keys", scope, railsPathEscape(id))
+	u := fmt.Sprintf("%ss/%s/data/keys", targetScope, railsPathEscape(id))
+	var body any
+	if metadataScope != "" {
+		body = &MetaData{Scope: metadataScope}
+	}
 
-	req, err := c.newRequest(ctx, "POST", u, nil)
+	req, err := c.newRequest(ctx, "POST", u, body)
 	if err != nil {
 		return nil, nil, err
 	}

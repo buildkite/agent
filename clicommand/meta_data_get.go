@@ -18,7 +18,7 @@ const metaDataGetHelpDescription = `Usage:
 
 Description:
 
-Get data from a build's key/value store.
+Get data from a build's key/value store, or a job's store with --scope job.
 
 Example:
 
@@ -32,13 +32,15 @@ type MetaDataGetConfig struct {
 	Default string `cli:"default"`
 	Job     string `cli:"job"`
 	Build   string `cli:"build"`
+	Scope   string `cli:"scope"`
 }
 
 var MetaDataGetCommand = &cli.Command{
 	Name:        "get",
-	Usage:       "Get data from a build",
+	Usage:       "Get data from a build or job",
 	Description: metaDataGetHelpDescription,
 	Flags: slices.Concat(globalFlags(), apiFlags(), []cli.Flag{
+		metaDataScopeFlag(),
 		&cli.StringFlag{
 			Name:  "default",
 			Value: "",
@@ -47,7 +49,7 @@ var MetaDataGetCommand = &cli.Command{
 		&cli.StringFlag{
 			Name:    "job",
 			Value:   "",
-			Usage:   "Which job's build should the meta-data be retrieved from",
+			Usage:   "Which job (with --scope job) or job's build should the meta-data be retrieved from",
 			Sources: cli.EnvVars("BUILDKITE_JOB_ID"),
 		},
 		&cli.StringFlag{
@@ -63,16 +65,24 @@ var MetaDataGetCommand = &cli.Command{
 		ctx, span := otel.Tracer("buildkite-agent").Start(ctx, "meta-data-get")
 		defer span.End()
 
+		metadataScope, err := metaDataRequestScope(cfg.Scope, cfg.Build)
+		if err != nil {
+			return err
+		}
+		if cfg.Scope == "job" && cfg.Job == "" {
+			return fmt.Errorf("--scope job requires --job or BUILDKITE_JOB_ID")
+		}
+
 		// Create the API client
 		client := api.NewClient(l, loadAPIClientConfig(cfg, "AgentAccessToken"))
 
 		// Find the meta data value
 
-		scope := "job"
+		targetScope := "job"
 		id := cfg.Job
 
 		if cfg.Build != "" {
-			scope = "build"
+			targetScope = "build"
 			id = cfg.Build
 		}
 
@@ -81,7 +91,7 @@ var MetaDataGetCommand = &cli.Command{
 			roko.WithStrategy(roko.Constant(5*time.Second)),
 		)
 		metaData, resp, err := roko.DoFunc2(ctx, r, func(r *roko.Retrier) (*api.MetaData, *api.Response, error) {
-			metaData, resp, err := client.GetMetaData(ctx, scope, id, cfg.Key)
+			metaData, resp, err := client.GetMetaData(ctx, targetScope, id, cfg.Key, metadataScope)
 			if api.BreakOnNonRetryable(r, resp, err) {
 				return nil, resp, err
 			}

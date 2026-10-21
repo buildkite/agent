@@ -22,6 +22,7 @@ const metaDataSetBatchHelpDescription = `Usage:
 Description:
 
 Set multiple meta-data key/value pairs on a build in a single request.
+Use --scope job to store data on the selected job instead of its build.
 
 Each argument must be in key=value format.
 
@@ -38,18 +39,20 @@ type MetaDataSetBatchConfig struct {
 	APIConfig
 
 	Job          string   `cli:"job" validate:"required"`
+	Scope        string   `cli:"scope"`
 	RedactedVars []string `cli:"redacted-vars" normalize:"list"`
 }
 
 var MetaDataSetBatchCommand = &cli.Command{
 	Name:        "set-batch",
-	Usage:       "Set multiple meta-data key/value pairs on a build",
+	Usage:       "Set multiple meta-data key/value pairs on a build or job",
 	Description: metaDataSetBatchHelpDescription,
 	Flags: slices.Concat(globalFlags(), apiFlags(), []cli.Flag{
+		metaDataScopeFlag(),
 		&cli.StringFlag{
 			Name:    "job",
 			Value:   "",
-			Usage:   "Which job's build should the meta-data be set on",
+			Usage:   "Which job (with --scope job) or job's build should the meta-data be set on",
 			Sources: cli.EnvVars("BUILDKITE_JOB_ID"),
 		},
 		RedactedVars,
@@ -57,6 +60,12 @@ var MetaDataSetBatchCommand = &cli.Command{
 	Action: func(ctx context.Context, c *cli.Command) error {
 		ctx, cfg, l, _, done := setupLoggerAndConfig[MetaDataSetBatchConfig](ctx, c)
 		defer done()
+
+		scope, err := metaDataRequestScope(cfg.Scope, "")
+		if err != nil {
+			return err
+		}
+		cfg.Scope = scope
 
 		args := c.Args()
 		if args.Len() == 0 {
@@ -123,7 +132,7 @@ func parseMetaDataBatchArgs(args []string) ([]api.MetaData, error) {
 func setMetaDataBatch(ctx context.Context, cfg MetaDataSetBatchConfig, l logger.Logger, items []api.MetaData) error {
 	client := api.NewClient(l, loadAPIClientConfig(cfg, "AgentAccessToken"))
 
-	batch := &api.MetaDataBatch{Items: items}
+	batch := &api.MetaDataBatch{Items: items, Scope: cfg.Scope}
 
 	if err := roko.NewRetrier(
 		roko.WithMaxAttempts(10),

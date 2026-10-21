@@ -21,6 +21,8 @@ Description:
 The command exits with a status of 0 if the key has been set, or it will
 exit with a status of 100 if the key doesn't exist.
 
+Checks build meta-data by default. Use --scope job to check a job's store.
+
 Example:
 
     $ buildkite-agent meta-data exists "foo"`
@@ -32,17 +34,19 @@ type MetaDataExistsConfig struct {
 	Key   string `cli:"arg:0" label:"meta-data key" validate:"required"`
 	Job   string `cli:"job"`
 	Build string `cli:"build"`
+	Scope string `cli:"scope"`
 }
 
 var MetaDataExistsCommand = &cli.Command{
 	Name:        "exists",
-	Usage:       "Check to see if the meta data key exists for a build",
+	Usage:       "Check to see if the meta data key exists for a build or job",
 	Description: metaDataExistsHelpDescription,
 	Flags: slices.Concat(globalFlags(), apiFlags(), []cli.Flag{
+		metaDataScopeFlag(),
 		&cli.StringFlag{
 			Name:    "job",
 			Value:   "",
-			Usage:   "Which job's build should the meta-data be checked for",
+			Usage:   "Which job (with --scope job) or job's build should the meta-data be checked for",
 			Sources: cli.EnvVars("BUILDKITE_JOB_ID"),
 		},
 		&cli.StringFlag{
@@ -58,15 +62,23 @@ var MetaDataExistsCommand = &cli.Command{
 		ctx, span := otel.Tracer("buildkite-agent").Start(ctx, "meta-data-exists")
 		defer span.End()
 
+		metadataScope, err := metaDataRequestScope(cfg.Scope, cfg.Build)
+		if err != nil {
+			return err
+		}
+		if cfg.Scope == "job" && cfg.Job == "" {
+			return fmt.Errorf("--scope job requires --job or BUILDKITE_JOB_ID")
+		}
+
 		// Create the API client
 		client := api.NewClient(l, loadAPIClientConfig(cfg, "AgentAccessToken"))
 
 		// Find the meta data value
-		scope := "job"
+		targetScope := "job"
 		id := cfg.Job
 
 		if cfg.Build != "" {
-			scope = "build"
+			targetScope = "build"
 			id = cfg.Build
 		}
 
@@ -75,7 +87,7 @@ var MetaDataExistsCommand = &cli.Command{
 			roko.WithStrategy(roko.Constant(5*time.Second)),
 		)
 		exists, err := roko.DoFunc(ctx, r, func(r *roko.Retrier) (*api.MetaDataExists, error) {
-			exists, resp, err := client.ExistsMetaData(ctx, scope, id, cfg.Key)
+			exists, resp, err := client.ExistsMetaData(ctx, targetScope, id, cfg.Key, metadataScope)
 			if api.BreakOnNonRetryable(r, resp, err) {
 				return nil, err
 			}

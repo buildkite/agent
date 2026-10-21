@@ -24,6 +24,7 @@ const metaDataSetHelpDescription = `Usage:
 Description:
 
 Set arbitrary data on a build using a basic key/value store.
+Use --scope job to store data on the selected job instead of its build.
 
 You can supply the value as an argument to the command, or pipe in a file or
 script output.
@@ -44,18 +45,20 @@ type MetaDataSetConfig struct {
 	Key          string   `cli:"arg:0" label:"meta-data key" validate:"required"`
 	Value        string   `cli:"arg:1" label:"meta-data value"`
 	Job          string   `cli:"job" validate:"required"`
+	Scope        string   `cli:"scope"`
 	RedactedVars []string `cli:"redacted-vars" normalize:"list"`
 }
 
 var MetaDataSetCommand = &cli.Command{
 	Name:        "set",
-	Usage:       "Set data on a build",
+	Usage:       "Set data on a build or job",
 	Description: metaDataSetHelpDescription,
 	Flags: slices.Concat(globalFlags(), apiFlags(), []cli.Flag{
+		metaDataScopeFlag(),
 		&cli.StringFlag{
 			Name:    "job",
 			Value:   "",
-			Usage:   "Which job's build should the meta-data be set on",
+			Usage:   "Which job (with --scope job) or job's build should the meta-data be set on",
 			Sources: cli.EnvVars("BUILDKITE_JOB_ID"),
 		},
 		RedactedVars,
@@ -65,6 +68,11 @@ var MetaDataSetCommand = &cli.Command{
 		defer done()
 		ctx, span := otel.Tracer("buildkite-agent").Start(ctx, "meta-data-set")
 		defer span.End()
+
+		scope, err := metaDataRequestScope(cfg.Scope, "")
+		if err != nil {
+			return err
+		}
 
 		// Read the value from STDIN if argument omitted entirely
 		if c.Args().Len() < 2 {
@@ -102,6 +110,7 @@ var MetaDataSetCommand = &cli.Command{
 		metaData := &api.MetaData{
 			Key:   cfg.Key,
 			Value: cfg.Value,
+			Scope: scope,
 		}
 
 		// Set the meta data
