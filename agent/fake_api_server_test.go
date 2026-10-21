@@ -52,6 +52,11 @@ type FakeAgent struct {
 	PingHandler      func(*http.Request) (api.Ping, error)
 	HeartbeatHandler http.HandlerFunc
 
+	// AcceptHandler overrides the default job accept handler. Unlike the other
+	// handlers it is called without the server mutex held, so it can block
+	// without holding up other requests.
+	AcceptHandler http.HandlerFunc
+
 	// PingStream is a simple way of providing streaming responses concurrently.
 	// It is used for the default handler.
 	PingStream chan *agentedgev1.StreamPingsResponse
@@ -237,9 +242,6 @@ func (fs *FakeAPIServer) handleJobAcquire(rw http.ResponseWriter, req *http.Requ
 }
 
 func (fs *FakeAPIServer) handleJobAccept(rw http.ResponseWriter, req *http.Request) {
-	fs.mu.Lock()
-	defer fs.mu.Unlock()
-
 	// The agent has the job info from the ping, but accepts as itself.
 	auth := req.Header.Get("Authorization")
 	agent := fs.agentForAuth(auth)
@@ -247,6 +249,14 @@ func (fs *FakeAPIServer) handleJobAccept(rw http.ResponseWriter, req *http.Reque
 		http.Error(rw, encodeMsgf("invalid Authorization header value %q", auth), http.StatusUnauthorized)
 		return
 	}
+
+	if agent.AcceptHandler != nil {
+		agent.AcceptHandler(rw, req)
+		return
+	}
+
+	fs.mu.Lock()
+	defer fs.mu.Unlock()
 
 	jobUUID := req.PathValue("job_uuid")
 	job := fs.jobs[jobUUID]
