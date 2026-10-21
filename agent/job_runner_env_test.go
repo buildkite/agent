@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"regexp"
@@ -193,11 +194,90 @@ func controlPlaneTestRunner(t *testing.T, jobEnv map[string]string, agentConf Ag
 func controlPlaneTestAgentConf() AgentConfiguration {
 	return AgentConfiguration{
 		OpenTelemetryTracing: true,
-		ControlPlaneTracingExporter: &api.TracingExporter{
+		ControlPlaneTracingExporter: &api.OTLPExporter{
 			Endpoint: "https://collector.example/v1/traces",
 			Protocol: "http/protobuf",
 			Headers:  map[string]string{"Authorization": testBearerToken},
 		},
+	}
+}
+
+func TestCreateEnvironmentControlPlaneJobLogs(t *testing.T) {
+	t.Parallel()
+
+	const policy = `{"job_logs":{"enabled":true,"exporter":{"endpoint":"https://collector.example/v1/logs","protocol":"http/protobuf","headers":{"Authorization":"Bearer super-secret-token"}}}}`
+	for _, tc := range []struct {
+		name         string
+		response     string
+		localEnabled bool
+		local        LocalJobLogsConfig
+		jobEnv       map[string]string
+		wantEnabled  bool
+		wantExporter bool
+	}{
+		{name: "registration enables logs", response: policy, wantEnabled: true, wantExporter: true},
+		{name: "omitted policy cannot enable logs", response: `{}`, jobEnv: map[string]string{"BUILDKITE_JOB_LOGS_OTLP": "true"}},
+		{name: "disabled policy preserves local opt-in", response: `{"job_logs":{"enabled":false}}`, localEnabled: true, local: LocalJobLogsConfig{EnabledSet: true}, wantEnabled: true},
+		{name: "explicit local false wins", response: policy, local: LocalJobLogsConfig{EnabledSet: true}},
+		{name: "local destination wins", response: policy, local: LocalJobLogsConfig{OTLPDestinationSet: true}, wantEnabled: true},
+		{name: "pipeline cannot opt out", response: policy, jobEnv: map[string]string{"BUILDKITE_JOB_LOGS_OTLP": "false"}, wantEnabled: true, wantExporter: true},
+		{name: "traces destination is independent", response: policy, jobEnv: map[string]string{"OTEL_EXPORTER_OTLP_TRACES_ENDPOINT": "https://other.example/v1/traces"}, wantEnabled: true, wantExporter: true},
+		{name: "logs endpoint blocks entire tuple", response: policy, jobEnv: map[string]string{"OTEL_EXPORTER_OTLP_LOGS_ENDPOINT": "https://other.example/v1/logs"}, wantEnabled: true},
+		{name: "empty logs headers block entire tuple", response: policy, jobEnv: map[string]string{"OTEL_EXPORTER_OTLP_LOGS_HEADERS": ""}, wantEnabled: true},
+		{name: "generic endpoint blocks entire tuple", response: policy, jobEnv: map[string]string{"OTEL_EXPORTER_OTLP_ENDPOINT": "https://other.example"}, wantEnabled: true},
+		{name: "generic headers block entire tuple", response: policy, jobEnv: map[string]string{"OTEL_EXPORTER_OTLP_HEADERS": "other=credential"}, wantEnabled: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			var registration api.AgentRegisterResponse
+			if err := json.Unmarshal([]byte(tc.response), &registration); err != nil {
+				t.Fatal(err)
+			}
+			conf := AgentConfiguration{JobLogsOTLP: tc.localEnabled}
+			log := logger.NewBuffer()
+			ApplyControlPlaneJobLogs(log, &conf, registration.JobLogs, tc.local)
+			r := controlPlaneTestRunner(t, tc.jobEnv, conf)
+			got, err := r.createEnvironment(t.Context())
+			if err != nil {
+				t.Fatal(err)
+			}
+			bootstrapEnv := envutil.FromSlice(got)
+			if got := bootstrapEnv.GetString("BUILDKITE_JOB_LOGS_OTLP", ""); got != fmt.Sprint(tc.wantEnabled) {
+				t.Errorf("BUILDKITE_JOB_LOGS_OTLP = %q, want %t", got, tc.wantEnabled)
+			}
+			for name, value := range map[string]string{
+				"OTEL_EXPORTER_OTLP_LOGS_ENDPOINT": "https://collector.example/v1/logs",
+				"OTEL_EXPORTER_OTLP_LOGS_PROTOCOL": "http/protobuf",
+				"OTEL_EXPORTER_OTLP_LOGS_HEADERS":  "Authorization=Bearer%20super-secret-token",
+			} {
+				want, wantPresent := tc.jobEnv[name]
+				if tc.wantExporter {
+					want, wantPresent = value, true
+				}
+				if got, present := bootstrapEnv.Get(name); got != want || present != wantPresent {
+					t.Errorf("%s = (%q, %t), want (%q, %t)", name, got, present, want, wantPresent)
+				}
+			}
+			for name, want := range tc.jobEnv {
+				if name != "BUILDKITE_JOB_LOGS_OTLP" && bootstrapEnv.GetString(name, "") != want {
+					t.Errorf("job variable %s was not preserved", name)
+				}
+			}
+			for _, f := range []*os.File{r.envShellFile, r.envJSONFile} {
+				data, err := os.ReadFile(f.Name())
+				if err != nil {
+					t.Fatal(err)
+				}
+				if strings.Contains(string(data), "collector.example") || strings.Contains(string(data), "super-secret-token") {
+					t.Error("registration exporter leaked into persisted job environment")
+				}
+			}
+			for _, message := range log.Messages {
+				if strings.Contains(message, "super-secret-token") || strings.Contains(message, "/v1/logs") {
+					t.Errorf("registration exporter leaked into agent log: %s", message)
+				}
+			}
+		})
 	}
 }
 
