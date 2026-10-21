@@ -84,7 +84,9 @@ func TestMetaDataScope(t *testing.T) {
 					if scope != tc.scope {
 						t.Errorf("scope = %q, want %q", scope, tc.scope)
 					}
-					fmt.Fprint(w, command.response)
+					if _, err := fmt.Fprint(w, command.response); err != nil {
+						t.Error(err)
+					}
 				}))
 				defer server.Close()
 				args := append([]string{command.command.Name}, command.args...)
@@ -138,7 +140,9 @@ func TestMetaDataReadBuildSelector(t *testing.T) {
 					if r.URL.Path != "/builds/other-build/data/"+command.command.Name {
 						t.Errorf("path = %s", r.URL.Path)
 					}
-					fmt.Fprint(w, command.response)
+					if _, err := fmt.Fprint(w, command.response); err != nil {
+						t.Error(err)
+					}
 				}))
 				defer server.Close()
 				args := append([]string{command.command.Name}, command.args...)
