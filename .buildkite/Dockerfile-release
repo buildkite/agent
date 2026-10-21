@@ -7,7 +7,7 @@ FROM public.ecr.aws/aws-cli/aws-cli:2.37.9@sha256:92de75724b6a746951f0e8b915d86b
 
 # The full (non-slim) image has git, curl, gpg, openssl and a C compiler, which
 # `bundle install` needs for bigdecimal's native extension.
-FROM public.ecr.aws/docker/library/ruby:4.0.6@sha256:8dc3950712ad2078bdd275b890419ba2fd3aab5a0653b291a7325f0d8a24ca05
+FROM public.ecr.aws/docker/library/ruby:4.0.7@sha256:bd4a9644f7aa9e8f8035e460e0aeedcd923a56347b1dcc7666e3bb5d810cd385
 
 ARG TARGETARCH
 ARG GH_VERSION=2.102.0
