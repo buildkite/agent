@@ -1,9 +1,12 @@
 package integration
 
 import (
+	"errors"
 	"io"
+	"os/exec"
 	"runtime"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -117,7 +120,15 @@ func TestProgramStatusCancelledCommandIsIdle(t *testing.T) {
 		t.Fatalf("tester.Cancel() = %v", err)
 	}
 	select {
-	case <-runDone:
+	case err := <-runDone:
+		// Bootstrap re-signals itself after handling cancellation.
+		var exitErr *exec.ExitError
+		if !errors.As(err, &exitErr) {
+			t.Fatalf("tester.Run() = %v, want an exit error from SIGINT", err)
+		}
+		if status, ok := exitErr.Sys().(syscall.WaitStatus); !ok || status.Signal() != syscall.SIGINT {
+			t.Fatalf("tester.Run() = %v, want termination by SIGINT", err)
+		}
 	case <-time.After(30 * time.Second):
 		t.Fatal("timed out waiting for cancelled job to finish")
 	}
