@@ -66,6 +66,12 @@ type UploaderConfig struct {
 	// How many upload operations to run concurrently. When zero, defaults to
 	// DefaultUploadConcurrency.
 	UploadConcurrency int
+
+	// OnProgress, if set, is called with the number of artifacts uploaded so
+	// far and the total: once before the uploads start, then each time an
+	// artifact finishes uploading. It isn't called if no files match. Calls
+	// happen one at a time, and none happen after Upload returns.
+	OnProgress func(uploaded, total int)
 }
 
 type Uploader struct {
@@ -77,6 +83,9 @@ type Uploader struct {
 
 	// The APIClient that will be used when uploading jobs
 	apiClient APIClient
+
+	// How many artifacts have been uploaded, of how many, for OnProgress.
+	uploaded, total int
 }
 
 type artifactUploadTimings struct {
@@ -182,6 +191,8 @@ func (a *Uploader) Upload(ctx context.Context) error {
 
 	a.logger.Infof("Found %d files that match %q", len(artifacts), a.conf.Paths)
 	timings.addArtifacts(artifacts)
+	a.total = len(artifacts)
+	a.progress(0)
 
 	// Determine what uploader to use
 	uploader, err := a.createUploader(ctx)
@@ -225,6 +236,17 @@ func (a *Uploader) Upload(ctx context.Context) error {
 	timings.logSummary(a.logger)
 
 	return nil
+}
+
+// progress counts n more artifacts as uploaded and calls OnProgress. Batches
+// upload one after another, and only the state updater goroutine of each
+// batch calls it, which has finished by the time upload returns, so it
+// doesn't need a lock.
+func (a *Uploader) progress(n int) {
+	a.uploaded += n
+	if a.conf.OnProgress != nil {
+		a.conf.OnProgress(a.uploaded, a.total)
+	}
 }
 
 func isSymlink(path string) bool {
@@ -687,12 +709,17 @@ func (a *Uploader) upload(ctx context.Context, artifacts []*api.Artifact, upload
 
 	// Send the work units for each artifact to the workers.
 	// This must happen after creating worker goroutines listening on workUnitsCh.
+	// If the context is cancelled first, stop sending, but still wait for the
+	// goroutines below, so none of them is running when this returns.
 	uploadStart := time.Now()
+	cancelled := false
+send:
 	for _, tracker := range worker.trackers {
 		for _, workUnit := range tracker.work {
 			select {
 			case <-ctx.Done():
-				return stats, ctx.Err()
+				cancelled = true
+				break send
 			case unitsCh <- workUnit:
 			}
 		}
@@ -714,7 +741,11 @@ func (a *Uploader) upload(ctx context.Context, artifacts []*api.Artifact, upload
 	a.logger.Debugf("Uploads complete, waiting for upload status to be sent to Buildkite...")
 
 	// Wait for the statuses to finish uploading
-	if err := <-errCh; err != nil {
+	err := <-errCh
+	if cancelled {
+		return stats, ctx.Err()
+	}
+	if err != nil {
 		stats.stateUpdateDuration = worker.stateUpdateDuration
 		stats.stateUpdateCount = worker.stateUpdateCount
 		return stats, fmt.Errorf("errors uploading artifacts: %w", err)
@@ -834,6 +865,7 @@ selectLoop:
 			// Add it to the next batch of states to upload.
 			tracker.State = "finished"
 			a.logger.Debugf("Artifact %s has entered state %s", tracker.ID, tracker.State)
+			a.progress(1)
 		}
 	}
 
