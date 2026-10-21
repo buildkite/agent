@@ -15,7 +15,7 @@ func serverTracing() *api.AgentTracing {
 	return &api.AgentTracing{
 		Backend:              "opentelemetry",
 		PropagateTraceparent: true,
-		Exporter: &api.TracingExporter{
+		Exporter: &api.OTLPExporter{
 			Endpoint: "https://collector.example/v1/traces",
 			Protocol: "http/protobuf",
 			Headers:  map[string]string{"Authorization": testBearerToken},
@@ -70,7 +70,7 @@ func TestApplyControlPlaneTracing(t *testing.T) {
 			name: "exporter without endpoint is not applied",
 			tracing: &api.AgentTracing{
 				Backend:  "opentelemetry",
-				Exporter: &api.TracingExporter{Protocol: "http/protobuf"},
+				Exporter: &api.OTLPExporter{Protocol: "http/protobuf"},
 			},
 			wantOTelTracing: true,
 		},
@@ -107,7 +107,7 @@ func TestApplyControlPlaneTracing(t *testing.T) {
 func TestOTLPTracesHeaderValue(t *testing.T) {
 	t.Parallel()
 
-	got := otlpTracesHeaderValue(map[string]string{
+	got := otlpHeaderValue(map[string]string{
 		"X-Later":       "plain",
 		"Authorization": "Bearer abc,def+ghi/jk=",
 		"A-First":       "with space",
@@ -116,18 +116,18 @@ func TestOTLPTracesHeaderValue(t *testing.T) {
 	// '+' escaped as %2B for form-style SDK parsers, keys untouched.
 	want := "A-First=with%20space,Authorization=Bearer%20abc%2Cdef%2Bghi%2Fjk=,X-Later=plain"
 	if got != want {
-		t.Errorf("otlpTracesHeaderValue() = %q, want %q", got, want)
+		t.Errorf("otlpHeaderValue() = %q, want %q", got, want)
 	}
 
-	if got := otlpTracesHeaderValue(nil); got != "" {
-		t.Errorf("otlpTracesHeaderValue(nil) = %q, want empty", got)
+	if got := otlpHeaderValue(nil); got != "" {
+		t.Errorf("otlpHeaderValue(nil) = %q, want empty", got)
 	}
 }
 
 func TestControlPlaneOTLPEnv(t *testing.T) {
 	t.Parallel()
 
-	got := controlPlaneOTLPEnv(serverTracing().Exporter)
+	got := controlPlaneOTLPEnv(serverTracing().Exporter, "TRACES")
 
 	want := map[string]string{
 		"OTEL_EXPORTER_OTLP_TRACES_ENDPOINT": "https://collector.example/v1/traces",
@@ -140,7 +140,7 @@ func TestControlPlaneOTLPEnv(t *testing.T) {
 
 	// Absent protocol/headers are omitted, not injected as empty-valued vars:
 	// the OTel spec treats empty as unset, but not every SDK does.
-	got = controlPlaneOTLPEnv(&api.TracingExporter{Endpoint: "https://collector.example"})
+	got = controlPlaneOTLPEnv(&api.OTLPExporter{Endpoint: "https://collector.example"}, "TRACES")
 	want = map[string]string{
 		"OTEL_EXPORTER_OTLP_TRACES_ENDPOINT": "https://collector.example",
 	}

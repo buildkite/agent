@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/buildkite/agent/v4/api"
-	envutil "github.com/buildkite/agent/v4/env"
 	"github.com/buildkite/agent/v4/logger"
 	"github.com/buildkite/agent/v4/tracetools"
 )
@@ -32,8 +31,8 @@ type LocalTracingConfig struct {
 // already configures an OTLP destination. Presence counts even when the value
 // is empty: an operator who set the variable made a choice. Protocol-, cert-
 // or timeout-only variables deliberately do not count as a destination.
-func HasLocalOTLPDestination() bool {
-	for _, name := range envutil.OTLPDestinationVars {
+func HasLocalOTLPDestination(names []string) bool {
+	for _, name := range names {
 		if _, ok := os.LookupEnv(name); ok {
 			return true
 		}
@@ -94,25 +93,25 @@ func sanitizedEndpoint(endpoint string) string {
 
 // controlPlaneOTLPEnv builds the environment additions that deliver a
 // control-plane exporter to the bootstrap process: the standard
-// traces-specific OTel variables. Hooks, plugins, and the job command inherit
-// them from bootstrap, so job-level OTel tooling can export spans to the same
-// collector as the agent's own trace. Protocol and headers are set only when
+// signal-specific OTel variables. Hooks, plugins, and the job command inherit
+// them from bootstrap. Protocol and headers are set only when
 // supplied: the OTel spec treats an empty variable as unset, but not every
 // SDK does, so absent fields are omitted rather than injected empty.
-func controlPlaneOTLPEnv(exporter *api.TracingExporter) map[string]string {
+func controlPlaneOTLPEnv(exporter *api.OTLPExporter, signal string) map[string]string {
+	prefix := "OTEL_EXPORTER_OTLP_" + signal
 	otlpEnv := map[string]string{
-		envutil.OTELTracesEndpoint: exporter.Endpoint,
+		prefix + "_ENDPOINT": exporter.Endpoint,
 	}
 	if exporter.Protocol != "" {
-		otlpEnv[envutil.OTELTracesProtocol] = exporter.Protocol
+		otlpEnv[prefix+"_PROTOCOL"] = exporter.Protocol
 	}
-	if headers := otlpTracesHeaderValue(exporter.Headers); headers != "" {
-		otlpEnv[envutil.OTELTracesHeaders] = headers
+	if headers := otlpHeaderValue(exporter.Headers); headers != "" {
+		otlpEnv[prefix+"_HEADERS"] = headers
 	}
 	return otlpEnv
 }
 
-// otlpTracesHeaderValue encodes exporter headers in the comma-separated
+// otlpHeaderValue encodes exporter headers in the comma-separated
 // key=value form the OTel SDK env parser expects. Values are path-escaped
 // (the SDK path-unescapes them), so commas or percent signs in a credential
 // cannot corrupt parsing. Literal '+' is additionally escaped as %2B because
@@ -120,7 +119,7 @@ func controlPlaneOTLPEnv(exporter *api.TracingExporter) map[string]string {
 // a space; compliant path-unescaping leaves %2B as '+' either way. Keys are
 // not escaped: the SDK validates them as HTTP tokens without unescaping.
 // Keys are sorted for deterministic output.
-func otlpTracesHeaderValue(headers map[string]string) string {
+func otlpHeaderValue(headers map[string]string) string {
 	pairs := make([]string, 0, len(headers))
 	for _, k := range slices.Sorted(maps.Keys(headers)) {
 		v := strings.ReplaceAll(url.PathEscape(headers[k]), "+", "%2B")

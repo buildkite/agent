@@ -31,6 +31,7 @@ type AgentRegisterResponse struct {
 	HeartbeatInterval int               `json:"heartbeat_interval"`
 	Tags              []string          `json:"meta_data"`
 	Tracing           *AgentTracing     `json:"tracing,omitempty"`
+	JobLogs           *AgentJobLogs     `json:"job_logs,omitempty"`
 	Warnings          []Warning         `json:"warnings,omitempty"`
 }
 
