@@ -165,11 +165,10 @@ We release binaries for various other platforms, and it should be possible to
 build the agent anywhere supported by Go, but official support is not provided
 for these Tier 3 platforms.
 
-Linux big-endian `ppc64` binaries built with Go 1.27 or later use the
-[ELFv2 ABI](https://go.dev/doc/go1.27#ppc64) and require Linux kernel 3.13 or
-later, or a kernel with ELFv2 support backported (such as RHEL 7's kernel).
-This change does not apply to `ppc64le`.
-
+Linux big-endian `ppc64` binaries use the [ELFv2 ABI](https://go.dev/doc/go1.27#ppc64) 
+and require Linux kernel 3.13 or later, or a kernel with ELFv2 support 
+backported (such as RHEL 7's kernel).
+This change does not apply to `ppc64le` or other architectures.
 ### Operating System Support
 
 We currently provide support for running the Buildkite Agent on the following

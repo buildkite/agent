@@ -1,14 +1,5 @@
 # Supported macOS versions
 
-Agent binaries built with [Go 1.27][go127] or later require macOS 13 (Ventura)
-or later on both Intel (`amd64`) and Apple silicon (`arm64`).
-
-The Go 1.27 upgrade on `main` has not yet shipped in a tagged agent release.
-The published v4.7.0 binaries for both architectures use Go 1.26.10 and remain
-compatible with macOS 12 (Monterey). The final Monterey-compatible agent release
-is not yet confirmed; v4.7.0 below is the latest verified v4 release, not a
-fixed cutoff. The v3 release line has a separate toolchain and is not changed by
-the upgrade on `main`.
 
 macOS version          | Last Go version to support | Last Agent version to support
 ---------------------- | -------------------------- | -----------------------------
@@ -21,7 +12,7 @@ macOS version          | Last Go version to support | Last Agent version to supp
 10.14 (Mojave)         | [1.20][go120]              | [v3.59.0][agent359]
 10.15 (Catalina)       | [1.22][go122]              | [v3.83.1][agent3831]
 11 (Big Sur)           | [1.24][go124]              | [v3.119.2][agent31192]
-12 (Monterey)          | [1.26][go126]              | Not yet confirmed (latest verified v4: [v4.7.0][agent470])
+12 (Monterey)          | [1.26][go126]              | [v4.7.0][agent470])
 13 (Ventura)           | TBC                        | [Latest release][latest]
 14 (Sonoma)            | TBC                        | [Latest release][latest]
 15 (Sequoia)           | TBC                        | [Latest release][latest]
