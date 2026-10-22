@@ -91,6 +91,85 @@ These reports don't add a line to the log, because the log already has a header 
 
 **Status:** Experimental. The agent doesn't reply to the protocol's feature detection query yet.
 
+### `job-errors-osc`
+
+**Status:** Proof of concept for review, not a production-ready error protocol.
+
+Transports captured job errors through live job output using
+[`github.com/wolfeidau/osc7501`](https://github.com/wolfeidau/osc7501), then
+extracts them in the parent agent and posts them to the existing job errors API.
+Enable it on the **parent agent**, not just an independently invoked bootstrap:
+
+```bash
+buildkite-agent start --experiment job-errors-osc
+```
+
+Automatic agent errors still require `BUILDKITE_CAPTURE_AGENT_ERRORS=true`.
+Explicit reports still use the existing command, including from plugins:
+
+```bash
+buildkite-agent job capture-error docker.pull_failed --message 'Could not pull the build image'
+```
+
+The bootstrap's Local Job API still validates, redacts registered secrets
+(including runtime registrations), masks URL credentials/query strings, truncates
+messages to 1000 characters, and assigns the timestamp and idempotency key.
+Instead of posting to Buildkite, it writes that normalized payload to stdout.
+The parent extracts it before timestamping and log-size limits, and sends it with
+the job's token. Errors observed outside bootstrap also use the OSC path. With
+the experiment off, the current direct API paths remain unchanged. The
+`program-status` experiment is independent and can be enabled alongside this one;
+`BUILDKITE_PROGRAM_STATUS=false` does not disable job error transport.
+
+The Docker and Docker Compose plugins suppress the capture CLI's stdout and
+stderr. Emitting from the bootstrap, rather than from that CLI process, keeps
+their existing calls working without plugin changes.
+
+#### Information preservation
+
+OSC 7501 defines **program status**, not structured job errors. A plain
+`state=error` report cannot preserve our complete API contract and is deliberately
+not treated as a captured error. This POC uses a **private convention**, not a
+standard OSC error schema:
+
+- `app=buildkite-job-error`, `state=error`, `id=job-error/v1/<delivery-key>`.
+- `title` is the 1-based part number and total, such as `1/3`.
+- `msg` holds up to 2000 ASCII bytes of base64-encoded JSON, then the library
+  applies OSC's normal base64 text encoding. Concatenate the decoded messages
+  in part order, base64-decode, and JSON-decode to recover the error.
+- JSON preserves `code`, `message`, `timestamp` (including subsecond precision)
+  and `idempotency_key`. Splitting avoids the library's silent 2048-byte message
+  truncation, including for 1000-character Unicode diagnostics. Encoding before
+  splitting also preserves newlines, tabs and other controls.
+- Redaction happens **before** encoding. Error reports emitted by the bootstrap
+  bypass the program-status describer and the log redactor, because processing
+  encoded data again cannot safely redact it and could corrupt the envelope.
+
+#### Differences and open questions
+
+- `capture-error` success now acknowledges local validation and the OSC write,
+  **not upstream API acceptance**. Later delivery failure appears in agent logs,
+  not as a command failure or Local Job API response. Truncation warnings still
+  reach the caller. The parent stops delivery after 404/422; 429/5xx do not
+  disable later reports. Requests are single-attempt with a two-second timeout.
+- Delivery is synchronous in the parent log writer, so a slow API can delay
+  draining output by up to two seconds per report. There is no durable queue,
+  retry or stored-log replay. Incomplete, malformed or interrupted envelopes are
+  not emitted. Assembly is bounded to 16 pending errors of at most 16 parts each.
+- This is not an authenticated channel: job output can forge this private
+  envelope, and the parent does not have bootstrap's live secret registry.
+  Direct hand-written OSC envelopes bypass Local Job API redaction. **Keep
+  plugins on `job capture-error`; do not use raw OSC to report sensitive data.**
+  Establishing a safe boundary for arbitrary producers is required before rollout.
+- Raw OSC payloads now persist in stored logs, including redacted diagnostics
+  that previously existed only in the errors API. Base64 is not encryption.
+  Consumers that strip escape sequences lose the transport, and independently
+  merged stdout/stderr streams can corrupt frames if interleaved mid-sequence.
+- Standalone bootstrap has no parent consumer. Mixed-version parent/bootstrap
+  deployments and Kubernetes/container output forwarding need compatibility and
+  interruption testing before rollout. The existing Local Job API OS and socket
+  requirements have not been removed.
+
 ### `interpolation-prefers-runtime-env`
 
 When interpolating the pipeline level environment block, a pipeline level environment variable could take precedence over environment variables depending on the ordering. This may contravene Buildkite's [documentation](https://buildkite.com/docs/pipelines/environment-variables#environment-variable-precedence) that suggests the Job runtime environment takes precedence over that defined by combining environment variables defined in a pipeline.

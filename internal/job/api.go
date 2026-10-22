@@ -5,9 +5,13 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"os"
+	"sync"
 	"sync/atomic"
 
 	"github.com/buildkite/agent/v4/api"
+	"github.com/buildkite/agent/v4/internal/experiments"
+	"github.com/buildkite/agent/v4/internal/joberrorosc"
 	"github.com/buildkite/agent/v4/internal/redact"
 	"github.com/buildkite/agent/v4/internal/socket"
 	"github.com/buildkite/agent/v4/jobapi"
@@ -42,6 +46,7 @@ We'll continue to run your job, but you won't be able to use the Job API`)
 	// for good, later ones would be refused too, so stop sending them; a
 	// script calling capture-error in a loop then can't keep hitting the API.
 	var refused atomic.Bool
+	var oscMu sync.Mutex
 	reporter := func(requestCtx context.Context, capturedError *jobapi.CapturedError) error {
 		// Reporting must not keep a cancelled job alive through its grace period.
 		reportCtx, cancel := context.WithCancel(requestCtx)
@@ -52,6 +57,20 @@ We'll continue to run your job, but you won't be able to use the Job API`)
 
 		if err := ctx.Err(); err != nil {
 			return err
+		}
+		if experiments.IsEnabled(ctx, experiments.JobErrorsOSC) {
+			// The Local Job API has already redacted the complete error before
+			// truncating it, and assigned its timestamp and delivery key. Write
+			// directly to stdout: encoded data must not pass through a redactor
+			// or the program-status describer a second time.
+			oscMu.Lock()
+			defer oscMu.Unlock()
+			return joberrorosc.Write(os.Stdout, api.JobCapturedError{
+				Code:           capturedError.Code,
+				Message:        capturedError.Message,
+				Timestamp:      *capturedError.Timestamp,
+				IdempotencyKey: capturedError.IdempotencyKey,
+			})
 		}
 		if refused.Load() {
 			return errors.New("not sent: Buildkite refused an earlier captured error for this job because its error limit was reached or error capture is unavailable")

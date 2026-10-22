@@ -3,12 +3,16 @@ package agent
 import (
 	"context"
 	"crypto/rand"
+	"io"
+	"net/http"
 	"os"
 	"time"
 	"unicode/utf8"
 
 	"github.com/buildkite/agent/v4/api"
 	envutil "github.com/buildkite/agent/v4/env"
+	"github.com/buildkite/agent/v4/internal/experiments"
+	"github.com/buildkite/agent/v4/internal/joberrorosc"
 	"github.com/buildkite/agent/v4/internal/redact"
 	"github.com/buildkite/agent/v4/jobapi"
 )
@@ -16,11 +20,11 @@ import (
 // captureJobError reports a failure the agent observed outside the job's
 // bootstrap process, such as refusing to run the job, when the job opted in
 // with BUILDKITE_CAPTURE_AGENT_ERRORS. There is no Local Job API here, so the
-// runner reports directly with the job's token, and does what the Local Job
-// API would: it masks URL credentials and query strings, then shortens the
-// message to the agent's budget. Messages are written by the agent and contain
-// no job output to redact. Delivery is best-effort and never changes the job's
-// outcome.
+// runner does what the Local Job API would: it masks URL credentials and query
+// strings, then shortens the message to the agent's budget. Messages are written
+// by the agent and contain no job output to redact. Delivery is through OSC when
+// enabled, otherwise directly with the job's token. It is best-effort and never
+// changes the job's outcome.
 func (r *JobRunner) captureJobError(ctx context.Context, code, message string) {
 	r.reportJobError(ctx, code, maskURLs(message))
 }
@@ -40,18 +44,47 @@ func (r *JobRunner) reportJobError(ctx context.Context, code, message string) {
 		const marker = "…[truncated]"
 		message = string(runes[:jobapi.MaxCapturedErrorDetail-utf8.RuneCountInString(marker)]) + marker
 	}
-	// Report even while the agent is stopping, but never wait long.
-	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 2*time.Second)
-	defer cancel()
-	_, err := r.apiClient.CaptureJobError(ctx, r.conf.Job.ID, &api.JobCapturedError{
+	report := api.JobCapturedError{
 		Code:           code,
 		Message:        message,
 		Timestamp:      time.Now(),
 		IdempotencyKey: rand.Text(),
-	})
-	if err != nil {
-		r.agentLogger.Warnf("Could not capture job error %q: %v", code, err)
 	}
+	if experiments.IsEnabled(ctx, experiments.JobErrorsOSC) {
+		if err := joberrorosc.Write(r.jobLogs, report); err != nil {
+			r.agentLogger.Warnf("Could not write job error %q to the log", code)
+		}
+		return
+	}
+	_ = r.sendCapturedError(ctx, report)
+}
+
+func (r *JobRunner) sendCapturedError(ctx context.Context, report api.JobCapturedError) error {
+	// Report even while the agent is stopping, but never wait long. Preserve
+	// the producer's timestamp and key rather than assigning them at extraction.
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 2*time.Second)
+	defer cancel()
+	_, err := r.apiClient.CaptureJobError(ctx, r.conf.Job.ID, &report)
+	if err != nil {
+		r.agentLogger.Warnf("Could not capture job error %q: %v", report.Code, err)
+	}
+	return err
+}
+
+// capturedErrorLogWriter extracts errors before timestamping or log size
+// limits can change/drop the stream. Keep failures best-effort, and stop API
+// calls after the same permanent refusals as the Local Job API.
+func (r *JobRunner) capturedErrorLogWriter(ctx context.Context, out io.Writer) io.Writer {
+	refused := false // callbacks are serialized by the OSC writer
+	return joberrorosc.NewWriter(out, func(report api.JobCapturedError) {
+		if refused {
+			return
+		}
+		err := r.sendCapturedError(ctx, report)
+		if api.IsErrHavingStatus(err, http.StatusNotFound) || api.IsErrHavingStatus(err, http.StatusUnprocessableEntity) {
+			refused = true
+		}
+	})
 }
 
 // agentErrorCaptureEnabled reads the BUILDKITE_CAPTURE_AGENT_ERRORS opt-in as

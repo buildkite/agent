@@ -12,6 +12,8 @@ import (
 	"time"
 
 	"github.com/buildkite/agent/v4/api"
+	"github.com/buildkite/agent/v4/internal/experiments"
+	"github.com/buildkite/agent/v4/internal/joberrorosc"
 	"github.com/buildkite/agent/v4/internal/process"
 	"github.com/buildkite/agent/v4/kubernetes"
 	"github.com/buildkite/agent/v4/logger"
@@ -33,9 +35,11 @@ func TestKubernetesStartTimeoutIsCaptured(t *testing.T) {
 		jobOptIn, agentEnv string
 		protected          []string
 		stopping           bool
+		osc                bool
 		want               bool
 	}{
 		{name: "job opted in", jobOptIn: "true", want: true},
+		{name: "OSC transport", jobOptIn: "true", osc: true, want: true},
 		{name: "agent opted in", agentEnv: "true", want: true},
 		{name: "job opted out on an agent that opted in", jobOptIn: "false", agentEnv: "true"},
 		{name: "not opted in"},
@@ -77,7 +81,13 @@ func TestKubernetesStartTimeoutIsCaptured(t *testing.T) {
 			}
 			r.agentStopping.Store(tc.stopping)
 
-			if exit := r.runJob(t.Context()); exit.Status != -1 || exit.SignalReason != SignalReasonProcessRunError {
+			ctx := t.Context()
+			var log strings.Builder
+			if tc.osc {
+				ctx, _ = experiments.Enable(ctx, experiments.JobErrorsOSC)
+				r.jobLogs = r.capturedErrorLogWriter(ctx, &log)
+			}
+			if exit := r.runJob(ctx); exit.Status != -1 || exit.SignalReason != SignalReasonProcessRunError {
 				t.Errorf("runJob() = %+v, want status -1 with the process-run-error signal reason", exit)
 			}
 
@@ -91,6 +101,50 @@ func TestKubernetesStartTimeoutIsCaptured(t *testing.T) {
 			}
 			if len(reports) != 1 || reports[0].Code != "buildkite.kubernetes_container_not_connected" || !strings.Contains(reports[0].Message, "within 5m0s") {
 				t.Fatalf("reports = %+v, want one buildkite.kubernetes_container_not_connected report naming the timeout", reports)
+			}
+			if tc.osc && !strings.Contains(log.String(), "\x1b]7501;") {
+				t.Fatal("captured error did not travel through the job log")
+			}
+		})
+	}
+}
+
+func TestOSCErrorForwarding(t *testing.T) {
+	t.Parallel()
+	for _, status := range []int{http.StatusCreated, http.StatusNotFound, http.StatusUnprocessableEntity, http.StatusTooManyRequests, http.StatusInternalServerError} {
+		t.Run(http.StatusText(status), func(t *testing.T) {
+			var got []api.JobCapturedError
+			upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+				if req.URL.Path != "/jobs/job-id/errors" || req.Header.Get("Authorization") != "Token job-token" {
+					t.Errorf("unexpected request path or authentication: %s", req.URL.Path)
+				}
+				var e api.JobCapturedError
+				if err := json.NewDecoder(req.Body).Decode(&e); err != nil {
+					t.Error(err)
+				}
+				got = append(got, e)
+				w.WriteHeader(status)
+			}))
+			defer upstream.Close()
+			r := &JobRunner{
+				conf:        JobRunnerConfig{Job: &api.Job{ID: "job-id"}},
+				agentLogger: logger.Discard,
+				apiClient:   api.NewClient(logger.Discard, api.Config{Endpoint: upstream.URL + "/", Token: "job-token"}),
+			}
+			var log strings.Builder
+			writer := r.capturedErrorLogWriter(t.Context(), &log)
+			timestamp := time.Date(2026, 10, 22, 1, 2, 3, 123456789, time.UTC)
+			for _, key := range []string{"first", "second"} {
+				if err := joberrorosc.Write(writer, api.JobCapturedError{Code: "plugin.failed", Message: "failed\n" + strings.Repeat("🦘", 990), Timestamp: timestamp, IdempotencyKey: key}); err != nil {
+					t.Fatal(err)
+				}
+			}
+			want := 2
+			if status == http.StatusNotFound || status == http.StatusUnprocessableEntity {
+				want = 1
+			}
+			if len(got) != want || got[0].IdempotencyKey != "first" || !got[0].Timestamp.Equal(timestamp) || got[0].Message != "failed\n"+strings.Repeat("🦘", 990) {
+				t.Fatalf("unexpected forwarded reports: %+v", got)
 			}
 		})
 	}

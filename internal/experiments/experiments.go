@@ -25,6 +25,7 @@ const (
 	// Available experiments
 	AgentAPI                       = "agent-api"
 	InterpolationPrefersRuntimeEnv = "interpolation-prefers-runtime-env"
+	JobErrorsOSC                   = "job-errors-osc"
 	OriginCloneKit                 = "origin-clonekit"
 	ProgramStatus                  = "program-status"
 	PTYRaw                         = "pty-raw"
@@ -55,6 +56,7 @@ var (
 	Available = map[string]struct{}{
 		AgentAPI:                       {},
 		InterpolationPrefersRuntimeEnv: {},
+		JobErrorsOSC:                   {},
 		OriginCloneKit:                 {},
 		LegacyPostHookOrder:            {},
 		ProgramStatus:                  {},

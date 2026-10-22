@@ -47,6 +47,14 @@ func TestMain(m *testing.M) {
 		Commands: []*cli.Command{
 			clicommand.BootstrapCommand,
 			{
+				Name:     "job",
+				Commands: []*cli.Command{clicommand.JobCaptureErrorCommand},
+			},
+			{
+				Name:     "redactor",
+				Commands: []*cli.Command{clicommand.RedactorAddCommand},
+			},
+			{
 				Name: "env",
 				Commands: []*cli.Command{
 					clicommand.EnvDumpCommand,
