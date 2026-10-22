@@ -118,9 +118,9 @@ go run *.go start --debug --build-path=/tmp/buildkite-builds --token "abc"
 ### Go Version and Dependency Management
 
 The latest agent version is typically compiled with the highest-numbered stable
-release of Go. Previous Go versions may work, but are not guaranteed to. We are
-using newer language features such as generics, so compiling on Go < 1.18 will
-fail.
+release of Go. The minimum compiler version is declared in [go.mod](./go.mod).
+Use `mise install` to install the development toolchain pinned in
+[mise.toml](./mise.toml).
 
 We're using [Go Modules](https://github.com/golang/go/wiki/Modules) to manage
 our Go dependencies. Dependencies are not
@@ -165,6 +165,10 @@ We release binaries for various other platforms, and it should be possible to
 build the agent anywhere supported by Go, but official support is not provided
 for these Tier 3 platforms.
 
+Linux big-endian `ppc64` binaries use the [ELFv2 ABI](https://go.dev/doc/go1.27#ppc64) 
+and require Linux kernel 3.13 or later, or a kernel with ELFv2 support 
+backported (such as RHEL 7's kernel).
+This change does not apply to `ppc64le` or other architectures.
 ### Operating System Support
 
 We currently provide support for running the Buildkite Agent on the following
@@ -183,7 +187,6 @@ like systems, as well as Windows.
   - CentOS 8
 - Amazon Linux 2
 - macOS [^1]
-  - 12 (Monterey)
   - 13 (Ventura)
   - 14 (Sonoma)
   - 15 (Sequoia)
@@ -195,9 +198,11 @@ like systems, as well as Windows.
   - Server 2019
   - Server 2022
 
-[^1]: See https://github.com/golang/go/issues/23011 for macOS / Go support and
-[Supported macOS Versions](./docs/macos.md) for the last supported version of
-the Buildkite Agent for versions of macOS prior to those listed above.
+[^1]: Binaries built from `main` with [Go 1.27](https://go.dev/doc/go1.27#darwin)
+require macOS 13 (Ventura) or later on both Intel (`amd64`) and Apple silicon
+(`arm64`). Older releases built with Go 1.26, including v4.7.0, remain compatible
+with macOS 12 (Monterey). See [Supported macOS Versions](./docs/macos.md) for
+older-release compatibility and the pending release cutoff.
 
 [^2]: See [Go's Windows support page](https://go.dev/wiki/Windows) for Go /
 Windows version compatibility and [Supported Windows
