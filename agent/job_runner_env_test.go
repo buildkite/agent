@@ -12,6 +12,7 @@ import (
 
 	"github.com/buildkite/agent/v4/api"
 	envutil "github.com/buildkite/agent/v4/env"
+	"github.com/buildkite/agent/v4/internal/experiments"
 	"github.com/buildkite/agent/v4/logger"
 	"github.com/google/go-cmp/cmp"
 )
@@ -474,5 +475,47 @@ func TestWindowsJobEnvAliasesCannotOverrideAgentControls(t *testing.T) {
 	}
 	if value, exists := bootstrapEnv.Get("BUILDKITE_AGENT_TOKEN"); exists {
 		t.Errorf("registration token reached bootstrap: %q", value)
+	}
+}
+
+func TestCreateEnvironmentProgramStatus(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		experiment bool
+		jobEnv     map[string]string
+		want       string // "" means unset
+	}{
+		{name: "experiment off", experiment: false, jobEnv: map[string]string{}, want: ""},
+		{name: "experiment on", experiment: true, jobEnv: map[string]string{}, want: "true"},
+		{name: "job turns it off", experiment: true, jobEnv: map[string]string{"BUILDKITE_PROGRAM_STATUS": "false"}, want: "false"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			ctx := t.Context()
+			if test.experiment {
+				ctx, _ = experiments.Enable(ctx, experiments.ProgramStatus)
+			}
+			r := controlPlaneTestRunner(t, test.jobEnv, AgentConfiguration{})
+			got, err := r.createEnvironment(ctx)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := envutil.FromSlice(got).GetString("BUILDKITE_PROGRAM_STATUS", ""); got != test.want {
+				t.Errorf("BUILDKITE_PROGRAM_STATUS = %q, want %q", got, test.want)
+			}
+
+			// Docker steps that propagate the environment read the names to
+			// pass through from the env file.
+			data, err := os.ReadFile(r.envShellFile.Name())
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !slices.Contains(strings.Split(string(data), "\n"), "BUILDKITE_PROGRAM_STATUS") {
+				t.Errorf("env file doesn't list BUILDKITE_PROGRAM_STATUS:\n%s", data)
+			}
+		})
 	}
 }

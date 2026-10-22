@@ -1,6 +1,6 @@
 module github.com/buildkite/agent/v4
 
-go 1.26.10
+go 1.27.3
 
 require (
 	cloud.google.com/go/compute/metadata v0.10.0
@@ -46,6 +46,7 @@ require (
 	github.com/puzpuzpuz/xsync/v2 v2.5.1
 	github.com/qri-io/jsonschema v0.2.1
 	github.com/urfave/cli/v3 v3.14.0
+	github.com/wolfeidau/osc7501 v0.1.0
 	github.com/wolfeidau/quickzip v1.0.3
 	go.opentelemetry.io/contrib/propagators/aws v1.47.0
 	go.opentelemetry.io/contrib/propagators/b3 v1.47.0

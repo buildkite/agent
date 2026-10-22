@@ -29,6 +29,7 @@ import (
 	"github.com/buildkite/agent/v4/internal/job/hook"
 	"github.com/buildkite/agent/v4/internal/osutil"
 	"github.com/buildkite/agent/v4/internal/process"
+	"github.com/buildkite/agent/v4/internal/programstatus"
 	"github.com/buildkite/agent/v4/internal/redact"
 	"github.com/buildkite/agent/v4/internal/replacer"
 	"github.com/buildkite/agent/v4/internal/secrets"
@@ -41,6 +42,7 @@ import (
 	"github.com/buildkite/go-pipeline"
 	"github.com/buildkite/shellwords"
 	"go.opentelemetry.io/otel/attribute"
+	"golang.org/x/term"
 )
 
 // Executor represents the phases of execution in a Buildkite Job. It's run as
@@ -115,6 +117,9 @@ type Executor struct {
 	// command, such as "The agent command hook", if any.
 	commandHook string
 
+	// status reports the job's phases and hooks as program status records.
+	status *jobStatus
+
 	// stderrTee carries the redacted shell logger output (section headers,
 	// prompts, comments, warnings) to stderr and, when OTLP job logging is
 	// enabled, mirrors it into the OTLP exporter so the exported records match
@@ -161,6 +166,22 @@ func (e *Executor) Run(ctx context.Context) (exitCode int) {
 	// setup the redactors here once and for the life of the executor
 	// they will be flushed at the end of each hook
 	preRedactedStdout, preRedactedLogger := e.setupRedactors(tempLog, environ, stdout, stderr)
+
+	// Report the job's phases and hooks as program status records, if the
+	// experiment and BUILDKITE_PROGRAM_STATUS turn reports on. The agent's
+	// own reports already have a header in the log, so they skip the program
+	// status writer below.
+	if experiments.IsEnabled(ctx, experiments.ProgramStatus) &&
+		programstatus.Enabled(environ.Get, term.IsTerminal(int(os.Stdout.Fd()))) {
+		e.status = newJobStatus(preRedactedStdout, e.cancelCh)
+	}
+
+	// Describe OSC 7501 program status reports in the job log. This must
+	// happen before redaction: the report's message is base64-encoded, so
+	// the redactor can only find secrets in it once it has been decoded.
+	if experiments.IsEnabled(ctx, experiments.ProgramStatus) {
+		preRedactedStdout = process.NewProgramStatusWriter(preRedactedStdout) // shell -> program status -> redactor
+	}
 
 	// Check if not nil to allow for tests to overwrite shell.
 	if e.shell == nil {
@@ -221,6 +242,10 @@ func (e *Executor) Run(ctx context.Context) (exitCode int) {
 		e.shell.Env.Remove("BUILDKITE_AGENT_JOB_API_CAPTURE_ERROR")
 		e.shell.OptionalWarningf("job-api-disabled", "The Job API has been disabled. Features like automatic redaction of secrets and polyglot hooks will either not work or have degraded functionality")
 	}
+
+	// Once the pre-exit hooks have run, remove the status records that
+	// finished successfully.
+	defer e.status.clearDone()
 
 	// Tear down the environment (and fire pre-exit hook) before we exit
 	defer func() {
@@ -462,6 +487,10 @@ type HookConfig struct {
 	Env            *env.Environment
 	SpanAttributes map[string]string
 	PluginName     string
+
+	// PluginID is the plugin's short name, such as docker-compose, for
+	// program status record ids.
+	PluginID string
 }
 
 // executeHook runs a hook script with the hookRunner
@@ -509,6 +538,10 @@ func (e *Executor) executeHook(ctx context.Context, hookCfg HookConfig) (retErr 
 			HookScopePlugin:     fmt.Sprintf("The %s plugin's command hook", hookCfg.PluginName),
 		}[hookCfg.Scope]
 	}
+
+	id := hookStatusID(hookCfg)
+	e.status.start(id, "Running "+hookName+" hook")
+	defer func() { e.status.finish(id, retErr, "The "+hookName+" hook") }()
 
 	e.shell.Headerf("Running %s hook", hookName)
 
@@ -1332,7 +1365,9 @@ func (e *Executor) CommandPhase(ctx context.Context) (hookErr, commandErr error)
 	}
 
 	// Run the command
+	e.status.start(commandStatusID, "Running the command")
 	commandErr = e.runCommand(ctx)
+	e.status.finish(commandStatusID, commandErr, "The command")
 
 	// Save the command exit status to the env so hooks + plugins can access it. If there is no
 	// error this will be zero. It's used to set the exit code later, so it's important

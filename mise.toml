@@ -1,7 +1,7 @@
 [tools]
-go = "1.26.10"
-golangci-lint = "2.9.0"
-ruby = "3.4.9"
+go = "1.27.3"
+golangci-lint = "2.15.0"
+ruby = "4.0.7"
 
 [bootstrap.packages]
 "apt:autoconf" = "latest"
