@@ -118,9 +118,9 @@ go run *.go start --debug --build-path=/tmp/buildkite-builds --token "abc"
 ### Go Version and Dependency Management
 
 The latest agent version is typically compiled with the highest-numbered stable
-release of Go. Previous Go versions may work, but are not guaranteed to. We are
-using newer language features such as generics, so compiling on Go < 1.18 will
-fail.
+release of Go. The minimum compiler version is declared in [go.mod](./go.mod).
+Use `mise install` to install the development toolchain pinned in
+[mise.toml](./mise.toml).
 
 We're using [Go Modules](https://github.com/golang/go/wiki/Modules) to manage
 our Go dependencies. Dependencies are not
