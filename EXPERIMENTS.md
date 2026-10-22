@@ -125,6 +125,46 @@ The Docker and Docker Compose plugins suppress the capture CLI's stdout and
 stderr. Emitting from the bootstrap, rather than from that CLI process, keeps
 their existing calls working without plugin changes.
 
+#### Native OSC alongside the existing emitters
+
+The POC also includes explicit native OSC calls beside the automatic error
+emitters: Git/checkout, hooks/commands, plugin setup, secrets, CLI operations,
+job rejection and Kubernetes failures. These use the `program-status` experiment
+and respect `BUILDKITE_PROGRAM_STATUS=false`. Enable both experiments to compare
+native status with the full-payload transport:
+
+```bash
+buildkite-agent start --experiment program-status --experiment job-errors-osc
+```
+
+For example, a command failure has two explicit calls:
+
+```go
+errorStatus(ctx, e.shell).Failed("error/command", "The step's command failed.")
+captureJobError(ctx, e.shell, code, e.withRecentOutput(message))
+```
+
+A failed Git command emits the fixed summary returned by `classifyGitError`
+before adding checkout context and Git output. For a missing tree, the native
+report decodes to:
+
+```text
+state=error id=error/git app=buildkite-agent
+msg="Git checkout could not resolve the reference to a tree."
+```
+
+These native reports deliberately carry **only agent-written summaries**. Raw
+diagnostics cannot safely be base64-encoded before secret redaction. They do not
+include the classified code, checkout context/output, timestamp or delivery key;
+they are not equivalent replacements for the API error. Repeated reports for
+the same status id replace the visible status, rather than create error records.
+The `error/` ids keep these observations separate from existing phase status.
+
+The parent does **not** submit native status reports to the errors API. Only the
+separate private envelope below triggers submission, so enabling both reports
+does not double-send errors. With `job-errors-osc` disabled, existing emitters
+still send directly to the API while native status can be enabled independently.
+
 #### Information preservation
 
 OSC 7501 defines **program status**, not structured job errors. A plain

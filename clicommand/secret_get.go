@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/buildkite/agent/v4/api"
+	"github.com/buildkite/agent/v4/internal/programstatus"
 	"github.com/buildkite/agent/v4/internal/secrets"
 	"github.com/buildkite/agent/v4/jobapi"
 	"github.com/buildkite/agent/v4/logger"
@@ -114,6 +115,7 @@ func secretGet(ctx context.Context, cfg SecretGetConfig, w io.Writer, l logger.L
 		if len(failedKeys) > 0 {
 			fallback = fmt.Sprintf("`buildkite-agent secret get` could not fetch these secrets: %s. %s", secrets.ListKeys(failedKeys, 5), secrets.FetchErrorFix)
 		}
+		programstatus.FromEnvironment().Failed("error/secrets", "Could not fetch secrets.")
 		captureAgentError(ctx, l, "buildkite.secrets_fetch_failed", jobapi.CapturedErrorMessage(detail, fallback))
 		return errors.New(sb.String())
 	}

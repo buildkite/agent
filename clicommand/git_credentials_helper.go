@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/buildkite/agent/v4/api"
+	"github.com/buildkite/agent/v4/internal/programstatus"
 	"github.com/buildkite/agent/v4/jobapi"
 	"github.com/buildkite/agent/v4/logger"
 	"github.com/urfave/cli/v3"
@@ -153,6 +154,7 @@ func handleAuthError(ctx context.Context, c *cli.Command, l logger.Logger, reaso
 	// other error text can echo credential input or a rejected token.
 	// Only a reason that includes Buildkite's response can be too long.
 	const lead = "The Git credential helper could not get repository credentials, so Git authentication will fail. "
+	programstatus.FromEnvironment().Failed("error/git-credentials", "Could not get repository credentials.")
 	captureAgentError(ctx, l, "buildkite.repository_credentials_failed",
 		jobapi.CapturedErrorMessage(lead+reason, lead+"The request to Buildkite failed."))
 	_, _ = fmt.Fprintln(c.Root().Writer, "username=fail")

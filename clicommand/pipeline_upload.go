@@ -517,6 +517,7 @@ func capturePipelineUploadError(ctx context.Context, l logger.Logger, stage stri
 		values = append(values, pair.Value)
 	}
 	message = redact.String(message, values)
+	programstatus.FromEnvironment().Failed("error/pipeline-upload", "Pipeline upload failed.")
 	captureAgentError(ctx, l, "buildkite.pipeline_upload_failed", jobapi.CapturedErrorMessage(message, fallback))
 }
 

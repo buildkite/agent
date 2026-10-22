@@ -1024,6 +1024,7 @@ func (e *Executor) executeLocalHook(ctx context.Context, name string) error {
 			disabledBy, fix = "the agent's --no-local-hooks option", "Remove the hook from the repository, or run the step on agents that allow local hooks."
 		}
 		relPath, _ := filepath.Rel(e.shell.Env.GetString("BUILDKITE_BUILD_CHECKOUT_PATH", ""), localHookPath)
+		errorStatus(ctx, e.shell).Failed("error/hook", "A repository hook was rejected by this agent.")
 		captureJobError(ctx, e.shell, "buildkite.local_hook_rejected", jobapi.CapturedErrorMessage(
 			fmt.Sprintf("The repository has a %s hook at %s, but %s disables local hooks, so the job failed. %s", name, filepath.ToSlash(relPath), disabledBy, fix),
 			fmt.Sprintf("The repository has a %s hook, but %s disables local hooks, so the job failed. %s", name, disabledBy, fix)))
@@ -1199,6 +1200,7 @@ func (e *Executor) fetchAndSetSecrets(ctx context.Context) error {
 		if len(failedKeys) > 0 {
 			fallback = fmt.Sprintf("Could not fetch these secrets for the job: %s. %s", secrets.ListKeys(failedKeys, 5), secrets.FetchErrorFix)
 		}
+		errorStatus(ctx, e.shell).Failed("error/secrets", "Could not fetch the job's secrets.")
 		captureJobError(ctx, e.shell, "buildkite.secrets_fetch_failed", jobapi.CapturedErrorMessage(detail, fallback))
 		return errors.New(errorMsg.String())
 	}
@@ -1228,6 +1230,7 @@ func (e *Executor) fetchAndSetSecrets(ctx context.Context) error {
 				}
 				if rejected != nil {
 					message := jobapi.CapturedErrorMessage(rejected.Error()+". Map the secret to a different environment_variable in the step.", "A secret cannot set this protected or checkout-locked environment variable. Map it to a different environment_variable in the step.")
+					errorStatus(ctx, e.shell).Failed("error/secrets", "A secret's environment variable was rejected.")
 					captureJobError(ctx, e.shell, "buildkite.secret_environment_variable_rejected", message)
 					return rejected
 				}

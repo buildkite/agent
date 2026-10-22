@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/buildkite/agent/v4/api"
+	"github.com/buildkite/agent/v4/internal/programstatus"
 	"github.com/buildkite/agent/v4/jobapi"
 	"github.com/buildkite/roko"
 	"github.com/urfave/cli/v3"
@@ -180,6 +181,7 @@ var OIDCRequestTokenCommand = &cli.Command{
 			if oidcTokenRefused(err) {
 				fix = "Buildkite refused the request, so check the audience, claims, and lifetime passed to `buildkite-agent oidc request-token`."
 			}
+			programstatus.FromEnvironment().Failed("error/oidc", "Could not obtain an OIDC token.")
 			captureAgentError(ctx, l, "buildkite.oidc_token_request_failed",
 				jobapi.CapturedErrorMessage(err.Error()+". "+fix, "Could not obtain an OIDC token. "+fix))
 			if oidcTokenRefused(err) {

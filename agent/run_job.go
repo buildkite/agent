@@ -157,6 +157,7 @@ func (r *JobRunner) Run(ctx context.Context, ignoreAgentInDispatches *bool) (err
 		)
 
 		if r.VerificationFailureBehavior == VerificationBehaviourBlock {
+			r.errorStatus(ctx).Failed("error/signature", "The agent has no key to verify the signed step.")
 			r.captureJobError(ctx, "buildkite.job_signature_rejected",
 				"This agent rejected the job because its step is signed, but the agent has no verification key (--verification-jwks-file). Run the step on agents that verify signatures, or configure this agent's verification key.")
 			exit.Status = -1
@@ -173,12 +174,15 @@ func (r *JobRunner) Run(ctx context.Context, ignoreAgentInDispatches *bool) (err
 			if r.VerificationFailureBehavior == VerificationBehaviourBlock {
 				switch {
 				case errors.Is(err, ErrNoSignature):
+					r.errorStatus(ctx).Failed("error/signature", "The agent requires a signed step.")
 					r.captureJobError(ctx, "buildkite.job_signature_rejected",
 						"This agent rejected the job because it only runs signed jobs, and the step has no signature. Sign the pipeline when uploading it, for example with `buildkite-agent pipeline upload --jwks-file`, or run the step on agents that do not require signatures.")
 				case errors.Is(err, ErrInvalidJob):
+					r.errorStatus(ctx).Failed("error/signature", "The job does not match its signed step.")
 					r.captureJobError(ctx, "buildkite.job_signature_rejected",
 						"This agent rejected the job because the job no longer matches its signed step, for example a different command, environment, plugins, or matrix values. Re-upload the pipeline to sign the step again, and avoid changing signed fields after upload.")
 				default:
+					r.errorStatus(ctx).Failed("error/signature", "The step's signature did not verify.")
 					r.captureJobError(ctx, "buildkite.job_signature_rejected",
 						"This agent rejected the job because the step's signature does not verify with any of the agent's verification keys. Sign the pipeline with a key that matches this agent's --verification-jwks-file, or run the step on agents that trust the signing key.")
 				}
@@ -191,6 +195,7 @@ func (r *JobRunner) Run(ctx context.Context, ignoreAgentInDispatches *bool) (err
 			r.verificationFailureLogs(VerificationBehaviourBlock, err) // errors in verification are always fatal
 			fallback := "This agent rejected the job because it could not verify the step's signature. Check the agent's verification keys."
 			detail := fmt.Sprintf("This agent rejected the job because it could not verify the step's signature: %v. Check the agent's verification keys.", err)
+			r.errorStatus(ctx).Failed("error/signature", "The agent could not verify the step's signature.")
 			r.captureJobError(ctx, "buildkite.job_signature_rejected", jobapi.CapturedErrorMessage(detail, fallback))
 			exit.Status = -1
 			exit.SignalReason = SignalReasonSignatureRejected
@@ -229,12 +234,14 @@ func (r *JobRunner) Run(ctx context.Context, ignoreAgentInDispatches *bool) (err
 			if errors.As(invalid.err, new(*json.SyntaxError)) {
 				message = jobapi.CapturedErrorMessage(fmt.Sprintf("The step's plugins could not be parsed: %v. %s", invalid.err, fix), message)
 			}
+			r.errorStatus(ctx).Failed("error/job", "The step's plugins could not be parsed.")
 			r.captureJobError(ctx, "buildkite.job_rejected", message)
 		case errors.As(err, &option):
 			fix := "Run the step on agents that allow it, or ask the agent's operator to change the option."
 			fallback := fmt.Sprintf("This agent rejected the job because its --%s option does not allow it. %s", option.option, fix)
 			noMatch := new(noMatchError)
 			if !errors.As(option.err, &noMatch) {
+				r.errorStatus(ctx).Failed("error/job", "The agent's allowlist rejected the job.")
 				r.captureJobError(ctx, "buildkite.job_rejected", jobapi.CapturedErrorMessage(
 					fmt.Sprintf("This agent rejected the job because its --%s option does not allow it: %v. %s", option.option, option.err, fix), fallback))
 				break
@@ -244,6 +251,7 @@ func (r *JobRunner) Run(ctx context.Context, ignoreAgentInDispatches *bool) (err
 			// Leave out a value that contains them or doesn't parse, as
 			// describeCheckout does in the job's checkout errors.
 			if strings.ContainsAny(noMatch.value, " \t\n\f\r<>") || redact.URLCredentials(noMatch.value) == "(invalid URL)" {
+				r.errorStatus(ctx).Failed("error/job", "The agent's allowlist rejected the job.")
 				r.reportJobError(ctx, "buildkite.job_rejected", fallback)
 				break
 			}
@@ -252,6 +260,7 @@ func (r *JobRunner) Run(ctx context.Context, ignoreAgentInDispatches *bool) (err
 			// sizing, because masking can shorten the value.
 			detail := fmt.Sprintf("This agent rejected the job because its --%s option does not allow it: %s has no match in %s. %s",
 				option.option, maskURLs(noMatch.value), noMatch.patterns, fix)
+			r.errorStatus(ctx).Failed("error/job", "The agent's allowlist rejected the job.")
 			r.reportJobError(ctx, "buildkite.job_rejected", jobapi.CapturedErrorMessage(detail, fallback))
 		}
 
@@ -279,6 +288,7 @@ func (r *JobRunner) Run(ctx context.Context, ignoreAgentInDispatches *bool) (err
 			r.agentLogger.Errorf("pre-bootstrap hook rejected this job: %s", err)
 			// Like the job log, the report leaves the hook's reasons to the
 			// agent logs.
+			r.errorStatus(ctx).Failed("error/job", "The pre-bootstrap hook rejected the job.")
 			r.captureJobError(ctx, "buildkite.job_rejected",
 				"This agent's pre-bootstrap hook rejected the job. The hook's output is in the agent's logs, not the job log. Run the step on other agents, or ask the agent's operator why the hook rejected it.")
 
@@ -439,6 +449,7 @@ func (r *JobRunner) runJob(ctx context.Context) core.ProcessExit {
 		_, _ = fmt.Fprintf(r.jobLogs, "Error running job: %s\n", err)
 
 		if timeout := new(kubernetes.StartTimeoutError); errors.As(err, &timeout) && !r.agentStopping.Load() {
+			r.errorStatus(ctx).Failed("error/kubernetes", "A container did not connect before the start timeout.")
 			r.captureJobError(ctx, "buildkite.kubernetes_container_not_connected", fmt.Sprintf(
 				"Not every container connected to the agent within %v, the agent's --kubernetes-container-start-timeout. The container image may not have been pulled (ImagePullBackOff). Check that each image in the podSpec exists and the cluster can pull it, and check the pod's events.",
 				timeout.Timeout))
@@ -460,12 +471,14 @@ func (r *JobRunner) runJob(ctx context.Context) core.ProcessExit {
 			_, _ = fmt.Fprint(r.jobLogs, `+++ Unknown container exit status
 One or more containers never connected to the agent. Perhaps the container image specified in your podSpec could not be pulled (ImagePullBackOff)?
 `)
+			r.errorStatus(ctx).Failed("error/kubernetes", "A container never connected to the agent.")
 			r.captureJobError(ctx, "buildkite.kubernetes_container_not_connected",
 				"The job was canceled while one or more containers had not connected to the agent. If the job did not start, the container image may not have been pulled (ImagePullBackOff). Check that each image in the podSpec exists and the cluster can pull it, and check the pod's events.")
 		case k8sProcess.AnyClientIn(kubernetes.StateLost):
 			_, _ = fmt.Fprint(r.jobLogs, `+++ Unknown container exit status
 One or more containers connected to the agent, but then stopped communicating without exiting normally. Perhaps the container was OOM-killed?
 `)
+			r.errorStatus(ctx).Failed("error/kubernetes", "A container stopped communicating with the agent.")
 			r.captureJobError(ctx, "buildkite.kubernetes_container_lost",
 				"One or more containers stopped communicating with the agent without reporting an exit status. The container may have been OOM-killed. Check the container's memory limit and the pod's events.")
 		}

@@ -19,10 +19,12 @@ import (
 	"time"
 
 	"github.com/buildkite/agent/v4/api"
+	"github.com/buildkite/agent/v4/internal/experiments"
 	"github.com/buildkite/agent/v4/internal/redact"
 	"github.com/buildkite/agent/v4/internal/replacer"
 	"github.com/buildkite/agent/v4/internal/shell"
 	"github.com/buildkite/agent/v4/internal/socket"
+	"github.com/wolfeidau/osc7501"
 )
 
 func gitErrorCaptureServer(t *testing.T, enabled bool, status int) (context.Context, *Executor, <-chan api.JobCapturedError) {
@@ -770,6 +772,15 @@ func TestGitErrorCaptureThroughCheckoutPhase(t *testing.T) {
 	}
 	// The Agent API never responds, so each delivery takes its full two seconds.
 	_, e, reports := gitErrorCaptureServer(t, true, 0)
+	ctx, _ := experiments.Enable(t.Context(), experiments.ProgramStatus)
+	e.shell.Env.Set("BUILDKITE_PROGRAM_STATUS", "true")
+	var native []osc7501.Report
+	scanner := osc7501.Scanner{W: e.shell.Logger, OnReport: func(r osc7501.Report) {
+		if r.App == "buildkite-agent" && r.ID == "error/git" {
+			native = append(native, r)
+		}
+	}}
+	e.shell.Logger = shell.NewWriterLogger(&scanner, false, nil)
 	_, commit := setupCheckoutTestRepo(t, e, "git-error-capture")
 	e.Commit = commit
 	e.Branch = "feature-branch"
@@ -800,7 +811,7 @@ func TestGitErrorCaptureThroughCheckoutPhase(t *testing.T) {
 	}
 	e.shell.Env.Set("PATH", dir+string(os.PathListSeparator)+e.shell.Env.GetString("PATH", ""))
 
-	err = e.CheckoutPhase(t.Context())
+	err = e.CheckoutPhase(ctx)
 	var gitErr *gitError
 	if !errors.As(err, &gitErr) || gitErr.Type != gitErrorClean || errors.Is(err, errCheckoutAttemptTimedOut) {
 		t.Fatalf("CheckoutPhase() error = %v, want the Git clean failure, not a timeout", err)
@@ -811,6 +822,9 @@ func TestGitErrorCaptureThroughCheckoutPhase(t *testing.T) {
 	report := <-reports
 	if want := "remote: [REDACTED]\nfatal: unable to read from remote\n"; report.Code != "buildkite.git_clean_failed" || strings.Contains(report.Message, "PRIVATE_CREDENTIAL_SUFFIX") || !strings.HasSuffix(report.Message, want) {
 		t.Fatalf("report = %#v, want buildkite.git_clean_failed with the secret redacted and suffix %q", report, want)
+	}
+	if len(native) != 1 || native[0].State != "error" || native[0].Msg != "Git clean failed." {
+		t.Fatalf("native OSC must contain only the fixed summary, not checkout data or secret output: %#v", native)
 	}
 }
 

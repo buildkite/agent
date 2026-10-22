@@ -13,9 +13,32 @@ import (
 	envutil "github.com/buildkite/agent/v4/env"
 	"github.com/buildkite/agent/v4/internal/experiments"
 	"github.com/buildkite/agent/v4/internal/joberrorosc"
+	"github.com/buildkite/agent/v4/internal/programstatus"
 	"github.com/buildkite/agent/v4/internal/redact"
 	"github.com/buildkite/agent/v4/jobapi"
 )
+
+// errorStatus emits native OSC status beside parent-side error captures.
+// Like createEnvironment, the experiment enables status unless the job opts out.
+// Only pass agent-written summaries, not unredacted job data.
+func (r *JobRunner) errorStatus(ctx context.Context) *programstatus.Reporter {
+	if !experiments.IsEnabled(ctx, experiments.ProgramStatus) {
+		return nil
+	}
+	lookup := func(key string) (string, bool) {
+		if v, ok := r.conf.Job.Env[key]; ok {
+			return v, true
+		}
+		if key == "BUILDKITE_PROGRAM_STATUS" {
+			return "true", true
+		}
+		return "", false
+	}
+	if !programstatus.Enabled(lookup, false) {
+		return nil
+	}
+	return programstatus.New(r.jobLogs)
+}
 
 // captureJobError reports a failure the agent observed outside the job's
 // bootstrap process, such as refusing to run the job, when the job opted in

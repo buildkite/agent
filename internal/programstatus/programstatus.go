@@ -65,6 +65,14 @@ func (r *Reporter) Working(id string, progress int, msg string) {
 	}
 }
 
+// Failed reports a failure without changing the command's result. Use an
+// agent-written summary: encoded messages bypass ordinary log redaction.
+func (r *Reporter) Failed(id, msg string) {
+	if r != nil {
+		_ = r.r.Failed(id, msg)
+	}
+}
+
 // Finish reports the record id as done if err is nil, idle if it was
 // cancelled, and failed otherwise.
 func (r *Reporter) Finish(id string, err error, doneMsg, errorMsg string) {

@@ -21,13 +21,24 @@ import (
 	"github.com/buildkite/agent/v4/logger"
 	"github.com/buildkite/agent/v4/metrics"
 	"github.com/google/go-cmp/cmp"
+	"github.com/wolfeidau/osc7501"
 )
 
 func TestJobErrorsOSCEndToEnd(t *testing.T) {
+	t.Parallel()
+	for _, enabled := range []bool{true, false} {
+		t.Run(fmt.Sprintf("native-status=%t", enabled), func(t *testing.T) {
+			t.Parallel()
+			testJobErrorsOSCEndToEnd(t, enabled)
+		})
+	}
+}
+
+func testJobErrorsOSCEndToEnd(t *testing.T, nativeStatus bool) {
+	t.Helper()
 	if runtime.GOOS == "windows" {
 		t.Skip("uses a POSIX command")
 	}
-	t.Parallel()
 	ctx, _ := experiments.Enable(mainCtx, experiments.JobErrorsOSC)
 	ctx, _ = experiments.Enable(ctx, experiments.ProgramStatus)
 	tester, err := NewExecutorTester(ctx)
@@ -77,6 +88,8 @@ func TestJobErrorsOSCEndToEnd(t *testing.T) {
 	}
 	jobEnv["INITIAL_SECRET"] = "initial-secret"
 	jobEnv["SUT"] = tester.Name
+	jobEnv["BUILDKITE_BUILD_CHECKOUT_PATH"] = tester.Repo.Path
+	jobEnv["BUILDKITE_PROGRAM_STATUS"] = fmt.Sprint(nativeStatus)
 	jobEnv["BUILDKITE_COMMAND"] = `printf runtime-secret | "$SUT" redactor add
 "$SUT" job capture-error plugin.failed --message 'initial-secret runtime-secret https://user:password@example.com/path?signature=secret' >/dev/null 2>&1 || true
 printf 'initial-secret\n'
@@ -93,7 +106,8 @@ exit 7`
 			AgentConfiguration: agent.AgentConfiguration{
 				BootstrapScript: fmt.Sprintf("%q bootstrap --phases command", tester.Name),
 				BuildPath:       tester.BuildDir, CommandEval: true,
-				Shell: "/bin/bash -e -c", RedactedVars: []string{"*_SECRET", "*_TOKEN"},
+				SocketsPath: tester.HomeDir,
+				Shell:       "/bin/bash -e -c", RedactedVars: []string{"*_SECRET", "*_TOKEN"},
 				GitCommitVerification: "off",
 				GitMirrorCheckoutMode: "dissociate",
 			},
@@ -124,6 +138,26 @@ exit 7`
 	}
 	if diff := cmp.Diff([]api.JobCapturedError{pluginReport, report}, extracted); diff != "" {
 		t.Fatalf("stored OSC vs API payload (-API +OSC):\n%s", diff)
+	}
+	var native []osc7501.Report
+	statusScanner := osc7501.Scanner{W: io.Discard, OnReport: func(r osc7501.Report) {
+		if r.App == "buildkite-agent" && r.ID == "error/command" {
+			native = append(native, r)
+		}
+	}}
+	if _, err := io.WriteString(&statusScanner, logs.String()); err != nil {
+		t.Fatal(err)
+	}
+	if nativeStatus {
+		want := []osc7501.Report{{State: "error", ID: "error/command", App: "buildkite-agent", Msg: "The step's command failed.", Progress: -1}}
+		if diff := cmp.Diff(want, native); diff != "" {
+			t.Fatalf("native OSC beside command capture (-want +got):\n%s", diff)
+		}
+	} else if len(native) != 0 {
+		t.Fatalf("native OSC emitted despite opt-out: %v", native)
+	}
+	if codes := a.codes(); len(codes) != 2 {
+		t.Fatalf("native status must not create duplicate API reports; got %v", codes)
 	}
 }
 

@@ -139,6 +139,11 @@ func captureGitError(ctx context.Context, sh *shell.Shell, err error, output str
 	if code == "" {
 		return
 	}
+	// The fixed classifier summary is safe to encode. Checkout context and
+	// Git output below still need the Local Job API's redaction boundary.
+	if gitErrorCaptureEnabled(sh.Env) {
+		errorStatus(ctx, sh).Failed("error/git", message)
+	}
 	message = withCheckout(message, describeCheckout(sh))
 	if output == gitOutputOmitted {
 		message += "\n\n" + gitOutputOmitted
@@ -302,11 +307,17 @@ func captureCheckoutError(ctx context.Context, sh *shell.Shell, err error) {
 			// Git commands capture their own failures. Other checkout operations
 			// reuse these error types for recovery, not to identify a failed command.
 			gitErr.captured = true
+			if gitErrorCaptureEnabled(sh.Env) {
+				errorStatus(ctx, sh).Failed("error/checkout", "The default checkout phase failed.")
+			}
 			captureError(ctx, sh, "buildkite.checkout_phase_failed", withCheckout("The default checkout phase failed.", describeCheckout(sh)))
 			return
 		}
 	}
 	code, message := classifyGitError(err)
+	if gitErrorCaptureEnabled(sh.Env) {
+		errorStatus(ctx, sh).Failed("error/checkout", message)
+	}
 	captureError(ctx, sh, code, withCheckout(message, describeCheckout(sh)))
 }
 
