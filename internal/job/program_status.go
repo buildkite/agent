@@ -2,12 +2,10 @@ package job
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"slices"
 
 	"github.com/buildkite/agent/v4/internal/programstatus"
-	"github.com/buildkite/agent/v4/internal/shell"
 )
 
 // commandStatusID is the record for the step's command. It's left behind
@@ -66,8 +64,8 @@ func (s *jobStatus) finish(id string, err error, what string) {
 		err = context.Canceled
 	}
 	errorMsg := what + " failed"
-	if shell.IsExitError(err) {
-		errorMsg = fmt.Sprintf("%s exited with status %d", what, shell.ExitCode(err))
+	if exit, ok := describeExit(err); ok {
+		errorMsg = what + " " + exit
 	}
 	s.r.Finish(id, err, "", errorMsg)
 
