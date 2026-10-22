@@ -38,9 +38,6 @@ Cleanup is not transactional. If cleanup fails, extraction for that cache does
 not start, but target paths may already have been modified. These failures remain
 fatal even when --cache-fail-on-error is false.
 
-Note: This feature is currently in development and subject to change. It is not
-yet available to all customers.
-
 Example:
 
     $ buildkite-agent cache restore
