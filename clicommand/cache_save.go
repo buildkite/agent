@@ -27,9 +27,6 @@ defined in your cache config file (defaults to .buildkite/cache.yml or
 The cache configuration file defines which files or directories should be cached
 and their associated cache key.
 
-Note: This feature is currently in development and subject to change. It is not
-yet available to all customers.
-
 Example:
 
     $ buildkite-agent cache save
