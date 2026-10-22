@@ -17,6 +17,7 @@ import (
 	"github.com/buildkite/agent/v4/internal/process"
 	"github.com/buildkite/agent/v4/kubernetes"
 	"github.com/buildkite/agent/v4/logger"
+	"github.com/wolfeidau/osc7501"
 )
 
 // failedJobProcess is a job process that fails to run.
@@ -39,7 +40,7 @@ func TestKubernetesStartTimeoutIsCaptured(t *testing.T) {
 		want               bool
 	}{
 		{name: "job opted in", jobOptIn: "true", want: true},
-		{name: "OSC transport", jobOptIn: "true", osc: true, want: true},
+		{name: "OSC alongside direct capture", jobOptIn: "true", osc: true, want: true},
 		{name: "agent opted in", agentEnv: "true", want: true},
 		{name: "job opted out on an agent that opted in", jobOptIn: "false", agentEnv: "true"},
 		{name: "not opted in"},
@@ -85,7 +86,8 @@ func TestKubernetesStartTimeoutIsCaptured(t *testing.T) {
 			var log strings.Builder
 			if tc.osc {
 				ctx, _ = experiments.Enable(ctx, experiments.JobErrorsOSC)
-				r.jobLogs = r.capturedErrorLogWriter(ctx, &log)
+				ctx, _ = experiments.Enable(ctx, experiments.ProgramStatus)
+				r.jobLogs = &log
 			}
 			if exit := r.runJob(ctx); exit.Status != -1 || exit.SignalReason != SignalReasonProcessRunError {
 				t.Errorf("runJob() = %+v, want status -1 with the process-run-error signal reason", exit)
@@ -99,8 +101,14 @@ func TestKubernetesStartTimeoutIsCaptured(t *testing.T) {
 				}
 				return
 			}
+			if tc.osc {
+				if len(reports) != 2 || reports[0].Code != joberrorosc.Code || reports[0].Message != "A container did not connect before the start timeout." {
+					t.Fatalf("reports = %+v, want independent OSC and direct reports", reports)
+				}
+				reports = reports[1:]
+			}
 			if len(reports) != 1 || reports[0].Code != "buildkite.kubernetes_container_not_connected" || !strings.Contains(reports[0].Message, "within 5m0s") {
-				t.Fatalf("reports = %+v, want one buildkite.kubernetes_container_not_connected report naming the timeout", reports)
+				t.Fatalf("reports = %+v, want the unchanged direct capture naming the timeout", reports)
 			}
 			if tc.osc && !strings.Contains(log.String(), "\x1b]7501;") {
 				t.Fatal("captured error did not travel through the job log")
@@ -133,9 +141,8 @@ func TestOSCErrorForwarding(t *testing.T) {
 			}
 			var log strings.Builder
 			writer := r.capturedErrorLogWriter(t.Context(), &log)
-			timestamp := time.Date(2026, 10, 22, 1, 2, 3, 123456789, time.UTC)
-			for _, key := range []string{"first", "second"} {
-				if err := joberrorosc.Write(writer, api.JobCapturedError{Code: "plugin.failed", Message: "failed\n" + strings.Repeat("🦘", 990), Timestamp: timestamp, IdempotencyKey: key}); err != nil {
+			for range 2 {
+				if err := osc7501.NewReporter(writer, "buildkite-agent").Failed("error/command", "Failed at https://user:password@example.com/path?signature=secret"); err != nil {
 					t.Fatal(err)
 				}
 			}
@@ -143,7 +150,7 @@ func TestOSCErrorForwarding(t *testing.T) {
 			if status == http.StatusNotFound || status == http.StatusUnprocessableEntity {
 				want = 1
 			}
-			if len(got) != want || got[0].IdempotencyKey != "first" || !got[0].Timestamp.Equal(timestamp) || got[0].Message != "failed\n"+strings.Repeat("🦘", 990) {
+			if len(got) != want || got[0].Code != joberrorosc.Code || got[0].IdempotencyKey == "" || got[0].Timestamp.IsZero() || got[0].Message != "Failed at https://xxxxx@example.com/path?[REDACTED]" {
 				t.Fatalf("unexpected forwarded reports: %+v", got)
 			}
 		})

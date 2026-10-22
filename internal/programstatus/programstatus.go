@@ -65,8 +65,9 @@ func (r *Reporter) Working(id string, progress int, msg string) {
 	}
 }
 
-// Failed reports a failure without changing the command's result. Use an
-// agent-written summary: encoded messages bypass ordinary log redaction.
+// Failed reports a failure without changing the command's result. The library
+// sanitizes controls and caps Msg at 2048 bytes. Encoded log data is not redacted;
+// the job-errors-osc consumer redacts only its extracted API copy.
 func (r *Reporter) Failed(id, msg string) {
 	if r != nil {
 		_ = r.r.Failed(id, msg)

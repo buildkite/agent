@@ -5,14 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"os"
-	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/buildkite/agent/v4/api"
-	"github.com/buildkite/agent/v4/internal/experiments"
-	"github.com/buildkite/agent/v4/internal/joberrorosc"
 	"github.com/buildkite/agent/v4/internal/redact"
+	"github.com/buildkite/agent/v4/internal/shell"
 	"github.com/buildkite/agent/v4/internal/socket"
 	"github.com/buildkite/agent/v4/jobapi"
 	"github.com/buildkite/agent/v4/logger"
@@ -46,7 +44,6 @@ We'll continue to run your job, but you won't be able to use the Job API`)
 	// for good, later ones would be refused too, so stop sending them; a
 	// script calling capture-error in a loop then can't keep hitting the API.
 	var refused atomic.Bool
-	var oscMu sync.Mutex
 	reporter := func(requestCtx context.Context, capturedError *jobapi.CapturedError) error {
 		// Reporting must not keep a cancelled job alive through its grace period.
 		reportCtx, cancel := context.WithCancel(requestCtx)
@@ -57,20 +54,6 @@ We'll continue to run your job, but you won't be able to use the Job API`)
 
 		if err := ctx.Err(); err != nil {
 			return err
-		}
-		if experiments.IsEnabled(ctx, experiments.JobErrorsOSC) {
-			// The Local Job API has already redacted the complete error before
-			// truncating it, and assigned its timestamp and delivery key. Write
-			// directly to stdout: encoded data must not pass through a redactor
-			// or the program-status describer a second time.
-			oscMu.Lock()
-			defer oscMu.Unlock()
-			return joberrorosc.Write(os.Stdout, api.JobCapturedError{
-				Code:           capturedError.Code,
-				Message:        capturedError.Message,
-				Timestamp:      *capturedError.Timestamp,
-				IdempotencyKey: capturedError.IdempotencyKey,
-			})
 		}
 		if refused.Load() {
 			return errors.New("not sent: Buildkite refused an earlier captured error for this job because its error limit was reached or error capture is unavailable")
@@ -145,6 +128,28 @@ func (e *Executor) reportCapturedError(ctx context.Context, capturedError *jobap
 		IdempotencyKey: capturedError.IdempotencyKey,
 	})
 	return err
+}
+
+// oscErrorReporter sends the scanner's normalized errors independently of the
+// capture API. log must bypass the scanner to avoid recursive writes while the
+// scanner holds its lock. Reporting failures never fail the command/log write.
+func (e *Executor) oscErrorReporter(ctx context.Context, log shell.Logger) func(*jobapi.CapturedError) {
+	var refused atomic.Bool
+	return func(report *jobapi.CapturedError) {
+		if refused.Load() || ctx.Err() != nil {
+			return
+		}
+		ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
+		defer cancel()
+		err := e.reportCapturedError(ctx, report)
+		if api.IsErrHavingStatus(err, http.StatusNotFound) || api.IsErrHavingStatus(err, http.StatusUnprocessableEntity) {
+			refused.Store(true)
+		}
+		if err != nil {
+			// Response bodies and transport errors can contain sensitive values.
+			log.Warningf("Could not capture OSC job error")
+		}
+	}
 }
 
 // declarePromiseFailure declares a promised failure for the current job to the

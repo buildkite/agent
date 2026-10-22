@@ -27,6 +27,7 @@ import (
 	"github.com/buildkite/agent/v4/internal/experiments"
 	"github.com/buildkite/agent/v4/internal/file"
 	"github.com/buildkite/agent/v4/internal/job/hook"
+	"github.com/buildkite/agent/v4/internal/joberrorosc"
 	"github.com/buildkite/agent/v4/internal/osutil"
 	"github.com/buildkite/agent/v4/internal/process"
 	"github.com/buildkite/agent/v4/internal/programstatus"
@@ -181,6 +182,16 @@ func (e *Executor) Run(ctx context.Context) (exitCode int) {
 	// the redactor can only find secrets in it once it has been decoded.
 	if experiments.IsEnabled(ctx, experiments.ProgramStatus) {
 		preRedactedStdout = process.NewProgramStatusWriter(preRedactedStdout) // shell -> program status -> redactor
+	}
+
+	if experiments.IsEnabled(ctx, experiments.JobErrorsOSC) {
+		// Scan where the job's live secret registry is available. The scanner
+		// preserves the raw OSC; only its separately extracted API copy is
+		// decoded, validated and redacted. Agent phase status above bypasses
+		// this path; the explicit calls beside error captures use the logger.
+		report := e.oscErrorReporter(ctx, preRedactedLogger)
+		preRedactedStdout = joberrorosc.NewWriter(preRedactedStdout, e.redactors.Needles, report)
+		preRedactedLogger = shell.NewWriterLogger(joberrorosc.NewWriter(preRedactedLogger, e.redactors.Needles, report), true, e.DisabledWarnings)
 	}
 
 	// Check if not nil to allow for tests to overwrite shell.

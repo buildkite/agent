@@ -78,28 +78,11 @@ func (s *Server) handleCapturedError(w http.ResponseWriter, r *http.Request) {
 
 	// Use the same registered values as job logs, including values added while
 	// the job is running. Redact before both forwarding and the local response.
-	if err := payload.redact(s.redactors.Needles()); err != nil {
-		s.writeCapturedError(w, fmt.Errorf("redacting captured error: %w", err), http.StatusUnprocessableEntity)
+	warning, err := payload.Prepare(s.redactors.Needles())
+	if err != nil {
+		s.writeCapturedError(w, err, http.StatusUnprocessableEntity)
 		return
 	}
-
-	// Redact the whole message first, so cutting through a secret cannot leave
-	// an unrecognizable fragment of it in the report.
-	var warning string
-	if utf8.RuneCountInString(payload.Message) > maxCapturedErrorMessageLength {
-		const marker = "…[truncated]"
-		payload.Message = string([]rune(payload.Message)[:maxCapturedErrorMessageLength-utf8.RuneCountInString(marker)]) + marker
-		warning = "Captured error message was truncated to 1000 characters. Put detailed output in an annotation or artifact."
-	}
-
-	now := time.Now().UTC()
-	if payload.Timestamp == nil {
-		payload.Timestamp = &now
-	} else {
-		t := payload.Timestamp.UTC()
-		payload.Timestamp = &t
-	}
-	payload.IdempotencyKey = rand.Text()
 
 	if err := s.reportCapturedError(r.Context(), payload); err != nil {
 		s.writeCapturedError(w, fmt.Errorf("reporting captured error: %w", err), http.StatusBadGateway)
@@ -113,6 +96,36 @@ func (s *Server) handleCapturedError(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewEncoder(w).Encode(CapturedErrorResponse{CapturedError: *payload, Warning: warning}); err != nil {
 		s.Logger.Errorf("Job API: couldn't encode captured-error response: %v", err)
 	}
+}
+
+// Prepare validates, redacts and sizes a captured error, then assigns delivery
+// metadata. Both the Local Job API and decoded OSC errors use this boundary.
+// Call with the job's current secret needles, including runtime registrations.
+func (e *CapturedError) Prepare(needles []string) (string, error) {
+	if err := validateCapturedError(e); err != nil {
+		return "", err
+	}
+	if err := e.redact(needles); err != nil {
+		return "", fmt.Errorf("redacting captured error: %w", err)
+	}
+	// Redact the whole message first, so cutting through a secret cannot leave
+	// an unrecognizable fragment of it in the report.
+	var warning string
+	if utf8.RuneCountInString(e.Message) > maxCapturedErrorMessageLength {
+		const marker = "…[truncated]"
+		e.Message = string([]rune(e.Message)[:maxCapturedErrorMessageLength-utf8.RuneCountInString(marker)]) + marker
+		warning = "Captured error message was truncated to 1000 characters. Put detailed output in an annotation or artifact."
+	}
+
+	now := time.Now().UTC()
+	if e.Timestamp == nil {
+		e.Timestamp = &now
+	} else {
+		t := e.Timestamp.UTC()
+		e.Timestamp = &t
+	}
+	e.IdempotencyKey = rand.Text()
+	return warning, nil
 }
 
 func (e *CapturedError) redact(needles []string) error {

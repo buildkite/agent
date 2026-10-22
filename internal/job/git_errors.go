@@ -101,6 +101,8 @@ type gitErrorReports []jobapi.CapturedError
 
 func (reports gitErrorReports) deliver(ctx context.Context, sh *shell.Shell) {
 	for _, report := range reports {
+		// Both transports run outside the checkout attempt's timeout budget.
+		errorStatus(ctx, sh).Failed("error/git", report.Message)
 		deliverError(ctx, sh, report)
 	}
 }
@@ -138,11 +140,6 @@ func captureGitError(ctx context.Context, sh *shell.Shell, err error, output str
 	code, message := classifyGitError(err)
 	if code == "" {
 		return
-	}
-	// The fixed classifier summary is safe to encode. Checkout context and
-	// Git output below still need the Local Job API's redaction boundary.
-	if gitErrorCaptureEnabled(sh.Env) {
-		errorStatus(ctx, sh).Failed("error/git", message)
 	}
 	message = withCheckout(message, describeCheckout(sh))
 	if output == gitOutputOmitted {
@@ -307,17 +304,11 @@ func captureCheckoutError(ctx context.Context, sh *shell.Shell, err error) {
 			// Git commands capture their own failures. Other checkout operations
 			// reuse these error types for recovery, not to identify a failed command.
 			gitErr.captured = true
-			if gitErrorCaptureEnabled(sh.Env) {
-				errorStatus(ctx, sh).Failed("error/checkout", "The default checkout phase failed.")
-			}
 			captureError(ctx, sh, "buildkite.checkout_phase_failed", withCheckout("The default checkout phase failed.", describeCheckout(sh)))
 			return
 		}
 	}
 	code, message := classifyGitError(err)
-	if gitErrorCaptureEnabled(sh.Env) {
-		errorStatus(ctx, sh).Failed("error/checkout", message)
-	}
 	captureError(ctx, sh, code, withCheckout(message, describeCheckout(sh)))
 }
 
@@ -396,5 +387,6 @@ func captureError(ctx context.Context, sh *shell.Shell, code, message string) {
 		*reports = append(*reports, report)
 		return
 	}
+	errorStatus(ctx, sh).Failed("error/git", message)
 	deliverError(ctx, sh, report)
 }

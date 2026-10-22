@@ -823,8 +823,9 @@ func TestGitErrorCaptureThroughCheckoutPhase(t *testing.T) {
 	if want := "remote: [REDACTED]\nfatal: unable to read from remote\n"; report.Code != "buildkite.git_clean_failed" || strings.Contains(report.Message, "PRIVATE_CREDENTIAL_SUFFIX") || !strings.HasSuffix(report.Message, want) {
 		t.Fatalf("report = %#v, want buildkite.git_clean_failed with the secret redacted and suffix %q", report, want)
 	}
-	if len(native) != 1 || native[0].State != "error" || native[0].Msg != "Git clean failed." {
-		t.Fatalf("native OSC must contain only the fixed summary, not checkout data or secret output: %#v", native)
+	if len(native) != 1 || native[0].State != "error" || !strings.HasPrefix(native[0].Msg, "Git clean failed.") ||
+		!strings.Contains(native[0].Msg, "Last lines of Git output: remote: [REDACTED] fatal: unable to read from remote") || strings.Contains(native[0].Msg, "PRIVATE_CREDENTIAL_SUFFIX") {
+		t.Fatalf("native OSC must include Git diagnostics with the registered secret redacted: %#v", native)
 	}
 }
 

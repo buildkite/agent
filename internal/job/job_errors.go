@@ -20,9 +20,8 @@ import (
 	"github.com/buildkite/agent/v4/jobapi"
 )
 
-// errorStatus is the native program-status side of the POC, not the private
-// job-error transport. Only pass agent-written summaries, never diagnostics
-// containing command output, secrets, refs, URLs or customer configuration.
+// errorStatus prints native OSC beside existing captures. The log retains the
+// encoded message; the job-errors-osc scanner sanitizes its extracted API copy.
 func errorStatus(ctx context.Context, sh *shell.Shell) *programstatus.Reporter {
 	if ctx.Err() != nil || sh.Env.GetString("BUILDKITE_JOB_CANCELLED", "") == "true" ||
 		!experiments.IsEnabled(ctx, experiments.ProgramStatus) || !programstatus.Enabled(sh.Env.Get, false) {
@@ -78,8 +77,9 @@ func (e *Executor) captureHookError(ctx context.Context, hookCfg HookConfig, hoo
 		message = fmt.Sprintf("The %s hook at %s could not be run because a program it needs was not found, usually the interpreter on its #! line, such as bash.%s", hookName, path, where)
 	}
 	message = jobapi.CapturedErrorMessage(message, fmt.Sprintf("The %s hook failed.%s", hookName, where))
-	errorStatus(ctx, e.shell).Failed("error/hook", "A job hook failed.")
-	captureJobError(ctx, e.shell, "buildkite.hook_failed", e.withRecentOutput(message))
+	message = e.withRecentOutput(message)
+	errorStatus(ctx, e.shell).Failed("error/hook", message)
+	captureJobError(ctx, e.shell, "buildkite.hook_failed", message)
 }
 
 // couldNotStart reports whether err is from starting a process, such as
@@ -151,29 +151,31 @@ func (e *Executor) captureCommandError(ctx context.Context, err error) {
 		if strings.HasSuffix(exit, "SIGKILL") {
 			message += " The operating system may have killed it for using too much memory."
 		}
-		errorStatus(ctx, e.shell).Failed("error/command", "The step's command failed.")
-		captureJobError(ctx, e.shell, code, e.withRecentOutput(message))
+		message = e.withRecentOutput(message)
+		errorStatus(ctx, e.shell).Failed("error/command", message)
+		captureJobError(ctx, e.shell, code, message)
 	case e.commandHook != "":
 		// The hook may have run and failed afterwards, such as while the agent
 		// read the environment changes it made.
-		errorStatus(ctx, e.shell).Failed("error/command", "The command hook failed.")
-		captureJobError(ctx, e.shell, "buildkite.command_hook_failed", e.withRecentOutput(jobapi.CapturedErrorMessage(
+		message := e.withRecentOutput(jobapi.CapturedErrorMessage(
 			fmt.Sprintf("%s, which runs instead of the step's command, failed: %v.", e.commandHook, err),
-			e.commandHook+", which runs instead of the step's command, failed.")))
+			e.commandHook+", which runs instead of the step's command, failed."))
+		errorStatus(ctx, e.shell).Failed("error/command", message)
+		captureJobError(ctx, e.shell, "buildkite.command_hook_failed", message)
 	case errors.Is(err, errNoCommand):
-		errorStatus(ctx, e.shell).Failed("error/command", "No command was configured.")
+		errorStatus(ctx, e.shell).Failed("error/command", err.Error())
 		captureJobError(ctx, e.shell, "buildkite.command_not_configured", err.Error())
 	case errors.Is(err, errCommandEvalDisabled), errors.Is(err, errCommandOutsideRepository):
 		message := err.Error()
 		if quoted {
 			message += fmt.Sprintf(". The step's command is `%s`.", command)
 		}
-		errorStatus(ctx, e.shell).Failed("error/command", "Command evaluation was rejected.")
+		errorStatus(ctx, e.shell).Failed("error/command", message)
 		captureJobError(ctx, e.shell, "buildkite.command_eval_rejected", message)
 	default:
-		errorStatus(ctx, e.shell).Failed("error/command", "The step's command could not be started.")
-		captureJobError(ctx, e.shell, "buildkite.command_start_failed", jobapi.CapturedErrorMessage(
-			fmt.Sprintf("%s could not be run: %v.", subject, err), subject+" could not be run."))
+		message := jobapi.CapturedErrorMessage(fmt.Sprintf("%s could not be run: %v.", subject, err), subject+" could not be run.")
+		errorStatus(ctx, e.shell).Failed("error/command", message)
+		captureJobError(ctx, e.shell, "buildkite.command_start_failed", message)
 	}
 }
 

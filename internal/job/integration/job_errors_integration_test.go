@@ -20,7 +20,6 @@ import (
 	"github.com/buildkite/agent/v4/internal/process"
 	"github.com/buildkite/agent/v4/logger"
 	"github.com/buildkite/agent/v4/metrics"
-	"github.com/google/go-cmp/cmp"
 	"github.com/wolfeidau/osc7501"
 )
 
@@ -91,11 +90,14 @@ func testJobErrorsOSCEndToEnd(t *testing.T, nativeStatus bool) {
 	jobEnv["BUILDKITE_BUILD_CHECKOUT_PATH"] = tester.Repo.Path
 	jobEnv["BUILDKITE_PROGRAM_STATUS"] = fmt.Sprint(nativeStatus)
 	jobEnv["BUILDKITE_COMMAND"] = `printf runtime-secret | "$SUT" redactor add
-"$SUT" job capture-error plugin.failed --message 'initial-secret runtime-secret https://user:password@example.com/path?signature=secret' >/dev/null 2>&1 || true
+message='initial-secret runtime-secret https://user:password@example.com/path?signature=secret'
+"$SUT" job capture-error comparison.failed --message "$message" >/dev/null 2>&1 || true
+encoded=$(printf '%s' "$message" | base64 | tr -d '\n')
+printf '\033]7501;state=error:msg=%s\033\\' "$encoded"
 printf 'initial-secret\n'
 exit 7`
-	// Start the real parent runner and real bootstrap, with no external API.
-	// Both automatic command errors and the Local Job API use this transport.
+	// Start the real parent runner and bootstrap against a test API. The same
+	// unredacted message is independently sent by capture-error and raw OSC.
 	runner, err := agent.NewJobRunner(ctx, logger.Discard,
 		api.NewClient(logger.Discard, api.Config{Endpoint: a.URL + "/", Token: "test-job-token"}),
 		agent.JobRunnerConfig{
@@ -127,37 +129,56 @@ exit 7`
 	if !strings.Contains(report.Message, "status 7") || !strings.Contains(report.Message, "[REDACTED]") || strings.Contains(report.Message, "initial-secret") {
 		t.Fatalf("unexpected error message: %q", report.Message)
 	}
-	pluginReport := a.report(t, "plugin.failed")
-	if pluginReport.Message != "[REDACTED] [REDACTED] https://xxxxx@example.com/path?[REDACTED]" {
-		t.Fatalf("plugin report was not redacted before OSC encoding: %q", pluginReport.Message)
+	direct := a.report(t, "comparison.failed")
+	wantMessage := "[REDACTED] [REDACTED] https://xxxxx@example.com/path?[REDACTED]"
+	if direct.Message != wantMessage {
+		t.Fatalf("direct capture was not redacted: %q", direct.Message)
 	}
-	var extracted []api.JobCapturedError
-	scanner := joberrorosc.NewWriter(io.Discard, func(e api.JobCapturedError) { extracted = append(extracted, e) })
-	if _, err := io.WriteString(scanner, logs.String()); err != nil {
-		t.Fatal(err)
+	a.mu.Lock()
+	var oscMessages []string
+	for _, r := range a.reports {
+		if r.Code == joberrorosc.Code {
+			oscMessages = append(oscMessages, r.Message)
+		}
 	}
-	if diff := cmp.Diff([]api.JobCapturedError{pluginReport, report}, extracted); diff != "" {
-		t.Fatalf("stored OSC vs API payload (-API +OSC):\n%s", diff)
+	a.mu.Unlock()
+	wantCount := 1
+	if nativeStatus {
+		wantCount++
 	}
+	if len(oscMessages) != wantCount || oscMessages[0] != wantMessage {
+		t.Fatalf("independent OSC capture = %q, want %d reports starting with %q", oscMessages, wantCount, wantMessage)
+	}
+	if nativeStatus && (!strings.HasPrefix(oscMessages[1], "The step's command exited with status 7.") || !strings.Contains(oscMessages[1], "Last lines of output:") || strings.Contains(oscMessages[1], "initial-secret")) {
+		t.Fatalf("native command OSC lost diagnostics or leaked the secret: %q", oscMessages[1])
+	}
+	// Inspect the stored log independently: the raw report intentionally
+	// retains both secrets and credentials, unlike its API copy.
 	var native []osc7501.Report
+	var customer []osc7501.Report
 	statusScanner := osc7501.Scanner{W: io.Discard, OnReport: func(r osc7501.Report) {
 		if r.App == "buildkite-agent" && r.ID == "error/command" {
 			native = append(native, r)
+		}
+		if r.State == "error" && r.App == "" {
+			customer = append(customer, r)
 		}
 	}}
 	if _, err := io.WriteString(&statusScanner, logs.String()); err != nil {
 		t.Fatal(err)
 	}
 	if nativeStatus {
-		want := []osc7501.Report{{State: "error", ID: "error/command", App: "buildkite-agent", Msg: "The step's command failed.", Progress: -1}}
-		if diff := cmp.Diff(want, native); diff != "" {
-			t.Fatalf("native OSC beside command capture (-want +got):\n%s", diff)
+		if len(native) != 1 || native[0].State != "error" || !strings.HasPrefix(native[0].Msg, "The step's command exited with status 7.") || !strings.Contains(native[0].Msg, "Last lines of output:") {
+			t.Fatalf("native OSC beside command capture lost diagnostics: %+v", native)
 		}
 	} else if len(native) != 0 {
 		t.Fatalf("native OSC emitted despite opt-out: %v", native)
 	}
-	if codes := a.codes(); len(codes) != 2 {
-		t.Fatalf("native status must not create duplicate API reports; got %v", codes)
+	if len(customer) != 1 || customer[0].Msg != "initial-secret runtime-secret https://user:password@example.com/path?signature=secret" {
+		t.Fatalf("raw customer OSC was rewritten in the uploaded log: %+v", customer)
+	}
+	if codes := a.codes(); len(codes) != 2+wantCount {
+		t.Fatalf("want direct captures plus independent OSC captures, got %v", codes)
 	}
 }
 

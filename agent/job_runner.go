@@ -321,9 +321,6 @@ func NewJobRunner(ctx context.Context, l logger.Logger, apiClient *api.Client, c
 
 	// The writer that output from the process goes into
 	r.jobLogs = io.MultiWriter(allWriters...)
-	if experiments.IsEnabled(ctx, experiments.JobErrorsOSC) {
-		r.jobLogs = r.capturedErrorLogWriter(ctx, r.jobLogs)
-	}
 
 	// Copy the current processes ENV and merge in the new ones. We do this
 	// so the sub process gets PATH and stuff. We merge our path in over

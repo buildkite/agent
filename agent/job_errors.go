@@ -37,7 +37,13 @@ func (r *JobRunner) errorStatus(ctx context.Context) *programstatus.Reporter {
 	if !programstatus.Enabled(lookup, false) {
 		return nil
 	}
-	return programstatus.New(r.jobLogs)
+	out := r.jobLogs
+	if experiments.IsEnabled(ctx, experiments.JobErrorsOSC) {
+		// Parent-owned summaries are fixed agent text. Child output is scanned
+		// in bootstrap instead, where runtime secret registrations are known.
+		out = r.capturedErrorLogWriter(ctx, out)
+	}
+	return programstatus.New(out)
 }
 
 // captureJobError reports a failure the agent observed outside the job's
@@ -45,9 +51,9 @@ func (r *JobRunner) errorStatus(ctx context.Context) *programstatus.Reporter {
 // with BUILDKITE_CAPTURE_AGENT_ERRORS. There is no Local Job API here, so the
 // runner does what the Local Job API would: it masks URL credentials and query
 // strings, then shortens the message to the agent's budget. Messages are written
-// by the agent and contain no job output to redact. Delivery is through OSC when
-// enabled, otherwise directly with the job's token. It is best-effort and never
-// changes the job's outcome.
+// by the agent and contain no job output to redact. The existing direct delivery
+// remains active alongside native OSC reporting. Delivery is best-effort and
+// never changes the job's outcome.
 func (r *JobRunner) captureJobError(ctx context.Context, code, message string) {
 	r.reportJobError(ctx, code, maskURLs(message))
 }
@@ -73,12 +79,6 @@ func (r *JobRunner) reportJobError(ctx context.Context, code, message string) {
 		Timestamp:      time.Now(),
 		IdempotencyKey: rand.Text(),
 	}
-	if experiments.IsEnabled(ctx, experiments.JobErrorsOSC) {
-		if err := joberrorosc.Write(r.jobLogs, report); err != nil {
-			r.agentLogger.Warnf("Could not write job error %q to the log", code)
-		}
-		return
-	}
 	_ = r.sendCapturedError(ctx, report)
 }
 
@@ -94,16 +94,18 @@ func (r *JobRunner) sendCapturedError(ctx context.Context, report api.JobCapture
 	return err
 }
 
-// capturedErrorLogWriter extracts errors before timestamping or log size
-// limits can change/drop the stream. Keep failures best-effort, and stop API
-// calls after the same permanent refusals as the Local Job API.
+// capturedErrorLogWriter handles parent-owned OSC only; never install it on
+// bootstrap output, which already has a scanner with the job's secret registry.
 func (r *JobRunner) capturedErrorLogWriter(ctx context.Context, out io.Writer) io.Writer {
 	refused := false // callbacks are serialized by the OSC writer
-	return joberrorosc.NewWriter(out, func(report api.JobCapturedError) {
+	return joberrorosc.NewWriter(out, func() []string { return nil }, func(report *jobapi.CapturedError) {
 		if refused {
 			return
 		}
-		err := r.sendCapturedError(ctx, report)
+		err := r.sendCapturedError(ctx, api.JobCapturedError{
+			Code: report.Code, Message: report.Message,
+			Timestamp: *report.Timestamp, IdempotencyKey: report.IdempotencyKey,
+		})
 		if api.IsErrHavingStatus(err, http.StatusNotFound) || api.IsErrHavingStatus(err, http.StatusUnprocessableEntity) {
 			refused = true
 		}

@@ -95,120 +95,103 @@ These reports don't add a line to the log, because the log already has a header 
 
 **Status:** Proof of concept for review, not a production-ready error protocol.
 
-Transports captured job errors through live job output using
-[`github.com/wolfeidau/osc7501`](https://github.com/wolfeidau/osc7501), then
-extracts them in the parent agent and posts them to the existing job errors API.
-Enable it on the **parent agent**, not just an independently invoked bootstrap:
+Extracts standard OSC 7501 `state=error` reports from live job output using
+[`github.com/wolfeidau/osc7501`](https://github.com/wolfeidau/osc7501). The
+bootstrap decodes each report, validates and redacts its message with the job's
+current secret registry, then sends it to the existing job errors API.
+The original OSC bytes remain in the log. Enable on the agent:
 
 ```bash
 buildkite-agent start --experiment job-errors-osc
 ```
 
-Automatic agent errors still require `BUILDKITE_CAPTURE_AGENT_ERRORS=true`.
-Explicit reports still use the existing command, including from plugins:
+Existing `job capture-error` calls **still send directly**, independently of
+OSC extraction. Existing automatic direct captures still require
+`BUILDKITE_CAPTURE_AGENT_ERRORS=true` (or the Git-specific opt-in). Nothing
+replaces the existing capture API in this POC. Reporting the same failure both
+ways intentionally creates two error records for comparison.
+
+#### A customer or plugin can print standard OSC
+
+A shell producer needs neither the capture CLI nor a private JSON envelope:
 
 ```bash
-buildkite-agent job capture-error docker.pull_failed --message 'Could not pull the build image'
+message='Failed to pull image: manifest unknown'
+encoded=$(printf '%s' "$message" | base64 | tr -d '\n')
+printf '\033]7501;state=error:msg=%s\033\\' "$encoded"
 ```
 
-The bootstrap's Local Job API still validates, redacts registered secrets
-(including runtime registrations), masks URL credentials/query strings, truncates
-messages to 1000 characters, and assigns the timestamp and idempotency key.
-Instead of posting to Buildkite, it writes that normalized payload to stdout.
-The parent extracts it before timestamping and log-size limits, and sends it with
-the job's token. Errors observed outside bootstrap also use the OSC path. With
-the experiment off, the current direct API paths remain unchanged. The
-`program-status` experiment is independent and can be enabled alongside this one;
-`BUILDKITE_PROGRAM_STATUS=false` does not disable job error transport.
+Print this to the actual job/hook output, not a redirected stream. Docker and
+Docker Compose currently suppress the capture CLI's stdout and stderr, so merely
+printing OSC inside that CLI would lose their reports. Their existing capture
+calls continue to work unchanged; no plugin repository is changed by this POC.
 
-The Docker and Docker Compose plugins suppress the capture CLI's stdout and
-stderr. Emitting from the bootstrap, rather than from that CLI process, keeps
-their existing calls working without plugin changes.
+OSC extraction does not depend on `program-status` or
+`BUILDKITE_PROGRAM_STATUS`. Those control the agent's own OSC production and
+the existing human-readable status decoration, not acceptance of customer OSC.
 
-#### Native OSC alongside the existing emitters
+#### Explicit OSC beside existing automatic emitters
 
-The POC also includes explicit native OSC calls beside the automatic error
-emitters: Git/checkout, hooks/commands, plugin setup, secrets, CLI operations,
-job rejection and Kubernetes failures. These use the `program-status` experiment
-and respect `BUILDKITE_PROGRAM_STATUS=false`. Enable both experiments to compare
-native status with the full-payload transport:
+Enable both experiments to see the agent produce OSC beside its existing
+captures. Its native reports respect `BUILDKITE_PROGRAM_STATUS=false`:
 
 ```bash
 buildkite-agent start --experiment program-status --experiment job-errors-osc
 ```
 
-For example, a command failure has two explicit calls:
+For example, a command failure has two explicit calls using the same message:
 
 ```go
-errorStatus(ctx, e.shell).Failed("error/command", "The step's command failed.")
-captureJobError(ctx, e.shell, code, e.withRecentOutput(message))
+message = e.withRecentOutput(message)
+errorStatus(ctx, e.shell).Failed("error/command", message)
+captureJobError(ctx, e.shell, code, message)
 ```
 
-A failed Git command emits the fixed summary returned by `classifyGitError`
-before adding checkout context and Git output. For a missing tree, the native
-report decodes to:
+Git reports likewise include the checkout description (repository, ref/commit)
+and retained Git output, not just the classifier summary. Hook reports include
+the hook path and retained output. Other instrumented families still use shorter
+agent-written summaries, so their native and direct messages are not identical.
+The scanner deliberately excludes the agent's existing phase-status reports to
+avoid treating a phase failure as another duplicate of its explicit error report.
+Parent-owned failures are scanned separately; child output is scanned only in
+bootstrap, where runtime secret registrations are available.
 
-```text
-state=error id=error/git app=buildkite-agent
-msg="Git checkout could not resolve the reference to a tree."
-```
+#### Redaction and information differences
 
-These native reports deliberately carry **only agent-written summaries**. Raw
-diagnostics cannot safely be base64-encoded before secret redaction. They do not
-include the classified code, checkout context/output, timestamp or delivery key;
-they are not equivalent replacements for the API error. Repeated reports for
-the same status id replace the visible status, rather than create error records.
-The `error/` ids keep these observations separate from existing phase status.
-
-The parent does **not** submit native status reports to the errors API. Only the
-separate private envelope below triggers submission, so enabling both reports
-does not double-send errors. With `job-errors-osc` disabled, existing emitters
-still send directly to the API while native status can be enabled independently.
-
-#### Information preservation
-
-OSC 7501 defines **program status**, not structured job errors. A plain
-`state=error` report cannot preserve our complete API contract and is deliberately
-not treated as a captured error. This POC uses a **private convention**, not a
-standard OSC error schema:
-
-- `app=buildkite-job-error`, `state=error`, `id=job-error/v1/<delivery-key>`.
-- `title` is the 1-based part number and total, such as `1/3`.
-- `msg` holds up to 2000 ASCII bytes of base64-encoded JSON, then the library
-  applies OSC's normal base64 text encoding. Concatenate the decoded messages
-  in part order, base64-decode, and JSON-decode to recover the error.
-- JSON preserves `code`, `message`, `timestamp` (including subsecond precision)
-  and `idempotency_key`. Splitting avoids the library's silent 2048-byte message
-  truncation, including for 1000-character Unicode diagnostics. Encoding before
-  splitting also preserves newlines, tabs and other controls.
-- Redaction happens **before** encoding. Error reports emitted by the bootstrap
-  bypass the program-status describer and the log redactor, because processing
-  encoded data again cannot safely redact it and could corrupt the envelope.
+- Both the Local Job API and OSC extractor use the same validation/redaction
+  function: registered secrets, runtime additions, Buildkite token prefixes,
+  URL credentials and query strings are masked before the API's 1000-character
+  truncation. Invalid, blank, malformed or incomplete OSC does not create errors.
+- **Only the extracted API copy is sanitized.** Original encoded OSC remains
+  in stored logs, even when it contains a secret. Base64 is not encryption.
+  Redaction is best effort, not a guarantee against arbitrary sensitive text or
+  secrets altered/truncated by a producer before extraction.
+- The library's encoder replaces controls, including newlines/tabs, with spaces
+  and caps `msg` at 2048 decoded bytes. Its parser rejects control-containing or
+  oversized messages rather than accepting arbitrary base64 data. Consequently,
+  multiline formatting and long Unicode diagnostics can differ from direct API
+  captures. There is no private chunking, nested encoding or JSON convention.
+- Classifier transport is out of scope. The backend requires a code, so OSC
+  captures use `buildkite.osc_error`. Timestamp and idempotency key are generated
+  at extraction, not copied from the direct capture. `app`/`id` are not trusted
+  identities or classifier fields.
+- OSC is a status protocol whose records replace previous visible status.
+  This experiment instead captures every complete `state=error` observation as
+  an independent API error; it does not deduplicate repeated status messages.
 
 #### Differences and open questions
 
-- `capture-error` success now acknowledges local validation and the OSC write,
-  **not upstream API acceptance**. Later delivery failure appears in agent logs,
-  not as a command failure or Local Job API response. Truncation warnings still
-  reach the caller. The parent stops delivery after 404/422; 429/5xx do not
-  disable later reports. Requests are single-attempt with a two-second timeout.
-- Delivery is synchronous in the parent log writer, so a slow API can delay
-  draining output by up to two seconds per report. There is no durable queue,
-  retry or stored-log replay. Incomplete, malformed or interrupted envelopes are
-  not emitted. Assembly is bounded to 16 pending errors of at most 16 parts each.
-- This is not an authenticated channel: job output can forge this private
-  envelope, and the parent does not have bootstrap's live secret registry.
-  Direct hand-written OSC envelopes bypass Local Job API redaction. **Keep
-  plugins on `job capture-error`; do not use raw OSC to report sensitive data.**
-  Establishing a safe boundary for arbitrary producers is required before rollout.
-- Raw OSC payloads now persist in stored logs, including redacted diagnostics
-  that previously existed only in the errors API. Base64 is not encryption.
-  Consumers that strip escape sequences lose the transport, and independently
-  merged stdout/stderr streams can corrupt frames if interleaved mid-sequence.
-- Standalone bootstrap has no parent consumer. Mixed-version parent/bootstrap
-  deployments and Kubernetes/container output forwarding need compatibility and
-  interruption testing before rollout. The existing Local Job API OS and socket
-  requirements have not been removed.
+- Existing capture-error success semantics are unchanged. Printing OSC confirms
+  a local write, not backend acceptance. Delivery failures do not fail the job.
+- Delivery is synchronous and can delay output by up to two seconds per report.
+  There is no durable queue, retry or stored-log replay. Requests stop after
+  404/422; 429/5xx do not disable later reports. These quotas can affect the two
+  comparison paths independently.
+- Any process writing job output can create an error. Validation/redaction is
+  not authentication. Interleaved or stripped escape sequences can lose reports.
+- Mixed-version and Kubernetes/container forwarding need compatibility testing.
+  Existing plugin calls retain their capability/socket requirements; raw OSC
+  producers do not use those calls.
 
 ### `interpolation-prefers-runtime-env`
 
