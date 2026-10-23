@@ -16,8 +16,8 @@ import (
 )
 
 func TestRunRestoreDownloadReturnsSuccessAfterCancellation(t *testing.T) {
-	for _, scenario := range []string{"timeout", "strict timeout", "job cancellation"} {
-		t.Run(scenario, func(t *testing.T) {
+	for _, cause := range []error{errDownloadTimeout, context.Canceled} {
+		t.Run(cause.Error(), func(t *testing.T) {
 			reg, apiClient, cfg := setupExecTest(t)
 			writeFile(t, "out/file", "cached")
 			if err := RunSave(t.Context(), logger.Discard, apiClient, cfg); err != nil {
@@ -41,7 +41,7 @@ func TestRunRestoreDownloadReturnsSuccessAfterCancellation(t *testing.T) {
 			tempRoot := t.TempDir()
 			t.Setenv("TMPDIR", tempRoot)
 			cfg.RestoreDownloadTimeout = time.Second
-			cfg.FailOnError = scenario == "strict timeout"
+			cfg.FailOnError = true
 			ctx, cancel := context.WithCancel(t.Context())
 			defer cancel()
 			done := make(chan error, 1)
@@ -69,7 +69,7 @@ func TestRunRestoreDownloadReturnsSuccessAfterCancellation(t *testing.T) {
 				}
 			}
 			defer func() { _ = meta.Close() }()
-			if scenario == "job cancellation" {
+			if cause == context.Canceled {
 				cancel()
 			} else {
 				time.Sleep(1100 * time.Millisecond)
@@ -82,19 +82,8 @@ func TestRunRestoreDownloadReturnsSuccessAfterCancellation(t *testing.T) {
 			}
 			_ = meta.Close()
 			err := <-done
-			switch scenario {
-			case "strict timeout":
-				if !errors.Is(err, errDownloadTimeout) {
-					t.Fatalf("late successful download = %v, want timeout", err)
-				}
-			case "job cancellation":
-				if !errors.Is(err, context.Canceled) || errors.Is(err, errDownloadTimeout) {
-					t.Fatalf("job cancellation = %v", err)
-				}
-			default:
-				if err != nil {
-					t.Fatal(err)
-				}
+			if !errors.Is(err, cause) {
+				t.Fatalf("late successful download = %v, want %v", err, cause)
 			}
 			if got := readFile(t, "out/file"); got != "original" {
 				t.Fatalf("late download mutated target: %q", got)

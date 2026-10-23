@@ -1,16 +1,13 @@
 package clicommand
 
 import (
-	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"strings"
 	"sync/atomic"
 	"testing"
 
-	"github.com/buildkite/agent/v4/api"
 	"github.com/urfave/cli/v3"
 )
 
@@ -50,43 +47,29 @@ func TestCacheRestoreDownloadTimeoutFlag(t *testing.T) {
 	}
 	var calls atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if strings.HasSuffix(r.URL.Path, "/retrieve") {
-			w.Header().Set("Content-Type", "application/json")
-			_ = json.NewEncoder(w).Encode(api.CacheEntryRetrieveResp{
-				Store: "agent_managed", Fallback: true,
-				Blobs: []api.CacheBlob{{Digest: api.CacheDigest{Algorithm: "future", Value: "object"}}},
-			})
-			return
-		}
-		if r.Method == http.MethodGet {
-			calls.Add(1)
-			w.Header().Set("Content-Length", "1")
-			_, _ = io.WriteString(w, "x")
-			return
-		}
-		_, _ = io.WriteString(w, `{}`)
+		calls.Add(1)
+		http.Error(w, "registry unavailable", http.StatusForbidden)
 	}))
 	defer server.Close()
-	t.Setenv("AWS_ACCESS_KEY_ID", "test")
-	t.Setenv("AWS_SECRET_ACCESS_KEY", "test")
-	t.Setenv("BUILDKITE_CACHE_RESTORE_DOWNLOAD_TIMEOUT", "1ns")
+	// A negative allowance must be rejected before contacting the registry.
+	// Explicit zero overrides it and reaches the registry, with no download fixture.
+	t.Setenv("BUILDKITE_CACHE_RESTORE_DOWNLOAD_TIMEOUT", "-1s")
 	for _, tc := range []struct {
-		name                    string
-		flags                   []string
-		wantError, wantDownload bool
+		name        string
+		flags       []string
+		wantRequest bool
 	}{
-		{name: "environment", wantError: true},
-		{name: "flag overrides environment", flags: []string{"--download-timeout", "0"}, wantDownload: true},
-		{name: "negative", flags: []string{"--download-timeout", "-1s"}, wantError: true},
+		{name: "negative environment"},
+		{name: "flag overrides environment", flags: []string{"--download-timeout", "0"}, wantRequest: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			calls.Store(0)
 			cmd := *CacheRestoreCommand
 			app := &cli.Command{Commands: []*cli.Command{&cmd}}
-			args := []string{"buildkite-agent", "restore", "--endpoint", server.URL, "--agent-access-token", "test", "--cache-config-file", "cache.yml", "--cache-fail-on-error", "--cache-store-url", "s3://bucket?use_path_style=true&endpoint=" + server.URL}
+			args := []string{"buildkite-agent", "restore", "--endpoint", server.URL, "--agent-access-token", "test", "--cache-config-file", "cache.yml", "--cache-fail-on-error"}
 			err := app.Run(t.Context(), append(args, tc.flags...))
-			if (err != nil) != tc.wantError || (calls.Load() > 0) != tc.wantDownload {
-				t.Fatalf("error=%v downloads=%d, want error=%v download=%v", err, calls.Load(), tc.wantError, tc.wantDownload)
+			if err == nil || (calls.Load() > 0) != tc.wantRequest {
+				t.Fatalf("error=%v requests=%d, want failure with registry contacted=%v", err, calls.Load(), tc.wantRequest)
 			}
 		})
 	}

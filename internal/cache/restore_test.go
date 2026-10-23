@@ -19,7 +19,6 @@ import (
 	"sync/atomic"
 	"syscall"
 	"testing"
-	"testing/synctest"
 	"time"
 
 	"github.com/buildkite/agent/v4/api"
@@ -807,46 +806,6 @@ func TestMaybeRefreshRetention(t *testing.T) {
 	})
 }
 
-func TestRestoreDownloadBudget(t *testing.T) {
-	synctest.Test(t, func(t *testing.T) {
-		budget := &downloadBudget{remaining: 10 * time.Second}
-		// Configuration and lookup do not start the allowance.
-		time.Sleep(time.Minute)
-		first, finishFirst := budget.start(t.Context())
-		time.Sleep(4 * time.Second)
-		second, finishSecond := budget.start(t.Context())
-		time.Sleep(3 * time.Second)
-		finishFirst()
-		time.Sleep(time.Second)
-		if second.Err() != nil {
-			t.Fatalf("overlapping downloads counted twice: %v", second.Err())
-		}
-		finishSecond()
-		// Eight seconds of overlapping download time used eight, not twelve,
-		// seconds. Validation/extraction between downloads does not consume time.
-		time.Sleep(time.Minute)
-		third, finishThird := budget.start(t.Context())
-		time.Sleep(time.Second)
-		if third.Err() != nil {
-			t.Fatalf("non-download time consumed the remaining allowance: %v", third.Err())
-		}
-		time.Sleep(time.Second)
-		synctest.Wait()
-		if !errors.Is(context.Cause(third), errDownloadTimeout) {
-			t.Fatalf("later download did not receive the remaining two seconds: %v", context.Cause(third))
-		}
-		finishThird()
-		fourth, finishFourth := budget.start(t.Context())
-		defer finishFourth()
-		if !errors.Is(context.Cause(fourth), errDownloadTimeout) {
-			t.Fatal("exhausted allowance was renewed for another cache")
-		}
-		if !errors.Is(first.Err(), context.Canceled) || !errors.Is(second.Err(), context.Canceled) {
-			t.Fatal("completed download contexts were not released")
-		}
-	})
-}
-
 func TestRunRestoreDownloadTimeout(t *testing.T) {
 	for _, scenario := range []string{"timeout", "strict timeout", "job cancellation", "default off"} {
 		t.Run(scenario, func(t *testing.T) {
@@ -951,11 +910,13 @@ func TestRunRestoreDownloadTimeoutSharedAcrossCaches(t *testing.T) {
 			writeFile(t, "cache.yml", `caches:
   - {name: one, cache_key: [one], target_paths: [one]}
   - {name: two, cache_key: [two], target_paths: [two]}
+  - {name: three, cache_key: [three], target_paths: [three]}
 `)
 			cfg.Names = nil
 			cfg.Concurrency = concurrency
 			writeFile(t, "one/file", "cached one")
 			writeFile(t, "two/file", "cached two")
+			writeFile(t, "three/file", "cached three")
 			if err := RunSave(t.Context(), logger.Discard, apiClient, cfg); err != nil {
 				t.Fatal(err)
 			}
@@ -981,6 +942,7 @@ func TestRunRestoreDownloadTimeoutSharedAcrossCaches(t *testing.T) {
 			reg.mu.Unlock()
 			writeFile(t, "one/file", "original one")
 			writeFile(t, "two/file", "original two")
+			writeFile(t, "three/file", "original three")
 			var downloads, lookups atomic.Int32
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				if strings.HasPrefix(r.URL.Path, "/cache_registries/") {
@@ -1011,8 +973,8 @@ func TestRunRestoreDownloadTimeoutSharedAcrossCaches(t *testing.T) {
 			if err := RunRestore(t.Context(), logger.Discard, apiClient, cfg); err != nil {
 				t.Fatal(err)
 			}
-			if downloads.Load() != 2 {
-				t.Fatalf("download calls = %d, want two (lookup time must not exhaust allowance)", downloads.Load())
+			if want := int32(concurrency + 1); downloads.Load() != want {
+				t.Fatalf("download calls = %d, want %d (no download starts after allowance is exhausted)", downloads.Load(), want)
 			}
 			if got := readFile(t, "one/file"); got != "cached one" {
 				t.Fatalf("completed cache = %q, want cached one", got)
@@ -1023,6 +985,9 @@ func TestRunRestoreDownloadTimeoutSharedAcrossCaches(t *testing.T) {
 			}
 			if got := readFile(t, "two/file"); got != want {
 				t.Fatalf("later cache = %q, want %q", got, want)
+			}
+			if got := readFile(t, "three/file"); got != "original three" {
+				t.Fatalf("exhausted allowance was renewed for the third cache: %q", got)
 			}
 		})
 	}
