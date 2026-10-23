@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"github.com/buildkite/agent/v4/internal/shell"
-	"github.com/wolfeidau/osc7501"
+	"github.com/buildkite/osc7501"
 )
 
 func TestJobStatusDescribesSignalledExits(t *testing.T) {

@@ -7,7 +7,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/wolfeidau/osc7501"
+	"github.com/buildkite/osc7501"
 )
 
 // maxProgramStatusRecords bounds how many records ProgramStatusWriter

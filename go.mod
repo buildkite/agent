@@ -25,6 +25,7 @@ require (
 	github.com/buildkite/go-buildkite/v4 v4.23.0
 	github.com/buildkite/go-pipeline v0.18.1
 	github.com/buildkite/interpolate v0.1.5
+	github.com/buildkite/osc7501 v0.3.0
 	github.com/buildkite/roko v1.4.0
 	github.com/buildkite/shellwords v1.0.1
 	github.com/coreos/go-systemd/v22 v22.7.0
@@ -46,7 +47,6 @@ require (
 	github.com/puzpuzpuz/xsync/v2 v2.5.1
 	github.com/qri-io/jsonschema v0.2.1
 	github.com/urfave/cli/v3 v3.14.0
-	github.com/wolfeidau/osc7501 v0.2.1
 	github.com/wolfeidau/quickzip v1.0.3
 	go.opentelemetry.io/contrib/propagators/aws v1.47.0
 	go.opentelemetry.io/contrib/propagators/b3 v1.47.0
