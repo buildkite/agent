@@ -3,7 +3,10 @@ package clicommand
 import (
 	"context"
 	"fmt"
+	"os"
+	"os/signal"
 	"slices"
+	"syscall"
 	"time"
 
 	"github.com/buildkite/agent/v4/api"
@@ -118,6 +121,15 @@ var CacheRestoreCommand = &cli.Command{
 		},
 	}),
 	Action: func(ctx context.Context, c *cli.Command) error {
+		// Let downloads join their writers and remove temporary files when the
+		// job is stopped, rather than exiting in the middle of a transfer.
+		ctx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
+		defer stop()
+		go func(ctx context.Context) {
+			<-ctx.Done()
+			// Restore default handling so another signal can terminate stuck I/O.
+			stop()
+		}(ctx)
 		ctx, cfg, l, _, done := setupLoggerAndConfig[CacheRestoreConfig](ctx, c)
 		defer done()
 		ctx, span := otel.Tracer("buildkite-agent").Start(ctx, "cache-restore")
