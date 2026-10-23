@@ -64,7 +64,9 @@ done <<< "${baseline_shas}"
 
 args=(sync --no-branch-ref-detection "--release-version=v${agent_version}")
 if [[ "${has_baseline}" == "false" ]]; then
-  previous_tag="$(git tag --merged HEAD --sort=-version:refname \
+  # Later releases may contain unsynced issues, so keep the bootstrap range fixed.
+  integration_commit="$(git log --diff-filter=A --format=%H -- .buildkite/steps/sync-linear-release.sh | tail -n 1)"
+  previous_tag="$(git tag --merged "${integration_commit}" --sort=-version:refname \
     | ruby -e '
       version = Gem::Version.new(ARGV.fetch(0))
       puts STDIN.each_line.map(&:strip).find { |tag|
