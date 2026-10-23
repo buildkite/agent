@@ -11,7 +11,7 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/wolfeidau/osc7501"
+	"github.com/buildkite/osc7501"
 	"golang.org/x/term"
 )
 

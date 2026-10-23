@@ -6,8 +6,8 @@ import (
 	"testing"
 
 	"github.com/buildkite/agent/v4/internal/programstatus"
+	"github.com/buildkite/osc7501"
 	"github.com/google/go-cmp/cmp"
-	"github.com/wolfeidau/osc7501"
 )
 
 func TestUploadStatus(t *testing.T) {

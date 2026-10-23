@@ -116,6 +116,8 @@ github.com/buildkite/go-pipeline v0.18.1 h1:24vuQtRrHoLTC+ywuG7/C6I1TYiiP/ib2sCM
 github.com/buildkite/go-pipeline v0.18.1/go.mod h1:6Mcx4gDQBMBsWEdRpPi1JEuxWlam11zaT3J/6/v8lN0=
 github.com/buildkite/interpolate v0.1.5 h1:v2Ji3voik69UZlbfoqzx+qfcsOKLA61nHdU79VV+tPU=
 github.com/buildkite/interpolate v0.1.5/go.mod h1:dHnrwHew5O8VNOAgMDpwRlFnhL5VSN6M1bHVmRZ9Ccc=
+github.com/buildkite/osc7501 v0.3.0 h1:6YCUJfTLPJs+hDhjdw6s7j0mBrQeFJgVdTnqwJjOZtc=
+github.com/buildkite/osc7501 v0.3.0/go.mod h1:bGsSNyYS5ECgws+5M7bNhm+fH1EdoUJ2uRFRoNNBwFA=
 github.com/buildkite/roko v1.4.0 h1:DxixoCdpNqxu4/1lXrXbfsKbJSd7r1qoxtef/TT2J80=
 github.com/buildkite/roko v1.4.0/go.mod h1:0vbODqUFEcVf4v2xVXRfZZRsqJVsCCHTG/TBRByGK4E=
 github.com/buildkite/shellwords v1.0.1 h1:88OjMbEBf+EliVB0tizXJynpAM2CKOvYwepg5n8O70M=
@@ -295,8 +297,6 @@ github.com/valyala/fastjson v1.6.10 h1:/yjJg8jaVQdYR3arGxPE2X5z89xrlhS0eGXdv+ADT
 github.com/valyala/fastjson v1.6.10/go.mod h1:e6FubmQouUNP73jtMLmcbxS6ydWIpOfhz34TSfO3JaE=
 github.com/vektah/gqlparser/v2 v2.5.32 h1:k9QPJd4sEDTL+qB4ncPLflqTJ3MmjB9SrVzJrawpFSc=
 github.com/vektah/gqlparser/v2 v2.5.32/go.mod h1:c1I28gSOVNzlfc4WuDlqU7voQnsqI6OG2amkBAFmgts=
-github.com/wolfeidau/osc7501 v0.1.0 h1:TkKtM51PBn8BOQviTqEC9voHXLhO2riR9FydDalFClM=
-github.com/wolfeidau/osc7501 v0.1.0/go.mod h1:BXJLnwGjkj9GfujZL/ND26Qv9W/4LPtlfdNCV7PG2Fc=
 github.com/wolfeidau/quickzip v1.0.3 h1:ThEzyN1RccCCeZqDvF7mM8gZxveOFaUTIinAA/HvsgU=
 github.com/wolfeidau/quickzip v1.0.3/go.mod h1:ZDvxJMzI2iVp6CavOqxFq1tORhRyuxCDFw4HO25RbuA=
 github.com/zeebo/assert v1.3.0 h1:g7C04CbJuIDKNPFHmsk4hwZDO5O+kntRxzaUoNXj+IQ=

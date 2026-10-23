@@ -13,8 +13,8 @@ import (
 	"github.com/buildkite/agent/v4/agent/plugin"
 	"github.com/buildkite/agent/v4/internal/experiments"
 	"github.com/buildkite/bintest/v3"
+	"github.com/buildkite/osc7501"
 	"github.com/google/go-cmp/cmp"
-	"github.com/wolfeidau/osc7501"
 )
 
 func TestProgramStatusReportsPhasesAndHooks(t *testing.T) {
