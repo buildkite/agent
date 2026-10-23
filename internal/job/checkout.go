@@ -259,7 +259,7 @@ func (e *Executor) checkout(ctx context.Context) error {
 				e.shell.Warningf("Checkout failed! %s", err)
 				r.Break()
 
-			case shell.IsExitError(err) && shell.ExitCode(err) == -1:
+			case shell.IsExitSignaled(err):
 				e.shell.Warningf("Checkout was interrupted by a signal")
 				r.Break()
 
