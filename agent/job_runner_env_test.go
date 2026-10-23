@@ -1,11 +1,13 @@
 package agent
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"regexp"
 	"runtime"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -154,6 +156,67 @@ func TestCreateEnvironmentRepositoryAllowlist(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestCreateEnvironmentShellFormatPreservesTrailingBackslash(t *testing.T) {
+	t.Parallel()
+
+	jobEnv := map[string]string{
+		"BASE_DIR":    `C:\Program Files (x86)\CODE\`,
+		"MULTI_SLASH": `ends with two\\`,
+		"QUOTED":      "say \"hi\"\nC:\\path",
+		"PLAIN":       "ordinary",
+		"NEXT":        "kept-separate",
+	}
+	r := controlPlaneTestRunner(t, jobEnv, AgentConfiguration{})
+	if _, err := r.createEnvironment(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+
+	data, err := os.ReadFile(r.envShellFile.Name())
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]string{}
+	for line := range strings.SplitSeq(string(data), "\n") {
+		key, value, ok := strings.Cut(line, "=")
+		if !ok {
+			continue
+		}
+		// A backslash immediately before the closing quote escapes it, so the
+		// value runs into the next entry.
+		if strings.HasSuffix(value, `\"`) {
+			t.Errorf("%s escapes its closing quote: %s", key, line)
+		}
+		unquoted, err := strconv.Unquote(value)
+		if err != nil {
+			t.Errorf("strconv.Unquote(%q) error = %v", value, err)
+			continue
+		}
+		got[key] = unquoted
+	}
+	for key, want := range jobEnv {
+		if got[key] != want {
+			t.Errorf("shell %s = %q, want %q", key, got[key], want)
+		}
+	}
+	if strings.Contains(got["BASE_DIR"], "kept-separate") || strings.Contains(got["MULTI_SLASH"], "kept-separate") {
+		t.Errorf("trailing backslash merged NEXT into another value: %#v", got)
+	}
+
+	jsonData, err := os.ReadFile(r.envJSONFile.Name())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var jsonEnv map[string]string
+	if err := json.Unmarshal(jsonData, &jsonEnv); err != nil {
+		t.Fatal(err)
+	}
+	for key, want := range jobEnv {
+		if jsonEnv[key] != want {
+			t.Errorf("json %s = %q, want %q", key, jsonEnv[key], want)
+		}
 	}
 }
 

@@ -603,16 +603,26 @@ BUILDKITE_AGENT_JWKS_KEY_ID`
 		}
 
 		for key, value := range env {
-			// Note that the value below is %q-quoted, and not shell-escaped.
-			// Env files are designed to be validated by the pre-bootstrap hook.
-			// Because the job env may contain untrusted or even dangerous env
-			// vars (suppose a user adds an env var in the "New Build" UI with a
-			// value that exploits a command injection in Bash), the
-			// pre-bootstrap hook should do this validation *without* sourcing
-			// the file. (If the job env was universally safe, then we wouldn't
-			// bother using a file - we'd load it straight into the subprocess
-			// env.)
-			if _, err := fmt.Fprintf(r.envShellFile, "%s=%q\n", key, value); err != nil {
+			// Values are Go-quoted, not shell-escaped. Env files are designed
+			// to be validated by the pre-bootstrap hook. Because the job env
+			// may contain untrusted or even dangerous env vars (suppose a user
+			// adds an env var in the "New Build" UI with a value that exploits
+			// a command injection in Bash), the pre-bootstrap hook should do
+			// this validation *without* sourcing the file. (If the job env was
+			// universally safe, then we wouldn't bother using a file - we'd
+			// load it straight into the subprocess env.)
+			//
+			// strconv.Quote encodes a final backslash as \\ right before the
+			// closing quote. Parsers that treat \" as an escaped quote then
+			// consume the next env entry; Windows paths often end in \. \x5c
+			// is that same byte and leaves the closing quote unescaped.
+			// strconv.Unquote still round-trips the value, including embedded
+			// newlines, which Quote encodes as \n.
+			quoted := strconv.Quote(value)
+			if strings.HasSuffix(value, `\`) {
+				quoted = strings.TrimSuffix(quoted, `\\"`) + `\x5c"`
+			}
+			if _, err := fmt.Fprintf(r.envShellFile, "%s=%s\n", key, quoted); err != nil {
 				return nil, err
 			}
 		}
