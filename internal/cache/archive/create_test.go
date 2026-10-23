@@ -15,6 +15,74 @@ import (
 	"github.com/klauspost/compress/zip"
 )
 
+func TestBuildAndExtractArchive_EntryMethods(t *testing.T) {
+	_, err := trace.NewProvider(t.Context(), "noop", "test", "0.0.1")
+	if err != nil {
+		t.Fatalf("trace.NewProvider: %v", err)
+	}
+
+	for _, test := range []struct {
+		name       string
+		method     entryMethod
+		production bool
+	}{
+		{name: "zstd", method: entryMethodZstd, production: true},
+		{name: "store", method: entryMethodStore},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			home := t.TempDir()
+			setHomeDir(t, home)
+			cacheDir := filepath.Join(home, "cache")
+			writeTestFile(t, filepath.Join(cacheDir, "payload.txt"), strings.Repeat("cache payload ", 1_000))
+
+			var info *ArchiveInfo
+			var err error
+			if test.production {
+				info, err = BuildArchive(t.Context(), []string{"~/cache"}, test.name)
+			} else {
+				info, err = buildArchive(t.Context(), []string{"~/cache"}, test.name, test.method)
+			}
+			if err != nil {
+				t.Fatalf("buildArchive: %v", err)
+			}
+			defer func() { _ = os.Remove(info.ArchivePath) }()
+
+			f := openArchive(t, info)
+			reader, err := zip.NewReader(f, info.Size)
+			if err != nil {
+				t.Fatalf("zip.NewReader: %v", err)
+			}
+			foundPayload := false
+			for _, entry := range reader.File {
+				if entry.Name == "_0/cache/payload.txt" && entry.Method != uint16(test.method) {
+					t.Errorf("payload method = %d, want %d", entry.Method, test.method)
+				}
+				foundPayload = foundPayload || entry.Name == "_0/cache/payload.txt"
+			}
+			if !foundPayload {
+				t.Fatal("archive does not contain payload entry")
+			}
+
+			if err := os.RemoveAll(cacheDir); err != nil {
+				t.Fatalf("RemoveAll: %v", err)
+			}
+			if _, err := f.Seek(0, io.SeekStart); err != nil {
+				t.Fatalf("Seek: %v", err)
+			}
+			if _, err := ExtractFiles(t.Context(), f, info.Size, []string{"~/cache"}); err != nil {
+				t.Fatalf("ExtractFiles: %v", err)
+			}
+			got, err := os.ReadFile(filepath.Join(cacheDir, "payload.txt"))
+			if err != nil {
+				t.Fatalf("ReadFile: %v", err)
+			}
+			if want := strings.Repeat("cache payload ", 1_000); string(got) != want {
+				t.Error("restored payload differs from source")
+			}
+		})
+	}
+}
+
 func TestRemoveZip64Extra(t *testing.T) {
 	field := func(tag uint16, data ...byte) []byte {
 		b := make([]byte, 4+len(data))
