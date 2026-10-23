@@ -61,6 +61,7 @@ caches:
       - ~/.gocache-target
 
   - name: acknowledgements
+    # Used with cache exec, which skips go-licenses on an exact key match.
     # We use go.mod as a stand-in for imports. This can miss a new licence from
     # an existing module, but that seems unlikely and keeps the cache useful.
     # go-licenses output also varies by GOOS/GOARCH (google/go-licenses#187).
