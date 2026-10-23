@@ -28,6 +28,13 @@ const nscScheme = "nsc"
 // supply a retention (older server).
 const nscDefaultRetention = "72h"
 
+// nsc exposes no HTTP timeout controls. Bound a stalled download by observing
+// writes in its private download directory, including the CLI's temporary file
+// (ranged downloads preallocate it, so size alone is not a progress signal).
+var nscDownloadIdleTimeout = time.Minute
+
+var errNscDownloadStalled = errors.New("nsc cache download stalled (no filesystem write activity)")
+
 // nscRetentionArg formats a retention duration for nsc's --expires_in / --ensure_minimum
 // flags, rounding up to whole hours. A zero or negative duration falls back to nscDefaultRetention.
 func nscRetentionArg(retention time.Duration) string {
@@ -212,7 +219,44 @@ func (n *NscStore) Download(ctx context.Context, key, filePath string) (*Transfe
 	start := time.Now()
 
 	// Execute nsc artifact download command
+	ctx, cancel := context.WithCancelCause(ctx)
+	defer cancel(nil)
+	// Windows can defer an open file's last-write timestamp until its writer
+	// closes. Metadata cannot distinguish a healthy ranged download from a
+	// stall there; only the caller's context bounds it, and run joins on cancel.
+	if runtime.GOOS != "windows" {
+		stop, stopped := make(chan struct{}), make(chan struct{})
+		go func() {
+			defer close(stopped)
+			ticker := time.NewTicker(nscDownloadIdleTimeout / 4)
+			defer ticker.Stop()
+			lastWrite := time.Now()
+			for {
+				select {
+				case <-stop:
+					return
+				case <-ctx.Done():
+					return
+				case now := <-ticker.C:
+					entries, _ := os.ReadDir(filepath.Dir(filePath))
+					for _, entry := range entries {
+						if info, err := entry.Info(); err == nil && info.ModTime().After(lastWrite) {
+							lastWrite = info.ModTime()
+						}
+					}
+					if now.Sub(lastWrite) >= nscDownloadIdleTimeout {
+						cancel(errNscDownloadStalled)
+						return
+					}
+				}
+			}
+		}()
+		defer func() { close(stop); <-stopped }()
+	}
 	result, err := n.run(ctx, "", n.artifactArgs("download", key, filePath)...)
+	if ctx.Err() != nil {
+		return nil, errors.Join(ctx.Err(), context.Cause(ctx))
+	}
 	if errors.Is(err, errCacheStorageUnreachable) {
 		return nil, err
 	}
