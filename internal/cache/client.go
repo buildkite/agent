@@ -60,6 +60,8 @@ type client struct {
 	force      bool
 	caches     []configuration.Cache
 	onProgress ProgressCallback
+	// Set only by RunRestore; exec and save retain their own policies.
+	downloadBudget *downloadBudget
 }
 
 // newClient builds a client from apiClient and cfg: loads and expands the

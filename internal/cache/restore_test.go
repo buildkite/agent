@@ -16,8 +16,10 @@ import (
 	"reflect"
 	"runtime"
 	"strings"
+	"sync/atomic"
 	"syscall"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/buildkite/agent/v4/api"
@@ -803,4 +805,266 @@ func TestMaybeRefreshRetention(t *testing.T) {
 
 		maybeRefreshRetention(t.Context(), blob, false, "key", 48*time.Hour) // must not panic
 	})
+}
+
+func TestRestoreDownloadBudget(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		budget := &downloadBudget{remaining: 10 * time.Second}
+		// Configuration and lookup do not start the allowance.
+		time.Sleep(time.Minute)
+		first, finishFirst := budget.start(t.Context())
+		time.Sleep(4 * time.Second)
+		second, finishSecond := budget.start(t.Context())
+		time.Sleep(3 * time.Second)
+		finishFirst()
+		time.Sleep(time.Second)
+		if second.Err() != nil {
+			t.Fatalf("overlapping downloads counted twice: %v", second.Err())
+		}
+		finishSecond()
+		// Eight seconds of overlapping download time used eight, not twelve,
+		// seconds. Validation/extraction between downloads does not consume time.
+		time.Sleep(time.Minute)
+		third, finishThird := budget.start(t.Context())
+		time.Sleep(time.Second)
+		if third.Err() != nil {
+			t.Fatalf("non-download time consumed the remaining allowance: %v", third.Err())
+		}
+		time.Sleep(time.Second)
+		synctest.Wait()
+		if !errors.Is(context.Cause(third), errDownloadTimeout) {
+			t.Fatalf("later download did not receive the remaining two seconds: %v", context.Cause(third))
+		}
+		finishThird()
+		fourth, finishFourth := budget.start(t.Context())
+		defer finishFourth()
+		if !errors.Is(context.Cause(fourth), errDownloadTimeout) {
+			t.Fatal("exhausted allowance was renewed for another cache")
+		}
+		if !errors.Is(first.Err(), context.Canceled) || !errors.Is(second.Err(), context.Canceled) {
+			t.Fatal("completed download contexts were not released")
+		}
+	})
+}
+
+func TestRunRestoreDownloadTimeout(t *testing.T) {
+	for _, scenario := range []string{"timeout", "strict timeout", "job cancellation", "default off"} {
+		t.Run(scenario, func(t *testing.T) {
+			reg, apiClient, cfg := setupExecTest(t)
+			writeFile(t, "out/file", "cached")
+			if err := RunSave(t.Context(), logger.Discard, apiClient, cfg); err != nil {
+				t.Fatal(err)
+			}
+			writeFile(t, "out/file", "original")
+			blobURL, _ := url.Parse(cfg.BucketURL)
+			storageRoot := filepath.FromSlash(blobURL.Path)
+			if runtime.GOOS == "windows" {
+				storageRoot = strings.TrimPrefix(storageRoot, `\`)
+			}
+			reg.mu.Lock()
+			for key, entry := range reg.entries {
+				entry.Store = store.AgentManaged
+				entry.Fallback = true // No TTL refresh; the remote entry must stay intact.
+				reg.entries[key] = entry
+			}
+			reg.mu.Unlock()
+			ctx, cancel := context.WithCancel(t.Context())
+			defer cancel()
+			stopped := make(chan struct{})
+			blobServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				defer close(stopped)
+				data, err := os.ReadFile(filepath.Join(storageRoot, filepath.Base(r.URL.Path)))
+				if err != nil {
+					t.Error(err)
+					http.NotFound(w, r)
+					return
+				}
+				w.Header().Set("Content-Length", fmt.Sprint(len(data)))
+				_, _ = w.Write(data[:1])
+				w.(http.Flusher).Flush()
+				switch scenario {
+				case "job cancellation":
+					cancel()
+				case "default off":
+					time.Sleep(50 * time.Millisecond)
+					_, _ = w.Write(data[1:])
+					return
+				}
+				<-r.Context().Done()
+			}))
+			defer blobServer.Close()
+			t.Setenv("AWS_ACCESS_KEY_ID", "test")
+			t.Setenv("AWS_SECRET_ACCESS_KEY", "test")
+			cfg.BucketURL = "s3://bucket?use_path_style=true&endpoint=" + blobServer.URL
+			cfg.RestoreDownloadTimeout = 200 * time.Millisecond
+			cfg.FailOnError = scenario == "strict timeout"
+			switch scenario {
+			case "default off":
+				cfg.RestoreDownloadTimeout = 0
+			case "job cancellation":
+				cfg.RestoreDownloadTimeout = time.Hour
+			}
+			tempRoot := t.TempDir()
+			for _, name := range []string{"TMPDIR", "TMP", "TEMP"} {
+				t.Setenv(name, tempRoot)
+			}
+			err := RunRestore(ctx, logger.Discard, apiClient, cfg)
+			switch scenario {
+			case "strict timeout":
+				if !errors.Is(err, errDownloadTimeout) {
+					t.Fatalf("strict timeout = %v", err)
+				}
+			case "job cancellation":
+				if !errors.Is(err, context.Canceled) || errors.Is(err, errDownloadTimeout) {
+					t.Fatalf("job cancellation = %v", err)
+				}
+			default:
+				if err != nil {
+					t.Fatal(err)
+				}
+			}
+			<-stopped
+			want := "original"
+			if scenario == "default off" {
+				want = "cached"
+			}
+			if got := readFile(t, "out/file"); got != want {
+				t.Fatalf("target = %q, want %q", got, want)
+			}
+			entries, err := os.ReadDir(tempRoot)
+			if err != nil || len(entries) != 0 {
+				t.Fatalf("temporary download remains after writer shutdown: %v, %v", entries, err)
+			}
+			reg.mu.Lock()
+			defer reg.mu.Unlock()
+			if len(reg.entries) != 1 {
+				t.Fatal("download timeout expired remote entry")
+			}
+		})
+	}
+}
+
+func TestRunRestoreDownloadTimeoutSharedAcrossCaches(t *testing.T) {
+	for _, concurrency := range []int{1, 2} {
+		t.Run(fmt.Sprint("concurrency=", concurrency), func(t *testing.T) {
+			reg, apiClient, cfg := setupExecTest(t)
+			writeFile(t, "cache.yml", `caches:
+  - {name: one, cache_key: [one], target_paths: [one]}
+  - {name: two, cache_key: [two], target_paths: [two]}
+`)
+			cfg.Names = nil
+			cfg.Concurrency = concurrency
+			writeFile(t, "one/file", "cached one")
+			writeFile(t, "two/file", "cached two")
+			if err := RunSave(t.Context(), logger.Discard, apiClient, cfg); err != nil {
+				t.Fatal(err)
+			}
+			blobs := make(map[string][]byte)
+			blobStore, err := store.NewBlobStore(t.Context(), store.LocalFileStore, cfg.BucketURL)
+			if err != nil {
+				t.Fatal(err)
+			}
+			reg.mu.Lock()
+			for key, entry := range reg.entries {
+				digest := entry.Blobs[0].Digest.Value
+				path := filepath.Join(t.TempDir(), "blob")
+				if _, err := blobStore.Download(t.Context(), digest, path); err != nil {
+					t.Fatal(err)
+				}
+				blobs[digest], err = os.ReadFile(path)
+				if err != nil {
+					t.Fatal(err)
+				}
+				entry.Store, entry.Fallback = store.AgentManaged, true
+				reg.entries[key] = entry
+			}
+			reg.mu.Unlock()
+			writeFile(t, "one/file", "original one")
+			writeFile(t, "two/file", "original two")
+			var downloads, lookups atomic.Int32
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if strings.HasPrefix(r.URL.Path, "/cache_registries/") {
+					if concurrency == 1 && strings.HasSuffix(r.URL.Path, "/retrieve") && lookups.Add(1) == 2 {
+						// A pause longer than the allowance must not consume download time.
+						time.Sleep(3 * time.Second)
+					}
+					reg.ServeHTTP(w, r)
+					return
+				}
+				downloads.Add(1)
+				data := blobs[filepath.Base(r.URL.Path)]
+				w.Header().Set("Content-Length", fmt.Sprint(len(data)))
+				_, _ = w.Write(data[:1])
+				w.(http.Flusher).Flush()
+				select {
+				case <-time.After(1200 * time.Millisecond):
+					_, _ = w.Write(data[1:])
+				case <-r.Context().Done():
+				}
+			}))
+			defer server.Close()
+			t.Setenv("AWS_ACCESS_KEY_ID", "test")
+			t.Setenv("AWS_SECRET_ACCESS_KEY", "test")
+			cfg.BucketURL = "s3://bucket?use_path_style=true&endpoint=" + server.URL
+			cfg.RestoreDownloadTimeout = 2 * time.Second
+			apiClient = api.NewClient(logger.Discard, api.Config{Endpoint: server.URL})
+			if err := RunRestore(t.Context(), logger.Discard, apiClient, cfg); err != nil {
+				t.Fatal(err)
+			}
+			if downloads.Load() != 2 {
+				t.Fatalf("download calls = %d, want two (lookup time must not exhaust allowance)", downloads.Load())
+			}
+			if got := readFile(t, "one/file"); got != "cached one" {
+				t.Fatalf("completed cache = %q, want cached one", got)
+			}
+			want := "original two" // Serial downloads share 2s; each needs 1.2s.
+			if concurrency == 2 {
+				want = "cached two" // Overlapping downloads count once, not 2.4s.
+			}
+			if got := readFile(t, "two/file"); got != want {
+				t.Fatalf("later cache = %q, want %q", got, want)
+			}
+		})
+	}
+}
+
+func TestRestoreDownloadTimeoutDoesNotLimitExtraction(t *testing.T) {
+	for _, jobCancel := range []bool{false, true} {
+		t.Run(fmt.Sprint("job cancellation=", jobCancel), func(t *testing.T) {
+			_, apiClient, cfg := setupExecTest(t)
+			writeFile(t, "out/file", "cached")
+			if err := RunSave(t.Context(), logger.Discard, apiClient, cfg); err != nil {
+				t.Fatal(err)
+			}
+			writeFile(t, "out/file", "original")
+			c, ids, err := newClient(logger.Discard, apiClient, cfg)
+			if err != nil {
+				t.Fatal(err)
+			}
+			ctx, cancel := context.WithCancel(t.Context())
+			defer cancel()
+			c.downloadBudget = &downloadBudget{remaining: 200 * time.Millisecond}
+			c.onProgress = func(_, stage, _ string, _, _ int) {
+				if stage == "extracting" {
+					time.Sleep(400 * time.Millisecond)
+					if jobCancel {
+						cancel()
+					}
+				}
+			}
+			err = restoreWithClient(ctx, logger.Discard, c, ids, 1, true)
+			if jobCancel {
+				if !errors.Is(err, context.Canceled) {
+					t.Fatalf("extraction job cancellation = %v", err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("completed download inherited a deadline during extraction: %v", err)
+			}
+			if got := readFile(t, "out/file"); got != "cached" {
+				t.Fatalf("target = %q, want cached", got)
+			}
+		})
+	}
 }

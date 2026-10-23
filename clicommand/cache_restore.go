@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"slices"
+	"time"
 
 	"github.com/buildkite/agent/v4/api"
 	"github.com/buildkite/agent/v4/internal/cache"
@@ -37,6 +38,20 @@ exclusive access for the entire time the cache is in use, not only during restor
 Cleanup is not transactional. If cleanup fails, extraction for that cache does
 not start, but target paths may already have been modified. These failures remain
 fatal even when --cache-fail-on-error is false.
+
+--download-timeout (or BUILDKITE_CACHE_RESTORE_DOWNLOAD_TIMEOUT) sets one shared
+download allowance for all selected caches. The default is off; an explicit flag
+overrides the environment. Zero disables the timeout.
+Time counts only while at least one archive download is active; concurrent
+downloads count once, and time between downloads does not use the allowance.
+For example, --download-timeout 10m allows 10m of download-active time, not 10m
+per cache. Key calculation, registry lookup, archive verification, target cleanup,
+extraction and confirmation are not limited by this setting.
+On download timeout, active downloads stop and temporary files are removed;
+existing targets and remote caches are left untouched. Completed downloads can
+still be verified and extracted. The timeout is a miss by default, or an error
+with --cache-fail-on-error. Stopping writers and removing temporary files may
+take additional time. Job cancellation still applies throughout restore.
 
 Example:
 
@@ -88,13 +103,20 @@ type CacheRestoreConfig struct {
 	GlobalConfig
 	APIConfig
 	CacheConfig
+	DownloadTimeout time.Duration `cli:"download-timeout"`
 }
 
 var CacheRestoreCommand = &cli.Command{
 	Name:        "restore",
 	Usage:       "Restores files from the cache",
 	Description: cacheRestoreHelpDescription,
-	Flags:       slices.Concat(globalFlags(), apiFlags(), cacheFlags()),
+	Flags: slices.Concat(globalFlags(), apiFlags(), cacheFlags(), []cli.Flag{
+		&cli.DurationFlag{
+			Name:    "download-timeout",
+			Usage:   "Shared download-active time limit across selected caches (Go duration; 0 disables)",
+			Sources: cli.EnvVars("BUILDKITE_CACHE_RESTORE_DOWNLOAD_TIMEOUT"),
+		},
+	}),
 	Action: func(ctx context.Context, c *cli.Command) error {
 		ctx, cfg, l, _, done := setupLoggerAndConfig[CacheRestoreConfig](ctx, c)
 		defer done()
@@ -115,11 +137,13 @@ var CacheRestoreCommand = &cli.Command{
 
 		// Build cache configuration
 		cacheCfg := cache.Config{
-			Registry:        cfg.Registry,
-			BucketURL:       cfg.BucketURL,
-			CacheConfigFile: cacheConfigFile,
-			Names:           cfg.Names,
-			FailOnError:     cfg.FailOnError,
+			Registry:               cfg.Registry,
+			BucketURL:              cfg.BucketURL,
+			CacheConfigFile:        cacheConfigFile,
+			Names:                  cfg.Names,
+			FailOnError:            cfg.FailOnError,
+			Concurrency:            cfg.Concurrency,
+			RestoreDownloadTimeout: cfg.DownloadTimeout,
 		}
 
 		// Perform cache restore (logging happens inside)

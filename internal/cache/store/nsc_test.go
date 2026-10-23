@@ -702,3 +702,17 @@ func TestNscStore_Stat(t *testing.T) {
 		}
 	})
 }
+
+func TestNscDownloadCancellation(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	n := &NscStore{namespace: "test", run: func(context.Context, string, ...string) (*CommandResult, error) {
+		cancel()
+		// exec.CommandContext may report an exit error rather than ctx.Err().
+		return nil, errors.New("signal: killed")
+	}}
+	_, err := n.Download(ctx, "key", filepath.Join(t.TempDir(), "archive"))
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("download cancellation = %v, want context.Canceled", err)
+	}
+}

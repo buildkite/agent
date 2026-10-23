@@ -213,6 +213,9 @@ func (n *NscStore) Download(ctx context.Context, key, filePath string) (*Transfe
 
 	// Execute nsc artifact download command
 	result, err := n.run(ctx, "", n.artifactArgs("download", key, filePath)...)
+	if ctx.Err() != nil {
+		return nil, errors.Join(ctx.Err(), context.Cause(ctx))
+	}
 	if errors.Is(err, errCacheStorageUnreachable) {
 		return nil, err
 	}
