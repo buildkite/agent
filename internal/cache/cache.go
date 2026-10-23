@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"runtime"
 	"sync"
+	"time"
 
 	"github.com/buildkite/agent/v4/api"
 	"github.com/buildkite/agent/v4/internal/cache/configuration"
@@ -25,6 +26,9 @@ type Config struct {
 	Names []string
 	// Concurrency is the number of concurrent cache operations
 	Concurrency int
+	// RestoreDownloadTimeout is a shared allowance for download-active wall time.
+	// Zero disables it. Save and exec do not apply this policy.
+	RestoreDownloadTimeout time.Duration
 	// FailOnError makes a save/restore failure fatal (non-zero exit). When false
 	// (the default) a failure is logged and skipped so a cache problem never
 	// fails the build — a cache is an optimization, not a build input.
@@ -62,6 +66,9 @@ func RunSave(ctx context.Context, l logger.Logger, apiClient *api.Client, cfg Co
 // RunRestore restores caches based on the provided configuration and logs results
 // as each cache is processed.
 func RunRestore(ctx context.Context, l logger.Logger, apiClient *api.Client, cfg Config) error {
+	if cfg.RestoreDownloadTimeout < 0 {
+		return fmt.Errorf("cache restore download timeout must not be negative")
+	}
 	c, cacheIDs, err := newClient(l, apiClient, cfg)
 	if err != nil {
 		return err
@@ -69,6 +76,9 @@ func RunRestore(ctx context.Context, l logger.Logger, apiClient *api.Client, cfg
 	if c == nil {
 		l.Infof("No caches defined in the cache configuration file, nothing to restore")
 		return nil
+	}
+	if cfg.RestoreDownloadTimeout > 0 {
+		c.downloadBudget = &downloadBudget{remaining: cfg.RestoreDownloadTimeout}
 	}
 	c.onProgress = func(cacheID, stage, message string, _, _ int) {
 		l.WithFields(
