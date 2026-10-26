@@ -18,7 +18,8 @@ type Blob interface {
 	// should be kept.
 	Upload(ctx context.Context, filePath, key string, retention time.Duration) (*TransferInfo, error)
 
-	// Download downloads a file from blob storage
+	// Download downloads a file from blob storage. Before returning, including
+	// on cancellation, it must join all destination writers and close their files.
 	Download(ctx context.Context, key, destPath string) (*TransferInfo, error)
 
 	// Stat returns the size in bytes of the blob stored under key, without
