@@ -13,6 +13,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 	"time"
@@ -538,10 +539,19 @@ func pipelineUploadFix(err error) string {
 	return "If Buildkite rejected the pipeline, fix the pipeline definition so that it accepts it. Otherwise, retry the step, and check this agent's network access to Buildkite if it keeps failing."
 }
 
+// fullCommitSHA matches a full SHA-1 commit hash,
+// which git rev-parse would return unchanged.
+var fullCommitSHA = regexp.MustCompile(`^[0-9a-f]{40}$`)
+
 // resolveCommit resolves and replaces BUILDKITE_COMMIT with the resolved value.
 func resolveCommit(l logger.Logger, environ *env.Environment) {
 	commitRef, has := environ.Get("BUILDKITE_COMMIT")
 	if !has {
+		return
+	}
+	if fullCommitSHA.MatchString(commitRef) {
+		// no need to parse when already a sha, and prevent spurious warning
+		// when called in environments with no checked-out source tree
 		return
 	}
 	cmdOut, err := exec.Command("git", "rev-parse", commitRef).Output()
