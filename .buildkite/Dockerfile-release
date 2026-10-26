@@ -3,7 +3,7 @@
 # Don't install buildkite-agent here: release steps mount the host agent at
 # /usr/bin/buildkite-agent, and an agent on an earlier PATH entry would shadow it.
 
-FROM public.ecr.aws/aws-cli/aws-cli:2.37.9@sha256:92de75724b6a746951f0e8b915d86bbccd7cb55aff96cd0cb4f7017272160780 AS awscli
+FROM public.ecr.aws/aws-cli/aws-cli:2.38.5@sha256:c8156a0e74e13929a42d7e60f0d4e14e7d28d980cd21822505d4bff80e5460c1 AS awscli
 
 # The full (non-slim) image has git, curl, gpg, openssl and a C compiler, which
 # `bundle install` needs for bigdecimal's native extension.
