@@ -11,6 +11,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/buildkite/agent/v4/api"
 	"github.com/urfave/cli/v3"
@@ -217,6 +218,50 @@ func TestOIDCRequestTokenRetriesUndecodableResponse(t *testing.T) {
 
 	if got, want := requests.Load(), int32(2); got != want {
 		t.Errorf("server received %d requests, want %d", got, want)
+	}
+}
+
+func TestOIDCRequestTokenRetryAfter(t *testing.T) {
+	tests := []struct {
+		name       string
+		status     int
+		retryAfter string
+		wantDelay  time.Duration
+	}{
+		{name: "overloaded proxy", status: http.StatusServiceUnavailable, retryAfter: "3", wantDelay: 3 * time.Second},
+		{name: "rate limited", status: http.StatusTooManyRequests, retryAfter: "3", wantDelay: 3 * time.Second},
+		{name: "invalid header", status: http.StatusServiceUnavailable, retryAfter: "invalid", wantDelay: time.Second},
+		{name: "negative delay", status: http.StatusServiceUnavailable, retryAfter: "-1", wantDelay: time.Second},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var requests atomic.Int32
+			firstRequest := make(chan time.Time, 1)
+			server := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
+				if requests.Add(1) == 1 {
+					firstRequest <- time.Now()
+					rw.Header().Set("Retry-After", tt.retryAfter)
+					http.Error(rw, "envoy overloaded", tt.status)
+					return
+				}
+				if delay := time.Since(<-firstRequest); delay < tt.wantDelay {
+					t.Errorf("retried after %s, want at least %s", delay, tt.wantDelay)
+				}
+				_, _ = fmt.Fprint(rw, `{"token":"oidc-token"}`)
+			}))
+			defer server.Close()
+
+			out, err := runOIDCRequestTokenCommand(t, server.URL, "--skip-redaction")
+			if err != nil {
+				t.Fatalf("runOIDCRequestTokenCommand() error = %v, want nil", err)
+			}
+			if want := "oidc-token\n"; out != want {
+				t.Errorf("output = %q, want %q", out, want)
+			}
+			if got := requests.Load(); got != 2 {
+				t.Errorf("server received %d requests, want 2", got)
+			}
+		})
 	}
 }
 
