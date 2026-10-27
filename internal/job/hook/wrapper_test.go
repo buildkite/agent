@@ -30,6 +30,9 @@ func TestRunningHookDetectsChangedEnvironment(t *testing.T) {
 			hook: `#!/bin/sh
 export LLAMAS=rock
 export Alpacas='are ok'
+export BASE_DIR='C:\Program Files (x86)\CODE\'
+export MULTI_SLASH='ends with two\\'
+export NEXT='kept-separate'
 echo hello world
 `,
 		},
@@ -39,6 +42,9 @@ echo hello world
 			hook: `#!/bin/sh
 export LLAMAS=rock
 export Alpacas='are ok'
+export BASE_DIR='C:\Program Files (x86)\CODE\'
+export MULTI_SLASH='ends with two\\'
+export NEXT='kept-separate'
 echo hello world
 `,
 		},
@@ -52,6 +58,9 @@ echo hello world
 				hook: `@echo off
 set LLAMAS=rock
 set Alpacas=are ok
+set "BASE_DIR=C:\Program Files (x86)\CODE\"
+set "MULTI_SLASH=ends with two\\"
+set "NEXT=kept-separate"
 echo hello world
 `,
 			},
@@ -60,6 +69,9 @@ echo hello world
 				os:   "windows",
 				hook: `$env:LLAMAS = "rock"
 $env:Alpacas = "are ok"
+$env:BASE_DIR = 'C:\Program Files (x86)\CODE\'
+$env:MULTI_SLASH = 'ends with two\\'
+$env:NEXT = 'kept-separate'
 echo "hello world"
 `,
 			},
@@ -99,8 +111,11 @@ echo "hello world"
 			expected := env.New()
 			expected.Apply(env.Diff{
 				Added: map[string]string{
-					"LLAMAS":  "rock",
-					"Alpacas": "are ok",
+					"LLAMAS":      "rock",
+					"Alpacas":     "are ok",
+					"BASE_DIR":    `C:\Program Files (x86)\CODE\`,
+					"MULTI_SLASH": `ends with two\\`,
+					"NEXT":        "kept-separate",
 				},
 				Changed: map[string]env.DiffPair{},
 				Removed: map[string]struct{}{},
