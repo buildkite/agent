@@ -216,14 +216,15 @@ func (l *TextPrinter) Print(level Level, msg string, fields Fields) {
 		}
 	}
 
-	// Make sure we're only outputting a line one at a time
+	// Make sure we're only outputting a line one at a time. Unlock in a defer:
+	// the writer can panic, and a mutex left locked hangs every later log line.
 	mutex.Lock()
+	defer mutex.Unlock()
 	_, _ = fmt.Fprint(l.Writer, line)
 	if len(fields) > 0 {
 		_, _ = fmt.Fprintf(l.Writer, " %s", strings.Join(fieldStrs, " "))
 	}
 	_, _ = fmt.Fprint(l.Writer, "\n")
-	mutex.Unlock()
 }
 
 func ColorsSupported() bool {
@@ -265,8 +266,8 @@ func (p *JSONPrinter) Print(level Level, msg string, fields Fields) {
 
 	// Make sure we're only outputting a line one at a time
 	mutex.Lock()
+	defer mutex.Unlock()
 	_, _ = fmt.Fprintf(p.Writer, "{%s}\n", strings.TrimSuffix(b.String(), ","))
-	mutex.Unlock()
 }
 
 var Discard = &ConsoleLogger{
