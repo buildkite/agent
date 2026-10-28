@@ -39,8 +39,7 @@ We'll continue to run your job, but you won't be able to use the Job API`)
 		jobapi.WithPromiseFailureDeclarer(e.declarePromiseFailure),
 	}
 	// Each report is its own API request. Once the API has refused a report
-	// for good, later ones would be refused too, so stop sending them; a
-	// script calling capture-error in a loop then can't keep hitting the API.
+	// for good, later ones would be refused too, so stop sending them.
 	var refused atomic.Bool
 	reporter := func(requestCtx context.Context, capturedError *jobapi.CapturedError) error {
 		// Reporting must not keep a cancelled job alive through its grace period.
