@@ -75,7 +75,7 @@ Shows [OSC 7501 program status](https://www.superlogical.com/rex/docs/build/prog
 # Program status: state=working id=build progress=40 app=cargo msg="Compiling"
 ```
 
-The report itself stays in the log unchanged. Reports that repeat the previous report for the same `id`, or only change its `progress`, don't add a line. Messages and titles are decoded before secret redaction, so redacted values are removed from them.
+Complete valid reports are decoded, their messages and titles redacted with the current registered secrets and Buildkite token patterns, and then re-encoded into the log. This protects both the encoded fields and the readable description. Unknown fields and complete invalid reports are omitted; incomplete, canceled or oversized sequences still pass through as ordinary log bytes and are not forwarded as reports. Reports that repeat the previous report for the same `id`, or only change its `progress`, don't add a line. Unknown secrets remain unknown: this is not a general detector for credentials or arbitrary encoded data.
 
 The experiment also sets `BUILDKITE_PROGRAM_STATUS=true` in the job environment, unless the job already sets it. Tools such as the Buildkite CLI (`bk`) only send reports in a Buildkite job when it's `true`. Set it to `false` in the job to turn them off.
 
@@ -88,6 +88,41 @@ The agent also reports the job's own progress, on records with these ids, so the
 - `hook/plugin/<plugin>/<hook>` for plugin hooks, such as `hook/plugin/docker/pre-command`.
 
 These reports don't add a line to the log, because the log already has a header for each of them. When the job ends, the agent clears the records that finished successfully, except `command`.
+
+As a proof of concept, captured job errors also emit `state=error`, `id=diagnostic`,
+`app=buildkite-agent`, with the redacted diagnostic text in `msg`. This depends on
+the existing Local Job API capture producing a diagnostic; automatic command,
+hook and Git diagnostics require `BUILDKITE_CAPTURE_AGENT_ERRORS=true`. Phase and
+hook status reports remain independent of error capture. Diagnostics use the
+executor's output stream, not a child command's potentially redirected stdout.
+
+The Local Job API validates and redacts registered secrets, Buildkite tokens and
+URL credentials and queries before truncation and OSC base64 encoding. OSC text
+fields replace control characters with spaces and are bounded by the protocol's
+size limit. Unregistered secrets that these rules don't recognise can still be
+included in diagnostics. Each diagnostic reuses the same record id, so a status
+viewer can replace the previous one; consumers needing every report must read
+the stream. Emission is best-effort and precedes upstream delivery checks, so it
+doesn't depend on backend acceptance. Direct error delivery and job exit status
+are unchanged.
+
+The separate `BUILDKITE_OSC_EVIDENCE_POC=true` agent-process setting enables thin
+forwarding when the `program-status` experiment is also enabled. It sends the
+first 256 valid decoded reports and their redacted-log offsets per job in batches
+of up to 32, every two seconds or at stream close. All states consume this cap,
+so progress reports can exhaust it before a later error; malformed reports do not.
+The agent forwards the supported report fields without deciding which messages
+are useful or inferring error codes or root causes. Existing direct API errors
+remain independent. This forwarding protocol is experimental and may change.
+
+Each batch has a five-second deadline covering up to three attempts, and stream
+shutdown gives all pending evidence a shared five-second budget after required
+log uploads finish. Evidence continues draining during those uploads. Non-retryable
+responses, exhausted retries, shutdown deadlines and process restarts lose evidence.
+Delivery is memory-only, with no disk buffer or durable replay; evidence failure
+does not fail the job. Trying this POC requires an agent built with these changes
+and explicit opt-in, and tools still need to emit supported reports. It cannot
+report failures before an agent starts a job or after the agent disappears.
 
 **Status:** Experimental. The agent doesn't reply to the protocol's feature detection query yet.
 
