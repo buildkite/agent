@@ -217,6 +217,9 @@ func (a *AgentWorker) Ping(ctx context.Context) (jobID, action string, err error
 		}
 
 		action = ping.Action
+		if action == "disconnect" {
+			a.logger.Infof("Buildkite requested that the agent stop")
+		}
 	}
 
 	if pingErr != nil {
