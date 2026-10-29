@@ -23,6 +23,15 @@ steps:
           mount-buildkite-agent: true
           propagate-environment: true
           propagate-aws-auth-tokens: true
+          # Runtime exporter settings are not in BUILDKITE_ENV_FILE.
+          # Forward names so credentials stay out of pipeline uploads.
+          environment:
+            - OTEL_EXPORTER_OTLP_ENDPOINT
+            - OTEL_EXPORTER_OTLP_PROTOCOL
+            - OTEL_EXPORTER_OTLP_HEADERS
+            - OTEL_EXPORTER_OTLP_TRACES_ENDPOINT
+            - OTEL_EXPORTER_OTLP_TRACES_PROTOCOL
+            - OTEL_EXPORTER_OTLP_TRACES_HEADERS
           # publish-debian-package.sh refuses to import signing keys unless this is tmpfs
           tmpfs:
             - "/root/.gnupg:mode=0700"
