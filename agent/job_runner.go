@@ -248,6 +248,13 @@ func NewJobRunner(ctx context.Context, l logger.Logger, apiClient *api.Client, c
 			MaxSizeBytes:      r.conf.Job.LogMaxSizeBytes,
 		},
 	)
+	if os.Getenv("BUILDKITE_OSC_EVIDENCE_POC") == "true" {
+		if experiments.IsEnabled(ctx, experiments.ProgramStatus) {
+			r.logStreamer.conf.ForwardOSC = r.forwardOSCBatch
+		} else {
+			r.agentLogger.Warnf("OSC evidence forwarding requires the program-status experiment; forwarding disabled")
+		}
+	}
 
 	contextDir := jobContextDir(conf)
 

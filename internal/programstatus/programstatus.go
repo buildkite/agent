@@ -65,6 +65,13 @@ func (r *Reporter) Working(id string, progress int, msg string) {
 	}
 }
 
+// Failed reports that the record id failed.
+func (r *Reporter) Failed(id, msg string) {
+	if r != nil {
+		_ = r.r.Failed(id, msg)
+	}
+}
+
 // Finish reports the record id as done if err is nil, idle if it was
 // cancelled, and failed otherwise.
 func (r *Reporter) Finish(id string, err error, doneMsg, errorMsg string) {
