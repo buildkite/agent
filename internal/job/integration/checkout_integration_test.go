@@ -170,6 +170,51 @@ func TestCheckingOutLocalGitProject(t *testing.T) {
 	tester.RunAndCheck(t, env...)
 }
 
+func TestExistingCommitFetchDefaultsToSkippedWithOptOut(t *testing.T) {
+	t.Parallel()
+
+	tester, err := NewExecutorTester(mainCtx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tester.Close()
+	tester.MockAgent(t).Expect("meta-data", "exists", job.CommitMetadataKey).
+		Min(0).Max(bintest.InfiniteTimes).AndExitWith(0)
+
+	commit, err := tester.Repo.RevParse("main")
+	if err != nil {
+		t.Fatal(err)
+	}
+	env := newEnvVars(
+		"BUILDKITE_COMMIT="+strings.TrimSpace(commit),
+		"BUILDKITE_GIT_FETCH_FLAGS=--tags",
+		"BUILDKITE_GIT_COMMIT_VERIFICATION=off",
+	)
+	tester.RunAndCheck(t, env.slice()...)
+	checkout := &gitRepository{Path: tester.CheckoutDir()}
+
+	// Add a tag after cloning, so only a subsequent fetch can bring it in.
+	if _, err := tester.Repo.Execute("tag", "after-clone", strings.TrimSpace(commit)); err != nil {
+		t.Fatal(err)
+	}
+	tester.RunAndCheck(t, env.slice()...)
+	if out, err := checkout.Execute("show-ref", "--verify", "--quiet", "refs/tags/after-clone"); err == nil {
+		t.Fatalf("tag fetched despite local commit and default skip-fetch: %s", out)
+	} else if exitErr := new(exec.ExitError); !errors.As(err, &exitErr) || exitErr.ExitCode() != 1 {
+		t.Fatalf("checking absent tag: %v", err)
+	}
+	if got, err := checkout.RevParse("HEAD"); err != nil || got != commit {
+		t.Fatalf("HEAD = %q, %v; want %q, nil", got, err, commit)
+	}
+
+	// An explicit false must restore fetch side effects, not just parse cleanly.
+	env.set("BUILDKITE_GIT_SKIP_FETCH_EXISTING_COMMITS", "false")
+	tester.RunAndCheck(t, env.slice()...)
+	if got, err := checkout.RevParse("refs/tags/after-clone"); err != nil || got != commit {
+		t.Fatalf("fetched tag = %q, %v; want %q, nil", got, err, commit)
+	}
+}
+
 // TestCheckingOutLocalGitProjectWithSparseCheckoutFallsBackOnOldGit exercises
 // the fallback path in resolveSparseCheckout when git is older than 2.27 (below
 // the cone-mode floor). It overrides `git --version` via AndCallFunc to
@@ -1186,6 +1231,7 @@ func TestCheckingOutLocalGitProjectWithShortCommitHash(t *testing.T) {
 	git.ExpectAll([][]any{
 		{"config", "--get-all", "remote.origin.url"},
 		{"clean", "-ffxdq"},
+		{"--git-dir", ".git", "rev-list", "--missing=print", "--no-walk", shortCommitHash + "^{commit}"},
 		{"fetch", "-v", "--prune", "--", "origin", shortCommitHash},
 		{"config", "remote.origin.fetch"},
 		{"fetch", "-v", "--prune", "--", "origin", "+refs/heads/*:refs/remotes/origin/*", "+refs/tags/*:refs/tags/*"},
@@ -1273,6 +1319,7 @@ func TestCheckingOutGitHubPullRequestAndCustomRefmap(t *testing.T) {
 	env := []string{
 		"BUILDKITE_GIT_CLONE_FLAGS=--no-local",                               // Disable the fast local clone method, which automatically copies all refs
 		"BUILDKITE_GIT_FETCH_FLAGS=--refmap=+refs/pull/*:refs/pull/origin/*", // Track remote pull request refs locally
+		"BUILDKITE_GIT_SKIP_FETCH_EXISTING_COMMITS=false",                    // The custom refmap needs the build-commit fetch even on a local hit.
 		"BUILDKITE_BRANCH=update-test-txt",
 		"BUILDKITE_PULL_REQUEST=123",
 		"BUILDKITE_PIPELINE_PROVIDER=github",
@@ -2307,8 +2354,8 @@ func TestCommitVerificationWithValidCommit(t *testing.T) {
 		MustMock(t, "git").
 		PassthroughToLocalCommand()
 
-	// Expect the normal checkout flow with commit verification inserted between
-	// fetch and checkout: fetch the branch tip into a dedicated ref (source
+	// The local commit skips the build-commit fetch, but verification still
+	// fetches the branch tip into a dedicated ref (source
 	// refs/heads/main, so a same-named tag can't win the ref lookup) rather than
 	// reading FETCH_HEAD, resolve that ref, then merge-base --is-ancestor against
 	// the SHA. Here the branch (main) tip is the build commit itself, so both
@@ -2319,7 +2366,7 @@ func TestCommitVerificationWithValidCommit(t *testing.T) {
 	git.ExpectAll([][]any{
 		{"clone", "-v", "--", tester.Repo.Path, "."},
 		{"clean", "-fdq"},
-		{"fetch", "-v", "--", "origin", commitHash},
+		{"--git-dir", ".git", "rev-list", "--missing=print", "--no-walk", commitHash + "^{commit}"},
 		{"fetch", "-v", "--", "origin", "+refs/heads/main:" + branchTipRef},
 		{"rev-parse", branchTipRef},
 		{"merge-base", "--is-ancestor", commitHash, commitHash},

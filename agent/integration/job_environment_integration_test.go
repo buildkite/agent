@@ -448,7 +448,7 @@ func TestCheckoutScopedJobEnvOverrideHonorsCheckoutOverrideMode(t *testing.T) {
 			wantIgnoredEnvVars: []string{"BUILDKITE_GIT_CLONE_FLAGS"},
 		},
 		// The four vars below are emitted by the agent only on the non-default side
-		// of each (submodules off, skip-checkout on, skip-fetch on, timeout > 0). On
+		// of each (submodules off, skip-checkout on, skip-fetch off, timeout > 0). On
 		// that emitted side, from-job keeps agent config authoritative over backend
 		// job env (via setCheckoutEnv). The silent-side counterparts, where the agent
 		// stays at its default and a job value survives under from-job (matching main;
@@ -483,13 +483,13 @@ func TestCheckoutScopedJobEnvOverrideHonorsCheckoutOverrideMode(t *testing.T) {
 			name:    "from_job_locks_skip_fetch_existing_commits_to_agent_config",
 			varName: "BUILDKITE_GIT_SKIP_FETCH_EXISTING_COMMITS",
 			jobEnv: map[string]string{
-				"BUILDKITE_GIT_SKIP_FETCH_EXISTING_COMMITS": "false",
+				"BUILDKITE_GIT_SKIP_FETCH_EXISTING_COMMITS": "true",
 			},
 			agentCfg: agent.AgentConfiguration{
-				GitSkipFetchExistingCommits: true,
+				GitSkipFetchExistingCommits: false,
 				CheckoutOverrideMode:        env.CheckoutOverrideFromJob,
 			},
-			wantEnvValue:       "true",
+			wantEnvValue:       "false",
 			wantIgnoredEnvVars: []string{"BUILDKITE_GIT_SKIP_FETCH_EXISTING_COMMITS"},
 		},
 		{
@@ -545,16 +545,16 @@ func TestCheckoutScopedJobEnvOverrideHonorsCheckoutOverrideMode(t *testing.T) {
 			wantEnvValue: "true",
 		},
 		{
-			name:    "from_job_allows_job_env_skip_fetch_existing_commits_when_agent_default_off",
+			name:    "from_job_allows_job_env_skip_fetch_existing_commits_when_agent_default_on",
 			varName: "BUILDKITE_GIT_SKIP_FETCH_EXISTING_COMMITS",
 			jobEnv: map[string]string{
-				"BUILDKITE_GIT_SKIP_FETCH_EXISTING_COMMITS": "true",
+				"BUILDKITE_GIT_SKIP_FETCH_EXISTING_COMMITS": "false",
 			},
 			agentCfg: agent.AgentConfiguration{
-				GitSkipFetchExistingCommits: false,
+				GitSkipFetchExistingCommits: true,
 				CheckoutOverrideMode:        env.CheckoutOverrideFromJob,
 			},
-			wantEnvValue: "true",
+			wantEnvValue: "false",
 		},
 		{
 			name:    "none_allows_job_env_to_enable_submodules",
@@ -776,6 +776,19 @@ func TestCheckoutScopedJobEnvOverrideHonorsCheckoutOverrideMode(t *testing.T) {
 				CheckoutOverrideMode:        env.CheckoutOverrideStrict,
 			},
 			wantEnvValue:       "false",
+			wantIgnoredEnvVars: []string{"BUILDKITE_GIT_SKIP_FETCH_EXISTING_COMMITS"},
+		},
+		{
+			name:    "strict_locks_skip_fetch_existing_commits_on_to_agent_config",
+			varName: "BUILDKITE_GIT_SKIP_FETCH_EXISTING_COMMITS",
+			jobEnv: map[string]string{
+				"BUILDKITE_GIT_SKIP_FETCH_EXISTING_COMMITS": "false",
+			},
+			agentCfg: agent.AgentConfiguration{
+				GitSkipFetchExistingCommits: true,
+				CheckoutOverrideMode:        env.CheckoutOverrideStrict,
+			},
+			wantEnvValue:       "true",
 			wantIgnoredEnvVars: []string{"BUILDKITE_GIT_SKIP_FETCH_EXISTING_COMMITS"},
 		},
 		{
