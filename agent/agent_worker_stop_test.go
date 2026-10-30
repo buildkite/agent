@@ -1,16 +1,22 @@
 package agent
 
 import (
+	"bufio"
+	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
+	"connectrpc.com/connect"
 	"github.com/buildkite/agent/v4/api"
+	agentedgev1 "github.com/buildkite/agent/v4/api/proto/gen"
 	"github.com/buildkite/agent/v4/logger"
 	"github.com/buildkite/agent/v4/metrics"
 )
@@ -103,25 +109,28 @@ func (s *gracefulStopTestServer) snapshot() (events []string, stopRequests []api
 	return slices.Clone(s.events), slices.Clone(s.stopRequests)
 }
 
-func newGracefulStopTestWorker(t *testing.T, server *gracefulStopTestServer) (*AgentWorker, *logger.Buffer) {
+func newGracefulStopTestWorker(t *testing.T, endpoint string, l logger.Logger, cfg AgentWorkerConfig) *AgentWorker {
 	t.Helper()
 
-	l := logger.NewBuffer()
-	return NewAgentWorker(
+	worker := NewAgentWorker(
 		l,
 		&api.AgentRegisterResponse{
-			UUID:        "agent-id",
-			Name:        "agent-name",
-			AccessToken: gracefulStopTestSessionToken,
-			Endpoint:    server.URL,
+			UUID:              "agent-id",
+			Name:              "agent-name",
+			AccessToken:       gracefulStopTestSessionToken,
+			Endpoint:          endpoint,
+			PingInterval:      1,
+			HeartbeatInterval: 60,
 		},
 		metrics.NewCollector(logger.Discard, metrics.CollectorConfig{}),
 		api.NewClient(logger.Discard, api.Config{
-			Endpoint: server.URL,
+			Endpoint: endpoint,
 			Token:    "registration-token",
 		}),
-		AgentWorkerConfig{},
-	), l
+		cfg,
+	)
+	worker.noWaitBetweenPingsForTesting = true
+	return worker
 }
 
 func TestAgentWorker_ReportsGracefulStopBeforeDisconnect(t *testing.T) {
@@ -129,7 +138,7 @@ func TestAgentWorker_ReportsGracefulStopBeforeDisconnect(t *testing.T) {
 
 	releaseStop := make(chan struct{})
 	server := newGracefulStopTestServer(t, http.StatusOK, releaseStop)
-	worker, _ := newGracefulStopTestWorker(t, server)
+	worker := newGracefulStopTestWorker(t, server.URL, logger.Discard, AgentWorkerConfig{})
 
 	worker.StopGracefully()
 	worker.StopGracefully()
@@ -177,7 +186,8 @@ func TestAgentWorker_GracefulStopReportFailureDoesNotPreventDisconnect(t *testin
 	t.Parallel()
 
 	server := newGracefulStopTestServer(t, http.StatusInternalServerError, nil)
-	worker, l := newGracefulStopTestWorker(t, server)
+	l := logger.NewBuffer()
+	worker := newGracefulStopTestWorker(t, server.URL, l, AgentWorkerConfig{})
 
 	worker.StopGracefully()
 	if err := worker.Disconnect(t.Context()); err != nil {
@@ -216,7 +226,7 @@ func TestAgentWorker_DoesNotReportOtherStops(t *testing.T) {
 			t.Parallel()
 
 			server := newGracefulStopTestServer(t, http.StatusOK, nil)
-			worker, _ := newGracefulStopTestWorker(t, server)
+			worker := newGracefulStopTestWorker(t, server.URL, logger.Discard, AgentWorkerConfig{})
 			if test.stop != nil {
 				test.stop(worker)
 			}
@@ -230,5 +240,150 @@ func TestAgentWorker_DoesNotReportOtherStops(t *testing.T) {
 				t.Errorf("request events = %v, want %v", got, want)
 			}
 		})
+	}
+}
+
+func TestAgentWorker_StartReturnsWhenAcceptFailsAfterStop(t *testing.T) {
+	t.Parallel()
+
+	// Stopping the worker makes the loop that dispatched a job stop waiting
+	// for its result and exit. If the accept then fails, the action loop must
+	// not block forever reporting the failure to a loop that has gone.
+	modes := []struct {
+		mode string
+		// Logged by each loop that dispatches jobs in this mode, once it has
+		// stopped waiting for the result and exited.
+		exits []string
+		// Pings the server should see, which checks that the job arrived via
+		// the loop the mode implies.
+		wantPings int
+	}{
+		{mode: PingModePollOnly, exits: []string{"[runPingLoop] Exiting"}, wantPings: 1},
+		{mode: PingModeStreamOnly, exits: []string{"[runDebouncer] Exiting"}},
+		{mode: PingModeAuto, exits: []string{"[runPingLoop] Exiting", "[runDebouncer] Exiting"}},
+	}
+	stops := []struct {
+		name string
+		stop func(*AgentWorker)
+	}{
+		{name: "graceful stop", stop: (*AgentWorker).StopGracefully},
+		{name: "ungraceful stop", stop: (*AgentWorker).StopUngracefully},
+	}
+
+	for _, mode := range modes {
+		for _, stop := range stops {
+			t.Run(mode.mode+"/"+stop.name, func(t *testing.T) {
+				t.Parallel()
+
+				server := NewFakeAPIServer(WithStreaming)
+				t.Cleanup(server.Close)
+
+				job := server.AddJob(nil)
+				agent := server.AddAgent(gracefulStopTestSessionToken)
+				server.Assign(agent, job) // the default ping handler dispatches it
+
+				// Hold the accept until the test releases it, then reject the
+				// job. A rejection isn't retried, so the action loop gets an
+				// error to report straight away.
+				acceptStarted := make(chan struct{})
+				releaseAccept := make(chan struct{})
+				var accepts atomic.Int32
+				agent.AcceptHandler = func(rw http.ResponseWriter, req *http.Request) {
+					if accepts.Add(1) == 1 {
+						close(acceptStarted)
+					}
+					select {
+					case <-releaseAccept:
+					case <-req.Context().Done():
+						return
+					}
+					http.Error(rw, encodeMsg("job no longer available"), http.StatusUnprocessableEntity)
+				}
+
+				// Dispatch the same job over the stream, then hold the stream
+				// open so that the worker never falls back to polling.
+				agent.PingStreamHandler = func(ctx context.Context, _ *connect.Request[agentedgev1.StreamPingsRequest], resp *connect.ServerStream[agentedgev1.StreamPingsResponse]) error {
+					if err := resp.Send(&agentedgev1.StreamPingsResponse{
+						Action: &agentedgev1.StreamPingsResponse_JobAssigned{
+							JobAssigned: &agentedgev1.JobAssignedAction{
+								Job: &agentedgev1.Job{Id: job.Job.ID},
+							},
+						},
+					}); err != nil {
+						return err
+					}
+					<-ctx.Done()
+					return nil
+				}
+
+				// The loops don't expose when they exit, so scan the log for
+				// their exit messages. Sends never block, so the worker can't
+				// stall on logging even if a message repeats.
+				exited := make(chan struct{}, len(mode.exits))
+				acceptFailed := make(chan struct{}, 1)
+				logReader, logWriter := io.Pipe()
+				t.Cleanup(func() { _ = logWriter.Close() })
+				go func() {
+					for sc := bufio.NewScanner(logReader); sc.Scan(); {
+						line := sc.Text()
+						for _, exit := range mode.exits {
+							if strings.Contains(line, exit) {
+								select {
+								case exited <- struct{}{}:
+								default:
+								}
+							}
+						}
+						if strings.Contains(line, "failed to accept job") {
+							select {
+							case acceptFailed <- struct{}{}:
+							default:
+							}
+						}
+					}
+				}()
+				l := logger.NewConsoleLogger(logger.NewTextPrinter(logWriter), func(int) {})
+				worker := newGracefulStopTestWorker(t, server.URL, l, AgentWorkerConfig{
+					AgentConfiguration: AgentConfiguration{PingMode: mode.mode},
+				})
+
+				done := make(chan error, 1)
+				go func() {
+					done <- worker.Start(t.Context(), nil)
+				}()
+
+				waitFor := func(ch <-chan struct{}, event string) {
+					t.Helper()
+					select {
+					case <-ch:
+					case <-time.After(5 * time.Second):
+						t.Fatalf("timed out waiting for %s", event)
+					}
+				}
+
+				waitFor(acceptStarted, "the accept request")
+				stop.stop(worker)
+				for range mode.exits {
+					waitFor(exited, "the loops that dispatched the job to exit")
+				}
+				close(releaseAccept)
+				waitFor(acceptFailed, "the accept to fail")
+
+				select {
+				case err := <-done:
+					if err != nil {
+						t.Errorf("worker.Start() error = %v, want nil", err)
+					}
+				case <-time.After(5 * time.Second):
+					t.Fatal("worker.Start() did not return: the action loop is blocked reporting the failed accept to a loop that has exited")
+				}
+				if got, want := accepts.Load(), int32(1); got != want {
+					t.Errorf("accept requests = %d, want %d", got, want)
+				}
+				if got, want := agent.Pings, mode.wantPings; got != want {
+					t.Errorf("agent.Pings = %d, want %d", got, want)
+				}
+			})
+		}
 	}
 }

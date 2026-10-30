@@ -173,7 +173,13 @@ func (a *AgentWorker) runActionLoop(ctx context.Context, idleMon *idleMonitor, f
 		if err := a.AcceptAndRunJob(ctx, msg.jobID, idleMon); err != nil {
 			a.logger.Errorf("%v", err)
 			setStat(fmt.Sprintf("✅ Finished job with error: %v", err))
-			msg.errCh <- err // so the ping loop can do something special
+			// Send the error so the ping loop can do something special, unless
+			// the receiver has already exited because we are stopping.
+			select {
+			case msg.errCh <- err:
+			case <-ctx.Done():
+			case <-a.stop:
+			}
 			close(msg.errCh)
 			continue
 		}
