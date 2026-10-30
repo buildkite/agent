@@ -75,18 +75,13 @@ func hasGitSubmodules(sh *shell.Shell) bool {
 }
 
 func hasGitCommit(ctx context.Context, sh *shell.Shell, gitDir, commit string) bool {
-	extraEnv := env.New()
-	// Remote Git mirrors require Git 2.45+, where GIT_NO_LAZY_FETCH keeps this
-	// presence check local in partial clones. Older Git versions intentionally
-	// fall outside the feature's support boundary rather than gaining a second
-	// object-inspection implementation.
-	extraEnv.Set("GIT_NO_LAZY_FETCH", "1")
-
-	// Resolve commit to an actual commit object
-	output, err := sh.Command("git", "--git-dir", gitDir, "rev-parse", commit+"^{commit}").RunAndCaptureStdout(
+	// --missing=print disables lazy fetching without the expensive promisor
+	// object scan that GIT_NO_LAZY_FETCH can trigger on older Git versions.
+	// --no-walk checks only this commit, and the peel rejects missing objects
+	// even on Git versions where an unpeeled missing SHA exits successfully.
+	output, err := sh.Command("git", "--git-dir", gitDir, "rev-list", "--missing=print", "--no-walk", commit+"^{commit}").RunAndCaptureStdout(
 		ctx,
 		shell.ShowStderr(false),
-		shell.WithExtraEnv(extraEnv),
 	)
 	if err != nil {
 		return false

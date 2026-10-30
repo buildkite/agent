@@ -3,11 +3,16 @@ package job
 import (
 	"errors"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/buildkite/agent/v4/internal/shell"
 	"github.com/google/go-cmp/cmp"
@@ -697,31 +702,85 @@ func TestGitFetchClassifiesRemoteMissingObjectWithoutRetrying(t *testing.T) {
 	}
 }
 
-func TestHasGitCommitDisablesLazyFetch(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("test git shim is POSIX-only")
-	}
+func TestHasGitCommit(t *testing.T) {
+	t.Parallel()
 
-	commit := strings.Repeat("a", 40)
-	sh := shell.NewTestShell(t)
-	binDir := t.TempDir()
-	captured := filepath.Join(t.TempDir(), "git-no-lazy-fetch")
-	script := "#!/bin/sh\nprintf '%s' \"$GIT_NO_LAZY_FETCH\" > \"$CAPTURED_ENV\"\nprintf '%s\\n' \"$EXPECTED_COMMIT\"\n"
-	if err := os.WriteFile(filepath.Join(binDir, "git"), []byte(script), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	sh.Env.Set("PATH", binDir)
-	sh.Env.Set("CAPTURED_ENV", captured)
-	sh.Env.Set("EXPECTED_COMMIT", commit)
+	for _, filter := range []string{"", "blob:none", "tree:0"} {
+		t.Run("filter="+filter, func(t *testing.T) {
+			t.Parallel()
+			sh := shell.NewTestShell(t)
+			sh.Env.Set("GIT_AUTHOR_NAME", "Test")
+			sh.Env.Set("GIT_AUTHOR_EMAIL", "test@example.com")
+			sh.Env.Set("GIT_COMMITTER_NAME", "Test")
+			sh.Env.Set("GIT_COMMITTER_EMAIL", "test@example.com")
+			source := t.TempDir()
+			git := func(args ...string) string {
+				t.Helper()
+				out, err := sh.Command("git", append([]string{"-C", source}, args...)...).RunAndCaptureStdout(t.Context())
+				if err != nil {
+					t.Fatalf("git %v: %v", args, err)
+				}
+				return strings.TrimSpace(out)
+			}
+			git("init")
+			git("config", "uploadpack.allowFilter", "true")
+			git("commit", "--allow-empty", "-m", "parent commit")
+			if err := os.WriteFile(filepath.Join(source, "file"), []byte("content"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			git("add", "file")
+			git("commit", "-m", "present commit")
+			present := git("rev-parse", "HEAD")
+			tree := git("rev-parse", "HEAD^{tree}")
+			clone := filepath.Join(t.TempDir(), "clone")
+			args := []string{"clone", "--no-checkout"}
+			if filter != "" {
+				args = append(args, "--filter="+filter)
+			}
+			// A file URL uses upload-pack, so Git actually applies the filter.
+			sourceURL := url.URL{Scheme: "file", Path: filepath.ToSlash(source)}
+			if runtime.GOOS == "windows" {
+				sourceURL.Path = "/" + sourceURL.Path
+			}
+			git(append(args, sourceURL.String(), clone)...)
+			git("commit", "--allow-empty", "-m", "missing commit")
+			missing := git("rev-parse", "HEAD")
+			gitDir := filepath.Join(clone, ".git")
+			if filter != "" {
+				if got := git("--git-dir", gitDir, "config", "--get", "remote.origin.promisor"); got != "true" {
+					t.Fatalf("remote.origin.promisor = %q, want true", got)
+				}
+			}
 
-	if !hasGitCommit(t.Context(), sh, ".git", commit) {
-		t.Fatal("hasGitCommit() = false, want true")
-	}
-	got, err := os.ReadFile(captured)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if string(got) != "1" {
-		t.Errorf("GIT_NO_LAZY_FETCH = %q, want 1", got)
+			var requests atomic.Int64
+			remote := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				requests.Add(1)
+				http.Error(w, "unexpected lazy fetch", http.StatusServiceUnavailable)
+			}))
+			defer remote.Close()
+			git("--git-dir", gitDir, "remote", "set-url", "origin", remote.URL)
+
+			for _, tc := range []struct {
+				name, commit string
+				want         bool
+			}{
+				{"present", present, true},
+				{"missing", missing, false},
+				{"HEAD", "HEAD", false},
+				{"abbreviated", present[:12], false},
+				{"tree", tree, false},
+			} {
+				t.Run(tc.name, func(t *testing.T) {
+					started := time.Now()
+					if got := hasGitCommit(t.Context(), sh, gitDir, tc.commit); got != tc.want {
+						t.Errorf("hasGitCommit(%q) = %t, want %t", tc.commit, got, tc.want)
+					}
+					t.Logf("presence check took %s", time.Since(started))
+					if got := requests.Load(); got != 0 {
+						t.Fatalf("presence check made %d HTTP requests, want 0", got)
+					}
+				})
+			}
+		})
 	}
 }

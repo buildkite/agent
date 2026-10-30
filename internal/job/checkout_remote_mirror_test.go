@@ -750,7 +750,7 @@ for arg do
 		*) exit 0 ;;
 		esac
 		;;
-	rev-parse)
+	rev-list)
 		case "$FETCH_MODE" in
 		hit) printf '%s\n' "$EXPECTED_COMMIT"; exit 0 ;;
 		timeout-confirmation) /bin/sleep 30; exit 1 ;;
