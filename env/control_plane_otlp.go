@@ -17,6 +17,8 @@ const (
 	OTELTracesEndpoint = "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT"
 	OTELTracesProtocol = "OTEL_EXPORTER_OTLP_TRACES_PROTOCOL"
 	OTELTracesHeaders  = "OTEL_EXPORTER_OTLP_TRACES_HEADERS"
+	OTELLogsEndpoint   = "OTEL_EXPORTER_OTLP_LOGS_ENDPOINT"
+	OTELLogsHeaders    = "OTEL_EXPORTER_OTLP_LOGS_HEADERS"
 )
 
 // OTLPDestinationVars are the variables whose presence — even with an empty
@@ -34,4 +36,13 @@ var OTLPDestinationVars = []string{
 	"OTEL_EXPORTER_OTLP_HEADERS",
 	OTELTracesEndpoint,
 	OTELTracesHeaders,
+}
+
+// OTLPLogsDestinationVars keep logs overrides independent of traces overrides;
+// generic endpoint/headers override either signal.
+var OTLPLogsDestinationVars = []string{
+	"OTEL_EXPORTER_OTLP_ENDPOINT",
+	"OTEL_EXPORTER_OTLP_HEADERS",
+	OTELLogsEndpoint,
+	OTELLogsHeaders,
 }

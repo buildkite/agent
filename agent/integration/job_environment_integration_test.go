@@ -1,14 +1,22 @@
 package integration
 
 import (
+	"bytes"
+	"context"
+	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/buildkite/agent/v4/agent"
 	"github.com/buildkite/agent/v4/api"
@@ -18,6 +26,141 @@ import (
 	"github.com/buildkite/go-pipeline"
 	"github.com/buildkite/go-pipeline/signature"
 )
+
+func TestControlPlaneJobLogs(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("test command uses a POSIX shell")
+	}
+	executable, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, source := range []string{"unspecified", "flag", "environment", "config"} {
+		t.Run(source, func(t *testing.T) {
+			var mu sync.Mutex
+			var exported []byte
+			collector := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path != "/v1/logs" || r.Header.Get("Authorization") != "Bearer test-logs" || r.Header.Get("Content-Type") != "application/x-protobuf" {
+					t.Errorf("incorrect OTLP request: %s %s, headers=%v", r.Method, r.URL.Path, r.Header)
+				}
+				body, err := io.ReadAll(r.Body)
+				if err != nil {
+					t.Error(err)
+				}
+				mu.Lock()
+				exported = append(exported, body...)
+				mu.Unlock()
+				w.Header().Set("Content-Type", "application/x-protobuf")
+			}))
+			defer collector.Close()
+			root := t.TempDir()
+			job := &api.Job{
+				ID: defaultJobID, ChunksMaxSizeBytes: 1024, Token: "bkaj_test-job",
+				Env: map[string]string{
+					"BUILDKITE_JOB_ID":              defaultJobID,
+					"BUILDKITE_AGENT_NAME":          "test-agent",
+					"BUILDKITE_REPO":                root,
+					"BUILDKITE_BUILD_CHECKOUT_PATH": root,
+					"BUILDKITE_COMMIT":              "HEAD",
+					"BUILDKITE_BRANCH":              "main",
+					"BUILDKITE_ORGANIZATION_SLUG":   "test",
+					"BUILDKITE_PIPELINE_SLUG":       "test",
+					"BUILDKITE_PIPELINE_PROVIDER":   "custom",
+					"BUILDKITE_COMMAND":             `printf 'otlp-job-marker %s\n' "$MY_SECRET"`,
+					"MY_SECRET":                     "secret-not-for-export",
+					// A pipeline must not defeat an explicit local opt-out.
+					"BUILDKITE_JOB_LOGS_OTLP": "true",
+				},
+			}
+			e := createTestAgentEndpoint()
+			server := e.server(
+				route{Method: "POST", Path: "/register", HandlerFunc: func(w http.ResponseWriter, r *http.Request) {
+					var request api.AgentRegisterRequest
+					if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+						t.Error(err)
+					}
+					if !slices.Contains(request.Features, "control-plane-otlp-job-logs") {
+						t.Error("registration did not advertise log policy support")
+					}
+					if err := json.NewEncoder(w).Encode(map[string]any{
+						"id": "test-agent", "name": "test-agent", "access_token": "bkaj_test-session",
+						"ping_interval": 1, "heartbeat_interval": 60, "job_status_interval": 60,
+						"job_logs": map[string]any{
+							"enabled": true,
+							"exporter": map[string]any{
+								"endpoint": collector.URL + "/v1/logs", "protocol": "http/protobuf",
+								"headers": map[string]string{"Authorization": "Bearer test-logs"},
+							},
+						},
+					}); err != nil {
+						t.Error(err)
+					}
+				}},
+				route{Method: "PUT", Path: "/jobs/{id}/acquire", HandlerFunc: func(w http.ResponseWriter, _ *http.Request) {
+					if err := json.NewEncoder(w).Encode(job); err != nil {
+						t.Error(err)
+					}
+				}},
+				route{Method: "POST", Path: "/connect", HandlerFunc: func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) }},
+				route{Method: "POST", Path: "/heartbeat", HandlerFunc: func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) }},
+				route{Method: "POST", Path: "/disconnect", HandlerFunc: func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) }},
+				route{Method: "GET", Path: "/ping", HandlerFunc: func(w http.ResponseWriter, _ *http.Request) {
+					_, _ = io.WriteString(w, `{"action":"disconnect"}`)
+				}},
+			)
+			defer server.Close()
+			config := ""
+			if source == "config" {
+				config = "job-logs-otlp=false\n"
+			}
+			configPath := filepath.Join(root, "agent.cfg")
+			if err := os.WriteFile(configPath, []byte(config), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+			defer cancel()
+			args := []string{
+				"start", "--config", configPath, "--token", "bkaj_registration", "--endpoint", server.URL,
+				"--build-path", root, "--bootstrap-script", fmt.Sprintf("%q bootstrap --phases command --no-job-api", executable),
+				"--acquire-job", defaultJobID, "--ping-mode", "poll-only", "--no-pty", "--redacted-vars", "MY_SECRET",
+			}
+			if source == "flag" {
+				args = append(args, "--job-logs-otlp=false")
+			}
+			cmd := exec.CommandContext(ctx, executable, args...)
+			// Avoid inheriting unrelated agent/collector settings from the test host.
+			for _, entry := range os.Environ() {
+				name, _, _ := strings.Cut(entry, "=")
+				if !strings.HasPrefix(name, "BUILDKITE_") && !strings.HasPrefix(name, "OTEL_") {
+					cmd.Env = append(cmd.Env, entry)
+				}
+			}
+			if source == "environment" {
+				cmd.Env = append(cmd.Env, "BUILDKITE_JOB_LOGS_OTLP=false")
+			}
+			output, err := cmd.CombinedOutput()
+			if err != nil {
+				t.Fatalf("agent start: %v\n%s", err, output)
+			}
+			finishes := e.finishesFor(t, defaultJobID)
+			if len(finishes) != 1 || finishes[0].ExitStatus != "0" {
+				t.Fatalf("job did not succeed: %+v\n%s", finishes, output)
+			}
+			if logs := e.logsFor(t, defaultJobID); !strings.Contains(logs, "otlp-job-marker [REDACTED]") {
+				t.Fatalf("job output missing: %s", logs)
+			}
+			mu.Lock()
+			defer mu.Unlock()
+			if source == "unspecified" {
+				if !bytes.Contains(exported, []byte("otlp-job-marker [REDACTED]")) || bytes.Contains(exported, []byte("secret-not-for-export")) {
+					t.Error("collector did not receive redacted job output")
+				}
+			} else if len(exported) != 0 {
+				t.Error("explicit local false did not prevent log export")
+			}
+		})
+	}
+}
 
 func TestProtectedEnvVarsBeforeBootstrap(t *testing.T) {
 	if runtime.GOOS == "windows" {
