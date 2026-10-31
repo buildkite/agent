@@ -19,6 +19,7 @@ import (
 	"sync/atomic"
 	"syscall"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/buildkite/agent/v4/api"
@@ -738,6 +739,7 @@ func TestCleanPathWindowsUNCShareRoot(t *testing.T) {
 type fakeRefreshingBlob struct {
 	refreshCalls      []string
 	refreshRetentions []time.Duration
+	refresh           func(context.Context)
 }
 
 func (f *fakeRefreshingBlob) Upload(_ context.Context, _, _ string, _ time.Duration) (*store.TransferInfo, error) {
@@ -752,9 +754,12 @@ func (f *fakeRefreshingBlob) Stat(_ context.Context, _ string) (int64, error) {
 	return 0, nil
 }
 
-func (f *fakeRefreshingBlob) RefreshRetention(_ context.Context, key string, retention time.Duration) {
+func (f *fakeRefreshingBlob) RefreshRetention(ctx context.Context, key string, retention time.Duration) {
 	f.refreshCalls = append(f.refreshCalls, key)
 	f.refreshRetentions = append(f.refreshRetentions, retention)
+	if f.refresh != nil {
+		f.refresh(ctx)
+	}
 }
 
 // fakeNonRefreshingBlob is a store.Blob with no RefreshRetention method,
@@ -774,6 +779,24 @@ func (f *fakeNonRefreshingBlob) Stat(_ context.Context, _ string) (int64, error)
 }
 
 func TestMaybeRefreshRetention(t *testing.T) {
+	t.Run("bounds a stalled refresh without canceling the caller", func(t *testing.T) {
+		for _, parentLimit := range []time.Duration{time.Hour, time.Second} {
+			synctest.Test(t, func(t *testing.T) {
+				ctx, cancel := context.WithTimeout(t.Context(), parentLimit)
+				defer cancel()
+				blob := &fakeRefreshingBlob{refresh: func(ctx context.Context) { <-ctx.Done() }}
+				start := time.Now()
+				maybeRefreshRetention(ctx, blob, false, "key", time.Hour)
+				if elapsed := time.Since(start); elapsed != min(parentLimit, 5*time.Second) {
+					t.Fatalf("stalled refresh took %v", elapsed)
+				}
+				if parentLimit > 5*time.Second && ctx.Err() != nil {
+					t.Fatalf("refresh canceled caller: %v", ctx.Err())
+				}
+			})
+		}
+	})
+
 	t.Run("refreshes on an exact match with the given retention", func(t *testing.T) {
 		blob := &fakeRefreshingBlob{}
 
