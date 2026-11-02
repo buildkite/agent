@@ -41,7 +41,7 @@ func NewAgentPool(workers []*AgentWorker, config *AgentConfiguration) (*AgentPoo
 func (ap *AgentPool) StartStatusServer(ctx context.Context, l logger.Logger, addr string) {
 	mux := http.NewServeMux()
 
-	mux.HandleFunc("/", healthHandler(l))
+	mux.HandleFunc("/", ap.healthHandler(l))
 	mux.Handle("/metrics", promhttp.Handler())
 	mux.HandleFunc("/status", status.Handle)
 	mux.HandleFunc("/status.json", ap.statusJSONHandler(l))
@@ -56,7 +56,11 @@ func (ap *AgentPool) StartStatusServer(ctx context.Context, l logger.Logger, add
 		setStatus("👂 Listening")
 
 		l.Noticef("Starting HTTP health check server on %v", addr)
-		err := http.ListenAndServe(addr, mux)
+		protocols := new(http.Protocols)
+		protocols.SetHTTP1(true)
+		protocols.SetUnencryptedHTTP2(true)
+		server := &http.Server{Addr: addr, Handler: mux, Protocols: protocols}
+		err := server.ListenAndServe()
 		if err != nil {
 			l.Errorf("Could not start health check server: %v", err)
 		}
@@ -196,13 +200,18 @@ func (ap *AgentPool) statusJSONHandler(l logger.Logger) http.HandlerFunc {
 	}
 }
 
-func healthHandler(l logger.Logger) http.HandlerFunc {
+func (ap *AgentPool) healthHandler(l logger.Logger) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		l.Debugf("agent_pool.go/healthHandler: %s %s", r.Method, r.URL.Path)
 		if r.URL.Path != "/" {
 			http.NotFound(w, r)
-		} else {
-			fmt.Fprintf(w, "OK: Buildkite agent is running") //nolint:errcheck // YOLO?
+			return
 		}
+		// External probes and the systemd watchdog use the same worker health.
+		if err := ap.watchdogHealth(time.Now()); err != nil {
+			http.Error(w, fmt.Sprintf("ERROR: %v", err), http.StatusServiceUnavailable)
+			return
+		}
+		fmt.Fprintf(w, "OK: Buildkite agent is running") //nolint:errcheck // YOLO?
 	}
 }
