@@ -31,6 +31,10 @@ func agentErrorCaptureEnabled(environ *env.Environment) bool {
 // Delivery is best-effort and never changes the job's outcome.
 func captureJobError(ctx context.Context, sh *shell.Shell, code, message string) {
 	// Failures after cancellation are consequences of it, not separate errors.
+	// That includes hooks that start afterwards, such as pre-exit. Program
+	// status still reports how those end, because it must give every record a
+	// final state, but a job's errors explain why it failed, and a cancelled
+	// job failed because it was cancelled.
 	if !agentErrorCaptureEnabled(sh.Env) || sh.Env.GetString("BUILDKITE_JOB_CANCELLED", "") == "true" {
 		return
 	}

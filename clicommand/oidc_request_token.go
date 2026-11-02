@@ -166,6 +166,11 @@ var OIDCRequestTokenCommand = &cli.Command{
 				return nil, err
 			}
 			if err != nil {
+				if resp != nil {
+					if delay, parseErr := time.ParseDuration(resp.Header.Get("Retry-After") + "s"); parseErr == nil && delay >= 0 {
+						r.SetNextInterval(delay)
+					}
+				}
 				l.Warnf("%s (%s)", err, r)
 			}
 			return token, err

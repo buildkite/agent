@@ -1,6 +1,6 @@
 module github.com/buildkite/agent/v4
 
-go 1.26.10
+go 1.27.3
 
 require (
 	cloud.google.com/go/compute/metadata v0.10.0
@@ -25,6 +25,7 @@ require (
 	github.com/buildkite/go-buildkite/v4 v4.23.0
 	github.com/buildkite/go-pipeline v0.18.1
 	github.com/buildkite/interpolate v0.1.5
+	github.com/buildkite/osc7501 v0.3.0
 	github.com/buildkite/roko v1.4.0
 	github.com/buildkite/shellwords v1.0.1
 	github.com/coreos/go-systemd/v22 v22.7.0
@@ -64,6 +65,7 @@ require (
 	go.opentelemetry.io/otel/sdk/log v1.47.0
 	go.opentelemetry.io/otel/sdk/metric v1.47.0
 	go.opentelemetry.io/otel/trace v1.47.0
+	golang.org/x/crypto/x509roots/fallback v0.0.0-20261020153306-9f2b28d4331a
 	golang.org/x/oauth2 v0.37.0
 	golang.org/x/sync v0.24.0
 	golang.org/x/sys v0.49.0

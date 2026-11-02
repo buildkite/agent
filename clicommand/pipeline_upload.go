@@ -26,6 +26,7 @@ import (
 	awssigner "github.com/buildkite/agent/v4/internal/cryptosigner/aws"
 	gcpsigner "github.com/buildkite/agent/v4/internal/cryptosigner/gcp"
 	"github.com/buildkite/agent/v4/internal/experiments"
+	"github.com/buildkite/agent/v4/internal/programstatus"
 	"github.com/buildkite/agent/v4/internal/redact"
 	"github.com/buildkite/agent/v4/internal/replacer"
 	"github.com/buildkite/agent/v4/internal/stdin"
@@ -216,6 +217,15 @@ var PipelineUploadCommand = &cli.Command{
 				capturePipelineUploadError(ctx, l, stage, cmp.Or(failure, err), cfg.RedactedVars, environ)
 			}
 		}()
+
+		// Report program status for the whole command. A dry run uploads
+		// nothing, so it doesn't report.
+		var reporter *programstatus.Reporter
+		if !cfg.DryRun {
+			reporter = programstatus.FromEnvironment()
+		}
+		status := newUploadStatus(reporter, "pipeline", "", "Pipeline upload failed")
+		defer func() { status.finish(cmp.Or(failure, err)) }()
 
 		// Find the pipeline either from STDIN or the non-flag arguments
 		type input struct {
@@ -445,6 +455,7 @@ var PipelineUploadCommand = &cli.Command{
 				}
 
 				stage = "upload"
+				status.start("Uploading pipeline from " + input.name)
 				uploader := &agent.PipelineUploader{
 					Client: api.NewClient(l, loadAPIClientConfig(cfg, "AgentAccessToken")),
 					JobID:  cfg.Job,
@@ -463,6 +474,7 @@ var PipelineUploadCommand = &cli.Command{
 
 				l.Infof("Successfully parsed and uploaded pipeline #%d from %q", count, input.name)
 				count++
+				status.uploadedOne()
 			}
 		}
 

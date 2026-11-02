@@ -200,6 +200,10 @@ func (c *client) Restore(ctx context.Context, cacheID string) (RestoreResult, er
 	// Download cache
 	tmpDir, archiveFile, transferInfo, err := c.downloadCache(ctx, retrieveResp, c.bucketURL)
 	if err != nil {
+		if errors.Is(err, errDownloadTimeout) {
+			result.TotalDuration = time.Since(startTime)
+			span.SetAttributes(attribute.Bool("cache.download_timed_out", true))
+		}
 		if errors.Is(err, store.ErrBlobNotFound) {
 			slog.Warn("cache blob missing, treating as miss and invalidating entry",
 				"cache_id", cacheID, "err", err)
@@ -580,10 +584,30 @@ func (c *client) downloadCache(ctx context.Context, retrieveResp api.CacheEntryR
 	// for concurrent restores and keeps API-supplied paths out of the destination.
 	archiveFile = filepath.Join(tmpDir, "archive")
 
-	// Download archive
-	transferInfo, err = blobStore.Download(ctx, storeObjectName, archiveFile)
+	// Only the transfer consumes the shared budget. The stores synchronously
+	// join their writers before returning, including on cancellation.
+	downloadCtx, release := c.downloadBudget.start(ctx)
+	if err = downloadCtx.Err(); err == nil {
+		transferInfo, err = blobStore.Download(downloadCtx, storeObjectName, archiveFile)
+	}
+	// A final filesystem write/close can outlast cancellation yet return nil.
+	// Check before release, which itself cancels this download-only context.
+	if err == nil {
+		err = downloadCtx.Err()
+	}
+	timedOut := errors.Is(context.Cause(downloadCtx), errDownloadTimeout) &&
+		(errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded))
+	release()
 	if err != nil {
-		// Clean up temporary directory on failure
+		if ctx.Err() != nil {
+			err = ctx.Err() // Job cancellation is never an optional download timeout.
+		} else if timedOut {
+			err = errDownloadTimeout
+			span.SetAttributes(attribute.Bool("cache.download_timed_out", true))
+			slog.Warn("cache download timed out; existing targets left untouched", "object", storeObjectName)
+		}
+		// Download has returned and closed its destination; no writer can
+		// recreate these files after removal. Targets have not been touched.
 		_ = os.RemoveAll(tmpDir)
 		span.RecordError(err)
 		span.SetStatus(codes.Error, "failed to download from blob store")

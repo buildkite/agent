@@ -14,6 +14,7 @@ import (
 	"github.com/buildkite/agent/v4/clicommand"
 	"github.com/buildkite/agent/v4/version"
 	"github.com/urfave/cli/v3"
+	_ "golang.org/x/crypto/x509roots/fallback" // Use bundled roots when no system roots are available.
 )
 
 const appHelpTemplate = `Usage:

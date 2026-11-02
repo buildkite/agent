@@ -273,6 +273,20 @@ func (b *LocalFileBlob) Upload(ctx context.Context, srcPath, key string, _ time.
 	}, nil
 }
 
+// contextReader checks cancellation between reads; a filesystem call already
+// executing in the kernel cannot be interrupted by a context.
+type contextReader struct {
+	ctx context.Context
+	r   io.Reader
+}
+
+func (r contextReader) Read(p []byte) (int, error) {
+	if err := r.ctx.Err(); err != nil {
+		return 0, err
+	}
+	return r.r.Read(p)
+}
+
 // Download retrieves a cached file identified by key and writes it to destPath.
 //
 // The download process:
@@ -332,7 +346,7 @@ func (b *LocalFileBlob) Download(ctx context.Context, key, destPath string) (*Tr
 		}
 	}()
 
-	bytesWritten, err := io.Copy(tmpFile, srcFile)
+	bytesWritten, err := io.Copy(tmpFile, contextReader{ctx: ctx, r: srcFile})
 	if err != nil {
 		return nil, fmt.Errorf("failed to copy data: %w", err)
 	}

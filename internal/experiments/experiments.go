@@ -26,6 +26,7 @@ const (
 	AgentAPI                       = "agent-api"
 	InterpolationPrefersRuntimeEnv = "interpolation-prefers-runtime-env"
 	OriginCloneKit                 = "origin-clonekit"
+	ProgramStatus                  = "program-status"
 	PTYRaw                         = "pty-raw"
 	LegacyPostHookOrder            = "legacy-post-hook-order"
 	ZipPlugins                     = "zip-plugins"
@@ -56,6 +57,7 @@ var (
 		InterpolationPrefersRuntimeEnv: {},
 		OriginCloneKit:                 {},
 		LegacyPostHookOrder:            {},
+		ProgramStatus:                  {},
 		PTYRaw:                         {},
 		ZipPlugins:                     {},
 	}

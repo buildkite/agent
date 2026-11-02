@@ -17,6 +17,9 @@ func (e *Executor) artifactPhase(ctx context.Context) error {
 	defer func() { tracetools.FinishWithError(span, err) }()
 	defer e.otlpLogSpan(ctx)()
 
+	e.status.start("artifacts", "Uploading artifacts")
+	defer func() { e.status.finish("artifacts", err, "The artifact upload") }()
+
 	err = e.preArtifactHooks(ctx)
 	if err != nil {
 		return err

@@ -1,11 +1,13 @@
 package integration
 
 import (
+	"encoding/base64"
 	"fmt"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/buildkite/agent/v4/internal/experiments"
 	"github.com/buildkite/agent/v4/jobapi"
 	"github.com/buildkite/bintest/v3"
 )
@@ -203,5 +205,36 @@ func redactionTestCommandHook(t *testing.T, secret string) func(c *bintest.Call)
 
 		_, _ = fmt.Fprintf(c.Stderr, "There should be a redacted here: %s\n", secret)
 		c.Exit(0)
+	}
+}
+
+func TestRedactorRedactsProgramStatusMessages(t *testing.T) {
+	t.Parallel()
+
+	ctx, _ := experiments.Enable(mainCtx, experiments.ProgramStatus)
+	tester, err := NewExecutorTester(ctx)
+	if err != nil {
+		t.Fatalf("setting up executor tester: %v", err)
+	}
+	defer tester.Close()
+
+	// The message is base64-encoded in the report, so it can only be redacted
+	// after the agent decodes it.
+	tester.ExpectGlobalHook("command").AndCallFunc(func(c *bintest.Call) {
+		msg := base64.StdEncoding.EncodeToString([]byte("token " + c.GetEnv("BUILDKITE_AGENT_ACCESS_TOKEN")))
+		_, _ = fmt.Fprintf(c.Stderr, "\x1b]7501;state=working:app=bk:msg=%s\x1b\\", msg)
+		c.Exit(0)
+	})
+
+	if err := tester.Run(t); err != nil {
+		t.Fatalf("running executor tester: %v", err)
+	}
+
+	want := `# Program status: state=working app=bk msg="token [REDACTED]"`
+	if !strings.Contains(tester.Output, want) {
+		t.Errorf("expected output to contain %q, but it didn't. Full output: %s", want, tester.Output)
+	}
+	if strings.Contains(tester.Output, "test-token-please-ignore") {
+		t.Errorf("expected agent token to be redacted, but it wasn't. Full output: %s", tester.Output)
 	}
 }

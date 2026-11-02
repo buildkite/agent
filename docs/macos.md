@@ -1,5 +1,6 @@
 # Supported macOS versions
 
+
 macOS version          | Last Go version to support | Last Agent version to support
 ---------------------- | -------------------------- | -----------------------------
 10.8 (Mountain Lion)   | [1.10][go110]              | [v3.5.4][agent354]
@@ -11,7 +12,7 @@ macOS version          | Last Go version to support | Last Agent version to supp
 10.14 (Mojave)         | [1.20][go120]              | [v3.59.0][agent359]
 10.15 (Catalina)       | [1.22][go122]              | [v3.83.1][agent3831]
 11 (Big Sur)           | [1.24][go124]              | [v3.119.2][agent31192]
-12 (Monterey)          | [1.26][go126]              | [Latest release][latest]
+12 (Monterey)          | [1.26][go126]              | [v4.7.0][agent470])
 13 (Ventura)           | TBC                        | [Latest release][latest]
 14 (Sonoma)            | TBC                        | [Latest release][latest]
 15 (Sequoia)           | TBC                        | [Latest release][latest]
@@ -25,6 +26,7 @@ macOS version          | Last Go version to support | Last Agent version to supp
 [go122]: https://go.dev/doc/go1.22#darwin
 [go124]: https://go.dev/doc/go1.24#darwin
 [go126]: https://go.dev/doc/go1.26#darwin
+[go127]: https://go.dev/doc/go1.27#darwin
 
 [agent354]: https://github.com/buildkite/agent/releases/tag/v3.5.4
 [agent3152]: https://github.com/buildkite/agent/releases/tag/v3.15.2
@@ -33,4 +35,5 @@ macOS version          | Last Go version to support | Last Agent version to supp
 [agent359]: https://github.com/buildkite/agent/releases/tag/v3.59.0
 [agent3831]: https://github.com/buildkite/agent/releases/tag/v3.83.1
 [agent31192]: https://github.com/buildkite/agent/releases/tag/v3.119.2
+[agent470]: https://github.com/buildkite/agent/releases/tag/v4.7.0
 [latest]: https://github.com/buildkite/agent/releases/

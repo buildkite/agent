@@ -243,12 +243,7 @@ type Header struct {
 // Relative URLs should always be specified without a preceding slash. If
 // specified, the value pointed to by body is JSON encoded and included as the
 // request body.
-func (c *Client) newRequest(
-	ctx context.Context,
-	method, urlStr string,
-	body any,
-	headers ...Header,
-) (*http.Request, error) {
+func (c *Client) newRequest(ctx context.Context, method, urlStr string, body any, headers ...Header) (*http.Request, error) {
 	u := joinURLPath(c.conf.Endpoint, urlStr)
 
 	buf := new(bytes.Buffer)
@@ -286,6 +281,7 @@ func (c *Client) newRequest(
 		req.Header.Add(header.Name, header.Value)
 	}
 
+	req.Header.Add("Accept", "application/json")
 	if body != nil {
 		req.Header.Add("Content-Type", "application/json")
 	}

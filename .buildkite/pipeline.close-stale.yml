@@ -32,7 +32,7 @@ steps:
             changes-enabled: true
             organization: buildkite
       - docker#v5.14.0:
-          image: golang:1.26.10
+          image: golang:1.27.3
           environment:
             - GH_TOKEN
             - STALE_DRY_RUN

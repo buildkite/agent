@@ -590,6 +590,7 @@ BUILDKITE_HOOKS_SHELL
 BUILDKITE_SSH_KEYSCAN
 BUILDKITE_STRICT_SINGLE_HOOKS
 BUILDKITE_OPENTELEMETRY_TRACING
+BUILDKITE_PROGRAM_STATUS
 BUILDKITE_TELEMETRY_SERVICE_NAME
 BUILDKITE_TRACING_TRACEPARENT
 BUILDKITE_TRACING_TRACESTATE
@@ -773,6 +774,14 @@ BUILDKITE_AGENT_JWKS_KEY_ID`
 	setEnv("BUILDKITE_SHELL", r.conf.AgentConfiguration.Shell)
 	setEnv("BUILDKITE_HOOKS_SHELL", r.conf.AgentConfiguration.HooksShell)
 	setEnv("BUILDKITE_AGENT_EXPERIMENT", strings.Join(experiments.Enabled(ctx), ","))
+
+	// Tools such as the Buildkite CLI (bk) don't send program status reports
+	// when BUILDKITE or CI are set, unless BUILDKITE_PROGRAM_STATUS turns them
+	// on. A job can still set it to false to turn them off.
+	if _, ok := env["BUILDKITE_PROGRAM_STATUS"]; !ok && experiments.IsEnabled(ctx, experiments.ProgramStatus) {
+		env["BUILDKITE_PROGRAM_STATUS"] = "true"
+	}
+
 	setEnv("BUILDKITE_REDACTED_VARS", strings.Join(r.conf.AgentConfiguration.RedactedVars, ","))
 	setEnv("BUILDKITE_STRICT_SINGLE_HOOKS", fmt.Sprint(r.conf.AgentConfiguration.StrictSingleHooks))
 	setEnv("BUILDKITE_CANCEL_SIGNAL_TIMEOUT", r.conf.AgentConfiguration.CancelSignalTimeout.String())
@@ -948,6 +957,9 @@ func truncateEnv(l logger.Logger, env map[string]string, key string, max int) er
 	return nil
 }
 
+// removeKubernetesPlugin removes the Kubernetes plugin from a BUILDKITE_PLUGINS
+// JSON value. It returns nil if no plugins remain, so callers can unset the
+// variable rather than leave an empty list that still counts as having plugins.
 func removeKubernetesPlugin(pluginsJSON []byte) ([]byte, error) {
 	var plugins []map[string]json.RawMessage
 	if err := json.Unmarshal(pluginsJSON, &plugins); err != nil {
@@ -957,6 +969,9 @@ func removeKubernetesPlugin(pluginsJSON []byte) ([]byte, error) {
 		_, isK8sPlugin := plugin["github.com/buildkite-plugins/kubernetes-buildkite-plugin"]
 		return isK8sPlugin
 	})
+	if len(plugins) == 0 {
+		return nil, nil
+	}
 	return json.Marshal(plugins)
 }
 
