@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/rand/v2"
 	"net/http"
 	"os"
 	"runtime"
@@ -241,10 +242,14 @@ func (c *Client) FinishJob(ctx context.Context, job *api.Job, finishedAt time.Ti
 }
 
 // Register takes an APIClient and registers it with the Buildkite API
-// and populates the result of the register call. It retries up to 30 times.
+// and populates the result of the register call. It retries for up to five minutes
+// with capped exponential backoff and jitter.
 // Options from opts are *not* set on AgentRegisterRequest, but some fields are
 // overridden with specific values.
 func (c *Client) Register(ctx context.Context, req api.AgentRegisterRequest) (*api.AgentRegisterResponse, error) {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
+	defer cancel()
+
 	// Set up some slightly expensive system info once
 	cacheMachineInfoOnce.Do(func() { cacheRegisterSystemInfo(c.Logger) })
 
@@ -257,17 +262,40 @@ func (c *Client) Register(ctx context.Context, req api.AgentRegisterRequest) (*a
 	req.Hostname = hostname
 	req.OS = osVersionDump
 
-	// Try to register, retrying every 10 seconds for a maximum of 30 attempts (5 minutes)
+	// Wait 1–2s, 2–4s, 4–8s, 8–16s, then 15–30s between attempts.
+	// Randomize across half the backoff window to spread out registration bursts.
 	r := roko.NewRetrier(
-		roko.WithMaxAttempts(30),
-		roko.WithStrategy(roko.Constant(10*time.Second)),
+		roko.TryForever(), // The context bounds the total registration time.
+		roko.WithStrategy(func(r *roko.Retrier) time.Duration {
+			limit := min(2*time.Second<<min(r.AttemptCount(), 4), 30*time.Second)
+			return limit/2 + time.Duration(rand.Int64N(int64(limit/2)))
+		}, "registration"),
 		roko.WithSleepFunc(c.RetrySleepFunc),
 	)
 
 	registered, err := roko.DoFunc(ctx, r, func(r *roko.Retrier) (*api.AgentRegisterResponse, error) {
+		if err := ctx.Err(); err != nil {
+			r.Break()
+			return nil, err
+		}
 		registered, resp, err := c.APIClient.Register(ctx, &req)
 		if err != nil {
 			if !api.BreakOnNonRetryable(r, resp, err) {
+				// Add the randomized backoff after Retry-After's minimum wait
+				// so a shared server hint does not synchronize agents' retries.
+				// Server-directed waits may exceed the 30s cap, but not the deadline.
+				if resp != nil {
+					retryAfter := resp.Header.Get("Retry-After")
+					var delay time.Duration
+					if seconds, err := strconv.ParseUint(retryAfter, 10, 32); err == nil {
+						delay = time.Duration(seconds) * time.Second
+					} else if date, err := http.ParseTime(retryAfter); err == nil {
+						delay = time.Until(date)
+					}
+					if delay > 0 {
+						r.SetNextInterval(delay + r.NextInterval())
+					}
+				}
 				c.Logger.Warnf("%s (%s)", err, r)
 			}
 			// JAT registration checks job eligibility before acquisition. Other
