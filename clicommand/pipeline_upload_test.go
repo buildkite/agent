@@ -26,6 +26,7 @@ import (
 )
 
 func TestPipelineUploadWithoutCheckout(t *testing.T) {
+	t.Setenv("BUILDKITE_AGENT_JWKS_FILE", "")
 	const commit = "0123456789abcdef0123456789abcdef01234567"
 	for _, test := range []struct {
 		name, skipCheckout string
