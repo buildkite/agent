@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"iter"
+	"net/http"
 	"net/url"
 	"sync"
 	"time"
@@ -11,7 +12,19 @@ import (
 	"connectrpc.com/connect"
 	agentedgev1 "github.com/buildkite/agent/v4/api/proto/gen"
 	"github.com/buildkite/agent/v4/api/proto/gen/agentedgev1connect"
+	"github.com/buildkite/agent/v4/version"
 )
+
+type streamUserAgentClient struct {
+	*http.Client
+	userAgent string
+}
+
+func (c streamUserAgentClient) Do(req *http.Request) (*http.Response, error) {
+	req = req.Clone(req.Context())
+	req.Header.Set("User-Agent", c.userAgent)
+	return c.Client.Do(req)
+}
 
 // StreamPings opens a ConnectRPC channel for streaming pings, waiting for the
 // first complete message within the API timeout. It returns an iterator over
@@ -26,7 +39,7 @@ func (c *Client) StreamPings(ctx context.Context, agentID string, opts ...connec
 	u.Path = "/"
 
 	cl := agentedgev1connect.NewAgentEdgeServiceClient(
-		c.streamingClient,
+		streamUserAgentClient{Client: c.streamingClient, userAgent: c.conf.UserAgent},
 		u.String(),
 		connect.WithGRPC(),
 		connect.WithClientOptions(opts...),
@@ -47,13 +60,6 @@ func (c *Client) StreamPings(ctx context.Context, agentID string, opts ...connec
 		}
 	}
 
-	// The Authorization header is added by the custom transport.
-	// Other methods add User-Agent in newRequest.
-	// Note that this does not set the entire header.
-	// ConnectRPC takes our value here and adds its own component *before* our
-	// own, which violates the convention of decreasing importance
-	// (see RFC 7231 section 5.5.3).
-	h.Set("User-Agent", c.conf.UserAgent)
 	ctx, cancel := context.WithCancel(ctx)
 	var setup sync.Once
 	var setupErr error
@@ -68,7 +74,8 @@ func (c *Client) StreamPings(ctx context.Context, agentID string, opts ...connec
 	}
 
 	stream, err := cl.StreamPings(ctx, connect.NewRequest(&agentedgev1.StreamPingsRequest{
-		AgentId: agentID,
+		AgentId:      agentID,
+		AgentVersion: version.Version(),
 	}))
 	received := err == nil && stream.Receive()
 	if err == nil && !received {

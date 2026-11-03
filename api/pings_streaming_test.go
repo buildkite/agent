@@ -14,6 +14,7 @@ import (
 	agentedgev1 "github.com/buildkite/agent/v4/api/proto/gen"
 	"github.com/buildkite/agent/v4/api/proto/gen/agentedgev1connect"
 	"github.com/buildkite/agent/v4/logger"
+	"github.com/buildkite/agent/v4/version"
 )
 
 type delayedPingStreamHandler struct{}
@@ -59,6 +60,42 @@ func TestStreamPingsDoesNotUseAPIClientTimeout(t *testing.T) {
 	}
 	if got, want := messages, 2; got != want {
 		t.Errorf("stream message count = %d, want %d", got, want)
+	}
+}
+
+func TestStreamPingsSendsAgentMetadata(t *testing.T) {
+	const userAgent = "buildkite-agent/4.9.0.99 (linux; amd64)"
+	handler := connect.NewServerStreamHandler(
+		agentedgev1connect.AgentEdgeServiceStreamPingsProcedure,
+		func(_ context.Context, req *connect.Request[agentedgev1.StreamPingsRequest], stream *connect.ServerStream[agentedgev1.StreamPingsResponse]) error {
+			if got := req.Header().Get("User-Agent"); got != userAgent {
+				t.Errorf("request User-Agent = %q, want %q", got, userAgent)
+			}
+
+			if got, want := req.Msg.GetAgentVersion(), version.Version(); got != want {
+				t.Errorf("request agent version = %q, want %q", got, want)
+			}
+
+			return stream.Send(resumePing())
+		},
+	)
+	server := newHTTP2PingServer(t, handler)
+	client := api.NewClient(logger.Discard, api.Config{
+		Endpoint:   server.URL + "/v3",
+		HTTPClient: server.Client(),
+		UserAgent:  userAgent,
+	})
+	stream, err := client.StreamPings(t.Context(), "agent-id")
+	if err != nil {
+		t.Fatalf("client.StreamPings: %v", err)
+	}
+
+	for _, err := range stream {
+		if err != nil {
+			t.Fatalf("stream error: %v", err)
+		}
+
+		break
 	}
 }
 
