@@ -85,7 +85,7 @@ var CacheSaveCommand = &cli.Command{
 			Usage: "Save even when an entry already exists at the same address",
 		},
 	}),
-	Action: func(ctx context.Context, c *cli.Command) error {
+	Action: func(ctx context.Context, c *cli.Command) (err error) {
 		ctx, cfg, l, _, done := setupLoggerAndConfig[CacheSaveConfig](ctx, c)
 		defer done()
 		ctx, span := otel.Tracer("buildkite-agent").Start(ctx, "cache-save")
@@ -94,6 +94,13 @@ var CacheSaveCommand = &cli.Command{
 		// Emit a Buildkite group header as raw job-log output so the cache
 		// output is collapsed into its own de-emphasised group.
 		fmt.Println("~~~ :package: Saving cache...")
+		// Expand the group on failure so the error is visible, like the
+		// bootstrap does for errors in its own de-emphasised groups.
+		defer func() {
+			if err != nil {
+				fmt.Println("^^^ +++")
+			}
+		}()
 
 		apiCfg := loadAPIClientConfig(cfg, "AgentAccessToken")
 
