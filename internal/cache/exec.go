@@ -100,7 +100,7 @@ func RunExec(ctx context.Context, l logger.Logger, apiClient *api.Client, cfg Co
 	if rec.midLine {
 		_, _ = fmt.Fprintln(stderr)
 	}
-	_, _ = fmt.Fprintln(stderr, "--- :package: Saving cache")
+	_, _ = fmt.Fprintln(stderr, "~~~ :package: Saving cache")
 	err = writeLog(ctx, cfg.Redact, logPath, rec, ranFor)
 	if err == nil {
 		l.Infof("Saving cache: %s", name)
