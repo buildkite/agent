@@ -540,6 +540,9 @@ func pipelineUploadFix(err error) string {
 
 // resolveCommit resolves and replaces BUILDKITE_COMMIT with the resolved value.
 func resolveCommit(l logger.Logger, environ *env.Environment) {
+	if environ.GetBool("BUILDKITE_SKIP_CHECKOUT", false) {
+		return
+	}
 	commitRef, has := environ.Get("BUILDKITE_COMMIT")
 	if !has {
 		return
