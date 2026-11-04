@@ -1402,6 +1402,66 @@ func TestCheckingOutGitHubPullRequestWithShortCommitHash(t *testing.T) {
 	}
 }
 
+func TestCheckoutHeadRejectsAppendFetchFlags(t *testing.T) {
+	t.Parallel()
+
+	for _, flags := range []string{"--append", "--ap", "-a", "-va", "-av", "--atomic --append"} {
+		t.Run(flags, func(t *testing.T) {
+			t.Parallel()
+			tester, err := NewExecutorTester(mainCtx)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer tester.Close()
+			tester.MockAgent(t).Expect("meta-data", "exists", job.CommitMetadataKey).
+				Min(0).Max(bintest.InfiniteTimes).AndExitWith(0)
+
+			// Populate a reused checkout and FETCH_HEAD with main before asking
+			// for the distinct PR head. Without rejection, --append builds main.
+			tester.RunAndCheck(t)
+			checkout := &gitRepository{Path: tester.CheckoutDir()}
+			stale, err := checkout.RevParse("FETCH_HEAD")
+			if err != nil {
+				t.Fatal(err)
+			}
+			want, err := tester.Repo.RevParse("refs/pull/123/head")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if stale == want {
+				t.Fatal("fixture must have distinct stale and requested commits")
+			}
+
+			env := []string{
+				"BUILDKITE_BRANCH=update-test-txt",
+				"BUILDKITE_PULL_REQUEST=123",
+				"BUILDKITE_PIPELINE_PROVIDER=github",
+				"BUILDKITE_COMMIT=HEAD",
+				"BUILDKITE_GIT_FETCH_BASE_BRANCH=off",
+				"BUILDKITE_GIT_FETCH_FLAGS=" + flags,
+			}
+			if err := tester.Run(t, env...); err == nil {
+				got, _ := checkout.RevParse("HEAD")
+				t.Fatalf("checkout succeeded with append flags: HEAD = %s, stale = %s, requested = %s", got, stale, want)
+			}
+			if !strings.Contains(tester.Output, "cannot use --append (-a) with BUILDKITE_COMMIT=HEAD") {
+				t.Fatalf("missing actionable error in output:\n%s", tester.Output)
+			}
+			// The invalid configuration must not trigger a clean-checkout retry.
+			if got, err := checkout.RevParse("HEAD"); err != nil || got != stale {
+				t.Fatalf("rejected checkout changed HEAD: got %q, %v; want %q", got, err, stale)
+			}
+
+			// Append remains valid when checkout uses an explicit commit instead.
+			env = append(env, "BUILDKITE_COMMIT="+strings.TrimSpace(want))
+			tester.RunAndCheck(t, env...)
+			if got, err := checkout.RevParse("HEAD"); err != nil || got != want {
+				t.Fatalf("pinned checkout HEAD = %q, %v; want %q", got, err, want)
+			}
+		})
+	}
+}
+
 func TestCheckingOutGitHubPullRequestAtHead(t *testing.T) {
 	t.Parallel()
 

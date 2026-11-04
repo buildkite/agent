@@ -132,6 +132,29 @@ func gitCheckout(ctx context.Context, sh *shell.Shell, gitCheckoutFlags, referen
 	return nil
 }
 
+// hasAppendFetchFlags includes long-option abbreviations and combined short
+// options such as -va. Stop at short options taking a value so -oextra is not
+// mistaken for append.
+func hasAppendFetchFlags(flags []string) bool {
+	for _, flag := range flags {
+		if strings.HasPrefix(flag, "--ap") && strings.HasPrefix("--append", flag) {
+			return true
+		}
+		if !strings.HasPrefix(flag, "-") || strings.HasPrefix(flag, "--") {
+			continue
+		}
+		for _, option := range flag[1:] {
+			if option == 'a' {
+				return true
+			}
+			if option == 'o' || option == 'j' {
+				break
+			}
+		}
+	}
+	return false
+}
+
 // hasPartialFilterFlags returns true if flags contains a filter option,
 // including Git's accepted --fi* long-option abbreviations.
 func hasPartialFilterFlags(flags []string) bool {
