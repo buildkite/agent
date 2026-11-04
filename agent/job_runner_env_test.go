@@ -206,7 +206,7 @@ func controlPlaneTestAgentConf() AgentConfiguration {
 func TestCreateEnvironmentControlPlaneJobLogs(t *testing.T) {
 	t.Parallel()
 
-	const policy = `{"job_logs":{"enabled":true,"exporter":{"endpoint":"https://collector.example/v1/logs","protocol":"http/protobuf","headers":{"Authorization":"Bearer super-secret-token"}}}}`
+	const policy = `{"otel":{"enabled":true,"job_logs":true,"exporter":{"endpoint":"https://collector.example/prefix/","protocol":"http/protobuf","headers":{"Authorization":"Bearer super-secret-token"}}}}`
 	for _, tc := range []struct {
 		name         string
 		response     string
@@ -218,7 +218,9 @@ func TestCreateEnvironmentControlPlaneJobLogs(t *testing.T) {
 	}{
 		{name: "registration enables logs", response: policy, wantEnabled: true, wantExporter: true},
 		{name: "omitted policy cannot enable logs", response: `{}`, jobEnv: map[string]string{"BUILDKITE_JOB_LOGS_OTLP": "true"}},
-		{name: "disabled policy preserves local opt-in", response: `{"job_logs":{"enabled":false}}`, localEnabled: true, local: LocalJobLogsConfig{EnabledSet: true}, wantEnabled: true},
+		{name: "disabled policy preserves local opt-in", response: `{"otel":{"enabled":false,"job_logs":true}}`, localEnabled: true, local: LocalJobLogsConfig{EnabledSet: true}, wantEnabled: true},
+		{name: "job logs defaults false", response: `{"otel":{"enabled":true}}`},
+		{name: "job logs false preserves local opt-in", response: `{"otel":{"enabled":true,"job_logs":false}}`, localEnabled: true, local: LocalJobLogsConfig{EnabledSet: true}, wantEnabled: true},
 		{name: "explicit local false wins", response: policy, local: LocalJobLogsConfig{EnabledSet: true}},
 		{name: "local destination wins", response: policy, local: LocalJobLogsConfig{OTLPDestinationSet: true}, wantEnabled: true},
 		{name: "pipeline cannot opt out", response: policy, jobEnv: map[string]string{"BUILDKITE_JOB_LOGS_OTLP": "false"}, wantEnabled: true, wantExporter: true},
@@ -236,7 +238,7 @@ func TestCreateEnvironmentControlPlaneJobLogs(t *testing.T) {
 			}
 			conf := AgentConfiguration{JobLogsOTLP: tc.localEnabled}
 			log := logger.NewBuffer()
-			ApplyControlPlaneJobLogs(log, &conf, registration.JobLogs, tc.local)
+			ApplyControlPlaneOTel(log, &conf, &registration, LocalTracingConfig{}, tc.local)
 			r := controlPlaneTestRunner(t, tc.jobEnv, conf)
 			got, err := r.createEnvironment(t.Context())
 			if err != nil {
@@ -247,7 +249,7 @@ func TestCreateEnvironmentControlPlaneJobLogs(t *testing.T) {
 				t.Errorf("BUILDKITE_JOB_LOGS_OTLP = %q, want %t", got, tc.wantEnabled)
 			}
 			for name, value := range map[string]string{
-				"OTEL_EXPORTER_OTLP_LOGS_ENDPOINT": "https://collector.example/v1/logs",
+				"OTEL_EXPORTER_OTLP_LOGS_ENDPOINT": "https://collector.example/prefix/v1/logs",
 				"OTEL_EXPORTER_OTLP_LOGS_PROTOCOL": "http/protobuf",
 				"OTEL_EXPORTER_OTLP_LOGS_HEADERS":  "Authorization=Bearer%20super-secret-token",
 			} {
