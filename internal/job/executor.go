@@ -57,6 +57,10 @@ type Executor struct {
 	// Shell is the shell environment for the executor
 	shell *shell.Shell
 
+	// programStatus strips program status reports from stdout. Nil unless the
+	// program-status experiment is enabled.
+	programStatus *process.ProgramStatusWriter
+
 	// canonicalRepository is the backend-supplied repository captured before
 	// hooks may rewrite Repository. A remote mirror is only eligible while they
 	// still match.
@@ -184,7 +188,8 @@ func (e *Executor) Run(ctx context.Context) (exitCode int) {
 	// happen before redaction: the report's message is base64-encoded, so
 	// the redactor can only find secrets in it once it has been decoded.
 	if experiments.IsEnabled(ctx, experiments.ProgramStatus) {
-		preRedactedStdout = process.NewProgramStatusWriter(preRedactedStdout) // shell -> program status -> redactor
+		e.programStatus = process.NewProgramStatusWriter(preRedactedStdout) // shell -> program status -> redactor
+		preRedactedStdout = e.programStatus
 	}
 
 	// Check if not nil to allow for tests to overwrite shell.
@@ -693,6 +698,11 @@ func (e hookExitError) Unwrap() error { return e.err }
 
 func (e *Executor) runWrappedShellScriptHook(ctx context.Context, hookName string, hookCfg HookConfig) error {
 	defer func() {
+		if e.programStatus != nil {
+			if err := e.programStatus.Flush(); err != nil {
+				e.shell.Errorf("Error flushing program status writer: %v", err)
+			}
+		}
 		if err := e.redactors.Flush(); err != nil {
 			e.shell.Errorf("Error flushing redactors: %v", err)
 		}
@@ -1429,6 +1439,11 @@ func (e *Executor) defaultCommandPhase(ctx context.Context) (retErr error) {
 	// Flush the redactors before the OTLP span restore above runs, so any
 	// withheld bytes are released and attributed to this span.
 	defer func() {
+		if e.programStatus != nil {
+			if err := e.programStatus.Flush(); err != nil {
+				e.shell.Errorf("Error flushing program status writer: %v", err)
+			}
+		}
 		if err := e.redactors.Flush(); err != nil {
 			e.shell.Errorf("Error flushing redactors: %v", err)
 		}

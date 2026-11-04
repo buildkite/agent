@@ -75,7 +75,7 @@ Shows [OSC 7501 program status](https://www.superlogical.com/rex/docs/build/prog
 # Program status: state=working id=build progress=40 app=cargo msg="Compiling"
 ```
 
-The report itself stays in the log unchanged. Reports that repeat the previous report for the same `id`, or only change its `progress`, don't add a line. Messages and titles are decoded before secret redaction, so redacted values are removed from them.
+The report itself stays in the log without its message and title, which only appear in the description line. Messages and titles are decoded before secret redaction, so redacted values are removed from them. Reports that repeat the previous report for the same `id`, or only change its `progress`, don't add a line.
 
 The experiment also sets `BUILDKITE_PROGRAM_STATUS=true` in the job environment, unless the job already sets it. Tools such as the Buildkite CLI (`bk`) only send reports in a Buildkite job when it's `true`. Set it to `false` in the job to turn them off.
 
