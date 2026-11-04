@@ -615,7 +615,7 @@ func (e *Executor) checkoutPlugin(ctx context.Context, p *plugin.Plugin) (*plugi
 // reusing a checkout. It intentionally does not fetch moving branches or tags;
 // PluginsAlwaysCloneFresh controls whether upstream updates are picked up.
 func (e *Executor) validatePluginCache(ctx context.Context, p *plugin.Plugin, directory string) error {
-	origin, err := e.shell.Command("git", "-C", directory, "config", "--get", "remote.origin.url").RunAndCaptureStdout(ctx)
+	origin, err := e.shell.Command("git", "--git-dir", filepath.Join(directory, ".git"), "--work-tree", directory, "config", "--get", "remote.origin.url").RunAndCaptureStdout(ctx)
 	if err != nil {
 		return fmt.Errorf("reading cached plugin origin: %w", err)
 	}
