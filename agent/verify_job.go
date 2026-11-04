@@ -37,14 +37,16 @@ func (e *invalidSignatureError) Unwrap() error {
 
 func (r *JobRunner) verifyJob(ctx context.Context, keySet any) error {
 	step := &r.conf.Job.Step
+	jobEnv := r.signedJobEnv
 
-	// First, verify the signature.
+	// First, verify the signature. The repo is an invariant of the job, so
+	// check the value bootstrap will check out.
 	err := signature.VerifyStep(
 		ctx,
 		step,
 		keySet,
 		r.conf.Job.Env["BUILDKITE_REPO"],
-		signature.WithEnv(r.conf.Job.Env),
+		signature.WithEnv(jobEnv),
 		signature.WithLogger(logger.DeprecatedLogger{Logger: r.agentLogger}),
 		signature.WithDebugSigning(r.conf.AgentConfiguration.DebugSigning),
 	)
@@ -110,6 +112,7 @@ func (r *JobRunner) verifyJob(ctx context.Context, keySet any) error {
 	for _, field := range signedFields {
 		switch field {
 		case "command": // compare directly
+			// use the normalized r.conf.Job.Env here too, so lowercase buildkite_command can’t inject an unsigned command when the signed command is empty
 			jobCommand := r.conf.Job.Env["BUILDKITE_COMMAND"]
 			if step.Command != jobCommand {
 				r.agentLogger.Debugf("failed to verifyJob: BUILDKITE_COMMAND = %q != %q = step.Command", jobCommand, step.Command)
@@ -120,7 +123,7 @@ func (r *JobRunner) verifyJob(ctx context.Context, keySet any) error {
 			// Everything in the step env (post-matrix interpolation) must be
 			// present in the job env, and have equal values.
 			for name, stepEnvValue := range step.Env {
-				jobEnvValue, has := r.conf.Job.Env[name]
+				jobEnvValue, has := jobEnv[name]
 				if !has {
 					r.agentLogger.Debugf("failed to verifyJob: %q missing from Job.Env; step.Env[%q] = %q", name, name, stepEnvValue)
 					return newInvalidSignatureError(ErrInvalidJob)
@@ -132,6 +135,9 @@ func (r *JobRunner) verifyJob(ctx context.Context, keySet any) error {
 			}
 
 		case "plugins": // compare canonicalised JSON
+			// Compare the value bootstrap will receive. On Windows, a
+			// case-variant job env key is normalized before execution, while
+			// jobEnv retains its original spelling for signed env fields.
 			jobPluginsJSON := r.conf.Job.Env["BUILDKITE_PLUGINS"]
 			// Various equivalent ways to represent "no plugins", however...
 			// jcs.Transform chokes on "" and "null", and json.Marshal encodes
@@ -208,7 +214,7 @@ func (r *JobRunner) verifyJob(ctx context.Context, keySet any) error {
 		default:
 			// env:: - skip any that were verified with Verify.
 			if name, isEnv := strings.CutPrefix(field, signature.EnvNamespacePrefix); isEnv {
-				if _, has := r.conf.Job.Env[name]; !has {
+				if _, has := jobEnv[name]; !has {
 					// A pipeline env var that is now missing.
 					r.agentLogger.Debugf("failed to verifyJob: %q missing from Job.Env", name)
 					return newInvalidSignatureError(ErrInvalidJob)
