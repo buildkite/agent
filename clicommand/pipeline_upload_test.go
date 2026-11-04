@@ -1,6 +1,8 @@
 package clicommand
 
 import (
+	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -22,6 +24,62 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/urfave/cli/v3"
 )
+
+func TestPipelineUploadWithoutCheckout(t *testing.T) {
+	t.Setenv("BUILDKITE_AGENT_JWKS_FILE", "")
+	const commit = "0123456789abcdef0123456789abcdef01234567"
+	for _, test := range []struct {
+		name, skipCheckout string
+		wantWarning        bool
+	}{
+		{"checkout skipped", "true", false},
+		{"checkout not skipped", "false", true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			t.Chdir(t.TempDir())
+			t.Setenv("BUILDKITE_COMMIT", commit)
+			t.Setenv("BUILDKITE_SKIP_CHECKOUT", test.skipCheckout)
+			if err := os.WriteFile("pipeline.yml", []byte("steps:\n  - command: echo $BUILDKITE_COMMIT\n"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+
+			stderr, err := os.CreateTemp(t.TempDir(), "stderr")
+			if err != nil {
+				t.Fatal(err)
+			}
+			originalStderr := os.Stderr
+			os.Stderr = stderr
+			t.Cleanup(func() {
+				os.Stderr = originalStderr
+				_ = stderr.Close()
+			})
+
+			var stdout bytes.Buffer
+			cmd := *PipelineUploadCommand
+			app := &cli.Command{Name: "buildkite-agent", Commands: []*cli.Command{&cmd}, Writer: &stdout, ErrWriter: io.Discard}
+			if err := app.Run(t.Context(), []string{"buildkite-agent", "upload", "--dry-run", "--agent-access-token", "unused-token", "pipeline.yml"}); err != nil {
+				t.Fatalf("pipeline upload error = %v, want success", err)
+			}
+
+			var uploaded struct {
+				Steps []struct{ Command string }
+			}
+			if err := json.Unmarshal(stdout.Bytes(), &uploaded); err != nil {
+				t.Fatal(err)
+			}
+			if len(uploaded.Steps) != 1 || uploaded.Steps[0].Command != "echo "+commit {
+				t.Errorf("uploaded pipeline = %s, want one command echoing %s", stdout.String(), commit)
+			}
+			output, err := os.ReadFile(stderr.Name())
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := strings.Contains(string(output), "Error running git rev-parse"); got != test.wantWarning {
+				t.Errorf("stderr = %q, want commit resolution warning = %t", output, test.wantWarning)
+			}
+		})
+	}
+}
 
 func TestSearchForSecrets(t *testing.T) {
 	t.Parallel()
