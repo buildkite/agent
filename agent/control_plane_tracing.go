@@ -16,6 +16,9 @@ import (
 // which always take precedence over control-plane (registration) tracing
 // policy. Design: https://linear.app/buildkite/issue/A-1641
 type LocalTracingConfig struct {
+	// EnabledSet preserves an explicit local opentelemetry-tracing=false.
+	EnabledSet bool
+
 	// PropagateTraceparentSet is whether the operator explicitly configured
 	// tracing-propagate-traceparent (CLI flag, config file, or environment),
 	// so its value — even an explicit false — must not be overridden.
@@ -49,6 +52,10 @@ func HasLocalOTLPDestination(names []string) bool {
 // endpoints are reduced to scheme+host and headers are never logged.
 func ApplyControlPlaneTracing(l logger.Logger, conf *AgentConfiguration, tracing *api.AgentTracing, local LocalTracingConfig) {
 	if tracing == nil {
+		return
+	}
+	if local.EnabledSet && !conf.OpenTelemetryTracing {
+		l.Infof("Ignoring control-plane tracing: explicitly disabled locally")
 		return
 	}
 

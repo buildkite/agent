@@ -812,6 +812,16 @@ var AgentStartCommand = &cli.Command{
 			}
 		}
 
+		localTracingSet := c.IsSet("opentelemetry-tracing")
+		if _, ok := os.LookupEnv("BUILDKITE_OPENTELEMETRY_TRACING"); ok {
+			localTracingSet = true
+		}
+		if configFile != nil {
+			if _, exists := configFile.Config["opentelemetry-tracing"]; exists {
+				localTracingSet = true
+			}
+		}
+
 		// A local false must remain an opt-out after configuration env is removed.
 		localJobLogsSet := c.IsSet("job-logs-otlp")
 		if _, ok := os.LookupEnv("BUILDKITE_JOB_LOGS_OTLP"); ok {
@@ -1306,6 +1316,7 @@ var AgentStartCommand = &cli.Command{
 		// The operator's explicit local tracing choices always win over any
 		// control-plane tracing policy in the registration responses below.
 		localTracing := agent.LocalTracingConfig{
+			EnabledSet:              localTracingSet,
 			PropagateTraceparentSet: localPropagateTraceparentSet,
 			OTLPDestinationSet:      agent.HasLocalOTLPDestination(env.OTLPDestinationVars),
 		}
@@ -1338,8 +1349,7 @@ var AgentStartCommand = &cli.Command{
 			// the agent configuration with any control-plane tracing policy
 			// merged in; the shared agentConf is never mutated.
 			workerConf := agentConf
-			agent.ApplyControlPlaneTracing(wl, &workerConf, reg.Tracing, localTracing)
-			agent.ApplyControlPlaneJobLogs(wl, &workerConf, reg.JobLogs, localJobLogs)
+			agent.ApplyControlPlaneOTel(wl, &workerConf, reg, localTracing, localJobLogs)
 
 			// Create an agent worker to run the agent
 			return agent.NewAgentWorker(

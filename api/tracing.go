@@ -10,16 +10,19 @@ type AgentTracing struct {
 	Exporter             *OTLPExporter `json:"exporter,omitempty"`
 }
 
-// AgentJobLogs is optional registration policy for agents advertising
-// control-plane-otlp-job-logs. An absent or disabled policy leaves local
-// job-log configuration unchanged.
-type AgentJobLogs struct {
+// AgentOTel is shared registration policy for agents advertising
+// control-plane-otlp-job-logs. It supersedes AgentTracing when present.
+// JobLogs defaults to false. Exporter.Endpoint is a standard OTLP base URL,
+// not a signal-specific URL.
+type AgentOTel struct {
 	Enabled  bool          `json:"enabled"`
+	JobLogs  bool          `json:"job_logs"`
 	Exporter *OTLPExporter `json:"exporter,omitempty"`
 }
 
-// OTLPExporter is a signal-specific OTLP exporter destination supplied by the
-// control plane. Headers may carry vendor credentials (e.g. an Authorization
+// OTLPExporter is an OTLP exporter destination supplied by the control plane.
+// AgentTracing uses a signal-specific endpoint; AgentOTel uses a base URL.
+// Headers may carry vendor credentials (e.g. an Authorization
 // header): raw endpoints and headers must not be logged or written to the
 // persisted job-env files, though the exporter is intentionally delivered
 // through the bootstrap process environment so hooks and the job command can

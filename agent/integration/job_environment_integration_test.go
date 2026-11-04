@@ -35,12 +35,24 @@ func TestControlPlaneJobLogs(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, source := range []string{"unspecified", "flag", "environment", "config"} {
-		t.Run(source, func(t *testing.T) {
+	for _, tc := range []struct {
+		name           string
+		source         string
+		disableTracing bool
+	}{
+		{name: "unspecified"},
+		{name: "logs flag", source: "flag"},
+		{name: "logs environment", source: "environment"},
+		{name: "logs config", source: "config"},
+		{name: "traces flag", source: "flag", disableTracing: true},
+		{name: "traces environment", source: "environment", disableTracing: true},
+		{name: "traces config", source: "config", disableTracing: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
 			var mu sync.Mutex
-			var exported []byte
+			var exported, traces []byte
 			collector := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				if r.URL.Path != "/v1/logs" || r.Header.Get("Authorization") != "Bearer test-logs" || r.Header.Get("Content-Type") != "application/x-protobuf" {
+				if (r.URL.Path != "/prefix/v1/logs" && r.URL.Path != "/prefix/v1/traces") || r.Header.Get("Authorization") != "Bearer test-logs" || r.Header.Get("Content-Type") != "application/x-protobuf" {
 					t.Errorf("incorrect OTLP request: %s %s, headers=%v", r.Method, r.URL.Path, r.Header)
 				}
 				body, err := io.ReadAll(r.Body)
@@ -48,7 +60,11 @@ func TestControlPlaneJobLogs(t *testing.T) {
 					t.Error(err)
 				}
 				mu.Lock()
-				exported = append(exported, body...)
+				if r.URL.Path == "/prefix/v1/logs" {
+					exported = append(exported, body...)
+				} else {
+					traces = append(traces, body...)
+				}
 				mu.Unlock()
 				w.Header().Set("Content-Type", "application/x-protobuf")
 			}))
@@ -85,10 +101,10 @@ func TestControlPlaneJobLogs(t *testing.T) {
 					if err := json.NewEncoder(w).Encode(map[string]any{
 						"id": "test-agent", "name": "test-agent", "access_token": "bkaj_test-session",
 						"ping_interval": 1, "heartbeat_interval": 60, "job_status_interval": 60,
-						"job_logs": map[string]any{
-							"enabled": true,
+						"otel": map[string]any{
+							"enabled": true, "job_logs": true,
 							"exporter": map[string]any{
-								"endpoint": collector.URL + "/v1/logs", "protocol": "http/protobuf",
+								"endpoint": collector.URL + "/prefix", "protocol": "http/protobuf",
 								"headers": map[string]string{"Authorization": "Bearer test-logs"},
 							},
 						},
@@ -109,9 +125,13 @@ func TestControlPlaneJobLogs(t *testing.T) {
 				}},
 			)
 			defer server.Close()
+			flag, variable := "job-logs-otlp", "BUILDKITE_JOB_LOGS_OTLP"
+			if tc.disableTracing {
+				flag, variable = "opentelemetry-tracing", "BUILDKITE_OPENTELEMETRY_TRACING"
+			}
 			config := ""
-			if source == "config" {
-				config = "job-logs-otlp=false\n"
+			if tc.source == "config" {
+				config = flag + "=false\n"
 			}
 			configPath := filepath.Join(root, "agent.cfg")
 			if err := os.WriteFile(configPath, []byte(config), 0o600); err != nil {
@@ -124,8 +144,8 @@ func TestControlPlaneJobLogs(t *testing.T) {
 				"--build-path", root, "--bootstrap-script", fmt.Sprintf("%q bootstrap --phases command --no-job-api", executable),
 				"--acquire-job", defaultJobID, "--ping-mode", "poll-only", "--no-pty", "--redacted-vars", "MY_SECRET",
 			}
-			if source == "flag" {
-				args = append(args, "--job-logs-otlp=false")
+			if tc.source == "flag" {
+				args = append(args, "--"+flag+"=false")
 			}
 			cmd := exec.CommandContext(ctx, executable, args...)
 			// Avoid inheriting unrelated agent/collector settings from the test host.
@@ -135,8 +155,8 @@ func TestControlPlaneJobLogs(t *testing.T) {
 					cmd.Env = append(cmd.Env, entry)
 				}
 			}
-			if source == "environment" {
-				cmd.Env = append(cmd.Env, "BUILDKITE_JOB_LOGS_OTLP=false")
+			if tc.source == "environment" {
+				cmd.Env = append(cmd.Env, variable+"=false")
 			}
 			output, err := cmd.CombinedOutput()
 			if err != nil {
@@ -151,12 +171,15 @@ func TestControlPlaneJobLogs(t *testing.T) {
 			}
 			mu.Lock()
 			defer mu.Unlock()
-			if source == "unspecified" {
+			if tc.source == "" || tc.disableTracing {
 				if !bytes.Contains(exported, []byte("otlp-job-marker [REDACTED]")) || bytes.Contains(exported, []byte("secret-not-for-export")) {
 					t.Error("collector did not receive redacted job output")
 				}
 			} else if len(exported) != 0 {
 				t.Error("explicit local false did not prevent log export")
+			}
+			if got := len(traces) > 0; got == tc.disableTracing {
+				t.Errorf("trace export = %t, want %t", got, !tc.disableTracing)
 			}
 		})
 	}
