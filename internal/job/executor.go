@@ -169,11 +169,15 @@ func (e *Executor) Run(ctx context.Context) (exitCode int) {
 
 	// Report the job's phases and hooks as program status records, if the
 	// experiment and BUILDKITE_PROGRAM_STATUS turn reports on. The agent's
-	// own reports already have a header in the log, so they skip the program
-	// status writer below.
+	// own reports go on the logger stream, attached to the end of a log line
+	// so they never come before a section header. They never pass through the
+	// program status writer below, which wraps stdout, so they don't get a
+	// description line: the log already has a header for each of them.
 	if experiments.IsEnabled(ctx, experiments.ProgramStatus) &&
 		programstatus.Enabled(environ.Get, term.IsTerminal(int(os.Stdout.Fd()))) {
-		e.status = newJobStatus(preRedactedStdout, e.cancelCh)
+		t := &statusTrailer{w: preRedactedLogger.Writer}
+		preRedactedLogger.Writer = t // logger -> trailer -> redactor -> real stderr
+		e.status = newJobStatus(t, e.cancelCh)
 	}
 
 	// Describe OSC 7501 program status reports in the job log. This must
@@ -1619,8 +1623,8 @@ func (e *Executor) writeBatchScript(cmd string) (string, error) {
 //
 // and
 //
-//	(returned shell.Logger) -> redactor 2 -> stderr
-func (e *Executor) setupRedactors(log shell.Logger, environ *env.Environment, stdout, stderr io.Writer) (io.Writer, shell.Logger) {
+//	(returned *shell.WriterLogger) -> redactor 2 -> stderr
+func (e *Executor) setupRedactors(log shell.Logger, environ *env.Environment, stdout, stderr io.Writer) (io.Writer, *shell.WriterLogger) {
 	varsToRedact, short, err := redact.Vars(e.RedactedVars, environ.DumpPairs())
 	if err != nil {
 		log.OptionalWarningf("bad-redacted-vars", "Couldn't match environment variable names against redacted-vars: %v", err)

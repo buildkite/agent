@@ -87,7 +87,7 @@ The agent also reports the job's own progress, on records with these ids, so the
 - `hook/agent/<hook>` and `hook/repository/<hook>` for agent and repository hooks, such as `hook/agent/pre-command`.
 - `hook/plugin/<plugin>/<hook>` for plugin hooks, such as `hook/plugin/docker/pre-command`.
 
-These reports don't add a line to the log, because the log already has a header for each of them. When the job ends, the agent clears the records that finished successfully, except `command`.
+These reports don't add a line to the log, because the log already has a header for each of them. The agent attaches its reports to the end of a log line, so they never come before a section header. When the job ends, the agent clears the records that finished successfully, except `command`.
 
 **Status:** Experimental. The agent doesn't reply to the protocol's feature detection query yet.
 

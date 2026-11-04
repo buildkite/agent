@@ -4,6 +4,7 @@ import (
 	"errors"
 	"io"
 	"os/exec"
+	"regexp"
 	"runtime"
 	"strings"
 	"syscall"
@@ -16,6 +17,8 @@ import (
 	"github.com/buildkite/osc7501"
 	"github.com/google/go-cmp/cmp"
 )
+
+var afterOSC = regexp.MustCompile(`\x1b\\(~~~|---|\+\+\+|\^\^\^ \+\+\+)`)
 
 func TestProgramStatusReportsPhasesAndHooks(t *testing.T) {
 	t.Parallel()
@@ -77,6 +80,14 @@ func TestProgramStatusReportsPhasesAndHooks(t *testing.T) {
 	}
 	if diff := cmp.Diff(want, got); diff != "" {
 		t.Errorf("program status reports diff (-want +got):\n%s\nFull output: %s", diff, tester.Output)
+	}
+
+	// Reports are attached to the end of a line, so no header follows one.
+	if m := afterOSC.FindString(tester.Output); m != "" {
+		t.Errorf("a header follows an OSC 7501 terminator (%q). Full output: %q", m, tester.Output)
+	}
+	if want := "~~~ Running agent pre-command hook\x1b]7501;"; !strings.Contains(tester.Output, want) {
+		t.Errorf("output doesn't contain %q. Full output: %q", want, tester.Output)
 	}
 
 	// The agent's own reports already have a header in the log.
