@@ -497,6 +497,15 @@ func (e *Executor) checkoutPlugin(ctx context.Context, p *plugin.Plugin) (*plugi
 		return nil, fmt.Errorf("checking plugin git directory %q: %w", pluginGitDirectory, statErr)
 	}
 	if statErr == nil {
+		if err := e.validatePluginCache(ctx, p, pluginDirectory); err != nil {
+			e.shell.Commentf("Removing cached plugin %q: %v", p.Label(), err)
+			if err := os.RemoveAll(pluginDirectory); err != nil {
+				return nil, fmt.Errorf("removing invalid plugin checkout: %w", err)
+			}
+			statErr = os.ErrNotExist
+		}
+	}
+	if statErr == nil {
 		// It'd be nice to show the current commit of the plugin, so
 		// let's figure that out.
 		headCommit, err := gitRevParseInWorkingDirectory(ctx, e.shell, pluginDirectory, "--short=7", "HEAD")
@@ -600,6 +609,51 @@ func (e *Executor) checkoutPlugin(ctx context.Context, p *plugin.Plugin) (*plugi
 	}
 
 	return checkout, nil
+}
+
+// validatePluginCache checks the source and locally resolved version before
+// reusing a checkout. It intentionally does not fetch moving branches or tags;
+// PluginsAlwaysCloneFresh controls whether upstream updates are picked up.
+func (e *Executor) validatePluginCache(ctx context.Context, p *plugin.Plugin, directory string) error {
+	origin, err := e.shell.Command("git", "--git-dir", filepath.Join(directory, ".git"), "--work-tree", directory, "config", "--get", "remote.origin.url").RunAndCaptureStdout(ctx)
+	if err != nil {
+		return fmt.Errorf("reading cached plugin origin: %w", err)
+	}
+	repository, err := p.Repository()
+	if err != nil {
+		return err
+	}
+	gotURL, err := parseGittableURL(strings.TrimSpace(origin))
+	if err != nil {
+		return errors.New("invalid cached plugin origin")
+	}
+	wantURL, err := parseGittableURL(repository)
+	if err != nil {
+		return errors.New("invalid requested plugin repository")
+	}
+	// Credentials can change without changing the source. Never include them in
+	// cache mismatch messages.
+	gotURL.User, wantURL.User = nil, nil
+	if gotURL.String() != wantURL.String() {
+		return errors.New("cached plugin origin does not match requested repository")
+	}
+
+	revision := p.Version
+	if revision == "" {
+		revision = "refs/remotes/origin/HEAD"
+	}
+	wantCommit, err := gitRevParseInWorkingDirectory(ctx, e.shell, directory, "--verify", "--end-of-options", revision+"^{commit}")
+	if err != nil {
+		return fmt.Errorf("resolving cached plugin version: %w", err)
+	}
+	headCommit, err := gitRevParseInWorkingDirectory(ctx, e.shell, directory, "--verify", "HEAD^{commit}")
+	if err != nil {
+		return fmt.Errorf("reading cached plugin commit: %w", err)
+	}
+	if strings.TrimSpace(headCommit) != strings.TrimSpace(wantCommit) {
+		return errors.New("cached plugin commit does not match requested version")
+	}
+	return nil
 }
 
 var fullObjectID = regexp.MustCompile(`^(?i:[0-9a-f]{40}|[0-9a-f]{64})$`)
