@@ -141,7 +141,9 @@ func (a *streamLoopState) startStream(ctx, streamCtx context.Context) error {
 	a.logger.Debugf("[runStreamingPingLoop] Connecting (attempt %d)", a.attempts)
 	stream, err := a.apiClient.StreamPings(streamCtx, a.agent.UUID)
 	if err != nil {
-		a.logger.Infof("Ping stream connection failed: %v", err)
+		// TODO: after we've made streaming endpoints generally available,
+		// think about making some of these logs error or warning level.
+		a.logger.Debugf("[runStreamingPingLoop] Connection to ping stream failed: %v", err)
 		if isUnrecoverable(err) {
 			a.logger.Debugf("[runStreamingPingLoop] Stopping because the error is unrecoverable")
 			return err
@@ -164,8 +166,6 @@ func (a *streamLoopState) startStream(ctx, streamCtx context.Context) error {
 		}
 		return nil // continue outer streaming loop
 	}
-
-	defer a.logger.Infof("Ping stream connection ended")
 
 	a.setStat("🏞️ Streaming actions from Buildkite")
 	a.logger.Debugf("[runStreamingPingLoop] Waiting for a message...")
@@ -229,7 +229,6 @@ func (a *streamLoopState) handle(ctx context.Context, msg *agentedgev1.StreamPin
 			amsg.action = "pause"
 
 		case *agentedgev1.StreamPingsResponse_Disconnect:
-			a.logger.Infof("Buildkite requested that the agent stop")
 			if reason := act.Disconnect.GetReason(); reason != "" {
 				a.logger.Infof("Disconnect reason: %s", reason)
 			}
