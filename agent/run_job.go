@@ -15,6 +15,7 @@ import (
 
 	"github.com/buildkite/agent/v4/api"
 	"github.com/buildkite/agent/v4/core"
+	"github.com/buildkite/agent/v4/internal/cache/reapi"
 	"github.com/buildkite/agent/v4/internal/job"
 	"github.com/buildkite/agent/v4/internal/job/hook"
 	"github.com/buildkite/agent/v4/internal/process"
@@ -76,6 +77,15 @@ func (e *missingKeyError) Error() string {
 func (r *JobRunner) Run(ctx context.Context, ignoreAgentInDispatches *bool) (err error) {
 	if r.cancelled.Load() {
 		return errors.New("job already cancelled before running")
+	}
+
+	if server := r.conf.AgentConfiguration.REAPICache; server != nil {
+		unregister := server.Register(ctx, r.reapiToken, &reapi.Backend{
+			API:       r.apiClient,
+			Registry:  os.Getenv("BUILDKITE_AGENT_CACHE_REGISTRY"),
+			BucketURL: os.Getenv("BUILDKITE_AGENT_CACHE_STORE_URL"),
+		})
+		defer unregister()
 	}
 
 	r.agentLogger.Infof("Starting job at %s", r.conf.Job.URL())

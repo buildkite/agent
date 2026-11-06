@@ -28,6 +28,7 @@ import (
 	"github.com/buildkite/agent/v4/env"
 	"github.com/buildkite/agent/v4/internal/agentapi"
 	"github.com/buildkite/agent/v4/internal/awslib"
+	"github.com/buildkite/agent/v4/internal/cache/reapi"
 	"github.com/buildkite/agent/v4/internal/concurrently"
 	awssigner "github.com/buildkite/agent/v4/internal/cryptosigner/aws"
 	gcpsigner "github.com/buildkite/agent/v4/internal/cryptosigner/gcp"
@@ -197,6 +198,7 @@ type AgentStartConfig struct {
 	ProtectDangerousGitEnvironmentVariables bool     `cli:"protect-dangerous-git-environment-variables"`
 
 	HealthCheckAddr string `cli:"health-check-addr"`
+	REAPICacheAddr  string `cli:"reapi-cache-addr"`
 
 	// Metrics config
 	OpenTelemetryMetrics bool `cli:"opentelemetry-metrics"`
@@ -574,6 +576,11 @@ var AgentStartCommand = &cli.Command{
 			Name:    "health-check-addr",
 			Usage:   "Start an HTTP server on this addr:port that returns whether the agent is healthy, disabled by default",
 			Sources: cli.EnvVars("BUILDKITE_AGENT_HEALTH_CHECK_ADDR"),
+		},
+		&cli.StringFlag{
+			Name:    "reapi-cache-addr",
+			Usage:   "Start an experimental cache-only REAPI server on a numeric loopback addr:port (use 127.0.0.1:0 for an allocated port), disabled by default",
+			Sources: cli.EnvVars("BUILDKITE_AGENT_REAPI_CACHE_ADDR"),
 		},
 		&cli.BoolFlag{
 			Name:    "no-pty",
@@ -998,8 +1005,23 @@ var AgentStartCommand = &cli.Command{
 			}
 		}
 
+		var reapiCache *reapi.Server
+		if cfg.REAPICacheAddr != "" {
+			if cfg.KubernetesExec {
+				return errors.New("reapi-cache-addr is not supported with kubernetes-exec: jobs must share the agent's loopback network")
+			}
+			var err error
+			reapiCache, err = reapi.Listen(cfg.REAPICacheAddr)
+			if err != nil {
+				return fmt.Errorf("starting REAPI cache server: %w", err)
+			}
+			defer reapiCache.Close()
+			l.Infof("Experimental REAPI cache server listening at %s", reapiCache.Endpoint())
+		}
+
 		// AgentConfiguration is the runtime configuration for an agent
 		agentConf := agent.AgentConfiguration{
+			REAPICache:                              reapiCache,
 			BootstrapScript:                         cfg.BootstrapScript,
 			BuildPath:                               cfg.BuildPath,
 			SocketsPath:                             cfg.SocketsPath,

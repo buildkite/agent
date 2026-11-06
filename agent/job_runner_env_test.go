@@ -11,6 +11,7 @@ import (
 
 	"github.com/buildkite/agent/v4/api"
 	envutil "github.com/buildkite/agent/v4/env"
+	"github.com/buildkite/agent/v4/internal/cache/reapi"
 	"github.com/buildkite/agent/v4/internal/experiments"
 	"github.com/buildkite/agent/v4/logger"
 	"github.com/google/go-cmp/cmp"
@@ -435,6 +436,50 @@ func TestCreateEnvironmentProgramStatus(t *testing.T) {
 			}
 			if !slices.Contains(strings.Split(string(data), "\n"), "BUILDKITE_PROGRAM_STATUS") {
 				t.Errorf("env file doesn't list BUILDKITE_PROGRAM_STATUS:\n%s", data)
+			}
+		})
+	}
+}
+
+func TestCreateEnvironmentREAPICache(t *testing.T) {
+	t.Parallel()
+
+	server, err := reapi.Listen("127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(server.Close)
+	for _, enabled := range []bool{false, true} {
+		t.Run(fmt.Sprint(enabled), func(t *testing.T) {
+			conf := AgentConfiguration{}
+			if enabled {
+				conf.REAPICache = server
+			}
+			r := controlPlaneTestRunner(t, map[string]string{
+				"BUILDKITE_REAPI_CACHE_ENDPOINT": "http://untrusted.invalid",
+				"BUILDKITE_REAPI_CACHE_TOKEN":    "untrusted-token",
+			}, conf)
+			r.reapiToken = reapi.NewToken()
+			got, err := r.createEnvironment(t.Context())
+			if err != nil {
+				t.Fatal(err)
+			}
+			endpoint, token := "", ""
+			if enabled {
+				endpoint, token = server.Endpoint(), r.reapiToken
+			}
+			env := envutil.FromSlice(got)
+			if env.GetString("BUILDKITE_REAPI_CACHE_ENDPOINT", "") != endpoint || env.GetString("BUILDKITE_REAPI_CACHE_TOKEN", "") != token {
+				t.Fatal("job did not receive the agent's REAPI configuration")
+			}
+			for _, path := range []string{r.envShellFile.Name(), r.envJSONFile.Name()} {
+				data, err := os.ReadFile(path)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if strings.Contains(string(data), r.reapiToken) {
+					t.Fatal("REAPI credential was written to an environment file")
+				}
 			}
 		})
 	}
