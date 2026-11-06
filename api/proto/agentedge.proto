@@ -4,6 +4,9 @@ package agentedge.v1;
 
 message StreamPingsRequest {
   string agent_id = 1;
+  // Agent release version without the User-Agent build-number suffix.
+  // Older agents omit this field and won't receive stream keepalives.
+  string agent_version = 2;
 }
 
 message StreamPingsResponse {
@@ -15,6 +18,7 @@ message StreamPingsResponse {
     PauseAction pause = 3;
     DisconnectAction disconnect = 4;
     JobAssignedAction job_assigned = 5;
+    KeepaliveAction keepalive = 7;
   }
 
   RequestHeaders request_headers = 6;
@@ -37,6 +41,9 @@ message DisconnectAction {
 message JobAssignedAction {
   Job job = 1;
 }
+
+// Keeps the stream active without changing agent state.
+message KeepaliveAction {}
 
 message Job {
   string id = 1;

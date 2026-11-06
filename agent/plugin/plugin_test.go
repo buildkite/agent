@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -229,40 +230,83 @@ func TestIdentifier(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		location, wantID string
+		name       string
+		first      string
+		second     string
+		wantSameID bool
 	}{
 		{
-			location: "github.com/buildkite/plugins/docker-compose/beta#main",
-			wantID:   "github-com-buildkite-plugins-docker-compose-beta-main",
+			name:   "repository punctuation",
+			first:  "github.com/acme/foo.bar#v1",
+			second: "github.com/acme/foo-bar#v1",
 		},
 		{
-			location: "github.com/buildkite/plugins/docker-compose/beta",
-			wantID:   "github-com-buildkite-plugins-docker-compose-beta",
+			name:   "version punctuation",
+			first:  "github.com/acme/foo#release/one",
+			second: "github.com/acme/foo#release-one",
 		},
 		{
-			location: "192.168.0.1/foo.git#12341234",
-			wantID:   "192-168-0-1-foo-git-12341234",
+			name:   "repository and version boundary",
+			first:  "github.com/acme/foo#bar",
+			second: "github.com/acme/foo-bar",
 		},
 		{
-			location: "/foo/bar/",
-			wantID:   "foo-bar",
+			name:   "protocol",
+			first:  "https://github.com/acme/foo#v1",
+			second: "ssh://github.com/acme/foo#v1",
 		},
 		{
-			location: "./.buildkite/plugins/llamas/",
-			wantID:   "buildkite-plugins-llamas",
+			name:   "subdirectory",
+			first:  "github.com/acme/foo/a.b#v1",
+			second: "github.com/acme/foo/a-b#v1",
+		},
+		{
+			name:   "zip version",
+			first:  "zip+https://example.com/plugin.zip#sha256:abc123",
+			second: "zip+https://example.com/plugin.zip#sha256:abc124",
+		},
+		{
+			name:   "long reference",
+			first:  "github.com/acme/plugins/" + strings.Repeat("nested/", 40) + "plugin#v1",
+			second: "github.com/acme/plugins/" + strings.Repeat("nested/", 40) + "plugin#v2",
+		},
+		{
+			name:       "default protocol",
+			first:      "github.com/acme/foo#v1",
+			second:     "https://github.com/acme/foo#v1",
+			wantSameID: true,
+		},
+		{
+			name:       "credentials are not cache identity",
+			first:      "https://alice:secret@github.com/acme/foo#v1",
+			second:     "https://bob:other@github.com/acme/foo#v1",
+			wantSameID: true,
 		},
 	}
 
 	for _, tc := range tests {
-		t.Run(tc.location, func(t *testing.T) {
+		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			plugin := &Plugin{Location: tc.location}
-			id, err := plugin.Identifier()
-			if err != nil {
-				t.Errorf("Plugin{Location: %q}.Identifier() error = %v", tc.location, err)
+			var ids [2]string
+			for i, reference := range []string{tc.first, tc.second} {
+				p, err := CreatePlugin(reference, nil)
+				if err != nil {
+					t.Fatal(err)
+				}
+				ids[i], err = p.Identifier()
+				if err != nil {
+					t.Fatal(err)
+				}
+				if ids[i] == "" || ids[i] == "." || ids[i] == ".." || strings.ContainsAny(ids[i], `/\`) || len(ids[i]) > 255 {
+					t.Fatalf("Identifier() = %q, want a filesystem-safe name", ids[i])
+				}
+				again, err := p.Identifier()
+				if err != nil || again != ids[i] {
+					t.Fatalf("Identifier() is not stable: %q, %v", again, err)
+				}
 			}
-			if got, want := id, tc.wantID; got != want {
-				t.Errorf("Plugin{Location: %q}.Identifier() = %q, want %q", tc.location, got, want)
+			if same := ids[0] == ids[1]; same != tc.wantSameID {
+				t.Errorf("identifiers %q and %q equal = %v, want %v", ids[0], ids[1], same, tc.wantSameID)
 			}
 		})
 	}
@@ -713,50 +757,6 @@ func TestIsZipPlugin(t *testing.T) {
 
 			if got := p.ZipBaseScheme(); got != tc.wantBase {
 				t.Errorf("Plugin{Scheme: %q}.ZipBaseScheme() = %q, want %q", tc.scheme, got, tc.wantBase)
-			}
-		})
-	}
-}
-
-func TestZipPluginIdentifier(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		location, version, wantID string
-	}{
-		{
-			location: "example.com/plugins/my-plugin.zip",
-			version:  "v1.0.0",
-			wantID:   "example-com-plugins-my-plugin-zip-v1-0-0",
-		},
-		{
-			location: "example.com/plugins/my-plugin.zip",
-			version:  "sha256:abc123",
-			wantID:   "example-com-plugins-my-plugin-zip-sha256-abc123",
-		},
-		{
-			location: "/opt/plugins/docker-compose.zip",
-			wantID:   "opt-plugins-docker-compose-zip",
-		},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.location, func(t *testing.T) {
-			t.Parallel()
-
-			p := &Plugin{
-				Location: tc.location,
-				Version:  tc.version,
-			}
-
-			id, err := p.Identifier()
-			if err != nil {
-				t.Errorf("Plugin.Identifier() error = %v", err)
-			}
-
-			if got, want := id, tc.wantID; got != want {
-				t.Errorf("Plugin{Location: %q, Version: %q}.Identifier() = %q, want %q",
-					tc.location, tc.version, got, want)
 			}
 		})
 	}

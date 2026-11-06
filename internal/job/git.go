@@ -75,18 +75,13 @@ func hasGitSubmodules(sh *shell.Shell) bool {
 }
 
 func hasGitCommit(ctx context.Context, sh *shell.Shell, gitDir, commit string) bool {
-	extraEnv := env.New()
-	// Remote Git mirrors require Git 2.45+, where GIT_NO_LAZY_FETCH keeps this
-	// presence check local in partial clones. Older Git versions intentionally
-	// fall outside the feature's support boundary rather than gaining a second
-	// object-inspection implementation.
-	extraEnv.Set("GIT_NO_LAZY_FETCH", "1")
-
-	// Resolve commit to an actual commit object
-	output, err := sh.Command("git", "--git-dir", gitDir, "rev-parse", commit+"^{commit}").RunAndCaptureStdout(
+	// --missing=print disables lazy fetching without the expensive promisor
+	// object scan that GIT_NO_LAZY_FETCH can trigger on older Git versions.
+	// --no-walk checks only this commit, and the peel rejects missing objects
+	// even on Git versions where an unpeeled missing SHA exits successfully.
+	output, err := sh.Command("git", "--git-dir", gitDir, "rev-list", "--missing=print", "--no-walk", commit+"^{commit}").RunAndCaptureStdout(
 		ctx,
 		shell.ShowStderr(false),
-		shell.WithExtraEnv(extraEnv),
 	)
 	if err != nil {
 		return false
@@ -135,6 +130,29 @@ func gitCheckout(ctx context.Context, sh *shell.Shell, gitCheckoutFlags, referen
 	}
 
 	return nil
+}
+
+// hasAppendFetchFlags includes long-option abbreviations and combined short
+// options such as -va. Stop at short options taking a value so -oextra is not
+// mistaken for append.
+func hasAppendFetchFlags(flags []string) bool {
+	for _, flag := range flags {
+		if strings.HasPrefix(flag, "--ap") && strings.HasPrefix("--append", flag) {
+			return true
+		}
+		if !strings.HasPrefix(flag, "-") || strings.HasPrefix(flag, "--") {
+			continue
+		}
+		for _, option := range flag[1:] {
+			if option == 'a' {
+				return true
+			}
+			if option == 'o' || option == 'j' {
+				break
+			}
+		}
+	}
+	return false
 }
 
 // hasPartialFilterFlags returns true if flags contains a filter option,

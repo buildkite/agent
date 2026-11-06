@@ -12,6 +12,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/buildkite/agent/v4/agent/plugin"
 	"github.com/buildkite/agent/v4/internal/experiments"
 	"github.com/buildkite/agent/v4/internal/shell"
 	"github.com/buildkite/bintest/v3"
@@ -648,6 +649,132 @@ func TestPluginPinnedToFullSHAOlderThanDefaultBranch(t *testing.T) {
 	})
 
 	tester.RunAndCheck(t, "BUILDKITE_PLUGINS="+json)
+}
+
+// Exercise reuse through bootstrap so a wrong checkout is detected by the
+// environment hook actually run, not just by inspecting its directory name.
+func TestPluginCacheAcrossJobs(t *testing.T) {
+	t.Parallel()
+
+	for _, scenario := range []string{
+		"colliding repositories", "wrong origin", "wrong commit", "missing ref",
+		"unversioned wrong commit", "full commit wrong commit",
+		"valid offline cache", "unversioned valid offline cache", "full commit valid offline cache",
+	} {
+		t.Run(scenario, func(t *testing.T) {
+			t.Parallel()
+
+			hooks := func(value string) map[string][]string {
+				if runtime.GOOS == "windows" {
+					return map[string][]string{"environment.bat": {"@echo off", "set CACHED_PLUGIN=" + value}}
+				}
+				return map[string][]string{"environment": {"#!/usr/bin/env bash", "export CACHED_PLUGIN=" + value}}
+			}
+			requested := createTestPlugin(t, hooks("requested"))
+			t.Cleanup(requested.Close)
+			goodCommit := strings.TrimSpace(requested.versionTag)
+			if _, err := requested.Execute("tag", "v1"); err != nil {
+				t.Fatal(err)
+			}
+			modifyTestPlugin(t, hooks("wrong"), requested)
+			wrongCommit, err := requested.RevParse("HEAD")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := requested.ExecuteAll([][]string{{"tag", "v2"}, {"reset", "--hard", goodCommit}}); err != nil {
+				t.Fatal(err)
+			}
+			requested.versionTag = "v1"
+			if strings.HasPrefix(scenario, "unversioned ") {
+				requested.versionTag = ""
+			} else if strings.HasPrefix(scenario, "full commit ") {
+				requested.versionTag = goodCommit
+			}
+
+			other := createTestPlugin(t, hooks("wrong"))
+			t.Cleanup(other.Close)
+			if _, err := other.Execute("tag", "v1"); err != nil {
+				t.Fatal(err)
+			}
+			other.versionTag = "v1"
+
+			// These names collide under the old punctuation-to-hyphens identifier.
+			parent := t.TempDir()
+			for i, p := range []*testPlugin{requested, other} {
+				path := filepath.Join(parent, []string{"foo.bar.git", "foo-bar.git"}[i])
+				if err := os.Rename(p.Path, path); err != nil {
+					t.Fatal(err)
+				}
+				p.Path = path
+			}
+
+			pluginsDir := t.TempDir()
+			run := func(p *testPlugin, want string) {
+				t.Helper()
+				tester, err := NewExecutorTester(mainCtx)
+				if err != nil {
+					t.Fatal(err)
+				}
+				t.Cleanup(tester.Close)
+				tester.Env = replacePluginPathInEnv(tester.Env, pluginsDir)
+				pluginJSON, err := p.ToJSON()
+				if err != nil {
+					t.Fatal(err)
+				}
+				tester.ExpectGlobalHook("command").Once().AndCallFunc(func(c *bintest.Call) {
+					if err := bintest.ExpectEnv(t, c.Env, "CACHED_PLUGIN="+want); err != nil {
+						_, _ = fmt.Fprintln(c.Stderr, err)
+						c.Exit(1)
+						return
+					}
+					c.Exit(0)
+				})
+				tester.RunAndCheck(t, "BUILDKITE_PLUGINS="+pluginJSON)
+			}
+
+			if scenario == "colliding repositories" {
+				run(other, "wrong")
+			} else {
+				run(requested, "requested")
+				pluginJSON, err := requested.ToJSON()
+				if err != nil {
+					t.Fatal(err)
+				}
+				plugins, err := plugin.CreateFromJSON(pluginJSON)
+				if err != nil {
+					t.Fatal(err)
+				}
+				id, err := plugins[0].Identifier()
+				if err != nil {
+					t.Fatal(err)
+				}
+				cached := &gitRepository{Path: filepath.Join(pluginsDir, "test-agent", id)}
+				switch scenario {
+				case "wrong origin":
+					if err := os.RemoveAll(cached.Path); err != nil {
+						t.Fatal(err)
+					}
+					if out, err := exec.Command("git", "clone", "--branch", "v1", other.Path, cached.Path).CombinedOutput(); err != nil {
+						t.Fatalf("cloning other plugin: %v\n%s", err, out)
+					}
+				case "wrong commit", "unversioned wrong commit", "full commit wrong commit", "missing ref":
+					if _, err := cached.Execute("checkout", "--detach", strings.TrimSpace(wrongCommit)); err != nil {
+						t.Fatal(err)
+					}
+					if scenario == "missing ref" {
+						if _, err := cached.Execute("tag", "-d", "v1"); err != nil {
+							t.Fatal(err)
+						}
+					}
+				case "valid offline cache", "unversioned valid offline cache", "full commit valid offline cache":
+					if err := os.RemoveAll(requested.Path); err != nil {
+						t.Fatal(err)
+					}
+				}
+			}
+			run(requested, "requested")
+		})
+	}
 }
 
 type testPlugin struct {

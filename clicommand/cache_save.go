@@ -92,8 +92,8 @@ var CacheSaveCommand = &cli.Command{
 		defer span.End()
 
 		// Emit a Buildkite group header as raw job-log output so the cache
-		// output is collapsed into its own group.
-		fmt.Println("--- :package: Saving cache...")
+		// output is collapsed into its own de-emphasised group.
+		fmt.Println("~~~ :package: Saving cache...")
 
 		apiCfg := loadAPIClientConfig(cfg, "AgentAccessToken")
 

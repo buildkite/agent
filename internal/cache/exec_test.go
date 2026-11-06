@@ -186,7 +186,7 @@ func TestRunExec_MissThenHit(t *testing.T) {
 		t.Fatalf("command ran %d times on a miss, want 1", b.runs)
 	}
 	// Headers go to stderr, so stdout is only the command's output.
-	wantStderr := "+++ :package: No cached result, running command\nwarning: deprecated\n--- :package: Saving cache\n"
+	wantStderr := "+++ :package: No cached result, running command\nwarning: deprecated\n~~~ :package: Saving cache\n"
 	if stdout != "compiling\ndone\n" || stderr != wantStderr {
 		t.Errorf("miss output: stdout %q, stderr %q", stdout, stderr)
 	}

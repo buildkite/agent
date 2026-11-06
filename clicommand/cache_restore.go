@@ -136,8 +136,8 @@ var CacheRestoreCommand = &cli.Command{
 		defer span.End()
 
 		// Emit a Buildkite group header as raw job-log output so the cache
-		// output is collapsed into its own group.
-		fmt.Println("--- :package: Restoring cache...")
+		// output is collapsed into its own de-emphasised group.
+		fmt.Println("~~~ :package: Restoring cache...")
 
 		apiCfg := loadAPIClientConfig(cfg, "AgentAccessToken")
 		apiClient := api.NewClient(l, apiCfg)

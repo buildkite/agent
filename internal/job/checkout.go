@@ -20,6 +20,8 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 )
 
+var errAppendFetchHead = errors.New("cannot use --append (-a) with BUILDKITE_COMMIT=HEAD: checkout uses FETCH_HEAD, which may resolve to a stale commit; remove append from BUILDKITE_GIT_FETCH_FLAGS or specify a commit SHA")
+
 // CheckoutPhase creates the build directory and makes sure we're running the
 // build at the right commit.
 func (e *Executor) CheckoutPhase(ctx context.Context) (retErr error) {
@@ -232,9 +234,10 @@ func (e *Executor) checkout(ctx context.Context) error {
 			switch {
 			case errors.Is(err, ErrCommitVerificationFailed),
 				errors.Is(err, errNoBaseBranchToFetch),
-				errors.Is(err, errBaseBranchFetchWritesNoRef):
+				errors.Is(err, errBaseBranchFetchWritesNoRef),
+				errors.Is(err, errAppendFetchHead):
 				// A commit that is provably not on its branch, a job that names no base
-				// branch to fetch, and fetch flags that write no ref are all settled
+				// branch to fetch, and incompatible fetch flags are all settled
 				// answers, so fail fast instead of re-cloning through the whole backoff.
 				e.shell.Warningf("Checkout failed! %s", err)
 				r.Break()
@@ -407,6 +410,16 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context, previousAttempts in
 	// Adopt the repo-checkout child ctx so git.* spans nest under it.
 	ctx = spanCtx
 
+	// Reject append before any fetch (including the base branch or mirror) can
+	// leave an earlier entry that a HEAD checkout would mistake for this build.
+	gitFetchFlags, err := shellwords.Split(e.GitFetchFlags)
+	if err != nil {
+		return fmt.Errorf("splitting --git-fetch-flags %q: %w", e.GitFetchFlags, err)
+	}
+	if e.Commit == "HEAD" && hasAppendFetchFlags(gitFetchFlags) {
+		return errAppendFetchHead
+	}
+
 	sshKeyPath, cleanupSSHKey, err := e.prepareGitSSHKey()
 	if err != nil {
 		return fmt.Errorf("preparing git ssh key: %w", err)
@@ -494,12 +507,6 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context, previousAttempts in
 		}); err != nil {
 			return fmt.Errorf("installing git lfs filter: %w", err)
 		}
-	}
-
-	// Parse the fetch flags into tokens so we can check for a user-supplied --filter flag.
-	gitFetchFlags, err := shellwords.Split(e.GitFetchFlags)
-	if err != nil {
-		return fmt.Errorf("splitting --git-fetch-flags %q: %w", e.GitFetchFlags, err)
 	}
 
 	addBloblessFilter := sparse.active() &&

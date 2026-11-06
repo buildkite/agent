@@ -4,6 +4,7 @@
 package plugin
 
 import (
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"net/url"
@@ -14,10 +15,9 @@ import (
 )
 
 var (
-	nonIDCharacterRE    = regexp.MustCompile(`[^a-zA-Z0-9]`)
-	consecutiveHyphenRE = regexp.MustCompile(`-+`)
-	hypenOrSpaceRE      = regexp.MustCompile(`-|\s`)
-	whitespaceRE        = regexp.MustCompile(`\s+`)
+	nonIDCharacterRE = regexp.MustCompile(`[^a-zA-Z0-9]`)
+	hypenOrSpaceRE   = regexp.MustCompile(`-|\s`)
+	whitespaceRE     = regexp.MustCompile(`\s+`)
 )
 
 // Plugin describes where to find, and how to configure, an agent plugin.
@@ -178,12 +178,19 @@ func (p *Plugin) Name() string {
 
 // Identifier returns an ID for the plugin that can be used as a folder name.
 func (p *Plugin) Identifier() (string, error) {
-	id := p.Label()
-	id = nonIDCharacterRE.ReplaceAllString(id, "-")
-	id = consecutiveHyphenRE.ReplaceAllString(id, "-")
-	id = strings.Trim(id, "-")
+	scheme := p.Scheme
+	if scheme == "" {
+		scheme = "https"
+	}
 
-	return id, nil
+	// Hash the original fields, not a sanitised label: punctuation and field
+	// boundaries distinguish repositories, subdirectories and versions. Location
+	// excludes credentials. A digest also keeps long references filesystem-safe.
+	identity, err := json.Marshal([]string{scheme, p.Location, p.Version})
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%x", sha256.Sum256(identity)), nil
 }
 
 // Repository returns the repository URL where the plugin code is stored, without any subdirectory path.
