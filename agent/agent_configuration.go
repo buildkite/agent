@@ -6,6 +6,7 @@ import (
 
 	"github.com/buildkite/agent/v4/api"
 	"github.com/buildkite/agent/v4/env"
+	"github.com/buildkite/agent/v4/internal/cache/reapi"
 	"github.com/buildkite/agent/v4/internal/job"
 )
 
@@ -67,6 +68,7 @@ type AgentConfiguration struct {
 	VerificationFailureBehaviour string // What to do if job verification fails (one of `block` or `warn`)
 
 	HealthCheckAddr            string
+	REAPICache                 *reapi.Server
 	DisconnectAfterJob         bool
 	DisconnectAfterIdleTimeout time.Duration
 	DisconnectAfterUptime      time.Duration

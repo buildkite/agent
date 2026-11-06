@@ -46,3 +46,75 @@ helper goroutines:
 
 * Copying PTY output
 * Waiting on context cancellation in order to hard-terminate the process
+
+## Experimental local REAPI cache
+
+`buildkite-agent start --reapi-cache-addr 127.0.0.1:0` starts a cache-only
+REAPI gRPC server. The matching config file option is
+`reapi-cache-addr="127.0.0.1:0"`, or set `BUILDKITE_AGENT_REAPI_CACHE_ADDR`.
+It is disabled by default. Port `0` allocates an available port; a fixed port
+can also be used. Only numeric loopback addresses are accepted.
+
+One listener is shared by all spawned workers. Each job receives:
+
+* `BUILDKITE_REAPI_CACHE_ENDPOINT`: the actual `http://host:port` endpoint (h2c).
+* `BUILDKITE_REAPI_CACHE_TOKEN`: a job-specific credential. Clients must send
+  `authorization: Bearer <token>` in gRPC metadata. Do not print this token.
+
+Credentials are registered when the job runs, revoked when its runner exits,
+and are not written to the job environment files. In-flight backend requests are
+canceled when the job session ends. Requests use that job's Agent API credentials, so
+the registry's save/restore policy still controls access. An `instance_name`
+selects a namespace within that policy; it cannot select another job's identity.
+This does not isolate mutually untrusted processes running as the same OS user.
+
+Configure `BUILDKITE_AGENT_CACHE_STORE_URL` and, optionally,
+`BUILDKITE_AGENT_CACHE_REGISTRY` in the agent process environment. The default
+registry is `~`. The server uses the existing S3, NSC, or local file store adapter;
+`file://` is for local testing only. Clients in containers must share the agent's
+network namespace and explicitly receive the endpoint and token. Kubernetes exec
+mode is not supported. Hooks that change cache variables after the job starts
+do not reconfigure the server.
+
+Supported services are Capabilities, CAS FindMissingBlobs/BatchReadBlobs/
+BatchUpdateBlobs, ByteStream Read/Write, and ActionCache Get/Update. Execution
+is disabled and its service is not registered. Only SHA-256 and uncompressed
+REAPI transfers are supported. Blobs are limited to 64 MiB, batches to 3 MiB;
+GetTree and resumable uploads are not implemented. The implementation buffers
+individual objects and is not yet tuned for large builds.
+
+CAS objects and action results are stored as versioned single-file ZIP envelopes
+with mandatory exact cache keys, separate from filesystem cache entries. Reads
+verify the envelope digest, and CAS reads also verify the requested raw digest.
+An action whose referenced output blobs are missing is a cache miss. Opaque
+ActionResult metadata is preserved, including Once's native result mapping.
+
+### Tuist Once 0.77.0 compatibility
+
+Once currently uses its Tuist provider for REAPI. A compatibility configuration
+in `once.toml` is:
+
+```toml
+[infrastructure.cache]
+provider = "tuist"
+project = "my-project"
+
+[infrastructures.tuist]
+kind = "tuist"
+account = "buildkite"
+url = "http://127.0.0.1:9"
+```
+
+The local `url` prevents Once's separate insights discovery from using the local
+credential with Tuist's public services. Set `TUIST_CACHE_ENDPOINT` from
+`BUILDKITE_REAPI_CACHE_ENDPOINT` and `TUIST_TOKEN` from
+`BUILDKITE_REAPI_CACHE_TOKEN` in the job, without printing either token.
+This is a compatibility workaround, not a native Buildkite provider in Once.
+No Once source changes are needed for this version.
+
+`ONCE_TEST_BINARY=/absolute/path/to/once go test -v ./internal/cache/reapi`
+runs a real C build through Once, removes its local cache and output, and checks
+remote reuse, output bytes, executable mode, and replayed streams. That test uses
+a metadata API fixture and the real file store, **not live Buildkite Cache**.
+Live validation additionally requires job credentials with cache permissions and
+a configured backing store.
