@@ -11,6 +11,7 @@ FROM public.ecr.aws/docker/library/ruby:4.0.7@sha256:bd4a9644f7aa9e8f8035e460e0a
 
 ARG TARGETARCH
 ARG GH_VERSION=2.102.0
+ARG LINEAR_RELEASE_VERSION=0.18.0
 
 RUN apt-get update \
   && apt-get install -y --no-install-recommends createrepo-c rpm-common \
@@ -30,6 +31,17 @@ RUN case "${TARGETARCH}" in \
   && tar -xzf /tmp/gh.tar.gz -C /tmp \
   && install "/tmp/gh_${GH_VERSION}_linux_${TARGETARCH}/bin/gh" /usr/local/bin/gh \
   && rm -rf /tmp/gh*
+
+# Checksums are from https://github.com/linear/linear-release/releases/download/v0.18.0/checksums.txt
+RUN case "${TARGETARCH}" in \
+      amd64) linear_arch=x64; linear_sha256=0476bc8b8c23c1ed3150a55fdeb17c91d6cafcdf5f52dab74b4f89539b3c374a ;; \
+      arm64) linear_arch=arm64; linear_sha256=de74648749a540f1ec4f85d057dc3f62a5c442d560b99ce2eb91b7a1b13b1087 ;; \
+      *) echo "Unsupported architecture: ${TARGETARCH}" >&2; exit 1 ;; \
+    esac \
+  && curl -fsSLo /tmp/linear-release "https://github.com/linear/linear-release/releases/download/v${LINEAR_RELEASE_VERSION}/linear-release-linux-${linear_arch}" \
+  && echo "${linear_sha256}  /tmp/linear-release" | sha256sum -c - \
+  && install /tmp/linear-release /usr/local/bin/linear-release \
+  && rm /tmp/linear-release
 
 # deb-s3 for publish-debian-package.sh. The build context is set up by
 # .buildkite/steps/build-release-image.sh.
