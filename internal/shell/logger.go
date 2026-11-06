@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"runtime"
 	"slices"
+	"sync"
 	"testing"
 )
 
@@ -168,9 +169,14 @@ func (tl TestingLogger) Promptf(format string, v ...any) {
 	tl.Logf(prompt+" "+format, v...)
 }
 
+// LoggerStreamer is safe for concurrent use. When it stands in for a hidden
+// output stream, os/exec copies the command's output into it from its own
+// goroutine while the process logger writes to it from the caller's.
 type LoggerStreamer struct {
-	Logger  Logger
-	Prefix  string
+	Logger Logger
+	Prefix string
+
+	mu      sync.Mutex
 	started bool
 	buf     *bytes.Buffer
 	offset  int
@@ -186,6 +192,9 @@ func NewLoggerStreamer(logger Logger) *LoggerStreamer {
 }
 
 func (l *LoggerStreamer) Write(p []byte) (n int, err error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
 	if bytes.ContainsRune(p, '\n') {
 		l.started = true
 	}
@@ -194,19 +203,25 @@ func (l *LoggerStreamer) Write(p []byte) (n int, err error) {
 		return n, err
 	}
 
-	err = l.Output()
+	err = l.output()
 	return n, err
 }
 
 func (l *LoggerStreamer) Close() error {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
 	if remaining := l.buf.String()[l.offset:]; len(remaining) > 0 {
 		l.Logger.Printf("%s%s", l.Prefix, remaining)
 	}
 	l.buf = bytes.NewBuffer(nil)
+	l.offset = 0
 	return nil
 }
 
-func (l *LoggerStreamer) Output() error {
+// output prints the complete lines not printed yet. It must be called with
+// l.mu held.
+func (l *LoggerStreamer) output() error {
 	if !l.started {
 		return nil
 	}

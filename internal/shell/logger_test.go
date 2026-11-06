@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"io"
 	"runtime"
+	"strings"
+	"sync"
 	"testing"
 
 	"github.com/buildkite/agent/v4/internal/shell"
@@ -114,6 +116,45 @@ func TestLoggerStreamer(t *testing.T) {
 
 	if diff := cmp.Diff(got.String(), want.String()); diff != "" {
 		t.Fatalf("shell.WriterLogger output buffer diff (-got +want):\n%s", diff)
+	}
+}
+
+// A command's hidden stderr and the process logger share one streamer, written
+// from os/exec's copy goroutine and the caller's goroutine at the same time.
+func TestLoggerStreamerConcurrentWrites(t *testing.T) {
+	got := &bytes.Buffer{}
+	streamer := shell.NewLoggerStreamer(shell.NewWriterLogger(got, false, nil))
+
+	const writers, linesPerWriter = 8, 200
+
+	var wg sync.WaitGroup
+	for w := range writers {
+		wg.Go(func() {
+			for i := range linesPerWriter {
+				fmt.Fprintf(streamer, "writer %d line %d\n", w, i) //nolint:errcheck // Writes to the underlying bytes.Buffer never error.
+			}
+		})
+	}
+	wg.Wait()
+
+	if err := streamer.Close(); err != nil {
+		t.Errorf("streamer.Close() = %v", err)
+	}
+
+	seen := make(map[string]int)
+	for line := range strings.Lines(got.String()) {
+		seen[line]++
+	}
+	for w := range writers {
+		for i := range linesPerWriter {
+			line := fmt.Sprintf("writer %d line %d\n", w, i)
+			if seen[line] != 1 {
+				t.Errorf("line %q printed %d times, want 1", line, seen[line])
+			}
+		}
+	}
+	if len(seen) != writers*linesPerWriter {
+		t.Errorf("got %d distinct lines, want %d", len(seen), writers*linesPerWriter)
 	}
 }
 
