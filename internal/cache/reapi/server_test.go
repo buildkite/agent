@@ -11,6 +11,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -33,7 +34,7 @@ import (
 )
 
 // A metadata-only Agent API fixture. Transfers use the real file store adapter.
-func cacheAPI(t *testing.T) (*api.Client, string) {
+func cacheAPI(t *testing.T) (*api.Client, string, string) {
 	t.Helper()
 	var mu sync.Mutex
 	entries := make(map[string]api.CacheEntryRetrieveResp)
@@ -99,7 +100,9 @@ func cacheAPI(t *testing.T) (*api.Client, string) {
 		}
 	}))
 	t.Cleanup(srv.Close)
-	return api.NewClient(logger.Discard, api.Config{Endpoint: srv.URL + "/", Token: "job-api-token"}), "file://" + t.TempDir()
+	dir := t.TempDir()
+	bucket := &url.URL{Scheme: "file", Path: "/" + strings.TrimPrefix(filepath.ToSlash(dir), "/")}
+	return api.NewClient(logger.Discard, api.Config{Endpoint: srv.URL + "/", Token: "job-api-token"}), bucket.String(), dir
 }
 
 func connect(t *testing.T, b *reapi.Backend) (*reapi.Server, *grpc.ClientConn, context.Context, func()) {
@@ -127,7 +130,7 @@ func digest(data []byte) *repb.Digest {
 
 func TestCachePersistenceAndIsolation(t *testing.T) {
 	t.Parallel()
-	client, bucket := cacheAPI(t)
+	client, bucket, dir := cacheAPI(t)
 	b := &reapi.Backend{API: client, BucketURL: bucket}
 	s, conn, ctx, unregister := connect(t, b)
 	capabilities := repb.NewCapabilitiesClient(conn)
@@ -230,7 +233,7 @@ func TestCachePersistenceAndIsolation(t *testing.T) {
 		t.Fatalf("range read = %v, %v", read, err)
 	}
 	// The metadata can outlive an evicted blob; this must not be an action hit.
-	files, _ := filepath.Glob(strings.TrimPrefix(bucket, "file://") + "/*")
+	files, _ := filepath.Glob(filepath.Join(dir, "*"))
 	var evicted bool
 	for _, file := range files {
 		zr, err := zip.OpenReader(file)
@@ -302,7 +305,7 @@ func TestBackendFailures(t *testing.T) {
 
 func TestByteStreamWrite(t *testing.T) {
 	t.Parallel()
-	client, bucket := cacheAPI(t)
+	client, bucket, _ := cacheAPI(t)
 	_, conn, ctx, _ := connect(t, &reapi.Backend{API: client, BucketURL: bucket})
 	payload := bytes.Repeat([]byte("a binary output\x00"), 150000)
 	d := digest(payload)
@@ -355,7 +358,7 @@ func TestOnceCompatibility(t *testing.T) {
 	if bin == "" {
 		t.Skip("set ONCE_TEST_BINARY to run the real Once compatibility check")
 	}
-	client, bucket := cacheAPI(t)
+	client, bucket, _ := cacheAPI(t)
 	s, _, _, _ := connect(t, &reapi.Backend{API: client, BucketURL: bucket})
 	workspace := t.TempDir()
 	config := `[infrastructure.cache]
