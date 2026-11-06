@@ -120,7 +120,7 @@ var CacheRestoreCommand = &cli.Command{
 			Sources: cli.EnvVars("BUILDKITE_CACHE_RESTORE_DOWNLOAD_TIMEOUT"),
 		},
 	}),
-	Action: func(ctx context.Context, c *cli.Command) error {
+	Action: func(ctx context.Context, c *cli.Command) (err error) {
 		// Let downloads join their writers and remove temporary files when the
 		// job is stopped, rather than exiting in the middle of a transfer.
 		ctx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
@@ -138,6 +138,13 @@ var CacheRestoreCommand = &cli.Command{
 		// Emit a Buildkite group header as raw job-log output so the cache
 		// output is collapsed into its own de-emphasised group.
 		fmt.Println("~~~ :package: Restoring cache...")
+		// Expand the group on failure so the error is visible, like the
+		// bootstrap does for errors in its own de-emphasised groups.
+		defer func() {
+			if err != nil {
+				fmt.Println("^^^ +++")
+			}
+		}()
 
 		apiCfg := loadAPIClientConfig(cfg, "AgentAccessToken")
 		apiClient := api.NewClient(l, apiCfg)
