@@ -61,7 +61,7 @@ backend; customers use any other code. When adding a code:
 - Use one code for each kind of failure, and give each code one meaning. If one code would cover two different failures, add a code.
 - Put details, such as file paths, refs and output, in the message, not the code.
 
-Codes are matched by people, coding agents and automation, so don't rename one after it's released. The `job capture-error` help text in [`clicommand/job_capture_error.go`](clicommand/job_capture_error.go) states the same convention for customers.
+Codes are matched by people, coding agents and automation, so don't rename one after it's released.
 
 ## Labelling pull requests
 
