@@ -8,7 +8,6 @@ import (
 	"regexp"
 	"runtime"
 	"slices"
-	"sync"
 	"syscall"
 	"time"
 
@@ -592,40 +591,41 @@ var BootstrapCommand = &cli.Command{
 		)
 		defer signal.Stop(signals)
 
-		var (
-			cancelled bool
-			received  os.Signal
-			signalMu  sync.Mutex
-		)
+		var received os.Signal
+		bootstrapDone := make(chan struct{})
+		signalDone := make(chan struct{})
 
-		// Listen for signals in the background and cancel the bootstrap
+		// Give one goroutine ownership of signal reception. Joining it after
+		// Run avoids a gap between receiving a signal and recording it, and
+		// ensures our handler is stopped before re-signalling ourselves.
 		go func() {
-			sig := <-signals
-			signalMu.Lock()
-			defer signalMu.Unlock()
+			defer close(signalDone)
+			defer signal.Stop(signals)
+			select {
+			case received = <-signals:
+			case <-bootstrapDone:
+				// Run can finish before this goroutine is scheduled. Preserve
+				// a signal that is already buffered in that case.
+				select {
+				case received = <-signals:
+				default:
+					return
+				}
+			}
 
-			// Cancel the bootstrap
 			if err := bootstrap.Cancel(); err != nil {
 				l.Debugf("Failed to cancel bootstrap: %v", err)
 			}
-
-			// Track the state and signal used
-			cancelled = true
-			received = sig
-
-			// Remove our signal handler so subsequent signals kill
-			signal.Stop(signals)
 		}()
 
-		// Run the bootstrap and get the exit code
+		// Run the bootstrap and join the signal handler before reading its state.
 		exitCode := bootstrap.Run(cctx)
-
-		signalMu.Lock()
-		defer signalMu.Unlock()
+		close(bootstrapDone)
+		<-signalDone
 
 		// If cancelled and our child process returns a non-zero, we should terminate
 		// ourselves with the same signal so that our caller can detect and handle appropriately
-		if cancelled && runtime.GOOS != "windows" {
+		if received != nil && runtime.GOOS != "windows" {
 			// Per https://pkg.go.dev/os/signal:
 			// "A SIGQUIT, SIGILL, SIGTRAP, SIGABRT, SIGSTKFLT, SIGEMT, or
 			// SIGSYS signal causes the program to exit with a stack dump."

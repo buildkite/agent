@@ -486,6 +486,11 @@ One or more containers connected to the agent, but then stopped communicating wi
 	}
 
 	if ws := r.process.WaitStatus(); ws.Signaled() {
+		// A process killed by a signal has no exit status of its own:
+		// ExitStatus is -1, which the agent otherwise uses to mean "the
+		// command never ran". Report 128+N like a shell would, so the exit
+		// status reflects the signal, e.g. 143 for SIGTERM.
+		exit.Status = 128 + int(ws.Signal())
 		exit.Signal = process.SignalString(ws.Signal())
 	}
 
