@@ -4,7 +4,6 @@ import (
 	"errors"
 	"io"
 	"os/exec"
-	"regexp"
 	"runtime"
 	"strings"
 	"syscall"
@@ -17,8 +16,6 @@ import (
 	"github.com/buildkite/osc7501"
 	"github.com/google/go-cmp/cmp"
 )
-
-var afterOSC = regexp.MustCompile(`\x1b\\(~~~|---|\+\+\+|\^\^\^ \+\+\+)`)
 
 func TestProgramStatusReportsPhasesAndHooks(t *testing.T) {
 	t.Parallel()
@@ -83,8 +80,10 @@ func TestProgramStatusReportsPhasesAndHooks(t *testing.T) {
 	}
 
 	// Reports are attached to the end of a line, so no header follows one.
-	if m := afterOSC.FindString(tester.Output); m != "" {
-		t.Errorf("a header follows an OSC 7501 terminator (%q). Full output: %q", m, tester.Output)
+	for _, h := range []string{"~~~", "---", "+++", "^^^ +++"} {
+		if strings.Contains(tester.Output, "\x1b\\"+h) {
+			t.Errorf("a %q header follows an OSC 7501 terminator. Full output: %q", h, tester.Output)
+		}
 	}
 	if want := "~~~ Running agent pre-command hook\x1b]7501;"; !strings.Contains(tester.Output, want) {
 		t.Errorf("output doesn't contain %q. Full output: %q", want, tester.Output)
