@@ -92,7 +92,10 @@ type AgentConfiguration struct {
 	// export spans to the same collector. Its headers may hold credentials,
 	// which is why it is injected after the job env files are written (kept
 	// off disk) and skipped when the job env chose its own OTLP destination.
-	ControlPlaneTracingExporter  *api.TracingExporter
+	ControlPlaneTracingExporter *api.OTLPExporter
+	// ControlPlaneJobLogsExporter is delivered via OTEL_EXPORTER_OTLP_LOGS_*
+	// under the same credential and destination-override rules as tracing.
+	ControlPlaneJobLogsExporter  *api.OTLPExporter
 	DisableWarningsFor           []string
 	AllowMultipartArtifactUpload bool
 	ArtifactUploadConcurrency    int

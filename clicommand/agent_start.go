@@ -258,7 +258,7 @@ func (asc AgentStartConfig) Features(ctx context.Context) []string {
 	// This agent can consume control-plane OTLP exporter configuration from
 	// the registration response (design:
 	// https://linear.app/buildkite/issue/A-1641).
-	features = append(features, "control-plane-otlp-tracing")
+	features = append(features, "control-plane-otlp-tracing", "control-plane-otlp-job-logs")
 
 	if asc.DisconnectAfterJob {
 		features = append(features, "disconnect-after-job")
@@ -812,6 +812,27 @@ var AgentStartCommand = &cli.Command{
 			}
 		}
 
+		localTracingSet := c.IsSet("opentelemetry-tracing")
+		if _, ok := os.LookupEnv("BUILDKITE_OPENTELEMETRY_TRACING"); ok {
+			localTracingSet = true
+		}
+		if configFile != nil {
+			if _, exists := configFile.Config["opentelemetry-tracing"]; exists {
+				localTracingSet = true
+			}
+		}
+
+		// A local false must remain an opt-out after configuration env is removed.
+		localJobLogsSet := c.IsSet("job-logs-otlp")
+		if _, ok := os.LookupEnv("BUILDKITE_JOB_LOGS_OTLP"); ok {
+			localJobLogsSet = true
+		}
+		if configFile != nil {
+			if _, exists := configFile.Config["job-logs-otlp"]; exists {
+				localJobLogsSet = true
+			}
+		}
+
 		// Remove any config env from the environment to prevent them propagating to bootstrap
 		if err := UnsetConfigFromEnvironment(c); err != nil {
 			return fmt.Errorf("failed to unset config from environment: %w", err)
@@ -1295,8 +1316,13 @@ var AgentStartCommand = &cli.Command{
 		// The operator's explicit local tracing choices always win over any
 		// control-plane tracing policy in the registration responses below.
 		localTracing := agent.LocalTracingConfig{
+			EnabledSet:              localTracingSet,
 			PropagateTraceparentSet: localPropagateTraceparentSet,
-			OTLPDestinationSet:      agent.HasLocalOTLPDestination(),
+			OTLPDestinationSet:      agent.HasLocalOTLPDestination(env.OTLPDestinationVars),
+		}
+		localJobLogs := agent.LocalJobLogsConfig{
+			EnabledSet:         localJobLogsSet,
+			OTLPDestinationSet: agent.HasLocalOTLPDestination(env.OTLPLogsDestinationVars),
 		}
 
 		// Spawned workers register separately but get the same warnings, so
@@ -1323,7 +1349,7 @@ var AgentStartCommand = &cli.Command{
 			// the agent configuration with any control-plane tracing policy
 			// merged in; the shared agentConf is never mutated.
 			workerConf := agentConf
-			agent.ApplyControlPlaneTracing(wl, &workerConf, reg.Tracing, localTracing)
+			agent.ApplyControlPlaneOTel(wl, &workerConf, reg, localTracing, localJobLogs)
 
 			// Create an agent worker to run the agent
 			return agent.NewAgentWorker(

@@ -479,14 +479,9 @@ func (r *JobRunner) createEnvironment(ctx context.Context) ([]string, error) {
 	// endpoint — must never happen. The check goes through env.Environment,
 	// which normalizes key case on Windows (a no-op on Unix), so a
 	// case-variant pipeline OTEL_* var cannot dodge it.
-	jobEnvHasOTLPDestination := false
 	normalizedJobEnv := envutil.FromMap(r.conf.Job.Env)
-	for _, name := range envutil.OTLPDestinationVars {
-		if normalizedJobEnv.Exists(name) {
-			jobEnvHasOTLPDestination = true
-			break
-		}
-	}
+	jobEnvHasOTLPDestination := slices.ContainsFunc(envutil.OTLPDestinationVars, normalizedJobEnv.Exists)
+	jobEnvHasOTLPLogsDestination := slices.ContainsFunc(envutil.OTLPLogsDestinationVars, normalizedJobEnv.Exists)
 
 	// Always override an ambient agent-process value. Without the explicit
 	// empty entry, bootstrap's inherited os.Environ could enable a mirror that
@@ -884,13 +879,19 @@ BUILDKITE_AGENT_JWKS_KEY_ID`
 		if jobEnvHasOTLPDestination {
 			r.agentLogger.Infof("Not delivering control-plane OTLP exporter to job %s: the job env already sets an OTEL_EXPORTER_OTLP_* destination, which takes precedence", r.conf.Job.ID)
 		} else {
-			maps.Copy(env, controlPlaneOTLPEnv(exp))
+			maps.Copy(env, controlPlaneOTLPEnv(exp, "TRACES"))
+		}
+	}
+	if exp := r.conf.AgentConfiguration.ControlPlaneJobLogsExporter; exp != nil && r.conf.AgentConfiguration.JobLogsOTLP {
+		if jobEnvHasOTLPLogsDestination {
+			r.agentLogger.Infof("Not delivering control-plane OTLP logs exporter to job %s: the job env already sets an OTLP logs destination, which takes precedence", r.conf.Job.ID)
+		} else {
+			maps.Copy(env, controlPlaneOTLPEnv(exp, "LOGS"))
 		}
 	}
 
-	// This is an agent-operator setting, not a pipeline setting. Always
-	// overwrite the job-provided value so a pipeline cannot enable OTLP export
-	// or choose its destination when the agent operator has not opted in.
+	// Only the operator or registration policy can enable log export, not
+	// pipeline environment variables.
 	setEnv("BUILDKITE_JOB_LOGS_OTLP", fmt.Sprint(r.conf.AgentConfiguration.JobLogsOTLP))
 
 	setEnv("BUILDKITE_AGENT_DISABLE_WARNINGS_FOR", strings.Join(r.conf.AgentConfiguration.DisableWarningsFor, ","))
