@@ -1,15 +1,18 @@
 package agent
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/buildkite/agent/v4/api"
 	"github.com/buildkite/agent/v4/logger"
 	"github.com/buildkite/agent/v4/status"
+	"github.com/buildkite/osc7501"
 	"github.com/dustin/go-humanize"
 )
 
@@ -28,6 +31,8 @@ type LogStreamerConfig struct {
 
 	// The maximum size of the log
 	MaxSizeBytes uint64
+
+	ForwardOSC func(context.Context, []api.OSCEvidence)
 }
 
 // LogStreamer divides job log output into chunks (Process), and log streamer
@@ -66,6 +71,12 @@ type LogStreamer struct {
 
 	// Have we stopped?
 	stopped bool
+
+	oscScanner *osc7501.Scanner
+	oscQueue   chan api.OSCEvidence
+	oscCount   int
+	oscWG      sync.WaitGroup
+	oscCancel  context.CancelFunc
 }
 
 // NewLogStreamer creates a new instance of the log streamer.
@@ -90,6 +101,28 @@ func (ls *LogStreamer) Start(ctx context.Context) error {
 
 	if ls.conf.MaxSizeBytes <= 0 {
 		ls.conf.MaxSizeBytes = defaultLogMaxSize
+	}
+
+	if ls.conf.ForwardOSC != nil {
+		ls.oscQueue = make(chan api.OSCEvidence, 256)
+		position := &oscOffsetWriter{}
+		ls.oscScanner = &osc7501.Scanner{W: position, OnReport: func(r osc7501.Report) {
+			if ls.oscCount < 256 {
+				report := api.OSCReport{State: r.State, ID: r.ID, App: r.App, Kind: r.Kind, Title: r.Title, Msg: r.Msg}
+				if r.Progress >= 0 {
+					progress := r.Progress
+					report.Progress = &progress
+				}
+				ls.oscQueue <- api.OSCEvidence{Offset: position.start, Report: report}
+				ls.oscCount++
+				if ls.oscCount == 256 {
+					ls.logger.Warnf("[OSC evidence POC] forwarding limit reached; later reports will be omitted")
+				}
+			}
+		}}
+		oscCtx, cancel := context.WithCancel(context.WithoutCancel(ctx))
+		ls.oscCancel = cancel
+		ls.oscWG.Go(func() { ls.forwardOSC(oscCtx) })
 	}
 
 	for i := range ls.conf.Concurrency {
@@ -144,6 +177,9 @@ func (ls *LogStreamer) Process(ctx context.Context, output []byte) error {
 			Offset:   ls.bytes,
 			Size:     size,
 		}
+		if ls.oscScanner != nil && ls.oscCount < 256 {
+			_, _ = ls.oscScanner.Write(chunk.Data)
+		}
 		output = output[size:]
 
 		// Stream the chunk onto the queue!
@@ -168,10 +204,68 @@ func (ls *LogStreamer) Stop() {
 	}
 	ls.stopped = true
 	close(ls.queue)
+	if ls.oscQueue != nil {
+		close(ls.oscQueue)
+	}
 	ls.processMutex.Unlock()
 
 	ls.logger.Debugf("[LogStreamer] Waiting for workers to shut down")
 	ls.workerWG.Wait()
+	if ls.oscCancel != nil {
+		timer := time.AfterFunc(5*time.Second, ls.oscCancel)
+		defer timer.Stop()
+		defer ls.oscCancel()
+	}
+	ls.oscWG.Wait()
+}
+
+func (ls *LogStreamer) forwardOSC(ctx context.Context) {
+	ticker := time.NewTicker(2 * time.Second)
+	defer ticker.Stop()
+	batch := make([]api.OSCEvidence, 0, 32)
+	flush := func() {
+		if len(batch) > 0 {
+			ls.conf.ForwardOSC(ctx, batch)
+			batch = make([]api.OSCEvidence, 0, 32)
+		}
+	}
+	for {
+		select {
+		case <-ctx.Done():
+			ls.logger.Warnf("[OSC evidence POC] shutdown deadline reached; pending evidence may be lost")
+			return
+		case frame, ok := <-ls.oscQueue:
+			if !ok {
+				flush()
+				return
+			}
+			batch = append(batch, frame)
+			if len(batch) == 32 {
+				flush()
+			}
+		case <-ticker.C:
+			flush()
+		}
+	}
+}
+
+// The scanner writes through each terminator before its callback. Tracking only
+// prefix positions leaves all framing and cancellation decisions to the scanner.
+type oscOffsetWriter struct {
+	tail  []byte
+	bytes uint64
+	start uint64
+}
+
+func (w *oscOffsetWriter) Write(p []byte) (int, error) {
+	const prefix = "\x1b]7501;"
+	data := append(w.tail, p...)
+	if index := bytes.LastIndex(data, []byte(prefix)); index >= 0 {
+		w.start = w.bytes + uint64(index) - uint64(len(w.tail))
+	}
+	w.bytes += uint64(len(p))
+	w.tail = append(data[:0], data[max(0, len(data)-len(prefix)+1):]...)
+	return len(p), nil
 }
 
 // The actual log streamer worker

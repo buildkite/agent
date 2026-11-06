@@ -3,6 +3,7 @@ package integration
 import (
 	"encoding/base64"
 	"fmt"
+	"io"
 	"strings"
 	"testing"
 	"time"
@@ -10,6 +11,7 @@ import (
 	"github.com/buildkite/agent/v4/internal/experiments"
 	"github.com/buildkite/agent/v4/jobapi"
 	"github.com/buildkite/bintest/v3"
+	"github.com/buildkite/osc7501"
 )
 
 func TestRedactorRedactsAgentToken(t *testing.T) {
@@ -236,5 +238,16 @@ func TestRedactorRedactsProgramStatusMessages(t *testing.T) {
 	}
 	if strings.Contains(tester.Output, "test-token-please-ignore") {
 		t.Errorf("expected agent token to be redacted, but it wasn't. Full output: %s", tester.Output)
+	}
+
+	var reports []osc7501.Report
+	scanner := osc7501.Scanner{W: io.Discard, OnReport: func(r osc7501.Report) {
+		if r.App == "bk" {
+			reports = append(reports, r)
+		}
+	}}
+	_, _ = scanner.Write([]byte(tester.Output))
+	if len(reports) != 1 || reports[0].Msg != "token [REDACTED]" {
+		t.Errorf("decoded original OSC reports = %+v, want one report with redacted token", reports)
 	}
 }

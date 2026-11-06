@@ -7,6 +7,8 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/buildkite/agent/v4/internal/redact"
+	"github.com/buildkite/agent/v4/internal/replacer"
 	"github.com/buildkite/osc7501"
 )
 
@@ -15,31 +17,48 @@ import (
 // cap in the OSC 7501 spec.
 const maxProgramStatusRecords = 256
 
-// ProgramStatusWriter passes output through unchanged and, after each OSC 7501
-// program status report in it, writes a line describing the report. Terminals
-// and the Buildkite log viewer hide the report itself, so the line makes it
-// visible in the job log.
+// ProgramStatusWriter redacts and re-encodes each OSC 7501 report and adds a readable line.
+// Terminals and the Buildkite log viewer hide the report itself, so the line
+// makes it visible in the job log.
 //
 // Reports that repeat the previous report for the same record, or only change
 // its progress, don't produce a line.
 //
 // See https://www.superlogical.com/rex/docs/build/program-status
 type ProgramStatusWriter struct {
-	mu      sync.Mutex
-	out     lineTracker
-	scanner osc7501.Scanner
-	logged  map[string]osc7501.Report // last report described, by record id
-	lineErr error                     // from writing a report's line
+	mu           sync.Mutex
+	out          lineTracker
+	scanner      osc7501.Scanner
+	logged       map[string]osc7501.Report // last report described, by record id
+	lineErr      error                     // from writing a report's line
+	redactors    *replacer.Mux
+	filtered     *programStatusOutput
+	redactedText strings.Builder
+	textRedactor *replacer.Replacer
 }
 
-// NewProgramStatusWriter returns a ProgramStatusWriter that writes to out.
-func NewProgramStatusWriter(out io.Writer) *ProgramStatusWriter {
+// NewProgramStatusWriter replaces complete OSC reports with their decoded,
+// redacted and re-encoded form before they reach logs or other consumers.
+// Unknown fields and complete invalid reports are omitted rather than forwarded.
+func NewProgramStatusWriter(out io.Writer, redactors *replacer.Mux) *ProgramStatusWriter {
 	w := &ProgramStatusWriter{
-		out:    lineTracker{w: out, last: '\n'},
-		logged: make(map[string]osc7501.Report),
+		out:       lineTracker{w: out, last: '\n'},
+		logged:    make(map[string]osc7501.Report),
+		redactors: redactors,
 	}
-	w.scanner = osc7501.Scanner{W: &w.out, OnReport: w.describe}
+	w.filtered = &programStatusOutput{out: &w.out}
+	w.scanner = osc7501.Scanner{W: w.filtered, OnReport: w.describe}
+	w.textRedactor = redact.New(&w.redactedText, nil)
+	w.textRedactor.AddPrefixes(redact.TokenPrefixes()...)
 	return w
+}
+
+// Flush releases an incomplete trailing escape sequence without dropping log bytes.
+func (w *ProgramStatusWriter) Flush() error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	_, err := w.out.Write(w.filtered.stripper.Flush())
+	return err
 }
 
 // Write implements io.Writer.
@@ -51,8 +70,19 @@ func (w *ProgramStatusWriter) Write(p []byte) (int, error) {
 	return n, err
 }
 
-// describe is called by the scanner after a report has been written to out.
+// describe is called after the original frame has been stripped from the output.
 func (w *ProgramStatusWriter) describe(r osc7501.Report) {
+	w.textRedactor.Reset(redact.AppendGoEscaped(w.redactors.Needles()))
+	for _, text := range []*string{&r.Title, &r.Msg} {
+		w.redactedText.Reset()
+		_, _ = io.WriteString(w.textRedactor, *text)
+		_ = w.textRedactor.Flush()
+		*text = w.redactedText.String()
+	}
+	if _, err := w.out.Write(r.Encode()); err != nil {
+		w.lineErr = err
+		return
+	}
 	if !w.remember(r) {
 		return
 	}
@@ -115,6 +145,18 @@ func (w *ProgramStatusWriter) remember(r osc7501.Report) bool {
 	}
 	w.logged[r.ID] = key
 	return true
+}
+
+type programStatusOutput struct {
+	out      *lineTracker
+	stripper osc7501.Stripper
+}
+
+func (o *programStatusOutput) Write(p []byte) (int, error) {
+	if _, err := o.out.Write(o.stripper.Strip(p)); err != nil {
+		return 0, err
+	}
+	return len(p), nil
 }
 
 // lineTracker writes to w and remembers the last byte written outside an ANSI

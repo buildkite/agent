@@ -176,11 +176,15 @@ func (e *Executor) Run(ctx context.Context) (exitCode int) {
 		e.status = newJobStatus(preRedactedStdout, e.cancelCh)
 	}
 
-	// Describe OSC 7501 program status reports in the job log. This must
-	// happen before redaction: the report's message is base64-encoded, so
-	// the redactor can only find secrets in it once it has been decoded.
+	// Decode and redact before re-encoding: downstream text redaction cannot
+	// remove a secret from the original base64 fields.
 	if experiments.IsEnabled(ctx, experiments.ProgramStatus) {
-		preRedactedStdout = process.NewProgramStatusWriter(preRedactedStdout) // shell -> program status -> redactor
+		writer := process.NewProgramStatusWriter(preRedactedStdout, e.redactors)
+		preRedactedStdout = writer
+		defer func() {
+			_ = writer.Flush()
+			_ = e.redactors.Flush()
+		}()
 	}
 
 	// Check if not nil to allow for tests to overwrite shell.

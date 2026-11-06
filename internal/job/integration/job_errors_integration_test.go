@@ -2,14 +2,73 @@ package integration
 
 import (
 	"encoding/json"
+	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"os/exec"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
 
 	"github.com/buildkite/agent/v4/api"
+	"github.com/buildkite/agent/v4/internal/experiments"
+	"github.com/buildkite/osc7501"
 )
+
+func TestCommandFailureDiagnosticProgramStatus(t *testing.T) {
+	t.Parallel()
+	if runtime.GOOS == "windows" {
+		t.Skip("command uses POSIX shell syntax")
+	}
+
+	ctx, _ := experiments.Enable(mainCtx, experiments.ProgramStatus)
+	tester, err := NewExecutorTester(ctx)
+	if err != nil {
+		t.Fatalf("NewExecutorTester() error = %v", err)
+	}
+	defer tester.Close()
+	agentAPI := newJobErrorsAPI(t, nil)
+	const secret = "synthetic-diagnostic-secret-7842"
+	err = tester.Run(t, append(agentAPI.env(),
+		"BUILDKITE_PROGRAM_STATUS=true",
+		"DIAGNOSTIC_SECRET="+secret,
+		"BUILDKITE_REDACTED_VARS=DIAGNOSTIC_SECRET,BUILDKITE_AGENT_ACCESS_TOKEN",
+		`BUILDKITE_COMMAND=printf 'Test suite failed: %s\n' "$DIAGNOSTIC_SECRET"; exit 3`,
+	)...)
+	var exitErr *exec.ExitError
+	if !errors.As(err, &exitErr) || exitErr.ExitCode() != 3 {
+		t.Fatalf("tester.Run() = %v, want exit status 3", err)
+	}
+
+	direct := agentAPI.report(t, "buildkite.command_failed")
+	if !strings.Contains(direct.Message, "exited with status 3") || !strings.Contains(direct.Message, "Test suite failed: [REDACTED]") {
+		t.Errorf("direct diagnostic missing failure details: %q", direct.Message)
+	}
+	if strings.Contains(direct.Message, secret) || strings.Contains(tester.Output, secret) {
+		t.Error("registered secret leaked in direct diagnostic or job output")
+	}
+
+	var diagnostics []osc7501.Report
+	scanner := osc7501.Scanner{W: io.Discard, OnReport: func(r osc7501.Report) {
+		if strings.Contains(r.Msg, secret) {
+			t.Error("registered secret leaked in decoded OSC message")
+		}
+		if r.App == "buildkite-agent" && r.ID == "diagnostic" {
+			diagnostics = append(diagnostics, r)
+		}
+	}}
+	_, _ = scanner.Write([]byte(tester.Output))
+	if len(diagnostics) != 1 {
+		t.Fatalf("decoded diagnostic reports = %d, want 1", len(diagnostics))
+	}
+	// OSC text fields replace control characters, including newlines, with spaces.
+	wantMessage := strings.ReplaceAll(direct.Message, "\n", " ")
+	if got := diagnostics[0]; got.State != osc7501.StateError || got.Msg != wantMessage {
+		t.Errorf("OSC diagnostic = %+v, want error with message %q", got, wantMessage)
+	}
+}
 
 // jobErrorsAPI stands in for the Agent API. It records captured job errors and
 // passes every other request to next, or responds 404 when next is nil.

@@ -43,6 +43,12 @@ We'll continue to run your job, but you won't be able to use the Job API`)
 	// script calling capture-error in a loop then can't keep hitting the API.
 	var refused atomic.Bool
 	reporter := func(requestCtx context.Context, capturedError *jobapi.CapturedError) error {
+		// The Local Job API has already redacted and bounded this message.
+		// Emit before delivery checks so diagnostics survive upstream refusal.
+		if e.status != nil {
+			e.status.r.Failed("diagnostic", capturedError.Message)
+		}
+
 		// Reporting must not keep a cancelled job alive through its grace period.
 		reportCtx, cancel := context.WithCancel(requestCtx)
 		defer cancel()
