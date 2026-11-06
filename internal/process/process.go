@@ -29,7 +29,15 @@ const termType = "xterm-256color"
 // fires before os/exec's WaitDelay-triggered kill, keeping cancellation
 // behaviour unchanged, while still bounding the post-exit I/O wait so a
 // leaked stdout/stderr pipe can never hang Cmd.Wait indefinitely.
-const waitDelayBuffer = 1 * time.Second
+//
+// The bound is deliberately generous: when it expires, os/exec force-closes
+// the output pipes and any not-yet-drained output is silently lost (Wait
+// returns ErrWaitDelay, which complete() treats as a clean exit). A 1s buffer
+// proved too tight on loaded Windows CI machines, where the post-exit drain of
+// fast hooks intermittently exceeded it and hook output went missing. Hitting
+// this bound should only ever mean a genuinely leaked pipe write-end, not a
+// slow-but-healthy drain.
+const waitDelayBuffer = 30 * time.Second
 
 // afterPTYStartHook lets tests force work to happen after the PTY helper
 // returns so they can verify raw-mode ordering around process startup.
@@ -99,6 +107,12 @@ type Config struct {
 	SignalGracePeriod time.Duration
 	Started           chan struct{}
 	Done              chan struct{}
+
+	// WaitDelay, when positive, overrides the derived Cmd.WaitDelay bound
+	// (SignalGracePeriod + waitDelayBuffer) for the non-PTY path. Production
+	// code leaves this zero; tests use it to keep leaked-pipe regression
+	// tests fast.
+	WaitDelay time.Duration
 }
 
 // Process is an operating system level process
@@ -315,6 +329,9 @@ func (p *Process) startWithoutPTY(context.Context) (func(), error) {
 // cancellation; this keeps cancellation behaviour identical to before while
 // still bounding the post-exit I/O wait for the leaked-pipe case.
 func (p *Process) waitDelay() time.Duration {
+	if p.conf.WaitDelay > 0 {
+		return p.conf.WaitDelay
+	}
 	return max(p.conf.SignalGracePeriod, 0) + waitDelayBuffer
 }
 
