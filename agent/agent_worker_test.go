@@ -26,6 +26,8 @@ import (
 	"github.com/buildkite/agent/v3/metrics"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/uuid"
+	"google.golang.org/protobuf/encoding/protowire"
+	"google.golang.org/protobuf/proto"
 )
 
 var dummyBootstrap = "/bin/sh -c true"
@@ -1278,6 +1280,106 @@ func TestAgentWorker_Streaming_Pause_Resume_Disconnect(t *testing.T) {
 	}
 }
 
+func TestAgentWorker_Streaming_NonActionsPreservePause(t *testing.T) {
+	t.Parallel()
+
+	unknown := new(agentedgev1.StreamPingsResponse)
+	if err := proto.Unmarshal(protowire.AppendBytes(protowire.AppendTag(nil, 99, protowire.BytesType), nil), unknown); err != nil {
+		t.Fatalf("proto.Unmarshal: %v", err)
+	}
+
+	for _, tt := range []struct {
+		name string
+		msg  *agentedgev1.StreamPingsResponse
+	}{
+		{name: "unknown action", msg: unknown},
+		{
+			name: "stream keepalive",
+			msg: &agentedgev1.StreamPingsResponse{
+				Action: &agentedgev1.StreamPingsResponse_Keepalive{Keepalive: &agentedgev1.KeepaliveAction{}},
+			},
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+			defer cancel()
+
+			server := NewFakeAPIServer(WithStreaming)
+			defer server.Close()
+
+			const agentSessionToken = "alpacas"
+			agent := server.AddAgent(agentSessionToken)
+			agent.PingHandler = func(*http.Request) (api.Ping, error) {
+				return api.Ping{}, errors.New("unexpected polling ping")
+			}
+
+			var resumed atomic.Bool
+			agent.PingStreamHandler = func(ctx context.Context, _ *connect.Request[agentedgev1.StreamPingsRequest], stream *connect.ServerStream[agentedgev1.StreamPingsResponse]) error {
+				if err := stream.Send(&agentedgev1.StreamPingsResponse{
+					Action: &agentedgev1.StreamPingsResponse_Pause{Pause: &agentedgev1.PauseAction{}},
+				}); err != nil {
+					return err
+				}
+
+				if err := stream.Send(tt.msg); err != nil {
+					return err
+				}
+
+				// Stay paused longer than the idle timeout before genuinely resuming.
+				select {
+				case <-time.After(250 * time.Millisecond):
+				case <-ctx.Done():
+					return ctx.Err()
+				}
+
+				resumed.Store(true)
+				if err := stream.Send(&agentedgev1.StreamPingsResponse{
+					Action: &agentedgev1.StreamPingsResponse_Resume{Resume: &agentedgev1.ResumeAction{}},
+				}); err != nil {
+					return err
+				}
+
+				<-ctx.Done()
+				return ctx.Err()
+			}
+
+			worker := NewAgentWorker(
+				logger.Discard,
+				&api.AgentRegisterResponse{
+					UUID:              uuid.New().String(),
+					Name:              "agent-1",
+					AccessToken:       agentSessionToken,
+					Endpoint:          server.URL,
+					PingInterval:      1,
+					HeartbeatInterval: 60,
+				},
+				metrics.NewCollector(logger.Discard, metrics.CollectorConfig{}),
+				api.NewClient(logger.Discard, api.Config{Endpoint: server.URL}),
+				AgentWorkerConfig{},
+			)
+			worker.noWaitBetweenPingsForTesting = true
+
+			if err := worker.Start(ctx, NewIdleMonitor(ctx, 1, 50*time.Millisecond)); err != nil {
+				t.Fatalf("worker.Start: %v", err)
+			}
+
+			if err := ctx.Err(); err != nil {
+				t.Fatalf("agent didn't disconnect after the explicit resume: %v", err)
+			}
+
+			if !resumed.Load() {
+				t.Error("agent disconnected while paused, before a real resume")
+			}
+
+			if agent.Pings != 0 {
+				t.Errorf("polling pings = %d, want 0", agent.Pings)
+			}
+		})
+	}
+}
+
 func TestAgentWorker_Streaming_Start_AcquireJob_Pause_Unpause(t *testing.T) {
 	t.Parallel()
 
@@ -1542,6 +1644,57 @@ func TestAgentWorker_Streaming_DisconnectAfterJob_PromptDisconnect(t *testing.T)
 	}
 	if got, want := job.State, JobStateFinished; got != want {
 		t.Errorf("job.State = %q, want %q", got, want)
+	}
+}
+
+func TestAgentWorker_Streaming_SetupTimeout_Fallback(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
+	defer cancel()
+
+	server := NewFakeAPIServer(WithStreaming)
+	defer server.Close()
+
+	const agentSessionToken = "alpacas"
+	agent := server.AddAgent(agentSessionToken)
+	agent.PingHandler = func(*http.Request) (api.Ping, error) {
+		return api.Ping{Action: "disconnect"}, nil
+	}
+	agent.PingStreamHandler = func(ctx context.Context, _ *connect.Request[agentedgev1.StreamPingsRequest], _ *connect.ServerStream[agentedgev1.StreamPingsResponse]) error {
+		<-ctx.Done()
+		return ctx.Err()
+	}
+
+	worker := NewAgentWorker(
+		logger.Discard,
+		&api.AgentRegisterResponse{
+			UUID:              uuid.New().String(),
+			Name:              "agent-1",
+			AccessToken:       agentSessionToken,
+			Endpoint:          server.URL,
+			PingInterval:      1,
+			HeartbeatInterval: 60,
+		},
+		metrics.NewCollector(logger.Discard, metrics.CollectorConfig{}),
+		api.NewClient(logger.Discard, api.Config{
+			Endpoint: server.URL,
+			Timeout:  50 * time.Millisecond,
+		}),
+		AgentWorkerConfig{},
+	)
+	worker.noWaitBetweenPingsForTesting = true
+
+	if err := worker.Start(ctx, nil); err != nil {
+		t.Fatalf("worker.Start: %v", err)
+	}
+
+	if err := ctx.Err(); err != nil {
+		t.Fatalf("agent didn't fall back to polling before the caller deadline: %v", err)
+	}
+
+	if got, want := agent.Pings, 1; got != want {
+		t.Errorf("polling pings = %d, want %d", got, want)
 	}
 }
 

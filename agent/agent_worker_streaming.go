@@ -241,6 +241,16 @@ func (a *streamLoopState) handle(ctx context.Context, msg *agentedgev1.StreamPin
 				a.logger.Debugf("[runStreamingPingLoop] Becoming unhealthy")
 				amsg.unhealthy = true
 			}
+
+		case *agentedgev1.StreamPingsResponse_Keepalive:
+			a.logger.Debugf("[runStreamingPingLoop] Received stream keepalive")
+			a.attempts = 0
+			return nil
+
+		default:
+			a.logger.Debugf("[runStreamingPingLoop] Ignoring unknown ping stream action")
+			a.attempts = 0
+			return nil
 		}
 	}
 
