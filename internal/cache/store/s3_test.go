@@ -5,7 +5,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
+	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -696,6 +699,100 @@ func TestS3Blob_Stat(t *testing.T) {
 		_, err := b.Stat(t.Context(), "key")
 		if err == nil || errors.Is(err, ErrBlobNotFound) {
 			t.Errorf("Stat err = %v, want a non-ErrBlobNotFound error", err)
+		}
+	})
+}
+
+// A healthy upload can take longer than the download read-inactivity bound.
+// HTTP/1 reads the response concurrently with writing the request: applying
+// that bound to uploads cancels them even while their bodies are progressing.
+func TestS3Blob_SlowHealthyUpload(t *testing.T) {
+	t.Setenv("AWS_ACCESS_KEY_ID", "local-test")
+	t.Setenv("AWS_SECRET_ACCESS_KEY", "local-test")
+	t.Setenv("AWS_SESSION_TOKEN", "")
+	t.Setenv("AWS_MAX_ATTEMPTS", "1")
+	old := s3DownloadIdleTimeout
+	s3DownloadIdleTimeout = 100 * time.Millisecond
+	t.Cleanup(func() { s3DownloadIdleTimeout = old })
+	const size = 16 << 20
+	server := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet {
+			if strings.HasSuffix(r.URL.Path, "/healthy") {
+				w.Header().Set("Content-Length", "12")
+				for range 12 {
+					_, _ = w.Write([]byte("x"))
+					w.(http.Flusher).Flush()
+					time.Sleep(25 * time.Millisecond)
+				}
+				return
+			}
+			w.Header().Set("Content-Length", "1")
+			w.WriteHeader(http.StatusOK)
+			w.(http.Flusher).Flush()
+			<-r.Context().Done()
+			return
+		}
+		buf := make([]byte, 128<<10)
+		var received int
+		for {
+			n, err := io.ReadFull(r.Body, buf)
+			received += n
+			if err != nil {
+				break
+			}
+			// Keep the upload progressing beyond the download inactivity bound.
+			time.Sleep(5 * time.Millisecond)
+		}
+		if received != size {
+			t.Errorf("received %d bytes, want %d", received, size)
+		}
+		w.Header().Set("ETag", `"local-test"`)
+	}))
+	server.Config.ConnState = func(c net.Conn, state http.ConnState) {
+		if state == http.StateNew {
+			// Keep loopback buffering from swallowing the entire body early
+			// and turning this into a response-header stall instead.
+			if err := c.(*net.TCPConn).SetReadBuffer(64 << 10); err != nil {
+				t.Error(err)
+			}
+		}
+	}
+	server.Start()
+	defer server.Close()
+	b, err := NewS3Blob(t.Context(), "s3://bucket?use_path_style=true&part_size_mb=32&endpoint="+url.QueryEscape(server.URL))
+	if err != nil {
+		t.Fatal(err)
+	}
+	file := filepath.Join(t.TempDir(), "upload")
+	if err := os.WriteFile(file, make([]byte, size), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+	defer cancel()
+	info, err := b.Upload(ctx, file, "key", time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.BytesTransferred != size {
+		t.Errorf("uploaded %d bytes, want %d", info.BytesTransferred, size)
+	}
+	t.Run("healthy download outlives inactivity bound", func(t *testing.T) {
+		file := filepath.Join(t.TempDir(), "download")
+		info, err := b.Download(ctx, "healthy", file)
+		if err != nil {
+			t.Fatal(err)
+		}
+		data, err := os.ReadFile(file)
+		if err != nil || string(data) != strings.Repeat("x", 12) || info.BytesTransferred != 12 {
+			t.Fatalf("healthy download = %q, %+v, %v", data, info, err)
+		}
+	})
+	t.Run("stalled download still times out", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+		defer cancel()
+		_, err := b.Download(ctx, "key", filepath.Join(t.TempDir(), "download"))
+		if err == nil || ctx.Err() != nil {
+			t.Fatalf("stalled download = %v (caller context: %v), want transport timeout", err, ctx.Err())
 		}
 	})
 }
