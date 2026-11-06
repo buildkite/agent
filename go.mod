@@ -25,7 +25,7 @@ require (
 	github.com/buildkite/go-buildkite/v4 v4.23.0
 	github.com/buildkite/go-pipeline v0.18.1
 	github.com/buildkite/interpolate v0.1.5
-	github.com/buildkite/osc7501 v0.3.0
+	github.com/buildkite/osc7501 v0.3.1
 	github.com/buildkite/roko v1.4.0
 	github.com/buildkite/shellwords v1.0.1
 	github.com/coreos/go-systemd/v22 v22.7.0
