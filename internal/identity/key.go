@@ -100,6 +100,11 @@ func manager(ctx context.Context, keyURI string) (kms.KeyManager, error) {
 		if u.Get("provider") != "Microsoft Platform Crypto Provider" {
 			return nil, fmt.Errorf("host keys require the Microsoft Platform Crypto Provider")
 		}
+		// Certificate lookup can acquire a key from a different provider.
+		// A named container keeps lookup on the explicitly selected TPM.
+		if u.Get("key") == "" {
+			return nil, fmt.Errorf("host CAPI keys require an explicit key container (key=...); certificate lookup is not supported")
+		}
 	case "tpmkms":
 		if u.Get("storage-directory") == "" {
 			return nil, fmt.Errorf("host TPM keys require an explicit storage-directory")

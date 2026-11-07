@@ -81,7 +81,11 @@ Supported Smallstep KMS URI backends are:
   build, Secure Enclave availability, and appropriate macOS signing/entitlements.
   The current release build script disables CGO, so this prototype requires a
   custom macOS build; it does not change release packaging.
-* `capi`, with `provider=Microsoft Platform Crypto Provider` explicitly selected.
+* `capi`, with `provider=Microsoft Platform Crypto Provider` and an explicit
+  `key=...` container, for example
+  `capi:provider=Microsoft Platform Crypto Provider;key=buildkite-agent;store-location=machine`.
+  Certificate-only lookup is rejected because its private key can belong to a
+  software provider regardless of the provider selected in the URI.
 
 A trusted provisioner authorizes the public key for a cluster/queue and supplies
 a short-lived, single-use grant **bound to that thumbprint**. How the provisioner

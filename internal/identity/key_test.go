@@ -28,6 +28,17 @@ func TestHardwareKeyConfigurationDoesNotFallBack(t *testing.T) {
 	}
 }
 
+func TestCAPICertificateLookupIsRejectedBeforeOpeningBackend(t *testing.T) {
+	// A certificate's private key can belong to a software provider even
+	// when the URI selects the TPM provider. Reject the configuration before
+	// attempting to open CAPI, including on systems without Windows support.
+	const uri = "capi:provider=Microsoft Platform Crypto Provider;sha1=0123456789abcdef0123456789abcdef01234567"
+	_, _, err := identity.Open(t.Context(), uri, false)
+	if err == nil || !strings.Contains(err.Error(), "explicit key container") {
+		t.Fatalf("certificate-only identity error = %v, want explicit key container requirement", err)
+	}
+}
+
 func TestPublicIdentityContainsNoPrivateKey(t *testing.T) {
 	for _, curve := range []elliptic.Curve{elliptic.P256(), elliptic.P384()} {
 		private, err := ecdsa.GenerateKey(curve, rand.Reader)
