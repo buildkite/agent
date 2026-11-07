@@ -3,8 +3,10 @@ package logger_test
 import (
 	"bytes"
 	"encoding/json"
+	"io"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/buildkite/agent/v4/logger"
 )
@@ -64,6 +66,41 @@ func TestTextPrinter(t *testing.T) {
 
 	if msg := b.String(); !strings.HasSuffix(msg, "llamas rock key=val\n") {
 		t.Fatalf("bad message, got %q", msg)
+	}
+}
+
+type panicWriter struct{}
+
+func (panicWriter) Write([]byte) (int, error) { panic("write failed") }
+
+// A printer whose writer panics must not leave the shared output mutex locked,
+// or every later log line, from any printer, blocks forever.
+func TestPrintersUnlockWhenWriterPanics(t *testing.T) {
+	// Everything runs in the goroutine, so a regression fails at the timeout
+	// below instead of hanging the test binary.
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for _, printer := range []logger.Printer{
+			logger.NewTextPrinter(panicWriter{}),
+			logger.NewJSONPrinter(panicWriter{}),
+		} {
+			func() {
+				defer func() {
+					if recover() == nil {
+						t.Errorf("%T.Print didn't panic with a panicking writer", printer)
+					}
+				}()
+				printer.Print(logger.INFO, "llamas", nil)
+			}()
+		}
+		logger.NewTextPrinter(io.Discard).Print(logger.INFO, "alpacas", nil)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("Print blocked after a writer panicked; the output mutex was left locked")
 	}
 }
 

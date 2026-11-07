@@ -22,8 +22,11 @@ const (
 )
 
 type StreamPingsRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	AgentId       string                 `protobuf:"bytes,1,opt,name=agent_id,json=agentId,proto3" json:"agent_id,omitempty"`
+	state   protoimpl.MessageState `protogen:"open.v1"`
+	AgentId string                 `protobuf:"bytes,1,opt,name=agent_id,json=agentId,proto3" json:"agent_id,omitempty"`
+	// Agent release version without the User-Agent build-number suffix.
+	// Older agents omit this field and won't receive stream keepalives.
+	AgentVersion  string `protobuf:"bytes,2,opt,name=agent_version,json=agentVersion,proto3" json:"agent_version,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -65,6 +68,13 @@ func (x *StreamPingsRequest) GetAgentId() string {
 	return ""
 }
 
+func (x *StreamPingsRequest) GetAgentVersion() string {
+	if x != nil {
+		return x.AgentVersion
+	}
+	return ""
+}
+
 type StreamPingsResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Types that are valid to be assigned to Action:
@@ -73,6 +83,7 @@ type StreamPingsResponse struct {
 	//	*StreamPingsResponse_Pause
 	//	*StreamPingsResponse_Disconnect
 	//	*StreamPingsResponse_JobAssigned
+	//	*StreamPingsResponse_Keepalive
 	Action         isStreamPingsResponse_Action `protobuf_oneof:"action"`
 	RequestHeaders *RequestHeaders              `protobuf:"bytes,6,opt,name=request_headers,json=requestHeaders,proto3" json:"request_headers,omitempty"`
 	unknownFields  protoimpl.UnknownFields
@@ -152,6 +163,15 @@ func (x *StreamPingsResponse) GetJobAssigned() *JobAssignedAction {
 	return nil
 }
 
+func (x *StreamPingsResponse) GetKeepalive() *KeepaliveAction {
+	if x != nil {
+		if x, ok := x.Action.(*StreamPingsResponse_Keepalive); ok {
+			return x.Keepalive
+		}
+	}
+	return nil
+}
+
 func (x *StreamPingsResponse) GetRequestHeaders() *RequestHeaders {
 	if x != nil {
 		return x.RequestHeaders
@@ -179,6 +199,10 @@ type StreamPingsResponse_JobAssigned struct {
 	JobAssigned *JobAssignedAction `protobuf:"bytes,5,opt,name=job_assigned,json=jobAssigned,proto3,oneof"`
 }
 
+type StreamPingsResponse_Keepalive struct {
+	Keepalive *KeepaliveAction `protobuf:"bytes,7,opt,name=keepalive,proto3,oneof"`
+}
+
 func (*StreamPingsResponse_Resume) isStreamPingsResponse_Action() {}
 
 func (*StreamPingsResponse_Pause) isStreamPingsResponse_Action() {}
@@ -186,6 +210,8 @@ func (*StreamPingsResponse_Pause) isStreamPingsResponse_Action() {}
 func (*StreamPingsResponse_Disconnect) isStreamPingsResponse_Action() {}
 
 func (*StreamPingsResponse_JobAssigned) isStreamPingsResponse_Action() {}
+
+func (*StreamPingsResponse_Keepalive) isStreamPingsResponse_Action() {}
 
 type RequestHeaders struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -399,6 +425,43 @@ func (x *JobAssignedAction) GetJob() *Job {
 	return nil
 }
 
+// Keeps the stream active without changing agent state.
+type KeepaliveAction struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *KeepaliveAction) Reset() {
+	*x = KeepaliveAction{}
+	mi := &file_agentedge_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *KeepaliveAction) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*KeepaliveAction) ProtoMessage() {}
+
+func (x *KeepaliveAction) ProtoReflect() protoreflect.Message {
+	mi := &file_agentedge_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use KeepaliveAction.ProtoReflect.Descriptor instead.
+func (*KeepaliveAction) Descriptor() ([]byte, []int) {
+	return file_agentedge_proto_rawDescGZIP(), []int{7}
+}
+
 type Job struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
@@ -408,7 +471,7 @@ type Job struct {
 
 func (x *Job) Reset() {
 	*x = Job{}
-	mi := &file_agentedge_proto_msgTypes[7]
+	mi := &file_agentedge_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -420,7 +483,7 @@ func (x *Job) String() string {
 func (*Job) ProtoMessage() {}
 
 func (x *Job) ProtoReflect() protoreflect.Message {
-	mi := &file_agentedge_proto_msgTypes[7]
+	mi := &file_agentedge_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -433,7 +496,7 @@ func (x *Job) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Job.ProtoReflect.Descriptor instead.
 func (*Job) Descriptor() ([]byte, []int) {
-	return file_agentedge_proto_rawDescGZIP(), []int{7}
+	return file_agentedge_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *Job) GetId() string {
@@ -447,16 +510,18 @@ var File_agentedge_proto protoreflect.FileDescriptor
 
 const file_agentedge_proto_rawDesc = "" +
 	"\n" +
-	"\x0fagentedge.proto\x12\fagentedge.v1\"/\n" +
+	"\x0fagentedge.proto\x12\fagentedge.v1\"T\n" +
 	"\x12StreamPingsRequest\x12\x19\n" +
-	"\bagent_id\x18\x01 \x01(\tR\aagentId\"\xe7\x02\n" +
+	"\bagent_id\x18\x01 \x01(\tR\aagentId\x12#\n" +
+	"\ragent_version\x18\x02 \x01(\tR\fagentVersion\"\xa6\x03\n" +
 	"\x13StreamPingsResponse\x124\n" +
 	"\x06resume\x18\x02 \x01(\v2\x1a.agentedge.v1.ResumeActionH\x00R\x06resume\x121\n" +
 	"\x05pause\x18\x03 \x01(\v2\x19.agentedge.v1.PauseActionH\x00R\x05pause\x12@\n" +
 	"\n" +
 	"disconnect\x18\x04 \x01(\v2\x1e.agentedge.v1.DisconnectActionH\x00R\n" +
 	"disconnect\x12D\n" +
-	"\fjob_assigned\x18\x05 \x01(\v2\x1f.agentedge.v1.JobAssignedActionH\x00R\vjobAssigned\x12E\n" +
+	"\fjob_assigned\x18\x05 \x01(\v2\x1f.agentedge.v1.JobAssignedActionH\x00R\vjobAssigned\x12=\n" +
+	"\tkeepalive\x18\a \x01(\v2\x1d.agentedge.v1.KeepaliveActionH\x00R\tkeepalive\x12E\n" +
 	"\x0frequest_headers\x18\x06 \x01(\v2\x1c.agentedge.v1.RequestHeadersR\x0erequestHeadersB\b\n" +
 	"\x06actionJ\x04\b\x01\x10\x02R\bendpoint\"\x8d\x01\n" +
 	"\x0eRequestHeaders\x12@\n" +
@@ -470,7 +535,8 @@ const file_agentedge_proto_rawDesc = "" +
 	"\x10DisconnectAction\x12\x16\n" +
 	"\x06reason\x18\x01 \x01(\tR\x06reason\"8\n" +
 	"\x11JobAssignedAction\x12#\n" +
-	"\x03job\x18\x01 \x01(\v2\x11.agentedge.v1.JobR\x03job\"\x15\n" +
+	"\x03job\x18\x01 \x01(\v2\x11.agentedge.v1.JobR\x03job\"\x11\n" +
+	"\x0fKeepaliveAction\"\x15\n" +
 	"\x03Job\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id2j\n" +
 	"\x10AgentEdgeService\x12V\n" +
@@ -489,7 +555,7 @@ func file_agentedge_proto_rawDescGZIP() []byte {
 	return file_agentedge_proto_rawDescData
 }
 
-var file_agentedge_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
+var file_agentedge_proto_msgTypes = make([]protoimpl.MessageInfo, 10)
 var file_agentedge_proto_goTypes = []any{
 	(*StreamPingsRequest)(nil),  // 0: agentedge.v1.StreamPingsRequest
 	(*StreamPingsResponse)(nil), // 1: agentedge.v1.StreamPingsResponse
@@ -498,24 +564,26 @@ var file_agentedge_proto_goTypes = []any{
 	(*PauseAction)(nil),         // 4: agentedge.v1.PauseAction
 	(*DisconnectAction)(nil),    // 5: agentedge.v1.DisconnectAction
 	(*JobAssignedAction)(nil),   // 6: agentedge.v1.JobAssignedAction
-	(*Job)(nil),                 // 7: agentedge.v1.Job
-	nil,                         // 8: agentedge.v1.RequestHeaders.ValuesEntry
+	(*KeepaliveAction)(nil),     // 7: agentedge.v1.KeepaliveAction
+	(*Job)(nil),                 // 8: agentedge.v1.Job
+	nil,                         // 9: agentedge.v1.RequestHeaders.ValuesEntry
 }
 var file_agentedge_proto_depIdxs = []int32{
 	3, // 0: agentedge.v1.StreamPingsResponse.resume:type_name -> agentedge.v1.ResumeAction
 	4, // 1: agentedge.v1.StreamPingsResponse.pause:type_name -> agentedge.v1.PauseAction
 	5, // 2: agentedge.v1.StreamPingsResponse.disconnect:type_name -> agentedge.v1.DisconnectAction
 	6, // 3: agentedge.v1.StreamPingsResponse.job_assigned:type_name -> agentedge.v1.JobAssignedAction
-	2, // 4: agentedge.v1.StreamPingsResponse.request_headers:type_name -> agentedge.v1.RequestHeaders
-	8, // 5: agentedge.v1.RequestHeaders.values:type_name -> agentedge.v1.RequestHeaders.ValuesEntry
-	7, // 6: agentedge.v1.JobAssignedAction.job:type_name -> agentedge.v1.Job
-	0, // 7: agentedge.v1.AgentEdgeService.StreamPings:input_type -> agentedge.v1.StreamPingsRequest
-	1, // 8: agentedge.v1.AgentEdgeService.StreamPings:output_type -> agentedge.v1.StreamPingsResponse
-	8, // [8:9] is the sub-list for method output_type
-	7, // [7:8] is the sub-list for method input_type
-	7, // [7:7] is the sub-list for extension type_name
-	7, // [7:7] is the sub-list for extension extendee
-	0, // [0:7] is the sub-list for field type_name
+	7, // 4: agentedge.v1.StreamPingsResponse.keepalive:type_name -> agentedge.v1.KeepaliveAction
+	2, // 5: agentedge.v1.StreamPingsResponse.request_headers:type_name -> agentedge.v1.RequestHeaders
+	9, // 6: agentedge.v1.RequestHeaders.values:type_name -> agentedge.v1.RequestHeaders.ValuesEntry
+	8, // 7: agentedge.v1.JobAssignedAction.job:type_name -> agentedge.v1.Job
+	0, // 8: agentedge.v1.AgentEdgeService.StreamPings:input_type -> agentedge.v1.StreamPingsRequest
+	1, // 9: agentedge.v1.AgentEdgeService.StreamPings:output_type -> agentedge.v1.StreamPingsResponse
+	9, // [9:10] is the sub-list for method output_type
+	8, // [8:9] is the sub-list for method input_type
+	8, // [8:8] is the sub-list for extension type_name
+	8, // [8:8] is the sub-list for extension extendee
+	0, // [0:8] is the sub-list for field type_name
 }
 
 func init() { file_agentedge_proto_init() }
@@ -528,6 +596,7 @@ func file_agentedge_proto_init() {
 		(*StreamPingsResponse_Pause)(nil),
 		(*StreamPingsResponse_Disconnect)(nil),
 		(*StreamPingsResponse_JobAssigned)(nil),
+		(*StreamPingsResponse_Keepalive)(nil),
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
@@ -535,7 +604,7 @@ func file_agentedge_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_agentedge_proto_rawDesc), len(file_agentedge_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   9,
+			NumMessages:   10,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

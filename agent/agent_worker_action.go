@@ -118,6 +118,10 @@ func (a *AgentWorker) runActionLoop(ctx context.Context, idleMon *idleMonitor, f
 			// instructions.
 			// *This includes acquire-job and disconnect-after-idle-timeout.*
 			a.logger.Debugf("[runActionLoop] Entering pause state")
+			if !paused {
+				a.logger.Infof("Agent has been paused")
+			}
+
 			paused = true
 			// For the purposes of deciding whether or not to exit,
 			// pausedness is a kind of non-idleness.

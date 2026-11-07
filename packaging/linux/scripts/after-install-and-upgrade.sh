@@ -91,8 +91,9 @@ if [ "$OPERATION" = "install" ] ; then
 
 TXT
 
-  echo "You now need to add your agent token to \"/etc/buildkite-agent/buildkite-agent.cfg\""
-  echo "and then you can start your agent by running \"$START_COMMAND\""
+  echo "Before starting your agent, check that \"/etc/buildkite-agent/buildkite-agent.cfg\""
+  echo "contains your agent token and the settings you want to use."
+  echo "Then start your agent by running \"$START_COMMAND\""
 fi
 
 # Restart on upgrade, if we can

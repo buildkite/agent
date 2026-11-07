@@ -77,6 +77,10 @@ type Client struct {
 	// HTTP client used to communicate with the API.
 	client *http.Client
 
+	// HTTP client used for streaming responses. It shares the API client's
+	// transport but has no whole-response timeout.
+	streamingClient *http.Client
+
 	// The logger used
 	logger logger.Logger
 
@@ -101,9 +105,10 @@ func NewClient(l logger.Logger, conf Config) *Client {
 			client = agenthttp.WithDPoP(client, conf.Token, conf.HostKey, conf.Endpoint, strings.EqualFold(conf.TokenType, "DPoP"))
 		}
 		return &Client{
-			logger: l,
-			client: client,
-			conf:   conf,
+			logger:          l,
+			client:          client,
+			streamingClient: withoutTimeout(client),
+			conf:            conf,
 		}
 	}
 
@@ -125,11 +130,18 @@ func NewClient(l logger.Logger, conf Config) *Client {
 	}
 
 	return &Client{
-		logger:         l,
-		client:         httpClient,
-		conf:           conf,
-		requestHeaders: requestHeadersFromEnv(os.Environ()),
+		logger:          l,
+		client:          httpClient,
+		streamingClient: withoutTimeout(httpClient),
+		conf:            conf,
+		requestHeaders:  requestHeadersFromEnv(os.Environ()),
 	}
+}
+
+func withoutTimeout(client *http.Client) *http.Client {
+	streamingClient := *client
+	streamingClient.Timeout = 0
+	return &streamingClient
 }
 
 func requestHeadersFromEnv(environ []string) http.Header {
