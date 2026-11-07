@@ -36,6 +36,7 @@ var commandConfigPairs = []configCommandPair{
 	{Config: EnvSetConfig{}, Command: EnvSetCommand},
 	{Config: EnvUnsetConfig{}, Command: EnvUnsetCommand},
 	{Config: GitCredentialsHelperConfig{}, Command: GitCredentialsHelperCommand},
+	{Config: IdentityConfig{}, Command: IdentityCommand},
 	{Config: JobPromiseFailureConfig{}, Command: JobPromiseFailureCommand},
 	{Config: JobCaptureErrorConfig{}, Command: JobCaptureErrorCommand},
 	{Config: KubernetesBootstrapConfig{}, Command: KubernetesBootstrapCommand},

@@ -18,6 +18,18 @@ If an experiment doesn't exist, no error will be raised.
 
 ## Available Experiments
 
+### `host-bound-sessions`
+
+Enables the hidden `identity` command and the `start --host-key-uri` and
+`--enrollment-token` options for hardware-key-bound worker sessions. Uses
+Smallstep KMS for TPM 2.0, Windows TPM-backed CNG and macOS Secure Enclave keys,
+with no automatic software fallback.
+
+**Status:** Agent-side protocol prototype only. Requires an enrollment and DPoP
+verification backend that the production Agent API does not yet provide. Job
+tokens remain portable; renewal, attestation and a job-operation broker are not
+implemented. See [the protocol and provisioning notes](docs/agent-start.md#experimental-host-bound-worker-sessions).
+
 ### `origin-clonekit`
 
 Seeds a missing on-host Git mirror using Cursor Origin's CloneKit pack data.

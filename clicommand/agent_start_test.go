@@ -17,10 +17,56 @@ import (
 	"github.com/buildkite/agent/v4/api"
 	"github.com/buildkite/agent/v4/core"
 	"github.com/buildkite/agent/v4/env"
+	"github.com/buildkite/agent/v4/internal/experiments"
 	"github.com/buildkite/agent/v4/logger"
 	"github.com/google/go-cmp/cmp"
 	"github.com/urfave/cli/v3"
 )
+
+func TestAgentStartHostIdentityValidation(t *testing.T) {
+	ctx, _ := experiments.Enable(t.Context(), experiments.HostBoundSessions)
+	valid := AgentStartConfig{
+		HostKeyURI:      "tpmkms:name=agent;storage-directory=/var/lib/agent/identity",
+		EnrollmentToken: "file:///run/agent/grant", Endpoint: "https://agent.example/v3",
+	}
+	for _, tt := range []struct {
+		name string
+		edit func(*AgentStartConfig)
+	}{
+		{"missing key", func(c *AgentStartConfig) { c.HostKeyURI = "" }},
+		{"missing grant", func(c *AgentStartConfig) { c.EnrollmentToken = "" }},
+		{"plaintext grant", func(c *AgentStartConfig) { c.EnrollmentToken = "secret" }},
+		{"legacy token", func(c *AgentStartConfig) { c.Token = "legacy" }},
+		{"http", func(c *AgentStartConfig) { c.Endpoint = "http://agent.example" }},
+		{"url credentials", func(c *AgentStartConfig) { c.Endpoint = "https://user:secret@agent.example" }},
+		{"credential dump", func(c *AgentStartConfig) { c.DebugHTTP = true }},
+		{"acquisition", func(c *AgentStartConfig) { c.AcquireJob = "job" }},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := valid
+			tt.edit(&cfg)
+			if err := cfg.validateIdentity(ctx); err == nil {
+				t.Fatal("accepted unsupported host identity configuration")
+			}
+		})
+	}
+	if err := valid.validateIdentity(t.Context()); err == nil {
+		t.Fatal("host identity enabled without its experiment")
+	}
+	if err := valid.validateIdentity(ctx); err != nil {
+		t.Fatal(err)
+	}
+	valid.EnrollmentToken = "fd://3"
+	if err := valid.validateIdentity(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := (AgentStartConfig{Token: "legacy"}).validateIdentity(t.Context()); err != nil {
+		t.Fatalf("legacy registration changed: %v", err)
+	}
+	if err := (AgentStartConfig{}).validateIdentity(t.Context()); err == nil {
+		t.Fatal("start accepted no credentials")
+	}
+}
 
 func TestAgentStartFeatures_OpenTelemetryTracing(t *testing.T) {
 	t.Parallel()

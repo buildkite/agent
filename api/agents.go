@@ -24,6 +24,8 @@ type AgentRegisterResponse struct {
 	UUID              string            `json:"id"`
 	Name              string            `json:"name"`
 	AccessToken       string            `json:"access_token"`
+	TokenType         string            `json:"token_type,omitempty"`
+	DPoPJKT           string            `json:"dpop_jkt,omitempty"`
 	Endpoint          string            `json:"endpoint"`
 	RequestHeaders    map[string]string `json:"request_headers"`
 	PingInterval      int               `json:"ping_interval"`
@@ -54,6 +56,9 @@ func (c *Client) Register(ctx context.Context, regReq *AgentRegisterRequest) (*A
 		return nil, resp, err
 	}
 
+	if err := c.validateHostBinding(a.AccessToken, a.TokenType, a.DPoPJKT); err != nil {
+		return nil, resp, err
+	}
 	return a, resp, err
 }
 
