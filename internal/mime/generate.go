@@ -52,7 +52,8 @@ var types = map[string]string{
 	".{{$key}}": "{{$value}}",
 {{- end }}
 }
-`))
+`,
+))
 
 func writeMimeFile(file string, data any) error {
 	f, err := os.Create(file)

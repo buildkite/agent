@@ -147,7 +147,8 @@ func (e *Executor) captureCommandError(ctx context.Context, err error) {
 		// read the environment changes it made.
 		captureJobError(ctx, e.shell, "buildkite.command_hook_failed", e.withRecentOutput(jobapi.CapturedErrorMessage(
 			fmt.Sprintf("%s, which runs instead of the step's command, failed: %v.", e.commandHook, err),
-			e.commandHook+", which runs instead of the step's command, failed.")))
+			e.commandHook+", which runs instead of the step's command, failed.",
+		)))
 	case errors.Is(err, errNoCommand):
 		captureJobError(ctx, e.shell, "buildkite.command_not_configured", err.Error())
 	case errors.Is(err, errCommandEvalDisabled), errors.Is(err, errCommandOutsideRepository):
@@ -158,7 +159,8 @@ func (e *Executor) captureCommandError(ctx context.Context, err error) {
 		captureJobError(ctx, e.shell, "buildkite.command_eval_rejected", message)
 	default:
 		captureJobError(ctx, e.shell, "buildkite.command_start_failed", jobapi.CapturedErrorMessage(
-			fmt.Sprintf("%s could not be run: %v.", subject, err), subject+" could not be run."))
+			fmt.Sprintf("%s could not be run: %v.", subject, err), subject+" could not be run.",
+		))
 	}
 }
 

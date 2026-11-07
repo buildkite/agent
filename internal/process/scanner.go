@@ -47,7 +47,7 @@ func (s *Scanner) ScanLines(r io.Reader, f func(line string)) error {
 			// since it points to its own internal buffer array. To accumulate the entire
 			// result we make a copy of the first prefix, and ensure there is spare capacity
 			// for future appends to minimize the need for resizing on append.
-			appending = make([]byte, len(line), (cap(line))*2)
+			appending = make([]byte, len(line), cap(line)*2)
 			copy(appending, line)
 
 			continue

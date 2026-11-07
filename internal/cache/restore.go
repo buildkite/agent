@@ -39,7 +39,8 @@ func restoreCleanupError(configured, resolved string, err error) error {
 	}
 	return errors.Join(errRestoreMutatedTargets, fmt.Errorf(
 		"failed to clean target_path %q (resolved to %q): %w%s; extraction was not started, but target paths may already have been modified",
-		configured, resolved, err, detail))
+		configured, resolved, err, detail,
+	))
 }
 
 // Restore restores a cache from storage by ID.

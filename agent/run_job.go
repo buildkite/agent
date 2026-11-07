@@ -236,7 +236,8 @@ func (r *JobRunner) Run(ctx context.Context, ignoreAgentInDispatches *bool) (err
 			noMatch := new(noMatchError)
 			if !errors.As(option.err, &noMatch) {
 				r.captureJobError(ctx, "buildkite.job_rejected", jobapi.CapturedErrorMessage(
-					fmt.Sprintf("This agent rejected the job because its --%s option does not allow it: %v. %s", option.option, option.err, fix), fallback))
+					fmt.Sprintf("This agent rejected the job because its --%s option does not allow it: %v. %s", option.option, option.err, fix), fallback,
+				))
 				break
 			}
 			// URL masking stops at whitespace, "<" and ">", so it can't mask
@@ -441,7 +442,8 @@ func (r *JobRunner) runJob(ctx context.Context) core.ProcessExit {
 		if timeout := new(kubernetes.StartTimeoutError); errors.As(err, &timeout) && !r.agentStopping.Load() {
 			r.captureJobError(ctx, "buildkite.kubernetes_container_not_connected", fmt.Sprintf(
 				"Not every container connected to the agent within %v, the agent's --kubernetes-container-start-timeout. The container image may not have been pulled (ImagePullBackOff). Check that each image in the podSpec exists and the cluster can pull it, and check the pod's events.",
-				timeout.Timeout))
+				timeout.Timeout,
+			))
 		}
 
 		// The process did not run at all, so make sure it fails

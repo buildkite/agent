@@ -119,7 +119,8 @@ func (e *Executor) validatePluginCheckout(ctx context.Context, checkout *pluginC
 			fix := "Fix the plugin's definition, or use a version of the plugin whose definition is valid."
 			captureJobError(ctx, e.shell, "buildkite.plugin_definition_file_invalid", jobapi.CapturedErrorMessage(
 				fmt.Sprintf("The definition of plugin %s, in its plugin.json, plugin.yaml, or plugin.yml, could not be read: %v. %s", pluginSource(checkout.Plugin), err, fix),
-				"A plugin's definition, in its plugin.json, plugin.yaml, or plugin.yml, could not be read. "+fix))
+				"A plugin's definition, in its plugin.json, plugin.yaml, or plugin.yml, could not be read. "+fix,
+			))
 			return err
 		}
 		checkout.Definition = def
@@ -148,13 +149,15 @@ func (e *Executor) capturePluginCheckoutError(ctx context.Context, p *plugin.Plu
 		fix := "Check that the repository exists, this agent can access it, and the version is a tag, branch, or commit in it."
 		message := jobapi.CapturedErrorMessage(
 			fmt.Sprintf("Git could not check out plugin %s from %s at version %q. %s", p.Name(), p.Location, p.Version, fix),
-			fmt.Sprintf("Git could not check out plugin %s. %s", p.Name(), fix))
+			fmt.Sprintf("Git could not check out plugin %s. %s", p.Name(), fix),
+		)
 		captureJobError(ctx, e.shell, "buildkite.plugin_checkout_failed", e.withRecentOutput(message))
 		return
 	}
 	captureJobError(ctx, e.shell, "buildkite.plugin_checkout_failed", jobapi.CapturedErrorMessage(
 		fmt.Sprintf("The agent could not check out plugin %s: %v.", pluginSource(p), err),
-		fmt.Sprintf("The agent could not check out plugin %s.", p.Name())))
+		fmt.Sprintf("The agent could not check out plugin %s.", p.Name()),
+	))
 }
 
 // schemaErrorRules turn schema validation messages into ones without the
@@ -209,13 +212,15 @@ func (e *Executor) capturePluginValidationErrors(ctx context.Context, p *plugin.
 		fix := "Install them on the agent, or run the step on agents that have them, such as another queue."
 		captureJobError(ctx, e.shell, "buildkite.plugin_requirement_not_found", jobapi.CapturedErrorMessage(
 			fmt.Sprintf("Plugin %s needs commands that are not in this agent's PATH: %s. %s", source, strings.Join(missing, ", "), fix),
-			fmt.Sprintf("Plugin %s needs commands that are not in this agent's PATH. %s", p.Name(), fix)))
+			fmt.Sprintf("Plugin %s needs commands that are not in this agent's PATH. %s", p.Name(), fix),
+		))
 	}
 	if len(invalid) > 0 {
 		fix := "Fix the configuration in the step."
 		captureJobError(ctx, e.shell, "buildkite.plugin_configuration_invalid", jobapi.CapturedErrorMessage(
 			fmt.Sprintf("The step's configuration for plugin %s does not match the plugin's schema: %s. %s", source, strings.Join(invalid, "; "), fix),
-			fmt.Sprintf("The step's configuration for plugin %s does not match the plugin's schema. %s", p.Name(), fix)))
+			fmt.Sprintf("The step's configuration for plugin %s does not match the plugin's schema. %s", p.Name(), fix),
+		))
 	}
 }
 
@@ -296,7 +301,8 @@ func (e *Executor) VendoredPluginPhase(ctx context.Context) error {
 		if fi, err := e.checkoutRoot.Stat(p.Location); err != nil || !fi.IsDir() {
 			captureJobError(ctx, e.shell, "buildkite.vendored_plugin_invalid", jobapi.CapturedErrorMessage(
 				fmt.Sprintf("The step uses vendored plugin %s, but %s is not a directory in the checked-out repository. Commit the plugin at that path, or fix the path in the step.", p.Name(), p.Location),
-				fmt.Sprintf("The step uses vendored plugin %s, but its path is not a directory in the checked-out repository. Commit the plugin at that path, or fix the path in the step.", p.Name())))
+				fmt.Sprintf("The step uses vendored plugin %s, but its path is not a directory in the checked-out repository. Commit the plugin at that path, or fix the path in the step.", p.Name()),
+			))
 			return fmt.Errorf("vendored plugin path %q must be a directory within the checked-out repository: %w", p.Location, err)
 		}
 
@@ -305,7 +311,8 @@ func (e *Executor) VendoredPluginPhase(ctx context.Context) error {
 		if fi, err := e.checkoutRoot.Stat(hooksPath); err != nil || !fi.IsDir() {
 			captureJobError(ctx, e.shell, "buildkite.vendored_plugin_invalid", jobapi.CapturedErrorMessage(
 				fmt.Sprintf("The step uses vendored plugin %s, but %s has no hooks directory in the checked-out repository. A plugin's hooks must be in a hooks directory at its root.", p.Name(), p.Location),
-				fmt.Sprintf("The step uses vendored plugin %s, but it has no hooks directory in the checked-out repository. A plugin's hooks must be in a hooks directory at its root.", p.Name())))
+				fmt.Sprintf("The step uses vendored plugin %s, but it has no hooks directory in the checked-out repository. A plugin's hooks must be in a hooks directory at its root.", p.Name()),
+			))
 			return fmt.Errorf("vendored plugin hooks path %q must be a directory within the checked-out repository: %w", hooksPath, err)
 		}
 
