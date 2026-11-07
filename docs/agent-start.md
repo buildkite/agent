@@ -79,6 +79,8 @@ Supported Smallstep KMS URI backends are:
 * `tpmkms`, with an explicit `storage-directory` and access to the TPM device.
 * `mackms`, with `se=true` and without biometric prompts. This requires a CGO
   build, Secure Enclave availability, and appropriate macOS signing/entitlements.
+  The agent verifies the resolved private key's Secure Enclave token attribute
+  and pins signing to its public-key hash; the URI flag alone is not trusted.
   The current release build script disables CGO, so this prototype requires a
   custom macOS build; it does not change release packaging.
 * `capi`, with `provider=Microsoft Platform Crypto Provider` and an explicit

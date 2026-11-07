@@ -73,6 +73,18 @@ func Open(ctx context.Context, keyURI string, create bool) (*Key, func() error, 
 		}
 		req = created.CreateSignerRequest
 	}
+	if uri.HasScheme("mackms", keyURI) {
+		publicKey, err := km.GetPublicKey(&apiv1.GetPublicKeyRequest{Name: req.SigningKey})
+		if err != nil {
+			_ = km.Close()
+			return nil, nil, fmt.Errorf("read host public key: %w", err)
+		}
+		req.SigningKey, err = secureEnclaveKeyURI(req.SigningKey, publicKey)
+		if err != nil {
+			_ = km.Close()
+			return nil, nil, fmt.Errorf("verify Secure Enclave host key: %w", err)
+		}
+	}
 	signer, err := km.CreateSigner(&req)
 	if err != nil {
 		_ = km.Close()
