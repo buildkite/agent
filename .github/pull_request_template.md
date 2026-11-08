@@ -8,7 +8,13 @@
 ## Context
 
 <!--
-For example, a link to a GitHub issue or a Buildkite internal document such as Linear, Coda, Slack, Basecamp.
+Explain why this change is needed in the PR itself, so readers don't have to follow a link to understand it. Add supporting links where available; prefer the original issue or discussion over an AI coding session.
+
+Use links the intended reviewers can read:
+- For Buildkite-only review, internal Notion, Linear or Slack discussions and workspace-readable AI threads are useful supporting context. Keep the rationale understandable to readers outside Buildkite too.
+- For external contributors or reviewers, use public sources, such as GitHub issues or discussions. Any linked AI session (Amp, Codex, Claude or another tool) should be publicly readable.
+
+Check thread visibility before linking. Don't publish sensitive information to make a link accessible; omit links that can't be shared appropriately and summarise the non-sensitive rationale here instead.
 -->
 
 ## Changes

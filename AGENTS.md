@@ -63,6 +63,14 @@ backend; customers use any other code. When adding a code:
 
 Codes are matched by people, coding agents and automation, so don't rename one after it's released. The `job capture-error` help text in [`clicommand/job_capture_error.go`](clicommand/job_capture_error.go) states the same convention for customers.
 
+## Pull request context
+
+Follow the context guidance in [the PR template](.github/pull_request_template.md), including its audience and link visibility rules.
+
+Ground the "why" in the user's explanation, an issue or an existing discussion. The diff shows what changed, but doesn't establish why someone wants it. Don't invent motivation, user impact or prior decisions. If the rationale is missing or ambiguous, ask the user what problem they're solving and why this change is needed before drafting that part of the description. Ask for a supporting link if one exists, but don't require one or ask again when the available context already answers the question.
+
+Before posting an AI thread link as context, confirm that the intended reviewers can read it. If visibility isn't confirmed, prompt the user to make it workspace-readable for Buildkite-only review or publicly readable for external review, and confirm they've done so before posting the link. Don't change visibility yourself. If the audience is unclear, use public sources or ask whether internal-only context is appropriate. If a thread can't be shared safely, omit the link rather than exposing sensitive information.
+
 ## Labelling pull requests
 
 Every PR needs a category label. The [PR Labels workflow](.github/workflows/pr-labels.yml) is a required check, and it fails until the PR has at least one of `bug`, `feature`, `change`, `internal`, `dependencies` or `release`. The labels also decide where the PR appears in the release notes ([`.github/release.yml`](.github/release.yml)), so the check passing doesn't mean the label is right. A user-facing PR labelled `internal` or `dependencies` ends up under 🏠 Internal, where people reading the release notes are likely to miss it.
