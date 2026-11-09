@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
 
@@ -19,9 +20,11 @@ import (
 	"github.com/buildkite/agent/v4/internal/experiments"
 	"github.com/buildkite/agent/v4/logger"
 	"github.com/buildkite/go-pipeline"
+	"github.com/buildkite/go-pipeline/jwkutil"
 	"github.com/buildkite/go-pipeline/ordered"
 	"github.com/buildkite/go-pipeline/warning"
 	"github.com/google/go-cmp/cmp"
+	"github.com/lestrrat-go/jwx/v3/jwa"
 	"github.com/urfave/cli/v3"
 )
 
@@ -76,6 +79,63 @@ func TestPipelineUploadWithoutCheckout(t *testing.T) {
 			}
 			if got := strings.Contains(string(output), "Error running git rev-parse"); got != test.wantWarning {
 				t.Errorf("stderr = %q, want commit resolution warning = %t", output, test.wantWarning)
+			}
+		})
+	}
+}
+
+func TestPipelineUploadSignsArtifactPathsOnlyWhenOptedIn(t *testing.T) {
+	t.Setenv("BUILDKITE_AGENT_JWKS_FILE", "")
+	t.Setenv("BUILDKITE_REPO", "https://example.test/repo.git")
+	t.Chdir(t.TempDir())
+	if err := os.WriteFile("pipeline.yml", []byte("steps:\n  - command: echo hello\n    artifact_paths: logs/*.txt\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	keys, _, err := jwkutil.NewKeyPair("test-key", jwa.EdDSA())
+	if err != nil {
+		t.Fatal(err)
+	}
+	keyFile, err := json.Marshal(keys)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile("key.json", keyFile, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, tt := range []struct {
+		name  string
+		optIn bool
+	}{
+		{name: "legacy signing"},
+		{name: "opted-in signing", optIn: true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			args := []string{"buildkite-agent", "upload", "--dry-run", "--agent-access-token", "unused-token", "--jwks-file", "key.json", "--jwks-key-id", "test-key", "pipeline.yml"}
+			if tt.optIn {
+				args = append(args[:len(args)-1], "--sign-artifact-paths", "pipeline.yml")
+			}
+			var stdout bytes.Buffer
+			cmd := *PipelineUploadCommand
+			app := &cli.Command{Name: "buildkite-agent", Commands: []*cli.Command{&cmd}, Writer: &stdout, ErrWriter: io.Discard}
+			if err := app.Run(t.Context(), args); err != nil {
+				t.Fatal(err)
+			}
+			var output struct {
+				Steps []struct {
+					Signature struct {
+						SignedFields []string `json:"signed_fields"`
+					} `json:"signature"`
+				} `json:"steps"`
+			}
+			if err := json.Unmarshal(stdout.Bytes(), &output); err != nil {
+				t.Fatalf("decoding signed pipeline: %v", err)
+			}
+			if len(output.Steps) != 1 {
+				t.Fatalf("signed pipeline has %d steps, want 1", len(output.Steps))
+			}
+			if got := slices.Contains(output.Steps[0].Signature.SignedFields, "artifact_paths"); got != tt.optIn {
+				t.Fatalf("signed fields = %v, want artifact_paths included = %t", output.Steps[0].Signature.SignedFields, tt.optIn)
 			}
 		})
 	}

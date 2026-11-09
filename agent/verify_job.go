@@ -77,6 +77,7 @@ func (r *JobRunner) verifyJob(ctx context.Context, keySet any) error {
 	// - command should match BUILDKITE_COMMAND exactly
 	// - env vars are complicated
 	// - plugins should match BUILDKITE_PLUGINS semantically
+	// - artifact paths should match BUILDKITE_ARTIFACT_PATHS after matrix interpolation
 	// - matrix interpolates into the others, and does not itself compare
 	//
 	// We can't check that the job is consistent with fields we don't know
@@ -173,6 +174,13 @@ func (r *JobRunner) verifyJob(ctx context.Context, keySet any) error {
 
 			if !bytes.Equal(jobPluginsNorm, stepPluginsNorm) {
 				r.agentLogger.Debugf("failed to verifyJob: jobPluginsNorm = %q != %q = stepPluginsNorm", jobPluginsNorm, stepPluginsNorm)
+				return newInvalidSignatureError(ErrInvalidJob)
+			}
+
+		case "artifact_paths":
+			paths, err := step.ArtifactPaths()
+			if err != nil || paths != r.conf.Job.Env["BUILDKITE_ARTIFACT_PATHS"] {
+				r.agentLogger.Debugf("failed to verifyJob: signed artifact paths do not match the job's upload paths: %v", err)
 				return newInvalidSignatureError(ErrInvalidJob)
 			}
 

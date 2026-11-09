@@ -114,6 +114,8 @@ github.com/buildkite/go-buildkite/v4 v4.23.0 h1:GlLgPzGz/+B/4Fc5CphIxynoQn00SdSu
 github.com/buildkite/go-buildkite/v4 v4.23.0/go.mod h1:t/M4DUcs7qyebtzm3nkyZ1zUB/svWnKtR+uRU2Ca8tQ=
 github.com/buildkite/go-pipeline v0.18.1 h1:24vuQtRrHoLTC+ywuG7/C6I1TYiiP/ib2sCM4byPCZY=
 github.com/buildkite/go-pipeline v0.18.1/go.mod h1:6Mcx4gDQBMBsWEdRpPi1JEuxWlam11zaT3J/6/v8lN0=
+github.com/buildkite/go-pipeline v0.18.2-0.20261109235255-eacf57649ae6 h1:tqKHsStDqw3vHj9OsP0wgHyD4wPILSERzJHH7UXr5qs=
+github.com/buildkite/go-pipeline v0.18.2-0.20261109235255-eacf57649ae6/go.mod h1:6Mcx4gDQBMBsWEdRpPi1JEuxWlam11zaT3J/6/v8lN0=
 github.com/buildkite/interpolate v0.1.5 h1:v2Ji3voik69UZlbfoqzx+qfcsOKLA61nHdU79VV+tPU=
 github.com/buildkite/interpolate v0.1.5/go.mod h1:dHnrwHew5O8VNOAgMDpwRlFnhL5VSN6M1bHVmRZ9Ccc=
 github.com/buildkite/osc7501 v0.3.1 h1:T+uuSCkiQgH39D+d0uL7k305jYkO7/iW8Iph83s2QB4=

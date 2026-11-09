@@ -46,7 +46,8 @@ type ToolSignConfig struct {
 	GCPKMSKeyID string `cli:"signing-gcp-kms-key"`
 
 	// Enable debug logging for pipeline signing, this depends on debug logging also being enabled
-	DebugSigning bool `cli:"debug-signing"`
+	DebugSigning      bool `cli:"debug-signing"`
+	SignArtifactPaths bool `cli:"sign-artifact-paths"`
 
 	// Needed for to use GraphQL API
 	OrganizationSlug string `cli:"organization-slug"`
@@ -148,6 +149,10 @@ Signing a pipeline from a file:
 			Name:    "debug-signing",
 			Usage:   "Enable debug logging for pipeline signing. This can potentially leak secrets to the logs as it prints each step in full before signing. Requires debug logging to be enabled (default: false)",
 			Sources: cli.EnvVars("BUILDKITE_AGENT_DEBUG_SIGNING"),
+		},
+		&cli.BoolFlag{
+			Name:  "sign-artifact-paths",
+			Usage: "Include automatic artifact upload paths in step signatures. Requires updated verifying agents and backend (default: false)",
 		},
 
 		// These are required for GraphQL
@@ -325,6 +330,7 @@ func signOffline(ctx context.Context, c *cli.Command, l logger.Logger, key signa
 		signature.WithEnv(parsedPipeline.Env.ToMap()),
 		signature.WithLogger(logger.DeprecatedLogger{Logger: l}),
 		signature.WithDebugSigning(cfg.DebugSigning),
+		signature.WithArtifactPathsSigning(cfg.SignArtifactPaths),
 	)
 	if err != nil {
 		return fmt.Errorf("couldn't sign pipeline: %w", err)
@@ -391,6 +397,7 @@ func signWithGraphQL(ctx context.Context, c *cli.Command, l logger.Logger, key s
 		signature.WithEnv(parsedPipeline.Env.ToMap()),
 		signature.WithLogger(logger.DeprecatedLogger{Logger: debugL}),
 		signature.WithDebugSigning(cfg.DebugSigning),
+		signature.WithArtifactPathsSigning(cfg.SignArtifactPaths),
 	)
 	if err != nil {
 		return fmt.Errorf("couldn't sign pipeline: %w", err)
