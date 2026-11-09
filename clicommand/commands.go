@@ -75,6 +75,7 @@ var BuildkiteAgentCommands = []*cli.Command{
 		},
 	},
 	GitCredentialsHelperCommand,
+	IdentityCommand,
 	{
 		Name:     "lock",
 		Category: categoryJobCommands,

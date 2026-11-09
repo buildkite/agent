@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/buildkite/agent/v4/internal/agenthttp"
+	"github.com/buildkite/agent/v4/internal/identity"
 	"github.com/buildkite/agent/v4/logger"
 	"github.com/google/go-querystring/query"
 )
@@ -40,6 +41,11 @@ type Config struct {
 
 	// The authentication token to use, either a registration or access token
 	Token string
+
+	// HostKey signs experimental key-bound requests. TokenType is "DPoP" for
+	// bound credentials and empty only for the initial enrollment exchange.
+	HostKey   *identity.Key
+	TokenType string
 
 	// User agent used when communicating with the Buildkite Agent API.
 	UserAgent string
@@ -94,29 +100,39 @@ func NewClient(l logger.Logger, conf Config) *Client {
 	}
 
 	if conf.HTTPClient != nil {
+		client := conf.HTTPClient
+		if conf.HostKey != nil || conf.TokenType != "" {
+			client = agenthttp.WithDPoP(client, conf.Token, conf.HostKey, conf.Endpoint, strings.EqualFold(conf.TokenType, "DPoP"))
+		}
 		return &Client{
 			logger:          l,
-			client:          conf.HTTPClient,
-			streamingClient: withoutTimeout(conf.HTTPClient),
+			client:          client,
+			streamingClient: withoutTimeout(client),
 			conf:            conf,
 		}
 	}
 
 	clientOptions := []agenthttp.ClientOption{
-		agenthttp.WithAuthToken(conf.Token),
 		agenthttp.WithAllowHTTP2(!conf.DisableHTTP2),
 		agenthttp.WithTLSConfig(conf.TLSConfig),
+	}
+	if conf.HostKey == nil {
+		clientOptions = append(clientOptions, agenthttp.WithAuthToken(conf.Token))
 	}
 
 	if conf.Timeout != 0 {
 		clientOptions = append(clientOptions, agenthttp.WithTimeout(conf.Timeout))
 	}
 
-	client := agenthttp.NewClient(clientOptions...)
+	httpClient := agenthttp.NewClient(clientOptions...)
+	if conf.HostKey != nil || conf.TokenType != "" {
+		httpClient = agenthttp.WithDPoP(httpClient, conf.Token, conf.HostKey, conf.Endpoint, strings.EqualFold(conf.TokenType, "DPoP"))
+	}
+
 	return &Client{
 		logger:          l,
-		client:          client,
-		streamingClient: withoutTimeout(client),
+		client:          httpClient,
+		streamingClient: withoutTimeout(httpClient),
 		conf:            conf,
 		requestHeaders:  requestHeadersFromEnv(os.Environ()),
 	}
@@ -180,6 +196,7 @@ func (c *Client) FromAgentRegisterResponse(reg *AgentRegisterResponse) *Client {
 
 	// Override the registration token with the access token
 	conf.Token = reg.AccessToken
+	conf.TokenType = reg.TokenType
 
 	// If Buildkite told us to use a new Endpoint, respect that
 	if reg.Endpoint != "" {

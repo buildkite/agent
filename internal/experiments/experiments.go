@@ -24,6 +24,7 @@ const (
 const (
 	// Available experiments
 	AgentAPI                       = "agent-api"
+	HostBoundSessions              = "host-bound-sessions"
 	InterpolationPrefersRuntimeEnv = "interpolation-prefers-runtime-env"
 	OriginCloneKit                 = "origin-clonekit"
 	ProgramStatus                  = "program-status"
@@ -54,6 +55,7 @@ const (
 var (
 	Available = map[string]struct{}{
 		AgentAPI:                       {},
+		HostBoundSessions:              {},
 		InterpolationPrefersRuntimeEnv: {},
 		OriginCloneKit:                 {},
 		LegacyPostHookOrder:            {},

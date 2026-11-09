@@ -1026,7 +1026,8 @@ func (e *Executor) executeLocalHook(ctx context.Context, name string) error {
 		relPath, _ := filepath.Rel(e.shell.Env.GetString("BUILDKITE_BUILD_CHECKOUT_PATH", ""), localHookPath)
 		captureJobError(ctx, e.shell, "buildkite.local_hook_rejected", jobapi.CapturedErrorMessage(
 			fmt.Sprintf("The repository has a %s hook at %s, but %s disables local hooks, so the job failed. %s", name, filepath.ToSlash(relPath), disabledBy, fix),
-			fmt.Sprintf("The repository has a %s hook, but %s disables local hooks, so the job failed. %s", name, disabledBy, fix)))
+			fmt.Sprintf("The repository has a %s hook, but %s disables local hooks, so the job failed. %s", name, disabledBy, fix),
+		))
 		return localHookRefusedError{path: localHookPath}
 	}
 

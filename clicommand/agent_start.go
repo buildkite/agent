@@ -217,11 +217,13 @@ type AgentStartConfig struct {
 	PingMode string `cli:"ping-mode"`
 
 	// API config
-	DebugHTTP bool   `cli:"debug-http"`
-	TraceHTTP bool   `cli:"trace-http"`
-	Token     string `cli:"token" validate:"required"`
-	Endpoint  string `cli:"endpoint" validate:"required"`
-	NoHTTP2   bool   `cli:"no-http2"`
+	DebugHTTP       bool   `cli:"debug-http"`
+	TraceHTTP       bool   `cli:"trace-http"`
+	Token           string `cli:"token"`
+	HostKeyURI      string `cli:"host-key-uri"`
+	EnrollmentToken string `cli:"enrollment-token"`
+	Endpoint        string `cli:"endpoint" validate:"required"`
+	NoHTTP2         bool   `cli:"no-http2"`
 }
 
 // checkoutOverrideMode resolves the configured mode, forcing strict when command-eval is off.
@@ -742,6 +744,16 @@ var AgentStartCommand = &cli.Command{
 
 		// API Flags
 		AgentRegisterTokenFlag, // != AgentAccessToken
+		&cli.StringFlag{
+			Name: "host-key-uri", Hidden: true,
+			Usage:   "Experimental signing provider URI; requires --experiment host-bound-sessions",
+			Sources: cli.EnvVars("BUILDKITE_AGENT_HOST_KEY_URI"),
+		},
+		&cli.StringFlag{
+			Name: "enrollment-token", Hidden: true,
+			Usage:   "Experimental single-use enrollment grant, supplied as file://PATH or fd://N",
+			Sources: cli.EnvVars("BUILDKITE_AGENT_ENROLLMENT_TOKEN"),
+		},
 		EndpointFlag,
 		NoHTTP2Flag,
 		DebugHTTPFlag,
@@ -783,6 +795,10 @@ var AgentStartCommand = &cli.Command{
 			defaultConfigFilePaths(),
 		))
 		defer done()
+
+		if err := cfg.validateIdentity(ctx); err != nil {
+			return err
+		}
 
 		// Resolve indirect registration tokens (fd://N from the re-exec
 		// above, or file://PATH) into the real token.
@@ -1219,10 +1235,6 @@ var AgentStartCommand = &cli.Command{
 			}
 		}
 
-		// Create the API apiClient
-		apiClient := api.NewClient(l, loadAPIClientConfig(cfg, "Token"))
-		client := &core.Client{APIClient: apiClient, Logger: l}
-
 		// The registration request for all agents
 		registerReq := api.AgentRegisterRequest{
 			Name:              cfg.Name,
@@ -1291,6 +1303,19 @@ var AgentStartCommand = &cli.Command{
 
 			regReqs = append(regReqs, registerReq)
 		}
+
+		// Validate local configuration before consuming the single-use grant.
+		// Enroll once, then register each worker with its own bound session.
+		apiConfig := loadAPIClientConfig(cfg, "Token")
+		if cfg.HostKeyURI != "" {
+			closeKey, err := enrollHost(ctx, cfg, l, &apiConfig)
+			if err != nil {
+				return err
+			}
+			defer closeKey() //nolint:errcheck // Keep the key open until every worker stops.
+		}
+		apiClient := api.NewClient(l, apiConfig)
+		client := &core.Client{APIClient: apiClient, Logger: l}
 
 		// The operator's explicit local tracing choices always win over any
 		// control-plane tracing policy in the registration responses below.

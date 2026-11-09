@@ -1,8 +1,14 @@
 package agent
 
 import (
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"regexp"
 	"runtime"
 	"slices"
@@ -12,9 +18,87 @@ import (
 	"github.com/buildkite/agent/v4/api"
 	envutil "github.com/buildkite/agent/v4/env"
 	"github.com/buildkite/agent/v4/internal/experiments"
+	"github.com/buildkite/agent/v4/internal/identity"
 	"github.com/buildkite/agent/v4/logger"
 	"github.com/google/go-cmp/cmp"
 )
+
+func TestHostBoundWorkerDoesNotDelegateIdentityToJob(t *testing.T) {
+	t.Setenv("BUILDKITE_AGENT_HOST_KEY_URI", "host-key-must-not-leak")
+	t.Setenv("BUILDKITE_AGENT_ENROLLMENT_TOKEN", "file:///host-only/grant")
+	private, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	key, err := identity.New(private)
+	if err != nil {
+		t.Fatal(err)
+	}
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Authorization") != "Token job-only" || r.Header.Get("DPoP") != "" {
+			t.Error("job API request inherited worker credentials or host signing authority")
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		_, _ = w.Write([]byte(`{}`))
+	}))
+	defer server.Close()
+	client := api.NewClient(logger.Discard, api.Config{
+		Endpoint: server.URL, Token: "host-session", TokenType: "DPoP", HostKey: key,
+		TLSConfig: server.Client().Transport.(*http.Transport).TLSClientConfig,
+	})
+	conf := JobRunnerConfig{Job: &api.Job{ID: "host-bound-test"}}
+	if _, err := NewJobRunner(t.Context(), logger.Discard, client, conf); err == nil {
+		t.Fatal("job without its own token inherited the bound worker session")
+	}
+	dir := t.TempDir()
+	path := filepath.Join(dir, "bootstrap.sh")
+	script := "#!/bin/sh\nprintf '%s|%s|%s' \"$BUILDKITE_AGENT_ACCESS_TOKEN\" \"$BUILDKITE_AGENT_HOST_KEY_URI\" \"$BUILDKITE_AGENT_ENROLLMENT_TOKEN\" > credentials.txt\n"
+	if runtime.GOOS == "windows" {
+		path = filepath.Join(dir, "bootstrap.bat")
+		script = "@echo off\r\n> credentials.txt echo %BUILDKITE_AGENT_ACCESS_TOKEN%^|%BUILDKITE_AGENT_HOST_KEY_URI%^|%BUILDKITE_AGENT_ENROLLMENT_TOKEN%\r\n"
+	}
+	if err := os.WriteFile(path, []byte(script), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	conf.Job.Token = "job-only"
+	conf.Job.Env = map[string]string{
+		"BUILDKITE_AGENT_HOST_KEY_URI":     "job-supplied-key",
+		"BUILDKITE_AGENT_ENROLLMENT_TOKEN": "job-supplied-grant",
+	}
+	conf.AgentConfiguration = AgentConfiguration{BuildPath: dir, BootstrapScript: fmt.Sprintf("%q", path)}
+	if runtime.GOOS == "windows" {
+		conf.AgentConfiguration.BootstrapScript = fmt.Sprintf("cmd.exe /c %q", path)
+	}
+	runner, err := NewJobRunner(t.Context(), logger.Discard, client, conf)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_ = os.Remove(runner.envShellFile.Name())
+		_ = os.Remove(runner.envJSONFile.Name())
+	})
+	if _, err := runner.apiClient.Connect(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if err := runner.process.Run(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	credentials, err := os.ReadFile(filepath.Join(dir, "credentials.txt"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.TrimSpace(string(credentials)); got != "job-only||" {
+		t.Fatalf("bootstrap credentials = %q, want job-only||", got)
+	}
+	data, err := os.ReadFile(runner.envJSONFile.Name())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(data), "BUILDKITE_AGENT_HOST_KEY_URI") || strings.Contains(string(data), "BUILDKITE_AGENT_ENROLLMENT_TOKEN") {
+		t.Fatal("host identity settings escaped through the job environment file")
+	}
+}
 
 func TestCreateEnvironmentProtectedEnv(t *testing.T) {
 	t.Parallel()

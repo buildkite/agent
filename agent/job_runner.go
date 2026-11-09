@@ -201,7 +201,13 @@ func NewJobRunner(ctx context.Context, l logger.Logger, apiClient *api.Client, c
 	if conf.Job.Token != "" {
 		clientConf := apiClient.Config()
 		clientConf.Token = conf.Job.Token
+		// This slice binds worker sessions only. Job subprocesses keep their
+		// own legacy credential and must never receive host signing authority.
+		clientConf.HostKey = nil
+		clientConf.TokenType = ""
 		apiClient = apiClient.New(clientConf)
+	} else if apiClient.Config().HostKey != nil {
+		return nil, fmt.Errorf("host-bound sessions require a separate job token; refusing to expose the worker session to a job")
 	}
 
 	r := &JobRunner{
@@ -327,6 +333,10 @@ func NewJobRunner(ctx context.Context, l logger.Logger, apiClient *api.Client, c
 	// the top of the current one so the ENV from Buildkite and the agent
 	// take precedence over the agent
 	processEnv := append(os.Environ(), env...)
+	// Host identity settings belong only to the supervisor, including when
+	// supplied through its environment rather than CLI flags. Explicit empty
+	// overrides are necessary because process.Process also inherits os.Environ.
+	processEnv = append(processEnv, "BUILDKITE_AGENT_HOST_KEY_URI=", "BUILDKITE_AGENT_ENROLLMENT_TOKEN=")
 
 	// The process that will run the bootstrap script
 	if conf.KubernetesExec {
@@ -455,6 +465,8 @@ func (r *JobRunner) createEnvironment(ctx context.Context) ([]string, error) {
 
 	// The agent registration token should never make it into the job environment
 	delete(env, "BUILDKITE_AGENT_TOKEN")
+	delete(env, "BUILDKITE_AGENT_HOST_KEY_URI")
+	delete(env, "BUILDKITE_AGENT_ENROLLMENT_TOKEN")
 
 	// Filter only job-supplied values, before injecting agent configuration or
 	// writing either env file. The process inherits the operator's environment
