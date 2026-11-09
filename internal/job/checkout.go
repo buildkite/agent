@@ -90,7 +90,7 @@ func (e *Executor) CheckoutPhase(ctx context.Context) (retErr error) {
 		return err
 	}
 
-	if err := e.checkout(ctx); err != nil {
+	if err := e.checkout(ctx, e.defaultCheckoutPhase); err != nil {
 		return err
 	}
 
@@ -141,7 +141,7 @@ func (e *Executor) validateRepositoryAllowedForCheckout(repository string) error
 }
 
 // checkout runs checkout hook or default checkout logic
-func (e *Executor) checkout(ctx context.Context) error {
+func (e *Executor) checkout(ctx context.Context, defaultCheckout func(context.Context, int) error) error {
 	if e.GitCommitVerification == GitCommitVerificationFailClosed {
 		reason := e.commitVerificationSkipReason()
 		switch {
@@ -222,7 +222,7 @@ func (e *Executor) checkout(ctx context.Context) error {
 			roko.WithStrategy(roko.Exponential(2*time.Second, 0)),
 			roko.WithJitter(),
 		).DoWithContext(ctx, func(r *roko.Retrier) error {
-			err := e.runDefaultCheckoutAttempt(ctx, r.AttemptCount())
+			err := e.runDefaultCheckoutAttempt(ctx, r.AttemptCount(), defaultCheckout)
 			if err == nil {
 				return nil
 			}
@@ -368,7 +368,7 @@ var errCheckoutAttemptTimedOut = errors.New("checkout attempt timed out")
 // timeout if BUILDKITE_GIT_CHECKOUT_TIMEOUT is set. On timeout the returned
 // error is joined with errCheckoutAttemptTimedOut so the retry loop can
 // distinguish a timeout-kill from other signal-terminated processes.
-func (e *Executor) runDefaultCheckoutAttempt(ctx context.Context, previousAttempts int) error {
+func (e *Executor) runDefaultCheckoutAttempt(ctx context.Context, previousAttempts int, defaultCheckout func(context.Context, int) error) error {
 	var reports gitErrorReports
 	// Settle the result and cancel the attempt timer before delivering
 	// observations under the parent job context. Reporting must not turn a
@@ -376,14 +376,14 @@ func (e *Executor) runDefaultCheckoutAttempt(ctx context.Context, previousAttemp
 	defer func() { reports.deliver(ctx, e.shell) }()
 	attemptCtx := context.WithValue(ctx, gitErrorReportsKey{}, &reports)
 	if e.GitCheckoutTimeout <= 0 {
-		return e.defaultCheckoutPhase(attemptCtx, previousAttempts)
+		return defaultCheckout(attemptCtx, previousAttempts)
 	}
 
 	timeout := time.Duration(e.GitCheckoutTimeout) * time.Second
 	attemptCtx, cancel := context.WithTimeout(attemptCtx, timeout)
 	defer cancel()
 
-	err := e.defaultCheckoutPhase(attemptCtx, previousAttempts)
+	err := defaultCheckout(attemptCtx, previousAttempts)
 	if err != nil && attemptCtx.Err() == context.DeadlineExceeded && ctx.Err() == nil {
 		return fmt.Errorf("%w after %s: %w", errCheckoutAttemptTimedOut, timeout, err)
 	}
