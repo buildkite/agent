@@ -22,15 +22,16 @@ type IdentityConfig struct {
 // IdentityCommand creates or inspects the public identity used by a provisioner.
 var IdentityCommand = &cli.Command{
 	Name:   "identity",
-	Usage:  "Create or inspect an experimental hardware-backed agent identity",
+	Usage:  "Create or inspect an experimental key-backed agent identity",
 	Hidden: true,
 	Description: `Print the public JWK and its SHA-256 thumbprint as JSON.
-Requires --experiment host-bound-sessions. Use --create once on a new host,
-then have a trusted provisioner authorize the thumbprint. This command never
-prints private keys. Existing keys are not replaced by --create.`,
+Requires --experiment host-bound-sessions. Use --create for a new local hardware
+key, or open an existing AWS KMS key without --create. Have a trusted provisioner
+authorize the thumbprint. This command never prints private keys. Existing keys
+are not replaced by --create.`,
 	Flags: append(globalFlags(),
-		&cli.StringFlag{Name: "key-uri", Usage: "Hardware key URI (mackms, capi or tpmkms)"},
-		&cli.BoolFlag{Name: "create", Usage: "Create the hardware key instead of opening it"},
+		&cli.StringFlag{Name: "key-uri", Usage: "Signing provider URI (awskms, mackms, capi or tpmkms)"},
+		&cli.BoolFlag{Name: "create", Usage: "Create a local hardware key instead of opening it; not supported for AWS KMS"},
 	),
 	Action: func(ctx context.Context, c *cli.Command) error {
 		ctx, cfg, _, _, done := setupLoggerAndConfig[IdentityConfig](ctx, c)
@@ -74,7 +75,7 @@ func (cfg AgentStartConfig) validateIdentity(ctx context.Context) error {
 }
 
 // enrollHost runs once for the process, not once per spawned worker. The grant
-// source and hardware key are never included in AgentConfiguration or job env.
+// source and signing key URI are never included in AgentConfiguration or job env.
 func enrollHost(ctx context.Context, cfg AgentStartConfig, l logger.Logger, conf *api.Config) (func() error, error) {
 	key, closeKey, err := identity.Open(ctx, cfg.HostKeyURI, false)
 	if err != nil {

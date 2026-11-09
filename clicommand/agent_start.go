@@ -746,7 +746,7 @@ var AgentStartCommand = &cli.Command{
 		AgentRegisterTokenFlag, // != AgentAccessToken
 		&cli.StringFlag{
 			Name: "host-key-uri", Hidden: true,
-			Usage:   "Experimental hardware key URI; requires --experiment host-bound-sessions",
+			Usage:   "Experimental signing provider URI; requires --experiment host-bound-sessions",
 			Sources: cli.EnvVars("BUILDKITE_AGENT_HOST_KEY_URI"),
 		},
 		&cli.StringFlag{

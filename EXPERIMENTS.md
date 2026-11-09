@@ -21,9 +21,11 @@ If an experiment doesn't exist, no error will be raised.
 ### `host-bound-sessions`
 
 Enables the hidden `identity` command and the `start --host-key-uri` and
-`--enrollment-token` options for hardware-key-bound worker sessions. Uses
-Smallstep KMS for TPM 2.0, Windows TPM-backed CNG and macOS Secure Enclave keys,
-with no automatic software fallback.
+`--enrollment-token` options for key-bound worker sessions. Uses pluggable
+Smallstep KMS providers, including AWS KMS, TPM 2.0, Windows TPM-backed CNG and
+macOS Secure Enclave, with no automatic software fallback. AWS KMS protects key
+material but does not itself bind signing access to one host; IAM and workload
+isolation determine who can sign.
 
 **Status:** Agent-side protocol prototype only. Requires an enrollment and DPoP
 verification backend that the production Agent API does not yet provide. Job

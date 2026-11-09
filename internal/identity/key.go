@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -19,6 +20,7 @@ import (
 	"github.com/lestrrat-go/jwx/v3/jws"
 	"go.step.sm/crypto/kms"
 	"go.step.sm/crypto/kms/apiv1"
+	_ "go.step.sm/crypto/kms/awskms" // AWS KMS signing keys.
 	_ "go.step.sm/crypto/kms/capi"   // Windows TPM-backed CNG keys.
 	_ "go.step.sm/crypto/kms/mackms" // macOS Secure Enclave keys.
 	_ "go.step.sm/crypto/kms/tpmkms" // TPM 2.0 keys.
@@ -50,10 +52,16 @@ func New(signer crypto.Signer) (*Key, error) {
 	return &Key{signer: signer, jwk: publicJWK, jkt: base64.RawURLEncoding.EncodeToString(thumbprint)}, nil
 }
 
-// Open opens a hardware key, or creates it when create is explicitly requested.
+// Open opens a key through its registered KMS provider, or creates a local
+// hardware key when create is explicitly requested. AWS keys must be provisioned
+// separately. Providers are registered through Smallstep's apiv1.Register and
+// must enforce their key protection requirements; software fallback is disabled.
 // The returned close function releases the manager, not the persistent key.
 // Missing keys are never silently replaced.
 func Open(ctx context.Context, keyURI string, create bool) (*Key, func() error, error) {
+	if create && uri.HasScheme("awskms", keyURI) {
+		return nil, nil, fmt.Errorf("AWS KMS keys must be provisioned separately; omit --create to open an existing key")
+	}
 	km, err := manager(ctx, keyURI)
 	if err != nil {
 		return nil, nil, err
@@ -121,9 +129,16 @@ func manager(ctx context.Context, keyURI string) (kms.KeyManager, error) {
 		if u.Get("storage-directory") == "" {
 			return nil, fmt.Errorf("host TPM keys require an explicit storage-directory")
 		}
-	default:
-		return nil, fmt.Errorf("host key URI must use mackms, capi or tpmkms; software fallback is not supported")
+	case "awskms":
+		keyID := strings.ToLower(u.Get("key-id"))
+		if keyID == "" || strings.HasPrefix(keyID, "alias/") || strings.Contains(keyID, ":alias/") {
+			return nil, fmt.Errorf("AWS KMS identity requires an immutable key-id or key ARN, not an alias")
+		}
+	case "softkms":
+		return nil, fmt.Errorf("software host keys are not supported")
 	}
+	// KMS provider factories are registered by linked packages. Keep dispatch
+	// here generic so a provider can be added without changing the proof code.
 	return kms.New(ctx, apiv1.Options{URI: keyURI})
 }
 
