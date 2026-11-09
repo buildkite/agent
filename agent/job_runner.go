@@ -21,6 +21,7 @@ import (
 	"github.com/buildkite/agent/v4/api"
 	"github.com/buildkite/agent/v4/core"
 	envutil "github.com/buildkite/agent/v4/env"
+	"github.com/buildkite/agent/v4/internal/cache/reapi"
 	"github.com/buildkite/agent/v4/internal/experiments"
 	"github.com/buildkite/agent/v4/internal/job"
 	"github.com/buildkite/agent/v4/internal/process"
@@ -115,7 +116,8 @@ type JobRunner struct {
 	agentLogger logger.Logger
 
 	// The APIClient that will be used when updating the job
-	apiClient *api.Client
+	apiClient  *api.Client
+	reapiToken string
 
 	// The agentlib Client is used to drive some APIClient methods
 	client *core.Client
@@ -211,6 +213,9 @@ func NewJobRunner(ctx context.Context, l logger.Logger, apiClient *api.Client, c
 		client:       &core.Client{APIClient: apiClient, Logger: l},
 		jobEnvError:  jobEnvError,
 		signedJobEnv: signedJobEnv,
+	}
+	if conf.AgentConfiguration.REAPICache != nil {
+		r.reapiToken = reapi.NewToken()
 	}
 
 	var err error
@@ -892,6 +897,16 @@ BUILDKITE_AGENT_JWKS_KEY_ID`
 	// overwrite the job-provided value so a pipeline cannot enable OTLP export
 	// or choose its destination when the agent operator has not opted in.
 	setEnv("BUILDKITE_JOB_LOGS_OTLP", fmt.Sprint(r.conf.AgentConfiguration.JobLogsOTLP))
+
+	// Keep the job credential out of the environment files, like OTLP headers.
+	// Set empty values when disabled so inherited or job-supplied endpoints
+	// cannot make a later job use a previous job's session.
+	setEnv("BUILDKITE_REAPI_CACHE_ENDPOINT", "")
+	setEnv("BUILDKITE_REAPI_CACHE_TOKEN", "")
+	if server := r.conf.AgentConfiguration.REAPICache; server != nil {
+		setEnv("BUILDKITE_REAPI_CACHE_ENDPOINT", server.Endpoint())
+		setEnv("BUILDKITE_REAPI_CACHE_TOKEN", r.reapiToken)
+	}
 
 	setEnv("BUILDKITE_AGENT_DISABLE_WARNINGS_FOR", strings.Join(r.conf.AgentConfiguration.DisableWarningsFor, ","))
 

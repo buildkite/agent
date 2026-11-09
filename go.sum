@@ -98,6 +98,8 @@ github.com/aws/aws-sdk-go-v2/service/sts v1.51.6 h1:BVjKrtRUtSYKztBCCfE1oAB+d3Vi
 github.com/aws/aws-sdk-go-v2/service/sts v1.51.6/go.mod h1:eSukFLeLkPMm+1OxDR+F0joauZdyBkF47Ow7MqjZiJw=
 github.com/aws/smithy-go v1.28.7 h1:h/n1SHrwVtaDYLz8mR1/Kq4Xh4RaFbFW7bOYckg9mfE=
 github.com/aws/smithy-go v1.28.7/go.mod h1:YE2RhdIuDbA5E5bTdciG9KrW3+TiEONeUWCqxX9i1Fc=
+github.com/bazelbuild/remote-apis v0.0.0-20261020142950-c2c07e3d718d h1:7izNenYM1R0KKGLzukza/7Z9aqm6DR+PRAZDJl+ZRrs=
+github.com/bazelbuild/remote-apis v0.0.0-20261020142950-c2c07e3d718d/go.mod h1:7Tyi5f5+hG+6LwC0X/G/EjCQS4ZYJUcpY0geSsU2NAw=
 github.com/beorn7/perks v1.0.1 h1:VlbKKnNfV8bJzeqoa4cOKqO6bYr3WgKZxO8Z16+hsOM=
 github.com/beorn7/perks v1.0.1/go.mod h1:G2ZrVWU2WbWT9wwq4/hrbKbnv/1ERSJQ0ibhJ6rlkpw=
 github.com/bitfield/gotestdox v0.2.2 h1:x6RcPAbBbErKLnapz1QeAlf3ospg8efBsedU93CDsnE=
@@ -393,6 +395,8 @@ google.golang.org/genproto v0.0.0-20261012220534-4341edf3f941 h1:CXq2XEi5aEyLjjP
 google.golang.org/genproto v0.0.0-20261012220534-4341edf3f941/go.mod h1:3gK0ehnhP0V7/x3ypGoLyT3d0n6TSi/EcsphIjHrcz4=
 google.golang.org/genproto/googleapis/api v0.0.0-20261012220534-4341edf3f941 h1:DS/w3N8rsfrwxwgGSj6WhMsPo7aNQGmDx74J81zd0NQ=
 google.golang.org/genproto/googleapis/api v0.0.0-20261012220534-4341edf3f941/go.mod h1:AuGAdi9KnXss7xbLxIKhCvk+Ro/SxpET/iS45DNYN+M=
+google.golang.org/genproto/googleapis/bytestream v0.0.0-20261104224025-d1e00e9f33ab h1:0/ZRT/eSohIgl2vqkVGmqvYYcwHcNNxbNH03EuzHyl8=
+google.golang.org/genproto/googleapis/bytestream v0.0.0-20261104224025-d1e00e9f33ab/go.mod h1:RoCpRfcA27uTJ0TZb3Vyad8eLVakUKdLdV2yMdlm2+w=
 google.golang.org/genproto/googleapis/rpc v0.0.0-20261019180522-ce908d29299b h1:6WNWHZk91dp4gZ25642OALkuG1UVNZbwENJD19DnB8k=
 google.golang.org/genproto/googleapis/rpc v0.0.0-20261019180522-ce908d29299b/go.mod h1:OaIUM3+LpYcK2GXM4FTmhWoIq371Owdr+Cc7/BsYHHc=
 google.golang.org/grpc v1.84.0 h1:soMyaPJ8pAak5PIQ0DGBUir0XRo2fRoMqhNWMLlLxO0=
