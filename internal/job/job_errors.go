@@ -166,7 +166,8 @@ func (e *Executor) captureCommandError(ctx context.Context, err error) {
 // command, or plugin checkout that just failed, using whatever room the
 // message budget leaves after the summary.
 func (e *Executor) withRecentOutput(summary string) string {
-	// Release output held back, for example in case it starts a secret.
+	// Release output held back, for example in case it starts a secret. Hooks
+	// and the command flush when they finish, but a plugin checkout doesn't.
 	e.flushOutput()
 	const heading = "\n\nLast lines of output:\n"
 	recent := e.outputTail.tail(jobapi.MaxCapturedErrorDetail - utf8.RuneCountInString(summary) - utf8.RuneCountInString(heading))

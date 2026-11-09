@@ -1442,7 +1442,7 @@ func (e *Executor) defaultCommandPhase(ctx context.Context) (retErr error) {
 	)
 	defer e.otlpLogSpan(ctx)()
 
-	// Flush the redactors before the OTLP span restore above runs, so any
+	// Flush held output before the OTLP span restore above runs, so any
 	// withheld bytes are released and attributed to this span.
 	defer e.flushOutput()
 
