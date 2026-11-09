@@ -75,7 +75,7 @@ Shows [OSC 7501 program status](https://www.superlogical.com/rex/docs/build/prog
 # Program status: state=working id=build progress=40 app=cargo msg="Compiling"
 ```
 
-The report itself stays in the log unchanged. Reports that repeat the previous report for the same `id`, or only change its `progress`, don't add a line. Messages and titles are decoded before secret redaction, so redacted values are removed from them.
+The report itself stays in the log without its message and title, which only appear in the description line. Messages and titles are decoded before secret redaction, so redacted values are removed from them. Reports that repeat the previous report for the same `id`, or only change its `progress`, don't add a line.
 
 The experiment also sets `BUILDKITE_PROGRAM_STATUS=true` in the job environment, unless the job already sets it. Tools such as the Buildkite CLI (`bk`) only send reports in a Buildkite job when it's `true`. Set it to `false` in the job to turn them off.
 
@@ -87,7 +87,7 @@ The agent also reports the job's own progress, on records with these ids, so the
 - `hook/agent/<hook>` and `hook/repository/<hook>` for agent and repository hooks, such as `hook/agent/pre-command`.
 - `hook/plugin/<plugin>/<hook>` for plugin hooks, such as `hook/plugin/docker/pre-command`.
 
-These reports don't add a line to the log, because the log already has a header for each of them. When the job ends, the agent clears the records that finished successfully, except `command`.
+These reports don't add a line to the log, because the log already has a header for each of them. The agent attaches its reports to the end of a log line, so they never come before a section header. When the job ends, the agent clears the records that finished successfully, except `command`.
 
 **Status:** Experimental. The agent doesn't reply to the protocol's feature detection query yet.
 

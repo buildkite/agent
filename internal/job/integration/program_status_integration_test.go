@@ -79,6 +79,16 @@ func TestProgramStatusReportsPhasesAndHooks(t *testing.T) {
 		t.Errorf("program status reports diff (-want +got):\n%s\nFull output: %s", diff, tester.Output)
 	}
 
+	// Reports are attached to the end of a line, so no header follows one.
+	for _, h := range []string{"~~~", "---", "+++", "^^^ +++"} {
+		if strings.Contains(tester.Output, "\x1b\\"+h) {
+			t.Errorf("a %q header follows an OSC 7501 terminator. Full output: %q", h, tester.Output)
+		}
+	}
+	if want := "~~~ Running agent pre-command hook\x1b]7501;"; !strings.Contains(tester.Output, want) {
+		t.Errorf("output doesn't contain %q. Full output: %q", want, tester.Output)
+	}
+
 	// The agent's own reports already have a header in the log.
 	if strings.Contains(tester.Output, "# Program status:") {
 		t.Errorf("output describes the agent's own reports. Full output: %s", tester.Output)
