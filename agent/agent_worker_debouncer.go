@@ -150,6 +150,11 @@ func (a *AgentWorker) runDebouncer(ctx context.Context, bat *baton, outCh chan<-
 			lastActionResult = nil
 			actionInProgress = false
 
+			if !healthy {
+				a.logger.Debugf("[runDebouncer] Releasing the baton")
+				bat.Release(actorDebouncer)
+			}
+
 			// If the action errored, there's nothing special to do; fall
 			// through to (maybe) sending the next pending action.
 			if err != nil {
