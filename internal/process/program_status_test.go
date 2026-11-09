@@ -120,6 +120,41 @@ func TestProgramStatusWriterFlush(t *testing.T) {
 	}
 }
 
+// After Flush, output from the next process starts afresh: it doesn't
+// complete a sequence the previous process left unfinished.
+func TestProgramStatusWriterFlushResets(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name   string
+		before string // ends partway into a sequence
+		after  string
+	}{
+		{"unterminated sequence", "a\x1b]7501;state=wor", "king\a\n"},
+		{"lone esc", "a\x1b", "]7501;state=done:msg=c2VjcmV0\a\n"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			var out bytes.Buffer
+			w := process.NewProgramStatusWriter(&out)
+			if _, err := w.Write([]byte(tt.before)); err != nil {
+				t.Fatalf("w.Write(%q) error = %v", tt.before, err)
+			}
+			if err := w.Flush(); err != nil {
+				t.Fatalf("w.Flush() error = %v", err)
+			}
+			if _, err := w.Write([]byte(tt.after)); err != nil {
+				t.Fatalf("w.Write(%q) error = %v", tt.after, err)
+			}
+			if got, want := out.String(), tt.before+tt.after; got != want {
+				t.Errorf("output = %q, want %q", got, want)
+			}
+		})
+	}
+}
+
 func TestProgramStatusWriterMidLine(t *testing.T) {
 	t.Parallel()
 

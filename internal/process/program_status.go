@@ -59,10 +59,13 @@ func (w *ProgramStatusWriter) Write(p []byte) (int, error) {
 }
 
 // Flush writes any bytes held back from an unterminated sequence at the end
-// of the output.
+// of the output. Output written afterwards is scanned afresh, so it can't
+// complete a sequence that was flushed.
 func (w *ProgramStatusWriter) Flush() error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
+	// Stripper.Flush resets the stripper, so reset the scanner to match.
+	w.scanner = osc7501.Scanner{W: &w.strip, OnReport: w.describe}
 	if held := w.strip.s.Flush(); len(held) > 0 {
 		_, err := w.out.Write(held)
 		return err
