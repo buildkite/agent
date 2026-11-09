@@ -551,6 +551,9 @@ func (e *Executor) executeHook(ctx context.Context, hookCfg HookConfig) (retErr 
 	id := hookStatusID(hookCfg)
 	e.status.start(id, "Running "+hookName+" hook")
 	defer func() { e.status.finish(id, retErr, "The "+hookName+" hook") }()
+	// Release output held back at the end of the hook, whatever its type, so
+	// it reaches this hook's section of the log.
+	defer e.flushOutput()
 
 	e.shell.Headerf("Running %s hook", hookName)
 
@@ -696,18 +699,21 @@ type hookExitError struct {
 func (e hookExitError) Error() string { return e.message }
 func (e hookExitError) Unwrap() error { return e.err }
 
-func (e *Executor) runWrappedShellScriptHook(ctx context.Context, hookName string, hookCfg HookConfig) error {
-	defer func() {
-		if e.programStatus != nil {
-			if err := e.programStatus.Flush(); err != nil {
-				e.shell.Errorf("Error flushing program status writer: %v", err)
-			}
+// flushOutput writes output that the program status writer and the redactors
+// are holding back, such as the start of a possible secret at the end of a
+// hook's output.
+func (e *Executor) flushOutput() {
+	if e.programStatus != nil {
+		if err := e.programStatus.Flush(); err != nil {
+			e.shell.Errorf("Error flushing program status writer: %v", err)
 		}
-		if err := e.redactors.Flush(); err != nil {
-			e.shell.Errorf("Error flushing redactors: %v", err)
-		}
-	}()
+	}
+	if err := e.redactors.Flush(); err != nil {
+		e.shell.Errorf("Error flushing redactors: %v", err)
+	}
+}
 
+func (e *Executor) runWrappedShellScriptHook(ctx context.Context, hookName string, hookCfg HookConfig) error {
 	script, err := hook.NewWrapper(hook.WithPath(hookCfg.Path))
 	if err != nil {
 		e.shell.Errorf("Error creating hook script: %v", err)
@@ -1438,16 +1444,7 @@ func (e *Executor) defaultCommandPhase(ctx context.Context) (retErr error) {
 
 	// Flush the redactors before the OTLP span restore above runs, so any
 	// withheld bytes are released and attributed to this span.
-	defer func() {
-		if e.programStatus != nil {
-			if err := e.programStatus.Flush(); err != nil {
-				e.shell.Errorf("Error flushing program status writer: %v", err)
-			}
-		}
-		if err := e.redactors.Flush(); err != nil {
-			e.shell.Errorf("Error flushing redactors: %v", err)
-		}
-	}()
+	defer e.flushOutput()
 
 	e.resetRecentOutput()
 
