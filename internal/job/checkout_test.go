@@ -1,6 +1,8 @@
 package job
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -8,6 +10,7 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/buildkite/agent/v4/internal/job/githttptest"
@@ -691,6 +694,69 @@ func TestDefaultCheckoutPhase_MergeRefspecFailsFast(t *testing.T) {
 	}
 }
 
+func TestCommitVerificationFailClosedRetriesCheckoutTimeout(t *testing.T) {
+	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		sh := shell.NewTestShell(t)
+		sh.Env.Set("BUILDKITE_BUILD_CHECKOUT_PATH", filepath.Join(t.TempDir(), "checkout"))
+		sh.Env.Set("BUILDKITE_CAPTURE_GIT_ERRORS", "true")
+		sh.Env.Set("BUILDKITE_AGENT_JOB_API_CAPTURE_ERROR", "true")
+		e := &Executor{
+			shell: sh,
+			ExecutorConfig: ExecutorConfig{
+				Repository:            "https://example.com/repo.git",
+				Branch:                "main",
+				Commit:                "1234567890abcdef1234567890abcdef12345678",
+				GitCommitVerification: GitCommitVerificationFailClosed,
+				GitCheckoutTimeout:    2,
+				CheckoutAttempts:      2,
+			},
+		}
+		defer func() {
+			if e.checkoutRoot != nil {
+				_ = e.checkoutRoot.Close()
+			}
+		}()
+		var reports gitErrorReports
+		ctx := context.WithValue(t.Context(), gitErrorReportsKey{}, &reports)
+		partialCheckout := filepath.Join(sh.Env.GetString("BUILDKITE_BUILD_CHECKOUT_PATH", ""), "partial")
+		attempts := 0
+		err := e.checkout(ctx, func(ctx context.Context, previousAttempts int) error {
+			attempts++
+			if previousAttempts == 0 {
+				if err := e.createCheckoutDir(); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(partialCheckout, nil, 0o600); err != nil {
+					t.Fatal(err)
+				}
+				// Only the Git operation is fake: the real attempt deadline
+				// cancels verification and the real retry loop handles its error.
+				<-ctx.Done()
+				return fmt.Errorf("%w: %w", ErrCommitVerificationUnavailable, errors.Join(ctx.Err(), &shell.ExitError{Code: -1, Err: errors.New("signal: terminated")}))
+			}
+			if _, err := os.Stat(partialCheckout); !errors.Is(err, os.ErrNotExist) {
+				t.Fatalf("partial checkout was not removed: %v", err)
+			}
+			// This advances virtual time, leaving room within a fresh deadline.
+			time.Sleep(time.Second)
+			if err := ctx.Err(); err != nil {
+				t.Fatalf("retry did not receive a fresh timeout budget: %v", err)
+			}
+			return nil
+		})
+		if err != nil {
+			t.Fatalf("checkout did not recover from the verification timeout: %v", err)
+		}
+		if attempts != 2 {
+			t.Fatalf("checkout attempts = %d, want 2", attempts)
+		}
+		if len(reports) != 1 || reports[0].Code != "buildkite.git_checkout_timed_out" {
+			t.Fatalf("captured errors = %v, want one checkout timeout", reports)
+		}
+	})
+}
+
 func TestSkipCheckout(t *testing.T) {
 	t.Parallel()
 
@@ -709,7 +775,7 @@ func TestSkipCheckout(t *testing.T) {
 		},
 	}
 
-	err = executor.checkout(ctx)
+	err = executor.checkout(ctx, executor.defaultCheckoutPhase)
 	if err != nil {
 		t.Fatalf("executor.checkout(ctx) error = %v, want nil", err)
 	}
@@ -803,7 +869,7 @@ func TestGitLFSBinaryMissing(t *testing.T) {
 		},
 	}
 
-	err = executor.checkout(ctx)
+	err = executor.checkout(ctx, executor.defaultCheckoutPhase)
 	if err == nil {
 		t.Fatalf("executor.checkout(ctx) error = nil, want error containing %q", "git lfs version")
 	}
