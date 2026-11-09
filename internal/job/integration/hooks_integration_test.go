@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/buildkite/agent/v4/internal/experiments"
 	"github.com/buildkite/agent/v4/internal/job"
 	"github.com/buildkite/agent/v4/internal/shell"
 	"github.com/buildkite/bintest/v3"
@@ -1314,4 +1315,86 @@ func hookFileName(name string) string {
 		return name + ".bat"
 	}
 	return name
+}
+
+// Output that a writer holds back at the end of a polyglot hook must reach the
+// log before the next section starts, and must not be lost when the hook is
+// the last thing the job runs.
+func TestPolyglotHookOutputIsFlushed(t *testing.T) {
+	t.Parallel()
+	if runtime.GOOS == "windows" {
+		t.Skip("script hooks aren't supported on windows")
+	}
+	if _, err := exec.LookPath("ruby"); err != nil {
+		t.Fatalf("ruby not found in $PATH. This test requires ruby to be installed on the host")
+	}
+
+	tests := []struct {
+		name          string
+		programStatus bool
+		// out is written with no trailing newline, so a writer holds back its end.
+		out  string
+		want string
+	}{
+		{
+			// The redactor holds a prefix of the agent token.
+			name: "redactor",
+			out:  "polyglot tail test-token-please-ign",
+			want: "polyglot tail test-token-please-ign",
+		},
+		{
+			name:          "redactor with program status",
+			programStatus: true,
+			out:           "polyglot tail test-token-please-ign",
+			want:          "polyglot tail test-token-please-ign",
+		},
+		{
+			// The program status writer holds an unterminated sequence.
+			name:          "program status",
+			programStatus: true,
+			out:           "polyglot tail \\e]7501;state=wor",
+			want:          "polyglot tail \x1b]7501;state=wor",
+		},
+	}
+	for _, tt := range tests {
+		for _, hook := range []string{"environment", "pre-exit"} {
+			t.Run(tt.name+"/"+hook, func(t *testing.T) {
+				t.Parallel()
+
+				ctx := mainCtx
+				if tt.programStatus {
+					ctx, _ = experiments.Enable(ctx, experiments.ProgramStatus)
+				}
+				tester, err := NewExecutorTester(ctx)
+				if err != nil {
+					t.Fatalf("NewExecutorTester() error = %v", err)
+				}
+				defer tester.Close()
+
+				script := "#!/usr/bin/env ruby\n$stdout.write(\"" + tt.out + "\")\n"
+				if err := os.WriteFile(filepath.Join(tester.HooksDir, hook), []byte(script), 0o755); err != nil {
+					t.Fatalf("os.WriteFile(%q) = %v", hook, err)
+				}
+
+				// Debug logging writes process lines to stdout after the hook
+				// exits, which pushes held bytes through and hides the problem.
+				tester.RunAndCheck(t, "BUILDKITE_PROGRAM_STATUS=true", "BUILDKITE_AGENT_DEBUG=false")
+
+				// The output belongs in the hook's own section. The next header
+				// may follow it on the same line, since the hook printed no newline.
+				header := "~~~ Running agent " + hook + " hook"
+				start := strings.Index(tester.Output, header)
+				if start < 0 {
+					t.Fatalf("output doesn't contain %q. Full output: %q", header, tester.Output)
+				}
+				section := tester.Output[start+len(header):]
+				if end := strings.Index(section, "~~~ "); end >= 0 {
+					section = section[:end]
+				}
+				if !strings.Contains(section, tt.want) {
+					t.Errorf("%s hook section doesn't contain %q. Full output: %q", hook, tt.want, tester.Output)
+				}
+			})
+		}
+	}
 }
