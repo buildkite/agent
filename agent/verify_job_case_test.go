@@ -161,36 +161,28 @@ func TestVerifyJobBindsSignedArtifactPathsToUpload(t *testing.T) {
 
 	const repo = "https://example.test/repo.git"
 	for _, tt := range []struct {
-		name        string
-		jobPaths    string
-		signedPaths any
-		stepPaths   any
-		legacy      bool
-		wantError   error
+		name, jobPaths         string
+		signedPaths, stepPaths []string
+		legacy                 bool
+		wantError              error
 	}{
-		{name: "matching literal matrix paths", jobPaths: "reports/{{matrix.os}}.txt", signedPaths: []any{"reports/{{matrix.os}}.txt"}, stepPaths: []any{"reports/{{matrix.os}}.txt"}},
-		{name: "changed upload source", jobPaths: "reports/linux.txt", signedPaths: []any{"reports/{{matrix.os}}.txt"}, stepPaths: []any{"reports/{{matrix.os}}.txt"}, wantError: ErrInvalidJob},
-		{name: "changed step source", jobPaths: "private.txt", signedPaths: []any{"reports/{{matrix.os}}.txt"}, stepPaths: []any{"private.txt"}, wantError: ErrVerificationFailed},
+		{name: "matching literal matrix paths", jobPaths: "reports/{{matrix.os}}.txt", signedPaths: []string{"reports/{{matrix.os}}.txt"}, stepPaths: []string{"reports/{{matrix.os}}.txt"}},
+		{name: "changed upload source", jobPaths: "reports/linux.txt", signedPaths: []string{"reports/{{matrix.os}}.txt"}, stepPaths: []string{"reports/{{matrix.os}}.txt"}, wantError: ErrInvalidJob},
+		{name: "changed step source", jobPaths: "private.txt", signedPaths: []string{"reports/{{matrix.os}}.txt"}, stepPaths: []string{"private.txt"}, wantError: ErrVerificationFailed},
 		{name: "no upload source", jobPaths: ""},
 		{name: "upload source added", jobPaths: "private.txt", wantError: ErrInvalidJob},
-		{name: "old signature remains valid", jobPaths: "private.txt", stepPaths: []any{"private.txt"}, legacy: true},
+		{name: "old signature remains valid", jobPaths: "private.txt", stepPaths: []string{"private.txt"}, legacy: true},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			step := pipeline.CommandStep{
-				Command: "echo hello",
-				Matrix:  &pipeline.Matrix{Setup: pipeline.MatrixSetup{"os": {"linux", "windows"}}},
-			}
-			if tt.signedPaths != nil {
-				step.RemainingFields = map[string]any{"artifact_paths": tt.signedPaths}
+				Command:       "echo hello",
+				Matrix:        &pipeline.Matrix{Setup: pipeline.MatrixSetup{"os": {"linux", "windows"}}},
+				ArtifactPaths: tt.signedPaths,
 			}
 			if err := signature.SignSteps(t.Context(), pipeline.Steps{&step}, key, repo, signature.WithArtifactPathsSigning(!tt.legacy)); err != nil {
 				t.Fatal(err)
 			}
-			if tt.stepPaths != nil {
-				step.RemainingFields = map[string]any{"artifact_paths": tt.stepPaths}
-			} else {
-				step.RemainingFields = nil
-			}
+			step.ArtifactPaths = tt.stepPaths
 			env := map[string]string{
 				"BUILDKITE_REPO":           repo,
 				"BUILDKITE_COMMAND":        step.Command,

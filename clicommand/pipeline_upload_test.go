@@ -24,6 +24,7 @@ import (
 	"github.com/buildkite/go-pipeline/ordered"
 	"github.com/buildkite/go-pipeline/warning"
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/lestrrat-go/jwx/v3/jwa"
 	"github.com/urfave/cli/v3"
 )
@@ -347,7 +348,7 @@ steps:
 		}
 		gotPipelines = append(gotPipelines, p)
 	}
-	if diff := cmp.Diff(gotPipelines, wantPipelines, cmp.Comparer(ordered.EqualSA), cmp.Comparer(ordered.EqualSS)); diff != "" {
+	if diff := cmp.Diff(gotPipelines, wantPipelines, cmp.Comparer(ordered.EqualSA), cmp.Comparer(ordered.EqualSS), cmpopts.IgnoreUnexported(pipeline.CommandStep{})); diff != "" {
 		t.Errorf("pipelines diff (-got +want):\n%s", diff)
 	}
 }
@@ -919,7 +920,7 @@ func TestIfChangedApplicator(t *testing.T) {
 
 			steps := makeInput()
 			test.ica.apply(l, steps)
-			if diff := cmp.Diff(steps, test.want); diff != "" {
+			if diff := cmp.Diff(steps, test.want, cmpopts.IgnoreUnexported(pipeline.CommandStep{})); diff != "" {
 				t.Errorf("after ica.apply(l, steps) (-got, +want):\n%s", diff)
 			}
 		})
@@ -1023,7 +1024,7 @@ func TestIfChangedApplicator_WeirdPipeline(t *testing.T) {
 	}
 
 	ica.apply(l, steps)
-	if diff := cmp.Diff(steps, want); diff != "" {
+	if diff := cmp.Diff(steps, want, cmpopts.IgnoreUnexported(pipeline.CommandStep{})); diff != "" {
 		t.Errorf("after ica.apply(l, steps) (-got, +want):\n%s", diff)
 	}
 }
@@ -1151,7 +1152,7 @@ func TestIfChangedApplicator_WithChangedFilesPath(t *testing.T) {
 	}
 
 	ica.apply(l, steps)
-	if diff := cmp.Diff(steps, want); diff != "" {
+	if diff := cmp.Diff(steps, want, cmpopts.IgnoreUnexported(pipeline.CommandStep{})); diff != "" {
 		t.Errorf("after ica.apply(l, steps) (-got, +want):\n%s", diff)
 	}
 }

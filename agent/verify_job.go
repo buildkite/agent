@@ -64,9 +64,8 @@ func (r *JobRunner) verifyJob(ctx context.Context, keySet any) error {
 	// Artifact upload paths are not matrix-interpolated by the backend. Compare
 	// the signed, original paths before interpolating the step's other fields.
 	if slices.Contains(signedFields, "artifact_paths") {
-		paths, err := step.ArtifactPaths()
-		if err != nil || paths != r.conf.Job.Env["BUILDKITE_ARTIFACT_PATHS"] {
-			r.agentLogger.Debugf("failed to verifyJob: signed artifact paths do not match the job's upload paths: %v", err)
+		if strings.Join(step.ArtifactPaths, ";") != r.conf.Job.Env["BUILDKITE_ARTIFACT_PATHS"] {
+			r.agentLogger.Debugf("failed to verifyJob: signed artifact paths do not match the job's upload paths")
 			return newInvalidSignatureError(ErrInvalidJob)
 		}
 	}
