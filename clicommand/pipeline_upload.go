@@ -99,12 +99,11 @@ type PipelineUploadConfig struct {
 	ChangedFilesPath string `cli:"changed-files-path"`
 
 	// Used for signing
-	JWKSFile          string `cli:"jwks-file"`
-	JWKSKeyID         string `cli:"jwks-key-id"`
-	SigningAWSKMSKey  string `cli:"signing-aws-kms-key"`
-	SigningGCPKMSKey  string `cli:"signing-gcp-kms-key"`
-	DebugSigning      bool   `cli:"debug-signing"`
-	SignArtifactPaths bool   `cli:"sign-artifact-paths"`
+	JWKSFile         string `cli:"jwks-file"`
+	JWKSKeyID        string `cli:"jwks-key-id"`
+	SigningAWSKMSKey string `cli:"signing-aws-kms-key"`
+	SigningGCPKMSKey string `cli:"signing-gcp-kms-key"`
+	DebugSigning     bool   `cli:"debug-signing"`
 }
 
 var PipelineUploadCommand = &cli.Command{
@@ -198,10 +197,6 @@ var PipelineUploadCommand = &cli.Command{
 			Name:    "debug-signing",
 			Usage:   "Enable debug logging for pipeline signing. This can potentially leak secrets to the logs as it prints each step in full before signing. Requires debug logging to be enabled (default: false)",
 			Sources: cli.EnvVars("BUILDKITE_AGENT_DEBUG_SIGNING"),
-		},
-		&cli.BoolFlag{
-			Name:  "sign-artifact-paths",
-			Usage: "Include artifact_paths in step signatures. Requires updated verifying agents and backend (default: false)",
 		},
 		RedactedVars,
 	}),
@@ -425,7 +420,7 @@ var PipelineUploadCommand = &cli.Command{
 						signature.WithEnv(result.Env.ToMap()),
 						signature.WithLogger(logger.DeprecatedLogger{Logger: l}),
 						signature.WithDebugSigning(cfg.DebugSigning),
-						signature.WithArtifactPathsSigning(cfg.SignArtifactPaths),
+						signature.WithArtifactPathsSigning(true),
 					)
 					if err != nil {
 						return fmt.Errorf("couldn't sign pipeline: %w", err)
