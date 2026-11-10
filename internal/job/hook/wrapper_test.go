@@ -119,6 +119,48 @@ echo "hello world"
 	}
 }
 
+func TestWrapperTreatsTempPathAsLiteralShellData(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("POSIX shell test")
+	}
+
+	root := t.TempDir()
+	marker := filepath.Join(root, "unexpected-command")
+	t.Setenv("TMPDIR", filepath.Join(root, "$(touch unexpected-command)'s temp"))
+	if err := os.MkdirAll(os.TempDir(), 0o700); err != nil {
+		t.Fatal(err)
+	}
+
+	hookFilename := writeTestHook(t, "hook", "#!/bin/sh\nexport WRAPPED_HOOK_RAN=yes\n")
+	wrapper, err := hook.NewWrapper(hook.WithPath(hookFilename))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer wrapper.Close()
+
+	sh := shell.NewTestShell(t)
+	if err := sh.Chdir(root); err != nil {
+		t.Fatal(err)
+	}
+	script, err := sh.Script(wrapper.Path(), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := script.Run(t.Context(), shell.ShowPrompt(false)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(marker); !os.IsNotExist(err) {
+		t.Fatalf("shell evaluated a command in TMPDIR: marker stat error = %v", err)
+	}
+	changes, err := wrapper.Changes()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := changes.Diff.Added["WRAPPED_HOOK_RAN"]; got != "yes" {
+		t.Fatalf("hook environment change = %q, want yes", got)
+	}
+}
+
 func TestRunningHookDetectsChangedWorkingDirectory(t *testing.T) {
 	t.Parallel()
 
@@ -257,7 +299,7 @@ func TestWrapperUsesOverrideSelfForExecutorTester(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to read wrapper %q: %v", wrapper.Path(), err)
 	}
-	if !strings.Contains(string(wrapperContents), `"mock-buildkite-agent" env dump`) {
+	if !strings.Contains(string(wrapperContents), `'mock-buildkite-agent' env dump`) {
 		t.Fatalf("wrapper contents did not use override self:\n%s", wrapperContents)
 	}
 }
