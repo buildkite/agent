@@ -245,6 +245,7 @@ func (e *Executor) fetchSource(ctx context.Context, addBloblessFilter bool, atte
 // known commit, keep waiting for the PR ref: another ref's FETCH_HEAD would build
 // the wrong revision. Merge refs and custom refspecs must not use this recovery.
 func (e *Executor) gitFetchPRHead(ctx context.Context, args gitFetchArgs) error {
+	retry := args.Retry
 	knownCommit := e.Commit != "" && e.Commit != "HEAD"
 	if knownCommit {
 		// There is no need to wait for the asynchronous PR ref if we can fetch
@@ -255,9 +256,19 @@ func (e *Executor) gitFetchPRHead(ctx context.Context, args gitFetchArgs) error 
 	err := gitFetch(ctx, args)
 	if gerr := new(gitError); knownCommit && ctx.Err() == nil && errors.As(err, &gerr) && gerr.Type == gitErrorFetchBadReference {
 		e.shell.Commentf("Pull request head fetch failed because a remote ref is missing, fetching commit %q directly", e.Commit)
-		args.RefSpecs = nil
-		args.LiteralRefSpecs = []string{e.Commit}
-		return gitFetch(ctx, args)
+		commitArgs := args
+		commitArgs.RefSpecs = nil
+		commitArgs.LiteralRefSpecs = []string{e.Commit}
+		err = gitFetch(ctx, commitArgs)
+		if retry && ctx.Err() == nil && errors.As(err, &gerr) && (gerr.Type == gitErrorFetchBadReference || gerr.Type == gitErrorFetchRefNotOnRemote) {
+			// Short hashes and unadvertised commits may not be fetchable
+			// directly. Keep the caller's wait for GitHub to publish the PR
+			// ref, but do not mask transport, authentication or corrupt-object
+			// errors by retrying a different fetch.
+			e.shell.Commentf("Commit could not be fetched directly, retrying the pull request head fetch")
+			args.Retry = true
+			return gitFetch(ctx, args)
+		}
 	}
 	return err
 }

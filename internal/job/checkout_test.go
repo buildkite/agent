@@ -4,11 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"testing/synctest"
 	"time"
@@ -136,6 +139,73 @@ func TestDefaultCheckoutPhaseMissingPRHead(t *testing.T) {
 	}
 }
 
+func TestDefaultCheckoutPhaseDelayedPRHeadAfterCommitFetchFails(t *testing.T) {
+	for _, shortCommit := range []bool{false, true} {
+		t.Run(fmt.Sprintf("shortCommit=%t", shortCommit), func(t *testing.T) {
+			sh := shell.NewTestShell(t)
+			// Protocol v0 rejects an unadvertised SHA before the PR ref exists.
+			sh.Env.Set("GIT_CONFIG_COUNT", "1")
+			sh.Env.Set("GIT_CONFIG_KEY_0", "protocol.version")
+			sh.Env.Set("GIT_CONFIG_VALUE_0", "0")
+			e := &Executor{shell: sh, ExecutorConfig: ExecutorConfig{
+				PullRequest: "124", PipelineProvider: "github", Branch: "feature-branch",
+				GitCleanFlags: "-f -d -x", GitMirrorsPath: t.TempDir(),
+				GitMirrorsLockTimeout: 30, CheckoutAttempts: 1,
+			}}
+			const project = "delayed-pr-head"
+			s, commit := setupCheckoutTestRepo(t, e, project)
+			if out, err := s.CreateRef(project, "refs/hidden/build", commit); err != nil {
+				t.Fatalf("CreateRef: %v\n%s", err, out)
+			}
+			runGitForMirrorTest(t, "", "push", s.RepoURL(project), ":refs/heads/feature-branch")
+			if err := s.ConfigureRepository(project, "uploadpack.hideRefs", "refs/hidden/"); err != nil {
+				t.Fatal(err)
+			}
+
+			var advertisements atomic.Int32
+			published := make(chan error, 1)
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				s.Config.Handler.ServeHTTP(w, r)
+				if r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/info/refs") && advertisements.Add(1) == 3 {
+					// The initial PR fetch and direct commit fetch have failed.
+					// Publish only after another missing-ref advertisement, so
+					// recovery must actually wait and retry the PR ref.
+					_, err := s.CreateRef(project, "refs/pull/124/head", commit)
+					published <- err
+				}
+			}))
+			t.Cleanup(server.Close)
+			e.Repository = server.URL + "/" + project + ".git"
+			cloneOnHostMirrorToPath(t, e.Repository, expectedOnHostMirrorDir(e))
+			advertisements.Store(0)
+			e.Commit = commit
+			if shortCommit {
+				e.Commit = commit[:12]
+			}
+			ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+			defer cancel()
+			if err := e.checkout(ctx, e.defaultCheckoutPhase); err != nil {
+				t.Fatalf("checkout() = %v, want delayed PR ref recovery in one checkout attempt", err)
+			}
+			select {
+			case err := <-published:
+				if err != nil {
+					t.Fatalf("publishing delayed PR ref: %v", err)
+				}
+			default:
+				t.Fatal("checkout succeeded before the PR ref was published")
+			}
+			got, err := sh.Command("git", "rev-parse", "HEAD").RunAndCaptureStdout(ctx)
+			if err != nil || strings.TrimSpace(got) != commit {
+				t.Fatalf("checkout HEAD = %q, %v; want %s", got, err, commit)
+			}
+			if !hasGitCommit(ctx, sh, expectedOnHostMirrorDir(e), commit) {
+				t.Fatal("mirror update did not obtain the delayed PR commit")
+			}
+		})
+	}
+}
+
 func TestPRHeadFetchRecoveryErrors(t *testing.T) {
 	for _, mirrors := range []bool{false, true} {
 		for _, failure := range []string{"missing commit", "HTTP error", "unknown commit", "custom refspec"} {
@@ -182,9 +252,15 @@ func TestPRHeadFetchRecoveryErrors(t *testing.T) {
 					t.Fatal("fetch succeeded, want failure preserved")
 				}
 				if failure == "missing commit" {
-					var gerr *gitError
-					if !errors.As(err, &gerr) || gerr.Type != gitErrorFetchRefNotOnRemote {
-						t.Fatalf("fetch error = %v, want commit not on remote", err)
+					if mirrors {
+						if !errors.Is(err, context.DeadlineExceeded) {
+							t.Fatalf("fetch error = %v, want deadline waiting for missing PR ref", err)
+						}
+					} else {
+						var gerr *gitError
+						if !errors.As(err, &gerr) || gerr.Type != gitErrorFetchRefNotOnRemote {
+							t.Fatalf("fetch error = %v, want commit not on remote", err)
+						}
 					}
 				}
 				if hasGitCommit(t.Context(), e.shell, gitDir, commit) {
