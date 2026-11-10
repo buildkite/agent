@@ -168,8 +168,8 @@ func TestVerifyJobBindsSignedArtifactPathsToUpload(t *testing.T) {
 		legacy      bool
 		wantError   error
 	}{
-		{name: "matching matrix paths", jobPaths: "reports/linux.txt", signedPaths: []any{"reports/{{matrix.os}}.txt"}, stepPaths: []any{"reports/{{matrix.os}}.txt"}},
-		{name: "changed upload source", jobPaths: "private.txt", signedPaths: []any{"reports/{{matrix.os}}.txt"}, stepPaths: []any{"reports/{{matrix.os}}.txt"}, wantError: ErrInvalidJob},
+		{name: "matching literal matrix paths", jobPaths: "reports/{{matrix.os}}.txt", signedPaths: []any{"reports/{{matrix.os}}.txt"}, stepPaths: []any{"reports/{{matrix.os}}.txt"}},
+		{name: "changed upload source", jobPaths: "reports/linux.txt", signedPaths: []any{"reports/{{matrix.os}}.txt"}, stepPaths: []any{"reports/{{matrix.os}}.txt"}, wantError: ErrInvalidJob},
 		{name: "changed step source", jobPaths: "private.txt", signedPaths: []any{"reports/{{matrix.os}}.txt"}, stepPaths: []any{"private.txt"}, wantError: ErrVerificationFailed},
 		{name: "no upload source", jobPaths: ""},
 		{name: "upload source added", jobPaths: "private.txt", wantError: ErrInvalidJob},
