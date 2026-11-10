@@ -201,7 +201,7 @@ var PipelineUploadCommand = &cli.Command{
 		},
 		&cli.BoolFlag{
 			Name:  "sign-artifact-paths",
-			Usage: "Include automatic artifact upload paths in step signatures. Requires updated verifying agents and backend (default: false)",
+			Usage: "Include artifact_paths in step signatures. Requires updated verifying agents and backend (default: false)",
 		},
 		RedactedVars,
 	}),

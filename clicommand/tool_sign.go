@@ -152,7 +152,7 @@ Signing a pipeline from a file:
 		},
 		&cli.BoolFlag{
 			Name:  "sign-artifact-paths",
-			Usage: "Include automatic artifact upload paths in step signatures. Requires updated verifying agents and backend (default: false)",
+			Usage: "Include artifact_paths in step signatures. Requires updated verifying agents and backend (default: false)",
 		},
 
 		// These are required for GraphQL
