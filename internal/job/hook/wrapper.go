@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"text/template"
 
 	"github.com/buildkite/agent/v4/env"
@@ -59,18 +60,20 @@ exit $Env:BUILDKITE_HOOK_EXIT_STATUS`
 
 	posixShellWrapper = `{{if .ShebangLine}}{{.ShebangLine}}
 {{end -}}
-"{{.AgentBinary}}" env dump > "{{.BeforeEnvFileName}}"
-. "{{.PathToHook}}"
+{{.AgentBinary | quotePosix}} env dump > {{.BeforeEnvFileName | quotePosix}}
+. {{.PathToHook | quotePosix}}
 export BUILDKITE_HOOK_EXIT_STATUS=$?
 export BUILDKITE_HOOK_WORKING_DIR="${PWD}"
-"{{.AgentBinary}}" env dump > "{{.AfterEnvFileName}}"
+{{.AgentBinary | quotePosix}} env dump > {{.AfterEnvFileName | quotePosix}}
 exit $BUILDKITE_HOOK_EXIT_STATUS`
 )
 
 var (
 	batchWrapperTmpl      = template.Must(template.New("batch").Parse(batchWrapper))
 	powershellWrapperTmpl = template.Must(template.New("pwsh").Parse(powershellWrapper))
-	posixShellWrapperTmpl = template.Must(template.New("bash").Parse(posixShellWrapper))
+	posixShellWrapperTmpl = template.Must(template.New("bash").Funcs(template.FuncMap{
+		"quotePosix": func(s string) string { return "'" + strings.ReplaceAll(s, "'", "'\\''") + "'" },
+	}).Parse(posixShellWrapper))
 
 	ErrNoHookPath = errors.New("hook path was not provided")
 )
