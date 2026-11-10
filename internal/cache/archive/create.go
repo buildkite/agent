@@ -19,8 +19,21 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 )
 
+type entryMethod uint16
+
+const (
+	entryMethodZstd  = entryMethod(zstd.ZipMethodWinZip)
+	entryMethodStore = entryMethod(zip.Store)
+)
+
 // BuildArchive builds a cache archive for the given target paths.
 func BuildArchive(ctx context.Context, paths []string, key string) (*ArchiveInfo, error) {
+	return buildArchive(ctx, paths, key, entryMethodZstd)
+}
+
+// buildArchive allows benchmarks to compare ZIP entry methods without exposing
+// a user-facing cache setting. Production archives always use Zstd.
+func buildArchive(ctx context.Context, paths []string, key string, method entryMethod) (*ArchiveInfo, error) {
 	_, span := trace.Start(ctx, "BuildArchive")
 	defer span.End()
 
@@ -89,7 +102,7 @@ func BuildArchive(ctx context.Context, paths []string, key string) (*ArchiveInfo
 
 	var writtenBytes, writtenEntries int64
 	for _, p := range plans {
-		b, e, err := archiveMapping(ctx, zw, p.mapping.ResolvedPath(), p.chroot, p.prefix, modified)
+		b, e, err := archiveMapping(ctx, zw, p.mapping.ResolvedPath(), p.chroot, p.prefix, modified, method)
 		if err != nil {
 			return nil, fmt.Errorf("failed to archive path %q: %w", p.mapping.Path, err)
 		}
@@ -124,7 +137,7 @@ func BuildArchive(ctx context.Context, paths []string, key string) (*ArchiveInfo
 // archiveMapping archives a single target path into a temporary zip via
 // quickzip, then copies each entry into the final archive with its namespace prefix.
 // Entries are copied raw (already compressed), so there is no second compression pass.
-func archiveMapping(ctx context.Context, zw *zip.Writer, resolvedPath, chroot, prefix string, modified time.Time) (writtenBytes, writtenEntries int64, err error) {
+func archiveMapping(ctx context.Context, zw *zip.Writer, resolvedPath, chroot, prefix string, modified time.Time, method entryMethod) (writtenBytes, writtenEntries int64, err error) {
 	tmp, err := os.CreateTemp("", "cache-ns-*.zip")
 	if err != nil {
 		return 0, 0, fmt.Errorf("failed to create namespace archive: %w", err)
@@ -136,7 +149,7 @@ func archiveMapping(ctx context.Context, zw *zip.Writer, resolvedPath, chroot, p
 
 	arc, err := quickzip.NewArchiver(
 		tmp,
-		quickzip.WithArchiverMethod(zstd.ZipMethodWinZip),
+		quickzip.WithArchiverMethod(uint16(method)),
 		quickzip.WithArchiverBufferSize(bufferSize),
 		quickzip.WithModifiedEpoch(modified),
 		quickzip.WithSkipOwnership(skipOwnership),
