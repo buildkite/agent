@@ -185,8 +185,24 @@ func (e *Executor) fetchSource(ctx context.Context, addBloblessFilter bool, atte
 			// Note: this is the typical case e.Commit != HEAD.
 			refspecs = append(refspecs, e.Commit)
 			// We aim to eliminate network round-trip as much as possible so we use a single git fetch here.
-			if err := gitFetchWithFallback(ctx, e.shell, gitFetchFlags, refspecs...); err != nil {
-				return fmt.Errorf("fetching PR refspec %q: %w%s", refspecs, err, prMergeRefspecHint(kind == refspecGithubPRMerge))
+			var fetchErr error
+			if kind == refspecGithubPRHead {
+				fetchErr = e.gitFetchPRHead(ctx, gitFetchArgs{
+					Shell:         e.shell,
+					GitFetchFlags: gitFetchFlags,
+					Repository:    "origin",
+					RefSpecs:      refspecs,
+				})
+				// Preserve the heads-and-tags fallback for short commit hashes,
+				// which Git cannot fetch directly.
+				if gerr := new(gitError); errors.As(fetchErr, &gerr) && gerr.Type == gitErrorFetchBadReference {
+					fetchErr = gitFetchWithFallback(ctx, e.shell, gitFetchFlags, e.Commit)
+				}
+			} else {
+				fetchErr = gitFetchWithFallback(ctx, e.shell, gitFetchFlags, refspecs...)
+			}
+			if fetchErr != nil {
+				return fmt.Errorf("fetching PR refspec %q: %w%s", refspecs, fetchErr, prMergeRefspecHint(kind == refspecGithubPRMerge))
 			}
 		}
 
@@ -222,6 +238,28 @@ func (e *Executor) fetchSource(ctx context.Context, addBloblessFilter bool, atte
 	}
 
 	return nil
+}
+
+// gitFetchPRHead recovers a missing GitHub PR head ref by fetching the build's
+// known commit. A missing ref aborts even a combined ref+commit fetch. Without a
+// known commit, keep waiting for the PR ref: another ref's FETCH_HEAD would build
+// the wrong revision. Merge refs and custom refspecs must not use this recovery.
+func (e *Executor) gitFetchPRHead(ctx context.Context, args gitFetchArgs) error {
+	knownCommit := e.Commit != "" && e.Commit != "HEAD"
+	if knownCommit {
+		// There is no need to wait for the asynchronous PR ref if we can fetch
+		// the exact revision the build requested instead.
+		args.Retry = false
+	}
+	args.CLocale = true
+	err := gitFetch(ctx, args)
+	if gerr := new(gitError); knownCommit && ctx.Err() == nil && errors.As(err, &gerr) && gerr.Type == gitErrorFetchBadReference {
+		e.shell.Commentf("Pull request head fetch failed because a remote ref is missing, fetching commit %q directly", e.Commit)
+		args.RefSpecs = nil
+		args.LiteralRefSpecs = []string{e.Commit}
+		return gitFetch(ctx, args)
+	}
+	return err
 }
 
 // headBuildRefs returns the refs a Commit=HEAD build may name, in fetch order.

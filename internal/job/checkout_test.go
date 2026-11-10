@@ -76,6 +76,125 @@ func setupCheckoutTestRepo(t *testing.T, e *Executor, projectName string) (*gith
 	return s, commit
 }
 
+// A missing PR head must not prevent fetching the build commit, including when
+// it is hidden from all advertised refs (as can happen with fork PRs).
+func TestDefaultCheckoutPhaseMissingPRHead(t *testing.T) {
+	for _, mirrors := range []bool{false, true} {
+		for _, test := range []struct{ name, mode, ref string }{
+			{"same repository", GitCommitVerificationStrict, "refs/heads/feature-branch"},
+			{"fork", GitCommitVerificationStrict, "refs/hidden/build"},
+			{"fail-closed", GitCommitVerificationFailClosed, "refs/hidden/build"},
+		} {
+			t.Run(fmt.Sprintf("mirrors=%t/%s", mirrors, test.name), func(t *testing.T) {
+				sh := shell.NewTestShell(t)
+				e := &Executor{shell: sh, ExecutorConfig: ExecutorConfig{
+					PullRequest: "124", PipelineProvider: "github",
+					Branch: "feature-branch", GitCleanFlags: "-f -d -x",
+					GitCommitVerification: test.mode, GitMirrorsLockTimeout: 30,
+				}}
+				const project = "missing-pr-head"
+				s, commit := setupCheckoutTestRepo(t, e, project)
+				// Keep only main in the existing mirror, so the update must fetch
+				// the build commit rather than take the already-present fast path.
+				runGitForMirrorTest(t, "", "push", s.RepoURL(project), ":refs/heads/feature-branch")
+				if mirrors {
+					e.GitMirrorsPath = t.TempDir()
+					cloneOnHostMirrorToPath(t, e.Repository, expectedOnHostMirrorDir(e))
+				}
+				if out, err := s.CreateRef(project, test.ref, commit); err != nil {
+					t.Fatalf("CreateRef: %v\n%s", err, out)
+				}
+				for key, value := range map[string]string{
+					"uploadpack.hideRefs": "refs/hidden/", "uploadpack.allowAnySHA1InWant": "true",
+				} {
+					if err := s.ConfigureRepository(project, key, value); err != nil {
+						t.Fatal(err)
+					}
+				}
+				e.Commit = commit
+				ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+				defer cancel()
+				err := e.defaultCheckoutPhase(ctx, 1)
+				if test.mode == GitCommitVerificationFailClosed {
+					if !errors.Is(err, ErrCommitVerificationUnavailable) {
+						t.Fatalf("defaultCheckoutPhase() = %v, want verification unavailable for PR", err)
+					}
+					return
+				}
+				if err != nil {
+					t.Fatalf("defaultCheckoutPhase() = %v, want successful pinned checkout", err)
+				}
+				got, err := sh.Command("git", "rev-parse", "HEAD").RunAndCaptureStdout(t.Context())
+				if err != nil || strings.TrimSpace(got) != commit {
+					t.Fatalf("checkout HEAD = %q, %v; want %s", got, err, commit)
+				}
+				if mirrors && !hasGitCommit(t.Context(), sh, expectedOnHostMirrorDir(e), commit) {
+					t.Fatal("mirror update did not obtain build commit")
+				}
+			})
+		}
+	}
+}
+
+func TestPRHeadFetchRecoveryErrors(t *testing.T) {
+	for _, mirrors := range []bool{false, true} {
+		for _, failure := range []string{"missing commit", "HTTP error", "unknown commit", "custom refspec"} {
+			t.Run(fmt.Sprintf("mirrors=%t/%s", mirrors, failure), func(t *testing.T) {
+				canonical := newOnHostMirrorHTTPRepo(t, "canonical")
+				e := newOnHostMirrorExecutor(t, canonical.RepoURL("canonical"), "HEAD")
+				e.PullRequest = "124"
+				e.PipelineProvider = "github"
+				gitDir := ".git"
+				if mirrors {
+					gitDir = expectedOnHostMirrorDir(e)
+					cloneOnHostMirrorToPath(t, e.Repository, gitDir)
+				} else {
+					checkout := cloneExistingCheckoutForRemoteMirrorTest(t, e.Repository)
+					if err := e.shell.Chdir(checkout); err != nil {
+						t.Fatal(err)
+					}
+				}
+				commit, _, err := canonical.PushBranch("canonical", "feature-branch")
+				if err != nil {
+					t.Fatal(err)
+				}
+				e.Commit = commit
+				switch failure {
+				case "missing commit":
+					e.Commit = strings.Repeat("0", 40)
+				case "HTTP error":
+					// If an arbitrary fetch failure triggered commit recovery,
+					// the next request would succeed and mask this real error.
+					canonical.FailNextRequests(1)
+				case "unknown commit":
+					e.Commit = "HEAD"
+				case "custom refspec":
+					e.RefSpec = "refs/custom/missing"
+				}
+				ctx, cancel := context.WithTimeout(t.Context(), 2*time.Second)
+				defer cancel()
+				if mirrors {
+					_, err = e.updateGitMirror(ctx, e.Repository, nil)
+				} else {
+					err = e.fetchSource(ctx, false, nil)
+				}
+				if err == nil {
+					t.Fatal("fetch succeeded, want failure preserved")
+				}
+				if failure == "missing commit" {
+					var gerr *gitError
+					if !errors.As(err, &gerr) || gerr.Type != gitErrorFetchRefNotOnRemote {
+						t.Fatalf("fetch error = %v, want commit not on remote", err)
+					}
+				}
+				if hasGitCommit(t.Context(), e.shell, gitDir, commit) {
+					t.Fatal("failed fetch unexpectedly obtained the build commit")
+				}
+			})
+		}
+	}
+}
+
 func TestDefaultCheckoutPhase(t *testing.T) {
 	ctx := t.Context()
 
