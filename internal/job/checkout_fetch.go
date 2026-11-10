@@ -186,7 +186,7 @@ func (e *Executor) fetchSource(ctx context.Context, addBloblessFilter bool, atte
 			refspecs = append(refspecs, e.Commit)
 			// We aim to eliminate network round-trip as much as possible so we use a single git fetch here.
 			var fetchErr error
-			if kind == refspecGithubPRHead {
+			if kind == refspecGithubPRHead && e.Commit != "" {
 				fetchErr = e.gitFetchPRHead(ctx, gitFetchArgs{
 					Shell:         e.shell,
 					GitFetchFlags: gitFetchFlags,
@@ -241,20 +241,16 @@ func (e *Executor) fetchSource(ctx context.Context, addBloblessFilter bool, atte
 }
 
 // gitFetchPRHead recovers a missing GitHub PR head ref by fetching the build's
-// known commit. A missing ref aborts even a combined ref+commit fetch. Without a
-// known commit, keep waiting for the PR ref: another ref's FETCH_HEAD would build
-// the wrong revision. Merge refs and custom refspecs must not use this recovery.
+// known commit. A missing ref aborts even a combined ref+commit fetch. Callers
+// must have a non-empty e.Commit other than HEAD; unknown-commit builds, merge
+// refs and custom refspecs must use their ordinary fetch paths instead.
 func (e *Executor) gitFetchPRHead(ctx context.Context, args gitFetchArgs) error {
 	retry := args.Retry
-	knownCommit := e.Commit != "" && e.Commit != "HEAD"
-	if knownCommit {
-		// There is no need to wait for the asynchronous PR ref if we can fetch
-		// the exact revision the build requested instead.
-		args.Retry = false
-	}
+	// Try direct commit recovery before waiting for the asynchronous PR ref.
+	args.Retry = false
 	args.CLocale = true
 	err := gitFetch(ctx, args)
-	if gerr := new(gitError); knownCommit && ctx.Err() == nil && errors.As(err, &gerr) && gerr.Type == gitErrorFetchBadReference {
+	if gerr := new(gitError); ctx.Err() == nil && errors.As(err, &gerr) && gerr.Type == gitErrorFetchBadReference {
 		e.shell.Commentf("Pull request head fetch failed because a remote ref is missing, fetching commit %q directly", e.Commit)
 		commitArgs := args
 		commitArgs.RefSpecs = nil

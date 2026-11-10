@@ -372,7 +372,9 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string, attem
 				e.shell.Commentf("Fetching and mirroring pull request head from GitHub")
 				refspec = fmt.Sprintf("refs/pull/%s/head", e.PullRequest)
 				retry = true
-				fetch = e.gitFetchPRHead
+				if e.Commit != "" && e.Commit != "HEAD" {
+					fetch = e.gitFetchPRHead
+				}
 			}
 			refspecs = []string{refspec}
 		default:
