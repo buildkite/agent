@@ -139,6 +139,42 @@ func TestDefaultCheckoutPhaseMissingPRHead(t *testing.T) {
 	}
 }
 
+func TestDefaultCheckoutPhaseMissingPRHeadShortCommit(t *testing.T) {
+	for _, ref := range []string{"refs/heads/feature-branch", "refs/tags/build-commit"} {
+		t.Run(ref, func(t *testing.T) {
+			sh := shell.NewTestShell(t)
+			e := &Executor{shell: sh, ExecutorConfig: ExecutorConfig{
+				PullRequest: "124", PipelineProvider: "github",
+				Branch: "feature-branch", GitCleanFlags: "-f -d -x",
+				GitCommitVerification: GitCommitVerificationStrict,
+			}}
+			const project = "short-pr-commit"
+			s, commit := setupCheckoutTestRepo(t, e, project)
+			// Start with a checkout that lacks the build commit. Only the
+			// heads-and-tags fallback can obtain it using an abbreviated SHA.
+			runGitForMirrorTest(t, "", "push", e.Repository, ":refs/heads/feature-branch")
+			checkout, _ := sh.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH")
+			runGitForMirrorTest(t, "", "clone", e.Repository, checkout)
+			if err := exec.Command("git", "-C", checkout, "cat-file", "-e", commit).Run(); err == nil {
+				t.Fatal("checkout already contains build commit")
+			}
+			if out, err := s.CreateRef(project, ref, commit); err != nil {
+				t.Fatalf("CreateRef: %v\n%s", err, out)
+			}
+			e.Commit = commit[:12]
+			ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+			defer cancel()
+			if err := e.defaultCheckoutPhase(ctx, 1); err != nil {
+				t.Fatalf("defaultCheckoutPhase() = %v, want successful pinned checkout", err)
+			}
+			got, err := sh.Command("git", "rev-parse", "HEAD").RunAndCaptureStdout(t.Context())
+			if err != nil || strings.TrimSpace(got) != commit {
+				t.Fatalf("checkout HEAD = %q, %v; want %s", got, err, commit)
+			}
+		})
+	}
+}
+
 func TestDefaultCheckoutPhaseDelayedPRHeadAfterCommitFetchFails(t *testing.T) {
 	for _, shortCommit := range []bool{false, true} {
 		t.Run(fmt.Sprintf("shortCommit=%t", shortCommit), func(t *testing.T) {

@@ -193,11 +193,6 @@ func (e *Executor) fetchSource(ctx context.Context, addBloblessFilter bool, atte
 					Repository:    "origin",
 					RefSpecs:      refspecs,
 				})
-				// Preserve the heads-and-tags fallback for short commit hashes,
-				// which Git cannot fetch directly.
-				if gerr := new(gitError); errors.As(fetchErr, &gerr) && gerr.Type == gitErrorFetchBadReference {
-					fetchErr = gitFetchWithFallback(ctx, e.shell, gitFetchFlags, e.Commit)
-				}
 			} else {
 				fetchErr = gitFetchWithFallback(ctx, e.shell, gitFetchFlags, refspecs...)
 			}
@@ -256,7 +251,15 @@ func (e *Executor) gitFetchPRHead(ctx context.Context, args gitFetchArgs) error 
 		commitArgs.RefSpecs = nil
 		commitArgs.LiteralRefSpecs = []string{e.Commit}
 		err = gitFetch(ctx, commitArgs)
-		if retry && ctx.Err() == nil && errors.As(err, &gerr) && (gerr.Type == gitErrorFetchBadReference || gerr.Type == gitErrorFetchRefNotOnRemote) {
+		if ctx.Err() != nil || !errors.As(err, &gerr) {
+			return err
+		}
+		switch {
+		case !retry && gerr.Type == gitErrorFetchBadReference:
+			// Workspace short hashes need heads and tags, not another attempt
+			// to fetch the same commit directly.
+			return gitFetchAllHeadsAndTags(ctx, args.Shell, args.GitFetchFlags)
+		case retry && (gerr.Type == gitErrorFetchBadReference || gerr.Type == gitErrorFetchRefNotOnRemote):
 			// Short hashes and unadvertised commits may not be fetchable
 			// directly. Keep the caller's wait for GitHub to publish the PR
 			// ref, but do not mask transport, authentication or corrupt-object
@@ -684,6 +687,13 @@ func gitFetchWithFallback(ctx context.Context, shell *shell.Shell, gitFetchFlags
 		}
 	}
 
+	if err := gitFetchAllHeadsAndTags(ctx, shell, gitFetchFlags); err != nil {
+		return fmt.Errorf("fetching refspecs %v: %w", refspecs, err)
+	}
+	return nil
+}
+
+func gitFetchAllHeadsAndTags(ctx context.Context, shell *shell.Shell, gitFetchFlags string) error {
 	// The refspecs might be something that's not possible to fetch directly
 	// (e.g. short commit hashes), so we fall back to fetching all heads and tags,
 	// hoping that the refspecs are included.
@@ -697,15 +707,11 @@ func gitFetchWithFallback(ctx context.Context, shell *shell.Shell, gitFetchFlags
 		return fmt.Errorf("getting remote.origin.fetch: %w", err)
 	}
 
-	if err := gitFetch(ctx, gitFetchArgs{
+	return gitFetch(ctx, gitFetchArgs{
 		Shell:         shell,
 		GitFetchFlags: gitFetchFlags,
 		Repository:    "origin",
 		Retry:         true,
 		RefSpecs:      []string{gitFetchRefspec, "+refs/tags/*:refs/tags/*"},
-	}); err != nil {
-		return fmt.Errorf("fetching refspecs %v: %w", refspecs, err)
-	}
-
-	return nil
+	})
 }
