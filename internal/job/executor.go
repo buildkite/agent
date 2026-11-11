@@ -714,7 +714,7 @@ func (e *Executor) flushOutput() {
 }
 
 func (e *Executor) runWrappedShellScriptHook(ctx context.Context, hookName string, hookCfg HookConfig) error {
-	script, err := hook.NewWrapper(hook.WithPath(hookCfg.Path))
+	script, err := hook.NewWrapper(ctx, hook.WithPath(hookCfg.Path))
 	if err != nil {
 		e.shell.Errorf("Error creating hook script: %v", err)
 		return err

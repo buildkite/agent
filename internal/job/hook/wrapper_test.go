@@ -6,7 +6,6 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"strings"
 	"testing"
 
 	"github.com/buildkite/agent/v4/env"
@@ -73,7 +72,7 @@ echo "hello world"
 			ctx := t.Context()
 
 			hookFilename := writeTestHook(t, tc.name, tc.hook)
-			wrapper, err := hook.NewWrapper(hook.WithPath(hookFilename), hook.WithOS(tc.os))
+			wrapper, err := hook.NewWrapper(ctx, hook.WithPath(hookFilename), hook.WithOS(tc.os))
 			if err != nil {
 				t.Fatalf("failed to create hook wrapper: %v", err)
 			}
@@ -132,7 +131,7 @@ func TestWrapperTreatsTempPathAsLiteralShellData(t *testing.T) {
 	}
 
 	hookFilename := writeTestHook(t, "hook", "#!/bin/sh\nexport WRAPPED_HOOK_RAN=yes\n")
-	wrapper, err := hook.NewWrapper(hook.WithPath(hookFilename))
+	wrapper, err := hook.NewWrapper(t.Context(), hook.WithPath(hookFilename))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -214,7 +213,7 @@ echo hello world
 			ctx := t.Context()
 
 			hookFilename := writeTestHook(t, tc.name, tc.hook)
-			wrapper, err := hook.NewWrapper(hook.WithPath(hookFilename), hook.WithOS(tc.os))
+			wrapper, err := hook.NewWrapper(ctx, hook.WithPath(hookFilename), hook.WithOS(tc.os))
 			if err != nil {
 				t.Fatalf("failed to create hook wrapper: %v", err)
 			}
@@ -274,6 +273,7 @@ func TestScriptWrapperFailsOnHookWithInvalidShebang(t *testing.T) {
 	hookFilename := writeTestHook(t, "hook", "#!/usr/bin/env ruby\nputs 'hello world'")
 
 	_, err := hook.NewWrapper(
+		t.Context(),
 		hook.WithPath(hookFilename),
 		hook.WithOS("linux"),
 	)
@@ -282,25 +282,47 @@ func TestScriptWrapperFailsOnHookWithInvalidShebang(t *testing.T) {
 	}
 }
 
-func TestWrapperUsesOverrideSelfForExecutorTester(t *testing.T) {
-	t.Setenv("BUILDKITE_JOB_ID", "1111-1111-1111-1111")
-	t.Setenv("BUILDKITE_OVERRIDE_SELF", "mock-buildkite-agent")
+func TestWrapperIgnoresJobEnvironmentSelfOverride(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("POSIX shell test")
+	}
 
-	hookFilename := writeTestHook(t, "hook", "#!/bin/sh\ntrue\n")
+	marker := filepath.Join(t.TempDir(), "unexpected-agent-binary")
+	fakeAgent := filepath.Join(t.TempDir(), "fake-agent")
+	if err := os.WriteFile(fakeAgent, []byte("#!/bin/sh\n: > '"+marker+"'\nprintf '{}'\n"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("BUILDKITE_JOB_ID", "1111-1111-1111-1111")
+	t.Setenv("BUILDKITE_OVERRIDE_SELF", fakeAgent)
+
+	hookFilename := writeTestHook(t, "hook", "#!/bin/sh\nexport WRAPPED_HOOK_RAN=yes\n")
 	wrapper, err := hook.NewWrapper(
+		t.Context(),
 		hook.WithPath(hookFilename),
 		hook.WithOS("linux"),
 	)
 	if err != nil {
-		t.Fatalf("failed to create hook wrapper: %v", err)
+		t.Fatal(err)
 	}
+	defer wrapper.Close()
 
-	wrapperContents, err := os.ReadFile(wrapper.Path())
+	sh := shell.NewTestShell(t)
+	script, err := sh.Script(wrapper.Path(), "")
 	if err != nil {
-		t.Fatalf("failed to read wrapper %q: %v", wrapper.Path(), err)
+		t.Fatal(err)
 	}
-	if !strings.Contains(string(wrapperContents), `'mock-buildkite-agent' env dump`) {
-		t.Fatalf("wrapper contents did not use override self:\n%s", wrapperContents)
+	if err := script.Run(t.Context(), shell.ShowPrompt(false)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(marker); !os.IsNotExist(err) {
+		t.Fatalf("hook wrapper executed an environment-selected binary: marker stat error = %v", err)
+	}
+	changes, err := wrapper.Changes()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := changes.Diff.Added["WRAPPED_HOOK_RAN"]; got != "yes" {
+		t.Fatalf("hook environment change = %q, want yes", got)
 	}
 }
 

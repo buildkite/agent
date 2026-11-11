@@ -61,6 +61,30 @@ func TestEnvironmentVariablesPassBetweenHooks(t *testing.T) {
 	tester.RunAndCheck(t, "MY_CUSTOM_ENV=1")
 }
 
+func TestBootstrapIgnoresJobEnvironmentSelfOverride(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("POSIX shell test")
+	}
+
+	tester, err := NewExecutorTester(mainCtx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tester.Close()
+
+	marker := filepath.Join(t.TempDir(), "unexpected-agent-binary")
+	fakeAgent := filepath.Join(t.TempDir(), "fake-agent")
+	if err := os.WriteFile(fakeAgent, []byte(fmt.Sprintf("#!/bin/sh\n: > %q\nexit 1\n", marker)), 0o700); err != nil {
+		t.Fatal(err)
+	}
+
+	tester.ExpectGlobalHook("command").Once().AndExitWith(0)
+	tester.RunAndCheck(t, "BUILDKITE_OVERRIDE_SELF="+fakeAgent)
+	if _, err := os.Stat(marker); !os.IsNotExist(err) {
+		t.Fatalf("bootstrap executed an environment-selected binary: marker stat error = %v", err)
+	}
+}
+
 func TestHooksCanUnsetEnvironmentVariables(t *testing.T) {
 	t.Parallel()
 
