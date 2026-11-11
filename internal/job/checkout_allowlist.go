@@ -20,16 +20,21 @@ func MatchesAllowedPatterns(patterns []*regexp.Regexp, value string) bool {
 	return false
 }
 
-// RepositoryAllowed rejects HTTP paths that can resolve to a different
-// repository after the allowlist check. Keep matching the supplied URL so
-// agent-managed Git credential rewrites of SSH URLs still work.
+// RepositoryAllowed rejects paths that can resolve to a different repository
+// after the allowlist check. Match the supplied URL so agent-managed Git
+// credential rewrites of SSH URLs still work with the operator's patterns.
 func RepositoryAllowed(patterns []*regexp.Regexp, repository string) bool {
 	if len(patterns) == 0 {
 		return true
 	}
-	scheme, _, hasScheme := strings.Cut(repository, ":")
+	urlToCheck := repository
+	if strings.HasPrefix(repository, "git@github.com:") {
+		// Managed Git credentials rewrite this SSH form to HTTPS before fetch.
+		urlToCheck = "https://github.com/" + strings.TrimPrefix(repository, "git@github.com:")
+	}
+	scheme, _, hasScheme := strings.Cut(urlToCheck, ":")
 	if hasScheme && (strings.EqualFold(scheme, "http") || strings.EqualFold(scheme, "https")) {
-		u, err := url.Parse(repository)
+		u, err := url.Parse(urlToCheck)
 		if err != nil {
 			return false
 		}

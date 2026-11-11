@@ -177,6 +177,20 @@ func TestConfigAllowlisting(t *testing.T) {
 			wantCapturedReason:       "allowed-repositories",
 		},
 		{
+			name: "when managed credentials rewrite an allowed SSH URL, an escaping path is refused before bootstrap",
+			extraEnv: map[string]string{
+				"BUILDKITE_REPO": "git@github.com:buildkite/../outside.git",
+				"BUILDKITE_USE_REPOSITORY_PROVIDER_GIT_CREDENTIALS": "true",
+			},
+			agentConfig: agent.AgentConfiguration{
+				AllowedRepositories: []*regexp.Regexp{regexp.MustCompile(`^git@github\.com:buildkite/`)},
+			},
+			mockBootstrapExpectation: func(bm *bintest.Mock) { bm.Expect().NotCalled() },
+			wantExitStatus:           "-1",
+			wantSignalReason:         agent.SignalReasonAgentRefused,
+			wantCapturedReason:       "allowed-repositories",
+		},
+		{
 			name: "when the remote mirror does not match the repo allowlist, the mirror is dropped without refusing the job",
 			extraEnv: map[string]string{
 				"BUILDKITE_REPO":                  "https://github.com/buildkite/agent",

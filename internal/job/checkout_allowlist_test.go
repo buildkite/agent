@@ -18,6 +18,8 @@ func TestValidateRepositoryAllowedForCheckout(t *testing.T) {
 		{name: "empty repository without allowlist"},
 		{name: "matches second pattern", patterns: []string{`^git@github\.com:org/`, `^https://github\.com/org/`}, repository: "https://github.com/org/repo.git"},
 		{name: "managed SSH URL remains allowed", patterns: []string{`^git@github\.com:org/`}, repository: "git@github.com:org/repo.git"},
+		{name: "managed SSH rewrite escapes allowed path", patterns: []string{`^git@github\.com:org/`}, repository: "git@github.com:org/../outside.git", wantErr: true},
+		{name: "encoded managed SSH rewrite escapes allowed path", patterns: []string{`^git@github\.com:org/`}, repository: "git@github.com:org/%2e%2e/outside.git", wantErr: true},
 		{name: "ordinary trailing slash remains allowed", patterns: []string{`^https://github\.com/org/`}, repository: "https://github.com/org/repo.git/"},
 		{name: "HTTP root path remains allowed", patterns: []string{`^https://github\.com/$`}, repository: "https://github.com/"},
 		{name: "dot segment escapes allowed path", patterns: []string{`^https://github\.com/org/`}, repository: "https://github.com/org/../outside.git", wantErr: true},
