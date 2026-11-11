@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"sync"
@@ -234,6 +235,50 @@ func TestRunExec_MissThenHit(t *testing.T) {
 	}
 	if got := len(reg.stores); got != 1 {
 		t.Errorf("got %d stores after a hit, want none added", got-1)
+	}
+}
+
+func TestRunExec_RestoredLogSymlink(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("creating a symlink needs privileges on Windows")
+	}
+	for _, contents := range []string{"not a log", "1s\noutside output\n"} {
+		t.Run(contents, func(t *testing.T) {
+			_, apiClient, cfg := setupExecTest(t)
+			const logPath = ".buildkite-cache-exec-build.v1.log"
+			outside := filepath.Join(t.TempDir(), "victim")
+			writeFile(t, outside, contents)
+			if err := os.Symlink(outside, logPath); err != nil {
+				t.Fatal(err)
+			}
+			writeFile(t, "out/result", "cached")
+			// A cache-sharing writer can save a symlink as exec's log target.
+			original := readFile(t, "cache.yml")
+			writeFile(t, "cache.yml", strings.Replace(original, "target_paths: [out]", "target_paths: [out, "+logPath+"]", 1))
+			if err := RunSave(t.Context(), logger.Discard, apiClient, cfg); err != nil {
+				t.Fatal(err)
+			}
+			writeFile(t, "cache.yml", original)
+			if err := os.Remove(logPath); err != nil {
+				t.Fatal(err)
+			}
+
+			runs := 0
+			stdout, _, err := runExec(t, apiClient, cfg, func(stdout, _ io.Writer) error {
+				runs++
+				_, err := io.WriteString(stdout, "fresh output\n")
+				return err
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if runs != 1 || stdout != "fresh output\n" {
+				t.Errorf("runs = %d, stdout = %q; want command output, not the symlink referent", runs, stdout)
+			}
+			if got := readFile(t, outside); got != contents {
+				t.Errorf("outside file = %q, want unchanged %q", got, contents)
+			}
+		})
 	}
 }
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -75,8 +76,8 @@ func ExtractFiles(ctx context.Context, zipFile *os.File, zipFileLen int64, paths
 	}
 	defer func() { _ = os.RemoveAll(discardDir) }()
 
-	discard := func(name string) string {
-		return discardName(discardDir, name)
+	discard := func(file *zip.File) (string, error) {
+		return checkedExtractPath(discardName(discardDir, file.Name), discardDir, file.Mode())
 	}
 
 	extract, err := quickzip.NewExtractorFromReader(zipFile, zipFileLen)
@@ -88,19 +89,19 @@ func ExtractFiles(ctx context.Context, zipFile *os.File, zipFileLen int64, paths
 
 	err = extract.ExtractWithPathMapper(ctx, func(file *zip.File) (string, error) {
 		if file.Name == ManifestPath {
-			return discard(file.Name), nil
+			return discard(file)
 		}
 
 		namespace, rest, ok := splitNamespace(file.Name)
 		if !ok {
 			slog.Warn("archive entry has no namespace, skipping", "entry", file.Name)
-			return discard(file.Name), nil
+			return discard(file)
 		}
 
 		anchor, ok := manifest.Mappings[namespace]
 		if !ok {
 			slog.Warn("archive entry namespace not in manifest, skipping", "entry", file.Name)
-			return discard(file.Name), nil
+			return discard(file)
 		}
 
 		base, err := resolveAnchor(anchor)
@@ -127,11 +128,11 @@ func ExtractFiles(ctx context.Context, zipFile *os.File, zipFileLen int64, paths
 			}
 		}
 		if matched == -1 {
-			return discard(file.Name), nil
+			return discard(file)
 		}
 		foundPaths[paths[matched]] = true
 
-		return dest, nil
+		return checkedExtractPath(dest, configPaths[matched], file.Mode())
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to extract zip file: %w", err)
@@ -158,6 +159,31 @@ func ExtractFiles(ctx context.Context, zipFile *os.File, zipFileLen int64, paths
 		WrittenEntries: countExtracted,
 		Duration:       time.Since(start),
 	}, nil
+}
+
+// checkedExtractPath rejects symlink traversal within a restore target. The
+// mapper runs again during quickzip's deferred symlink/metadata pass, so links
+// restored earlier in that pass cannot redirect a later operation. A leaf link
+// may still be restored verbatim, but directory metadata must not follow it.
+// Parents above the configured target are trusted, not archive-controlled.
+func checkedExtractPath(dest, target string, mode os.FileMode) (string, error) {
+	start := filepath.Dir(dest)
+	if mode.IsDir() {
+		start = dest
+	}
+	for p, stop := start, filepath.Dir(target); p != stop; p = filepath.Dir(p) {
+		info, err := os.Lstat(p)
+		if errors.Is(err, os.ErrNotExist) {
+			continue
+		}
+		if err != nil {
+			return "", fmt.Errorf("checking extraction path %q: %w", p, err)
+		}
+		if info.Mode()&os.ModeSymlink != 0 {
+			return "", fmt.Errorf("extraction path %q traverses symlink %q", dest, p)
+		}
+	}
+	return dest, nil
 }
 
 // discardName maps a not-restored entry (the manifest, or an unconfigured

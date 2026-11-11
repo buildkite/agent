@@ -713,6 +713,82 @@ func TestIsUnder(t *testing.T) {
 	}
 }
 
+func TestExtractFiles_SymlinkTraversal(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("creating a symlink needs privileges on Windows")
+	}
+	for _, test := range []struct {
+		name, entry string
+		directory   bool
+	}{
+		{name: "deferred symlink unlink", entry: "_0/cache/pivot"},
+		{name: "directory metadata", entry: "_0/cache/pivot", directory: true},
+		{name: "discarded directory metadata", entry: "_9/cache/pivot", directory: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			mustTrace(t)
+			t.Chdir(t.TempDir())
+			outside := t.TempDir()
+			victim := filepath.Join(outside, "victim")
+			writeTestFile(t, victim, "untouched")
+			if err := os.Chmod(outside, 0o750); err != nil {
+				t.Fatal(err)
+			}
+
+			f, err := os.CreateTemp(t.TempDir(), "crafted-*.zip")
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer f.Close()
+			zw := zip.NewWriter(f)
+			if err := writeManifest(zw, Manifest{Version: ManifestVersion, Mappings: map[string]string{"_0": AnchorCWD}}); err != nil {
+				t.Fatal(err)
+			}
+			add := func(name string, mode os.FileMode, body string) {
+				t.Helper()
+				header := &zip.FileHeader{Name: name}
+				header.SetMode(mode)
+				w, err := zw.CreateHeader(header)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if _, err := w.Write([]byte(body)); err != nil {
+					t.Fatal(err)
+				}
+			}
+			add(test.entry, os.ModeSymlink|0o777, outside)
+			if test.directory {
+				// A directory entry at the same destination must not apply its
+				// permissions through the previously restored symlink, even
+				// when both entries are routed to the discard directory.
+				add(test.entry, os.ModeDir|0o700, "")
+			} else {
+				// Both links are deferred. The second must not unlink the
+				// outside file through the first link's destination.
+				add(test.entry+"/victim", os.ModeSymlink|0o777, "replacement")
+			}
+			if err := zw.Close(); err != nil {
+				t.Fatal(err)
+			}
+			stat, err := f.Stat()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := ExtractFiles(t.Context(), f, stat.Size(), []string{"cache"}); err == nil {
+				t.Error("extraction through a symlink succeeded")
+			}
+			assertFileContent(t, victim, "untouched")
+			stat, err = os.Stat(outside)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if stat.Mode().Perm() != 0o750 {
+				t.Errorf("outside directory mode = %v, want 0750", stat.Mode().Perm())
+			}
+		})
+	}
+}
+
 func assertFileContent(t *testing.T, path, want string) {
 	t.Helper()
 	got, err := os.ReadFile(path)

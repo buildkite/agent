@@ -139,12 +139,26 @@ func writeLog(ctx context.Context, redact Redactor, path string, rec *recorder, 
 	if err != nil {
 		return fmt.Errorf("failed to redact secrets from the command output: %w", err)
 	}
-	return os.WriteFile(path, append([]byte(ranFor.String()+"\n"), output...), 0o600)
+	// A restored log may be a symlink. Unlink it rather than truncating its
+	// referent, then require a new file so creation cannot follow a link.
+	if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	if err != nil {
+		return err
+	}
+	_, err = f.Write(append([]byte(ranFor.String()+"\n"), output...))
+	return errors.Join(err, f.Close())
 }
 
 // readLog returns how long the command ran and its output from the restored log at path, and whether the log was
 // readable.
 func readLog(path string) (ranFor time.Duration, output []byte, ok bool) {
+	// Only replay a regular log, never the referent of a cached symlink.
+	if info, err := os.Lstat(path); err != nil || !info.Mode().IsRegular() {
+		return 0, nil, false
+	}
 	log, err := os.ReadFile(path)
 	if err != nil {
 		return 0, nil, false
