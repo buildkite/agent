@@ -134,7 +134,7 @@ func (e *Executor) CheckoutPhase(ctx context.Context) (retErr error) {
 }
 
 func (e *Executor) validateRepositoryAllowedForCheckout(repository string) error {
-	if MatchesAllowedPatterns(e.AllowedRepositories, repository) {
+	if RepositoryAllowed(e.AllowedRepositories, repository) {
 		return nil
 	}
 	return fmt.Errorf("repository %q is not permitted by --allowed-repositories", redact.URLCredentials(repository))

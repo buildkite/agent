@@ -166,6 +166,17 @@ func TestConfigAllowlisting(t *testing.T) {
 			wantExitStatus:           "0",
 		},
 		{
+			name:     "when allowlisting repos, a URL that escapes its allowed HTTP path is refused before bootstrap",
+			extraEnv: map[string]string{"BUILDKITE_REPO": "https://github.com/buildkite/../outside.git"},
+			agentConfig: agent.AgentConfiguration{
+				AllowedRepositories: []*regexp.Regexp{regexp.MustCompile(`^https://github\.com/buildkite/`)},
+			},
+			mockBootstrapExpectation: func(bm *bintest.Mock) { bm.Expect().NotCalled() },
+			wantExitStatus:           "-1",
+			wantSignalReason:         agent.SignalReasonAgentRefused,
+			wantCapturedReason:       "allowed-repositories",
+		},
+		{
 			name: "when the remote mirror does not match the repo allowlist, the mirror is dropped without refusing the job",
 			extraEnv: map[string]string{
 				"BUILDKITE_REPO":                  "https://github.com/buildkite/agent",
@@ -175,6 +186,26 @@ func TestConfigAllowlisting(t *testing.T) {
 				AllowedRepositories: []*regexp.Regexp{
 					regexp.MustCompile("^https://github.com/buildkite/.*$"),
 				},
+			},
+			mockBootstrapExpectation: func(bm *bintest.Mock) {
+				bm.Expect().Once().AndExitWith(0).AndCallFunc(func(c *bintest.Call) {
+					if got := c.GetEnv("BUILDKITE_GIT_REMOTE_MIRROR_URL"); got != "" {
+						t.Errorf("BUILDKITE_GIT_REMOTE_MIRROR_URL = %q, want dropped", got)
+					}
+					c.Exit(0)
+				})
+			},
+			wantExitStatus:  "0",
+			wantLogsContain: []string{"Remote Git mirror is not permitted by --allowed-repositories; using canonical repository"},
+		},
+		{
+			name: "when the remote mirror escapes its allowed HTTP path, the mirror is dropped",
+			extraEnv: map[string]string{
+				"BUILDKITE_REPO":                  "https://github.com/buildkite/agent",
+				"BUILDKITE_GIT_REMOTE_MIRROR_URL": "https://mirror.example/buildkite/../outside.git",
+			},
+			agentConfig: agent.AgentConfiguration{
+				AllowedRepositories: []*regexp.Regexp{regexp.MustCompile(`^https://(github\.com|mirror\.example)/buildkite/`)},
 			},
 			mockBootstrapExpectation: func(bm *bintest.Mock) {
 				bm.Expect().Once().AndExitWith(0).AndCallFunc(func(c *bintest.Call) {

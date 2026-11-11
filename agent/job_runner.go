@@ -494,7 +494,7 @@ func (r *JobRunner) createEnvironment(ctx context.Context) ([]string, error) {
 	mirrorURL := env["BUILDKITE_GIT_REMOTE_MIRROR_URL"]
 	env["BUILDKITE_GIT_REMOTE_MIRROR_URL"] = ""
 	if mirrorURL != "" {
-		if !job.MatchesAllowedPatterns(r.conf.AgentConfiguration.AllowedRepositories, mirrorURL) {
+		if !job.RepositoryAllowed(r.conf.AgentConfiguration.AllowedRepositories, mirrorURL) {
 			r.droppedRemoteMirrorURL = mirrorURL
 		} else {
 			env["BUILDKITE_GIT_REMOTE_MIRROR_URL"] = mirrorURL
