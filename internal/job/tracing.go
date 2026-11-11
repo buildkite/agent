@@ -282,8 +282,12 @@ func genericTracingExtras(v jobTracingValues, env *env.Environment) map[string]a
 	}
 
 	pullRequest, has := env.Get("BUILDKITE_PULL_REQUEST")
+	pullRequestDraft := "n/a"
 	if !has || pullRequest == "" || pullRequest == "false" {
 		pullRequest = "n/a"
+	} else {
+		draft, _ := env.Get("BUILDKITE_PULL_REQUEST_DRAFT")
+		pullRequestDraft = strconv.FormatBool(draft == "true")
 	}
 
 	buildAuthor, has := env.Get("BUILDKITE_BUILD_AUTHOR")
@@ -292,27 +296,28 @@ func genericTracingExtras(v jobTracingValues, env *env.Environment) map[string]a
 	}
 
 	result := map[string]any{
-		"buildkite.agent":             v.AgentName,
-		"buildkite.version":           version.Version(),
-		"buildkite.queue":             v.Queue,
-		"buildkite.org":               v.OrganizationSlug,
-		"buildkite.pipeline":          v.PipelineSlug,
-		"buildkite.branch":            v.Branch,
-		"buildkite.job_label":         jobLabel,
-		"buildkite.job_key":           jobKey,
-		"buildkite.job_id":            v.JobID,
-		"buildkite.job_url":           jobURL,
-		"buildkite.build_id":          buildID,
-		"buildkite.build_number":      buildNumber,
-		"buildkite.build_url":         buildURL,
-		"buildkite.build_author":      buildAuthor,
-		"buildkite.commit":            commit,
-		"buildkite.pull_request":      pullRequest,
-		"buildkite.source":            source,
-		"buildkite.retry":             retry,
-		"buildkite.parallel":          parallel,
-		"buildkite.rebuilt_from_id":   rebuiltFromID,
-		"buildkite.triggered_from_id": triggeredFromID,
+		"buildkite.agent":              v.AgentName,
+		"buildkite.version":            version.Version(),
+		"buildkite.queue":              v.Queue,
+		"buildkite.org":                v.OrganizationSlug,
+		"buildkite.pipeline":           v.PipelineSlug,
+		"buildkite.branch":             v.Branch,
+		"buildkite.job_label":          jobLabel,
+		"buildkite.job_key":            jobKey,
+		"buildkite.job_id":             v.JobID,
+		"buildkite.job_url":            jobURL,
+		"buildkite.build_id":           buildID,
+		"buildkite.build_number":       buildNumber,
+		"buildkite.build_url":          buildURL,
+		"buildkite.build_author":       buildAuthor,
+		"buildkite.commit":             commit,
+		"buildkite.pull_request":       pullRequest,
+		"buildkite.pull_request_draft": pullRequestDraft,
+		"buildkite.source":             source,
+		"buildkite.retry":              retry,
+		"buildkite.parallel":           parallel,
+		"buildkite.rebuilt_from_id":    rebuiltFromID,
+		"buildkite.triggered_from_id":  triggeredFromID,
 	}
 
 	// Add agent metadata from BUILDKITE_AGENT_META_DATA_* env vars
