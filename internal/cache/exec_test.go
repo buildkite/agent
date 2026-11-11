@@ -344,12 +344,16 @@ func TestRunExec_OutputNotSaved(t *testing.T) {
 			reg, apiClient, cfg := setupExecTest(t)
 			cfg.FailOnError = test.failOnError
 			cfg.Redact = test.redact
-			_, _, err := runExec(t, apiClient, cfg, func(stdout, _ io.Writer) error {
+			_, stderr, err := runExec(t, apiClient, cfg, func(stdout, _ io.Writer) error {
 				_, _ = io.WriteString(stdout, test.output)
 				return os.MkdirAll("out", 0o755)
 			})
 			if gotErr := err != nil; gotErr != test.failOnError {
 				t.Errorf("exec error = %v, want error: %t", err, test.failOnError)
+			}
+			// A failed save expands its de-emphasised group so the error is visible.
+			if expanded := strings.HasSuffix(stderr, "~~~ :package: Saving cache\n^^^ +++\n"); expanded != test.failOnError {
+				t.Errorf("stderr = %q, want group expanded: %t", stderr, test.failOnError)
 			}
 			if len(reg.stores) != 0 {
 				t.Errorf("saved %d entries, want none", len(reg.stores))
