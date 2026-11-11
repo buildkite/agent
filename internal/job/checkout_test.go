@@ -139,33 +139,56 @@ func TestDefaultCheckoutPhaseMissingPRHead(t *testing.T) {
 	}
 }
 
-func TestDefaultCheckoutPhaseMissingPRHeadShortCommit(t *testing.T) {
-	for _, ref := range []string{"refs/heads/feature-branch", "refs/tags/build-commit"} {
-		t.Run(ref, func(t *testing.T) {
+func TestDefaultCheckoutPhaseMissingPRHeadCommitFallback(t *testing.T) {
+	for _, test := range []struct {
+		name, ref   string
+		shortCommit bool
+	}{
+		{"short branch commit", "refs/heads/feature-branch", true},
+		{"short tag commit", "refs/tags/build-commit", true},
+		{"unadvertised ancestor", "refs/heads/feature-branch", false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
 			sh := shell.NewTestShell(t)
 			e := &Executor{shell: sh, ExecutorConfig: ExecutorConfig{
 				PullRequest: "124", PipelineProvider: "github",
 				Branch: "feature-branch", GitCleanFlags: "-f -d -x",
-				GitCommitVerification: GitCommitVerificationStrict,
+				GitCommitVerification: GitCommitVerificationStrict, CheckoutAttempts: 1,
 			}}
-			const project = "short-pr-commit"
+			const project = "pr-commit-fallback"
 			s, commit := setupCheckoutTestRepo(t, e, project)
+			tip := commit
+			if !test.shortCommit {
+				// Protocol v0 rejects direct SHA requests for ancestors of an
+				// advertised branch when upload-pack lacks the capability.
+				sh.Env.Set("GIT_CONFIG_COUNT", "1")
+				sh.Env.Set("GIT_CONFIG_KEY_0", "protocol.version")
+				sh.Env.Set("GIT_CONFIG_VALUE_0", "0")
+				history := cloneExistingCheckoutForRemoteMirrorTest(t, e.Repository)
+				runGitForMirrorTest(t, history, "checkout", "--detach", commit)
+				runGitForMirrorTest(t, history, "commit", "--allow-empty", "-m", "Advance branch beyond build commit")
+				runGitForMirrorTest(t, history, "push", "origin", "HEAD:refs/heads/feature-branch")
+				tip = gitOutputForRemoteCheckoutTest(t, history, "rev-parse", "HEAD")
+			}
 			// Start with a checkout that lacks the build commit. Only the
-			// heads-and-tags fallback can obtain it using an abbreviated SHA.
+			// heads-and-tags fallback can obtain it when direct fetching fails.
 			runGitForMirrorTest(t, "", "push", e.Repository, ":refs/heads/feature-branch")
 			checkout, _ := sh.Env.Get("BUILDKITE_BUILD_CHECKOUT_PATH")
 			runGitForMirrorTest(t, "", "clone", e.Repository, checkout)
 			if err := exec.Command("git", "-C", checkout, "cat-file", "-e", commit).Run(); err == nil {
 				t.Fatal("checkout already contains build commit")
 			}
-			if out, err := s.CreateRef(project, ref, commit); err != nil {
+			if out, err := s.CreateRef(project, test.ref, tip); err != nil {
 				t.Fatalf("CreateRef: %v\n%s", err, out)
 			}
-			e.Commit = commit[:12]
+			e.Commit = commit
+			if test.shortCommit {
+				e.Commit = commit[:12]
+			}
 			ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 			defer cancel()
-			if err := e.defaultCheckoutPhase(ctx, 1); err != nil {
-				t.Fatalf("defaultCheckoutPhase() = %v, want successful pinned checkout", err)
+			if err := e.checkout(ctx, e.defaultCheckoutPhase); err != nil {
+				t.Fatalf("checkout() = %v, want successful pinned checkout in one attempt", err)
 			}
 			got, err := sh.Command("git", "rev-parse", "HEAD").RunAndCaptureStdout(t.Context())
 			if err != nil || strings.TrimSpace(got) != commit {

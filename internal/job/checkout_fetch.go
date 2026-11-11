@@ -255,9 +255,10 @@ func (e *Executor) gitFetchPRHead(ctx context.Context, args gitFetchArgs) error 
 			return err
 		}
 		switch {
-		case !retry && gerr.Type == gitErrorFetchBadReference:
-			// Workspace short hashes need heads and tags, not another attempt
-			// to fetch the same commit directly.
+		case !retry && (gerr.Type == gitErrorFetchBadReference || gerr.outputMatches[gitErrStrUnadvertisedObject]):
+			// Short hashes and rejected unadvertised SHA requests may still
+			// resolve through branch or tag history. Preserve "not our ref"
+			// failures rather than treating all missing objects as recoverable.
 			return gitFetchAllHeadsAndTags(ctx, args.Shell, args.GitFetchFlags)
 		case retry && (gerr.Type == gitErrorFetchBadReference || gerr.Type == gitErrorFetchRefNotOnRemote):
 			// Short hashes and unadvertised commits may not be fetchable
