@@ -739,7 +739,7 @@ func TestExtractFiles_SymlinkTraversal(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			defer f.Close()
+			defer func() { _ = f.Close() }()
 			zw := zip.NewWriter(f)
 			if err := writeManifest(zw, Manifest{Version: ManifestVersion, Mappings: map[string]string{"_0": AnchorCWD}}); err != nil {
 				t.Fatal(err)
