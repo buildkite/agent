@@ -378,8 +378,13 @@ func gitFetch(ctx context.Context, args gitFetchArgs) error {
 	})
 }
 
-func gitEnumerateSubmoduleURLs(ctx context.Context, sh *shell.Shell) ([]string, error) {
-	urls := []string{}
+type gitSubmoduleURL struct {
+	key string
+	url string
+}
+
+func gitEnumerateSubmoduleURLs(ctx context.Context, sh *shell.Shell) ([]gitSubmoduleURL, error) {
+	urls := []gitSubmoduleURL{}
 
 	// The output of this command looks like:
 	// submodule.bitbucket-git-docker-example.url\ngit@bitbucket.org:lox24/docker-example.git\0
@@ -400,7 +405,7 @@ func gitEnumerateSubmoduleURLs(ctx context.Context, sh *shell.Shell) ([]string, 
 		if len(tokens) != 2 {
 			return nil, fmt.Errorf("failed to parse .gitmodules line %q", line)
 		}
-		urls = append(urls, tokens[1])
+		urls = append(urls, gitSubmoduleURL{key: tokens[0], url: tokens[1]})
 	}
 
 	return urls, nil
