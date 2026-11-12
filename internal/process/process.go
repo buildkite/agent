@@ -189,6 +189,7 @@ func (p *Process) start(ctx context.Context) (func(), error) {
 	// Start!
 	cleanup, err := start(ctx)
 	if err != nil {
+		p.cleanupProcessGroup()
 		return nil, err
 	}
 
@@ -206,15 +207,6 @@ func (p *Process) setup(ctx context.Context) error {
 		return errors.New("process is already running")
 	}
 
-	// Create a command. Upon context cancellation, call p.onContextCancel,
-	// which calls p.Interrupt, and if the process continues past the signal
-	// grace period, p.Terminate.
-	p.command = exec.CommandContext(ctx, p.conf.Path, p.conf.Args...)
-	p.command.Cancel = p.onContextCancel
-
-	// Setup the process to create a process group if supported
-	p.setupProcessGroup()
-
 	// Configure working dir and fail if it doesn't exist, otherwise
 	// we get confusing errors about fork/exec failing because the file
 	// doesn't exist
@@ -222,6 +214,14 @@ func (p *Process) setup(ctx context.Context) error {
 		if _, err := os.Stat(p.conf.Dir); os.IsNotExist(err) {
 			return fmt.Errorf("process working directory %q doesn't exist", p.conf.Dir)
 		}
+	}
+
+	// Create a command. Upon context cancellation, call p.onContextCancel,
+	// which calls p.Interrupt, and if the process continues past the signal
+	// grace period, p.Terminate.
+	p.command = exec.CommandContext(ctx, p.conf.Path, p.conf.Args...)
+	p.command.Cancel = p.onContextCancel
+	if p.conf.Dir != "" {
 		p.command.Dir = p.conf.Dir
 	}
 
@@ -235,6 +235,9 @@ func (p *Process) setup(ctx context.Context) error {
 	// take precedence over the agent
 	currentEnv := os.Environ()
 	p.command.Env = append(currentEnv, p.conf.Env...)
+
+	// Setup the process to create a process group if supported
+	p.setupProcessGroup()
 	return nil
 }
 
@@ -351,6 +354,7 @@ func (p *Process) complete(waitResult error) error {
 	defer p.mu.Unlock()
 
 	p.waitResult = waitResult
+	p.cleanupProcessGroup()
 	// Signal waiting consumers in Done() by closing the done channel
 	close(p.done)
 
