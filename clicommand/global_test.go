@@ -94,6 +94,57 @@ func TestAllFlagEnvs(t *testing.T) {
 	}
 }
 
+func TestGitSkipFetchExistingCommitsConfiguration(t *testing.T) {
+	for _, source := range []string{"default", "flag", "environment", "config"} {
+		t.Run(source, func(t *testing.T) {
+			t.Setenv("BUILDKITE_GIT_SKIP_FETCH_EXISTING_COMMITS", "")
+			if err := os.Unsetenv("BUILDKITE_GIT_SKIP_FETCH_EXISTING_COMMITS"); err != nil {
+				t.Fatal(err)
+			}
+			args := []string{"test"}
+			switch source {
+			case "flag":
+				args = append(args, "--git-skip-fetch-existing-commits=false")
+			case "environment":
+				t.Setenv("BUILDKITE_GIT_SKIP_FETCH_EXISTING_COMMITS", "false")
+			case "config":
+				path := filepath.Join(t.TempDir(), "agent.cfg")
+				if err := os.WriteFile(path, []byte("git-skip-fetch-existing-commits=false\n"), 0o600); err != nil {
+					t.Fatal(err)
+				}
+				args = append(args, "--config", path)
+			}
+			command := &cli.Command{
+				Name: "test",
+				Flags: []cli.Flag{
+					&cli.BoolFlag{
+						Name:    GitSkipFetchExistingCommitsFlag.Name,
+						Value:   GitSkipFetchExistingCommitsFlag.Value,
+						Sources: GitSkipFetchExistingCommitsFlag.Sources,
+					},
+					&cli.StringFlag{Name: "config"},
+				},
+				Action: func(_ context.Context, c *cli.Command) error {
+					var cfg struct {
+						SkipFetch bool `cli:"git-skip-fetch-existing-commits"`
+					}
+					loader := cliconfig.Loader{CLI: c, Config: &cfg}
+					if _, err := loader.Load(); err != nil {
+						return err
+					}
+					if want := source == "default"; cfg.SkipFetch != want {
+						t.Errorf("skip fetch = %t, want %t", cfg.SkipFetch, want)
+					}
+					return nil
+				},
+			}
+			if err := command.Run(t.Context(), args); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}
+
 func TestGitFetchBaseBranchFlag(t *testing.T) {
 	tests := []struct {
 		name    string
