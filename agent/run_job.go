@@ -318,7 +318,7 @@ func (r *JobRunner) validateConfigAllowlists(jobToValidate *api.Job) error {
 		{"repo", "allowed-repositories", func() error {
 			repository := jobToValidate.Env["BUILDKITE_REPO"]
 			patterns := r.conf.AgentConfiguration.AllowedRepositories
-			if !job.MatchesAllowedPatterns(patterns, repository) {
+			if !job.RepositoryAllowed(patterns, repository) {
 				return &noMatchError{value: repository, patterns: patterns}
 			}
 			return nil
