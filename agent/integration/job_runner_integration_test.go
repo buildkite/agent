@@ -246,6 +246,55 @@ func TestJobRunner_WhenBootstrapExits_ItSendsTheExitStatusToTheAPI(t *testing.T)
 	}
 }
 
+func TestJobRunner_WhenBootstrapIsSignalled_ItSendsTheSignalledExitStatusToTheAPI(t *testing.T) {
+	t.Parallel()
+	ctx := t.Context()
+
+	if runtime.GOOS == "windows" {
+		t.Skip("signals don't exist on Windows")
+	}
+
+	j := &api.Job{
+		ID:                 "my-job-id",
+		ChunksMaxSizeBytes: 1024,
+		Env: map[string]string{
+			"BUILDKITE_COMMAND": "echo hello world",
+		},
+		Token: "bkaj_job-token",
+	}
+
+	// A bootstrap that is killed by a signal has no exit status of its own
+	// (ExitStatus is -1). The agent should report the shell-style 128+N
+	// status and the signal, not -1 (which otherwise means "the command
+	// never ran") or 255.
+	bootstrapScript := filepath.Join(t.TempDir(), "bootstrap.sh")
+	if err := os.WriteFile(bootstrapScript, []byte("#!/bin/sh\nkill -TERM $$\n"), 0o777); err != nil {
+		t.Fatalf("os.WriteFile(%q) error = %v", bootstrapScript, err)
+	}
+
+	e := createTestAgentEndpoint()
+	server := e.server()
+	defer server.Close()
+
+	err := runJob(t, ctx, testRunJobConfig{
+		job:      j,
+		server:   server,
+		agentCfg: agent.AgentConfiguration{BootstrapScript: fmt.Sprintf("sh %q", bootstrapScript)},
+	})
+	if err != nil {
+		t.Fatalf("runJob() error = %v", err)
+	}
+
+	finish := e.finishesFor(t, "my-job-id")[0]
+
+	if got, want := finish.ExitStatus, "143"; got != want {
+		t.Errorf("finish.ExitStatus = %q, want %q", got, want)
+	}
+	if got, want := finish.Signal, "SIGTERM"; got != want {
+		t.Errorf("finish.Signal = %q, want %q", got, want)
+	}
+}
+
 func TestJobRunner_WhenJobHasToken_ItOverridesAccessToken(t *testing.T) {
 	t.Parallel()
 	ctx := t.Context()

@@ -87,6 +87,29 @@ func TestRunAndCaptureWithExitCode(t *testing.T) {
 	}
 }
 
+func TestExitCodeOfSignalledProcess(t *testing.T) {
+	t.Parallel()
+
+	if runtime.GOOS == "windows" {
+		t.Skip("signals don't exist on Windows")
+	}
+
+	// A process killed by a signal has no exit code of its own. ExitCode
+	// reports 128+N like a shell would, e.g. 143 for SIGTERM, rather than
+	// Go's -1 (which survives os.Exit as 255, losing the signal entirely).
+	err := exec.Command("sh", "-c", "kill -TERM $$").Run()
+	if err == nil {
+		t.Fatal(`exec.Command("sh", "-c", "kill -TERM $$").Run() = nil, want non-nil error`)
+	}
+
+	if got, want := shell.ExitCode(err), 128+int(syscall.SIGTERM); got != want {
+		t.Errorf("shell.ExitCode(%v) = %d, want %d", err, got, want)
+	}
+	if !shell.IsExitSignaled(err) {
+		t.Errorf("shell.IsExitSignaled(%v) = false, want true", err)
+	}
+}
+
 func TestRun(t *testing.T) {
 	t.Parallel()
 
