@@ -2,16 +2,21 @@ package clicommand
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"slices"
+	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/buildkite/agent/v4/agent"
 	"github.com/buildkite/agent/v4/api"
@@ -424,6 +429,209 @@ func TestAgentStartRegistrationRejected(t *testing.T) {
 				t.Errorf("requests = %d, want 1 (no retries or job acquisition)", got)
 			}
 		})
+	}
+}
+
+func TestAgentStartPausedConfiguration(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		args   []string
+		env    map[string]string
+		config string
+		want   string
+	}{
+		{name: "missing", args: []string{"--start-paused"}, want: "whole minutes from 1 to 10080"},
+		{name: "zero", args: []string{"--start-paused", "--start-paused-timeout-in-minutes=0"}, want: "whole minutes from 1 to 10080"},
+		{name: "negative", args: []string{"--start-paused", "--start-paused-timeout-in-minutes=-1"}, want: "whole minutes from 1 to 10080"},
+		{name: "above cap", args: []string{"--start-paused", "--start-paused-timeout-in-minutes=10081"}, want: "whole minutes from 1 to 10080"},
+		{name: "CLI malformed", args: []string{"--start-paused-timeout-in-minutes=1h"}, want: "1h"},
+		{name: "CLI overflow", args: []string{"--start-paused-timeout-in-minutes=999999999999999999999"}, want: "999999999999999999999"},
+		{name: "env malformed bool", env: map[string]string{"BUILDKITE_AGENT_START_PAUSED": "yes"}, want: "yes"},
+		{name: "env malformed minutes", env: map[string]string{"BUILDKITE_AGENT_START_PAUSED_TIMEOUT_MINUTES": "1.5"}, want: "1.5"},
+		{name: "env missing", env: map[string]string{"BUILDKITE_AGENT_START_PAUSED": "true"}, want: "whole minutes from 1 to 10080"},
+		{name: "orphan", args: []string{"--start-paused-timeout-in-minutes=60"}, want: "enable --start-paused or remove"},
+		{name: "explicit false", args: []string{"--start-paused=false"}, config: "start-paused=true\nstart-paused-timeout-in-minutes=60", want: "enable --start-paused or remove"},
+		{name: "acquire", args: []string{"--start-paused", "--start-paused-timeout-in-minutes=60", "--acquire-job=job-123"}, want: "remove one"},
+		{name: "file bool", config: "start-paused=yes", want: "expected true or false"},
+		{name: "file minutes", config: "start-paused=true\nstart-paused-timeout-in-minutes=1h", want: "1h"},
+		{name: "file fractional", config: "start-paused=true\nstart-paused-timeout-in-minutes=1.5", want: "1.5"},
+		{name: "file overflow", config: "start-paused=true\nstart-paused-timeout-in-minutes=999999999999999999999", want: "whole minutes from 1 to 10080"},
+		{name: "file disabled malformed duration", config: "start-paused=false\nstart-paused-timeout-in-minutes=1h", want: "enable --start-paused or remove"},
+		{name: "file malformed bool and duration", config: "start-paused=yes\nstart-paused-timeout-in-minutes=1h", want: "expected true or false"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var requests atomic.Int32
+			handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				requests.Add(1)
+				w.WriteHeader(http.StatusUnprocessableEntity)
+				_, _ = io.WriteString(w, `{"message":"unexpected registration"}`)
+			})
+			err := runPausedAgentStart(t, handler, tc.config, tc.env, tc.args...)
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("error = %v, want %q", err, tc.want)
+			}
+			if got := requests.Load(); got != 0 {
+				t.Errorf("requests = %d, want zero", got)
+			}
+		})
+	}
+}
+
+func TestAgentStartPausedAcknowledgement(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		spawn int
+		body  string
+		code  int
+		want  string
+	}{
+		{name: "rejected", spawn: 1, code: 422, body: `{"message":"startup pause unavailable"}`, want: "startup pause unavailable"},
+		{name: "unsupported server", spawn: 1, code: 201, body: `{}`, want: "did not acknowledge"},
+		{name: "missing deadline", spawn: 1, code: 201, body: `{"start_paused_at":"2026-11-08T01:00:00Z"}`, want: "did not acknowledge"},
+		{name: "zero start", spawn: 1, code: 201, body: `{"start_paused_at":"0001-01-01T00:00:00Z","start_paused_until":"0001-01-01T01:00:00Z"}`, want: "did not acknowledge"},
+		{name: "mismatched minutes", spawn: 1, code: 201, body: `{"start_paused_at":"2026-11-08T01:00:00Z","start_paused_until":"2026-11-08T01:01:00Z"}`, want: "did not acknowledge"},
+		{name: "negative interval", spawn: 1, code: 201, body: `{"start_paused_at":"2026-11-08T01:00:00Z","start_paused_until":"2026-11-08T00:00:00Z"}`, want: "did not acknowledge"},
+		{name: "second worker unsupported", spawn: 2, code: 201, body: `{}`, want: "did not acknowledge"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			hooks := t.TempDir()
+			marker := filepath.Join(t.TempDir(), "startup-ran")
+			writePausedStartupHook(t, hooks, marker)
+			var requests atomic.Int32
+			handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				n := requests.Add(1)
+				if r.Method != http.MethodPost || r.URL.Path != "/register" {
+					t.Errorf("unexpected session request: %s %s", r.Method, r.URL.Path)
+				}
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(tc.code)
+				if tc.spawn == 2 && n == 1 {
+					_, _ = io.WriteString(w, `{"start_paused_at":"2026-11-08T01:00:00Z","start_paused_until":"2026-11-08T02:00:00Z"}`)
+					return
+				}
+				_, _ = io.WriteString(w, tc.body)
+			})
+			err := runPausedAgentStart(t, handler, "", nil, "--start-paused", "--start-paused-timeout-in-minutes=60", fmt.Sprintf("--spawn=%d", tc.spawn), "--hooks-path", hooks)
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("error = %v, want %q", err, tc.want)
+			}
+			if got := requests.Load(); got != int32(tc.spawn) {
+				t.Errorf("requests = %d, want %d registrations only, without retry", got, tc.spawn)
+			}
+			if _, err := os.Stat(marker); !errors.Is(err, os.ErrNotExist) {
+				t.Errorf("startup hook marker exists or could not be checked: %v", err)
+			}
+		})
+	}
+}
+
+func TestAgentStartPausedPayload(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		args    []string
+		env     map[string]string
+		config  string
+		minutes int
+	}{
+		{name: "default off"},
+		{name: "CLI minimum", args: []string{"--start-paused", "--start-paused-timeout-in-minutes=1"}, minutes: 1},
+		{name: "file maximum", config: "start-paused=true\nstart-paused-timeout-in-minutes=10080", minutes: 10080},
+		{name: "CLI overrides malformed file", args: []string{"--start-paused", "--start-paused-timeout-in-minutes=60"}, config: "start-paused=yes\nstart-paused-timeout-in-minutes=1h", minutes: 60},
+		{name: "env overrides file", env: map[string]string{"BUILDKITE_AGENT_START_PAUSED": "true", "BUILDKITE_AGENT_START_PAUSED_TIMEOUT_MINUTES": "7"}, config: "start-paused=yes\nstart-paused-timeout-in-minutes=1h", minutes: 7},
+		{name: "CLI overrides env", args: []string{"--start-paused-timeout-in-minutes=3"}, env: map[string]string{"BUILDKITE_AGENT_START_PAUSED": "true", "BUILDKITE_AGENT_START_PAUSED_TIMEOUT_MINUTES": "7"}, minutes: 3},
+		{name: "explicit false overrides file", args: []string{"--start-paused=false"}, config: "start-paused=yes"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			hooks := t.TempDir()
+			marker := filepath.Join(t.TempDir(), "startup-ran")
+			writePausedStartupHook(t, hooks, marker)
+			var requests atomic.Int32
+			handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				requests.Add(1)
+				if r.URL.Path != "/register" {
+					t.Errorf("unexpected session request %s", r.URL.Path)
+				}
+				var payload map[string]any
+				if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+					t.Error(err)
+				}
+				if tc.minutes == 0 {
+					for _, key := range []string{"start_paused", "start_paused_timeout_in_minutes"} {
+						if _, ok := payload[key]; ok {
+							t.Errorf("default-off payload contains %s", key)
+						}
+					}
+				} else if payload["start_paused"] != true || payload["start_paused_timeout_in_minutes"] != float64(tc.minutes) {
+					t.Errorf("startup pause payload = %v, want true and %d minutes", payload, tc.minutes)
+				}
+				start := time.Date(2026, 11, 8, 1, 0, 0, 123456000, time.UTC)
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusCreated)
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"id": "agent-123", "name": "test-agent", "access_token": "session-token",
+					"start_paused_at": start, "start_paused_until": start.Add(time.Duration(tc.minutes) * time.Minute),
+				})
+			})
+			err := runPausedAgentStart(t, handler, tc.config, tc.env, append(tc.args, "--hooks-path", hooks)...)
+			if err == nil || !strings.Contains(err.Error(), "failed to run startup hook") {
+				t.Fatalf("error = %v, want deliberate hook failure after accepted registration", err)
+			}
+			if _, err := os.Stat(marker); err != nil {
+				t.Errorf("accepted registration did not reach startup hook: %v", err)
+			}
+			if got := requests.Load(); got != 1 {
+				t.Errorf("requests = %d, want one registration", got)
+			}
+		})
+	}
+}
+
+func runPausedAgentStart(t *testing.T, handler http.Handler, config string, env map[string]string, args ...string) error {
+	t.Helper()
+	t.Setenv("BUILDKITE_AGENT_TOKEN", "")
+	for _, key := range []string{"BUILDKITE_AGENT_START_PAUSED", "BUILDKITE_AGENT_START_PAUSED_TIMEOUT_MINUTES"} {
+		t.Setenv(key, "")
+		if err := os.Unsetenv(key); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for key, value := range env {
+		t.Setenv(key, value)
+	}
+	server := httptest.NewServer(handler)
+	defer server.Close()
+	configPath := filepath.Join(t.TempDir(), "buildkite-agent.cfg")
+	if err := os.WriteFile(configPath, []byte(config), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cmd := *AgentStartCommand
+	cmd.Flags = make([]cli.Flag, len(AgentStartCommand.Flags))
+	for i, flag := range AgentStartCommand.Flags {
+		copy := reflect.New(reflect.TypeOf(flag).Elem())
+		copy.Elem().Set(reflect.ValueOf(flag).Elem())
+		cmd.Flags[i] = copy.Interface().(cli.Flag)
+	}
+	app := &cli.Command{
+		Name: "buildkite-agent", Commands: []*cli.Command{&cmd},
+		Writer: io.Discard, ErrWriter: io.Discard,
+		ExitErrHandler: func(context.Context, *cli.Command, error) {},
+	}
+	return app.Run(t.Context(), append([]string{
+		"buildkite-agent", "start", "--config", configPath, "--token", "test-token",
+		"--endpoint", server.URL, "--build-path", t.TempDir(),
+	}, args...))
+}
+
+func writePausedStartupHook(t *testing.T, hooks, marker string) {
+	t.Helper()
+	name := "agent-startup"
+	script := fmt.Sprintf("#!/bin/sh\ntouch %q\nexit 1\n", marker)
+	if runtime.GOOS == "windows" {
+		name += ".bat"
+		script = fmt.Sprintf("@echo off\ntype nul > %q\nexit /b 1\n", marker)
+	}
+	if err := os.WriteFile(filepath.Join(hooks, name), []byte(script), 0o700); err != nil {
+		t.Fatal(err)
 	}
 }
 
