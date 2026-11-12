@@ -100,6 +100,11 @@ func (e *Executor) fetchSource(ctx context.Context, addBloblessFilter bool, atte
 	if addBloblessFilter {
 		gitFetchFlags = "--filter=blob:none " + gitFetchFlags
 	}
+	if len(e.AllowedRepositories) != 0 {
+		// Existing checkouts may have populated submodules. Git's on-demand
+		// fetch can contact them before the new commit's URLs are validated.
+		gitFetchFlags += " --no-recurse-submodules"
+	}
 
 	// A job that asked for the base branch wants it whether or not its own commit
 	// still needs fetching, so this precedes the skip below.

@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/buildkite/agent/v4/internal/experiments"
@@ -18,9 +19,13 @@ import (
 	"github.com/buildkite/roko"
 	"github.com/buildkite/shellwords"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 )
 
-var errAppendFetchHead = errors.New("cannot use --append (-a) with BUILDKITE_COMMIT=HEAD: checkout uses FETCH_HEAD, which may resolve to a stale commit; remove append from BUILDKITE_GIT_FETCH_FLAGS or specify a commit SHA")
+var (
+	errAppendFetchHead     = errors.New("cannot use --append (-a) with BUILDKITE_COMMIT=HEAD: checkout uses FETCH_HEAD, which may resolve to a stale commit; remove append from BUILDKITE_GIT_FETCH_FLAGS or specify a commit SHA")
+	errDisallowedSubmodule = errors.New("submodule source is not permitted")
+)
 
 // CheckoutPhase creates the build directory and makes sure we're running the
 // build at the right commit.
@@ -235,7 +240,8 @@ func (e *Executor) checkout(ctx context.Context, defaultCheckout func(context.Co
 			case errors.Is(err, ErrCommitVerificationFailed),
 				errors.Is(err, errNoBaseBranchToFetch),
 				errors.Is(err, errBaseBranchFetchWritesNoRef),
-				errors.Is(err, errAppendFetchHead):
+				errors.Is(err, errAppendFetchHead),
+				errors.Is(err, errDisallowedSubmodule):
 				// A commit that is provably not on its branch, a job that names no base
 				// branch to fetch, and incompatible fetch flags are all settled
 				// answers, so fail fast instead of re-cloning through the whole backoff.
@@ -471,6 +477,11 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context, previousAttempts in
 	if err != nil {
 		return fmt.Errorf("splitting --git-clone-flags %q: %w", e.GitCloneFlags, err)
 	}
+	if len(e.AllowedRepositories) != 0 {
+		// Even a user-supplied --recurse-submodules must not clone submodules
+		// before their URLs can be checked against the repository policy.
+		gitCloneFlags = append(gitCloneFlags, "--no-recurse-submodules")
+	}
 
 	// Snapshot whether the user supplied their own --filter before we
 	// potentially append one — the fetch-side decision depends on the
@@ -543,6 +554,9 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context, previousAttempts in
 	}
 
 	gitCheckoutFlags := e.GitCheckoutFlags
+	if len(e.AllowedRepositories) != 0 {
+		gitCheckoutFlags += " --no-recurse-submodules"
+	}
 
 	if err := e.traceOp(ctx, "git.checkout", func(ctx context.Context) error {
 		if e.Commit == "HEAD" {
@@ -666,13 +680,23 @@ func (e *Executor) updateGitSubmodules(ctx context.Context) (retErr error) {
 	submodulesSpan, ctx := e.traceOpSpan(ctx, "git.submodules")
 	submodulesSpan.SetAttributes(attribute.Bool("git.mirrored", e.GitMirrorsPath != ""))
 	defer func() { tracetools.FinishWithError(submodulesSpan, retErr) }()
+	return e.updateGitSubmodulesAtCurrentDir(ctx)
+}
+
+func (e *Executor) updateGitSubmodulesAtCurrentDir(ctx context.Context) error {
+	restricted := len(e.AllowedRepositories) != 0
+	workDir := e.shell.Getwd()
 
 	// `submodule sync` will ensure the .git/config
 	// matches the .gitmodules file.  The command
 	// is only available in git version 1.8.1, so
 	// if the call fails, continue the job
 	// script, and show an informative error.
-	if err := e.shell.Command("git", "submodule", "sync", "--recursive").Run(ctx); err != nil {
+	syncArgs := []string{"submodule", "sync"}
+	if !restricted {
+		syncArgs = append(syncArgs, "--recursive")
+	}
+	if err := e.shell.Command("git", syncArgs...).Run(ctx); err != nil {
 		gitVersionOutput, _ := e.shell.Command("git", "--version").RunAndCaptureStdout(ctx)
 		e.shell.Warningf("Failed to recursively sync git submodules. This is most likely because you have an older version of git installed (" + gitVersionOutput + ") and you need version 1.8.1 and above. If you're using submodules, it's highly recommended you upgrade if you can.")
 	}
@@ -687,19 +711,70 @@ func (e *Executor) updateGitSubmodules(ctx context.Context) (retErr error) {
 		}
 		args = append(args, "-c", config)
 	}
+	if restricted {
+		// Updating a parent may fetch into previously populated children.
+		// Their URLs must be checked at their own level first.
+		args = append(args, "-c", "fetch.recurseSubmodules=false")
+	}
+
+	// Initialize URL configuration without fetching anything. Git resolves relative
+	// URLs here and retains any locally configured URL for a submodule.
+	if restricted {
+		if err := e.shell.Command("git", "submodule", "init").Run(ctx); err != nil {
+			return fmt.Errorf("initializing submodule URLs: %w", err)
+		}
+	}
 
 	// Checking for submodule repositories
 	submoduleRepos, err := gitEnumerateSubmoduleURLs(ctx, e.shell)
 	if err != nil {
+		if restricted {
+			if shell.ExitCode(err) == 1 {
+				// A .gitmodules file without URL entries cannot cause a fetch.
+				return nil
+			}
+			return fmt.Errorf("enumerating submodule URLs: %w", err)
+		}
 		e.shell.Warningf("Failed to enumerate git submodules: %v", err)
 		return nil
 	}
+	if span := trace.SpanFromContext(ctx); span.IsRecording() {
+		span.SetAttributes(attribute.Int("git.count", len(submoduleRepos)))
+	}
 
-	submodulesSpan.SetAttributes(attribute.Int("git.count", len(submoduleRepos)))
+	if restricted {
+		activeRepos := submoduleRepos[:0]
+		for i := range submoduleRepos {
+			// update reads the effective Git configuration after init, including
+			// per-command -c overrides. Check that URL before any clone or mirror.
+			configured, err := e.shell.Command("git", append(slices.Clone(args), "config", "--null", "--get", submoduleRepos[i].key)...).RunAndCaptureStdout(ctx)
+			if err != nil {
+				if shell.ExitCode(err) == 1 {
+					// git submodule init ignored a .gitmodules entry with no active
+					// gitlink; update will not fetch it either.
+					continue
+				}
+				return fmt.Errorf("reading configured submodule URL: %w", err)
+			}
+			url := strings.TrimSuffix(configured, "\x00")
+			rewritten, err := e.shell.Command("git", append(slices.Clone(args), "ls-remote", "--get-url", url)...).RunAndCaptureStdout(ctx)
+			if err != nil {
+				return fmt.Errorf("resolving submodule URL: %w", err)
+			}
+			resolved := strings.TrimSuffix(rewritten, "\n")
+			if err := e.validateRepositoryAllowedForCheckout(resolved); err != nil {
+				return fmt.Errorf("%w: submodule %q: %v", errDisallowedSubmodule, submoduleRepos[i].key, err)
+			}
+			submoduleRepos[i].url = url
+			activeRepos = append(activeRepos, submoduleRepos[i])
+		}
+		submoduleRepos = activeRepos
+	}
 
 	mirrorSubmodules := e.GitMirrorsPath != ""
 	if mirrorSubmodules {
-		for _, repository := range submoduleRepos {
+		for _, submodule := range submoduleRepos {
+			repository := submodule.url
 			isRelativeSubmodule := isRelativeSubmoduleURL(repository)
 			mirrorRepository := repository
 			if isRelativeSubmodule {
@@ -738,20 +813,33 @@ func (e *Executor) updateGitSubmodules(ctx context.Context) (retErr error) {
 				}
 			}
 
-			// Switch back to the checkout dir, doing other operations from GitMirrorsPath will fail.
-			if err := e.createCheckoutDir(); err != nil {
+			// Mirror updates change the shell directory; submodule updates must
+			// run from the repository that contains this submodule.
+			if restricted {
+				if err := e.shell.Chdir(workDir); err != nil {
+					return fmt.Errorf("returning to submodule parent: %w", err)
+				}
+			} else if err := e.createCheckoutDir(); err != nil {
 				return fmt.Errorf("creating checkout dir: %w", err)
 			}
 
 			submoduleArgs := slices.Clone(args)
 			if mirrorDir != "" {
-				submoduleArgs = append(submoduleArgs, "submodule", "update", "--init", "--recursive", "--force", "--reference", mirrorDir)
+				submoduleArgs = append(submoduleArgs, "submodule", "update", "--init")
+				if !restricted {
+					submoduleArgs = append(submoduleArgs, "--recursive")
+				}
+				submoduleArgs = append(submoduleArgs, "--force", "--reference", mirrorDir)
 				if e.GitMirrorCheckoutMode == "dissociate" {
 					submoduleArgs = append(submoduleArgs, "--dissociate")
 				}
 			} else {
 				// Fall back to a clean update, rather than failing the checkout and therefore the build
-				submoduleArgs = append(submoduleArgs, "submodule", "update", "--init", "--recursive", "--force")
+				submoduleArgs = append(submoduleArgs, "submodule", "update", "--init")
+				if !restricted {
+					submoduleArgs = append(submoduleArgs, "--recursive")
+				}
+				submoduleArgs = append(submoduleArgs, "--force")
 			}
 
 			if err := e.traceOp(ctx, "git.submodule.update", func(ctx context.Context) error {
@@ -761,7 +849,11 @@ func (e *Executor) updateGitSubmodules(ctx context.Context) (retErr error) {
 			}
 		}
 	} else { // no submodule mirrors
-		args = append(args, "submodule", "update", "--init", "--recursive", "--force")
+		args = append(args, "submodule", "update", "--init")
+		if !restricted {
+			args = append(args, "--recursive")
+		}
+		args = append(args, "--force")
 		if err := e.traceOp(ctx, "git.submodule.update", func(ctx context.Context) error {
 			return e.shell.Command("git", args...).Run(ctx)
 		}); err != nil {
@@ -769,7 +861,37 @@ func (e *Executor) updateGitSubmodules(ctx context.Context) (retErr error) {
 		}
 	}
 
-	cmd := e.shell.Command("git", "submodule", "foreach", "--recursive", "git reset --hard")
+	if restricted {
+		// A non-recursive update makes nested .gitmodules available. Check each
+		// level before asking Git to fetch the next one.
+		paths, err := e.shell.Command("git", "submodule", "foreach", "--quiet", `printf '%s\0' "$sm_path"`).RunAndCaptureStdout(ctx)
+		if err != nil {
+			return fmt.Errorf("enumerating checked-out submodules: %w", err)
+		}
+		for _, path := range strings.Split(strings.TrimSuffix(paths, "\x00"), "\x00") {
+			if path == "" {
+				continue
+			}
+			if err := e.shell.Chdir(filepath.Join(workDir, path)); err != nil {
+				return fmt.Errorf("entering submodule: %w", err)
+			}
+			if hasGitSubmodules(e.shell) {
+				err = e.updateGitSubmodulesAtCurrentDir(ctx)
+			}
+			if chdirErr := e.shell.Chdir(workDir); chdirErr != nil {
+				return fmt.Errorf("returning to submodule parent: %w", chdirErr)
+			}
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	resetArgs := []string{"submodule", "foreach", "--recursive", "git reset --hard"}
+	if restricted {
+		resetArgs = []string{"submodule", "foreach", "git reset --hard"}
+	}
+	cmd := e.shell.Command("git", resetArgs...)
 	if err := cmd.Run(ctx); err != nil {
 		return fmt.Errorf("resetting submodules: %w", err)
 	}
