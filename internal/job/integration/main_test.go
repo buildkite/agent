@@ -9,6 +9,7 @@ import (
 
 	"github.com/buildkite/agent/v4/clicommand"
 	"github.com/buildkite/agent/v4/internal/experiments"
+	"github.com/buildkite/agent/v4/internal/self"
 	"github.com/buildkite/agent/v4/version"
 	"github.com/buildkite/bintest/v3"
 	"github.com/urfave/cli/v3"
@@ -40,6 +41,10 @@ func TestMain(m *testing.M) {
 
 		os.Exit(m.Run())
 	}
+
+	// This test binary stands in for bootstrap; only its own subprocesses use
+	// the bintest agent mock for self-execution and hook environment dumps.
+	mainCtx = self.OverridePath(mainCtx, "buildkite-agent")
 
 	app := &cli.Command{
 		Name:    "buildkite-agent",
