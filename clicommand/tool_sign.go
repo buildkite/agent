@@ -228,6 +228,20 @@ Signing a pipeline from a file:
 	},
 }
 
+// mergePipelineSecretsIntoSteps merges pipeline-level secrets into every
+// command step, including those nested inside group steps, mirroring the
+// recursion signature.SignSteps uses to reach and sign those same steps.
+func mergePipelineSecretsIntoSteps(steps pipeline.Steps, pipelineSecrets pipeline.Secrets) {
+	for _, step := range steps {
+		switch step := step.(type) {
+		case *pipeline.CommandStep:
+			step.MergeSecretsFromPipeline(pipelineSecrets)
+		case *pipeline.GroupStep:
+			mergePipelineSecretsIntoSteps(step.Steps, pipelineSecrets)
+		}
+	}
+}
+
 func validateNoInterpolations(pipelineString string) error {
 	expansions, err := interpolate.Identifiers(pipelineString)
 	if err != nil {
@@ -311,11 +325,7 @@ func signOffline(ctx context.Context, c *cli.Command, l logger.Logger, key signa
 	}
 
 	// Merge pipeline-level secrets with step-level secrets before signing
-	for _, step := range parsedPipeline.Steps {
-		if commandStep, ok := step.(*pipeline.CommandStep); ok {
-			commandStep.MergeSecretsFromPipeline(parsedPipeline.Secrets)
-		}
-	}
+	mergePipelineSecretsIntoSteps(parsedPipeline.Steps, parsedPipeline.Secrets)
 
 	err = signature.SignSteps(
 		ctx,
@@ -382,6 +392,9 @@ func signWithGraphQL(ctx context.Context, c *cli.Command, l logger.Logger, key s
 		}
 		debugL.Debugf("Pipeline parsed successfully: %v", parsedPipeline)
 	}
+
+	// Merge pipeline-level secrets with step-level secrets before signing
+	mergePipelineSecretsIntoSteps(parsedPipeline.Steps, parsedPipeline.Secrets)
 
 	err = signature.SignSteps(
 		ctx,
