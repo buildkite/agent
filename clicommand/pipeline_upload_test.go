@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
 
@@ -19,9 +20,11 @@ import (
 	"github.com/buildkite/agent/v4/internal/experiments"
 	"github.com/buildkite/agent/v4/logger"
 	"github.com/buildkite/go-pipeline"
+	"github.com/buildkite/go-pipeline/jwkutil"
 	"github.com/buildkite/go-pipeline/ordered"
 	"github.com/buildkite/go-pipeline/warning"
 	"github.com/google/go-cmp/cmp"
+	"github.com/lestrrat-go/jwx/v3/jwa"
 	"github.com/urfave/cli/v3"
 )
 
@@ -78,6 +81,91 @@ func TestPipelineUploadWithoutCheckout(t *testing.T) {
 				t.Errorf("stderr = %q, want commit resolution warning = %t", output, test.wantWarning)
 			}
 		})
+	}
+}
+
+// TestPipelineUploadSigningMergesPipelineLevelSecrets is a regression test for
+// pipeline-level secrets not reaching command steps before pipeline_upload.go
+// signs them, particularly ones nested inside group steps. This exercises
+// pipeline_upload.go's own, independent signing path (as opposed to `tool sign`).
+func TestPipelineUploadSigningMergesPipelineLevelSecrets(t *testing.T) {
+	privSet, _, err := jwkutil.NewKeyPair("test-key", jwa.EdDSA())
+	if err != nil {
+		t.Fatalf("jwkutil.NewKeyPair() error = %v", err)
+	}
+
+	jwksBytes, err := json.Marshal(privSet)
+	if err != nil {
+		t.Fatalf("marshaling JWKS: %v", err)
+	}
+	jwksPath := filepath.Join(t.TempDir(), "signing-jwks.json")
+	if err := os.WriteFile(jwksPath, jwksBytes, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	t.Chdir(t.TempDir())
+	t.Setenv("BUILDKITE_REPO", "fake-repo")
+	const pipelineYAML = `---
+secrets:
+  - key: db-password
+    environment_variable: DB_PASSWORD
+steps:
+  - label: top-level
+    command: echo top
+  - group: "grouped"
+    steps:
+      - label: nested
+        command: echo nested
+`
+	if err := os.WriteFile("pipeline.yml", []byte(pipelineYAML), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	var stdout bytes.Buffer
+	cmd := *PipelineUploadCommand
+	app := &cli.Command{Name: "buildkite-agent", Commands: []*cli.Command{&cmd}, Writer: &stdout, ErrWriter: io.Discard}
+	if err := app.Run(t.Context(), []string{
+		"buildkite-agent", "upload", "--dry-run",
+		"--agent-access-token", "unused-token",
+		"--jwks-file", jwksPath,
+		"pipeline.yml",
+	}); err != nil {
+		t.Fatalf("pipeline upload error = %v, want success", err)
+	}
+
+	type uploadedStep struct {
+		Command string
+		Secrets []struct {
+			Key                 string
+			EnvironmentVariable string `json:"environment_variable"`
+		}
+		Signature struct {
+			SignedFields []string `json:"signed_fields"`
+		}
+		Steps []uploadedStep
+	}
+	var uploaded struct{ Steps []uploadedStep }
+	if err := json.Unmarshal(stdout.Bytes(), &uploaded); err != nil {
+		t.Fatalf("unmarshaling dry-run output: %v\noutput:\n%s", err, stdout.String())
+	}
+	if len(uploaded.Steps) != 2 {
+		t.Fatalf("uploaded.Steps = %+v, want 2 steps", uploaded.Steps)
+	}
+
+	top := uploaded.Steps[0]
+	group := uploaded.Steps[1]
+	if len(group.Steps) != 1 {
+		t.Fatalf("group.Steps = %+v, want 1 nested step", group.Steps)
+	}
+	nested := group.Steps[0]
+
+	for _, step := range []uploadedStep{top, nested} {
+		if len(step.Secrets) != 1 || step.Secrets[0].Key != "db-password" || step.Secrets[0].EnvironmentVariable != "DB_PASSWORD" {
+			t.Errorf("step %q secrets = %+v, want [{db-password DB_PASSWORD}]", step.Command, step.Secrets)
+		}
+		if !slices.Contains(step.Signature.SignedFields, "secrets") {
+			t.Errorf("step %q signed_fields = %v, want it to contain %q", step.Command, step.Signature.SignedFields, "secrets")
+		}
 	}
 }
 

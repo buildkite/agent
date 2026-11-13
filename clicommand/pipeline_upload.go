@@ -412,6 +412,9 @@ var PipelineUploadCommand = &cli.Command{
 				}
 
 				if key != nil {
+					// Merge pipeline-level secrets with step-level secrets before signing
+					mergePipelineSecretsIntoSteps(result.Steps, result.Secrets)
+
 					err := signature.SignSteps(
 						ctx,
 						result.Steps,
