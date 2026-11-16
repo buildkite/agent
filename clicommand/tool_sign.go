@@ -231,13 +231,37 @@ Signing a pipeline from a file:
 // mergePipelineSecretsIntoSteps merges pipeline-level secrets into every
 // command step, including those nested inside group steps, mirroring the
 // recursion signature.SignSteps uses to reach and sign those same steps.
-func mergePipelineSecretsIntoSteps(steps pipeline.Steps, pipelineSecrets pipeline.Secrets) {
-	for _, step := range steps {
-		switch step := step.(type) {
-		case *pipeline.CommandStep:
-			step.MergeSecretsFromPipeline(pipelineSecrets)
-		case *pipeline.GroupStep:
-			mergePipelineSecretsIntoSteps(step.Steps, pipelineSecrets)
+//
+// The merge is needed only so the signature covers secrets a step inherits
+// from the pipeline. It returns a restore function that puts each step's
+// original Secrets back afterwards; callers that serialize or upload the
+// pipeline once it's signed should call restore first, so an inherited
+// pipeline-level secret isn't persisted as an explicit step-level one (which
+// the backend can reject as an env/secrets conflict).
+func mergePipelineSecretsIntoSteps(steps pipeline.Steps, pipelineSecrets pipeline.Secrets) (restore func()) {
+	type original struct {
+		step    *pipeline.CommandStep
+		secrets pipeline.Secrets
+	}
+	var originals []original
+
+	var merge func(steps pipeline.Steps)
+	merge = func(steps pipeline.Steps) {
+		for _, step := range steps {
+			switch step := step.(type) {
+			case *pipeline.CommandStep:
+				originals = append(originals, original{step: step, secrets: step.Secrets})
+				step.MergeSecretsFromPipeline(pipelineSecrets)
+			case *pipeline.GroupStep:
+				merge(step.Steps)
+			}
+		}
+	}
+	merge(steps)
+
+	return func() {
+		for _, o := range originals {
+			o.step.Secrets = o.secrets
 		}
 	}
 }
@@ -394,7 +418,7 @@ func signWithGraphQL(ctx context.Context, c *cli.Command, l logger.Logger, key s
 	}
 
 	// Merge pipeline-level secrets with step-level secrets before signing
-	mergePipelineSecretsIntoSteps(parsedPipeline.Steps, parsedPipeline.Secrets)
+	restoreSecrets := mergePipelineSecretsIntoSteps(parsedPipeline.Steps, parsedPipeline.Secrets)
 
 	err = signature.SignSteps(
 		ctx,
@@ -408,6 +432,11 @@ func signWithGraphQL(ctx context.Context, c *cli.Command, l logger.Logger, key s
 	if err != nil {
 		return fmt.Errorf("couldn't sign pipeline: %w", err)
 	}
+
+	// The signature now covers any inherited pipeline-level secrets; restore
+	// each step's original secrets before this gets serialized and sent back
+	// to GraphQL, so they aren't persisted as explicit step-level secrets.
+	restoreSecrets()
 
 	if !cfg.Update {
 		enc := yaml.NewEncoder(c.Root().Writer)

@@ -86,7 +86,11 @@ func TestPipelineUploadWithoutCheckout(t *testing.T) {
 
 // TestPipelineUploadSigningMergesPipelineLevelSecrets is a regression test for
 // pipeline-level secrets not reaching command steps before pipeline_upload.go
-// signs them, particularly ones nested inside group steps. This exercises
+// signs them, particularly ones nested inside group steps. It also checks that
+// the inherited pipeline-level secret is not persisted onto the uploaded step:
+// merging it permanently would make the backend see an explicit step-level
+// secret, which it can reject as conflicting with a step env var of the same
+// name even though the original, unsigned pipeline was valid. This exercises
 // pipeline_upload.go's own, independent signing path (as opposed to `tool sign`).
 func TestPipelineUploadSigningMergesPipelineLevelSecrets(t *testing.T) {
 	privSet, _, err := jwkutil.NewKeyPair("test-key", jwa.EdDSA())
@@ -160,9 +164,14 @@ steps:
 	nested := group.Steps[0]
 
 	for _, step := range []uploadedStep{top, nested} {
-		if len(step.Secrets) != 1 || step.Secrets[0].Key != "db-password" || step.Secrets[0].EnvironmentVariable != "DB_PASSWORD" {
-			t.Errorf("step %q secrets = %+v, want [{db-password DB_PASSWORD}]", step.Command, step.Secrets)
+		// Neither step declares its own secrets in the source pipeline, so the
+		// inherited pipeline-level secret must not be persisted onto the step
+		// once it's been used for signing.
+		if len(step.Secrets) != 0 {
+			t.Errorf("step %q secrets = %+v, want none", step.Command, step.Secrets)
 		}
+		// The signature should still have been computed over the merged
+		// (pipeline + step) secrets, so "secrets" is a signed field.
 		if !slices.Contains(step.Signature.SignedFields, "secrets") {
 			t.Errorf("step %q signed_fields = %v, want it to contain %q", step.Command, step.Signature.SignedFields, "secrets")
 		}
