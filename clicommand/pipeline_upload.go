@@ -492,6 +492,22 @@ func allEnvVars(o any, f func(p env.Pair)) {
 		for _, s := range x.Steps {
 			allEnvVars(s, f)
 		}
+
+	case *pipeline.TriggerStep:
+		// Include build.env within the trigger step
+		build, _ := x.Contents["build"].(*ordered.MapSA)
+		if build == nil {
+			break
+		}
+		envAny, _ := build.Get("env")
+		if envAny == nil {
+			break
+		}
+		buildEnv, _ := envAny.(*ordered.MapSA)
+		buildEnv.Range(func(k string, v any) error { //nolint:errcheck // No error from Range because its callback never returns an error
+			f(env.Pair{Name: k, Value: fmt.Sprint(v)})
+			return nil
+		})
 	}
 }
 
