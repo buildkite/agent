@@ -3,13 +3,86 @@ package job
 import (
 	"bytes"
 	"io"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"testing"
 
 	"github.com/buildkite/agent/v4/internal/shell"
+	"github.com/buildkite/agent/v4/tracetools"
 	"github.com/buildkite/osc7501"
 )
+
+func TestProgramStatusSpanIDs(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("script hooks aren't supported on Windows")
+	}
+
+	for _, test := range []struct {
+		name string
+		hook HookConfig
+		id   string
+	}{
+		{name: "command", id: "command"},
+		{name: "agent hook", hook: HookConfig{Scope: HookScopeAgent, Name: "pre-command"}, id: "hook/agent/pre-command"},
+		{name: "repository hook", hook: HookConfig{Scope: HookScopeRepository, Name: "post-command"}, id: "hook/repository/post-command"},
+		{name: "plugin hook", hook: HookConfig{Scope: HookScopePlugin, Name: "command", PluginID: "docker", PluginName: "docker#v5.0.0"}, id: "hook/plugin/docker/command"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			recorder := installGlobalSpanRecorder(t)
+			var out bytes.Buffer
+			trailer := &statusTrailer{w: &out}
+			sh, err := shell.New(shell.WithLogger(shell.NewWriterLogger(trailer, false, nil)), shell.WithStdout(io.Discard))
+			if err != nil {
+				t.Fatalf("shell.New() error = %v", err)
+			}
+			e := New(ExecutorConfig{
+				TracingBackend: tracetools.BackendOpenTelemetry,
+				Command:        "echo hello",
+				CommandEval:    true,
+				Shell:          "/bin/sh -c",
+				HooksPath:      t.TempDir(),
+			})
+			e.shell = sh
+			e.status = newJobStatus(trailer, e.cancelCh)
+
+			spanName := "command"
+			if test.hook.Name == "" {
+				if hookErr, commandErr := e.CommandPhase(t.Context()); hookErr != nil || commandErr != nil {
+					t.Fatalf("CommandPhase() errors = %v, %v", hookErr, commandErr)
+				}
+			} else {
+				hookCfg := test.hook
+				hookCfg.Path = filepath.Join(t.TempDir(), "hook")
+				hookCfg.Env = e.shell.Env
+				if err := os.WriteFile(hookCfg.Path, []byte("#!/usr/bin/env ruby\nexit(0)\n"), 0o755); err != nil {
+					t.Fatal(err)
+				}
+				if err := e.executeHook(t.Context(), hookCfg); err != nil {
+					t.Fatalf("executeHook() error = %v", err)
+				}
+				spanName = hookCfg.Scope + " " + hookCfg.Name + " hook"
+			}
+			e.status.clearDone()
+
+			span := findOnlySpan(t, recorder.Ended(), spanName)
+			assertSpanAttr(t, span, "buildkite.program_status.id", test.id)
+			var matched bool
+			scanner := osc7501.Scanner{W: io.Discard, OnReport: func(r osc7501.Report) {
+				if r.State == osc7501.StateWorking && r.ID == test.id {
+					matched = true
+				}
+			}}
+			if _, err := scanner.Write(out.Bytes()); err != nil {
+				t.Fatal(err)
+			}
+			if !matched {
+				t.Errorf("no working OSC report for span's program status ID %q in %q", test.id, out.String())
+			}
+		})
+	}
+}
 
 func TestJobStatusDescribesSignalledExits(t *testing.T) {
 	if runtime.GOOS == "windows" {
