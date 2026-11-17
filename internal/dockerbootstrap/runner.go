@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 )
@@ -129,6 +130,8 @@ func (r Runner) Run(ctx context.Context, cfg Config) (code int, err error) {
 	// Docker's init deliver signals directly to bootstrap.
 	const script = `set -e
 export PATH="/buildkite-docker/bin:$PATH"
+USER="$(id -un)"
+export USER LOGNAME="$USER"
 for path in "$BUILDKITE_ENV_FILE" "$BUILDKITE_ENV_JSON_FILE"; do
   if ! test -r "$path"; then
     echo "Docker bootstrap user cannot read private job context: $path" >&2
@@ -164,6 +167,39 @@ exec /buildkite-docker/bin/buildkite-agent bootstrap`
 	}
 	if ctx.Err() != nil {
 		return SetupFailure, ctx.Err()
+	}
+
+	// Keep the image's own users and groups: copy them out of the created
+	// container, add the job identity, and copy them back before it starts.
+	etc := filepath.Join(job.userDirectory, "etc")
+	if err := os.Mkdir(etc, 0o755); err != nil {
+		return SetupFailure, err
+	}
+	var images [2]string
+	for i, file := range []string{"passwd", "group"} {
+		path := filepath.Join(etc, file)
+		if err := operation(ctx, cfg.OperationTimeout, "cp", "--follow-link", name+":/etc/"+file, path); err != nil {
+			return SetupFailure, err
+		}
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return SetupFailure, err
+		}
+		images[i] = string(data)
+	}
+	passwd, group := mergeIdentity(images[0], images[1], job.uid, job.gid)
+	for file, contents := range map[string]string{"passwd": passwd, "group": group} {
+		path := filepath.Join(etc, file)
+		if err := os.WriteFile(path, []byte(contents), 0o644); err != nil {
+			return SetupFailure, err
+		}
+		// Lookup files must remain readable under restrictive host umasks.
+		if err := os.Chmod(path, 0o644); err != nil {
+			return SetupFailure, err
+		}
+	}
+	if err := operation(ctx, cfg.OperationTimeout, "cp", etc+"/.", name+":/etc"); err != nil {
+		return SetupFailure, err
 	}
 
 	// start --attach registers the exit observer before starting the container.

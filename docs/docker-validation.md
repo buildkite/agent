@@ -47,8 +47,7 @@ development agent uses a different queue. Do not add a step-level `image`.
 Disable any pipeline-level policy that automatically cancels an older build
 when you create another build. Complete one test build before starting the next.
 
-The `BOOTSTRAP_TEST` build variable selects the test. Use that exact name:
-job-defined `DOCKER_*` variables are rejected by this prototype. The conditionals
+The `BOOTSTRAP_TEST` build variable selects the test. The conditionals
 are evaluated when the pipeline is uploaded, so set the variable when creating
 the build, not within a command.
 

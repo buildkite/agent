@@ -64,12 +64,24 @@ test "$(id -g)" = %d
 test "$HOOK_WORKED" = yes
 getent passwd "$(id -u)"
 getent group "$(id -g)"
+getent passwd _apt
+test "$(getent passwd "$(id -u)" | cut -d: -f6)" = "$HOME"
+test "$USER" = "$(id -un)"
+test "$DOCKER_BUILDKIT" = 1
 test -w "$HOME"
 touch "$HOME/home-test"
 echo workspace-ok > ownership-test
 `, uid, gid)
 			cfg.Environment = append(cfg.Environment, "BUILDKITE_BUILD_PATH="+build, "BUILDKITE_BUILD_CHECKOUT_PATH="+build, "BUILDKITE_BOOTSTRAP_PHASES=command", "BUILDKITE_COMMAND="+command, "BUILDKITE_JOB_ID=user-integration", "BUILDKITE_CANCEL_SIGNAL_TIMEOUT=10s", "BUILDKITE_PTY=false", "BUILDKITE_REPO=.", "BUILDKITE_COMMIT=HEAD", "BUILDKITE_BRANCH=main", "BUILDKITE_PIPELINE_PROVIDER=custom", "BUILDKITE_AGENT_NAME=test-agent", "BUILDKITE_ORGANIZATION_SLUG=test-org", "BUILDKITE_PIPELINE_SLUG=test-pipeline")
 			cfg.PullPolicy = "never"
+			for _, pair := range cfg.Environment {
+				if path, ok := strings.CutPrefix(pair, "BUILDKITE_ENV_JSON_FILE="); ok {
+					if err := os.WriteFile(path, []byte(`{"DOCKER_BUILDKIT":"1"}`), 0o600); err != nil {
+						t.Fatal(err)
+					}
+				}
+			}
+			cfg.Environment = append(cfg.Environment, "DOCKER_BUILDKIT=1")
 			client := CLI{Path: "/usr/bin/docker", ConfigDir: t.TempDir()}
 			for range 2 {
 				var output bytes.Buffer

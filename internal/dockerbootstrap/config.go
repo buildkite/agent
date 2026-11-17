@@ -12,6 +12,7 @@ import (
 	"slices"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 const (
@@ -40,9 +41,12 @@ type jobConfig struct {
 	args          []string
 	grace         time.Duration
 	userDirectory string
+	uid, gid      int
 }
 
 var envName = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
+
+var proxyNames = []string{"HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "NO_PROXY", "http_proxy", "https_proxy", "all_proxy", "no_proxy"}
 
 func prepare(cfg Config) (jobConfig, error) {
 	var job jobConfig
@@ -95,11 +99,9 @@ func prepare(cfg Config) (jobConfig, error) {
 	job.env = make(map[string]string)
 	for name, value := range all {
 		_, fromJob := names[name]
-		if fromJob || strings.HasPrefix(name, "BUILDKITE_") || strings.HasPrefix(name, "OTEL_EXPORTER_OTLP_") {
-			// --env NAME also exposes these values to the host Docker client.
-			if strings.HasPrefix(name, "DOCKER_") {
-				return job, fmt.Errorf("docker CLI control variables cannot be forwarded in the prototype")
-			}
+		// Host proxy settings are forwarded so the container reaches the network
+		// the same way the agent does; job values take precedence.
+		if fromJob || strings.HasPrefix(name, "BUILDKITE_") || strings.HasPrefix(name, "OTEL_EXPORTER_OTLP_") || slices.Contains(proxyNames, name) {
 			if !envName.MatchString(name) {
 				return job, fmt.Errorf("invalid job environment variable name")
 			}
@@ -211,20 +213,9 @@ func prepare(cfg Config) (jobConfig, error) {
 		return job, err
 	}
 	job.userDirectory = userDir
-	for _, name := range []string{"passwd", "group"} {
-		if err := addMount(filepath.Join(userDir, name), "/etc/"+name, true); err != nil {
-			_ = os.RemoveAll(userDir)
-			return job, err
-		}
-	}
+	job.uid, job.gid = uid, gid
 	job.args = append(job.args, "--user", fmt.Sprintf("%d:%d", uid, gid), "--tmpfs", fmt.Sprintf("%s/home:rw,nosuid,nodev,mode=0700,uid=%d,gid=%d", containerRoot, uid, gid))
 	job.env["HOME"] = containerRoot + "/home"
-	job.env["USER"] = "buildkite"
-	job.env["LOGNAME"] = "buildkite"
-	if uid == 0 {
-		job.env["USER"] = "root"
-		job.env["LOGNAME"] = "root"
-	}
 	keys := make([]string, 0, len(mounts))
 	for target := range mounts {
 		keys = append(keys, target)
@@ -238,8 +229,30 @@ func prepare(cfg Config) (jobConfig, error) {
 		keys = append(keys, name)
 	}
 	slices.Sort(keys)
+	// --env NAME makes the host Docker client read the value from its own
+	// environment, where DOCKER_* variables would also configure the client.
+	// Pass those through a private env file instead.
+	var dockerEnv strings.Builder
 	for _, name := range keys {
-		job.args = append(job.args, "--env", name)
+		if !strings.HasPrefix(name, "DOCKER_") {
+			job.args = append(job.args, "--env", name)
+			continue
+		}
+		value := job.env[name]
+		delete(job.env, name)
+		if strings.ContainsAny(value, "\r\n") || !utf8.ValidString(value) {
+			_ = os.RemoveAll(userDir)
+			return job, fmt.Errorf("%s must be a single line of UTF-8 text", name)
+		}
+		dockerEnv.WriteString(name + "=" + value + "\n")
+	}
+	if dockerEnv.Len() > 0 {
+		path := filepath.Join(userDir, "docker.env")
+		if err := os.WriteFile(path, []byte(dockerEnv.String()), 0o600); err != nil {
+			_ = os.RemoveAll(userDir)
+			return job, err
+		}
+		job.args = append(job.args, "--env-file", path)
 	}
 	return job, nil
 }

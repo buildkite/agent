@@ -74,6 +74,10 @@ func (f *fakeClient) Run(ctx context.Context, args []string, env map[string]stri
 	if args[0] == "image" && slices.Contains(args, "--format") {
 		_, _ = fmt.Fprintln(out, "sha256:"+strings.Repeat("a", 64)+" []")
 	}
+	// Copying out of the container writes the image's file on the host.
+	if args[0] == "cp" && strings.Contains(args[len(args)-2], ":/etc/") {
+		_ = os.WriteFile(args[len(args)-1], []byte("root:x:0:0:root:/root:/bin/bash\n"), 0o644)
+	}
 	if f.run != nil {
 		return f.run(ctx, args, env, out, stderr)
 	}
@@ -93,9 +97,14 @@ func (f *fakeClient) called(command string) bool {
 
 func TestEnvironmentAndMounts(t *testing.T) {
 	cfg := testConfig(t)
+	cfg.Environment = append(cfg.Environment, "HTTPS_PROXY=http://proxy.example:3128", "no_proxy=.internal")
 	job, err := prepare(cfg)
 	if err != nil {
 		t.Fatal(err)
+	}
+	// Agent-level proxy settings are not job variables but must still apply.
+	if job.env["HTTPS_PROXY"] != "http://proxy.example:3128" || job.env["no_proxy"] != ".internal" {
+		t.Fatal("host proxy settings not forwarded")
 	}
 	if got := job.env["MULTILINE"]; got != "  hello\n世界\n" {
 		t.Fatalf("multiline value changed: %q", got)

@@ -19,8 +19,10 @@ First-milestone decisions:
   `buildkite/agent-base:ubuntu-noble-hosted`, maintained in
   <https://github.com/buildkite/agent-base-images>.
 - Always mount the host agent binary read-only.
-- Reject steps that specify `image` as a setup failure (exit 125). Pipeline image
-  selection and resource controls remain deferred. Phase 2 adds per-job networks.
+- Reject steps that specify `image` as a setup failure (exit 125). The rejection
+  is written to the job log only; it does not report a `buildkite.*` job error
+  code yet. Pipeline image selection and resource controls remain deferred.
+  Phase 2 adds per-job networks.
 - Preserve container exit codes without inferring signals; retain JobRunner's
   cancellation reason. OOM diagnostics are best-effort.
 - Initial unit tests and Linux builds have been supplemented by live OrbStack
@@ -53,14 +55,16 @@ Current implementation details and limits:
 - `docker start --attach` performs attach, exit-observer registration, start, and
   wait in one CLI invocation. Separate CLI processes cannot guarantee that
   ordering for fast-exiting auto-removed containers.
-- The local endpoint is fixed to `unix:///var/run/docker.sock`. Docker uses an
-  empty private configuration for container operations. Pulls can use
-  operator-provided registry credentials; see "Registry authentication".
-- Job-defined `DOCKER_*` variables are rejected because name-only environment
-  transport would also apply them to the host Docker client. This includes common
-  pipeline settings such as `DOCKER_BUILDKIT` and `DOCKER_DEFAULT_PLATFORM`; remove
-  these from prototype jobs. Narrower compatibility needs separate environment
-  transport or a verified exception list.
+- The local endpoint is fixed to `unix:///var/run/docker.sock` and cannot be
+  configured. Rootless Docker (`$XDG_RUNTIME_DIR/docker.sock`), Podman, and remote
+  or TCP daemons are not supported, and `DOCKER_HOST` and Docker contexts are
+  ignored. Docker uses an empty private configuration for container operations.
+  Pulls can use operator-provided registry credentials; see "Registry
+  authentication".
+- Job-defined `DOCKER_*` variables, such as `DOCKER_BUILDKIT`, reach the job
+  through a private `--env-file` rather than `--env NAME`, so they never
+  configure the host Docker client. Docker's env-file format cannot carry line
+  breaks, so a multiline `DOCKER_*` value fails the job as a setup failure.
 - Containers default to the host agent's numeric UID:GID. `--user=UID:GID`
   overrides it; `--user=0:0` explicitly runs as root. Private context remains
   mode 0700 with mode 0600 env files. Rootless/user-namespace mappings are not
@@ -421,8 +425,13 @@ supervisor therefore needs an explicit selection rule rather than "everything
    `BUILDKITE_AGENT_ACCESS_TOKEN` and the agent API request headers.
 3. Control-plane OpenTelemetry exporter variables (`OTEL_EXPORTER_OTLP_*`),
    which `JobRunner` also adds after the env files are written.
-4. An agent-configured allowlist (`docker-bootstrap-additional-env`) for
-   anything else, such as proxy settings.
+4. The standard proxy variables (`HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY`,
+   `NO_PROXY` and their lowercase forms) from the agent's own environment, so
+   the container reaches the network the way the agent does. Job values take
+   precedence. Loopback proxy addresses fail the job, because they are not
+   reachable from the container's network.
+5. Later: an agent-configured allowlist (`docker-bootstrap-additional-env`) for
+   anything else. This is not implemented yet.
 
 Host-only variables such as `PATH`, `HOME`, `USER`, `TMPDIR`, and
 `BUILDKITE_JOB_LOG_TMPFILE` must not be forwarded unless the container is given
@@ -520,16 +529,21 @@ Operators can select a numeric identity with `--user=UID:GID`; names are not
 accepted. A root host agent defaults to root, and `--user=0:0` is an explicit
 compatibility option that can produce root-owned workspace files.
 
-Each job receives a private tmpfs home owned by that UID:GID. Minimal read-only
-`/etc/passwd` and `/etc/group` files provide root and the selected identity
-(`buildkite` for a non-root UID). Image-specific accounts and supplementary host
-groups are not preserved. This deliberately avoids inheriting the host Docker
-group; images requiring their original account database need separate support.
+Each job receives a private tmpfs home owned by that UID:GID. The image's own
+`/etc/passwd` and `/etc/group` are kept. After `docker create`, the supervisor
+copies them out of the container, adds the selected identity, and copies them
+back before the container starts. If the UID already exists in the image, its
+entry keeps its name and its home directory is pointed at the private home,
+because ssh reads `~/.ssh` from the passwd entry rather than `$HOME`. Otherwise
+an entry named `buildkite` (or `buildkite-<id>` when that name is taken) is
+added, and the same applies to the GID. `USER` and `LOGNAME` are set from the
+resolved name. Supplementary host groups are not added, which deliberately
+avoids inheriting the host Docker group.
 
 A root host agent can grant the selected UID ownership of the private job context
 and coordination files. An unprivileged host agent can select its own UID or
 explicit root; selecting another non-root UID fails before Docker starts.
-Generated identity files are removed during supervisor cleanup.
+Host copies of the identity files are removed during supervisor cleanup.
 
 Before bootstrap, the entrypoint checks context readability and write/search
 access to home, build, plugin, mirror, and existing checkout directories. Existing

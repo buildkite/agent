@@ -46,9 +46,9 @@ func prepareUser(user, contextDir string) (string, int, int, error) {
 	if err := grantContextAccess(contextDir, uid, gid); err != nil {
 		return "", 0, 0, err
 	}
-	directory, err := createIdentityDirectory(contextDir, uid, gid)
+	directory, err := os.MkdirTemp(contextDir, "identity-")
 	if err != nil {
-		return directory, 0, 0, err
+		return "", 0, 0, err
 	}
 	return directory, uid, gid, nil
 }
@@ -83,40 +83,51 @@ func grantContextAccess(contextDir string, uid, gid int) error {
 	return nil
 }
 
-func createIdentityDirectory(contextDir string, uid, gid int) (string, error) {
-	directory, err := os.MkdirTemp(contextDir, "identity-")
-	if err != nil {
-		return "", err
+// mergeIdentity keeps the image's own users and groups, and makes sure the
+// container UID and GID resolve. The UID's home directory is pointed at the
+// private home, because ssh reads ~/.ssh from the passwd entry rather than $HOME.
+func mergeIdentity(passwd, group string, uid, gid int) (string, string) {
+	home := containerRoot + "/home"
+	lines := strings.Split(strings.TrimSuffix(passwd, "\n"), "\n")
+	found := false
+	used := map[string]bool{}
+	for i, line := range lines {
+		fields := strings.Split(line, ":")
+		if len(fields) != 7 {
+			continue
+		}
+		used[fields[0]] = true
+		if !found && fields[2] == strconv.Itoa(uid) {
+			found = true
+			fields[5] = home
+			lines[i] = strings.Join(fields, ":")
+		}
 	}
-	if err := writeIdentityFiles(directory, uid, gid); err != nil {
-		_ = os.RemoveAll(directory)
-		return directory, err
+	if !found {
+		lines = append(lines, fmt.Sprintf("%s:x:%d:%d:Buildkite:%s:/bin/sh", unusedName(used, uid), uid, gid, home))
 	}
-	return directory, nil
+	passwd = strings.TrimPrefix(strings.Join(lines, "\n")+"\n", "\n")
+
+	used = map[string]bool{}
+	for _, line := range strings.Split(group, "\n") {
+		fields := strings.Split(line, ":")
+		if len(fields) != 4 {
+			continue
+		}
+		used[fields[0]] = true
+		if fields[2] == strconv.Itoa(gid) {
+			return passwd, group
+		}
+	}
+	if group != "" && !strings.HasSuffix(group, "\n") {
+		group += "\n"
+	}
+	return passwd, group + fmt.Sprintf("%s:x:%d:\n", unusedName(used, gid), gid)
 }
 
-func writeIdentityFiles(directory string, uid, gid int) error {
-	rootGID := 0
-	if uid == 0 {
-		rootGID = gid
+func unusedName(used map[string]bool, id int) string {
+	if !used["buildkite"] {
+		return "buildkite"
 	}
-	passwd := fmt.Sprintf("root:x:0:%d:root:%s/home:/bin/sh\n", rootGID, containerRoot)
-	group := "root:x:0:\n"
-	if uid != 0 {
-		passwd += fmt.Sprintf("buildkite:x:%d:%d:Buildkite:%s/home:/bin/sh\n", uid, gid, containerRoot)
-	}
-	if gid != 0 {
-		group += fmt.Sprintf("buildkite:x:%d:\n", gid)
-	}
-	for name, contents := range map[string]string{"passwd": passwd, "group": group} {
-		path := filepath.Join(directory, name)
-		if err := os.WriteFile(path, []byte(contents), 0o644); err != nil {
-			return err
-		}
-		// Lookup files must remain readable under restrictive host umasks.
-		if err := os.Chmod(path, 0o644); err != nil {
-			return err
-		}
-	}
-	return nil
+	return fmt.Sprintf("buildkite-%d", id)
 }

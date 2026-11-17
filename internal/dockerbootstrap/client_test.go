@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -64,17 +65,38 @@ func TestCLICancellation(t *testing.T) {
 	}
 }
 
-func TestDockerControlEnvironmentRejected(t *testing.T) {
-	cfg := testConfig(t)
-	for _, pair := range cfg.Environment {
-		if path, ok := strings.CutPrefix(pair, "BUILDKITE_ENV_JSON_FILE="); ok {
-			if err := os.WriteFile(path, []byte(`{"DOCKER_API_VERSION":"1.20"}`), 0o600); err != nil {
-				t.Fatal(err)
+func TestDockerEnvironmentUsesEnvFile(t *testing.T) {
+	for _, value := range []string{"1", "two\nlines"} {
+		cfg := testConfig(t)
+		for _, pair := range cfg.Environment {
+			if path, ok := strings.CutPrefix(pair, "BUILDKITE_ENV_JSON_FILE="); ok {
+				if err := os.WriteFile(path, []byte(`{"DOCKER_BUILDKIT":""}`), 0o600); err != nil {
+					t.Fatal(err)
+				}
 			}
 		}
-	}
-	cfg.Environment = append(cfg.Environment, "DOCKER_API_VERSION=1.20")
-	if _, err := prepare(cfg); err == nil {
-		t.Fatal("job configured the Docker client")
+		cfg.Environment = append(cfg.Environment, "DOCKER_BUILDKIT="+value)
+		job, err := prepare(cfg)
+		if strings.Contains(value, "\n") {
+			if err == nil {
+				t.Fatal("accepted a multiline value the env file cannot carry")
+			}
+			continue
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		// The host Docker client must never see job DOCKER_* values.
+		if _, ok := job.env["DOCKER_BUILDKIT"]; ok {
+			t.Fatal("DOCKER_BUILDKIT reached the Docker client environment")
+		}
+		i := slices.Index(job.args, "--env-file")
+		if i < 0 {
+			t.Fatal("missing --env-file")
+		}
+		data, err := os.ReadFile(job.args[i+1])
+		if err != nil || string(data) != "DOCKER_BUILDKIT=1\n" {
+			t.Fatalf("env file = %q, %v", data, err)
+		}
 	}
 }
