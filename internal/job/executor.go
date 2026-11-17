@@ -508,8 +508,10 @@ func (e *Executor) executeHook(ctx context.Context, hookCfg HookConfig) (retErr 
 	spanName := fmt.Sprintf("%s %s hook", hookCfg.Scope, hookCfg.Name)
 	span, ctx := tracetools.StartSpanFromContext(ctx, spanName, e.TracingBackend)
 	defer func() { tracetools.FinishWithError(span, retErr) }()
+	if e.status != nil {
+		span.SetAttributes(attribute.String("buildkite.program_status.id", id))
+	}
 	span.SetAttributes(
-		attribute.String("buildkite.program_status.id", id),
 		attribute.String("hook.type", hookCfg.Scope),
 		attribute.String("hook.name", hookCfg.Name),
 		attribute.String("hook.command", hookCfg.Path),
@@ -1352,7 +1354,9 @@ func (e *Executor) CommandPhase(ctx context.Context) (hookErr, commandErr error)
 	var preCommandErr error
 
 	span, ctx := tracetools.StartSpanFromContext(ctx, "command", e.TracingBackend)
-	span.SetAttributes(attribute.String("buildkite.program_status.id", commandStatusID))
+	if e.status != nil {
+		span.SetAttributes(attribute.String("buildkite.program_status.id", commandStatusID))
+	}
 	defer func() {
 		if hookErr != nil {
 			tracetools.FinishWithError(span, hookErr)

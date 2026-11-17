@@ -29,58 +29,66 @@ func TestProgramStatusSpanIDs(t *testing.T) {
 		{name: "repository hook", hook: HookConfig{Scope: HookScopeRepository, Name: "post-command"}, id: "hook/repository/post-command"},
 		{name: "plugin hook", hook: HookConfig{Scope: HookScopePlugin, Name: "command", PluginID: "docker", PluginName: "docker#v5.0.0"}, id: "hook/plugin/docker/command"},
 	} {
-		t.Run(test.name, func(t *testing.T) {
-			recorder := installGlobalSpanRecorder(t)
-			var out bytes.Buffer
-			trailer := &statusTrailer{w: &out}
-			sh, err := shell.New(shell.WithLogger(shell.NewWriterLogger(trailer, false, nil)), shell.WithStdout(io.Discard))
-			if err != nil {
-				t.Fatalf("shell.New() error = %v", err)
-			}
-			e := New(ExecutorConfig{
-				TracingBackend: tracetools.BackendOpenTelemetry,
-				Command:        "echo hello",
-				CommandEval:    true,
-				Shell:          "/bin/sh -c",
-				HooksPath:      t.TempDir(),
-			})
-			e.shell = sh
-			e.status = newJobStatus(trailer, e.cancelCh)
-
-			spanName := "command"
-			if test.hook.Name == "" {
-				if hookErr, commandErr := e.CommandPhase(t.Context()); hookErr != nil || commandErr != nil {
-					t.Fatalf("CommandPhase() errors = %v, %v", hookErr, commandErr)
+		for _, reporting := range []string{"enabled", "disabled"} {
+			t.Run(test.name+"/"+reporting, func(t *testing.T) {
+				recorder := installGlobalSpanRecorder(t)
+				var out bytes.Buffer
+				trailer := &statusTrailer{w: &out}
+				sh, err := shell.New(shell.WithLogger(shell.NewWriterLogger(trailer, false, nil)), shell.WithStdout(io.Discard))
+				if err != nil {
+					t.Fatalf("shell.New() error = %v", err)
 				}
-			} else {
-				hookCfg := test.hook
-				hookCfg.Path = filepath.Join(t.TempDir(), "hook")
-				hookCfg.Env = e.shell.Env
-				if err := os.WriteFile(hookCfg.Path, []byte("#!/usr/bin/env ruby\nexit(0)\n"), 0o755); err != nil {
+				e := New(ExecutorConfig{
+					TracingBackend: tracetools.BackendOpenTelemetry,
+					Command:        "echo hello",
+					CommandEval:    true,
+					Shell:          "/bin/sh -c",
+					HooksPath:      t.TempDir(),
+				})
+				e.shell = sh
+				if reporting == "enabled" {
+					e.status = newJobStatus(trailer, e.cancelCh)
+				}
+
+				spanName := "command"
+				if test.hook.Name == "" {
+					if hookErr, commandErr := e.CommandPhase(t.Context()); hookErr != nil || commandErr != nil {
+						t.Fatalf("CommandPhase() errors = %v, %v", hookErr, commandErr)
+					}
+				} else {
+					hookCfg := test.hook
+					hookCfg.Path = filepath.Join(t.TempDir(), "hook")
+					hookCfg.Env = e.shell.Env
+					if err := os.WriteFile(hookCfg.Path, []byte("#!/usr/bin/env ruby\nexit(0)\n"), 0o755); err != nil {
+						t.Fatal(err)
+					}
+					if err := e.executeHook(t.Context(), hookCfg); err != nil {
+						t.Fatalf("executeHook() error = %v", err)
+					}
+					spanName = hookCfg.Scope + " " + hookCfg.Name + " hook"
+				}
+				e.status.clearDone()
+
+				span := findOnlySpan(t, recorder.Ended(), spanName)
+				if reporting == "enabled" {
+					assertSpanAttr(t, span, "buildkite.program_status.id", test.id)
+				} else if id, ok := spanAttr(span, "buildkite.program_status.id"); ok {
+					t.Errorf("span's program status ID = %q with reporting disabled, want no attribute", id)
+				}
+				var matched bool
+				scanner := osc7501.Scanner{W: io.Discard, OnReport: func(r osc7501.Report) {
+					if r.State == osc7501.StateWorking && r.ID == test.id {
+						matched = true
+					}
+				}}
+				if _, err := scanner.Write(out.Bytes()); err != nil {
 					t.Fatal(err)
 				}
-				if err := e.executeHook(t.Context(), hookCfg); err != nil {
-					t.Fatalf("executeHook() error = %v", err)
+				if want := reporting == "enabled"; matched != want {
+					t.Errorf("working OSC report for %q present = %t, want %t; output: %q", test.id, matched, want, out.String())
 				}
-				spanName = hookCfg.Scope + " " + hookCfg.Name + " hook"
-			}
-			e.status.clearDone()
-
-			span := findOnlySpan(t, recorder.Ended(), spanName)
-			assertSpanAttr(t, span, "buildkite.program_status.id", test.id)
-			var matched bool
-			scanner := osc7501.Scanner{W: io.Discard, OnReport: func(r osc7501.Report) {
-				if r.State == osc7501.StateWorking && r.ID == test.id {
-					matched = true
-				}
-			}}
-			if _, err := scanner.Write(out.Bytes()); err != nil {
-				t.Fatal(err)
-			}
-			if !matched {
-				t.Errorf("no working OSC report for span's program status ID %q in %q", test.id, out.String())
-			}
-		})
+			})
+		}
 	}
 }
 
