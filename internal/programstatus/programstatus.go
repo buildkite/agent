@@ -22,6 +22,9 @@ const App = "buildkite-agent"
 // methods don't return errors. A nil Reporter does nothing.
 type Reporter struct {
 	r *osc7501.Reporter
+
+	// OnReport receives each successfully written report. Set it before reporting.
+	OnReport func(osc7501.Report)
 }
 
 // New returns a Reporter that writes reports to w.
@@ -61,7 +64,7 @@ func Enabled(lookupEnv func(string) (string, bool), isTerminal bool) bool {
 // it's unknown.
 func (r *Reporter) Working(id string, progress int, msg string) {
 	if r != nil {
-		_ = r.r.Working(id, progress, msg)
+		r.report(osc7501.Report{State: osc7501.StateWorking, ID: id, Progress: progress, Msg: msg})
 	}
 }
 
@@ -73,17 +76,24 @@ func (r *Reporter) Finish(id string, err error, doneMsg, errorMsg string) {
 	}
 	switch {
 	case err == nil:
-		_ = r.r.Done(id, doneMsg)
+		r.report(osc7501.Report{State: osc7501.StateDone, ID: id, Progress: -1, Msg: doneMsg})
 	case errors.Is(err, context.Canceled):
-		_ = r.r.Idle(id)
+		r.report(osc7501.Report{State: osc7501.StateIdle, ID: id, Progress: -1})
 	default:
-		_ = r.r.Failed(id, errorMsg)
+		r.report(osc7501.Report{State: osc7501.StateError, ID: id, Progress: -1, Msg: errorMsg})
 	}
 }
 
 // Clear removes the record id and the records beneath it.
 func (r *Reporter) Clear(id string) {
 	if r != nil {
-		_ = r.r.Clear(id)
+		r.report(osc7501.Report{State: osc7501.StateClear, ID: id, Progress: -1})
+	}
+}
+
+func (r *Reporter) report(rep osc7501.Report) {
+	rep.App = App
+	if err := r.r.Report(rep); err == nil && r.OnReport != nil {
+		r.OnReport(rep)
 	}
 }

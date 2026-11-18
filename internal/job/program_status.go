@@ -5,10 +5,63 @@ import (
 	"context"
 	"io"
 	"slices"
+	"strings"
 	"sync"
 
 	"github.com/buildkite/agent/v4/internal/programstatus"
+	"github.com/buildkite/agent/v4/internal/redact"
+	"github.com/buildkite/agent/v4/internal/replacer"
+	"github.com/buildkite/osc7501"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 )
+
+// outputSpan attributes log records and program status reports to the current
+// span, restoring the enclosing span when a hook or phase returns.
+func (e *Executor) outputSpan(ctx context.Context) func() {
+	restoreLogs := e.otlpLogSpan(ctx)
+	onReport := func(r osc7501.Report) { e.recordProgramStatus(ctx, r) }
+	restoreOutput := func() {}
+	if e.programStatus != nil {
+		restoreOutput = e.programStatus.SetReportHandler(onReport)
+	}
+	var previous func(osc7501.Report)
+	if e.status != nil {
+		previous = e.status.r.OnReport
+		e.status.r.OnReport = onReport
+	}
+	return func() {
+		restoreOutput()
+		if e.status != nil {
+			e.status.r.OnReport = previous
+		}
+		restoreLogs()
+	}
+}
+
+func (e *Executor) recordProgramStatus(ctx context.Context, r osc7501.Report) {
+	span := trace.SpanFromContext(ctx)
+	if !span.IsRecording() {
+		return
+	}
+	// Reports reach this callback before the log redactors. Use the current
+	// needles so secrets added by hooks or the Job API are also removed.
+	needles := e.redactors.Needles()
+	var out strings.Builder
+	redactor := replacer.New(&out, needles, redact.Redacted)
+	redactor.AddPrefixes(redact.TokenPrefixes()...)
+	redactValue := func(value string) string {
+		start := out.Len()
+		_, _ = io.WriteString(redactor, value)
+		_ = redactor.Flush() // strings.Builder cannot fail
+		return out.String()[start:]
+	}
+	span.AddEvent("buildkite.program_status", trace.WithAttributes(
+		attribute.String("buildkite.program_status.id", redactValue(r.ID)),
+		attribute.String("buildkite.program_status.state", r.State),
+		attribute.String("buildkite.program_status.message", redactValue(r.Msg)),
+	))
+}
 
 // commandStatusID is the record for the step's command. It's left behind
 // when the job ends, so whoever is watching can see how the job finished.

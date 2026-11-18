@@ -30,12 +30,13 @@ const maxProgramStatusRecords = 256
 //
 // See https://www.superlogical.com/rex/docs/build/program-status
 type ProgramStatusWriter struct {
-	mu      sync.Mutex
-	out     lineTracker
-	scanner osc7501.Scanner
-	strip   stripWriter
-	logged  map[string]osc7501.Report // last report described, by record id
-	lineErr error                     // from writing a report's line
+	mu       sync.Mutex
+	out      lineTracker
+	scanner  osc7501.Scanner
+	strip    stripWriter
+	logged   map[string]osc7501.Report // last report described, by record id
+	lineErr  error                     // from writing a report's line
+	onReport func(osc7501.Report)
 }
 
 // NewProgramStatusWriter returns a ProgramStatusWriter that writes to out.
@@ -47,6 +48,21 @@ func NewProgramStatusWriter(out io.Writer) *ProgramStatusWriter {
 	w.strip = stripWriter{w: &w.out}
 	w.scanner = osc7501.Scanner{W: &w.strip, OnReport: w.describe}
 	return w
+}
+
+// SetReportHandler installs a callback for every valid report, including
+// repeats and progress updates, and returns a function that restores the
+// previous handler. The callback runs before redaction and must not call w.
+func (w *ProgramStatusWriter) SetReportHandler(handler func(osc7501.Report)) func() {
+	w.mu.Lock()
+	previous := w.onReport
+	w.onReport = handler
+	w.mu.Unlock()
+	return func() {
+		w.mu.Lock()
+		defer w.mu.Unlock()
+		w.onReport = previous
+	}
 }
 
 // Write implements io.Writer.
@@ -77,6 +93,10 @@ func (w *ProgramStatusWriter) Flush() error {
 // written to the stripper, which has dropped the report and holds nothing, so
 // writing to out here keeps the output in order.
 func (w *ProgramStatusWriter) describe(r osc7501.Report) {
+	if w.onReport != nil {
+		w.onReport(r)
+	}
+
 	// Write the report back without the text, which the line below carries.
 	sanitised := r
 	sanitised.Title, sanitised.Msg = "", ""
