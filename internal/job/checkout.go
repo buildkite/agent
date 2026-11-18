@@ -27,7 +27,7 @@ var errAppendFetchHead = errors.New("cannot use --append (-a) with BUILDKITE_COM
 func (e *Executor) CheckoutPhase(ctx context.Context) (retErr error) {
 	span, ctx := tracetools.StartSpanFromContext(ctx, "checkout", e.TracingBackend)
 	defer func() { tracetools.FinishWithError(span, retErr) }()
-	defer e.otlpLogSpan(ctx)()
+	defer e.outputSpan(ctx)()
 
 	e.status.start("checkout", "Checking out the repository")
 	defer func() { e.status.finish("checkout", retErr, "The checkout") }()

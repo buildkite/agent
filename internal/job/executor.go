@@ -97,7 +97,7 @@ type Executor struct {
 
 	// otlpJobLogger exports job log output as OTLP log records while job log
 	// export is enabled. The executor updates its current span context at
-	// phase and hook boundaries via otlpLogSpan.
+	// phase and hook boundaries via outputSpan.
 	otlpJobLogger *otlpJobLogger
 
 	// jobAPI is the Job API server for this job. It's retained so the executor
@@ -237,6 +237,7 @@ func (e *Executor) Run(ctx context.Context) (exitCode int) {
 		cleanup := e.setupOTLPJobLogger(ctx)
 		defer cleanup()
 	}
+	defer e.outputSpan(ctx)()
 
 	// Initialize the Job API when enabled.
 	if e.JobAPI {
@@ -519,7 +520,7 @@ func (e *Executor) executeHook(ctx context.Context, hookCfg HookConfig) (retErr 
 	for k, v := range hookCfg.SpanAttributes {
 		span.SetAttributes(attribute.String(k, v))
 	}
-	defer e.otlpLogSpan(ctx)()
+	defer e.outputSpan(ctx)()
 
 	hookName := hookCfg.Scope
 	if hookCfg.PluginName != "" {
@@ -1084,7 +1085,7 @@ func dirForRepository(repository string) string {
 func (e *Executor) setUp(ctx context.Context) (retErr error) {
 	span, ctx := tracetools.StartSpanFromContext(ctx, "environment", e.TracingBackend)
 	defer func() { tracetools.FinishWithError(span, retErr) }()
-	defer e.otlpLogSpan(ctx)()
+	defer e.outputSpan(ctx)()
 
 	// Add the $BUILDKITE_BIN_PATH to the $PATH if we've been given one
 	if e.BinPath != "" {
@@ -1276,7 +1277,7 @@ func (e *Executor) fetchAndSetSecrets(ctx context.Context) error {
 func (e *Executor) tearDown(ctx context.Context) (retErr error) {
 	span, ctx := tracetools.StartSpanFromContext(ctx, "pre-exit", e.TracingBackend)
 	defer func() { tracetools.FinishWithError(span, retErr) }()
-	defer e.otlpLogSpan(ctx)()
+	defer e.outputSpan(ctx)()
 
 	// In vanilla agent usage, there's always a command phase.
 	// But over in agent-stack-k8s, which splits the agent phases among
@@ -1364,7 +1365,7 @@ func (e *Executor) CommandPhase(ctx context.Context) (hookErr, commandErr error)
 			tracetools.FinishWithError(span, commandErr)
 		}
 	}()
-	defer e.otlpLogSpan(ctx)()
+	defer e.outputSpan(ctx)()
 
 	// Run postCommandHooks, even if there is an error from the command, but not if there is an
 	// error from the pre-command hooks. Note: any post-command hook error will be returned.
@@ -1446,7 +1447,7 @@ func (e *Executor) defaultCommandPhase(ctx context.Context) (retErr error) {
 		attribute.String("hook.name", "command"),
 		attribute.String("hook.type", "default"),
 	)
-	defer e.otlpLogSpan(ctx)()
+	defer e.outputSpan(ctx)()
 
 	// Flush held output before the OTLP span restore above runs, so any
 	// withheld bytes are released and attributed to this span.

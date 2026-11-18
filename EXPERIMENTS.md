@@ -89,6 +89,18 @@ The agent also reports the job's own progress, on records with these ids, so the
 
 These reports don't add a line to the log, because the log already has a header for each of them. The agent attaches its reports to the end of a log line, so they never come before a section header. When the job ends, the agent clears the records that finished successfully, except `command`.
 
+With OpenTelemetry tracing enabled, reports also become `buildkite.program_status` events on the active hook or phase span. This includes the agent's own reports, program output, repeated reports and progress updates. Events have these attributes:
+
+| Attribute | OSC key | Meaning |
+| --- | --- | --- |
+| `buildkite.program_status.id` | `id` | Record path. An empty string means the root record. |
+| `buildkite.program_status.state` | `state` | `idle`, `working`, `done`, `blocked`, `error` or `clear`. |
+| `buildkite.program_status.message` | `msg` | Decoded message, or an empty string when absent. |
+
+Record IDs and messages are secret-redacted before export. Event timestamps record when the agent processes each report. Events do not change the span's error status: an OSC `error` report can appear on a command span that exits successfully. Events export when their span ends, are subject to the OpenTelemetry SDK's event limit, and do not require OTLP job log export.
+
+The [protocol's available keys](https://www.superlogical.com/rex/docs/build/program-status#keys) also include `kind` (`permission`, `question` or `auth`, for `blocked`), `progress` (0–100, for `working` or `blocked`), `app` (program identifier), and `title` (base64-encoded label). These four keys are not exported as event attributes yet. Both `msg` and `title` are base64-encoded on the wire; log descriptions decode them.
+
 **Status:** Experimental. The agent doesn't reply to the protocol's feature detection query yet.
 
 ### `interpolation-prefers-runtime-env`

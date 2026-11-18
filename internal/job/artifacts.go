@@ -15,7 +15,7 @@ func (e *Executor) artifactPhase(ctx context.Context) error {
 	span, ctx := tracetools.StartSpanFromContext(ctx, "artifacts", e.TracingBackend)
 	var err error
 	defer func() { tracetools.FinishWithError(span, err) }()
-	defer e.otlpLogSpan(ctx)()
+	defer e.outputSpan(ctx)()
 
 	e.status.start("artifacts", "Uploading artifacts")
 	defer func() { e.status.finish("artifacts", err, "The artifact upload") }()
