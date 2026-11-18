@@ -420,6 +420,7 @@ var PipelineUploadCommand = &cli.Command{
 						signature.WithEnv(result.Env.ToMap()),
 						signature.WithLogger(logger.DeprecatedLogger{Logger: l}),
 						signature.WithDebugSigning(cfg.DebugSigning),
+						signature.WithArtifactPathsSigning(true),
 					)
 					if err != nil {
 						return fmt.Errorf("couldn't sign pipeline: %w", err)
