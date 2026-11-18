@@ -720,7 +720,7 @@ func (e *Executor) updateGitSubmodulesAtCurrentDir(ctx context.Context) error {
 	// Initialize URL configuration without fetching anything. Git resolves relative
 	// URLs here and retains any locally configured URL for a submodule.
 	if restricted {
-		if err := e.shell.Command("git", "submodule", "init").Run(ctx); err != nil {
+		if err := e.shell.Command("git", append(slices.Clone(args), "submodule", "init")...).Run(ctx); err != nil {
 			return fmt.Errorf("initializing submodule URLs: %w", err)
 		}
 	}
@@ -784,6 +784,20 @@ func (e *Executor) updateGitSubmodulesAtCurrentDir(ctx context.Context) error {
 					mirrorRepository = ""
 				} else {
 					mirrorRepository = resolvedRepository
+				}
+			}
+
+			if restricted && mirrorRepository != "" && !e.GitMirrorsSkipUpdate {
+				// The mirror runs without the submodule's per-command -c options.
+				// A skipped mirror cannot fetch; otherwise, if it would fetch a
+				// disallowed source, use the checked direct update.
+				mirrorURL, err := e.shell.Command("git", "-C", e.GitMirrorsPath, "ls-remote", "--get-url", mirrorRepository).RunAndCaptureStdout(ctx)
+				if err != nil {
+					return fmt.Errorf("resolving submodule mirror URL: %w", err)
+				}
+				if err := e.validateRepositoryAllowedForCheckout(strings.TrimSuffix(mirrorURL, "\n")); err != nil {
+					e.shell.Warningf("Skipping submodule %q mirror: %v", submodule.key, err)
+					mirrorRepository = ""
 				}
 			}
 

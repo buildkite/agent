@@ -239,14 +239,17 @@ func TestCheckoutRepositoryAllowlistSubmodules(t *testing.T) {
 		t.Skip("local Git submodule fixture")
 	}
 	for _, tc := range []struct {
-		name, url                                string
-		allow, mirrors, recursiveClone, override bool
+		name, url                                                                   string
+		allow, mirrors, recursiveClone, override, active, mirrorRewrite, skipMirror bool
 	}{
 		{name: "disallowed"},
 		{name: "disallowed with mirrors", mirrors: true},
 		{name: "recursive clone flags", recursiveClone: true},
+		{name: "per-command active submodule", active: true},
+		{name: "per-command mirror rewrite", mirrors: true, mirrorRewrite: true},
 		{name: "allowed", allow: true},
 		{name: "allowed with mirrors", allow: true, mirrors: true},
+		{name: "allowed with skipped missing mirror", allow: true, mirrors: true, skipMirror: true},
 		{name: "relative allowed", url: "relative", allow: true},
 		{name: "rewritten to disallowed", url: "rewrite"},
 		{name: "per-command URL override", allow: true, override: true},
@@ -293,6 +296,11 @@ func TestCheckoutRepositoryAllowlistSubmodules(t *testing.T) {
 				if err := tester.EnableGitMirrors(); err != nil {
 					t.Fatal(err)
 				}
+				if tc.skipMirror {
+					if err := os.Remove(tester.GitMirrorsDir); err != nil {
+						t.Fatal(err)
+					}
+				}
 			}
 			patterns := []string{"^" + regexp.QuoteMeta(tester.Repo.Path) + "$"}
 			if tc.allow {
@@ -307,18 +315,39 @@ func TestCheckoutRepositoryAllowlistSubmodules(t *testing.T) {
 				defer other.Close()
 				cloneConfig += ",submodule.outside.url=" + other.Path
 			}
+			if tc.active {
+				if err := os.WriteFile(filepath.Join(tester.HomeDir, ".gitconfig"), []byte("[submodule]\n\tactive = selected\n"), 0o600); err != nil {
+					t.Fatal(err)
+				}
+				cloneConfig += ",submodule.active=outside"
+			}
+			if tc.mirrorRewrite {
+				other, err := createTestGitRespository()
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer other.Close()
+				patterns = append(patterns, "^"+regexp.QuoteMeta(other.Path)+"$")
+				cloneConfig += ",url." + other.Path + ".insteadOf=" + submodule.Path
+			}
 			env := []string{repositoryAllowlistEnv(patterns...), "BUILDKITE_GIT_SUBMODULE_CLONE_CONFIG=" + cloneConfig}
+			if tc.skipMirror {
+				env = append(env, "BUILDKITE_GIT_MIRRORS_SKIP_UPDATE=true")
+			}
 			if tc.recursiveClone {
 				env = append(env, "BUILDKITE_GIT_CLONE_FLAGS=--recurse-submodules", "GIT_ALLOW_PROTOCOL=file")
 			}
 			err = tester.Run(t, env...)
 			file := filepath.Join(tester.CheckoutDir(), "outside", "test.txt")
-			if tc.allow && !tc.override {
+			if (tc.allow && !tc.override) || tc.mirrorRewrite {
 				if err != nil {
 					t.Fatalf("allowed submodule rejected: %v\n%s", err, tester.Output)
 				}
 				if _, err := os.Stat(file); err != nil {
 					t.Fatalf("allowed submodule not fetched: %v\n%s", err, tester.Output)
+				}
+				if tc.mirrorRewrite && strings.Contains(tester.Output, "git clone --mirror -- "+submodule.Path) {
+					t.Fatal("mirror fetched the disallowed submodule source")
 				}
 			} else {
 				if err == nil || !strings.Contains(tester.Output, "is not permitted by --allowed-repositories") {
@@ -466,6 +495,22 @@ func TestCheckoutRepositoryAllowlistExistingSubmoduleFetch(t *testing.T) {
 	}
 	if out, err := tester.Repo.Execute("commit", "-am", "Update submodule pointer"); err != nil {
 		t.Fatalf("committing fixture pointer: %v: %s", err, out)
+	}
+	parentCommit, err := tester.Repo.Execute("rev-parse", "HEAD")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := tester.Run(t,
+		repositoryAllowlistEnv("^"+regexp.QuoteMeta(tester.Repo.Path)+"$"),
+		"BUILDKITE_GIT_SUBMODULE_CLONE_CONFIG=protocol.file.allow=always",
+		"BUILDKITE_GIT_FETCH_FLAGS=--recurse-submodules=on-demand",
+		"BUILDKITE_COMMIT="+strings.TrimSpace(parentCommit),
+		"GIT_ALLOW_PROTOCOL=file",
+	); err == nil || !strings.Contains(tester.Output, "is not permitted by --allowed-repositories") {
+		t.Fatalf("verified checkout did not reject submodule: %v\n%s", err, tester.Output)
+	}
+	if _, err := tester.Repo.Execute("-C", filepath.Join(tester.CheckoutDir(), "outside"), "cat-file", "-e", commit+"^{commit}"); err == nil {
+		t.Fatal("commit verification fetched a disallowed submodule commit")
 	}
 	if err := tester.Run(t,
 		repositoryAllowlistEnv("^"+regexp.QuoteMeta(tester.Repo.Path)+"$"),
