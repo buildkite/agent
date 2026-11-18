@@ -159,8 +159,16 @@ func TestProgramStatusOutputSpanEvents(t *testing.T) {
 			e.status.clearDone()
 			// Output after the phase belongs to the job again. Its callback
 			// predates the runtime secret registration above.
-			if _, err := e.programStatus.Write((osc7501.Report{State: "idle", Progress: -1, Msg: "Finished late-secret"}).Encode()); err != nil {
-				t.Fatal(err)
+			for _, report := range []osc7501.Report{
+				{State: "idle", Progress: -1, Msg: "Finished late-secret"},
+				// Partial secrets must not join across fields or reports.
+				{ID: "secret-", State: "working", Progress: -1, Msg: "value"},
+				{ID: "secret-value", State: "done", Progress: -1, Msg: "secret-"},
+				{ID: "value", State: "done", Progress: -1},
+			} {
+				if _, err := e.programStatus.Write(report.Encode()); err != nil {
+					t.Fatal(err)
+				}
 			}
 			restore()
 			root.End()
@@ -194,6 +202,9 @@ func TestProgramStatusOutputSpanEvents(t *testing.T) {
 				{"hook/agent/pre-command", "clear", ""},
 				{"hook/agent/post-command", "clear", ""},
 				{"", "idle", "Finished [REDACTED]"},
+				{"secret-", "working", "value"},
+				{"[REDACTED]", "done", "secret-"},
+				{"value", "done", ""},
 			})
 		})
 	}

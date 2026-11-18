@@ -47,13 +47,14 @@ func (e *Executor) recordProgramStatus(ctx context.Context, r osc7501.Report) {
 	// Reports reach this callback before the log redactors. Use the current
 	// needles so secrets added by hooks or the Job API are also removed.
 	needles := e.redactors.Needles()
+	var out strings.Builder
+	redactor := replacer.New(&out, needles, redact.Redacted)
+	redactor.AddPrefixes(redact.TokenPrefixes()...)
 	redactValue := func(value string) string {
-		var out strings.Builder
-		redactor := replacer.New(&out, needles, redact.Redacted)
-		redactor.AddPrefixes(redact.TokenPrefixes()...)
+		start := out.Len()
 		_, _ = io.WriteString(redactor, value)
 		_ = redactor.Flush() // strings.Builder cannot fail
-		return out.String()
+		return out.String()[start:]
 	}
 	span.AddEvent("buildkite.program_status", trace.WithAttributes(
 		attribute.String("buildkite.program_status.id", redactValue(r.ID)),
