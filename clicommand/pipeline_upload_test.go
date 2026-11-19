@@ -24,6 +24,7 @@ import (
 	"github.com/buildkite/go-pipeline/ordered"
 	"github.com/buildkite/go-pipeline/warning"
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/lestrrat-go/jwx/v3/jwa"
 	"github.com/urfave/cli/v3"
 )
@@ -176,6 +177,50 @@ steps:
 			t.Errorf("step %q signed_fields = %v, want it to contain %q", step.Command, step.Signature.SignedFields, "secrets")
 		}
 	}
+}
+
+func TestPipelineUploadSignsArtifactPathsByDefault(t *testing.T) {
+    t.Setenv("BUILDKITE_AGENT_JWKS_FILE", "")
+    t.Setenv("BUILDKITE_REPO", "https://example.test/repo.git")
+    t.Chdir(t.TempDir())
+    if err := os.WriteFile("pipeline.yml", []byte("steps:\n  - command: echo hello\n    artifact_paths: logs/*.txt\n"), 0o600); err != nil {
+        t.Fatal(err)
+    }
+    keys, _, err := jwkutil.NewKeyPair("test-key", jwa.EdDSA())
+    if err != nil {
+        t.Fatal(err)
+    }
+    keyFile, err := json.Marshal(keys)
+    if err != nil {
+        t.Fatal(err)
+    }
+    if err := os.WriteFile("key.json", keyFile, 0o600); err != nil {
+        t.Fatal(err)
+    }
+
+    var stdout bytes.Buffer
+    cmd := *PipelineUploadCommand
+    app := &cli.Command{Name: "buildkite-agent", Commands: []*cli.Command{&cmd}, Writer: &stdout, ErrWriter: io.Discard}
+    args := []string{"buildkite-agent", "upload", "--dry-run", "--agent-access-token", "unused-token", "--jwks-file", "key.json", "--jwks-key-id", "test-key", "pipeline.yml"}
+    if err := app.Run(t.Context(), args); err != nil {
+        t.Fatal(err)
+    }
+    var output struct {
+        Steps []struct {
+            Signature struct {
+                SignedFields []string `json:"signed_fields"`
+            } `json:"signature"`
+        } `json:"steps"`
+    }
+    if err := json.Unmarshal(stdout.Bytes(), &output); err != nil {
+        t.Fatalf("decoding signed pipeline: %v", err)
+    }
+    if len(output.Steps) != 1 {
+        t.Fatalf("signed pipeline has %d steps, want 1", len(output.Steps))
+    }
+    if !slices.Contains(output.Steps[0].Signature.SignedFields, "artifact_paths") {
+        t.Fatalf("signed fields = %v, want artifact_paths", output.Steps[0].Signature.SignedFields)
+    }
 }
 
 func TestSearchForSecrets(t *testing.T) {
@@ -384,7 +429,7 @@ steps:
 		}
 		gotPipelines = append(gotPipelines, p)
 	}
-	if diff := cmp.Diff(gotPipelines, wantPipelines, cmp.Comparer(ordered.EqualSA), cmp.Comparer(ordered.EqualSS)); diff != "" {
+	if diff := cmp.Diff(gotPipelines, wantPipelines, cmp.Comparer(ordered.EqualSA), cmp.Comparer(ordered.EqualSS), cmpopts.IgnoreUnexported(pipeline.CommandStep{})); diff != "" {
 		t.Errorf("pipelines diff (-got +want):\n%s", diff)
 	}
 }
@@ -956,7 +1001,7 @@ func TestIfChangedApplicator(t *testing.T) {
 
 			steps := makeInput()
 			test.ica.apply(l, steps)
-			if diff := cmp.Diff(steps, test.want); diff != "" {
+			if diff := cmp.Diff(steps, test.want, cmpopts.IgnoreUnexported(pipeline.CommandStep{})); diff != "" {
 				t.Errorf("after ica.apply(l, steps) (-got, +want):\n%s", diff)
 			}
 		})
@@ -1060,7 +1105,7 @@ func TestIfChangedApplicator_WeirdPipeline(t *testing.T) {
 	}
 
 	ica.apply(l, steps)
-	if diff := cmp.Diff(steps, want); diff != "" {
+	if diff := cmp.Diff(steps, want, cmpopts.IgnoreUnexported(pipeline.CommandStep{})); diff != "" {
 		t.Errorf("after ica.apply(l, steps) (-got, +want):\n%s", diff)
 	}
 }
@@ -1188,7 +1233,7 @@ func TestIfChangedApplicator_WithChangedFilesPath(t *testing.T) {
 	}
 
 	ica.apply(l, steps)
-	if diff := cmp.Diff(steps, want); diff != "" {
+	if diff := cmp.Diff(steps, want, cmpopts.IgnoreUnexported(pipeline.CommandStep{})); diff != "" {
 		t.Errorf("after ica.apply(l, steps) (-got, +want):\n%s", diff)
 	}
 }

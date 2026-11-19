@@ -27,7 +27,7 @@ var errAppendFetchHead = errors.New("cannot use --append (-a) with BUILDKITE_COM
 func (e *Executor) CheckoutPhase(ctx context.Context) (retErr error) {
 	span, ctx := tracetools.StartSpanFromContext(ctx, "checkout", e.TracingBackend)
 	defer func() { tracetools.FinishWithError(span, retErr) }()
-	defer e.otlpLogSpan(ctx)()
+	defer e.outputSpan(ctx)()
 
 	e.status.start("checkout", "Checking out the repository")
 	defer func() { e.status.finish("checkout", retErr, "The checkout") }()
@@ -134,7 +134,7 @@ func (e *Executor) CheckoutPhase(ctx context.Context) (retErr error) {
 }
 
 func (e *Executor) validateRepositoryAllowedForCheckout(repository string) error {
-	if MatchesAllowedPatterns(e.AllowedRepositories, repository) {
+	if RepositoryAllowed(e.AllowedRepositories, repository) {
 		return nil
 	}
 	return fmt.Errorf("repository %q is not permitted by --allowed-repositories", redact.URLCredentials(repository))

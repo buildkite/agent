@@ -140,3 +140,71 @@ func TestVerifyJobComparesWindowsPluginAliasWithSignedStep(t *testing.T) {
 		})
 	}
 }
+
+func TestVerifyJobBindsSignedArtifactPathsToUpload(t *testing.T) {
+	t.Parallel()
+
+	key, err := jwk.Import([]byte("synthetic-signing-key-with-32-bytes-or-more"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := key.Set("alg", "HS256"); err != nil {
+		t.Fatal(err)
+	}
+	if err := key.Set("kid", "test-key"); err != nil {
+		t.Fatal(err)
+	}
+	keySet := jwk.NewSet()
+	if err := keySet.AddKey(key); err != nil {
+		t.Fatal(err)
+	}
+
+	const repo = "https://example.test/repo.git"
+	for _, tt := range []struct {
+		name, jobPaths         string
+		signedPaths, stepPaths []string
+		legacy                 bool
+		wantError              error
+	}{
+		{name: "matching literal matrix paths", jobPaths: "reports/{{matrix.os}}.txt", signedPaths: []string{"reports/{{matrix.os}}.txt"}, stepPaths: []string{"reports/{{matrix.os}}.txt"}},
+		{name: "changed upload source", jobPaths: "reports/linux.txt", signedPaths: []string{"reports/{{matrix.os}}.txt"}, stepPaths: []string{"reports/{{matrix.os}}.txt"}, wantError: ErrInvalidJob},
+		{name: "changed step source", jobPaths: "private.txt", signedPaths: []string{"reports/{{matrix.os}}.txt"}, stepPaths: []string{"private.txt"}, wantError: ErrVerificationFailed},
+		{name: "no upload source", jobPaths: ""},
+		{name: "upload source added", jobPaths: "private.txt", wantError: ErrInvalidJob},
+		{name: "old signature remains valid", jobPaths: "private.txt", stepPaths: []string{"private.txt"}, legacy: true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			step := pipeline.CommandStep{
+				Command:       "echo hello",
+				Matrix:        &pipeline.Matrix{Setup: pipeline.MatrixSetup{"os": {"linux", "windows"}}},
+				ArtifactPaths: tt.signedPaths,
+			}
+			if err := signature.SignSteps(t.Context(), pipeline.Steps{&step}, key, repo, signature.WithArtifactPathsSigning(!tt.legacy)); err != nil {
+				t.Fatal(err)
+			}
+			step.ArtifactPaths = tt.stepPaths
+			env := map[string]string{
+				"BUILDKITE_REPO":           repo,
+				"BUILDKITE_COMMAND":        step.Command,
+				"BUILDKITE_ARTIFACT_PATHS": tt.jobPaths,
+			}
+			runner := &JobRunner{
+				agentLogger:  logger.Discard,
+				signedJobEnv: env,
+				conf: JobRunnerConfig{Job: &api.Job{
+					Step:              step,
+					Env:               env,
+					MatrixPermutation: pipeline.MatrixPermutation{"os": "linux"},
+				}},
+			}
+			err := runner.verifyJob(t.Context(), keySet)
+			if tt.wantError != nil {
+				if !errors.Is(err, tt.wantError) {
+					t.Fatalf("verifyJob() error = %v, want %v", err, tt.wantError)
+				}
+			} else if err != nil {
+				t.Fatalf("verifyJob() error = %v, want nil", err)
+			}
+		})
+	}
+}

@@ -8,6 +8,8 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+
+	"github.com/buildkite/agent/v4/internal/job/githttptest"
 )
 
 func writeRepositoryHook(t *testing.T, tester *ExecutorTester, name, body string) {
@@ -19,6 +21,52 @@ func writeRepositoryHook(t *testing.T, tester *ExecutorTester, name, body string
 
 func repositoryAllowlistEnv(patterns ...string) string {
 	return "BUILDKITE_ALLOWED_REPOSITORIES=" + strings.Join(patterns, ",")
+}
+
+func TestCheckoutRepositoryAllowlistRejectsHTTPPathResolution(t *testing.T) {
+	t.Setenv("GIT_AUTHOR_NAME", "Buildkite Agent")
+	t.Setenv("GIT_AUTHOR_EMAIL", "agent@example.com")
+	t.Setenv("GIT_COMMITTER_NAME", "Buildkite Agent")
+	t.Setenv("GIT_COMMITTER_EMAIL", "agent@example.com")
+
+	s := githttptest.NewServer()
+	defer s.Close()
+	for _, name := range []string{"allowed", "outside"} {
+		if err := s.CreateRepository(name); err != nil {
+			t.Fatal(err)
+		}
+		if out, err := s.InitRepository(name); err != nil {
+			t.Fatalf("initializing %s: %v: %s", name, err, out)
+		}
+		if err := s.SetDefaultBranch(name, "main"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	policy := repositoryAllowlistEnv("^" + regexp.QuoteMeta(s.RepoURL("allowed")) + `(?:/|$)`)
+
+	allowed, err := NewExecutorTester(mainCtx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer allowed.Close()
+	allowed.RunAndCheck(t, policy, "BUILDKITE_REPO="+s.RepoURL("allowed"))
+	if _, err := os.Stat(filepath.Join(allowed.CheckoutDir(), "README.md")); err != nil {
+		t.Fatalf("allowed HTTP repository was not checked out: %v", err)
+	}
+
+	blocked, err := NewExecutorTester(mainCtx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer blocked.Close()
+	blocked.MustMock(t, "git").Expect().NotCalled()
+	if err := blocked.Run(t, policy, "BUILDKITE_REPO="+s.RepoURL("allowed")+"/../outside.git"); err == nil {
+		t.Fatal("checkout accepted a URL that resolves to the outside repository")
+	}
+	if !strings.Contains(blocked.Output, "is not permitted by --allowed-repositories") {
+		t.Fatalf("missing allowlist rejection: %s", blocked.Output)
+	}
+	blocked.CheckMocks(t)
 }
 
 func TestCheckoutRepositoryAllowlistAfterHooks(t *testing.T) {

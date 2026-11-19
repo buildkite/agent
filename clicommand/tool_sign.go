@@ -359,6 +359,7 @@ func signOffline(ctx context.Context, c *cli.Command, l logger.Logger, key signa
 		signature.WithEnv(parsedPipeline.Env.ToMap()),
 		signature.WithLogger(logger.DeprecatedLogger{Logger: l}),
 		signature.WithDebugSigning(cfg.DebugSigning),
+		signature.WithArtifactPathsSigning(true),
 	)
 	if err != nil {
 		return fmt.Errorf("couldn't sign pipeline: %w", err)
@@ -428,6 +429,7 @@ func signWithGraphQL(ctx context.Context, c *cli.Command, l logger.Logger, key s
 		signature.WithEnv(parsedPipeline.Env.ToMap()),
 		signature.WithLogger(logger.DeprecatedLogger{Logger: debugL}),
 		signature.WithDebugSigning(cfg.DebugSigning),
+		signature.WithArtifactPathsSigning(true),
 	)
 	if err != nil {
 		return fmt.Errorf("couldn't sign pipeline: %w", err)

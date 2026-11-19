@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/buildkite/agent/v4/internal/process"
+	"github.com/buildkite/osc7501"
 	"github.com/google/go-cmp/cmp"
 )
 
@@ -33,6 +34,8 @@ func TestProgramStatusWriter(t *testing.T) {
 
 	var out bytes.Buffer
 	w := process.NewProgramStatusWriter(&out)
+	var reports []osc7501.Report
+	w.SetReportHandler(func(r osc7501.Report) { reports = append(reports, r) })
 
 	for _, chunk := range []string{
 		// A report split across writes, arriving mid-line.
@@ -57,6 +60,15 @@ func TestProgramStatusWriter(t *testing.T) {
 		"\x1b[90m# Program status: state=done id=build/test title=\"Tests\"\x1b[0m\n"
 	if diff := cmp.Diff(want, out.String()); diff != "" {
 		t.Errorf("output diff (-want +got):\n%s", diff)
+	}
+	wantReports := []osc7501.Report{
+		{State: "working", ID: "build", Progress: 40, App: "cargo", Msg: "Compiling"},
+		{State: "working", ID: "build", Progress: 60, App: "cargo", Msg: "Compiling"},
+		{State: "working", ID: "build", Progress: -1, App: "cargo", Msg: "Linking"},
+		{State: "done", ID: "build/test", Progress: -1, Title: "Tests"},
+	}
+	if diff := cmp.Diff(wantReports, reports); diff != "" {
+		t.Errorf("reports (-want +got):\n%s", diff)
 	}
 }
 
