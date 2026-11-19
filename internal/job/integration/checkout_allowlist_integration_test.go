@@ -524,3 +524,90 @@ func TestCheckoutRepositoryAllowlistExistingSubmoduleFetch(t *testing.T) {
 		t.Fatal("primary repository fetch obtained a disallowed submodule commit")
 	}
 }
+
+func TestCheckoutRepositoryAllowlistExistingSubmoduleURLChange(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("local Git submodule fixture")
+	}
+	tester, err := NewExecutorTester(mainCtx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tester.Close()
+	allowed, err := createTestGitRespository()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer allowed.Close()
+	blocked, err := createTestGitRespository()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer blocked.Close()
+	if out, err := tester.Repo.Execute("-c", "protocol.file.allow=always", "submodule", "add", allowed.Path, "outside"); err != nil {
+		t.Fatalf("adding submodule: %v: %s", err, out)
+	}
+	if out, err := tester.Repo.Execute("commit", "-am", "Add allowed submodule"); err != nil {
+		t.Fatalf("committing submodule: %v: %s", err, out)
+	}
+	policy := repositoryAllowlistEnv("^"+regexp.QuoteMeta(tester.Repo.Path)+"$", "^"+regexp.QuoteMeta(allowed.Path)+"$")
+	tester.RunAndCheck(t, policy, "BUILDKITE_GIT_SUBMODULE_CLONE_CONFIG=protocol.file.allow=always")
+	if err := os.WriteFile(filepath.Join(blocked.Path, "test.txt"), []byte("new blocked commit"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := blocked.Add("test.txt"); err != nil {
+		t.Fatal(err)
+	}
+	if err := blocked.Commit("New blocked commit"); err != nil {
+		t.Fatal(err)
+	}
+	commit, err := blocked.Execute("rev-parse", "HEAD")
+	if err != nil {
+		t.Fatal(err)
+	}
+	commit = strings.TrimSpace(commit)
+	if out, err := tester.Repo.Execute("config", "--file", ".gitmodules", "submodule.outside.url", blocked.Path); err != nil {
+		t.Fatalf("changing submodule URL: %v: %s", err, out)
+	}
+	if out, err := tester.Repo.Execute("-C", "outside", "fetch", "--", blocked.Path, "main"); err != nil {
+		t.Fatalf("fetching fixture commit: %v: %s", err, out)
+	}
+	if out, err := tester.Repo.Execute("-C", "outside", "checkout", "-f", commit); err != nil {
+		t.Fatalf("checking out fixture commit: %v: %s", err, out)
+	}
+	if out, err := tester.Repo.Execute("commit", "-am", "Change submodule source and pointer"); err != nil {
+		t.Fatalf("committing fixture pointer: %v: %s", err, out)
+	}
+	if err := tester.Run(t, policy,
+		"BUILDKITE_GIT_SUBMODULE_CLONE_CONFIG=protocol.file.allow=always,submodule.outside.url="+allowed.Path,
+		"GIT_ALLOW_PROTOCOL=file",
+	); err == nil || !strings.Contains(tester.Output, "is not permitted by --allowed-repositories") {
+		t.Fatalf("checkout did not reject disallowed populated submodule remote: %v\n%s", err, tester.Output)
+	}
+	if _, err := tester.Repo.Execute("-C", filepath.Join(tester.CheckoutDir(), "outside"), "cat-file", "-e", commit+"^{commit}"); err == nil {
+		t.Fatal("populated submodule fetched a disallowed commit")
+	}
+
+	child := filepath.Join(tester.CheckoutDir(), "outside")
+	if out, err := tester.Repo.Execute("-C", child, "checkout", "-B", "main"); err != nil {
+		t.Fatalf("checking out child branch: %v: %s", err, out)
+	}
+	if out, err := tester.Repo.Execute("-C", child, "remote", "add", "other", blocked.Path); err != nil {
+		t.Fatalf("adding child fetch remote: %v: %s", err, out)
+	}
+	if out, err := tester.Repo.Execute("-C", child, "config", "branch.main.remote", "other"); err != nil {
+		t.Fatalf("selecting child fetch remote: %v: %s", err, out)
+	}
+	if out, err := tester.Repo.Execute("-C", child, "config", "branch.main.merge", "refs/heads/main"); err != nil {
+		t.Fatalf("configuring child branch: %v: %s", err, out)
+	}
+	if err := tester.Run(t, policy,
+		"BUILDKITE_GIT_SUBMODULE_CLONE_CONFIG=protocol.file.allow=always,submodule.outside.url="+allowed.Path+",remote.origin.url="+allowed.Path,
+		"GIT_ALLOW_PROTOCOL=file",
+	); err == nil || !strings.Contains(tester.Output, "is not permitted by --allowed-repositories") {
+		t.Fatalf("checkout did not reject disallowed branch fetch remote: %v\n%s", err, tester.Output)
+	}
+	if _, err := tester.Repo.Execute("-C", child, "cat-file", "-e", commit+"^{commit}"); err == nil {
+		t.Fatal("branched submodule fetched a disallowed commit")
+	}
+}

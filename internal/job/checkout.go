@@ -769,6 +769,52 @@ func (e *Executor) updateGitSubmodulesAtCurrentDir(ctx context.Context) error {
 			activeRepos = append(activeRepos, submoduleRepos[i])
 		}
 		submoduleRepos = activeRepos
+
+		// Updating a previously checked-out submodule can fetch from its own
+		// remote, even when a -c submodule.<name>.url override changes the URL
+		// read from the parent. Check the remote Git will use for the fetch.
+		paths, err := e.shell.Command("git", append(slices.Clone(args), "submodule", "foreach", "--quiet", `printf '%s\0' "$sm_path"`)...).RunAndCaptureStdout(ctx)
+		if err != nil {
+			return fmt.Errorf("enumerating checked-out submodules: %w", err)
+		}
+		for _, path := range strings.Split(strings.TrimSuffix(paths, "\x00"), "\x00") {
+			if path == "" {
+				continue
+			}
+			fetchRemote := "origin"
+			branch, err := e.shell.Command("git", append(slices.Clone(args), "-C", path, "symbolic-ref", "--quiet", "--short", "HEAD")...).RunAndCaptureStdout(ctx)
+			if err != nil && (!shell.IsExitError(err) || shell.ExitCode(err) != 1) {
+				return fmt.Errorf("reading submodule %q branch: %w", path, err)
+			}
+			if branch != "" {
+				configured, err := e.shell.Command("git", append(slices.Clone(args), "-C", path, "config", "--get", "branch."+strings.TrimSuffix(branch, "\n")+".remote")...).RunAndCaptureStdout(ctx)
+				if err != nil && (!shell.IsExitError(err) || shell.ExitCode(err) != 1) {
+					return fmt.Errorf("reading submodule %q branch remote: %w", path, err)
+				}
+				if configured != "" {
+					fetchRemote = strings.TrimSuffix(configured, "\n")
+				}
+			}
+			if fetchRemote == "." {
+				// Git fetches from the child's own repository in this case.
+				continue
+			}
+			remote, err := e.shell.Command("git", append(slices.Clone(args), "-C", path, "remote", "get-url", fetchRemote)...).RunAndCaptureStdout(ctx)
+			if shell.IsExitError(err) && shell.ExitCode(err) == 2 {
+				if fetchRemote == "origin" {
+					// No origin means there is no remote for Git to fetch from.
+					continue
+				}
+				// A branch's fetch remote can be a URL instead of a named remote.
+				remote, err = e.shell.Command("git", append(slices.Clone(args), "-C", path, "ls-remote", "--get-url", fetchRemote)...).RunAndCaptureStdout(ctx)
+			}
+			if err != nil {
+				return fmt.Errorf("reading submodule %q fetch remote: %w", path, err)
+			}
+			if err := e.validateRepositoryAllowedForCheckout(strings.TrimSuffix(remote, "\n")); err != nil {
+				return fmt.Errorf("%w: submodule %q fetch remote: %v", errDisallowedSubmodule, path, err)
+			}
+		}
 	}
 
 	mirrorSubmodules := e.GitMirrorsPath != ""
