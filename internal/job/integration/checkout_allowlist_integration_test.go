@@ -9,7 +9,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/buildkite/agent/v4/internal/job"
 	"github.com/buildkite/agent/v4/internal/job/githttptest"
+	"github.com/buildkite/bintest/v3"
 )
 
 func writeRepositoryHook(t *testing.T, tester *ExecutorTester, name, body string) {
@@ -230,6 +232,438 @@ func TestCheckoutRepositoryAllowlistRemoteMirror(t *testing.T) {
 			if dropped := strings.Contains(tester.Output, "Remote Git mirror is not permitted by --allowed-repositories"); dropped == permitted {
 				t.Errorf("mirror dropped = %t, permitted = %t\n%s", dropped, permitted, tester.Output)
 			}
+		})
+	}
+}
+
+func TestCheckoutRepositoryAllowlistSubmodules(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("local Git submodule fixture")
+	}
+	for _, tc := range []struct {
+		name, url                                                                                  string
+		allow, mirrors, recursiveClone, override, active, mirrorRewrite, skipMirror, parentRewrite bool
+	}{
+		{name: "disallowed"},
+		{name: "disallowed with mirrors", mirrors: true},
+		{name: "recursive clone flags", recursiveClone: true},
+		{name: "per-command active submodule", active: true},
+		{name: "per-command mirror rewrite", mirrors: true, mirrorRewrite: true},
+		{name: "allowed", allow: true},
+		{name: "allowed with mirrors", allow: true, mirrors: true},
+		{name: "allowed with skipped missing mirror", allow: true, mirrors: true, skipMirror: true},
+		{name: "relative allowed", url: "relative", allow: true},
+		{name: "rewritten to disallowed", url: "rewrite"},
+		{name: "per-command URL override", allow: true, override: true},
+		{name: "parent-only rewrite", parentRewrite: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			tester, err := NewExecutorTester(mainCtx)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer tester.Close()
+			submodule, err := createTestGitRespository()
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer submodule.Close()
+			if out, err := tester.Repo.Execute("-c", "protocol.file.allow=always", "submodule", "add", submodule.Path, "outside"); err != nil {
+				t.Fatalf("adding submodule: %v: %s", err, out)
+			}
+			if tc.url != "" {
+				url := "../" + filepath.Base(submodule.Path)
+				if tc.url == "rewrite" {
+					url = "https://allowed.example/submodule"
+					config := fmt.Sprintf("[url %q]\n\tinsteadOf = %s\n", submodule.Path, url)
+					if err := os.WriteFile(filepath.Join(tester.HomeDir, ".gitconfig"), []byte(config), 0o600); err != nil {
+						t.Fatal(err)
+					}
+				}
+				if out, err := tester.Repo.Execute("config", "--file", ".gitmodules", "submodule.outside.url", url); err != nil {
+					t.Fatalf("setting submodule URL: %v: %s", err, out)
+				}
+			}
+			if tc.name == "allowed" {
+				// A stale .gitmodules entry without a gitlink is not fetched by Git.
+				for _, entry := range []string{"submodule.unused.path", "submodule.unused.url"} {
+					if out, err := tester.Repo.Execute("config", "--file", ".gitmodules", entry, "unused"); err != nil {
+						t.Fatalf("setting unused submodule entry: %v: %s", err, out)
+					}
+				}
+			}
+			if out, err := tester.Repo.Execute("commit", "-am", "Add test submodule"); err != nil {
+				t.Fatalf("committing submodule: %v: %s", err, out)
+			}
+			if tc.mirrors {
+				if err := tester.EnableGitMirrors(); err != nil {
+					t.Fatal(err)
+				}
+				if tc.skipMirror {
+					if err := os.Remove(tester.GitMirrorsDir); err != nil {
+						t.Fatal(err)
+					}
+				}
+			}
+			patterns := []string{"^" + regexp.QuoteMeta(tester.Repo.Path) + "$"}
+			if tc.allow {
+				patterns = append(patterns, "^"+regexp.QuoteMeta(submodule.Path)+"$")
+			}
+			cloneConfig := "protocol.file.allow=always"
+			if tc.override {
+				other, err := createTestGitRespository()
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer other.Close()
+				cloneConfig += ",submodule.outside.url=" + other.Path
+			}
+			if tc.active {
+				if err := os.WriteFile(filepath.Join(tester.HomeDir, ".gitconfig"), []byte("[submodule]\n\tactive = selected\n"), 0o600); err != nil {
+					t.Fatal(err)
+				}
+				cloneConfig += ",submodule.active=outside"
+			}
+			if tc.mirrorRewrite {
+				other, err := createTestGitRespository()
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer other.Close()
+				patterns = append(patterns, "^"+regexp.QuoteMeta(other.Path)+"$")
+				cloneConfig += ",url." + other.Path + ".insteadOf=" + submodule.Path
+			}
+			if tc.parentRewrite {
+				other, err := createTestGitRespository()
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer other.Close()
+				patterns = append(patterns, "^"+regexp.QuoteMeta(other.Path)+"$")
+				tester.RunAndCheck(t, repositoryAllowlistEnv(patterns...), "BUILDKITE_GIT_SUBMODULES=false")
+				// A clone does not inherit this parent-local rewrite. Checking
+				// it in the parent would approve a source the child won't use.
+				if out, err := tester.Repo.Execute("-C", tester.CheckoutDir(), "config", "url."+other.Path+".insteadOf", submodule.Path); err != nil {
+					t.Fatalf("configuring parent rewrite: %v: %s", err, out)
+				}
+			}
+			env := []string{repositoryAllowlistEnv(patterns...), "BUILDKITE_GIT_SUBMODULE_CLONE_CONFIG=" + cloneConfig}
+			if tc.skipMirror {
+				env = append(env, "BUILDKITE_GIT_MIRRORS_SKIP_UPDATE=true")
+			}
+			if tc.recursiveClone {
+				env = append(env, "BUILDKITE_GIT_CLONE_FLAGS=--recurse-submodules", "GIT_ALLOW_PROTOCOL=file")
+			}
+			err = tester.Run(t, env...)
+			file := filepath.Join(tester.CheckoutDir(), "outside", "test.txt")
+			if (tc.allow && !tc.override) || tc.mirrorRewrite {
+				if err != nil {
+					t.Fatalf("allowed submodule rejected: %v\n%s", err, tester.Output)
+				}
+				if _, err := os.Stat(file); err != nil {
+					t.Fatalf("allowed submodule not fetched: %v\n%s", err, tester.Output)
+				}
+				if tc.mirrorRewrite && strings.Contains(tester.Output, "git clone --mirror -- "+submodule.Path) {
+					t.Fatal("mirror fetched the disallowed submodule source")
+				}
+			} else {
+				if err == nil || !strings.Contains(tester.Output, "is not permitted by --allowed-repositories") {
+					t.Fatalf("checkout did not reject disallowed submodule: %v\n%s", err, tester.Output)
+				}
+				if _, err := os.Stat(file); !os.IsNotExist(err) {
+					t.Fatalf("disallowed submodule was fetched: %v", err)
+				}
+				if tc.mirrors && strings.Contains(tester.Output, "git clone --mirror -- "+submodule.Path) {
+					t.Fatal("disallowed submodule was mirrored")
+				}
+			}
+		})
+	}
+}
+
+func TestCheckoutRepositoryAllowlistNestedSubmodule(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("local Git submodule fixture")
+	}
+	for _, tc := range []struct {
+		name           string
+		allow, mirrors bool
+	}{
+		{name: "nested disallowed"},
+		{name: "nested disallowed with mirrors", mirrors: true},
+		{name: "nested allowed", allow: true},
+		{name: "nested allowed with mirrors", allow: true, mirrors: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			tester, err := NewExecutorTester(mainCtx)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer tester.Close()
+			parent, err := createTestGitRespository()
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer parent.Close()
+			leaf, err := createTestGitRespository()
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer leaf.Close()
+			if out, err := parent.Execute("-c", "protocol.file.allow=always", "submodule", "add", leaf.Path, "inside"); err != nil {
+				t.Fatalf("adding nested submodule: %v: %s", err, out)
+			}
+			if out, err := parent.Execute("config", "--file", ".gitmodules", "submodule.inside.url", "../"+filepath.Base(leaf.Path)); err != nil {
+				t.Fatalf("setting relative nested URL: %v: %s", err, out)
+			}
+			if out, err := parent.Execute("commit", "-am", "Add nested submodule"); err != nil {
+				t.Fatalf("committing nested submodule: %v: %s", err, out)
+			}
+			if out, err := tester.Repo.Execute("-c", "protocol.file.allow=always", "submodule", "add", parent.Path, "outside"); err != nil {
+				t.Fatalf("adding parent submodule: %v: %s", err, out)
+			}
+			if out, err := tester.Repo.Execute("commit", "-am", "Add parent submodule"); err != nil {
+				t.Fatalf("committing parent submodule: %v: %s", err, out)
+			}
+			if tc.mirrors {
+				if err := tester.EnableGitMirrors(); err != nil {
+					t.Fatal(err)
+				}
+			}
+			patterns := []string{"^" + regexp.QuoteMeta(tester.Repo.Path) + "$", "^" + regexp.QuoteMeta(parent.Path) + "$"}
+			if tc.allow {
+				patterns = append(patterns, "^"+regexp.QuoteMeta(leaf.Path)+"$")
+			}
+			env := []string{repositoryAllowlistEnv(patterns...), "BUILDKITE_GIT_SUBMODULE_CLONE_CONFIG=protocol.file.allow=always", "BUILDKITE_LOCAL_HOOKS_ENABLED=false"}
+			if !tc.allow {
+				env = append(env, "BUILDKITE_COMMAND_EVAL=false")
+			}
+			err = tester.Run(t, env...)
+			parentFile := filepath.Join(tester.CheckoutDir(), "outside", "test.txt")
+			leafFile := filepath.Join(tester.CheckoutDir(), "outside", "inside", "test.txt")
+			if _, statErr := os.Stat(parentFile); statErr != nil {
+				t.Fatalf("allowed parent was not fetched: %v\n%s", statErr, tester.Output)
+			}
+			if tc.allow {
+				if err != nil {
+					t.Fatalf("allowed nested submodule rejected: %v\n%s", err, tester.Output)
+				}
+				if _, statErr := os.Stat(leafFile); statErr != nil {
+					t.Fatalf("allowed nested submodule was not fetched: %v\n%s", statErr, tester.Output)
+				}
+			} else {
+				if err == nil || !strings.Contains(tester.Output, "is not permitted by --allowed-repositories") {
+					t.Fatalf("nested submodule was not rejected: %v\n%s", err, tester.Output)
+				}
+				if _, statErr := os.Stat(leafFile); !os.IsNotExist(statErr) {
+					t.Fatalf("disallowed nested submodule was fetched: %v", statErr)
+				}
+				if strings.Contains(tester.Output, "Attempt 2/6") {
+					t.Fatal("policy rejection was retried")
+				}
+				if tc.mirrors && strings.Contains(tester.Output, "git clone --mirror -- "+leaf.Path) {
+					t.Fatal("disallowed nested submodule was mirrored")
+				}
+			}
+		})
+	}
+}
+
+func TestCheckoutRepositoryAllowlistExistingSubmoduleFetch(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("local Git submodule fixture")
+	}
+	tester, err := NewExecutorTester(mainCtx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tester.Close()
+	submodule, err := createTestGitRespository()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer submodule.Close()
+	if out, err := tester.Repo.Execute("-c", "protocol.file.allow=always", "submodule", "add", submodule.Path, "outside"); err != nil {
+		t.Fatalf("adding submodule: %v: %s", err, out)
+	}
+	if out, err := tester.Repo.Execute("commit", "-am", "Add submodule"); err != nil {
+		t.Fatalf("committing submodule: %v: %s", err, out)
+	}
+	tester.RunAndCheck(t, repositoryAllowlistEnv("^"+regexp.QuoteMeta(tester.Repo.Path)+"$", "^"+regexp.QuoteMeta(submodule.Path)+"$"), "BUILDKITE_GIT_SUBMODULE_CLONE_CONFIG=protocol.file.allow=always")
+	if err := os.WriteFile(filepath.Join(submodule.Path, "test.txt"), []byte("second commit"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := submodule.Add("test.txt"); err != nil {
+		t.Fatal(err)
+	}
+	if err := submodule.Commit("Second commit"); err != nil {
+		t.Fatal(err)
+	}
+	commit, err := submodule.Execute("rev-parse", "HEAD")
+	if err != nil {
+		t.Fatal(err)
+	}
+	commit = strings.TrimSpace(commit)
+	if out, err := tester.Repo.Execute("-C", "outside", "fetch", "--", submodule.Path, "main"); err != nil {
+		t.Fatalf("updating fixture submodule: %v: %s", err, out)
+	}
+	if out, err := tester.Repo.Execute("-C", "outside", "checkout", "-f", commit); err != nil {
+		t.Fatalf("checking out fixture submodule: %v: %s", err, out)
+	}
+	if out, err := tester.Repo.Execute("commit", "-am", "Update submodule pointer"); err != nil {
+		t.Fatalf("committing fixture pointer: %v: %s", err, out)
+	}
+	parentCommit, err := tester.Repo.Execute("rev-parse", "HEAD")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := tester.Run(t,
+		repositoryAllowlistEnv("^"+regexp.QuoteMeta(tester.Repo.Path)+"$"),
+		"BUILDKITE_GIT_SUBMODULE_CLONE_CONFIG=protocol.file.allow=always",
+		"BUILDKITE_GIT_FETCH_FLAGS=--recurse-submodules=on-demand",
+		"BUILDKITE_COMMIT="+strings.TrimSpace(parentCommit),
+		"GIT_ALLOW_PROTOCOL=file",
+	); err == nil || !strings.Contains(tester.Output, "is not permitted by --allowed-repositories") {
+		t.Fatalf("verified checkout did not reject submodule: %v\n%s", err, tester.Output)
+	}
+	if _, err := tester.Repo.Execute("-C", filepath.Join(tester.CheckoutDir(), "outside"), "cat-file", "-e", commit+"^{commit}"); err == nil {
+		t.Fatal("commit verification fetched a disallowed submodule commit")
+	}
+	if err := tester.Run(t,
+		repositoryAllowlistEnv("^"+regexp.QuoteMeta(tester.Repo.Path)+"$"),
+		"BUILDKITE_GIT_SUBMODULE_CLONE_CONFIG=protocol.file.allow=always",
+		"BUILDKITE_GIT_FETCH_FLAGS=--recurse-submodules=on-demand",
+		"GIT_ALLOW_PROTOCOL=file",
+	); err == nil || !strings.Contains(tester.Output, "is not permitted by --allowed-repositories") {
+		t.Fatalf("existing checkout did not reject submodule: %v\n%s", err, tester.Output)
+	}
+	if _, err := tester.Repo.Execute("-C", filepath.Join(tester.CheckoutDir(), "outside"), "cat-file", "-e", commit+"^{commit}"); err == nil {
+		t.Fatal("primary repository fetch obtained a disallowed submodule commit")
+	}
+}
+
+func TestCheckoutRepositoryAllowlistExistingSubmoduleURLChange(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("local Git submodule fixture")
+	}
+	for _, state := range []string{"origin", "upstream", "tag collision", "parent default retry", "mirrors", "available", "unrestricted"} {
+		t.Run(state, func(t *testing.T) {
+			tester, err := NewExecutorTester(mainCtx)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer tester.Close()
+			tester.MockAgent(t).Expect("meta-data", "exists", job.CommitMetadataKey).Min(0).Max(bintest.InfiniteTimes).AndExitWith(0)
+			allowed, err := createTestGitRespository()
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer allowed.Close()
+			blocked, err := createTestGitRespository()
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer blocked.Close()
+			if out, err := tester.Repo.Execute("-c", "protocol.file.allow=always", "submodule", "add", allowed.Path, "outside"); err != nil {
+				t.Fatalf("adding submodule: %v: %s", err, out)
+			}
+			if out, err := tester.Repo.Execute("commit", "-am", "Add allowed submodule"); err != nil {
+				t.Fatalf("committing submodule: %v: %s", err, out)
+			}
+			policy := repositoryAllowlistEnv("^"+regexp.QuoteMeta(tester.Repo.Path)+"$", "^"+regexp.QuoteMeta(allowed.Path)+"$")
+			tester.RunAndCheck(t, policy, "BUILDKITE_GIT_SUBMODULE_CLONE_CONFIG=protocol.file.allow=always")
+			if err := os.WriteFile(filepath.Join(blocked.Path, "test.txt"), []byte("new blocked commit"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			if err := blocked.Add("test.txt"); err != nil {
+				t.Fatal(err)
+			}
+			if err := blocked.Commit("New blocked commit"); err != nil {
+				t.Fatal(err)
+			}
+			commit, err := blocked.Execute("rev-parse", "HEAD")
+			if err != nil {
+				t.Fatal(err)
+			}
+			commit = strings.TrimSpace(commit)
+			if out, err := tester.Repo.Execute("config", "--file", ".gitmodules", "submodule.outside.url", blocked.Path); err != nil {
+				t.Fatalf("changing submodule URL: %v: %s", err, out)
+			}
+			if out, err := tester.Repo.Execute("-C", "outside", "fetch", "--", blocked.Path, "main"); err != nil {
+				t.Fatalf("fetching fixture commit: %v: %s", err, out)
+			}
+			if out, err := tester.Repo.Execute("-C", "outside", "checkout", "-f", commit); err != nil {
+				t.Fatalf("checking out fixture commit: %v: %s", err, out)
+			}
+			if out, err := tester.Repo.Execute("commit", "-am", "Change submodule source and pointer"); err != nil {
+				t.Fatalf("committing fixture pointer: %v: %s", err, out)
+			}
+			child := filepath.Join(tester.CheckoutDir(), "outside")
+			git := func(args ...string) {
+				t.Helper()
+				if out, err := tester.Repo.Execute(append([]string{"-C", child}, args...)...); err != nil {
+					t.Fatalf("git %v: %v: %s", args, err, out)
+				}
+			}
+			if state != "origin" {
+				git("checkout", "-B", "main")
+				git("remote", "add", "other", blocked.Path)
+				git("config", "branch.main.remote", "other")
+				git("config", "branch.main.merge", "refs/heads/main")
+			}
+			if state != "origin" && state != "upstream" {
+				git("tag", "main")
+			}
+			if state == "parent default retry" {
+				// The first fetch's upstream is allowed but lacks the commit;
+				// Git's direct-SHA retry would use the blocked origin instead.
+				git("remote", "set-url", "other", allowed.Path)
+			}
+			if state == "mirrors" {
+				if err := tester.EnableGitMirrors(); err != nil {
+					t.Fatal(err)
+				}
+				git("remote", "set-url", "other", blocked.Path)
+			}
+			if state == "available" {
+				if out, err := allowed.Execute("fetch", "--", blocked.Path, commit); err != nil {
+					t.Fatalf("making commit available at approved URL: %v: %s", err, out)
+				}
+			}
+			if state == "unrestricted" {
+				policy = repositoryAllowlistEnv()
+			}
+			traceFile := filepath.Join(t.TempDir(), "git-trace")
+			err = tester.Run(t, policy,
+				"BUILDKITE_GIT_SUBMODULE_CLONE_CONFIG=protocol.file.allow=always,submodule.outside.url="+allowed.Path,
+				"BUILDKITE_CHECKOUT_ATTEMPTS=1",
+				"GIT_TRACE="+traceFile,
+				"GIT_ALLOW_PROTOCOL=file",
+			)
+			if state == "available" || state == "unrestricted" {
+				if err != nil {
+					t.Fatalf("checkout rejected available commit: %v\n%s", err, tester.Output)
+				}
+				if contents, err := os.ReadFile(filepath.Join(child, "test.txt")); err != nil || string(contents) != "new blocked commit" {
+					t.Fatalf("commit contents = %q, %v", contents, err)
+				}
+			} else if err == nil || !strings.Contains(tester.Output, "fetching submodule") {
+				t.Fatalf("checkout did not fail fetching from the approved source: %v\n%s", err, tester.Output)
+			}
+			trace, err := os.ReadFile(traceFile)
+			if err != nil {
+				t.Fatal(err)
+			}
+			contactedBlocked := false
+			for line := range strings.SplitSeq(string(trace), "\n") {
+				if strings.Contains(line, "git-upload-pack") && strings.Contains(line, blocked.Path) {
+					contactedBlocked = true
+				}
+			}
+			if contactedBlocked != (state == "unrestricted") {
+				t.Fatalf("contacted blocked repository = %t, state = %s\n%s", contactedBlocked, state, trace)
+			}
+			tester.CheckMocks(t)
 		})
 	}
 }
