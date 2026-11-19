@@ -744,7 +744,7 @@ func (e *Executor) updateGitSubmodulesAtCurrentDir(ctx context.Context) error {
 	var submoduleRepos []gitSubmoduleURL
 	var err error
 	if restricted {
-		submoduleRepos, err = gitEnumerateSubmodulePaths(ctx, e.shell)
+		submoduleRepos, err = gitEnumerateSubmodulePaths(ctx, e.shell, args)
 	} else {
 		submoduleRepos, err = gitEnumerateSubmoduleURLs(ctx, e.shell)
 	}
@@ -814,6 +814,7 @@ func (e *Executor) updateGitSubmodulesAtCurrentDir(ctx context.Context) error {
 			}
 			submoduleRepos[i].url = url
 			activeRepos = append(activeRepos, submoduleRepos[i])
+			fetchedSubmodules[submoduleRepos[i].path] = false
 		}
 		submoduleRepos = activeRepos
 
@@ -960,6 +961,9 @@ func (e *Executor) updateGitSubmodulesAtCurrentDir(ctx context.Context) error {
 			if path == "" {
 				continue
 			}
+			if _, active := fetchedSubmodules[path]; !active {
+				continue
+			}
 			if err := e.shell.Chdir(filepath.Join(workDir, path)); err != nil {
 				return fmt.Errorf("entering submodule: %w", err)
 			}
@@ -990,7 +994,8 @@ func (e *Executor) updateGitSubmodulesAtCurrentDir(ctx context.Context) error {
 // fetchGitSubmoduleCommits fetches from checked URLs rather than letting Git
 // select origin, a branch upstream, or the parent's default remote on retry.
 // foreach supplies the gitlink SHA from the parent's index, not child HEAD.
-// fetchedSubmodules tracks children already fetched during this level's update.
+// fetchedSubmodules contains only selected children and tracks which have
+// already been fetched during this level's update.
 func (e *Executor) fetchGitSubmoduleCommits(ctx context.Context, args []string, fetchedSubmodules map[string]bool) (bool, error) {
 	children, err := e.shell.Command("git", append(slices.Clone(args), "submodule", "foreach", "--quiet", `printf '%s\0%s\0%s\0' "$name" "$sm_path" "$sha1"`)...).RunAndCaptureStdout(ctx)
 	if err != nil {
@@ -1000,7 +1005,7 @@ func (e *Executor) fetchGitSubmoduleCommits(ctx context.Context, args []string, 
 	fields := strings.Split(strings.TrimSuffix(children, "\x00"), "\x00")
 	for i := 0; i+2 < len(fields); i += 3 {
 		name, path, commit := fields[i], fields[i+1], fields[i+2]
-		if fetchedSubmodules[path] {
+		if alreadyFetched, active := fetchedSubmodules[path]; !active || alreadyFetched {
 			continue
 		}
 		url, err := e.shell.Command("git", append(slices.Clone(args), "config", "--null", "--get", "submodule."+name+".url")...).RunAndCaptureStdout(ctx)

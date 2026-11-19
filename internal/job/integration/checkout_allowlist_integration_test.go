@@ -502,6 +502,59 @@ func TestCheckoutRepositoryAllowlistSubmoduleConfiguration(t *testing.T) {
 	}
 }
 
+func TestCheckoutRepositoryAllowlistSubmoduleActivity(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("local Git submodule fixture")
+	}
+	for _, tc := range []struct {
+		name, config    string
+		reused, mirrors bool
+		active          bool
+	}{
+		{name: "explicit false overrides matching pathspec", config: "submodule.active=modules/**,submodule.modules/java-prettify.active=off"},
+		{name: "pathspec excludes populated child", config: "submodule.active=modules/**,submodule.active=:(exclude)modules/java-prettify", reused: true},
+		{name: "inactive populated child with mirrors", config: "submodule.modules/java-prettify.active=false", reused: true, mirrors: true},
+		{name: "explicit true overrides excluding pathspec", config: "submodule.active=not-selected,submodule.modules/java-prettify.active=true", mirrors: true, active: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			tester, err := NewExecutorTester(mainCtx)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer tester.Close()
+			if tc.mirrors {
+				if err := tester.EnableGitMirrors(); err != nil {
+					t.Fatal(err)
+				}
+			}
+			parent, child := setupRelativeSubmoduleFixture(t, tester)
+			patterns := []string{"^" + regexp.QuoteMeta(parent.Path) + "$"}
+			if tc.reused {
+				tester.MockAgent(t).Expect("meta-data", "exists", job.CommitMetadataKey).Min(0).Max(bintest.InfiniteTimes).AndExitWith(0)
+				tester.RunAndCheck(t,
+					repositoryAllowlistEnv(append(patterns, "^"+regexp.QuoteMeta(child.Path)+"$")...),
+					"BUILDKITE_GIT_SUBMODULE_CLONE_CONFIG=protocol.file.allow=always",
+				)
+				// init records active=true locally; remove it to allow a later
+				// pathspec selection to take effect while retaining the URL.
+				if out, err := tester.Repo.Execute("-C", tester.CheckoutDir(), "config", "--unset", "submodule.modules/java-prettify.active"); err != nil {
+					t.Fatalf("removing previous activity selection: %v: %s", err, out)
+				}
+			}
+			if tc.active {
+				patterns = append(patterns, "^"+regexp.QuoteMeta(child.Path)+"$")
+			}
+			tester.RunAndCheck(t,
+				repositoryAllowlistEnv(patterns...),
+				"BUILDKITE_GIT_SUBMODULE_CLONE_CONFIG=protocol.file.allow=always,submodule.modules/java-prettify.url="+child.Path+","+tc.config,
+				"BUILDKITE_CHECKOUT_ATTEMPTS=1",
+			)
+			requireCheckoutPath(t, tester.CheckoutDir(), "superproject.txt", true)
+			requireCheckoutPath(t, tester.CheckoutDir(), "modules/java-prettify/submodule.txt", tc.reused || tc.active)
+		})
+	}
+}
+
 func TestCheckoutRepositoryAllowlistReusedSubmoduleMirrorRewrite(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("local Git submodule fixture")

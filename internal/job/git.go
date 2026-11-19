@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 
@@ -385,9 +386,9 @@ type gitSubmoduleURL struct {
 	relative bool
 }
 
-// gitEnumerateSubmodulePaths includes gitlinks whose URL is supplied only by
-// Git configuration, rather than by .gitmodules.
-func gitEnumerateSubmodulePaths(ctx context.Context, sh *shell.Shell) ([]gitSubmoduleURL, error) {
+// gitEnumerateSubmodulePaths includes selected gitlinks whose URL is supplied
+// only by Git configuration, rather than by .gitmodules.
+func gitEnumerateSubmodulePaths(ctx context.Context, sh *shell.Shell, args []string) ([]gitSubmoduleURL, error) {
 	index, err := sh.Command("git", "ls-files", "--stage", "-z").RunAndCaptureStdout(ctx)
 	if err != nil {
 		return nil, err
@@ -398,6 +399,23 @@ func gitEnumerateSubmodulePaths(ctx context.Context, sh *shell.Shell) ([]gitSubm
 		if strings.HasPrefix(metadata, "160000 ") && strings.HasSuffix(metadata, " 0") {
 			gitlinks[path] = true
 		}
+	}
+	selection, err := sh.Command("git", append(slices.Clone(args), "config", "--null", "--get-all", "submodule.active")...).RunAndCaptureStdout(ctx)
+	var selectedPaths map[string]bool
+	if err == nil {
+		// Let Git interpret pathspecs, including exclusion and magic syntax.
+		selectedArgs := append(slices.Clone(args), "ls-files", "-z", "--")
+		selectedArgs = append(selectedArgs, strings.Split(strings.TrimSuffix(selection, "\x00"), "\x00")...)
+		selected, err := sh.Command("git", selectedArgs...).RunAndCaptureStdout(ctx)
+		if err != nil {
+			return nil, err
+		}
+		selectedPaths = make(map[string]bool)
+		for path := range strings.SplitSeq(selected, "\x00") {
+			selectedPaths[path] = true
+		}
+	} else if shell.ExitCode(err) != 1 {
+		return nil, err
 	}
 	paths, err := sh.Command("git", "config", "--file", ".gitmodules", "--null", "--get-regexp", `^submodule\..+\.(path|url)$`).RunAndCaptureStdout(ctx)
 	if err != nil {
@@ -418,11 +436,26 @@ func gitEnumerateSubmodulePaths(ctx context.Context, sh *shell.Shell) ([]gitSubm
 			submodules = append(submodules, gitSubmoduleURL{key: strings.TrimSuffix(key, ".path") + ".url", path: path})
 		}
 	}
-	for i := range submodules {
+	activeSubmodules := submodules[:0]
+	for _, submodule := range submodules {
+		// An explicit per-module boolean takes precedence over submodule.active;
+		// only when both are absent does a configured URL select the child.
+		activeKey := strings.TrimSuffix(submodule.key, ".url") + ".active"
+		active, err := sh.Command("git", append(slices.Clone(args), "config", "--bool", "--get", activeKey)...).RunAndCaptureStdout(ctx)
+		if err == nil {
+			if strings.TrimSpace(active) == "false" {
+				continue
+			}
+		} else if shell.ExitCode(err) != 1 {
+			return nil, err
+		} else if selectedPaths != nil && !selectedPaths[submodule.path] {
+			continue
+		}
 		// Keep the relative-source fallback policy after init resolves the URL.
-		submodules[i].relative = isRelativeSubmoduleURL(urls[submodules[i].key])
+		submodule.relative = isRelativeSubmoduleURL(urls[submodule.key])
+		activeSubmodules = append(activeSubmodules, submodule)
 	}
-	return submodules, nil
+	return activeSubmodules, nil
 }
 
 func gitEnumerateSubmoduleURLs(ctx context.Context, sh *shell.Shell) ([]gitSubmoduleURL, error) {
