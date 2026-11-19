@@ -145,6 +145,18 @@ func (e *Executor) validateRepositoryAllowedForCheckout(repository string) error
 	return fmt.Errorf("repository %q is not permitted by --allowed-repositories", redact.URLCredentials(repository))
 }
 
+func (e *Executor) validateSubmoduleRepositoryAllowed(configured, resolved string) error {
+	// Preserve SSH-form policies for the agent's managed GitHub credential
+	// rewrite, but only when it still names exactly the same repository.
+	if e.useRepositoryProviderGitCredentials() && strings.HasPrefix(configured, "git@github.com:") &&
+		resolved == "https://github.com/"+strings.TrimPrefix(configured, "git@github.com:") {
+		if RepositoryAllowed(e.AllowedRepositories, configured) {
+			return nil
+		}
+	}
+	return e.validateRepositoryAllowedForCheckout(resolved)
+}
+
 // checkout runs checkout hook or default checkout logic
 func (e *Executor) checkout(ctx context.Context, defaultCheckout func(context.Context, int) error) error {
 	if e.GitCommitVerification == GitCommitVerificationFailClosed {
@@ -712,9 +724,9 @@ func (e *Executor) updateGitSubmodulesAtCurrentDir(ctx context.Context) error {
 		args = append(args, "-c", config)
 	}
 	if restricted {
-		// Updating a parent may fetch into previously populated children.
-		// Their URLs must be checked at their own level first.
-		args = append(args, "-c", "fetch.recurseSubmodules=false")
+		// Both fetch and checkout must stop at this level. Descendants wait
+		// until their URLs and commits have been checked at their own level.
+		args = append(args, "-c", "fetch.recurseSubmodules=false", "-c", "submodule.recurse=false")
 	}
 
 	// Initialize URL configuration without fetching anything. Git resolves relative
@@ -742,6 +754,7 @@ func (e *Executor) updateGitSubmodulesAtCurrentDir(ctx context.Context) error {
 		span.SetAttributes(attribute.Int("git.count", len(submoduleRepos)))
 	}
 
+	fetchedSubmodules := make(map[string]bool)
 	if restricted {
 		activeRepos := submoduleRepos[:0]
 		for i := range submoduleRepos {
@@ -765,7 +778,7 @@ func (e *Executor) updateGitSubmodulesAtCurrentDir(ctx context.Context) error {
 				return fmt.Errorf("resolving submodule URL: %w", err)
 			}
 			resolved := strings.TrimSuffix(rewritten, "\n")
-			if err := e.validateRepositoryAllowedForCheckout(resolved); err != nil {
+			if err := e.validateSubmoduleRepositoryAllowed(url, resolved); err != nil {
 				return fmt.Errorf("%w: submodule %q: %v", errDisallowedSubmodule, submoduleRepos[i].key, err)
 			}
 			submoduleRepos[i].url = url
@@ -773,31 +786,26 @@ func (e *Executor) updateGitSubmodulesAtCurrentDir(ctx context.Context) error {
 		}
 		submoduleRepos = activeRepos
 
-		// Fetch populated children explicitly. Git's implicit fetch can select
-		// origin, a branch upstream, or the parent's default remote on retry.
-		// foreach supplies the gitlink SHA from the parent's index, not child HEAD.
-		children, err := e.shell.Command("git", append(slices.Clone(args), "submodule", "foreach", "--quiet", `printf '%s\0%s\0%s\0' "$name" "$sm_path" "$sha1"`)...).RunAndCaptureStdout(ctx)
-		if err != nil {
-			return fmt.Errorf("enumerating checked-out submodules: %w", err)
+		if _, err := e.fetchGitSubmoduleCommits(ctx, args, fetchedSubmodules); err != nil {
+			return err
 		}
-		fields := strings.Split(strings.TrimSuffix(children, "\x00"), "\x00")
-		for i := 0; i+2 < len(fields); i += 3 {
-			name, path, commit := fields[i], fields[i+1], fields[i+2]
-			url, err := e.shell.Command("git", append(slices.Clone(args), "config", "--null", "--get", "submodule."+name+".url")...).RunAndCaptureStdout(ctx)
-			if err != nil {
-				return fmt.Errorf("reading submodule %q URL: %w", name, err)
+	}
+
+	update := func(ctx context.Context, updateArgs []string) error {
+		for {
+			err := e.shell.Command("git", updateArgs...).Run(ctx)
+			if err == nil || !restricted {
+				return err
 			}
-			url = strings.TrimSuffix(url, "\x00")
-			// The child's own configuration may also rewrite the explicit URL.
-			resolved, err := e.shell.Command("git", append(slices.Clone(args), "-C", path, "ls-remote", "--get-url", url)...).RunAndCaptureStdout(ctx)
-			if err != nil {
-				return fmt.Errorf("resolving submodule %q fetch URL: %w", name, err)
+			// --no-fetch still clones new children, but a shallow clone may
+			// lack its pinned commit. Fetch newly populated children from
+			// checked sources, then retry. Each child is fetched at most once.
+			fetched, fetchErr := e.fetchGitSubmoduleCommits(ctx, args, fetchedSubmodules)
+			if fetchErr != nil {
+				return fetchErr
 			}
-			if err := e.validateRepositoryAllowedForCheckout(strings.TrimSuffix(resolved, "\n")); err != nil {
-				return fmt.Errorf("%w: submodule %q: %v", errDisallowedSubmodule, name, err)
-			}
-			if err := e.shell.Command("git", append(slices.Clone(args), "-C", path, "fetch", "--no-recurse-submodules", "--", url, commit)...).Run(ctx); err != nil {
-				return fmt.Errorf("fetching submodule %q commit from configured URL: %w", name, err)
+			if !fetched {
+				return err
 			}
 		}
 	}
@@ -826,7 +834,7 @@ func (e *Executor) updateGitSubmodulesAtCurrentDir(ctx context.Context) error {
 				if err != nil {
 					return fmt.Errorf("resolving submodule mirror URL: %w", err)
 				}
-				if err := e.validateRepositoryAllowedForCheckout(strings.TrimSuffix(mirrorURL, "\n")); err != nil {
+				if err := e.validateSubmoduleRepositoryAllowed(mirrorRepository, strings.TrimSuffix(mirrorURL, "\n")); err != nil {
 					e.shell.Warningf("Skipping submodule %q mirror: %v", submodule.key, err)
 					mirrorRepository = ""
 				}
@@ -884,21 +892,21 @@ func (e *Executor) updateGitSubmodulesAtCurrentDir(ctx context.Context) error {
 			}
 
 			if err := e.traceOp(ctx, "git.submodule.update", func(ctx context.Context) error {
-				return e.shell.Command("git", submoduleArgs...).Run(ctx)
+				return update(ctx, submoduleArgs)
 			}); err != nil {
 				return fmt.Errorf("updating submodules: %w", err)
 			}
 		}
 	} else { // no submodule mirrors
-		args = append(args, "submodule", "update", "--init")
+		updateArgs := append(slices.Clone(args), "submodule", "update", "--init")
 		if restricted {
-			args = append(args, "--no-fetch")
+			updateArgs = append(updateArgs, "--no-fetch")
 		} else {
-			args = append(args, "--recursive")
+			updateArgs = append(updateArgs, "--recursive")
 		}
-		args = append(args, "--force")
+		updateArgs = append(updateArgs, "--force")
 		if err := e.traceOp(ctx, "git.submodule.update", func(ctx context.Context) error {
-			return e.shell.Command("git", args...).Run(ctx)
+			return update(ctx, updateArgs)
 		}); err != nil {
 			return fmt.Errorf("updating submodules: %w", err)
 		}
@@ -940,6 +948,44 @@ func (e *Executor) updateGitSubmodulesAtCurrentDir(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+// fetchGitSubmoduleCommits fetches from checked URLs rather than letting Git
+// select origin, a branch upstream, or the parent's default remote on retry.
+// foreach supplies the gitlink SHA from the parent's index, not child HEAD.
+// fetchedSubmodules tracks children already fetched during this level's update.
+func (e *Executor) fetchGitSubmoduleCommits(ctx context.Context, args []string, fetchedSubmodules map[string]bool) (bool, error) {
+	children, err := e.shell.Command("git", append(slices.Clone(args), "submodule", "foreach", "--quiet", `printf '%s\0%s\0%s\0' "$name" "$sm_path" "$sha1"`)...).RunAndCaptureStdout(ctx)
+	if err != nil {
+		return false, fmt.Errorf("enumerating checked-out submodules: %w", err)
+	}
+	fetched := false
+	fields := strings.Split(strings.TrimSuffix(children, "\x00"), "\x00")
+	for i := 0; i+2 < len(fields); i += 3 {
+		name, path, commit := fields[i], fields[i+1], fields[i+2]
+		if fetchedSubmodules[path] {
+			continue
+		}
+		url, err := e.shell.Command("git", append(slices.Clone(args), "config", "--null", "--get", "submodule."+name+".url")...).RunAndCaptureStdout(ctx)
+		if err != nil {
+			return fetched, fmt.Errorf("reading submodule %q URL: %w", name, err)
+		}
+		url = strings.TrimSuffix(url, "\x00")
+		// The child's own configuration may also rewrite the explicit URL.
+		resolved, err := e.shell.Command("git", append(slices.Clone(args), "-C", path, "ls-remote", "--get-url", url)...).RunAndCaptureStdout(ctx)
+		if err != nil {
+			return fetched, fmt.Errorf("resolving submodule %q fetch URL: %w", name, err)
+		}
+		if err := e.validateSubmoduleRepositoryAllowed(url, strings.TrimSuffix(resolved, "\n")); err != nil {
+			return fetched, fmt.Errorf("%w: submodule %q: %v", errDisallowedSubmodule, name, err)
+		}
+		if err := e.shell.Command("git", append(slices.Clone(args), "-C", path, "fetch", "--no-recurse-submodules", "--", url, commit)...).Run(ctx); err != nil {
+			return fetched, fmt.Errorf("fetching submodule %q commit from configured URL: %w", name, err)
+		}
+		fetchedSubmodules[path] = true
+		fetched = true
+	}
+	return fetched, nil
 }
 
 // createCheckoutDir checks for the existence of a directory at
