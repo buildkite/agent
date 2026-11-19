@@ -515,6 +515,8 @@ func TestCheckoutRepositoryAllowlistSubmoduleActivity(t *testing.T) {
 		{name: "pathspec excludes populated child", config: "submodule.active=modules/**,submodule.active=:(exclude)modules/java-prettify", reused: true},
 		{name: "inactive populated child with mirrors", config: "submodule.modules/java-prettify.active=false", reused: true, mirrors: true},
 		{name: "explicit true overrides excluding pathspec", config: "submodule.active=not-selected,submodule.modules/java-prettify.active=true", mirrors: true, active: true},
+		{name: "update none skips fresh child", config: "submodule.modules/java-prettify.update=none"},
+		{name: "update none skips populated child with mirrors", config: "submodule.modules/java-prettify.update=none", reused: true, mirrors: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			tester, err := NewExecutorTester(mainCtx)

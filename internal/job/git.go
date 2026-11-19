@@ -451,6 +451,15 @@ func gitEnumerateSubmodulePaths(ctx context.Context, sh *shell.Shell, args []str
 		} else if selectedPaths != nil && !selectedPaths[submodule.path] {
 			continue
 		}
+		// Active children can still opt out of updates, including --init --force.
+		updateKey := strings.TrimSuffix(submodule.key, ".url") + ".update"
+		update, err := sh.Command("git", append(slices.Clone(args), "config", "--null", "--get", updateKey)...).RunAndCaptureStdout(ctx)
+		if err != nil && shell.ExitCode(err) != 1 {
+			return nil, err
+		}
+		if strings.TrimSuffix(update, "\x00") == "none" {
+			continue
+		}
 		// Keep the relative-source fallback policy after init resolves the URL.
 		submodule.relative = isRelativeSubmoduleURL(urls[submodule.key])
 		activeSubmodules = append(activeSubmodules, submodule)
