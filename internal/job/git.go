@@ -379,8 +379,40 @@ func gitFetch(ctx context.Context, args gitFetchArgs) error {
 }
 
 type gitSubmoduleURL struct {
-	key string
-	url string
+	key  string
+	url  string
+	path string
+}
+
+// gitEnumerateSubmodulePaths includes gitlinks whose URL is supplied only by
+// Git configuration, rather than by .gitmodules.
+func gitEnumerateSubmodulePaths(ctx context.Context, sh *shell.Shell) ([]gitSubmoduleURL, error) {
+	index, err := sh.Command("git", "ls-files", "--stage", "-z").RunAndCaptureStdout(ctx)
+	if err != nil {
+		return nil, err
+	}
+	gitlinks := make(map[string]bool)
+	for entry := range strings.SplitSeq(index, "\x00") {
+		metadata, path, _ := strings.Cut(entry, "\t")
+		if strings.HasPrefix(metadata, "160000 ") && strings.HasSuffix(metadata, " 0") {
+			gitlinks[path] = true
+		}
+	}
+	paths, err := sh.Command("git", "config", "--file", ".gitmodules", "--null", "--get-regexp", `^submodule\..+\.path$`).RunAndCaptureStdout(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var submodules []gitSubmoduleURL
+	for entry := range strings.SplitSeq(strings.TrimSuffix(paths, "\x00"), "\x00") {
+		key, path, ok := strings.Cut(entry, "\n")
+		if !ok {
+			return nil, fmt.Errorf("failed to parse .gitmodules entry %q", entry)
+		}
+		if gitlinks[path] {
+			submodules = append(submodules, gitSubmoduleURL{key: strings.TrimSuffix(key, ".path") + ".url", path: path})
+		}
+	}
+	return submodules, nil
 }
 
 func gitEnumerateSubmoduleURLs(ctx context.Context, sh *shell.Shell) ([]gitSubmoduleURL, error) {

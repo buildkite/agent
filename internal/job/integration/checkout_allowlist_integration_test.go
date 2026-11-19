@@ -413,6 +413,182 @@ func TestCheckoutRepositoryAllowlistSubmodules(t *testing.T) {
 	}
 }
 
+func TestCheckoutRepositoryAllowlistSubmoduleConfiguration(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("local Git submodule fixture")
+	}
+	for _, source := range []string{"conditional clone rewrite", "config-only URL"} {
+		for _, allow := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/allowed=%t", source, allow), func(t *testing.T) {
+				tester, err := NewExecutorTester(mainCtx)
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer tester.Close()
+				approved, err := createTestGitRespository()
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer approved.Close()
+				blocked, err := createTestGitRespository()
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer blocked.Close()
+				cloneConfig := "protocol.file.allow=always"
+				for name, url := range map[string]string{"inside": approved.Path, "outside": blocked.Path} {
+					if source == "conditional clone rewrite" {
+						url = approved.Path
+					}
+					if out, err := tester.Repo.Execute("-c", "protocol.file.allow=always", "submodule", "add", url, name); err != nil {
+						t.Fatalf("adding submodule: %v: %s", err, out)
+					}
+				}
+				if source == "config-only URL" {
+					if out, err := tester.Repo.Execute("config", "--file", ".gitmodules", "--unset", "submodule.outside.url"); err != nil {
+						t.Fatalf("removing submodule URL: %v: %s", err, out)
+					}
+					cloneConfig += ",submodule.outside.url=" + blocked.Path
+				} else {
+					rewrite := filepath.Join(t.TempDir(), "rewrite.config")
+					if err := os.WriteFile(rewrite, []byte(fmt.Sprintf("[url %q]\n\tinsteadOf = %s\n", blocked.Path, approved.Path)), 0o600); err != nil {
+						t.Fatal(err)
+					}
+					if err := os.WriteFile(filepath.Join(tester.HomeDir, ".gitconfig"), []byte(fmt.Sprintf("[includeIf \"gitdir:**/modules/**\"]\n\tpath = %s\n", rewrite)), 0o600); err != nil {
+						t.Fatal(err)
+					}
+				}
+				if out, err := tester.Repo.Execute("commit", "-am", "Configure submodules"); err != nil {
+					t.Fatalf("committing submodules: %v: %s", err, out)
+				}
+				patterns := []string{"^" + regexp.QuoteMeta(tester.Repo.Path) + "$", "^" + regexp.QuoteMeta(approved.Path) + "$"}
+				if allow {
+					patterns = append(patterns, "^"+regexp.QuoteMeta(blocked.Path)+"$")
+				}
+				traceFile := filepath.Join(t.TempDir(), "git-trace")
+				err = tester.Run(t, repositoryAllowlistEnv(patterns...), "BUILDKITE_GIT_SUBMODULE_CLONE_CONFIG="+cloneConfig, "GIT_TRACE="+traceFile, "BUILDKITE_CHECKOUT_ATTEMPTS=1")
+				if allow {
+					if err != nil {
+						t.Fatalf("allowed configured source rejected: %v\n%s", err, tester.Output)
+					}
+					if _, err := os.Stat(filepath.Join(tester.CheckoutDir(), "outside", "test.txt")); err != nil {
+						t.Fatalf("configured submodule not checked out: %v", err)
+					}
+					return
+				}
+				if err == nil || !strings.Contains(tester.Output, "is not permitted by --allowed-repositories") {
+					t.Errorf("disallowed configured source was not rejected: %v\n%s", err, tester.Output)
+				}
+				trace, err := os.ReadFile(traceFile)
+				if err != nil {
+					t.Fatal(err)
+				}
+				for line := range strings.SplitSeq(string(trace), "\n") {
+					if strings.Contains(line, "git-upload-pack") && strings.Contains(line, blocked.Path) {
+						t.Fatalf("submodule contacted a blocked source:\n%s", trace)
+					}
+				}
+			})
+		}
+	}
+}
+
+func TestCheckoutRepositoryAllowlistReusedSubmoduleMirrorRewrite(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("local Git submodule fixture")
+	}
+	for _, source := range []string{"local config", "conditional include", "fresh conditional include"} {
+		t.Run(source, func(t *testing.T) {
+			tester, err := NewExecutorTester(mainCtx)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer tester.Close()
+			approved, err := createTestGitRespository()
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer approved.Close()
+			blocked, err := createTestGitRespository()
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer blocked.Close()
+			if out, err := tester.Repo.Execute("-c", "protocol.file.allow=always", "submodule", "add", approved.Path, "outside"); err != nil {
+				t.Fatalf("adding submodule: %v: %s", err, out)
+			}
+			if out, err := tester.Repo.Execute("commit", "-am", "Add submodule"); err != nil {
+				t.Fatalf("committing submodule: %v: %s", err, out)
+			}
+			if err := tester.EnableGitMirrors(); err != nil {
+				t.Fatal(err)
+			}
+			tester.MockAgent(t).Expect("meta-data", "exists", job.CommitMetadataKey).Min(0).Max(bintest.InfiniteTimes).AndExitWith(0)
+			env := []string{
+				repositoryAllowlistEnv("^"+regexp.QuoteMeta(tester.Repo.Path)+"$", "^"+regexp.QuoteMeta(approved.Path)+"$"),
+				"BUILDKITE_GIT_SUBMODULE_CLONE_CONFIG=protocol.file.allow=always",
+				"BUILDKITE_CHECKOUT_ATTEMPTS=1",
+			}
+			tester.RunAndCheck(t, env...)
+			configs, err := filepath.Glob(filepath.Join(tester.GitMirrorsDir, "*", "config"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			var mirror string
+			for _, config := range configs {
+				dir := filepath.Dir(config)
+				url, err := tester.Repo.Execute("--git-dir", dir, "config", "--get", "remote.origin.url")
+				if err != nil {
+					t.Fatalf("reading mirror origin: %v: %s", err, url)
+				}
+				if strings.TrimSpace(url) == approved.Path {
+					mirror = dir
+				}
+			}
+			if mirror == "" {
+				t.Fatal("submodule mirror was not created")
+			}
+			if source == "local config" {
+				if out, err := tester.Repo.Execute("--git-dir", mirror, "config", "url."+blocked.Path+".insteadOf", approved.Path); err != nil {
+					t.Fatalf("setting mirror rewrite: %v: %s", err, out)
+				}
+			} else {
+				rewrite := filepath.Join(t.TempDir(), "rewrite.config")
+				if err := os.WriteFile(rewrite, []byte(fmt.Sprintf("[url %q]\n\tinsteadOf = %s\n", blocked.Path, approved.Path)), 0o600); err != nil {
+					t.Fatal(err)
+				}
+				config := fmt.Sprintf("[includeIf %q]\n\tpath = %s\n", "gitdir:"+mirror, rewrite)
+				if err := os.WriteFile(filepath.Join(tester.HomeDir, ".gitconfig"), []byte(config), 0o600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			// Force a fresh worktree while retaining the configured mirror.
+			if err := os.RemoveAll(tester.CheckoutDir()); err != nil {
+				t.Fatal(err)
+			}
+			if source == "fresh conditional include" {
+				if err := os.RemoveAll(mirror); err != nil {
+					t.Fatal(err)
+				}
+			}
+			traceFile := filepath.Join(t.TempDir(), "git-trace")
+			tester.RunAndCheck(t, append(env, "GIT_TRACE="+traceFile)...)
+			if _, err := os.Stat(filepath.Join(tester.CheckoutDir(), "outside", "test.txt")); err != nil {
+				t.Fatalf("direct submodule checkout failed: %v\n%s", err, tester.Output)
+			}
+			trace, err := os.ReadFile(traceFile)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for line := range strings.SplitSeq(string(trace), "\n") {
+				if strings.Contains(line, "git-upload-pack") && strings.Contains(line, blocked.Path) {
+					t.Fatalf("reused submodule mirror contacted a blocked source:\n%s", trace)
+				}
+			}
+		})
+	}
+}
+
 func TestCheckoutRepositoryAllowlistManagedSubmoduleRewrite(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("local Git submodule fixture")

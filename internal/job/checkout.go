@@ -738,11 +738,17 @@ func (e *Executor) updateGitSubmodulesAtCurrentDir(ctx context.Context) error {
 	}
 
 	// Checking for submodule repositories
-	submoduleRepos, err := gitEnumerateSubmoduleURLs(ctx, e.shell)
+	var submoduleRepos []gitSubmoduleURL
+	var err error
+	if restricted {
+		submoduleRepos, err = gitEnumerateSubmodulePaths(ctx, e.shell)
+	} else {
+		submoduleRepos, err = gitEnumerateSubmoduleURLs(ctx, e.shell)
+	}
 	if err != nil {
 		if restricted {
 			if shell.ExitCode(err) == 1 {
-				// A .gitmodules file without URL entries cannot cause a fetch.
+				// There are no submodule paths to update.
 				return nil
 			}
 			return fmt.Errorf("enumerating submodule URLs: %w", err)
@@ -770,10 +776,27 @@ func (e *Executor) updateGitSubmodulesAtCurrentDir(ctx context.Context) error {
 				return fmt.Errorf("reading configured submodule URL: %w", err)
 			}
 			url := strings.TrimSuffix(configured, "\x00")
-			// A fresh clone uses global and per-command configuration, not the
-			// parent's local URL rewrites. Disable repository config for this
-			// lookup; populated children are checked in their own context below.
-			rewritten, err := e.shell.Command("git", append(slices.Clone(args), "--git-dir="+os.DevNull, "ls-remote", "--get-url", url)...).RunAndCaptureStdout(ctx)
+			// Resolve in the child's Git directory, including conditional includes
+			// for a not-yet-created clone, without inheriting parent-local config.
+			resolveArgs := append(slices.Clone(args), "-C", submoduleRepos[i].path)
+			if !osutil.FileExists(filepath.Join(workDir, submoduleRepos[i].path, ".git")) {
+				name := strings.TrimSuffix(strings.TrimPrefix(submoduleRepos[i].key, "submodule."), ".url")
+				gitDir, err := e.shell.Command("git", "rev-parse", "--git-path", "modules/"+name).RunAndCaptureStdout(ctx)
+				if err != nil {
+					return fmt.Errorf("locating submodule Git directory: %w", err)
+				}
+				gitDir = strings.TrimSuffix(gitDir, "\n")
+				if !filepath.IsAbs(gitDir) {
+					gitDir = filepath.Join(workDir, gitDir)
+				}
+				// Git needs the parent directory to resolve gitdir conditions, but
+				// leave the repository itself absent so update still clones it.
+				if err := os.MkdirAll(filepath.Dir(gitDir), 0o777); err != nil {
+					return fmt.Errorf("preparing submodule Git directory: %w", err)
+				}
+				resolveArgs = append(slices.Clone(args), "--git-dir="+gitDir)
+			}
+			rewritten, err := e.shell.Command("git", append(resolveArgs, "ls-remote", "--get-url", url)...).RunAndCaptureStdout(ctx)
 			if err != nil {
 				return fmt.Errorf("resolving submodule URL: %w", err)
 			}
@@ -828,9 +851,11 @@ func (e *Executor) updateGitSubmodulesAtCurrentDir(ctx context.Context) error {
 
 			if restricted && mirrorRepository != "" && !e.GitMirrorsSkipUpdate {
 				// The mirror runs without the submodule's per-command -c options.
-				// A skipped mirror cannot fetch; otherwise, if it would fetch a
-				// disallowed source, use the checked direct update.
-				mirrorURL, err := e.shell.Command("git", "-C", e.GitMirrorsPath, "ls-remote", "--get-url", mirrorRepository).RunAndCaptureStdout(ctx)
+				// Use its Git directory for local config and conditional includes,
+				// even before cloning. Fall back to the checked direct update if
+				// the mirror would fetch a disallowed source.
+				mirrorDir := filepath.Join(e.GitMirrorsPath, dirForRepository(mirrorRepository))
+				mirrorURL, err := e.shell.Command("git", "-C", e.GitMirrorsPath, "--git-dir", mirrorDir, "ls-remote", "--get-url", mirrorRepository).RunAndCaptureStdout(ctx)
 				if err != nil {
 					return fmt.Errorf("resolving submodule mirror URL: %w", err)
 				}
