@@ -492,6 +492,9 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context, previousAttempts in
 	if len(e.AllowedRepositories) != 0 {
 		// Even a user-supplied --recurse-submodules must not clone submodules
 		// before their URLs can be checked against the repository policy.
+		gitCloneFlags = slices.DeleteFunc(gitCloneFlags, func(flag string) bool {
+			return flag == "--also-filter-submodules"
+		})
 		gitCloneFlags = append(gitCloneFlags, "--no-recurse-submodules")
 	}
 
@@ -795,6 +798,11 @@ func (e *Executor) updateGitSubmodulesAtCurrentDir(ctx context.Context) error {
 					return fmt.Errorf("preparing submodule Git directory: %w", err)
 				}
 				resolveArgs = append(slices.Clone(args), "--git-dir="+gitDir)
+				if !osutil.FileExists(gitDir) {
+					// Clone installs its origin before resolving the transport URL.
+					// Include remote-URL conditions without creating a repository.
+					resolveArgs = append(resolveArgs, "-c", "remote.origin.url="+url)
+				}
 			}
 			rewritten, err := e.shell.Command("git", append(resolveArgs, "ls-remote", "--get-url", url)...).RunAndCaptureStdout(ctx)
 			if err != nil {
@@ -837,9 +845,9 @@ func (e *Executor) updateGitSubmodulesAtCurrentDir(ctx context.Context) error {
 	if mirrorSubmodules {
 		for _, submodule := range submoduleRepos {
 			repository := submodule.url
-			isRelativeSubmodule := isRelativeSubmoduleURL(repository)
+			isRelativeSubmodule := submodule.relative || isRelativeSubmoduleURL(repository)
 			mirrorRepository := repository
-			if isRelativeSubmodule {
+			if isRelativeSubmoduleURL(repository) {
 				resolvedRepository, err := resolveGitSubmoduleURL(e.Repository, repository)
 				if err != nil {
 					e.shell.Warningf("Failed to resolve relative submodule URL %q against %q for git mirror: %v", repository, redact.URLCredentials(e.Repository), err)
@@ -855,7 +863,11 @@ func (e *Executor) updateGitSubmodulesAtCurrentDir(ctx context.Context) error {
 				// even before cloning. Fall back to the checked direct update if
 				// the mirror would fetch a disallowed source.
 				mirrorDir := filepath.Join(e.GitMirrorsPath, dirForRepository(mirrorRepository))
-				mirrorURL, err := e.shell.Command("git", "-C", e.GitMirrorsPath, "--git-dir", mirrorDir, "ls-remote", "--get-url", mirrorRepository).RunAndCaptureStdout(ctx)
+				resolveArgs := []string{"-C", e.GitMirrorsPath, "--git-dir", mirrorDir}
+				if !osutil.FileExists(mirrorDir) {
+					resolveArgs = append(resolveArgs, "-c", "remote.origin.url="+mirrorRepository)
+				}
+				mirrorURL, err := e.shell.Command("git", append(resolveArgs, "ls-remote", "--get-url", mirrorRepository)...).RunAndCaptureStdout(ctx)
 				if err != nil {
 					return fmt.Errorf("resolving submodule mirror URL: %w", err)
 				}

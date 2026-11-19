@@ -379,9 +379,10 @@ func gitFetch(ctx context.Context, args gitFetchArgs) error {
 }
 
 type gitSubmoduleURL struct {
-	key  string
-	url  string
-	path string
+	key      string
+	url      string
+	path     string
+	relative bool
 }
 
 // gitEnumerateSubmodulePaths includes gitlinks whose URL is supplied only by
@@ -398,19 +399,28 @@ func gitEnumerateSubmodulePaths(ctx context.Context, sh *shell.Shell) ([]gitSubm
 			gitlinks[path] = true
 		}
 	}
-	paths, err := sh.Command("git", "config", "--file", ".gitmodules", "--null", "--get-regexp", `^submodule\..+\.path$`).RunAndCaptureStdout(ctx)
+	paths, err := sh.Command("git", "config", "--file", ".gitmodules", "--null", "--get-regexp", `^submodule\..+\.(path|url)$`).RunAndCaptureStdout(ctx)
 	if err != nil {
 		return nil, err
 	}
 	var submodules []gitSubmoduleURL
+	urls := make(map[string]string)
 	for entry := range strings.SplitSeq(strings.TrimSuffix(paths, "\x00"), "\x00") {
 		key, path, ok := strings.Cut(entry, "\n")
 		if !ok {
 			return nil, fmt.Errorf("failed to parse .gitmodules entry %q", entry)
 		}
+		if strings.HasSuffix(key, ".url") {
+			urls[key] = path
+			continue
+		}
 		if gitlinks[path] {
 			submodules = append(submodules, gitSubmoduleURL{key: strings.TrimSuffix(key, ".path") + ".url", path: path})
 		}
+	}
+	for i := range submodules {
+		// Keep the relative-source fallback policy after init resolves the URL.
+		submodules[i].relative = isRelativeSubmoduleURL(urls[submodules[i].key])
 	}
 	return submodules, nil
 }

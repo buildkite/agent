@@ -247,6 +247,7 @@ func TestCheckoutRepositoryAllowlistSubmodules(t *testing.T) {
 		{name: "disallowed"},
 		{name: "disallowed with mirrors", mirrors: true},
 		{name: "recursive clone flags", recursiveClone: true},
+		{name: "recursive partial clone flags", recursiveClone: true, allow: true},
 		{name: "per-command active submodule", active: true},
 		{name: "per-command mirror rewrite", mirrors: true, mirrorRewrite: true},
 		{name: "allowed", allow: true},
@@ -375,7 +376,11 @@ func TestCheckoutRepositoryAllowlistSubmodules(t *testing.T) {
 				env = append(env, "BUILDKITE_GIT_MIRRORS_SKIP_UPDATE=true")
 			}
 			if tc.recursiveClone {
-				env = append(env, "BUILDKITE_GIT_CLONE_FLAGS=--recurse-submodules", "GIT_ALLOW_PROTOCOL=file")
+				flags := "--recurse-submodules"
+				if tc.name == "recursive partial clone flags" {
+					flags += " --filter=blob:none --also-filter-submodules"
+				}
+				env = append(env, "BUILDKITE_GIT_CLONE_FLAGS="+flags, "GIT_ALLOW_PROTOCOL=file")
 			}
 			err = tester.Run(t, env...)
 			file := filepath.Join(tester.CheckoutDir(), "outside", "test.txt")
@@ -417,7 +422,7 @@ func TestCheckoutRepositoryAllowlistSubmoduleConfiguration(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("local Git submodule fixture")
 	}
-	for _, source := range []string{"conditional clone rewrite", "config-only URL"} {
+	for _, source := range []string{"conditional clone rewrite", "remote-URL clone rewrite", "config-only URL"} {
 		for _, allow := range []bool{false, true} {
 			t.Run(fmt.Sprintf("%s/allowed=%t", source, allow), func(t *testing.T) {
 				tester, err := NewExecutorTester(mainCtx)
@@ -437,7 +442,7 @@ func TestCheckoutRepositoryAllowlistSubmoduleConfiguration(t *testing.T) {
 				defer blocked.Close()
 				cloneConfig := "protocol.file.allow=always"
 				for name, url := range map[string]string{"inside": approved.Path, "outside": blocked.Path} {
-					if source == "conditional clone rewrite" {
+					if source != "config-only URL" {
 						url = approved.Path
 					}
 					if out, err := tester.Repo.Execute("-c", "protocol.file.allow=always", "submodule", "add", url, name); err != nil {
@@ -454,7 +459,11 @@ func TestCheckoutRepositoryAllowlistSubmoduleConfiguration(t *testing.T) {
 					if err := os.WriteFile(rewrite, []byte(fmt.Sprintf("[url %q]\n\tinsteadOf = %s\n", blocked.Path, approved.Path)), 0o600); err != nil {
 						t.Fatal(err)
 					}
-					if err := os.WriteFile(filepath.Join(tester.HomeDir, ".gitconfig"), []byte(fmt.Sprintf("[includeIf \"gitdir:**/modules/**\"]\n\tpath = %s\n", rewrite)), 0o600); err != nil {
+					condition := "gitdir:**/modules/**"
+					if source == "remote-URL clone rewrite" {
+						condition = "hasconfig:remote.*.url:" + approved.Path
+					}
+					if err := os.WriteFile(filepath.Join(tester.HomeDir, ".gitconfig"), []byte(fmt.Sprintf("[includeIf %q]\n\tpath = %s\n", condition, rewrite)), 0o600); err != nil {
 						t.Fatal(err)
 					}
 				}
@@ -586,6 +595,37 @@ func TestCheckoutRepositoryAllowlistReusedSubmoduleMirrorRewrite(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestCheckoutRepositoryAllowlistRelativeSubmoduleMirrorFailure(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("local Git submodule fixture")
+	}
+	tester, err := NewExecutorTester(mainCtx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tester.Close()
+	if err := tester.EnableGitMirrors(); err != nil {
+		t.Fatal(err)
+	}
+	parent, child := setupRelativeSubmoduleFixture(t, tester)
+	git := tester.MustMock(t, "git").PassthroughToLocalCommand().Before(func(i bintest.Invocation) error {
+		if len(i.Args) >= 4 && i.Args[0] == "clone" && i.Args[1] == "--mirror" && i.Args[len(i.Args)-2] == child.Path {
+			return fmt.Errorf("submodule mirror temporarily unavailable")
+		}
+		return nil
+	})
+	git.Expect().AtLeastOnce().WithAnyArguments()
+	tester.RunAndCheck(t,
+		repositoryAllowlistEnv("^"+regexp.QuoteMeta(parent.Path)+"$", "^"+regexp.QuoteMeta(child.Path)+"$"),
+		"BUILDKITE_GIT_SUBMODULE_CLONE_CONFIG=protocol.file.allow=always",
+		"BUILDKITE_CHECKOUT_ATTEMPTS=1",
+	)
+	contents, err := os.ReadFile(filepath.Join(tester.CheckoutDir(), "modules", "java-prettify", "submodule.txt"))
+	if err != nil || string(contents) != "submodule" {
+		t.Fatalf("direct submodule checkout contents = %q, %v; want submodule", contents, err)
 	}
 }
 
