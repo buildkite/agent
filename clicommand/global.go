@@ -370,7 +370,8 @@ var (
 
 	GitSkipFetchExistingCommitsFlag = &cli.BoolFlag{
 		Name:    "git-skip-fetch-existing-commits",
-		Usage:   "Skip git fetch if the commit already exists in the local git directory (default: false)",
+		Value:   true,
+		Usage:   "Skip the build-commit fetch if the full commit SHA already exists locally (default: true). Set to false to retain fetch side effects such as tags or refreshed refs",
 		Sources: cli.EnvVars("BUILDKITE_GIT_SKIP_FETCH_EXISTING_COMMITS"),
 	}
 

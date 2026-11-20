@@ -709,7 +709,7 @@ BUILDKITE_AGENT_JWKS_KEY_ID`
 	setEnv("BUILDKITE_SSH_KEYSCAN", fmt.Sprint(r.conf.AgentConfiguration.SSHKeyscan))
 	// submodules/skip-checkout/skip-fetch/timeout/fetch-base-branch are each emitted
 	// by the agent on only one side of their default (submodules off, skip-checkout
-	// on, skip-fetch on, timeout > 0, base branch fetch not off); on the other,
+	// on, skip-fetch off, timeout > 0, base branch fetch not off); on the other,
 	// silent, side the agent stays quiet and historically let pipeline/step env
 	// decide. Only strict closes that silent side, emitting the agent value
 	// unconditionally so a job can't reintroduce a setting the agent left at its
@@ -738,8 +738,10 @@ BUILDKITE_AGENT_JWKS_KEY_ID`
 		if r.conf.AgentConfiguration.SkipCheckout {
 			setCheckoutEnv("BUILDKITE_SKIP_CHECKOUT", "true")
 		}
-		if r.conf.AgentConfiguration.GitSkipFetchExistingCommits {
-			setCheckoutEnv("BUILDKITE_GIT_SKIP_FETCH_EXISTING_COMMITS", "true")
+		// Bootstrap defaults to skipping fetches for local commits. Forward an
+		// explicit opt-out; otherwise let job env choose in non-strict modes.
+		if !r.conf.AgentConfiguration.GitSkipFetchExistingCommits {
+			setCheckoutEnv("BUILDKITE_GIT_SKIP_FETCH_EXISTING_COMMITS", "false")
 		}
 		if mode := r.conf.AgentConfiguration.GitFetchBaseBranch; mode != "" && mode != job.GitFetchBaseBranchOff {
 			setCheckoutEnv("BUILDKITE_GIT_FETCH_BASE_BRANCH", mode)

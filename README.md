@@ -82,6 +82,30 @@ Agents page within Buildkite, and a build path. For example:
 buildkite-agent start --token=<your token> --build-path=/tmp/buildkite-builds
 ```
 
+### Git checkout fetches
+
+By default, the agent skips the build-commit fetch when the full commit SHA
+already resolves to a local commit, including in reused checkouts and Git mirrors.
+Missing commits, abbreviated SHAs, and builds of `HEAD` still take the normal
+fetch path. Commit verification and an explicitly configured base-branch fetch
+still run.
+
+Skipping the build-commit fetch also skips its side effects: tags requested by
+custom fetch flags such as `--tags`, `FETCH_HEAD`, and remote refs may be stale.
+If your jobs rely on those updates, disable this optimization with
+`--git-skip-fetch-existing-commits=false`,
+`BUILDKITE_GIT_SKIP_FETCH_EXISTING_COMMITS=false`, or
+`git-skip-fetch-existing-commits=false` in the agent configuration file.
+Remote-mirror hits retain their existing fetch-skipping behavior independently
+of this setting.
+
+With the default `checkout-override-mode=from-job`, pipeline/step environment
+variables can disable skip-fetch when the agent leaves it at its default.
+An agent-configured `false` takes precedence over pipeline/step values. With
+`checkout-override-mode=strict`, the agent's value is always authoritative;
+set the opt-out on the agent itself rather than in the job. With
+`checkout-override-mode=none`, job environment values can override either value.
+
 ### Telemetry
 
 By default, the agent sends some information back to the Buildkite mothership on
