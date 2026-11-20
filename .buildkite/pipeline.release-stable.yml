@@ -127,6 +127,7 @@ steps:
   - wait
 
   - name: ":beer: Publish Homebrew Package"
+    key: release-homebrew
     command: ".buildkite/steps/release-homebrew.sh"
     artifact_paths: "pkg/*.rb;pkg/*.json"
     env:
@@ -150,3 +151,25 @@ steps:
   - name: ":pipeline: Upload Namespace agent overlay image trigger"
     command: ".buildkite/steps/trigger-namespace-agent-overlay-image.sh"
     soft_fail: true
+
+  - name: ":linear: Sync released issues"
+    command: ".buildkite/steps/sync-linear-release.sh"
+    depends_on: release-homebrew
+    soft_fail: true
+    secrets:
+      LINEAR_ACCESS_KEY: LINEAR_RELEASES_AGENT_RELEASE_STABLE_ACCESS_KEY
+    plugins:
+      - aws-assume-role-with-web-identity#v1.4.0:
+          role-arn: arn:aws:iam::032379705303:role/pipeline-buildkite-agent-release-stable
+          session-tags:
+            - organization_slug
+            - organization_id
+            - pipeline_slug
+            - build_branch
+      - ecr#v2.12.0:
+          login: true
+          account-ids: "445615400570"
+      - docker#v5.14.0:
+          <<: *release_tools
+          environment:
+            - LINEAR_ACCESS_KEY
