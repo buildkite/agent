@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"io"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"slices"
@@ -313,5 +315,162 @@ steps:
 
 	if err := signature.VerifyStep(t.Context(), top, pubSet, "fake-repo", signature.WithEnv(signedPipeline.Env.ToMap())); err != nil {
 		t.Errorf("signature.VerifyStep() error = %v, want success", err)
+	}
+}
+
+// TestSignWithGraphQLMergesPipelineLevelSecrets is a regression test for the
+// GraphQL signing path (`tool sign --graphql-token ... --update`), as opposed
+// to offline signing (`tool sign <file>`): it exercises retrieval of the
+// pipeline over GraphQL and submission of the signed YAML back via the
+// PipelineUpdate mutation, then verifies the signatures on the YAML that was
+// actually submitted, for both a top-level and a grouped command step. A
+// fixture-less test exercising only signOffline wouldn't catch a regression
+// that broke signWithGraphQL specifically, such as the merge call it needs
+// of its own being removed.
+func TestSignWithGraphQLMergesPipelineLevelSecrets(t *testing.T) {
+	// No t.Parallel(): see the comment in TestSignOfflineMergesPipelineLevelSecrets.
+
+	privSet, pubSet, err := jwkutil.NewKeyPair("test-key", jwa.EdDSA())
+	if err != nil {
+		t.Fatalf("jwkutil.NewKeyPair() error = %v", err)
+	}
+
+	jwksBytes, err := json.Marshal(privSet)
+	if err != nil {
+		t.Fatalf("marshaling JWKS: %v", err)
+	}
+	jwksPath := filepath.Join(t.TempDir(), "signing-jwks.json")
+	if err := os.WriteFile(jwksPath, jwksBytes, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	const pipelineID = "pipeline-id-123"
+	const repoURL = "git@github.com:buildkite/agent.git"
+	const pipelineYAML = `---
+secrets:
+  - key: db-password
+    environment_variable: DB_PASSWORD
+steps:
+  - label: top-level
+    command: echo top
+  - group: "grouped"
+    steps:
+      - label: nested
+        command: echo nested
+`
+
+	// Fakes the two GraphQL operations signWithGraphQL relies on: retrieving
+	// the pipeline (GetPipeline) and, since --update is passed below,
+	// submitting the signed YAML back (UpdatePipeline). The submitted YAML
+	// is captured so the test can verify what was actually signed and sent,
+	// not just what tool sign printed.
+	var submittedYAML string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			OperationName string         `json:"operationName"`
+			Variables     map[string]any `json:"variables"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			t.Errorf("decoding GraphQL request body: %v", err)
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		var resp map[string]any
+		switch req.OperationName {
+		case "GetPipeline":
+			resp = map[string]any{
+				"data": map[string]any{
+					"pipeline": map[string]any{
+						"id":         pipelineID,
+						"repository": map[string]any{"url": repoURL},
+						"steps":      map[string]any{"yaml": pipelineYAML},
+					},
+				},
+			}
+		case "UpdatePipeline":
+			submittedYAML, _ = req.Variables["yaml"].(string)
+			resp = map[string]any{
+				"data": map[string]any{
+					"pipelineUpdate": map[string]any{
+						"clientMutationId": "",
+						"pipeline":         map[string]any{"steps": map[string]any{"yaml": submittedYAML}},
+					},
+				},
+			}
+		default:
+			t.Errorf("unexpected GraphQL operation %q", req.OperationName)
+			http.Error(w, "unexpected operation", http.StatusBadRequest)
+			return
+		}
+		if err := json.NewEncoder(w).Encode(resp); err != nil {
+			t.Errorf("encoding fake GraphQL response: %v", err)
+		}
+	}))
+	defer server.Close()
+
+	var stdout bytes.Buffer
+	cmd := *ToolSignCommand
+	app := &cli.Command{Name: "buildkite-agent", Commands: []*cli.Command{&cmd}, Writer: &stdout, ErrWriter: io.Discard}
+	if err := app.Run(t.Context(), []string{
+		"buildkite-agent", "sign",
+		"--jwks-file", jwksPath,
+		"--graphql-token", "fake-token",
+		"--graphql-endpoint", server.URL,
+		"--organization-slug", "buildkite",
+		"--pipeline-slug", "agent",
+		"--update",
+		"--no-confirm",
+	}); err != nil {
+		t.Fatalf("tool sign error = %v, want success", err)
+	}
+
+	if submittedYAML == "" {
+		t.Fatal("PipelineUpdate was never called with a non-empty yaml variable")
+	}
+
+	signedPipeline, err := pipeline.Parse(strings.NewReader(submittedYAML))
+	if err != nil {
+		t.Fatalf("parsing submitted pipeline yaml: %v\nyaml:\n%s", err, submittedYAML)
+	}
+
+	top, ok := signedPipeline.Steps[0].(*pipeline.CommandStep)
+	if !ok {
+		t.Fatalf("Steps[0] = %T, want *pipeline.CommandStep", signedPipeline.Steps[0])
+	}
+	group, ok := signedPipeline.Steps[1].(*pipeline.GroupStep)
+	if !ok {
+		t.Fatalf("Steps[1] = %T, want *pipeline.GroupStep", signedPipeline.Steps[1])
+	}
+	if len(group.Steps) != 1 {
+		t.Fatalf("group.Steps = %+v, want 1 nested step", group.Steps)
+	}
+	nested, ok := group.Steps[0].(*pipeline.CommandStep)
+	if !ok {
+		t.Fatalf("group.Steps[0] = %T, want *pipeline.CommandStep", group.Steps[0])
+	}
+
+	for _, step := range []*pipeline.CommandStep{top, nested} {
+		if len(step.Secrets) != 0 {
+			t.Errorf("step %q secrets = %v, want none: an inherited pipeline-level secret shouldn't be persisted as an explicit step-level one", step.Label, step.Secrets)
+		}
+		if step.Signature == nil {
+			t.Fatalf("step %q has no signature", step.Label)
+		}
+		if !slices.Contains(step.Signature.SignedFields, "secrets") {
+			t.Errorf("step %q signed_fields = %v, want it to contain %q", step.Label, step.Signature.SignedFields, "secrets")
+		}
+	}
+
+	// Verification needs to see the same pipeline-level secrets that were
+	// merged in before signing, so re-merge them here, mirroring what
+	// signWithGraphQL does before signing.
+	mergePipelineSecretsIntoSteps(signedPipeline.Steps, signedPipeline.Secrets)
+
+	for _, step := range []*pipeline.CommandStep{top, nested} {
+		if err := signature.VerifyStep(t.Context(), step, pubSet, repoURL, signature.WithEnv(signedPipeline.Env.ToMap())); err != nil {
+			t.Errorf("signature.VerifyStep(%q) error = %v, want success", step.Label, err)
+		}
 	}
 }
