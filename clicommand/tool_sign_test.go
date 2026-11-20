@@ -140,10 +140,9 @@ steps:
 		t.Fatalf("group.Steps[0] = %T, want *pipeline.CommandStep", group.Steps[0])
 	}
 
-	wantSecrets := pipeline.Secrets{{Key: "db-password", EnvironmentVariable: "DB_PASSWORD"}}
 	for _, step := range []*pipeline.CommandStep{top, nested} {
-		if diff := cmp.Diff(step.Secrets, wantSecrets); diff != "" {
-			t.Errorf("step %q secrets (-got +want):\n%s", step.Label, diff)
+		if len(step.Secrets) != 0 {
+			t.Errorf("step %q secrets = %v, want none: an inherited pipeline-level secret shouldn't be persisted as an explicit step-level one", step.Label, step.Secrets)
 		}
 		if step.Signature == nil {
 			t.Fatalf("step %q has no signature", step.Label)
@@ -151,7 +150,14 @@ steps:
 		if !slices.Contains(step.Signature.SignedFields, "secrets") {
 			t.Errorf("step %q signed_fields = %v, want it to contain %q", step.Label, step.Signature.SignedFields, "secrets")
 		}
+	}
 
+	// Verification needs to see the same pipeline-level secrets that were
+	// merged in before signing, so re-merge them here, mirroring what
+	// signOffline does before signing.
+	mergePipelineSecretsIntoSteps(signedPipeline.Steps, signedPipeline.Secrets)
+
+	for _, step := range []*pipeline.CommandStep{top, nested} {
 		if err := signature.VerifyStep(t.Context(), step, pubSet, "fake-repo", signature.WithEnv(signedPipeline.Env.ToMap())); err != nil {
 			t.Errorf("signature.VerifyStep(%q) error = %v, want success", step.Label, err)
 		}

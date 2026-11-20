@@ -349,7 +349,7 @@ func signOffline(ctx context.Context, c *cli.Command, l logger.Logger, key signa
 	}
 
 	// Merge pipeline-level secrets with step-level secrets before signing
-	mergePipelineSecretsIntoSteps(parsedPipeline.Steps, parsedPipeline.Secrets)
+	restoreSecrets := mergePipelineSecretsIntoSteps(parsedPipeline.Steps, parsedPipeline.Secrets)
 
 	err = signature.SignSteps(
 		ctx,
@@ -364,6 +364,8 @@ func signOffline(ctx context.Context, c *cli.Command, l logger.Logger, key signa
 	if err != nil {
 		return fmt.Errorf("couldn't sign pipeline: %w", err)
 	}
+
+	restoreSecrets()
 
 	enc := yaml.NewEncoder(c.Root().Writer)
 	enc.SetIndent(yamlIndent)
