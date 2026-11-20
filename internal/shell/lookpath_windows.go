@@ -9,10 +9,13 @@
 package shell
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"golang.org/x/sys/windows"
 )
 
 func chkStat(file string) error {
@@ -88,4 +91,12 @@ func LookPath(file, path, fileExtensions string) (string, error) {
 		}
 	}
 	return "", &exec.Error{file, exec.ErrNotFound}
+}
+
+func systemCommandProcessor() (string, error) {
+	systemDirectory, err := windows.GetSystemDirectory()
+	if err != nil {
+		return "", fmt.Errorf("finding Windows system directory: %w", err)
+	}
+	return filepath.Join(systemDirectory, "cmd.exe"), nil
 }
