@@ -23,10 +23,18 @@ case "$2" in
 esac
 
 echo --- :inbox_tray: Restoring Go caches
-buildkite-agent cache restore \
-  --name gomodcache \
-  --name target_gocache \
-  --name acknowledgements
+buildkite-agent cache restore --name gomodcache --name target_gocache
+
+# Run go-licenses only if this platform's acknowledgements aren't cached, with
+# the GOOS/GOARCH/GOARM that scripts/build-binary.sh builds with.
+ack_goarch="$2"
+ack_goarm=""
+if [[ "$2" == "armhf" ]]; then
+  ack_goarch="arm"
+  ack_goarm="7"
+fi
+GOOS="${1/#dragonflybsd/dragonfly}" GOARCH="${ack_goarch}" GOARM="${ack_goarm}" \
+  buildkite-agent cache exec --name acknowledgements -- ./scripts/generate-acknowledgements.sh
 
 export ACKNOWLEDGEMENTS_REUSE_EXISTING=true
 
@@ -37,4 +45,4 @@ rm -rf pkg
 ./scripts/build-binary.sh "${1}" "${2}" "${BUILDKITE_BUILD_NUMBER}"
 
 echo --- :outbox_tray: Saving Go caches
-buildkite-agent cache save --name target_gocache --name acknowledgements
+buildkite-agent cache save --name target_gocache
