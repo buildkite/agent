@@ -52,8 +52,10 @@ attempt returns, `post-bootstrap` runs even if starting the process failed or
 cancellation, a timeout, or agent stop caused it to be killed with SIGKILL. It
 does not run for jobs rejected before the bootstrap attempt.
 
-`post-bootstrap` finishes before the agent reports the job finished or removes
-the job's environment files. This lets operators clean up resources left behind
+The agent uploads the final bootstrap logs before running `post-bootstrap`, so
+diagnostics remain visible while cleanup runs. `post-bootstrap` finishes before
+the agent reports the job finished or removes the job's environment files.
+This lets operators clean up resources left behind
 by a killed bootstrap before the worker can accept another job. Its exit status
 does not change the job result. It is not cancelled with the job and has no
 deadline: it blocks the worker from accepting another job until it exits. A

@@ -72,6 +72,13 @@ func TestPostBootstrapHook(t *testing.T) {
 				if finishes := e.finishesFor(t, defaultJobID); len(finishes) != 0 {
 					t.Error("job finished before post-bootstrap completed")
 				}
+				wantLog := "final bootstrap output"
+				if tc.startFailure {
+					wantLog = "Error running job:"
+				}
+				if !strings.Contains(e.logsFor(t, defaultJobID), wantLog) {
+					t.Errorf("job logs must contain %q before post-bootstrap starts", wantLog)
+				}
 				if _, err := fmt.Fprintln(c.Stdout, "host cleanup output"); err != nil {
 					t.Errorf("writing hook output: %v", err)
 				}
@@ -83,7 +90,8 @@ func TestPostBootstrapHook(t *testing.T) {
 			cfg := testRunJobConfig{
 				job: &api.Job{
 					ID: defaultJobID, Token: "bkaj_job-token", ChunksMaxSizeBytes: 1024,
-					Env: map[string]string{"POST_BOOTSTRAP_UNTRUSTED": "must not be exported"},
+					ChunksIntervalSeconds: 3600, // Keep final output buffered until the process exits.
+					Env:                   map[string]string{"POST_BOOTSTRAP_UNTRUSTED": "must not be exported"},
 				},
 				server: server, agentCfg: agent.AgentConfiguration{HooksPath: hooksDir}, logger: logs,
 			}
@@ -91,7 +99,12 @@ func TestPostBootstrapHook(t *testing.T) {
 				mb.Expect().NotCalled()
 				cfg.agentCfg.BootstrapScript = filepath.Join(t.TempDir(), "missing-bootstrap")
 			} else {
-				mb.Expect().Once().AndExitWith(tc.bootstrapExit)
+				mb.Expect().Once().AndCallFunc(func(c *bintest.Call) {
+					if _, err := fmt.Fprintln(c.Stdout, "final bootstrap output"); err != nil {
+						t.Errorf("writing bootstrap output: %v", err)
+					}
+					c.Exit(tc.bootstrapExit)
+				})
 				cfg.mockBootstrap = mb
 			}
 			if err := runJob(t, t.Context(), cfg); err != nil {
