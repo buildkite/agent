@@ -22,6 +22,7 @@ import (
 	"github.com/buildkite/go-pipeline"
 	"github.com/buildkite/go-pipeline/jwkutil"
 	"github.com/buildkite/go-pipeline/ordered"
+	"github.com/buildkite/go-pipeline/signature"
 	"github.com/buildkite/go-pipeline/warning"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
@@ -82,6 +83,112 @@ func TestPipelineUploadWithoutCheckout(t *testing.T) {
 				t.Errorf("stderr = %q, want commit resolution warning = %t", output, test.wantWarning)
 			}
 		})
+	}
+}
+
+// TestPipelineUploadSigningMergesPipelineLevelSecrets is a regression test for
+// pipeline-level secrets not reaching command steps before pipeline_upload.go
+// signs them, particularly ones nested inside group steps. It also checks that
+// the inherited pipeline-level secret is not persisted onto the uploaded step:
+// merging it permanently would make the backend see an explicit step-level
+// secret, which it can reject as conflicting with a step env var of the same
+// name even though the original, unsigned pipeline was valid. This exercises
+// pipeline_upload.go's own, independent signing path (as opposed to `tool sign`).
+func TestPipelineUploadSigningMergesPipelineLevelSecrets(t *testing.T) {
+	privSet, pubSet, err := jwkutil.NewKeyPair("test-key", jwa.EdDSA())
+	if err != nil {
+		t.Fatalf("jwkutil.NewKeyPair() error = %v", err)
+	}
+
+	jwksBytes, err := json.Marshal(privSet)
+	if err != nil {
+		t.Fatalf("marshaling JWKS: %v", err)
+	}
+	jwksPath := filepath.Join(t.TempDir(), "signing-jwks.json")
+	if err := os.WriteFile(jwksPath, jwksBytes, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	t.Chdir(t.TempDir())
+	t.Setenv("BUILDKITE_REPO", "fake-repo")
+	const pipelineYAML = `---
+secrets:
+  - key: db-password
+    environment_variable: DB_PASSWORD
+steps:
+  - label: top-level
+    command: echo top
+  - group: "grouped"
+    steps:
+      - label: nested
+        command: echo nested
+`
+	if err := os.WriteFile("pipeline.yml", []byte(pipelineYAML), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	var stdout bytes.Buffer
+	cmd := *PipelineUploadCommand
+	app := &cli.Command{Name: "buildkite-agent", Commands: []*cli.Command{&cmd}, Writer: &stdout, ErrWriter: io.Discard}
+	if err := app.Run(t.Context(), []string{
+		"buildkite-agent", "upload", "--dry-run",
+		"--agent-access-token", "unused-token",
+		"--jwks-file", jwksPath,
+		"pipeline.yml",
+	}); err != nil {
+		t.Fatalf("pipeline upload error = %v, want success", err)
+	}
+
+	uploaded, err := pipeline.Parse(strings.NewReader(stdout.String()))
+	if err != nil {
+		t.Fatalf("parsing uploaded pipeline: %v\noutput:\n%s", err, stdout.String())
+	}
+	if len(uploaded.Steps) != 2 {
+		t.Fatalf("uploaded.Steps = %+v, want 2 steps", uploaded.Steps)
+	}
+
+	top, ok := uploaded.Steps[0].(*pipeline.CommandStep)
+	if !ok {
+		t.Fatalf("Steps[0] = %T, want *pipeline.CommandStep", uploaded.Steps[0])
+	}
+	group, ok := uploaded.Steps[1].(*pipeline.GroupStep)
+	if !ok {
+		t.Fatalf("Steps[1] = %T, want *pipeline.GroupStep", uploaded.Steps[1])
+	}
+	if len(group.Steps) != 1 {
+		t.Fatalf("group.Steps = %+v, want 1 nested step", group.Steps)
+	}
+	nested, ok := group.Steps[0].(*pipeline.CommandStep)
+	if !ok {
+		t.Fatalf("group.Steps[0] = %T, want *pipeline.CommandStep", group.Steps[0])
+	}
+
+	for _, step := range []*pipeline.CommandStep{top, nested} {
+		// Neither step declares its own secrets in the source pipeline, so the
+		// inherited pipeline-level secret must not be persisted onto the step
+		// once it's been used for signing.
+		if len(step.Secrets) != 0 {
+			t.Errorf("step %q secrets = %+v, want none", step.Label, step.Secrets)
+		}
+		if step.Signature == nil {
+			t.Fatalf("step %q has no signature", step.Label)
+		}
+		// The signature should still have been computed over the merged
+		// (pipeline + step) secrets, so "secrets" is a signed field.
+		if !slices.Contains(step.Signature.SignedFields, "secrets") {
+			t.Errorf("step %q signed_fields = %v, want it to contain %q", step.Label, step.Signature.SignedFields, "secrets")
+		}
+	}
+
+	// Verification needs to see the same merged pipeline-level secrets that
+	// were present when pipeline_upload.go signed the steps, so re-merge
+	// them here, mirroring what it does before signing.
+	mergePipelineSecretsIntoSteps(uploaded.Steps, uploaded.Secrets)
+
+	for _, step := range []*pipeline.CommandStep{top, nested} {
+		if err := signature.VerifyStep(t.Context(), step, pubSet, "fake-repo", signature.WithEnv(uploaded.Env.ToMap())); err != nil {
+			t.Errorf("signature.VerifyStep(%q) error = %v, want success", step.Label, err)
+		}
 	}
 }
 

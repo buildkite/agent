@@ -412,6 +412,9 @@ var PipelineUploadCommand = &cli.Command{
 				}
 
 				if key != nil {
+					// Merge pipeline-level secrets with step-level secrets before signing
+					restoreSecrets := mergePipelineSecretsIntoSteps(result.Steps, result.Secrets)
+
 					err := signature.SignSteps(
 						ctx,
 						result.Steps,
@@ -425,6 +428,11 @@ var PipelineUploadCommand = &cli.Command{
 					if err != nil {
 						return fmt.Errorf("couldn't sign pipeline: %w", err)
 					}
+
+					// The signature now covers any inherited pipeline-level secrets;
+					// restore each step's original secrets before this gets uploaded,
+					// so they aren't persisted as explicit step-level secrets.
+					restoreSecrets()
 				}
 
 				// Apply or strip out `if_changed`, based on settings.
