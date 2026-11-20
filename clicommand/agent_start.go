@@ -424,7 +424,7 @@ var AgentStartCommand = &cli.Command{
 		&cli.DurationFlag{
 			Name:    "post-bootstrap-timeout",
 			Value:   time.Second,
-			Usage:   "Maximum runtime of the agent-side post-bootstrap hook; timeout does not change the job result",
+			Usage:   "Maximum runtime of the experimental post-bootstrap hook (requires --experiment post-bootstrap-hook); timeout does not change the job result",
 			Sources: cli.EnvVars("BUILDKITE_POST_BOOTSTRAP_TIMEOUT"),
 		},
 		&cli.BoolFlag{

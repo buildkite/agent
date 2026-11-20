@@ -18,6 +18,7 @@ import (
 	"github.com/buildkite/agent/v4/agent"
 	"github.com/buildkite/agent/v4/api"
 	"github.com/buildkite/agent/v4/env"
+	"github.com/buildkite/agent/v4/internal/experiments"
 	"github.com/buildkite/agent/v4/logger"
 	"github.com/buildkite/agent/v4/metrics"
 	"github.com/buildkite/bintest/v3"
@@ -25,6 +26,7 @@ import (
 
 func TestPostBootstrapHook(t *testing.T) {
 	t.Parallel()
+	ctx, _ := experiments.Enable(t.Context(), experiments.PostBootstrapHook)
 	for _, tc := range []struct {
 		name          string
 		bootstrapExit int
@@ -107,7 +109,7 @@ func TestPostBootstrapHook(t *testing.T) {
 				})
 				cfg.mockBootstrap = mb
 			}
-			if err := runJob(t, t.Context(), cfg); err != nil {
+			if err := runJob(t, ctx, cfg); err != nil {
 				t.Fatalf("runJob: %v", err)
 			}
 			finish := e.finishesFor(t, defaultJobID)[0]
@@ -127,11 +129,39 @@ func TestPostBootstrapHook(t *testing.T) {
 	}
 }
 
+func TestPostBootstrapHookRequiresExperiment(t *testing.T) {
+	t.Parallel()
+	hooksDir := t.TempDir()
+	post := mockAgentHook(t, hooksDir, "post-bootstrap")
+	post.Expect().NotCalled()
+	defer post.CheckAndClose(t) //nolint:errcheck // bintest logs to t
+	mb := mockBootstrap(t)
+	mb.Expect().Once().AndExitWith(7)
+	defer mb.CheckAndClose(t) //nolint:errcheck // bintest logs to t
+	e := createTestAgentEndpoint()
+	server := e.server()
+	defer server.Close()
+	if err := runJob(t, t.Context(), testRunJobConfig{
+		job: &api.Job{
+			ID: defaultJobID, Token: "bkaj_job-token", ChunksMaxSizeBytes: 1024,
+			Env: map[string]string{"BUILDKITE_AGENT_EXPERIMENT": experiments.PostBootstrapHook},
+		},
+		server: server, mockBootstrap: mb,
+		agentCfg: agent.AgentConfiguration{HooksPath: hooksDir, PostBootstrapTimeout: time.Second},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if finish := e.finishesFor(t, defaultJobID)[0]; finish.ExitStatus != "7" {
+		t.Errorf("job exit status = %s, want 7", finish.ExitStatus)
+	}
+}
+
 func TestPostBootstrapHookTimeout(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("requires a POSIX shell and signals")
 	}
 	t.Parallel()
+	ctx, _ := experiments.Enable(t.Context(), experiments.PostBootstrapHook)
 	for _, tc := range []struct {
 		name     string
 		timeout  time.Duration
@@ -162,7 +192,7 @@ func TestPostBootstrapHookTimeout(t *testing.T) {
 			defer mb.CheckAndClose(t) //nolint:errcheck // bintest logs to t
 			mb.Expect().Once().AndExitWith(7)
 			logs := logger.NewBuffer()
-			if err := runJob(t, t.Context(), testRunJobConfig{
+			if err := runJob(t, ctx, testRunJobConfig{
 				job: &api.Job{
 					ID: defaultJobID, Token: "bkaj_job-token", ChunksMaxSizeBytes: 1024,
 					Env: map[string]string{"BUILDKITE_POST_BOOTSTRAP_TIMEOUT": "30s"},
@@ -198,6 +228,7 @@ func TestPostBootstrapHookAfterSIGKILL(t *testing.T) {
 		t.Skip("requires POSIX signals")
 	}
 	t.Parallel()
+	experimentCtx, _ := experiments.Enable(t.Context(), experiments.PostBootstrapHook)
 	for _, tc := range []struct {
 		name          string
 		reason        agent.CancelReason
@@ -210,7 +241,7 @@ func TestPostBootstrapHookAfterSIGKILL(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			ctx, cancel := context.WithCancel(t.Context())
+			ctx, cancel := context.WithCancel(experimentCtx)
 			defer cancel()
 			hooksDir := t.TempDir()
 			ready := make(chan struct{})
@@ -413,7 +444,7 @@ func TestPreBootstrapHookScripts(t *testing.T) {
 
 func TestPreBootstrapHookRefusesJob(t *testing.T) {
 	t.Parallel()
-	ctx := t.Context()
+	ctx, _ := experiments.Enable(t.Context(), experiments.PostBootstrapHook)
 
 	hooksDir, err := os.MkdirTemp("", "bootstrap-hooks")
 	if err != nil {

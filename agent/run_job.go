@@ -15,6 +15,7 @@ import (
 
 	"github.com/buildkite/agent/v4/api"
 	"github.com/buildkite/agent/v4/core"
+	"github.com/buildkite/agent/v4/internal/experiments"
 	"github.com/buildkite/agent/v4/internal/job"
 	"github.com/buildkite/agent/v4/internal/job/hook"
 	"github.com/buildkite/agent/v4/internal/process"
@@ -295,7 +296,9 @@ func (r *JobRunner) Run(ctx context.Context, ignoreAgentInDispatches *bool) (err
 	wg.Go(func() { r.jobCancellationChecker(cctx) })
 
 	exit = r.runJob(cctx)
-	postBootstrapHook, _ = hook.Find(nil, r.conf.AgentConfiguration.HooksPath, "post-bootstrap")
+	if experiments.IsEnabled(ctx, experiments.PostBootstrapHook) {
+		postBootstrapHook, _ = hook.Find(nil, r.conf.AgentConfiguration.HooksPath, "post-bootstrap")
+	}
 	// The defer mutates the error return in some cases.
 	return nil
 }

@@ -18,6 +18,24 @@ If an experiment doesn't exist, no error will be raised.
 
 ## Available Experiments
 
+### `post-bootstrap-hook`
+
+Enables the agent-side `post-bootstrap` hook after each bootstrap attempt,
+including when the bootstrap is killed with SIGKILL. Install the hook in the
+agent's configured hooks path and opt in with
+`buildkite-agent start --experiment post-bootstrap-hook` or
+`experiment="post-bootstrap-hook"` in the agent config. Without the experiment,
+the hook is ignored.
+
+This is a last-resort notification backstop: report a problem or notify an
+independent watchdog to recover leftover resources, rather than perform recovery
+inside the hook. It has a one-second default timeout and runs before the agent
+reports the job finished. Hook failure or timeout does not change the job result.
+See [agent-side bootstrap hooks](docs/agent-start.md#agent-side-bootstrap-hooks)
+for environment, timeout configuration, and shutdown limits.
+
+**Status:** Experimental; the hook and its settings may change or be removed.
+
 ### `origin-clonekit`
 
 Seeds a missing on-host Git mirror using Cursor Origin's CloneKit pack data.

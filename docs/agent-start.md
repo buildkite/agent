@@ -47,6 +47,12 @@ The agent runs `pre-bootstrap` and `post-bootstrap` from its configured hooks
 path, using its hooks shell. These are agent hooks, not repository or plugin
 hooks. Their output goes to the agent log, not the job log.
 
+`post-bootstrap` is experimental and subject to change or removal. Enable it
+with `buildkite-agent start --experiment post-bootstrap-hook` or
+`experiment="post-bootstrap-hook"` in the agent config. Without this opt-in,
+the hook is not discovered or run, even if its file exists. Job or pipeline
+environment variables cannot enable it. `pre-bootstrap` needs no experiment.
+
 `pre-bootstrap` can reject a job before its bootstrap starts. After a bootstrap
 attempt returns, `post-bootstrap` runs even if starting the process failed or
 cancellation, a timeout, or agent stop caused it to be killed with SIGKILL. It
