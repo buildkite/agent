@@ -34,7 +34,7 @@ require (
 	github.com/dustin/go-humanize v1.1.0
 	github.com/dustinkirkland/golang-petname v0.0.0-20260215035315-f0c533e9ce9b
 	github.com/go-chi/chi/v5 v5.5.0
-	github.com/gofrs/flock v0.13.1
+	github.com/gofrs/flock v0.13.2
 	github.com/google/go-cmp v0.7.0
 	github.com/google/go-querystring v1.2.0
 	github.com/google/uuid v1.6.0
