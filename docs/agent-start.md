@@ -55,12 +55,21 @@ does not run for jobs rejected before the bootstrap attempt.
 The agent uploads the final bootstrap logs before running `post-bootstrap`, so
 diagnostics remain visible while cleanup runs. `post-bootstrap` finishes before
 the agent reports the job finished or removes the job's environment files.
-This lets operators clean up resources left behind
-by a killed bootstrap before the worker can accept another job. Its exit status
-does not change the job result. It is not cancelled with the job and has no
-deadline: it blocks the worker from accepting another job until it exits. A
-command stuck on a hung Docker daemon can therefore block the worker indefinitely.
-Operators must bound their own cleanup commands, for example with `timeout`.
+This lets operators clean up resources left behind by a killed bootstrap before
+the worker can accept another job. Hook failure or timeout does not change the
+job's exit status, signal, or signal reason. Hook runtime is part of the job's
+lifecycle and duration, but it is not cancelled with the job.
+
+The hook has a **one-second default timeout**. On expiry, the agent immediately
+kills the hook's process group, logs a warning, and continues finishing the job;
+there is no extra cancellation grace period. Configure a different budget with
+`--post-bootstrap-timeout=2s`, `post-bootstrap-timeout="2s"` in the agent config,
+or `BUILDKITE_POST_BOOTSTRAP_TIMEOUT=2s` in the agent's environment. Non-positive
+values use the one-second default rather than disabling the timeout. Job or
+pipeline environment variables cannot change this setting. The budget starts
+when the hook is invoked, after final bootstrap log upload. Without a
+`post-bootstrap` hook, no extra timeout or wait is added. `pre-bootstrap` is
+unchanged and has no dedicated hook timeout.
 
 Force-stopping the agent imposes a separate shutdown deadline:
 `cancel-signal-timeout + cancel-cleanup-timeout + 1s` (16 seconds by default),

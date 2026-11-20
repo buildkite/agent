@@ -72,6 +72,7 @@ type AgentConfiguration struct {
 	DisconnectAfterUptime      time.Duration
 	CancelSignalTimeout        time.Duration
 	CancelCleanupTimeout       time.Duration
+	PostBootstrapTimeout       time.Duration
 	EnableJobLogTmpfile        bool
 	JobLogPath                 string
 	WriteJobLogsToStdout       bool

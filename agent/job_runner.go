@@ -1008,8 +1008,20 @@ func (r *JobRunner) executePreBootstrapHook(ctx context.Context, hook string) (b
 }
 
 func (r *JobRunner) executePostBootstrapHook(ctx context.Context, hook string, exit core.ProcessExit) {
-	r.agentLogger.Infof("Running post-bootstrap hook %q", hook)
-	sh, err := shell.New(shell.WithStdout(LogWriter{l: r.agentLogger}))
+	timeout := r.conf.AgentConfiguration.PostBootstrapTimeout
+	if timeout <= 0 {
+		timeout = time.Second
+	}
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	r.agentLogger.Infof("Running post-bootstrap hook %q (timeout %s)", hook, timeout)
+	// The deadline is the whole hook budget, not the start of another grace
+	// period. Kill the process group immediately when the context expires.
+	sh, err := shell.New(
+		shell.WithStdout(LogWriter{l: r.agentLogger}),
+		shell.WithInterruptSignal(process.SIGKILL),
+	)
 	if err != nil {
 		r.agentLogger.Errorf("Finished post-bootstrap hook %q: %v", hook, err)
 		return
@@ -1023,7 +1035,12 @@ func (r *JobRunner) executePostBootstrapHook(ctx context.Context, hook string, e
 	environ.Set("BUILDKITE_BOOTSTRAP_EXIT_STATUS", strconv.Itoa(exit.Status))
 	environ.Set("BUILDKITE_BOOTSTRAP_SIGNAL", exit.Signal)
 	environ.Set("BUILDKITE_BOOTSTRAP_SIGNAL_REASON", exit.SignalReason)
-	if err := script.Run(ctx, shell.ShowPrompt(false), shell.WithExtraEnv(environ)); err != nil {
+	err = script.Run(ctx, shell.ShowPrompt(false), shell.WithExtraEnv(environ))
+	if ctx.Err() == context.DeadlineExceeded {
+		r.agentLogger.Warnf("post-bootstrap hook timed out after %s: %q", timeout, hook)
+		return
+	}
+	if err != nil {
 		r.agentLogger.Errorf("Finished post-bootstrap hook %q: %v", hook, err)
 		return
 	}

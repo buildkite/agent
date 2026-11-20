@@ -127,6 +127,72 @@ func TestPostBootstrapHook(t *testing.T) {
 	}
 }
 
+func TestPostBootstrapHookTimeout(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("requires a POSIX shell and signals")
+	}
+	t.Parallel()
+	for _, tc := range []struct {
+		name     string
+		timeout  time.Duration
+		timedOut bool
+	}{
+		{name: "default_one_second", timedOut: true},
+		{name: "shorter_override", timeout: 50 * time.Millisecond, timedOut: true},
+		{name: "longer_override", timeout: 3 * time.Second},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			hooksDir := t.TempDir()
+			executable, err := os.Executable()
+			if err != nil {
+				t.Fatal(err)
+			}
+			cmd := exec.Command(executable, "write-exec", filepath.Join(hooksDir, "post-bootstrap"))
+			// Both the hook and its child ignore SIGTERM. The timeout must kill
+			// their process group without another cancellation grace period.
+			cmd.Stdin = strings.NewReader("#!/bin/sh\ntrap '' TERM\n(sleep 2; echo cleanup-finished) &\nwait\n")
+			if err := cmd.Run(); err != nil {
+				t.Fatal(err)
+			}
+			e := createTestAgentEndpoint()
+			server := e.server()
+			defer server.Close()
+			mb := mockBootstrap(t)
+			defer mb.CheckAndClose(t) //nolint:errcheck // bintest logs to t
+			mb.Expect().Once().AndExitWith(7)
+			logs := logger.NewBuffer()
+			if err := runJob(t, t.Context(), testRunJobConfig{
+				job: &api.Job{
+					ID: defaultJobID, Token: "bkaj_job-token", ChunksMaxSizeBytes: 1024,
+					Env: map[string]string{"BUILDKITE_POST_BOOTSTRAP_TIMEOUT": "30s"},
+				},
+				server: server, mockBootstrap: mb, logger: logs,
+				agentCfg: agent.AgentConfiguration{
+					HooksPath: hooksDir, PostBootstrapTimeout: tc.timeout,
+					CancelSignalTimeout: 30 * time.Second,
+				},
+			}); err != nil {
+				t.Fatal(err)
+			}
+			output := strings.Join(logs.Messages, "\n")
+			if got := strings.Contains(output, "post-bootstrap hook timed out"); got != tc.timedOut {
+				t.Errorf("timeout warning present = %t, want %t", got, tc.timedOut)
+			}
+			if tc.timeout == 0 && !strings.Contains(output, "post-bootstrap hook timed out after 1s") {
+				t.Error("unconfigured hook must use the one-second timeout")
+			}
+			if got := strings.Contains(output, "cleanup-finished"); got == tc.timedOut {
+				t.Errorf("cleanup completed = %t, want %t", got, !tc.timedOut)
+			}
+			finish := e.finishesFor(t, defaultJobID)[0]
+			if finish.ExitStatus != "7" || finish.Signal != "" || finish.SignalReason != "" {
+				t.Errorf("job result = %+v, want exit 7 without a signal or signal reason", finish)
+			}
+		})
+	}
+}
+
 func TestPostBootstrapHookAfterSIGKILL(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("requires POSIX signals")
