@@ -251,7 +251,7 @@ func mergePipelineSecretsIntoSteps(steps pipeline.Steps, pipelineSecrets pipelin
 			switch step := step.(type) {
 			case *pipeline.CommandStep:
 				originals = append(originals, original{step: step, secrets: step.Secrets})
-				step.MergeSecretsFromPipeline(pipelineSecrets)
+				step.Secrets = mergeSecretsStepFirst(step.Secrets, pipelineSecrets)
 			case *pipeline.GroupStep:
 				merge(step.Steps)
 			}
@@ -264,6 +264,39 @@ func mergePipelineSecretsIntoSteps(steps pipeline.Steps, pipelineSecrets pipelin
 			o.step.Secrets = o.secrets
 		}
 	}
+}
+
+// mergeSecretsStepFirst merges step-level secrets with pipeline-level
+// secrets, deduplicating by EnvironmentVariable so each environment
+// variable is backed by exactly one secret: step-level secrets always win,
+// and among the pipeline-level secrets the first one declared for a given
+// environment variable wins.
+//
+// This doesn't use pipeline.Secrets.MergeWith, which short-circuits to
+// returning one side verbatim, with no deduplication at all, whenever the
+// other side is empty (as it usually is here: most steps have no
+// step-level secrets). That means duplicate pipeline-level secrets for the
+// same environment variable would both get signed, even though the
+// backend only honours one of them, so the signature would cover a value
+// that's never actually enforced.
+func mergeSecretsStepFirst(stepSecrets, pipelineSecrets pipeline.Secrets) pipeline.Secrets {
+	seen := make(map[string]bool, len(stepSecrets)+len(pipelineSecrets))
+	merged := make(pipeline.Secrets, 0, len(stepSecrets)+len(pipelineSecrets))
+
+	for _, secrets := range [2]pipeline.Secrets{stepSecrets, pipelineSecrets} {
+		for _, secret := range secrets {
+			if secret.EnvironmentVariable == "" || seen[secret.EnvironmentVariable] {
+				continue
+			}
+			seen[secret.EnvironmentVariable] = true
+			merged = append(merged, secret)
+		}
+	}
+
+	if len(merged) == 0 {
+		return nil
+	}
+	return merged
 }
 
 func validateNoInterpolations(pipelineString string) error {
