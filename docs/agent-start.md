@@ -41,6 +41,73 @@ it. Each `JobRunner` starts several goroutines that handle various tasks:
 * Periodically checking with the API if the job is cancelled
 * Waiting for the job to be over to mark the job as completed
 
+### Agent-side bootstrap hooks
+
+The agent runs `pre-bootstrap` and `post-bootstrap` from its configured hooks
+path, using its hooks shell. These are agent hooks, not repository or plugin
+hooks. Their output goes to the agent log, not the job log.
+
+`post-bootstrap` is experimental and subject to change or removal. Enable it
+with `buildkite-agent start --experiment post-bootstrap-hook` or
+`experiment="post-bootstrap-hook"` in the agent config. Without this opt-in,
+the hook is not discovered or run, even if its file exists. Job or pipeline
+environment variables cannot enable it. `pre-bootstrap` needs no experiment.
+
+`pre-bootstrap` can reject a job before its bootstrap starts. After a bootstrap
+attempt returns, `post-bootstrap` runs even if starting the process failed or
+cancellation, a timeout, or agent stop caused it to be killed with SIGKILL. It
+does not run for jobs rejected before the bootstrap attempt.
+
+The agent uploads the final bootstrap logs before running `post-bootstrap`, so
+diagnostics remain visible while cleanup runs. `post-bootstrap` finishes before
+the agent reports the job finished or removes the job's environment files.
+This lets operators clean up resources left behind by a killed bootstrap before
+the worker can accept another job. Hook failure or timeout does not change the
+job's exit status, signal, or signal reason. Hook runtime is part of the job's
+lifecycle and duration, but it is not cancelled with the job.
+
+The hook has a **one-second default timeout**. On expiry, the agent immediately
+kills the hook's process group, logs a warning, and continues finishing the job;
+there is no extra cancellation grace period. Configure a different budget with
+`--post-bootstrap-timeout=2s`, `post-bootstrap-timeout="2s"` in the agent config,
+or `BUILDKITE_POST_BOOTSTRAP_TIMEOUT=2s` in the agent's environment. Non-positive
+values use the one-second default rather than disabling the timeout. Job or
+pipeline environment variables cannot change this setting. The budget starts
+when the hook is invoked, after final bootstrap log upload. Without a
+`post-bootstrap` hook, no extra timeout or wait is added. `pre-bootstrap` is
+unchanged and has no dedicated hook timeout.
+
+Force-stopping the agent imposes a separate shutdown deadline:
+`cancel-signal-timeout + cancel-cleanup-timeout + 1s` (16 seconds by default),
+after which the agent exits even if the hook is still running. If the bootstrap
+uses the full default 10-second signal grace period before SIGKILL, only about
+six seconds remain for final log upload, the hook, and agent disconnects combined.
+Increase `--cancel-cleanup-timeout` if cleanup needs a larger force-stop budget;
+this is not a dedicated hook timeout or a guarantee of that much hook runtime.
+
+The hook cannot run if the agent itself is SIGKILLed or the host shuts down;
+external service shutdown deadlines can also interrupt it. With multiple workers
+on one host, hooks can overlap; cleanup must target only that job's resources.
+
+Both hooks inherit the agent's environment, plus these trusted values (not the
+job's environment):
+
+* `BUILDKITE_JOB_ID`
+* `BUILDKITE_ENV_FILE` and `BUILDKITE_ENV_JSON_FILE`
+* `BUILDKITE_AGENT_ACCESS_TOKEN` (the job API token) and `BUILDKITE_AGENT_ENDPOINT`
+* `BUILDKITE_NO_HTTP2`, `BUILDKITE_AGENT_DEBUG`, and `BUILDKITE_AGENT_DEBUG_HTTP`
+
+The environment files contain untrusted job values. Read them as data; do not
+source them into a privileged cleanup shell.
+
+`post-bootstrap` also receives `BUILDKITE_BOOTSTRAP_EXIT_STATUS`,
+`BUILDKITE_BOOTSTRAP_SIGNAL`, and `BUILDKITE_BOOTSTRAP_SIGNAL_REASON`, matching
+the result reported to the API. A signal exit has status `-1`; signal and reason
+are empty when absent. Reasons include `cancel` (also used for job timeouts),
+`agent_stop`, and `process_run_error`.
+
+### Bootstrap process
+
 The core of the job runner is running a `Process`, which itself spins up a few
 helper goroutines:
 

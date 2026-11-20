@@ -15,6 +15,7 @@ import (
 
 	"github.com/buildkite/agent/v4/api"
 	"github.com/buildkite/agent/v4/core"
+	"github.com/buildkite/agent/v4/internal/experiments"
 	"github.com/buildkite/agent/v4/internal/job"
 	"github.com/buildkite/agent/v4/internal/job/hook"
 	"github.com/buildkite/agent/v4/internal/process"
@@ -113,12 +114,13 @@ func (r *JobRunner) Run(ctx context.Context, ignoreAgentInDispatches *bool) (err
 
 	// Used to wait on various routines that we spin up
 	var wg sync.WaitGroup
+	var postBootstrapHook string
 
 	// Set up a child context for helper goroutines related to running the job.
 	cctx, cancel := context.WithCancel(ctx)
 	defer func(ctx context.Context, wg *sync.WaitGroup) {
 		cancel()
-		r.cleanup(ctx, wg, exit, ignoreAgentInDispatches)
+		r.cleanup(ctx, wg, exit, ignoreAgentInDispatches, postBootstrapHook)
 
 		// In acquire-job mode, we want to return any failed exit code so that
 		// the program can exit with the same code.
@@ -294,6 +296,9 @@ func (r *JobRunner) Run(ctx context.Context, ignoreAgentInDispatches *bool) (err
 	wg.Go(func() { r.jobCancellationChecker(cctx) })
 
 	exit = r.runJob(cctx)
+	if experiments.IsEnabled(ctx, experiments.PostBootstrapHook) {
+		postBootstrapHook, _ = hook.Find(nil, r.conf.AgentConfiguration.HooksPath, "post-bootstrap")
+	}
 	// The defer mutates the error return in some cases.
 	return nil
 }
@@ -509,7 +514,7 @@ One or more containers connected to the agent, but then stopped communicating wi
 	return exit
 }
 
-func (r *JobRunner) cleanup(ctx context.Context, wg *sync.WaitGroup, exit core.ProcessExit, ignoreAgentInDispatches *bool) {
+func (r *JobRunner) cleanup(ctx context.Context, wg *sync.WaitGroup, exit core.ProcessExit, ignoreAgentInDispatches *bool, postBootstrapHook string) {
 	finishedAt := time.Now()
 
 	// Flush the job logs. If the process is never started, then logs from prior to the attempt to
@@ -530,6 +535,15 @@ func (r *JobRunner) cleanup(ctx context.Context, wg *sync.WaitGroup, exit core.P
 	// Wait for the routines that we spun up to finish
 	r.agentLogger.Debugf("[JobRunner] Waiting for all other routines to finish")
 	wg.Wait()
+
+	// Upload final bootstrap diagnostics before potentially slow host cleanup.
+	// Keep the env files and job token available, and finish host cleanup before
+	// FinishJob allows the API to assign more work. Job cancellation must not
+	// interrupt this hook, including when the bootstrap was forcefully killed.
+	if postBootstrapHook != "" {
+		r.executePostBootstrapHook(context.WithoutCancel(ctx), postBootstrapHook, exit)
+		finishedAt = time.Now()
+	}
 
 	// Remove the env file, if any
 	for _, f := range []*os.File{r.envShellFile, r.envJSONFile} {
