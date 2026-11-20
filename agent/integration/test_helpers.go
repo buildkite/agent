@@ -48,12 +48,16 @@ type testRunJobConfig struct {
 	mockBootstrap    *bintest.Mock
 	verificationJWKS jwk.Set
 	client           *api.Client
+	logger           logger.Logger
 }
 
 func runJob(t *testing.T, ctx context.Context, cfg testRunJobConfig) error {
 	t.Helper()
 
-	l := logger.Discard
+	l := cfg.logger
+	if l == nil {
+		l = logger.Discard
+	}
 
 	// minimal metrics, this could be cleaner
 	m := metrics.NewCollector(l, metrics.CollectorConfig{})
@@ -290,13 +294,17 @@ func (t *testAgentEndpoint) server(extraRoutes ...route) *httptest.Server {
 
 func mockPreBootstrap(t *testing.T, hooksDir string) *bintest.Mock {
 	t.Helper()
+	return mockAgentHook(t, hooksDir, "pre-bootstrap")
+}
 
-	mock, err := bintest.NewMock(fmt.Sprintf("buildkite-agent-pre-bootstrap-hook-%s", t.Name()))
+func mockAgentHook(t *testing.T, hooksDir, name string) *bintest.Mock {
+	t.Helper()
+	mock, err := bintest.NewMock(fmt.Sprintf("buildkite-agent-%s-hook-%s", name, strings.ReplaceAll(t.Name(), "/", "-")))
 	if err != nil {
 		t.Fatalf("bintest.NewMock() error = %v", err)
 	}
 
-	hookScript := filepath.Join(hooksDir, "pre-bootstrap")
+	hookScript := filepath.Join(hooksDir, name)
 	body := ""
 
 	if runtime.GOOS == "windows" {
@@ -309,11 +317,11 @@ func mockPreBootstrap(t *testing.T, hooksDir string) *bintest.Mock {
 	}
 
 	if err := os.MkdirAll(hooksDir, 0o700); err != nil {
-		t.Fatalf("creating pre-bootstrap hook mock: os.MkdirAll() error = %v", err)
+		t.Fatalf("creating %s hook mock: os.MkdirAll() error = %v", name, err)
 	}
 
 	if err := os.WriteFile(hookScript, []byte(body), 0o777); err != nil {
-		t.Fatalf("creating pre-bootstrap hook mock: s.WriteFile() error = %v", err)
+		t.Fatalf("creating %s hook mock: os.WriteFile() error = %v", name, err)
 	}
 
 	return mock

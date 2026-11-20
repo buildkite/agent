@@ -41,6 +41,47 @@ it. Each `JobRunner` starts several goroutines that handle various tasks:
 * Periodically checking with the API if the job is cancelled
 * Waiting for the job to be over to mark the job as completed
 
+### Agent-side bootstrap hooks
+
+The agent runs `pre-bootstrap` and `post-bootstrap` from its configured hooks
+path, using its hooks shell. These are agent hooks, not repository or plugin
+hooks. Their output goes to the agent log, not the job log.
+
+`pre-bootstrap` can reject a job before its bootstrap starts. After a bootstrap
+attempt returns, `post-bootstrap` runs even if starting the process failed or
+cancellation, a timeout, or agent stop caused it to be killed with SIGKILL. It
+does not run for jobs rejected before the bootstrap attempt.
+
+`post-bootstrap` finishes before the agent reports the job finished or removes
+the job's environment files. This lets operators clean up resources left behind
+by a killed bootstrap before the worker can accept another job. Its exit status
+does not change the job result. It is not cancelled with the job and has no
+deadline: it blocks the worker from accepting another job until it exits. A
+command stuck on a hung Docker daemon can therefore block the worker indefinitely.
+Operators must bound their own cleanup commands, for example with `timeout`.
+The hook cannot run if the agent itself is killed or the host shuts down, and external
+service shutdown deadlines can interrupt it. With multiple workers on one host,
+hooks can overlap; cleanup must target only the resources belonging to that job.
+
+Both hooks inherit the agent's environment, plus these trusted values (not the
+job's environment):
+
+* `BUILDKITE_JOB_ID`
+* `BUILDKITE_ENV_FILE` and `BUILDKITE_ENV_JSON_FILE`
+* `BUILDKITE_AGENT_ACCESS_TOKEN` (the job API token) and `BUILDKITE_AGENT_ENDPOINT`
+* `BUILDKITE_NO_HTTP2`, `BUILDKITE_AGENT_DEBUG`, and `BUILDKITE_AGENT_DEBUG_HTTP`
+
+The environment files contain untrusted job values. Read them as data; do not
+source them into a privileged cleanup shell.
+
+`post-bootstrap` also receives `BUILDKITE_BOOTSTRAP_EXIT_STATUS`,
+`BUILDKITE_BOOTSTRAP_SIGNAL`, and `BUILDKITE_BOOTSTRAP_SIGNAL_REASON`, matching
+the result reported to the API. A signal exit has status `-1`; signal and reason
+are empty when absent. Reasons include `cancel` (also used for job timeouts),
+`agent_stop`, and `process_run_error`.
+
+### Bootstrap process
+
 The core of the job runner is running a `Process`, which itself spins up a few
 helper goroutines:
 

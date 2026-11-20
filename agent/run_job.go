@@ -294,6 +294,13 @@ func (r *JobRunner) Run(ctx context.Context, ignoreAgentInDispatches *bool) (err
 	wg.Go(func() { r.jobCancellationChecker(cctx) })
 
 	exit = r.runJob(cctx)
+	cancel()
+	// Keep the env files and job token available, and finish host cleanup before
+	// FinishJob allows the API to assign more work. Job cancellation must not
+	// interrupt this hook, including when the bootstrap was forcefully killed.
+	if hook, _ := hook.Find(nil, r.conf.AgentConfiguration.HooksPath, "post-bootstrap"); hook != "" {
+		r.executePostBootstrapHook(context.WithoutCancel(ctx), hook, exit)
+	}
 	// The defer mutates the error return in some cases.
 	return nil
 }

@@ -994,8 +994,44 @@ func (r *JobRunner) executePreBootstrapHook(ctx context.Context, hook string) (b
 		return false, err
 	}
 
-	// This (plus inherited) is the only ENV that should be exposed
-	// to the pre-bootstrap hook.
+	script, err := sh.Script(hook, r.conf.AgentConfiguration.HooksShell)
+	if err != nil {
+		r.agentLogger.Errorf("Finished pre-bootstrap hook %q: script not runnable: %v", hook, err)
+		return false, err
+	}
+	if err := script.Run(ctx, shell.ShowPrompt(false), shell.WithExtraEnv(r.bootstrapHookEnvironment())); err != nil {
+		r.agentLogger.Errorf("Finished pre-bootstrap hook %q: job rejected: %v", hook, err)
+		return false, err
+	}
+	r.agentLogger.Infof("Finished pre-bootstrap hook %q: job accepted", hook)
+	return true, nil
+}
+
+func (r *JobRunner) executePostBootstrapHook(ctx context.Context, hook string, exit core.ProcessExit) {
+	r.agentLogger.Infof("Running post-bootstrap hook %q", hook)
+	sh, err := shell.New(shell.WithStdout(LogWriter{l: r.agentLogger}))
+	if err != nil {
+		r.agentLogger.Errorf("Finished post-bootstrap hook %q: %v", hook, err)
+		return
+	}
+	script, err := sh.Script(hook, r.conf.AgentConfiguration.HooksShell)
+	if err != nil {
+		r.agentLogger.Errorf("Finished post-bootstrap hook %q: script not runnable: %v", hook, err)
+		return
+	}
+	environ := r.bootstrapHookEnvironment()
+	environ.Set("BUILDKITE_BOOTSTRAP_EXIT_STATUS", strconv.Itoa(exit.Status))
+	environ.Set("BUILDKITE_BOOTSTRAP_SIGNAL", exit.Signal)
+	environ.Set("BUILDKITE_BOOTSTRAP_SIGNAL_REASON", exit.SignalReason)
+	if err := script.Run(ctx, shell.ShowPrompt(false), shell.WithExtraEnv(environ)); err != nil {
+		r.agentLogger.Errorf("Finished post-bootstrap hook %q: %v", hook, err)
+		return
+	}
+	r.agentLogger.Infof("Finished post-bootstrap hook %q", hook)
+}
+
+func (r *JobRunner) bootstrapHookEnvironment() *envutil.Environment {
+	// This (plus inherited) is the only ENV exposed to agent-side bootstrap hooks.
 	// - Env files are designed to be validated by the pre-bootstrap hook.
 	//   Because the job env may contain untrusted or even dangerous env vars
 	//   (suppose a user adds an env var in the "New Build" UI with a value that
@@ -1015,18 +1051,7 @@ func (r *JobRunner) executePreBootstrapHook(ctx context.Context, hook string) (b
 	environ.Set("BUILDKITE_NO_HTTP2", fmt.Sprint(apiConfig.DisableHTTP2))
 	environ.Set("BUILDKITE_AGENT_DEBUG", fmt.Sprint(r.conf.Debug))
 	environ.Set("BUILDKITE_AGENT_DEBUG_HTTP", fmt.Sprint(r.conf.DebugHTTP))
-
-	script, err := sh.Script(hook, r.conf.AgentConfiguration.HooksShell)
-	if err != nil {
-		r.agentLogger.Errorf("Finished pre-bootstrap hook %q: script not runnable: %v", hook, err)
-		return false, err
-	}
-	if err := script.Run(ctx, shell.ShowPrompt(false), shell.WithExtraEnv(environ)); err != nil {
-		r.agentLogger.Errorf("Finished pre-bootstrap hook %q: job rejected: %v", hook, err)
-		return false, err
-	}
-	r.agentLogger.Infof("Finished pre-bootstrap hook %q: job accepted", hook)
-	return true, nil
+	return environ
 }
 
 // jobCancellationChecker waits for the processes to start, then continuously
