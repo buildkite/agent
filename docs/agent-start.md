@@ -61,9 +61,18 @@ does not change the job result. It is not cancelled with the job and has no
 deadline: it blocks the worker from accepting another job until it exits. A
 command stuck on a hung Docker daemon can therefore block the worker indefinitely.
 Operators must bound their own cleanup commands, for example with `timeout`.
-The hook cannot run if the agent itself is killed or the host shuts down, and external
-service shutdown deadlines can interrupt it. With multiple workers on one host,
-hooks can overlap; cleanup must target only the resources belonging to that job.
+
+Force-stopping the agent imposes a separate shutdown deadline:
+`cancel-signal-timeout + cancel-cleanup-timeout + 1s` (16 seconds by default),
+after which the agent exits even if the hook is still running. If the bootstrap
+uses the full default 10-second signal grace period before SIGKILL, only about
+six seconds remain for final log upload, the hook, and agent disconnects combined.
+Increase `--cancel-cleanup-timeout` if cleanup needs a larger force-stop budget;
+this is not a dedicated hook timeout or a guarantee of that much hook runtime.
+
+The hook cannot run if the agent itself is SIGKILLed or the host shuts down;
+external service shutdown deadlines can also interrupt it. With multiple workers
+on one host, hooks can overlap; cleanup must target only that job's resources.
 
 Both hooks inherit the agent's environment, plus these trusted values (not the
 job's environment):
