@@ -37,6 +37,8 @@ const (
 	defaultDownloadPartSizeMB  = 32
 )
 
+var s3DownloadIdleTimeout = time.Minute
+
 // Options holds configuration for S3Blob and can be constructed from an S3 URL in a similar way to gocloud.dev
 // Example S3 URLs:
 //
@@ -221,7 +223,11 @@ func NewS3Blob(ctx context.Context, s3url string) (*S3Blob, error) {
 	// Keep at least as many idle connections warm per host as the highest
 	// concurrency we use, so parallel parts reuse connections instead of
 	// re-establishing them (the SDK default of 10 throttles higher concurrency).
+	// Dial (30s), TLS (10s) and idle-pool (90s) limits come from the SDK.
+	// The response-header timer starts after the request body has been sent,
+	// so it does not limit healthy uploads.
 	httpClient := awshttp.NewBuildableClient().WithTransportOptions(func(t *http.Transport) {
+		t.ResponseHeaderTimeout = 30 * time.Second
 		t.MaxIdleConnsPerHost = settings.maxIdleConnsPerHost
 		if t.MaxIdleConns < settings.maxIdleConnsPerHost {
 			t.MaxIdleConns = settings.maxIdleConnsPerHost
@@ -248,10 +254,15 @@ func NewS3Blob(ctx context.Context, s3url string) (*S3Blob, error) {
 		u.Concurrency = settings.uploadConcurrency
 		u.PartSize = settings.uploadPartSize
 	})
+	// A connection-wide read timeout can expire while a healthy upload is
+	// still sending its body. Only downloads should use the inactivity bound.
+	downloadHTTPClient := httpClient.WithReadTimeout(s3DownloadIdleTimeout)
 	downloader := manager.NewDownloader(client, func(d *manager.Downloader) { //nolint:staticcheck // SA1019: pending migration to transfermanager
 		d.Concurrency = settings.downloadConcurrency
 		d.PartSize = settings.downloadPartSize
-	})
+	}, manager.WithDownloaderClientOptions(func(o *s3.Options) { //nolint:staticcheck // SA1019: pending migration to transfermanager
+		o.HTTPClient = downloadHTTPClient
+	}))
 
 	slog.Debug("configured S3 transfer manager",
 		"upload_concurrency", settings.uploadConcurrency,

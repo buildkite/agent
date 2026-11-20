@@ -650,6 +650,9 @@ func maybeRefreshRetention(ctx context.Context, blobStore store.Blob, fallback b
 	if !ok || fallback {
 		return
 	}
+	// Best-effort retention refresh must not hold up a healthy restore.
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
 	refresher.RefreshRetention(ctx, key, retention)
 }
 

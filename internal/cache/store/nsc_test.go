@@ -3,8 +3,10 @@ package store
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -31,6 +33,121 @@ func TestNscRetentionArg(t *testing.T) {
 				t.Errorf("nscRetentionArg(%v) = %q, want %q", tt.retention, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestNscDownloadInactivity(t *testing.T) {
+	old := nscDownloadIdleTimeout
+	nscDownloadIdleTimeout = 100 * time.Millisecond
+	t.Cleanup(func() { nscDownloadIdleTimeout = old })
+	for _, progress := range []bool{false, true} {
+		t.Run(fmt.Sprintf("progress=%t", progress), func(t *testing.T) {
+			dest := filepath.Join(t.TempDir(), "archive")
+			n := &NscStore{namespace: "test", run: func(ctx context.Context, _ string, _ ...string) (*CommandResult, error) {
+				if !progress {
+					<-ctx.Done()
+					return nil, ctx.Err()
+				}
+				// Match nsc's preallocated temporary file, NOT the final path.
+				f, err := os.Create(filepath.Join(filepath.Dir(dest), ".archive.tmp"))
+				if err != nil {
+					return nil, err
+				}
+				defer func() { _ = f.Close() }()
+				if err := f.Truncate(1024); err != nil {
+					return nil, err
+				}
+				for i := 0; i < 12; i++ {
+					select {
+					case <-ctx.Done():
+						return nil, ctx.Err()
+					case <-time.After(25 * time.Millisecond):
+						if _, err := f.WriteAt([]byte("x"), int64(i)); err != nil {
+							return nil, err
+						}
+					}
+				}
+				if err := os.WriteFile(dest, []byte("done"), 0o600); err != nil {
+					return nil, err
+				}
+				return &CommandResult{}, nil
+			}}
+			ctx := t.Context()
+			if !progress {
+				var cancel context.CancelFunc
+				ctx, cancel = context.WithTimeout(ctx, 200*time.Millisecond)
+				defer cancel()
+			}
+			info, err := n.Download(ctx, "key", dest)
+			if progress {
+				if err != nil || info.BytesTransferred != 4 {
+					t.Fatalf("healthy long download = %+v, %v", info, err)
+				}
+			} else if runtime.GOOS == "windows" {
+				if !errors.Is(err, context.DeadlineExceeded) || errors.Is(err, errNscDownloadStalled) {
+					t.Fatalf("Windows download must honor caller deadline, not metadata inactivity: %v", err)
+				}
+			} else if !errors.Is(err, errNscDownloadStalled) {
+				t.Fatalf("stalled download = %v", err)
+			}
+		})
+	}
+	t.Run("caller deadline", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(t.Context(), 50*time.Millisecond)
+		defer cancel()
+		n := &NscStore{namespace: "test", run: func(ctx context.Context, _ string, _ ...string) (*CommandResult, error) {
+			<-ctx.Done()
+			return nil, ctx.Err()
+		}}
+		_, err := n.Download(ctx, "key", filepath.Join(t.TempDir(), "archive"))
+		if !errors.Is(err, context.DeadlineExceeded) || errors.Is(err, errNscDownloadStalled) {
+			t.Fatalf("caller deadline became an inactivity error: %v", err)
+		}
+	})
+}
+
+func TestNscDownloadJoinsWriter(t *testing.T) {
+	old := nscDownloadIdleTimeout
+	nscDownloadIdleTimeout = 200 * time.Millisecond
+	t.Cleanup(func() { nscDownloadIdleTimeout = old })
+	dest := filepath.Join(t.TempDir(), "archive")
+	t.Setenv("NSC_TEST_WRITER", dest)
+	n := &NscStore{namespace: "test", run: func(ctx context.Context, _ string, _ ...string) (*CommandResult, error) {
+		return runCommand(ctx, "", os.Args[0], "-test.run=^TestNscDownloadWriterProcess$")
+	}}
+	ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
+	defer cancel()
+	_, err := n.Download(ctx, "key", dest)
+	if runtime.GOOS == "windows" {
+		if !errors.Is(err, context.DeadlineExceeded) || errors.Is(err, errNscDownloadStalled) {
+			t.Fatalf("Windows caller cancellation = %v", err)
+		}
+	} else if !errors.Is(err, errNscDownloadStalled) {
+		t.Fatalf("stalled subprocess = %v", err)
+	}
+	if _, err := os.Stat(dest); err != nil {
+		t.Fatalf("writer never started: %v", err)
+	}
+	if err := os.Remove(dest); err != nil {
+		t.Fatal(err)
+	}
+	// The child resumes writes after its stall if cancellation did not join it.
+	time.Sleep(600 * time.Millisecond)
+	if _, err := os.Stat(dest); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("writer recreated destination after Download returned: %v", err)
+	}
+}
+
+func TestNscDownloadWriterProcess(t *testing.T) {
+	dest := os.Getenv("NSC_TEST_WRITER")
+	if dest == "" {
+		return
+	}
+	for {
+		if err := os.WriteFile(dest, []byte("writer"), 0o600); err != nil {
+			os.Exit(1)
+		}
+		time.Sleep(500 * time.Millisecond)
 	}
 }
 
