@@ -113,6 +113,7 @@ func RunExec(ctx context.Context, l logger.Logger, apiClient *api.Client, cfg Co
 	}
 	if err != nil {
 		if cfg.FailOnError {
+			_, _ = fmt.Fprintln(stderr, "^^^ +++")
 			return fmt.Errorf("failed to save cache %q: %w", name, err)
 		}
 		l.Warnf("Failed to save cache %q: %v; continuing without failing the build", name, err)
