@@ -16,6 +16,15 @@ type ReusePlan struct {
 	Outputs            ReuseOutputs   `json:"outputs"`
 	Restore            []ReuseRestore `json:"restore"`
 
+	// SaveOnFailure means the step's outcome is saved even when its command
+	// fails, e.g. because it's soft-failed.
+	SaveOnFailure bool `json:"save_on_failure"`
+
+	// Mode is why the step runs: "reuse", "shadow", "verify", "run_anyway",
+	// "rebuild_without_reuse", "retry" or "repair". ModeReason explains it.
+	Mode       *string `json:"mode"`
+	ModeReason *string `json:"mode_reason"`
+
 	// Values are the output values this job has set with `output set`.
 	Values map[string]string `json:"values"`
 }

@@ -149,6 +149,8 @@ var ReuseRestoreCommand = &cli.Command{
 			return nil
 		}
 
+		logReuseMode(l, plan)
+
 		r := &reuseRestorer{l: l, client: client, jobID: cfg.Job, bucketURL: cfg.BucketURL}
 
 		keySet, err := loadReuseVerificationKeys(ctx, cfg)
@@ -216,12 +218,15 @@ var ReuseSaveCommand = &cli.Command{
 			return nil
 		}
 
+		// A failed command's outputs are only stored when its outcome is saved.
+		storeOutputs := cfg.ExitStatus == 0 || plan.SaveOnFailure
+
 		if !plan.Save {
 			reason := "saving is disabled for this job"
 			if plan.SaveDisabledReason != nil && *plan.SaveDisabledReason != "" {
 				reason = *plan.SaveDisabledReason
 			}
-			if cfg.ExitStatus != 0 || len(plan.Outputs.Paths) == 0 {
+			if !storeOutputs || len(plan.Outputs.Paths) == 0 {
 				l.Infof("Step reuse: not saving result: %s", reason)
 				return nil
 			}
@@ -230,7 +235,7 @@ var ReuseSaveCommand = &cli.Command{
 		}
 
 		result := &api.ReuseResult{ExitStatus: cfg.ExitStatus, Paths: []api.ReusePath{}}
-		if cfg.ExitStatus == 0 {
+		if storeOutputs {
 			s := &reuseSaver{l: l, bucketURL: cfg.BucketURL}
 			s.save(ctx, plan, result)
 		}
@@ -317,6 +322,32 @@ func verifyRestoreSignature(keySet any, entry api.ReuseRestore) (path, reason st
 		}
 	}
 	return "", ""
+}
+
+// reuseModeExplanations say why a step runs in each step reuse mode.
+var reuseModeExplanations = map[string]string{
+	"shadow":                "the step runs and its result is compared with the stored result",
+	"verify":                "the step runs to verify the stored result",
+	"run_anyway":            "the step runs even though a stored result could be reused",
+	"rebuild_without_reuse": "the build was rebuilt without step reuse, so the step runs",
+	"retry":                 "the step was retried, so it runs",
+	"repair":                "the step runs to repair an unavailable stored result",
+}
+
+// logReuseMode explains why the step is running, unless it runs in the
+// normal "reuse" mode.
+func logReuseMode(l logger.Logger, plan *api.ReusePlan) {
+	if plan.Mode == nil || *plan.Mode == "" || *plan.Mode == "reuse" {
+		return
+	}
+	msg := fmt.Sprintf("Step reuse: %s mode", strings.ReplaceAll(*plan.Mode, "_", " "))
+	if explanation, ok := reuseModeExplanations[*plan.Mode]; ok {
+		msg += ", " + explanation
+	}
+	if plan.ModeReason != nil && *plan.ModeReason != "" {
+		msg += " (" + *plan.ModeReason + ")"
+	}
+	l.Infof("%s", msg)
 }
 
 func reuseRetrier() *roko.Retrier {

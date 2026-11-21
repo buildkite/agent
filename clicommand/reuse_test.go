@@ -16,6 +16,7 @@ import (
 
 	"github.com/buildkite/agent/v4/api"
 	"github.com/buildkite/agent/v4/internal/reuse"
+	"github.com/buildkite/agent/v4/logger"
 	"github.com/buildkite/go-pipeline/jwkutil"
 	"github.com/google/go-cmp/cmp"
 	"github.com/lestrrat-go/jwx/v3/jwa"
@@ -388,5 +389,78 @@ func TestReuseResultSignatures(t *testing.T) {
 				t.Errorf("VERSION = %q after a rejected restore, want it untouched", got)
 			}
 		})
+	}
+}
+
+func TestReuseSaveOnFailure(t *testing.T) {
+	clearReuseSigningEnv(t)
+	t.Setenv("TMPDIR", t.TempDir())
+	t.Chdir(t.TempDir())
+	storeURL := "file://" + t.TempDir()
+	if err := os.WriteFile("report.xml", []byte("<failures/>\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	want, _, err := reuse.TreeDigest("report.xml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	outputs := api.ReuseOutputs{Paths: []string{"report.xml"}}
+	fake := &fakeReuseAPI{plans: map[string]api.ReusePlan{
+		"soft":     {StepKey: "test", Save: true, SaveOnFailure: true, Outputs: outputs},
+		"hard":     {StepKey: "test", Save: true, Outputs: outputs},
+		"nosave":   {StepKey: "test", SaveOnFailure: true, Outputs: outputs},
+		"discard":  {StepKey: "test", Save: true, SaveOnFailure: true, Outputs: api.ReuseOutputs{Paths: []string{"missing/"}}},
+		"no-paths": {StepKey: "test", Save: true, SaveOnFailure: true},
+	}}
+	server := httptest.NewServer(fake)
+	t.Cleanup(server.Close)
+
+	for _, tt := range []struct {
+		job         string
+		wantPaths   int
+		wantDiscard bool
+	}{
+		{job: "soft", wantPaths: 1},
+		{job: "hard"},
+		{job: "nosave", wantPaths: 1},
+		{job: "discard", wantDiscard: true},
+		{job: "no-paths"},
+	} {
+		t.Run(tt.job, func(t *testing.T) {
+			fake.results = nil
+			if err := runReuseCommand(t, server.URL, "save", "--job", tt.job, "--exit-status", "2", "--cache-store-url", storeURL); err != nil {
+				t.Fatalf("reuse save error = %v", err)
+			}
+			if len(fake.results) != 1 {
+				t.Fatalf("results = %+v, want one", fake.results)
+			}
+			got := fake.results[0]
+			if got.ExitStatus != 2 || len(got.Paths) != tt.wantPaths || (got.DiscardReason != nil) != tt.wantDiscard {
+				t.Fatalf("result = %+v, want exit status 2, %d paths, discarded %t", got, tt.wantPaths, tt.wantDiscard)
+			}
+			if tt.wantPaths > 0 && got.Paths[0].Digest != want {
+				t.Errorf("path digest = %s, want %s", got.Paths[0].Digest, want)
+			}
+		})
+	}
+}
+
+func TestLogReuseMode(t *testing.T) {
+	ptr := func(s string) *string { return &s }
+	for _, tt := range []struct {
+		mode, reason *string
+		want         []string
+	}{
+		{want: []string{}},
+		{mode: ptr("reuse"), want: []string{}},
+		{mode: ptr("shadow"), want: []string{"[info] Step reuse: shadow mode, the step runs and its result is compared with the stored result"}},
+		{mode: ptr("run_anyway"), reason: ptr("reuse: false in the build"), want: []string{"[info] Step reuse: run anyway mode, the step runs even though a stored result could be reused (reuse: false in the build)"}},
+		{mode: ptr("future"), want: []string{"[info] Step reuse: future mode"}},
+	} {
+		l := logger.NewBuffer()
+		logReuseMode(l, &api.ReusePlan{Mode: tt.mode, ModeReason: tt.reason})
+		if diff := cmp.Diff(l.Messages, tt.want); diff != "" {
+			t.Errorf("logReuseMode(%v) messages (-got +want):\n%s", tt.mode, diff)
+		}
 	}
 }
