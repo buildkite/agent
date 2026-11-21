@@ -4,12 +4,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"sync"
 	"sync/atomic"
 
 	"github.com/buildkite/agent/v4/api"
+	"github.com/buildkite/agent/v4/internal/experiments"
 	"github.com/buildkite/agent/v4/logger"
 	"github.com/buildkite/agent/v4/status"
+	"github.com/buildkite/osc7501"
 	"github.com/dustin/go-humanize"
 )
 
@@ -66,6 +69,9 @@ type LogStreamer struct {
 
 	// Have we stopped?
 	stopped bool
+
+	// Scans final log bytes in order, before upload workers can reorder them.
+	programStatus *osc7501.Scanner
 }
 
 // NewLogStreamer creates a new instance of the log streamer.
@@ -90,6 +96,10 @@ func (ls *LogStreamer) Start(ctx context.Context) error {
 
 	if ls.conf.MaxSizeBytes <= 0 {
 		ls.conf.MaxSizeBytes = defaultLogMaxSize
+	}
+
+	if experiments.IsEnabled(ctx, experiments.ProgramStatus) {
+		ls.programStatus = &osc7501.Scanner{W: io.Discard}
 	}
 
 	for i := range ls.conf.Concurrency {
@@ -145,6 +155,10 @@ func (ls *LogStreamer) Process(ctx context.Context, output []byte) error {
 			Size:     size,
 		}
 		output = output[size:]
+
+		if ls.programStatus != nil {
+			chunk.ExecutionEvents = ls.programStatusEvents(chunk.Data)
+		}
 
 		// Stream the chunk onto the queue!
 		select {

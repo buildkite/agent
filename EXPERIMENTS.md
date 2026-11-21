@@ -95,6 +95,8 @@ Shows [OSC 7501 program status](https://www.superlogical.com/rex/docs/build/prog
 
 The report itself stays in the log without its message and title, which only appear in the description line. Messages and titles are decoded before secret redaction, so redacted values are removed from them. Reports that repeat the previous report for the same `id`, or only change its `progress`, don't add a line.
 
+The log uploader also sends report IDs, states, apps, kinds and progress as optional metadata with each log chunk. Byte offsets refer to the final log, after secret redaction and timestamps. A report split across chunks accompanies the chunk where it ends. Each chunk includes at most 128 reports and 64 KiB of metadata; any remaining reports stay in the log but are omitted from the metadata. Messages and titles are not included in this metadata. Backend capture must also be enabled for Buildkite to retain it.
+
 The experiment also sets `BUILDKITE_PROGRAM_STATUS=true` in the job environment, unless the job already sets it. Tools such as the Buildkite CLI (`bk`) only send reports in a Buildkite job when it's `true`. Set it to `false` in the job to turn them off.
 
 `buildkite-agent pipeline upload` and `buildkite-agent artifact upload` send their own reports, with `app=buildkite-agent`, following the same `BUILDKITE_PROGRAM_STATUS` rules as `bk`. `artifact upload` reports its progress as the percentage of files uploaded.
