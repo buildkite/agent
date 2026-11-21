@@ -444,6 +444,14 @@ var PipelineUploadCommand = &cli.Command{
 				// Hash declared step reuse input files.
 				inputsDigest.apply(ctx, l, result.Steps)
 
+				// Sign step reuse declarations, which the step signature
+				// doesn't cover, binding them to the step signature.
+				if key != nil {
+					if err := signReuseDeclarations(key, result.Steps); err != nil {
+						return fmt.Errorf("couldn't sign step reuse fields: %w", err)
+					}
+				}
+
 				// All logging happens to stderr.
 				// So this can be used with other tools to get interpolated, signed
 				// JSON or YAML.
@@ -1174,6 +1182,34 @@ func (ida *inputsDigestApplicator) apply(ctx context.Context, l logger.Logger, s
 			st.RemainingFields["inputs_digest"] = digest
 		}
 	}
+}
+
+// signReuseDeclarations sets `reuse_signature` on every signed command step
+// (including those within groups) that declares step reuse. It covers the
+// step's `inputs`, `outputs`, `reuse` and `inputs_digest`, and its signature.
+func signReuseDeclarations(key signature.Key, steps pipeline.Steps) error {
+	for _, step := range steps {
+		switch st := step.(type) {
+		case *pipeline.GroupStep:
+			if err := signReuseDeclarations(key, st.Steps); err != nil {
+				return err
+			}
+
+		case *pipeline.CommandStep:
+			if st.Signature == nil || !reuse.HasDeclaration(st.RemainingFields) {
+				continue
+			}
+			sig, err := reuse.SignDeclaration(key, st.Signature.Value, st.RemainingFields)
+			if err != nil {
+				return fmt.Errorf("step %q: %w", cmp.Or(st.Key, st.Label, st.Command), err)
+			}
+			value := ordered.NewMap[string, any](2)
+			value.Set("algorithm", sig.Algorithm)
+			value.Set("value", sig.Value)
+			st.RemainingFields[reuse.SignatureField] = value
+		}
+	}
+	return nil
 }
 
 func (ida *inputsDigestApplicator) hash(ctx context.Context, files any) (reuse.Result, error) {

@@ -9,6 +9,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/buildkite/agent/v4/internal/reuse"
 	"github.com/buildkite/agent/v4/logger"
 	"github.com/buildkite/go-pipeline/signature"
 	"github.com/gowebpki/jcs"
@@ -58,6 +59,19 @@ func (r *JobRunner) verifyJob(ctx context.Context, keySet any) error {
 	if err != nil {
 		r.agentLogger.Debugf("failed to verifyJob: step.Signature.Verify(Job.Env, stepWithInvariants, JWKS) = %v", err)
 		return newInvalidSignatureError(ErrVerificationFailed)
+	}
+
+	// The step signature doesn't cover step reuse fields, so they have their
+	// own signature, bound to the step signature. Check it before matrix
+	// interpolation changes the step.
+	if reuse.HasDeclaration(step.RemainingFields) {
+		if err := reuse.VerifyDeclaration(keySet, step.Signature.Value, step.RemainingFields); err != nil {
+			r.agentLogger.Debugf("failed to verifyJob: %v", err)
+			if errors.Is(err, reuse.ErrNoDeclarationSignature) || errors.Is(err, reuse.ErrDeclarationMismatch) {
+				return newInvalidSignatureError(ErrInvalidJob)
+			}
+			return newInvalidSignatureError(ErrVerificationFailed)
+		}
 	}
 
 	signedFields := step.Signature.SignedFields

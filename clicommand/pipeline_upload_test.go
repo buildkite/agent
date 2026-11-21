@@ -1498,3 +1498,102 @@ func TestPipelineUploadReuseInputsDigest(t *testing.T) {
 		t.Errorf("step plain has inputs_digest, want none")
 	}
 }
+
+func TestPipelineUploadSignsReuseDeclarations(t *testing.T) {
+	t.Setenv("BUILDKITE_AGENT_JWKS_FILE", "")
+	t.Setenv("BUILDKITE_REPO", "https://example.test/repo.git")
+	dir := t.TempDir()
+	cmd := exec.Command("git", "init", "-q")
+	cmd.Dir = dir
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git init: %v\n%s", err, out)
+	}
+	t.Chdir(dir)
+	const yml = `steps:
+  - key: deps
+    command: ./install.sh
+    outputs:
+      paths: ["node_modules/"]
+    reuse: true
+  - group: g
+    steps:
+      - key: build
+        command: ./build.sh
+        inputs:
+          steps: [deps]
+        reuse:
+          scope: pipeline
+  - key: plain
+    command: ./y.sh
+`
+	if err := os.WriteFile("pipeline.yml", []byte(yml), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	priv, pub, err := jwkutil.NewKeyPair("test-key", jwa.EdDSA())
+	if err != nil {
+		t.Fatal(err)
+	}
+	keyFile, err := json.Marshal(priv)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile("key.json", keyFile, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	var stdout bytes.Buffer
+	upload := *PipelineUploadCommand
+	app := &cli.Command{Name: "buildkite-agent", Commands: []*cli.Command{&upload}, Writer: &stdout, ErrWriter: io.Discard}
+	args := []string{"buildkite-agent", "upload", "--dry-run", "--agent-access-token", "unused-token", "--jwks-file", "key.json", "--jwks-key-id", "test-key", "pipeline.yml"}
+	if err := app.Run(t.Context(), args); err != nil {
+		t.Fatal(err)
+	}
+
+	// Decode each command step as a job's step is decoded.
+	var output struct {
+		Steps []json.RawMessage `json:"steps"`
+	}
+	if err := json.Unmarshal(stdout.Bytes(), &output); err != nil {
+		t.Fatalf("decoding signed pipeline: %v", err)
+	}
+	var group struct {
+		Steps []json.RawMessage `json:"steps"`
+	}
+	if err := json.Unmarshal(output.Steps[1], &group); err != nil {
+		t.Fatal(err)
+	}
+	decode := func(raw json.RawMessage) *pipeline.CommandStep {
+		t.Helper()
+		step := new(pipeline.CommandStep)
+		if err := json.Unmarshal(raw, step); err != nil {
+			t.Fatal(err)
+		}
+		return step
+	}
+	deps, build, plain := decode(output.Steps[0]), decode(group.Steps[0]), decode(output.Steps[2])
+
+	for _, step := range []*pipeline.CommandStep{deps, build} {
+		sig, ok := step.RemainingFields[reuse.SignatureField].(*ordered.MapSA)
+		if !ok {
+			t.Fatalf("step %q reuse_signature = %#v, want a map", step.Key, step.RemainingFields[reuse.SignatureField])
+		}
+		if alg, _ := sig.Get("algorithm"); alg != "EdDSA" {
+			t.Errorf("step %q reuse_signature.algorithm = %v, want EdDSA", step.Key, alg)
+		}
+		if err := reuse.VerifyDeclaration(pub, step.Signature.Value, step.RemainingFields); err != nil {
+			t.Errorf("step %q VerifyDeclaration() = %v", step.Key, err)
+		}
+	}
+	if _, ok := plain.RemainingFields[reuse.SignatureField]; ok {
+		t.Errorf("step plain has reuse_signature, want none")
+	}
+
+	// Changing the declaration, or moving it to another step, fails.
+	build.RemainingFields["inputs"] = map[string]any{"steps": []any{"other"}}
+	if err := reuse.VerifyDeclaration(pub, build.Signature.Value, build.RemainingFields); !errors.Is(err, reuse.ErrDeclarationMismatch) {
+		t.Errorf("VerifyDeclaration() with tampered inputs = %v, want %v", err, reuse.ErrDeclarationMismatch)
+	}
+	if err := reuse.VerifyDeclaration(pub, plain.Signature.Value, deps.RemainingFields); !errors.Is(err, reuse.ErrDeclarationMismatch) {
+		t.Errorf("VerifyDeclaration() with another step's signature = %v, want %v", err, reuse.ErrDeclarationMismatch)
+	}
+}
