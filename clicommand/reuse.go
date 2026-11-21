@@ -1,6 +1,7 @@
 package clicommand
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -50,8 +51,9 @@ Restores the outputs of upstream steps that the current step declares in
 this before the command phase when step reuse is enabled for the job.
 
 If an upstream output is missing from the store, is corrupt, or its signature
-doesn't verify, it is reported to Buildkite, which can schedule a repair run,
-and the command exits with status 94.
+doesn't verify, it is reported to Buildkite. If Buildkite schedules a run to
+repair it, the command exits with status 94; otherwise it logs a warning and
+exits successfully, so that the step's command runs without it.
 
 Other failures, such as a missing or unreachable cache store or local
 filesystem errors, are logged as warnings, and the affected output is skipped.
@@ -569,8 +571,11 @@ func (r *reuseRestorer) restorePath(ctx context.Context, stepKey string, p api.R
 	return "", "", nil
 }
 
+// inputUnavailable reports an unavailable upstream output. It returns an exit
+// error with status reuse.ExitCodeInputUnavailable if Buildkite schedules a
+// repair run, and otherwise nil, so that the command runs without the output.
 func (r *reuseRestorer) inputUnavailable(ctx context.Context, entry api.ReuseRestore, outputPath, kind, reason string) error {
-	r.l.Errorf("Step reuse: upstream output %s from step %s is unavailable (%s); requesting a repair run", outputPath, entry.StepKey, reason)
+	r.l.Errorf("Step reuse: upstream output %s from step %s is unavailable (%s); reporting it", outputPath, entry.StepKey, reason)
 	report := &api.ReuseInputUnavailable{StepKey: entry.StepKey, JobID: entry.JobID, Path: outputPath, Kind: kind, Reason: reason}
 	resp, _, err := roko.DoFunc2(ctx, reuseRetrier(), func(rt *roko.Retrier) (*api.ReuseInputUnavailableResponse, *api.Response, error) {
 		out, resp, err := r.client.ReportReuseInputUnavailable(ctx, r.jobID, report)
@@ -582,10 +587,15 @@ func (r *reuseRestorer) inputUnavailable(ctx context.Context, entry api.ReuseRes
 		}
 		return out, resp, err
 	})
-	switch {
-	case err != nil:
-		r.l.Warnf("Step reuse: couldn't report the unavailable input: %v", err)
-	case resp.Message != "":
+	if err != nil {
+		r.l.Warnf("Step reuse: couldn't report the unavailable input, running the command without it: %v", err)
+		return nil
+	}
+	if !resp.Repair {
+		r.l.Warnf("Step reuse: no repair run (%s); running the command without upstream output %s", cmp.Or(resp.Message, "no reason given"), outputPath)
+		return nil
+	}
+	if resp.Message != "" {
 		r.l.Infof("Step reuse: %s", resp.Message)
 	}
 	return NewSilentExitError(reuse.ExitCodeInputUnavailable)

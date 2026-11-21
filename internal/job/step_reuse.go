@@ -19,8 +19,9 @@ func (e *Executor) stepReuseEnabled() bool {
 
 // restoreStepReuseInputs restores upstream step outputs into the checkout
 // before the command phase. It returns an error with exit code
-// reuse.ExitCodeInputUnavailable if an upstream output is unavailable, in
-// which case the command must not run. Other failures are only logged.
+// reuse.ExitCodeInputUnavailable if an upstream output is unavailable and
+// Buildkite has scheduled a run to repair it, in which case the command must
+// not run. Other failures are only logged.
 func (e *Executor) restoreStepReuseInputs(ctx context.Context) error {
 	span, ctx := tracetools.StartSpanFromContext(ctx, "step-reuse-restore", e.TracingBackend)
 	var err error

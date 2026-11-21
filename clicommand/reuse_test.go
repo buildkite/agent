@@ -30,6 +30,11 @@ type fakeReuseAPI struct {
 	plans       map[string]api.ReusePlan
 	results     []api.ReuseResult
 	unavailable []api.ReuseInputUnavailable
+
+	// unavailableStatus and unavailableBody are the status and body of
+	// input_unavailable responses, by default a scheduled repair.
+	unavailableStatus int
+	unavailableBody   string
 }
 
 func (f *fakeReuseAPI) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
@@ -54,7 +59,14 @@ func (f *fakeReuseAPI) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 		var r api.ReuseInputUnavailable
 		_ = json.NewDecoder(req.Body).Decode(&r)
 		f.unavailable = append(f.unavailable, r)
-		_, _ = io.WriteString(rw, `{"repair":true,"message":"repair scheduled"}`)
+		if f.unavailableStatus != 0 {
+			rw.WriteHeader(f.unavailableStatus)
+		}
+		body := f.unavailableBody
+		if body == "" {
+			body = `{"repair":true,"message":"repair scheduled"}`
+		}
+		_, _ = io.WriteString(rw, body)
 	default:
 		http.Error(rw, `{"message":"not found"}`, http.StatusNotFound)
 	}
@@ -215,7 +227,8 @@ func TestReuseSaveAndRestore(t *testing.T) {
 		t.Errorf("restore state file still exists after reading: %v", err)
 	}
 
-	// A missing or corrupt archive is reported, and the command exits 94.
+	// A missing or corrupt archive is reported, and when Buildkite schedules
+	// a repair the command exits 94.
 	missing := result.Paths[0]
 	missing.Key = "step-reuse/missing.tar.gz"
 	garbage := result.Paths[0]
@@ -244,6 +257,28 @@ func TestReuseSaveAndRestore(t *testing.T) {
 			t.Errorf("input_unavailable reports for %s = %+v, want [%+v]", tt.path.Key, fake.unavailable, tt.want)
 		}
 	}
+
+	// When Buildkite doesn't schedule a repair, or the report fails, the
+	// command runs without the output.
+	for _, tt := range []struct {
+		name   string
+		status int
+		body   string
+	}{
+		{"no repair", 0, `{"repair":false,"message":"repair limit reached"}`},
+		{"report failed", http.StatusUnprocessableEntity, `{"message":"no"}`},
+	} {
+		fake.unavailable = nil
+		fake.unavailableStatus, fake.unavailableBody = tt.status, tt.body
+		fake.plans["missing"] = api.ReusePlan{StepKey: "test", Restore: []api.ReuseRestore{{StepKey: "build", JobID: "build-job", Paths: []api.ReusePath{missing}}}}
+		if err := runReuseCommand(t, server.URL, "restore", "--job", "missing", "--cache-store-url", storeURL); err != nil {
+			t.Errorf("reuse restore (%s) error = %v, want nil so that the command runs", tt.name, err)
+		}
+		if len(fake.unavailable) != 1 {
+			t.Errorf("input_unavailable reports (%s) = %+v, want one", tt.name, fake.unavailable)
+		}
+	}
+	fake.unavailableStatus, fake.unavailableBody = 0, ""
 
 	// Other failures aren't reported: the path is skipped and the rest are
 	// restored.
