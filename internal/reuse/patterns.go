@@ -8,6 +8,10 @@ import (
 	"drjosh.dev/zzglob"
 )
 
+// ExitCodeInputUnavailable is the exit status of `buildkite-agent reuse
+// restore`, and of the job, when an upstream step's output can't be restored.
+const ExitCodeInputUnavailable = 94
+
 // StringList converts a pipeline value that is either a single string or a
 // list of strings into a slice of strings. A nil value yields a nil slice.
 func StringList(value any) ([]string, error) {

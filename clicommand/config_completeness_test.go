@@ -49,12 +49,17 @@ var commandConfigPairs = []configCommandPair{
 	{Config: MetaDataKeysConfig{}, Command: MetaDataKeysCommand},
 	{Config: MetaDataSetConfig{}, Command: MetaDataSetCommand},
 	{Config: MetaDataSetBatchConfig{}, Command: MetaDataSetBatchCommand},
+	{Config: OutputGetConfig{}, Command: OutputGetCommand},
+	{Config: OutputSetConfig{}, Command: OutputSetCommand},
 	{Config: OIDCTokenConfig{}, Command: OIDCRequestTokenCommand},
 	{Config: PipelineUploadConfig{}, Command: PipelineUploadCommand},
 	{Config: RedactorAddConfig{}, Command: RedactorAddCommand},
+	{Config: ReuseRestoreConfig{}, Command: ReuseRestoreCommand},
+	{Config: ReuseSaveConfig{}, Command: ReuseSaveCommand},
 	{Config: SecretGetConfig{}, Command: SecretGetCommand},
 	{Config: StepCancelConfig{}, Command: StepCancelCommand},
 	{Config: StepGetConfig{}, Command: StepGetCommand},
+	{Config: StepHashFilesConfig{}, Command: StepHashFilesCommand},
 	{Config: StepUpdateConfig{}, Command: StepUpdateCommand},
 	{Config: ToolKeygenConfig{}, Command: ToolKeygenCommand},
 	{Config: ToolSignConfig{}, Command: ToolSignCommand},
@@ -124,33 +129,30 @@ func commandsByFullName(t *testing.T, commands []*cli.Command) map[string]*cli.C
 	t.Helper()
 
 	result := make(map[string]*cli.Command)
+	for _, command := range leafCommands(commands) {
+		result[command.FullName()] = command
+	}
+	return result
+}
 
+// leafCommands returns the commands that have no subcommands, recursing into
+// command groups.
+func leafCommands(commands []*cli.Command) []*cli.Command {
+	var leaves []*cli.Command
 	for _, command := range commands {
 		if len(command.Commands) == 0 {
-			result[command.FullName()] = command
+			leaves = append(leaves, command)
+			continue
 		}
-
-		for _, subcommand := range command.Commands {
-			result[subcommand.FullName()] = subcommand
-		}
+		leaves = append(leaves, leafCommands(command.Commands)...)
 	}
-
-	return result
+	return leaves
 }
 
 func TestAllCommandsAreTestedForConfigCompleteness(t *testing.T) {
 	t.Parallel()
 
-	allCommands := make([]*cli.Command, 0, len(commandConfigPairs))
-	for _, command := range BuildkiteAgentCommands {
-		if len(command.Commands) > 0 {
-			allCommands = append(allCommands, command.Commands...)
-		} else {
-			allCommands = append(allCommands, command)
-		}
-	}
-
-	for _, command := range allCommands {
+	for _, command := range leafCommands(BuildkiteAgentCommands) {
 		found := slices.ContainsFunc(commandConfigPairs, func(pair configCommandPair) bool {
 			return pair.Command.FullName() == command.FullName()
 		})

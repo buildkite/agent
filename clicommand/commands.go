@@ -88,6 +88,15 @@ var BuildkiteAgentCommands = []*cli.Command{
 		},
 	},
 	{
+		Name:     "output",
+		Category: categoryJobCommands,
+		Usage:    "Get/set step output values used by step reuse",
+		Commands: []*cli.Command{
+			OutputSetCommand,
+			OutputGetCommand,
+		},
+	},
+	{
 		Name:     "redactor",
 		Category: categoryJobCommands,
 		Usage:    "Redact sensitive information from logs",
@@ -126,6 +135,15 @@ var BuildkiteAgentCommands = []*cli.Command{
 	},
 	AgentResumeCommand,
 	{
+		Name:     "reuse",
+		Category: categoryInternal,
+		Usage:    "Restore and save step reuse outputs (used by the job executor)",
+		Commands: []*cli.Command{
+			ReuseRestoreCommand,
+			ReuseSaveCommand,
+		},
+	},
+	{
 		Name:     "secret",
 		Category: categoryJobCommands,
 		Usage:    "Interact with Pipelines Secrets",
@@ -141,6 +159,13 @@ var BuildkiteAgentCommands = []*cli.Command{
 			StepGetCommand,
 			StepUpdateCommand,
 			StepCancelCommand,
+			{
+				Name:  "hash",
+				Usage: "Compute step reuse digests",
+				Commands: []*cli.Command{
+					StepHashFilesCommand,
+				},
+			},
 		},
 	},
 	AgentStopCommand,
