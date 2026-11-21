@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"os/exec"
 	"path"
@@ -300,26 +301,36 @@ func loadReuseVerificationKeys(ctx context.Context, cfg ReuseRestoreConfig) (any
 }
 
 // verifyRestoreSignature checks that an upstream result's signed manifest
-// covers every path to restore from it. It returns the first path and a
-// reason when it doesn't.
-func verifyRestoreSignature(keySet any, entry api.ReuseRestore) (path, reason string) {
-	if len(entry.Paths) == 0 {
+// covers every path to restore from it and matches its output values and exit
+// status. It returns the first path and a reason when it doesn't.
+func verifyRestoreSignature(keySet any, entry api.ReuseRestore) (failedPath, reason string) {
+	if len(entry.Paths) == 0 && len(entry.Values) == 0 {
 		return "", ""
 	}
+	failedPath = "values"
+	if len(entry.Paths) > 0 {
+		failedPath = entry.Paths[0].Path
+	}
 	if entry.Signature == nil || *entry.Signature == "" {
-		return entry.Paths[0].Path, "result signature missing"
+		return failedPath, "result signature missing"
 	}
 	m, err := reuse.VerifyManifest(keySet, *entry.Signature)
 	if err != nil {
-		return entry.Paths[0].Path, fmt.Sprintf("result signature invalid: %v", err)
+		return failedPath, fmt.Sprintf("result signature invalid: %v", err)
 	}
 	if m.StepKey != entry.StepKey {
-		return entry.Paths[0].Path, fmt.Sprintf("result signature invalid: signed for step %q", m.StepKey)
+		return failedPath, fmt.Sprintf("result signature invalid: signed for step %q", m.StepKey)
 	}
 	for _, p := range entry.Paths {
 		if !m.Covers(p.Path, p.Digest) {
 			return p.Path, fmt.Sprintf("result signature invalid: doesn't cover %s with digest %s", p.Path, p.Digest)
 		}
+	}
+	if entry.ExitStatus != nil && *entry.ExitStatus != m.ExitStatus {
+		return failedPath, fmt.Sprintf("result signature invalid: signed exit status %d, stored %d", m.ExitStatus, *entry.ExitStatus)
+	}
+	if entry.Values != nil && !maps.Equal(entry.Values, m.Values) {
+		return failedPath, "result signature invalid: stored output values don't match the signed values"
 	}
 	return "", ""
 }

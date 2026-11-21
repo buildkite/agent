@@ -49,6 +49,11 @@ type ReuseRestore struct {
 	Download bool        `json:"download"` // download the step's artifacts too
 	Paths    []ReusePath `json:"paths"`
 
+	// Values and ExitStatus are the upstream job's stored output values and
+	// exit status, which a signed manifest must match.
+	Values     map[string]string `json:"values"`
+	ExitStatus *int              `json:"exit_status"`
+
 	// Signature is the signed result manifest of the upstream job, if it had
 	// a signing key.
 	Signature *string `json:"signature"`

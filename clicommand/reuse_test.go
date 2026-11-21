@@ -342,6 +342,7 @@ func TestReuseResultSignatures(t *testing.T) {
 		t.Errorf("unsigned signature = %q, want nil", *got)
 	}
 
+	zero, two := 0, 2
 	tamperedPaths := slices.Clone(result.Paths)
 	tamperedPaths[0].Digest = result.Paths[1].Digest
 	tamperedPaths[0].Key = result.Paths[1].Key
@@ -357,6 +358,10 @@ func TestReuseResultSignatures(t *testing.T) {
 		{name: "signed with an untrusted key", entry: api.ReuseRestore{StepKey: "build", Paths: result.Paths, Signature: otherSig}, verify: true, wantReason: "result signature invalid: "},
 		{name: "signed for another step", entry: api.ReuseRestore{StepKey: "test", Paths: result.Paths, Signature: result.Signature}, verify: true, wantReason: `result signature invalid: signed for step "build"`},
 		{name: "path digest not covered", entry: api.ReuseRestore{StepKey: "build", Paths: tamperedPaths, Signature: result.Signature}, verify: true, wantReason: "result signature invalid: doesn't cover VERSION"},
+		{name: "signed values match", entry: api.ReuseRestore{StepKey: "build", Paths: result.Paths, Values: map[string]string{"version": "1.2.3"}, ExitStatus: &zero, Signature: result.Signature}, verify: true},
+		{name: "stored value changed", entry: api.ReuseRestore{StepKey: "build", Paths: result.Paths, Values: map[string]string{"version": "6.6.6"}, Signature: result.Signature}, verify: true, wantReason: "result signature invalid: stored output values don't match"},
+		{name: "stored exit status changed", entry: api.ReuseRestore{StepKey: "build", Paths: result.Paths, ExitStatus: &two, Values: map[string]string{"version": "1.2.3"}, Signature: result.Signature}, verify: true, wantReason: "result signature invalid: signed exit status 0, stored 2"},
+		{name: "values-only result with a missing signature", entry: api.ReuseRestore{StepKey: "build", Values: map[string]string{"version": "1.2.3"}}, verify: true, wantReason: "result signature missing"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			fake.unavailable = nil
