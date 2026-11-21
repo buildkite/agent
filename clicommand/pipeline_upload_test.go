@@ -1425,6 +1425,10 @@ func TestPipelineUploadReuseInputsDigest(t *testing.T) {
     command: ./install.sh
     inputs:
       files: ["package.json", "yarn.lock"]
+    inputs_digest:
+      algorithm: blake3
+      files_digest: b3:forged
+      files_count: 1
     outputs:
       paths: ["node_modules/"]
     reuse: true
@@ -1442,6 +1446,10 @@ func TestPipelineUploadReuseInputsDigest(t *testing.T) {
     command: ./x.sh
     inputs:
       files: ["package.json", "nope/**"]
+    inputs_digest:
+      algorithm: blake3
+      files_digest: b3:forged
+      files_count: 1
   - key: plain
     command: ./y.sh
 `
@@ -1491,12 +1499,58 @@ func TestPipelineUploadReuseInputsDigest(t *testing.T) {
 		}
 	}
 
-	// A pattern matching nothing is an error even when another matches.
+	// A pattern matching nothing is an error even when another matches, and
+	// the error replaces the pipeline's own inputs_digest.
 	if diff := cmp.Diff(digestOf(nothing), map[string]any{"error": `inputs.files pattern "nope/**" matched no files`}); diff != "" {
 		t.Errorf("step nothing inputs_digest (-got +want):\n%s", diff)
 	}
 	if _, ok := plain.RemainingFields["inputs_digest"]; ok {
 		t.Errorf("step plain has inputs_digest, want none")
+	}
+
+	// The upload says the digests were computed by the agent, and carries
+	// them in place of the pipeline's.
+	var body struct {
+		ReuseInputsHashed *bool `json:"reuse_inputs_hashed"`
+		Pipeline          struct {
+			Steps []map[string]any `json:"steps"`
+		} `json:"pipeline"`
+	}
+	agentAPI := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/jobs/job-id/pipelines" {
+			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+			http.NotFound(w, r)
+			return
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("decoding upload: %v", err)
+		}
+		w.WriteHeader(http.StatusCreated)
+	}))
+	t.Cleanup(agentAPI.Close)
+	t.Setenv("BUILDKITE_AGENT_JWKS_FILE", "")
+	pipelinePath := filepath.Join(t.TempDir(), "pipeline.yml")
+	if err := os.WriteFile(pipelinePath, []byte(yml), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cmd := *PipelineUploadCommand
+	app := &cli.Command{Name: "buildkite-agent", Commands: []*cli.Command{&cmd}, Writer: io.Discard, ErrWriter: io.Discard}
+	args := []string{"buildkite-agent", "upload", "--endpoint", agentAPI.URL, "--agent-access-token", "job-token", "--job", "job-id", pipelinePath}
+	if err := app.Run(t.Context(), args); err != nil {
+		t.Fatalf("pipeline upload error = %v", err)
+	}
+	if body.ReuseInputsHashed == nil || !*body.ReuseInputsHashed {
+		t.Errorf("upload reuse_inputs_hashed = %v, want true", body.ReuseInputsHashed)
+	}
+	if len(body.Pipeline.Steps) == 0 {
+		t.Fatalf("uploaded steps = %v, want some", body.Pipeline.Steps)
+	}
+	wantDeps, err := reuse.HashFiles(t.Context(), ".", []string{"package.json", "yarn.lock"}, nil, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := body.Pipeline.Steps[0]["inputs_digest"]; !cmp.Equal(got, map[string]any{"algorithm": "blake3", "files_digest": wantDeps.Digest, "files_count": float64(2)}) {
+		t.Errorf("uploaded deps inputs_digest = %v, want the agent's digest %s", got, wantDeps.Digest)
 	}
 }
 

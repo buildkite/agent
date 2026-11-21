@@ -462,6 +462,8 @@ var PipelineUploadCommand = &cli.Command{
 						UUID:     api.NewUUID(),
 						Replace:  cfg.Replace,
 						Pipeline: result,
+						// inputsDigest.apply has replaced every inputs_digest.
+						ReuseInputsHashed: true,
 					},
 					RetrySleepFunc: time.Sleep,
 				}
@@ -1160,8 +1162,9 @@ type inputsDigestApplicator struct {
 }
 
 // apply sets `inputs_digest` on every command step (including those within
-// groups) that declares `inputs.files`. Hashing failures are recorded in the
-// step and logged; they never fail the upload.
+// groups) that declares `inputs.files`, replacing any value from the pipeline
+// definition. Hashing failures are recorded in the step and logged; they never
+// fail the upload.
 func (ida *inputsDigestApplicator) apply(ctx context.Context, l logger.Logger, steps pipeline.Steps) {
 	for _, step := range steps {
 		switch st := step.(type) {

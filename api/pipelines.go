@@ -12,6 +12,11 @@ type PipelineChange struct {
 	UUID     string `json:"uuid"`
 	Pipeline any    `json:"pipeline"`
 	Replace  bool   `json:"replace,omitempty"`
+
+	// ReuseInputsHashed means the agent computed `inputs_digest` for every
+	// step that declares step reuse `inputs.files`, replacing any value from
+	// the pipeline definition. Buildkite ignores `inputs_digest` otherwise.
+	ReuseInputsHashed bool `json:"reuse_inputs_hashed,omitempty"`
 }
 
 type PipelineUploadStatus struct {
