@@ -22,7 +22,23 @@ import (
 const DigestPrefix = "b3:"
 
 // ErrNoFilesMatched is returned by HashFiles when the patterns match no files.
+// A *PatternMatchedNoFilesError also matches it with errors.Is.
 var ErrNoFilesMatched = errors.New("inputs.files matched no files")
+
+// PatternMatchedNoFilesError is returned by HashFiles when an include pattern
+// matches no files, since a pattern that matches nothing is usually a mistake
+// that would leave changes to the intended files out of the digest.
+type PatternMatchedNoFilesError struct {
+	Pattern string
+}
+
+func (e *PatternMatchedNoFilesError) Error() string {
+	return fmt.Sprintf("inputs.files pattern %q matched no files", e.Pattern)
+}
+
+func (e *PatternMatchedNoFilesError) Is(target error) bool {
+	return target == ErrNoFilesMatched
+}
 
 // FileEntry is one hashed input file.
 type FileEntry struct {
@@ -55,7 +71,7 @@ type Hasher struct {
 // HashFiles hashes the committed content of the tracked files in repoDir
 // whose paths match any include pattern and no exclude pattern. If untracked
 // is true, untracked and ignored files are also considered, and read from the
-// working tree.
+// working tree. Every include pattern must match at least one such file.
 func HashFiles(ctx context.Context, repoDir string, include, exclude []string, untracked bool) (Result, error) {
 	return new(Hasher).HashFiles(ctx, repoDir, include, exclude, untracked)
 }
@@ -78,8 +94,9 @@ func (h *Hasher) HashFiles(ctx context.Context, repoDir string, include, exclude
 
 	var matched []indexEntry
 	seen := make(map[string]bool)
+	hit := make([]bool, len(incl))
 	for _, e := range tracked {
-		if seen[e.path] || !matches(e.path, incl, excl) {
+		if seen[e.path] || !matches(e.path, incl, excl, hit) {
 			continue
 		}
 		seen[e.path] = true
@@ -92,7 +109,7 @@ func (h *Hasher) HashFiles(ctx context.Context, repoDir string, include, exclude
 			return Result{}, err
 		}
 		for _, e := range others {
-			if seen[e.path] || !matches(e.path, incl, excl) {
+			if seen[e.path] || !matches(e.path, incl, excl, hit) {
 				continue
 			}
 			seen[e.path] = true
@@ -100,6 +117,11 @@ func (h *Hasher) HashFiles(ctx context.Context, repoDir string, include, exclude
 		}
 	}
 
+	for i, ok := range hit {
+		if !ok {
+			return Result{}, &PatternMatchedNoFilesError{Pattern: include[i]}
+		}
+	}
 	if len(matched) == 0 {
 		return Result{}, ErrNoFilesMatched
 	}

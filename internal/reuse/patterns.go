@@ -68,17 +68,19 @@ func ParsePatterns(value any) ([]*zzglob.Pattern, error) {
 }
 
 // matches reports whether path matches any include pattern and no exclude
-// pattern.
-func matches(path string, include, exclude []*zzglob.Pattern) bool {
+// pattern. It sets hit[i] when the path is included by include[i].
+func matches(path string, include, exclude []*zzglob.Pattern, hit []bool) bool {
 	for _, g := range exclude {
 		if g.Match(path) {
 			return false
 		}
 	}
-	for _, g := range include {
+	included := false
+	for i, g := range include {
 		if g.Match(path) {
-			return true
+			hit[i] = true
+			included = true
 		}
 	}
-	return false
+	return included
 }

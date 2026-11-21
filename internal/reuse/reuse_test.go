@@ -106,8 +106,25 @@ func TestReuseHashFiles(t *testing.T) {
 
 	// Zero matches is an error.
 	_, err := HashFiles(t.Context(), dir, []string{"nope/**"}, nil, false)
-	if !errors.Is(err, ErrNoFilesMatched) || err.Error() != "inputs.files matched no files" {
-		t.Errorf("HashFiles(no match) error = %v, want %v", err, ErrNoFilesMatched)
+	if !errors.Is(err, ErrNoFilesMatched) || err.Error() != `inputs.files pattern "nope/**" matched no files` {
+		t.Errorf("HashFiles(no match) error = %v, want pattern \"nope/**\" matched no files", err)
+	}
+
+	// So is any one pattern matching nothing, even when others match.
+	_, err = HashFiles(t.Context(), dir, []string{"web/**", "nope/**", "package.json"}, nil, false)
+	if !errors.Is(err, ErrNoFilesMatched) || err.Error() != `inputs.files pattern "nope/**" matched no files` {
+		t.Errorf("HashFiles(second pattern no match) error = %v, want pattern \"nope/**\" matched no files", err)
+	}
+
+	// A pattern whose files are all excluded matches nothing.
+	_, err = HashFiles(t.Context(), dir, []string{"web/app.ts", "web/*.md"}, []string{"**/*.md"}, false)
+	if !errors.Is(err, ErrNoFilesMatched) || err.Error() != `inputs.files pattern "web/*.md" matched no files` {
+		t.Errorf("HashFiles(excluded pattern) error = %v, want pattern \"web/*.md\" matched no files", err)
+	}
+
+	// Overlapping patterns each count the files they match.
+	if got := mustHash(t, dir, []string{"web/**", "web/app.ts"}, nil, false).Count; got != 2 {
+		t.Errorf("Count(overlapping patterns) = %d, want 2", got)
 	}
 }
 

@@ -1441,7 +1441,7 @@ func TestPipelineUploadReuseInputsDigest(t *testing.T) {
   - key: nothing
     command: ./x.sh
     inputs:
-      files: "nope/**"
+      files: ["package.json", "nope/**"]
   - key: plain
     command: ./y.sh
 `
@@ -1491,7 +1491,8 @@ func TestPipelineUploadReuseInputsDigest(t *testing.T) {
 		}
 	}
 
-	if diff := cmp.Diff(digestOf(nothing), map[string]any{"error": "inputs.files matched no files"}); diff != "" {
+	// A pattern matching nothing is an error even when another matches.
+	if diff := cmp.Diff(digestOf(nothing), map[string]any{"error": `inputs.files pattern "nope/**" matched no files`}); diff != "" {
 		t.Errorf("step nothing inputs_digest (-got +want):\n%s", diff)
 	}
 	if _, ok := plain.RemainingFields["inputs_digest"]; ok {

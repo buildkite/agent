@@ -17,7 +17,8 @@ Description:
 
 Prints the step reuse digest of the committed files in the current directory's
 git repository that match any of the given glob patterns, and none of the
-exclude patterns. Patterns use the same syntax as ′if_changed′.
+exclude patterns. Patterns use the same syntax as ′if_changed′. It fails if any
+pattern matches no such files.
 
 This is the same digest that ′buildkite-agent pipeline upload′ computes for a
 step's ′inputs.files′, so dynamic pipeline generators can compute it too.
