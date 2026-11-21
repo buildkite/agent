@@ -215,17 +215,69 @@ func TestReuseSaveAndRestore(t *testing.T) {
 		t.Errorf("restore state file still exists after reading: %v", err)
 	}
 
-	// A missing archive is reported, and the command exits 94.
+	// A missing or corrupt archive is reported, and the command exits 94.
 	missing := result.Paths[0]
 	missing.Key = "step-reuse/missing.tar.gz"
-	fake.plans["missing"] = api.ReusePlan{StepKey: "test", Restore: []api.ReuseRestore{{StepKey: "build", Paths: []api.ReusePath{missing}}}}
-	err = runReuseCommand(t, server.URL, "restore", "--job", "missing", "--cache-store-url", storeURL)
-	if serr := new(SilentExitError); !errors.As(err, &serr) || serr.Code() != reuse.ExitCodeInputUnavailable {
-		t.Fatalf("reuse restore (missing) error = %v, want exit %d", err, reuse.ExitCodeInputUnavailable)
+	garbage := result.Paths[0]
+	garbage.Key = "step-reuse/garbage.tar.gz"
+	if err := os.WriteFile(filepath.Join(storeDir, "step-reuse", "garbage.tar.gz"), []byte("not a tarball"), 0o644); err != nil {
+		t.Fatal(err)
 	}
-	want := api.ReuseInputUnavailable{StepKey: "build", Path: "dist/", Reason: "blob not found"}
-	if len(fake.unavailable) != 1 || fake.unavailable[0] != want {
-		t.Errorf("input_unavailable reports = %+v, want [%+v]", fake.unavailable, want)
+	for _, tt := range []struct {
+		path api.ReusePath
+		want api.ReuseInputUnavailable
+	}{
+		{missing, api.ReuseInputUnavailable{StepKey: "build", JobID: "build-job", Path: "dist/", Kind: "not_found", Reason: "blob not found"}},
+		{garbage, api.ReuseInputUnavailable{StepKey: "build", JobID: "build-job", Path: "dist/", Kind: "digest_mismatch"}},
+	} {
+		fake.unavailable = nil
+		fake.plans["missing"] = api.ReusePlan{StepKey: "test", Restore: []api.ReuseRestore{{StepKey: "build", JobID: "build-job", Paths: []api.ReusePath{tt.path}}}}
+		err = runReuseCommand(t, server.URL, "restore", "--job", "missing", "--cache-store-url", storeURL)
+		if serr := new(SilentExitError); !errors.As(err, &serr) || serr.Code() != reuse.ExitCodeInputUnavailable {
+			t.Fatalf("reuse restore (%s) error = %v, want exit %d", tt.path.Key, err, reuse.ExitCodeInputUnavailable)
+		}
+		got := fake.unavailable
+		if len(got) == 1 && tt.want.Reason == "" {
+			got[0].Reason = ""
+		}
+		if len(got) != 1 || got[0] != tt.want {
+			t.Errorf("input_unavailable reports for %s = %+v, want [%+v]", tt.path.Key, fake.unavailable, tt.want)
+		}
+	}
+
+	// Other failures aren't reported: the path is skipped and the rest are
+	// restored.
+	if err := os.MkdirAll(filepath.Join(storeDir, "step-reuse", "unreadable.tar.gz"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	unreadable := result.Paths[1]
+	unreadable.Key = "step-reuse/unreadable.tar.gz"
+	fake.plans["unreadable"] = api.ReusePlan{StepKey: "test", Restore: []api.ReuseRestore{{StepKey: "build", JobID: "build-job", Paths: []api.ReusePath{unreadable, result.Paths[0]}}}}
+	for _, tt := range []struct{ name, storeURL string }{
+		{"download error", storeURL},
+		{"no store", ""},
+		{"store can't be opened", "file://"},
+	} {
+		fake.unavailable = nil
+		if err := os.RemoveAll("dist"); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile("VERSION", []byte("stale\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if err := runReuseCommand(t, server.URL, "restore", "--job", "unreadable", "--cache-store-url", tt.storeURL); err != nil {
+			t.Errorf("reuse restore (%s) error = %v, want nil", tt.name, err)
+		}
+		if len(fake.unavailable) != 0 {
+			t.Errorf("input_unavailable reports (%s) = %+v, want none", tt.name, fake.unavailable)
+		}
+		if got, _ := os.ReadFile("VERSION"); string(got) != "stale\n" {
+			t.Errorf("VERSION (%s) = %q, want it untouched", tt.name, got)
+		}
+		_, _, err := reuse.TreeDigest("dist")
+		if restored := err == nil; restored != (tt.name == "download error") {
+			t.Errorf("dist restored (%s) = %t, want %t", tt.name, restored, tt.name == "download error")
+		}
 	}
 
 	// Without a store, the result is discarded.
@@ -387,7 +439,7 @@ func TestReuseResultSignatures(t *testing.T) {
 	}{
 		{name: "verified", entry: api.ReuseRestore{StepKey: "build", Paths: result.Paths, Signature: result.Signature}, verify: true},
 		{name: "unverified ignores a missing signature", entry: api.ReuseRestore{StepKey: "build", Paths: result.Paths}},
-		{name: "missing signature", entry: api.ReuseRestore{StepKey: "build", Paths: result.Paths}, verify: true, wantReason: "result signature missing"},
+		{name: "missing signature", entry: api.ReuseRestore{StepKey: "build", JobID: "build-job", Paths: result.Paths}, verify: true, wantReason: "result signature missing"},
 		{name: "signed with an untrusted key", entry: api.ReuseRestore{StepKey: "build", Paths: result.Paths, Signature: otherSig}, verify: true, wantReason: "result signature invalid: "},
 		{name: "signed by the source job", entry: api.ReuseRestore{StepKey: "build", JobID: "reusing-job", SourceJobID: "save", Paths: result.Paths, Signature: result.Signature}, verify: true},
 		{name: "signed for another job", entry: api.ReuseRestore{StepKey: "build", JobID: "build-job", SourceJobID: "build-job", Paths: result.Paths, Signature: result.Signature}, verify: true, wantReason: "result signature invalid: signed for job save"},
@@ -423,8 +475,13 @@ func TestReuseResultSignatures(t *testing.T) {
 			if serr := new(SilentExitError); !errors.As(err, &serr) || serr.Code() != reuse.ExitCodeInputUnavailable {
 				t.Fatalf("reuse restore error = %v, want exit %d", err, reuse.ExitCodeInputUnavailable)
 			}
-			if len(fake.unavailable) != 1 || fake.unavailable[0].StepKey != tt.entry.StepKey || !strings.HasPrefix(fake.unavailable[0].Reason, tt.wantReason) {
-				t.Errorf("input_unavailable reports = %+v, want one for step %s with reason %q", fake.unavailable, tt.entry.StepKey, tt.wantReason)
+			wantKind := "signature_invalid"
+			if tt.wantReason == "result signature missing" {
+				wantKind = "signature_missing"
+			}
+			if len(fake.unavailable) != 1 || fake.unavailable[0].StepKey != tt.entry.StepKey || fake.unavailable[0].JobID != tt.entry.JobID ||
+				fake.unavailable[0].Kind != wantKind || !strings.HasPrefix(fake.unavailable[0].Reason, tt.wantReason) {
+				t.Errorf("input_unavailable reports = %+v, want one for step %s, job %q, kind %s with reason %q", fake.unavailable, tt.entry.StepKey, tt.entry.JobID, wantKind, tt.wantReason)
 			}
 			if got, _ := os.ReadFile("VERSION"); string(got) != "stale\n" {
 				t.Errorf("VERSION = %q after a rejected restore, want it untouched", got)

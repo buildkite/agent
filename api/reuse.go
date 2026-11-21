@@ -94,11 +94,17 @@ type ReuseResultResponse struct {
 	ActionKey string `json:"action_key"`
 }
 
-// ReuseInputUnavailable reports that an upstream output could not be restored.
+// ReuseInputUnavailable reports that an upstream output could not be restored
+// because it is missing, corrupt or unverifiable.
 type ReuseInputUnavailable struct {
 	StepKey string `json:"step_key"`
+	JobID   string `json:"job_id,omitempty"` // the upstream job, from ReuseRestore.JobID
 	Path    string `json:"path"`
-	Reason  string `json:"reason"`
+
+	// Kind is "not_found", "digest_mismatch", "signature_missing" or
+	// "signature_invalid". Reason describes the problem.
+	Kind   string `json:"kind"`
+	Reason string `json:"reason"`
 }
 
 // ReuseInputUnavailableResponse is the control plane's response to a

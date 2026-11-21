@@ -101,7 +101,7 @@ func TestReuseEndpoints(t *testing.T) {
 		t.Errorf("SubmitReuseResult() (-got +want):\n%s", diff)
 	}
 
-	unavail, _, err := client.ReportReuseInputUnavailable(ctx, "j1", &api.ReuseInputUnavailable{StepKey: "deps", Path: "node_modules/", Reason: "blob not found"})
+	unavail, _, err := client.ReportReuseInputUnavailable(ctx, "j1", &api.ReuseInputUnavailable{StepKey: "deps", JobID: "j0", Path: "node_modules/", Kind: "not_found", Reason: "blob not found"})
 	if err != nil {
 		t.Fatalf("ReportReuseInputUnavailable() error = %v", err)
 	}
@@ -133,7 +133,7 @@ func TestReuseEndpoints(t *testing.T) {
 			"signature": "eyJ.manifest.sig",
 			"paths":     []any{map[string]any{"path": "dist/", "digest": "b3:bb", "key": "step-reuse/bb.tar.gz", "size": 9.0, "files": 4.0}},
 		}},
-		{"POST", "/jobs/j1/reuse/input_unavailable", "", map[string]any{"step_key": "deps", "path": "node_modules/", "reason": "blob not found"}},
+		{"POST", "/jobs/j1/reuse/input_unavailable", "", map[string]any{"step_key": "deps", "job_id": "j0", "path": "node_modules/", "kind": "not_found", "reason": "blob not found"}},
 		{"PUT", "/jobs/j1/outputs/values", "", map[string]any{"name": "bundle_size", "value": "184kB"}},
 		{"GET", "/jobs/j1/outputs/values", "name=bundle_size&step=build", nil},
 		{"GET", "/jobs/j1/outputs/values", "name=missing&step=build", nil},

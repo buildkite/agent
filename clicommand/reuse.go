@@ -31,6 +31,14 @@ const (
 	reuseNoStoreReason = "no cache store configured (BUILDKITE_AGENT_CACHE_STORE_URL)"
 )
 
+// The kinds of unavailable upstream output that `reuse restore` reports.
+const (
+	reuseUnavailableNotFound         = "not_found"
+	reuseUnavailableDigestMismatch   = "digest_mismatch"
+	reuseUnavailableSignatureMissing = "signature_missing"
+	reuseUnavailableSignatureInvalid = "signature_invalid"
+)
+
 const reuseRestoreHelpDescription = `Usage:
 
     buildkite-agent reuse restore [options...]
@@ -41,8 +49,12 @@ Restores the outputs of upstream steps that the current step declares in
 ′inputs.steps′, according to the job's step reuse plan. The job executor runs
 this before the command phase when step reuse is enabled for the job.
 
-If an upstream output is unavailable, it is reported to Buildkite, which can
-schedule a repair run, and the command exits with status 94.
+If an upstream output is missing from the store, is corrupt, or its signature
+doesn't verify, it is reported to Buildkite, which can schedule a repair run,
+and the command exits with status 94.
+
+Other failures, such as a missing or unreachable cache store or local
+filesystem errors, are logged as warnings, and the affected output is skipped.
 
 When the agent verifies job signatures (′--verification-jwks-file′ or a KMS key),
 each upstream result's signed manifest must verify and cover the paths being
@@ -164,20 +176,20 @@ var ReuseRestoreCommand = &cli.Command{
 		}
 		if keySet != nil {
 			for _, entry := range plan.Restore {
-				if path, reason := verifyRestoreSignature(keySet, entry); reason != "" {
-					return r.inputUnavailable(ctx, entry.StepKey, path, reason)
+				if path, kind, reason := verifyRestoreSignature(keySet, entry); reason != "" {
+					return r.inputUnavailable(ctx, entry, path, kind, reason)
 				}
 			}
 		}
 
 		for _, entry := range plan.Restore {
 			for _, p := range entry.Paths {
-				reason, err := r.restorePath(ctx, entry.StepKey, p)
-				if reason != "" {
-					return r.inputUnavailable(ctx, entry.StepKey, p.Path, reason)
+				kind, reason, err := r.restorePath(ctx, entry.StepKey, p)
+				if kind != "" {
+					return r.inputUnavailable(ctx, entry, p.Path, kind, reason)
 				}
 				if err != nil {
-					l.Warnf("Step reuse: couldn't restore %s from step %s: %v", p.Path, entry.StepKey, err)
+					l.Warnf("Step reuse: couldn't restore %s from step %s, skipping it: %v", p.Path, entry.StepKey, err)
 				}
 			}
 			if entry.Download {
@@ -305,42 +317,45 @@ func loadReuseVerificationKeys(ctx context.Context, cfg ReuseRestoreConfig) (any
 
 // verifyRestoreSignature checks that an upstream result's signed manifest was
 // signed for the job that produced the result, covers every path to restore
-// from it, and matches its output values and exit status. It returns the first
-// path and a reason when it doesn't.
-func verifyRestoreSignature(keySet any, entry api.ReuseRestore) (failedPath, reason string) {
+// from it, and matches its output values and exit status. When it doesn't, it
+// returns the first path, the kind of problem and a reason.
+func verifyRestoreSignature(keySet any, entry api.ReuseRestore) (failedPath, kind, reason string) {
 	if len(entry.Paths) == 0 && len(entry.Values) == 0 {
-		return "", ""
+		return "", "", ""
 	}
 	failedPath = "values"
 	if len(entry.Paths) > 0 {
 		failedPath = entry.Paths[0].Path
 	}
 	if entry.Signature == nil || *entry.Signature == "" {
-		return failedPath, "result signature missing"
+		return failedPath, reuseUnavailableSignatureMissing, "result signature missing"
+	}
+	invalid := func(path, format string, args ...any) (string, string, string) {
+		return path, reuseUnavailableSignatureInvalid, "result signature invalid: " + fmt.Sprintf(format, args...)
 	}
 	m, err := reuse.VerifyManifest(keySet, *entry.Signature)
 	if err != nil {
-		return failedPath, fmt.Sprintf("result signature invalid: %v", err)
+		return invalid(failedPath, "%v", err)
 	}
 	if m.StepKey != entry.StepKey {
-		return failedPath, fmt.Sprintf("result signature invalid: signed for step %q", m.StepKey)
+		return invalid(failedPath, "signed for step %q", m.StepKey)
 	}
 	// Plans from before source_job_id can't say which job signed the result.
 	if entry.SourceJobID != "" && m.JobID != entry.SourceJobID {
-		return failedPath, fmt.Sprintf("result signature invalid: signed for job %s", m.JobID)
+		return invalid(failedPath, "signed for job %s", m.JobID)
 	}
 	for _, p := range entry.Paths {
 		if !m.Covers(p.Path, p.Digest) {
-			return p.Path, fmt.Sprintf("result signature invalid: doesn't cover %s with digest %s", p.Path, p.Digest)
+			return invalid(p.Path, "doesn't cover %s with digest %s", p.Path, p.Digest)
 		}
 	}
 	if entry.ExitStatus != nil && *entry.ExitStatus != m.ExitStatus {
-		return failedPath, fmt.Sprintf("result signature invalid: signed exit status %d, stored %d", m.ExitStatus, *entry.ExitStatus)
+		return invalid(failedPath, "signed exit status %d, stored %d", m.ExitStatus, *entry.ExitStatus)
 	}
 	if entry.Values != nil && !maps.Equal(entry.Values, m.Values) {
-		return failedPath, "result signature invalid: stored output values don't match the signed values"
+		return invalid(failedPath, "stored output values don't match the signed values")
 	}
-	return "", ""
+	return "", "", ""
 }
 
 // reuseModeExplanations say why a step runs in each step reuse mode.
@@ -471,53 +486,54 @@ func (r *reuseRestorer) store(ctx context.Context) (store.Blob, error) {
 	return r.blob, nil
 }
 
-// restorePath restores one upstream output path into the checkout. It returns
-// a non-empty reason if the output is unavailable, or an error for any other
-// failure.
-func (r *reuseRestorer) restorePath(ctx context.Context, stepKey string, p api.ReusePath) (unavailable string, err error) {
+// restorePath restores one upstream output path into the checkout. If the
+// stored output is missing or corrupt, it returns the kind of problem and a
+// reason, to report to Buildkite. It returns an error for any other failure,
+// such as the store being unavailable.
+func (r *reuseRestorer) restorePath(ctx context.Context, stepKey string, p api.ReusePath) (kind, reason string, err error) {
 	dest, err := cleanOutputPath(p.Path)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	if r.bucketURL == "" {
-		return reuseNoStoreReason, nil
+		return "", "", errors.New(reuseNoStoreReason)
 	}
 	blob, err := r.store(ctx)
 	if err != nil {
-		return fmt.Sprintf("couldn't open the cache store: %v", err), nil
+		return "", "", fmt.Errorf("couldn't open the cache store: %w", err)
 	}
 
 	// Download to a path that doesn't exist yet, as `cache restore` does,
 	// since stores such as nsc write the file themselves.
 	downloadDir, err := os.MkdirTemp("", "buildkite-step-reuse-")
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	defer func() { _ = os.RemoveAll(downloadDir) }()
 	archive := filepath.Join(downloadDir, "archive.tar.gz")
 
 	if _, err := blob.Download(ctx, p.Key, archive); err != nil {
 		if errors.Is(err, store.ErrBlobNotFound) {
-			return store.ErrBlobNotFound.Error(), nil
+			return reuseUnavailableNotFound, store.ErrBlobNotFound.Error(), nil
 		}
-		return fmt.Sprintf("download failed: %v", err), nil
+		return "", "", fmt.Errorf("download failed: %w", err)
 	}
 
 	// Unpack next to the destination, so it can be moved into place with a
 	// rename.
 	parent := filepath.Dir(dest)
 	if err := os.MkdirAll(parent, 0o755); err != nil {
-		return "", err
+		return "", "", err
 	}
 	tmp, err := os.MkdirTemp(parent, ".buildkite-step-reuse-*")
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	defer func() { _ = os.RemoveAll(tmp) }()
 
 	unpacked := filepath.Join(tmp, "out")
 	if err := reuse.Unpack(archive, unpacked); err != nil {
-		return fmt.Sprintf("couldn't unpack the archive: %v", err), nil
+		return reuseUnavailableDigestMismatch, fmt.Sprintf("couldn't unpack the archive: %v", err), nil
 	}
 
 	content := unpacked
@@ -532,10 +548,10 @@ func (r *reuseRestorer) restorePath(ctx context.Context, stepKey string, p api.R
 
 	digest, files, err := reuse.TreeDigest(content)
 	if err != nil {
-		return fmt.Sprintf("couldn't digest the unpacked content: %v", err), nil
+		return "", "", fmt.Errorf("couldn't digest the unpacked content: %w", err)
 	}
 	if digest != p.Digest {
-		return fmt.Sprintf("digest mismatch: got %s, want %s", digest, p.Digest), nil
+		return reuseUnavailableDigestMismatch, fmt.Sprintf("digest mismatch: got %s, want %s", digest, p.Digest), nil
 	}
 
 	// Keep a stored output that's still in use, as `cache restore` does.
@@ -544,18 +560,18 @@ func (r *reuseRestorer) restorePath(ctx context.Context, stepKey string, p api.R
 	}
 
 	if err := os.RemoveAll(dest); err != nil {
-		return "", err
+		return "", "", err
 	}
 	if err := os.Rename(content, dest); err != nil {
-		return "", err
+		return "", "", err
 	}
 	r.l.Infof("Restored %s from step %s (%d files, %s)", p.Path, stepKey, files, digest)
-	return "", nil
+	return "", "", nil
 }
 
-func (r *reuseRestorer) inputUnavailable(ctx context.Context, stepKey, outputPath, reason string) error {
-	r.l.Errorf("Step reuse: upstream output %s from step %s is unavailable (%s); requesting a repair run", outputPath, stepKey, reason)
-	report := &api.ReuseInputUnavailable{StepKey: stepKey, Path: outputPath, Reason: reason}
+func (r *reuseRestorer) inputUnavailable(ctx context.Context, entry api.ReuseRestore, outputPath, kind, reason string) error {
+	r.l.Errorf("Step reuse: upstream output %s from step %s is unavailable (%s); requesting a repair run", outputPath, entry.StepKey, reason)
+	report := &api.ReuseInputUnavailable{StepKey: entry.StepKey, JobID: entry.JobID, Path: outputPath, Kind: kind, Reason: reason}
 	resp, _, err := roko.DoFunc2(ctx, reuseRetrier(), func(rt *roko.Retrier) (*api.ReuseInputUnavailableResponse, *api.Response, error) {
 		out, resp, err := r.client.ReportReuseInputUnavailable(ctx, r.jobID, report)
 		if api.BreakOnNonRetryable(rt, resp, err) {
