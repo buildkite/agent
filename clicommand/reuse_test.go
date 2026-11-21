@@ -122,6 +122,11 @@ func TestReuseSaveAndRestore(t *testing.T) {
 			Outputs: api.ReuseOutputs{Paths: []string{"dist/", "VERSION"}},
 		},
 		"nosave": {StepKey: "build", Save: false},
+		"publish": {
+			StepKey: "build",
+			Save:    false,
+			Outputs: api.ReuseOutputs{Paths: []string{"VERSION"}},
+		},
 	}}
 	server := httptest.NewServer(fake)
 	t.Cleanup(server.Close)
@@ -133,6 +138,21 @@ func TestReuseSaveAndRestore(t *testing.T) {
 	if len(fake.results) != 0 {
 		t.Fatalf("results after save: false = %+v, want none", fake.results)
 	}
+
+	// With save: false, output paths are still stored for later steps in the build.
+	if err := runReuseCommand(t, server.URL, "save", "--job", "publish", "--exit-status", "1", "--cache-store-url", storeURL); err != nil {
+		t.Fatalf("reuse save (publish, failed) error = %v", err)
+	}
+	if len(fake.results) != 0 {
+		t.Fatalf("results after a failed save: false job = %+v, want none", fake.results)
+	}
+	if err := runReuseCommand(t, server.URL, "save", "--job", "publish", "--exit-status", "0", "--cache-store-url", storeURL); err != nil {
+		t.Fatalf("reuse save (publish) error = %v", err)
+	}
+	if got := fake.results; len(got) != 1 || len(got[0].Paths) != 1 || got[0].Paths[0].Path != "VERSION" {
+		t.Fatalf("results after save: false with outputs.paths = %+v, want VERSION stored", got)
+	}
+	fake.results = nil
 
 	// A failed command reports only its exit status.
 	if err := runReuseCommand(t, server.URL, "save", "--job", "save", "--exit-status", "3", "--cache-store-url", storeURL); err != nil {

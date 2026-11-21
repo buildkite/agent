@@ -158,8 +158,12 @@ var ReuseSaveCommand = &cli.Command{
 			if plan.SaveDisabledReason != nil && *plan.SaveDisabledReason != "" {
 				reason = *plan.SaveDisabledReason
 			}
-			l.Infof("Step reuse: not saving result: %s", reason)
-			return nil
+			if cfg.ExitStatus != 0 || len(plan.Outputs.Paths) == 0 {
+				l.Infof("Step reuse: not saving result: %s", reason)
+				return nil
+			}
+			// Later steps in this build still restore the output paths.
+			l.Infof("Step reuse: not saving result (%s); storing output paths for later steps in this build", reason)
 		}
 
 		result := &api.ReuseResult{ExitStatus: cfg.ExitStatus, Paths: []api.ReusePath{}}
