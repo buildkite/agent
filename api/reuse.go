@@ -15,6 +15,9 @@ type ReusePlan struct {
 	Files              *ReuseFiles    `json:"files"` // nil when the step has no inputs.files
 	Outputs            ReuseOutputs   `json:"outputs"`
 	Restore            []ReuseRestore `json:"restore"`
+
+	// Values are the output values this job has set with `output set`.
+	Values map[string]string `json:"values"`
 }
 
 // ReuseFiles is a step's parsed `inputs.files`.
@@ -36,6 +39,10 @@ type ReuseRestore struct {
 	StepKey  string      `json:"step_key"`
 	Download bool        `json:"download"` // download the step's artifacts too
 	Paths    []ReusePath `json:"paths"`
+
+	// Signature is the signed result manifest of the upstream job, if it had
+	// a signing key.
+	Signature *string `json:"signature"`
 }
 
 // ReusePath is a stored output path.
@@ -54,6 +61,9 @@ type ReuseResult struct {
 	Paths               []ReusePath `json:"paths"`
 	OverheadMS          int64       `json:"overhead_ms"`
 	DiscardReason       *string     `json:"discard_reason"`
+
+	// Signature is the signed result manifest, if the job has a signing key.
+	Signature *string `json:"signature"`
 }
 
 // ReuseResultResponse is the control plane's response to a ReuseResult.

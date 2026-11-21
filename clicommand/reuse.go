@@ -41,7 +41,11 @@ Restores the outputs of upstream steps that the current step declares in
 this before the command phase when step reuse is enabled for the job.
 
 If an upstream output is unavailable, it is reported to Buildkite, which can
-schedule a repair run, and the command exits with status 94.`
+schedule a repair run, and the command exits with status 94.
+
+When the agent verifies job signatures (′--verification-jwks-file′ or a KMS key),
+each upstream result's signed manifest must verify and cover the paths being
+restored; otherwise the output is treated as unavailable.`
 
 const reuseSaveHelpDescription = `Usage:
 
@@ -53,6 +57,9 @@ Stores the current step's ′outputs.paths′ and reports the job's result for s
 reuse, according to the job's step reuse plan. The job executor runs this after
 the command phase when step reuse is enabled for the job.
 
+When the job has a pipeline signing key (′--jwks-file′ or a KMS key), the result
+is reported with a signed manifest of its exit status, output paths and values.
+
 Failures are logged as warnings; this command never fails the job.`
 
 type ReuseRestoreConfig struct {
@@ -61,6 +68,10 @@ type ReuseRestoreConfig struct {
 
 	Job       string `cli:"job" validate:"required"`
 	BucketURL string `cli:"cache-store-url"`
+
+	VerificationJWKSFile string `cli:"verification-jwks-file" normalize:"filepath"`
+	SigningAWSKMSKey     string `cli:"signing-aws-kms-key"`
+	SigningGCPKMSKey     string `cli:"signing-gcp-kms-key"`
 }
 
 type ReuseSaveConfig struct {
@@ -70,6 +81,11 @@ type ReuseSaveConfig struct {
 	Job        string `cli:"job" validate:"required"`
 	BucketURL  string `cli:"cache-store-url"`
 	ExitStatus int    `cli:"exit-status"`
+
+	JWKSFile         string `cli:"jwks-file" normalize:"filepath"`
+	JWKSKeyID        string `cli:"jwks-key-id"`
+	SigningAWSKMSKey string `cli:"signing-aws-kms-key"`
+	SigningGCPKMSKey string `cli:"signing-gcp-kms-key"`
 }
 
 func reuseFlags() []cli.Flag {
@@ -89,11 +105,34 @@ func reuseFlags() []cli.Flag {
 	}
 }
 
+// reuseKMSFlags are the KMS keys that sign pipelines, which the agent also
+// verifies jobs with.
+func reuseKMSFlags() []cli.Flag {
+	return []cli.Flag{
+		&cli.StringFlag{
+			Name:    "signing-aws-kms-key",
+			Usage:   "The AWS KMS key identifier which is used to sign and verify step reuse results",
+			Sources: cli.EnvVars("BUILDKITE_AGENT_AWS_KMS_KEY"),
+		},
+		&cli.StringFlag{
+			Name:    "signing-gcp-kms-key",
+			Usage:   "The GCP KMS key identifier which is used to sign and verify step reuse results",
+			Sources: cli.EnvVars("BUILDKITE_AGENT_GCP_KMS_KEY"),
+		},
+	}
+}
+
 var ReuseRestoreCommand = &cli.Command{
 	Name:        "restore",
 	Usage:       "Restore upstream step outputs before the command runs",
 	Description: reuseRestoreHelpDescription,
-	Flags:       slices.Concat(globalFlags(), apiFlags(), reuseFlags()),
+	Flags: slices.Concat(globalFlags(), apiFlags(), reuseFlags(), reuseKMSFlags(), []cli.Flag{
+		&cli.StringFlag{
+			Name:    "verification-jwks-file",
+			Usage:   "Path to a JWKS file used to verify the signed results of upstream steps. The agent passes its own to jobs",
+			Sources: cli.EnvVars("BUILDKITE_AGENT_VERIFICATION_JWKS_FILE"),
+		},
+	}),
 	Action: func(ctx context.Context, c *cli.Command) error {
 		ctx, cfg, l, _, done := setupLoggerAndConfig[ReuseRestoreConfig](ctx, c)
 		defer done()
@@ -111,6 +150,20 @@ var ReuseRestoreCommand = &cli.Command{
 		}
 
 		r := &reuseRestorer{l: l, client: client, jobID: cfg.Job, bucketURL: cfg.BucketURL}
+
+		keySet, err := loadReuseVerificationKeys(ctx, cfg)
+		if err != nil {
+			l.Errorf("Step reuse: couldn't load the keys to verify upstream results, not restoring inputs: %v", err)
+			return err
+		}
+		if keySet != nil {
+			for _, entry := range plan.Restore {
+				if path, reason := verifyRestoreSignature(keySet, entry); reason != "" {
+					return r.inputUnavailable(ctx, entry.StepKey, path, reason)
+				}
+			}
+		}
+
 		for _, entry := range plan.Restore {
 			for _, p := range entry.Paths {
 				reason, err := r.restorePath(ctx, entry.StepKey, p)
@@ -133,10 +186,20 @@ var ReuseSaveCommand = &cli.Command{
 	Name:        "save",
 	Usage:       "Store step outputs and report the result for step reuse",
 	Description: reuseSaveHelpDescription,
-	Flags: slices.Concat(globalFlags(), apiFlags(), reuseFlags(), []cli.Flag{
+	Flags: slices.Concat(globalFlags(), apiFlags(), reuseFlags(), reuseKMSFlags(), []cli.Flag{
 		&cli.IntFlag{
 			Name:  "exit-status",
 			Usage: "The exit status of the job's command",
+		},
+		&cli.StringFlag{
+			Name:    "jwks-file",
+			Usage:   "Path to a JWKS file used to sign the step reuse result. The agent passes its pipeline signing key to jobs",
+			Sources: cli.EnvVars("BUILDKITE_AGENT_JWKS_FILE"),
+		},
+		&cli.StringFlag{
+			Name:    "jwks-key-id",
+			Usage:   "The JWKS key ID to sign the step reuse result with",
+			Sources: cli.EnvVars("BUILDKITE_AGENT_JWKS_KEY_ID"),
 		},
 	}),
 	Action: func(ctx context.Context, c *cli.Command) error {
@@ -171,6 +234,7 @@ var ReuseSaveCommand = &cli.Command{
 			s := &reuseSaver{l: l, bucketURL: cfg.BucketURL}
 			s.save(ctx, plan, result)
 		}
+		signReuseResult(ctx, l, cfg, plan, result)
 		result.OverheadMS = (readReuseRestoreElapsed(cfg.Job) + time.Since(start)).Milliseconds()
 
 		resp, err := submitReuseResult(ctx, l, client, cfg.Job, result)
@@ -188,6 +252,71 @@ var ReuseSaveCommand = &cli.Command{
 		}
 		return nil
 	},
+}
+
+// signReuseResult signs a manifest of result, if the job has a signing key.
+// Failures are logged, and the result is reported unsigned.
+func signReuseResult(ctx context.Context, l logger.Logger, cfg ReuseSaveConfig, plan *api.ReusePlan, result *api.ReuseResult) {
+	key, err := loadSigningKey(ctx, cfg.SigningAWSKMSKey, cfg.SigningGCPKMSKey, cfg.JWKSFile, cfg.JWKSKeyID)
+	if err != nil {
+		l.Warnf("Step reuse: couldn't load the signing key, reporting the result unsigned: %v", err)
+		return
+	}
+	if key == nil {
+		return
+	}
+	m := reuse.Manifest{JobID: cfg.Job, StepKey: plan.StepKey, ExitStatus: result.ExitStatus, Values: plan.Values}
+	for _, p := range result.Paths {
+		m.Paths = append(m.Paths, reuse.ManifestPath{Path: p.Path, Digest: p.Digest})
+	}
+	sig, err := reuse.SignManifest(key, m)
+	if err != nil {
+		l.Warnf("Step reuse: couldn't sign the result, reporting it unsigned: %v", err)
+		return
+	}
+	result.Signature = &sig
+}
+
+// loadReuseVerificationKeys loads the keys the agent verifies jobs with, in
+// the same order of precedence as `agent start`. It returns nil if there are
+// none.
+func loadReuseVerificationKeys(ctx context.Context, cfg ReuseRestoreConfig) (any, error) {
+	if cfg.SigningAWSKMSKey != "" || cfg.SigningGCPKMSKey != "" {
+		key, err := loadSigningKey(ctx, cfg.SigningAWSKMSKey, cfg.SigningGCPKMSKey, "", "")
+		if err != nil {
+			return nil, err
+		}
+		return key, nil
+	}
+	if cfg.VerificationJWKSFile != "" {
+		return parseAndValidateJWKS(ctx, "verification", cfg.VerificationJWKSFile)
+	}
+	return nil, nil
+}
+
+// verifyRestoreSignature checks that an upstream result's signed manifest
+// covers every path to restore from it. It returns the first path and a
+// reason when it doesn't.
+func verifyRestoreSignature(keySet any, entry api.ReuseRestore) (path, reason string) {
+	if len(entry.Paths) == 0 {
+		return "", ""
+	}
+	if entry.Signature == nil || *entry.Signature == "" {
+		return entry.Paths[0].Path, "result signature missing"
+	}
+	m, err := reuse.VerifyManifest(keySet, *entry.Signature)
+	if err != nil {
+		return entry.Paths[0].Path, fmt.Sprintf("result signature invalid: %v", err)
+	}
+	if m.StepKey != entry.StepKey {
+		return entry.Paths[0].Path, fmt.Sprintf("result signature invalid: signed for step %q", m.StepKey)
+	}
+	for _, p := range entry.Paths {
+		if !m.Covers(p.Path, p.Digest) {
+			return p.Path, fmt.Sprintf("result signature invalid: doesn't cover %s with digest %s", p.Path, p.Digest)
+		}
+	}
+	return "", ""
 }
 
 func reuseRetrier() *roko.Retrier {

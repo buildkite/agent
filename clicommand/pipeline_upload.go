@@ -385,33 +385,9 @@ var PipelineUploadCommand = &cli.Command{
 				}
 
 				stage = "signing"
-				var key signature.Key
-
-				switch {
-				case cfg.SigningAWSKMSKey != "":
-					awscfg, err := awslib.GetConfigV2(ctx)
-					if err != nil {
-						return err
-					}
-
-					// assign a crypto signer which uses the AWS KMS key to sign the pipeline
-					key, err = awssigner.NewKMS(kms.NewFromConfig(awscfg), cfg.SigningAWSKMSKey)
-					if err != nil {
-						return fmt.Errorf("couldn't create AWS KMS signer: %w", err)
-					}
-
-				case cfg.SigningGCPKMSKey != "":
-					// assign a crypto signer which uses the GCP KMS key to sign the pipeline
-					key, err = gcpsigner.NewKMS(ctx, cfg.SigningGCPKMSKey)
-					if err != nil {
-						return fmt.Errorf("couldn't create GCP KMS signer: %w", err)
-					}
-
-				case cfg.JWKSFile != "":
-					key, err = jwkutil.LoadKey(cfg.JWKSFile, cfg.JWKSKeyID)
-					if err != nil {
-						return fmt.Errorf("couldn't read the signing key file: %w", err)
-					}
+				key, err := loadSigningKey(ctx, cfg.SigningAWSKMSKey, cfg.SigningGCPKMSKey, cfg.JWKSFile, cfg.JWKSKeyID)
+				if err != nil {
+					return err
 				}
 
 				if key != nil {
@@ -503,6 +479,41 @@ var PipelineUploadCommand = &cli.Command{
 
 		return nil
 	},
+}
+
+// loadSigningKey loads the pipeline signing key: an AWS or GCP KMS key, or a
+// key from a JWKS file. It returns nil if none is configured.
+func loadSigningKey(ctx context.Context, awsKMSKey, gcpKMSKey, jwksFile, jwksKeyID string) (signature.Key, error) {
+	switch {
+	case awsKMSKey != "":
+		awscfg, err := awslib.GetConfigV2(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		// assign a crypto signer which uses the AWS KMS key to sign the pipeline
+		key, err := awssigner.NewKMS(kms.NewFromConfig(awscfg), awsKMSKey)
+		if err != nil {
+			return nil, fmt.Errorf("couldn't create AWS KMS signer: %w", err)
+		}
+		return key, nil
+
+	case gcpKMSKey != "":
+		// assign a crypto signer which uses the GCP KMS key to sign the pipeline
+		key, err := gcpsigner.NewKMS(ctx, gcpKMSKey)
+		if err != nil {
+			return nil, fmt.Errorf("couldn't create GCP KMS signer: %w", err)
+		}
+		return key, nil
+
+	case jwksFile != "":
+		key, err := jwkutil.LoadKey(jwksFile, jwksKeyID)
+		if err != nil {
+			return nil, fmt.Errorf("couldn't read the signing key file: %w", err)
+		}
+		return key, nil
+	}
+	return nil, nil
 }
 
 // capturePipelineUploadError reports why a pipeline upload failed. Parse and

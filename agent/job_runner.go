@@ -597,7 +597,8 @@ BUILDKITE_TRACING_TRACESTATE
 BUILDKITE_AGENT_AWS_KMS_KEY
 BUILDKITE_AGENT_GCP_KMS_KEY
 BUILDKITE_AGENT_JWKS_FILE
-BUILDKITE_AGENT_JWKS_KEY_ID`
+BUILDKITE_AGENT_JWKS_KEY_ID
+BUILDKITE_AGENT_VERIFICATION_JWKS_FILE`
 		if _, err := fmt.Fprintln(r.envShellFile, agentCfgVars); err != nil {
 			return nil, err
 		}
@@ -827,6 +828,12 @@ BUILDKITE_AGENT_JWKS_KEY_ID`
 
 	if r.conf.AgentConfiguration.SigningJWKSKeyID != "" {
 		setEnv("BUILDKITE_AGENT_JWKS_KEY_ID", r.conf.AgentConfiguration.SigningJWKSKeyID)
+	}
+
+	// Pass the verification keys through, so that step reuse can verify the
+	// signed results of upstream steps
+	if r.conf.AgentConfiguration.VerificationJWKSFile != "" {
+		setEnv("BUILDKITE_AGENT_VERIFICATION_JWKS_FILE", r.conf.AgentConfiguration.VerificationJWKSFile)
 	}
 
 	if r.conf.AgentConfiguration.DebugSigning {

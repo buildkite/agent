@@ -9,12 +9,16 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
 
 	"github.com/buildkite/agent/v4/api"
 	"github.com/buildkite/agent/v4/internal/reuse"
+	"github.com/buildkite/go-pipeline/jwkutil"
+	"github.com/google/go-cmp/cmp"
+	"github.com/lestrrat-go/jwx/v3/jwa"
 	"github.com/urfave/cli/v3"
 )
 
@@ -64,6 +68,7 @@ func runReuseCommand(t *testing.T, endpoint string, args ...string) error {
 }
 
 func TestReuseSaveAndRestore(t *testing.T) {
+	clearReuseSigningEnv(t)
 	t.Setenv("TMPDIR", t.TempDir())
 	repo := t.TempDir()
 	storeDir := t.TempDir()
@@ -227,5 +232,161 @@ func TestReuseSaveAndRestore(t *testing.T) {
 	}
 	if got := fake.results[2].DiscardReason; got == nil || *got != reuseNoStoreReason {
 		t.Errorf("discard_reason without a store = %v, want %q", got, reuseNoStoreReason)
+	}
+}
+
+// clearReuseSigningEnv stops the environment from configuring signing keys.
+func clearReuseSigningEnv(t *testing.T) {
+	t.Helper()
+	for _, name := range []string{
+		"BUILDKITE_AGENT_JWKS_FILE", "BUILDKITE_AGENT_JWKS_KEY_ID",
+		"BUILDKITE_AGENT_AWS_KMS_KEY", "BUILDKITE_AGENT_GCP_KMS_KEY",
+		"BUILDKITE_AGENT_VERIFICATION_JWKS_FILE",
+	} {
+		t.Setenv(name, "")
+	}
+}
+
+func writeJWKS(t *testing.T, path string, set any) {
+	t.Helper()
+	b, err := json.Marshal(set)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, b, 0o600); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestReuseResultSignatures(t *testing.T) {
+	clearReuseSigningEnv(t)
+	t.Setenv("TMPDIR", t.TempDir())
+	keysDir := t.TempDir()
+	priv, pub, err := jwkutil.NewKeyPair("test-key", jwa.EdDSA())
+	if err != nil {
+		t.Fatal(err)
+	}
+	otherPriv, _, err := jwkutil.NewKeyPair("test-key", jwa.EdDSA())
+	if err != nil {
+		t.Fatal(err)
+	}
+	signingFile := filepath.Join(keysDir, "signing.json")
+	otherFile := filepath.Join(keysDir, "other.json")
+	verifyFile := filepath.Join(keysDir, "verify.json")
+	writeJWKS(t, signingFile, priv)
+	writeJWKS(t, otherFile, otherPriv)
+	writeJWKS(t, verifyFile, pub)
+
+	t.Chdir(t.TempDir())
+	storeURL := "file://" + t.TempDir()
+	if err := os.WriteFile("VERSION", []byte("1.2.3\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile("NOTES", []byte("notes\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	fake := &fakeReuseAPI{plans: map[string]api.ReusePlan{
+		"save": {
+			StepKey: "build",
+			Save:    true,
+			Outputs: api.ReuseOutputs{Paths: []string{"VERSION", "NOTES"}, Values: []string{"version"}},
+			Values:  map[string]string{"version": "1.2.3"},
+		},
+	}}
+	server := httptest.NewServer(fake)
+	t.Cleanup(server.Close)
+
+	saveWith := func(keyFile string) api.ReuseResult {
+		t.Helper()
+		fake.results = nil
+		if err := runReuseCommand(t, server.URL, "save", "--job", "save", "--exit-status", "0", "--cache-store-url", storeURL, "--jwks-file", keyFile, "--jwks-key-id", "test-key"); err != nil {
+			t.Fatalf("reuse save error = %v", err)
+		}
+		return fake.results[0]
+	}
+
+	// The saved result is signed with the job's signing key.
+	result := saveWith(signingFile)
+	if result.Signature == nil {
+		t.Fatal("signature = nil, want a signed manifest")
+	}
+	m, err := reuse.VerifyManifest(pub, *result.Signature)
+	if err != nil {
+		t.Fatalf("VerifyManifest() error = %v", err)
+	}
+	want := &reuse.Manifest{
+		Version:    1,
+		JobID:      "save",
+		StepKey:    "build",
+		ExitStatus: 0,
+		Paths: []reuse.ManifestPath{
+			{Path: "NOTES", Digest: result.Paths[1].Digest},
+			{Path: "VERSION", Digest: result.Paths[0].Digest},
+		},
+		Values: map[string]string{"version": "1.2.3"},
+	}
+	if diff := cmp.Diff(m, want); diff != "" {
+		t.Errorf("manifest (-got +want):\n%s", diff)
+	}
+	otherSig := saveWith(otherFile).Signature
+
+	// Without a signing key, the result is unsigned.
+	fake.results = nil
+	if err := runReuseCommand(t, server.URL, "save", "--job", "save", "--exit-status", "0", "--cache-store-url", storeURL); err != nil {
+		t.Fatalf("reuse save error = %v", err)
+	}
+	if got := fake.results[0].Signature; got != nil {
+		t.Errorf("unsigned signature = %q, want nil", *got)
+	}
+
+	tamperedPaths := slices.Clone(result.Paths)
+	tamperedPaths[0].Digest = result.Paths[1].Digest
+	tamperedPaths[0].Key = result.Paths[1].Key
+	for _, tt := range []struct {
+		name       string
+		entry      api.ReuseRestore
+		verify     bool
+		wantReason string
+	}{
+		{name: "verified", entry: api.ReuseRestore{StepKey: "build", Paths: result.Paths, Signature: result.Signature}, verify: true},
+		{name: "unverified ignores a missing signature", entry: api.ReuseRestore{StepKey: "build", Paths: result.Paths}},
+		{name: "missing signature", entry: api.ReuseRestore{StepKey: "build", Paths: result.Paths}, verify: true, wantReason: "result signature missing"},
+		{name: "signed with an untrusted key", entry: api.ReuseRestore{StepKey: "build", Paths: result.Paths, Signature: otherSig}, verify: true, wantReason: "result signature invalid: "},
+		{name: "signed for another step", entry: api.ReuseRestore{StepKey: "test", Paths: result.Paths, Signature: result.Signature}, verify: true, wantReason: `result signature invalid: signed for step "build"`},
+		{name: "path digest not covered", entry: api.ReuseRestore{StepKey: "build", Paths: tamperedPaths, Signature: result.Signature}, verify: true, wantReason: "result signature invalid: doesn't cover VERSION"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			fake.unavailable = nil
+			if err := os.WriteFile("VERSION", []byte("stale\n"), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			job := "restore-" + strings.ReplaceAll(tt.name, " ", "-")
+			fake.plans[job] = api.ReusePlan{StepKey: "test", Restore: []api.ReuseRestore{tt.entry}}
+			args := []string{"restore", "--job", job, "--cache-store-url", storeURL}
+			if tt.verify {
+				args = append(args, "--verification-jwks-file", verifyFile)
+			}
+			err := runReuseCommand(t, server.URL, args...)
+
+			if tt.wantReason == "" {
+				if err != nil {
+					t.Fatalf("reuse restore error = %v", err)
+				}
+				if got, err := os.ReadFile("VERSION"); err != nil || string(got) != "1.2.3\n" {
+					t.Errorf("restored VERSION = %q, %v, want 1.2.3", got, err)
+				}
+				return
+			}
+			if serr := new(SilentExitError); !errors.As(err, &serr) || serr.Code() != reuse.ExitCodeInputUnavailable {
+				t.Fatalf("reuse restore error = %v, want exit %d", err, reuse.ExitCodeInputUnavailable)
+			}
+			if len(fake.unavailable) != 1 || fake.unavailable[0].StepKey != tt.entry.StepKey || !strings.HasPrefix(fake.unavailable[0].Reason, tt.wantReason) {
+				t.Errorf("input_unavailable reports = %+v, want one for step %s with reason %q", fake.unavailable, tt.entry.StepKey, tt.wantReason)
+			}
+			if got, _ := os.ReadFile("VERSION"); string(got) != "stale\n" {
+				t.Errorf("VERSION = %q after a rejected restore, want it untouched", got)
+			}
+		})
 	}
 }

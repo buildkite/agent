@@ -64,6 +64,7 @@ type AgentConfiguration struct {
 	DebugSigning     bool   // Whether to print step payloads when signing them
 
 	VerificationJWKS             any    // The set of keys to verify jobs with
+	VerificationJWKSFile         string // Where VerificationJWKS came from, if a file (passed through to jobs, to verify step reuse results)
 	VerificationFailureBehaviour string // What to do if job verification fails (one of `block` or `warn`)
 
 	HealthCheckAddr            string

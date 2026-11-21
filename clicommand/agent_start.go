@@ -1076,6 +1076,7 @@ var AgentStartCommand = &cli.Command{
 			DebugSigning:     cfg.DebugSigning,
 
 			VerificationJWKS:             verificationJWKS,
+			VerificationJWKSFile:         cfg.VerificationJWKSFile,
 			VerificationFailureBehaviour: cfg.VerificationFailureBehavior,
 
 			DisableWarningsFor: cfg.DisableWarningsFor,
