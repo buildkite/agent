@@ -36,8 +36,9 @@ func TestReuseEndpoints(t *testing.T) {
 			_, _ = io.WriteString(rw, `{"step_key":"build","save":true,"save_disabled_reason":null,
 				"files":{"include":["web/**"],"exclude":[],"untracked":false},
 				"outputs":{"paths":["dist/"],"artifacts":["dist/**"],"values":["bundle_size"]},
-				"restore":[{"step_key":"deps","download":false,
-					"paths":[{"path":"node_modules/","digest":"b3:aa","key":"step-reuse/aa.tar.gz","size":123,"files":40}]}]}`)
+				"restore":[{"step_key":"deps","download":false,"signature":"eyJ.manifest.sig",
+					"paths":[{"path":"node_modules/","digest":"b3:aa","key":"step-reuse/aa.tar.gz","size":123,"files":40}]}],
+				"values":{"bundle_size":"184kB"},"save_on_failure":true,"mode":"shadow","mode_reason":"sampled"}`)
 		case "POST /jobs/j1/reuse/result":
 			_, _ = io.WriteString(rw, `{"saved":true,"reason":"ok","action_key":"hs256:abc"}`)
 		case "POST /jobs/j1/reuse/input_unavailable":
@@ -63,14 +64,20 @@ func TestReuseEndpoints(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetReusePlan() error = %v", err)
 	}
+	manifest, shadow, sampled := "eyJ.manifest.sig", "shadow", "sampled"
 	wantPlan := &api.ReusePlan{
-		StepKey: "build",
-		Save:    true,
-		Files:   &api.ReuseFiles{Include: []string{"web/**"}, Exclude: []string{}},
-		Outputs: api.ReuseOutputs{Paths: []string{"dist/"}, Artifacts: []string{"dist/**"}, Values: []string{"bundle_size"}},
+		StepKey:       "build",
+		Save:          true,
+		SaveOnFailure: true,
+		Mode:          &shadow,
+		ModeReason:    &sampled,
+		Values:        map[string]string{"bundle_size": "184kB"},
+		Files:         &api.ReuseFiles{Include: []string{"web/**"}, Exclude: []string{}},
+		Outputs:       api.ReuseOutputs{Paths: []string{"dist/"}, Artifacts: []string{"dist/**"}, Values: []string{"bundle_size"}},
 		Restore: []api.ReuseRestore{{
-			StepKey: "deps",
-			Paths:   []api.ReusePath{{Path: "node_modules/", Digest: "b3:aa", Key: "step-reuse/aa.tar.gz", Size: 123, Files: 40}},
+			StepKey:   "deps",
+			Paths:     []api.ReusePath{{Path: "node_modules/", Digest: "b3:aa", Key: "step-reuse/aa.tar.gz", Size: 123, Files: 40}},
+			Signature: &manifest,
 		}},
 	}
 	if diff := cmp.Diff(plan, wantPlan); diff != "" {
@@ -83,6 +90,7 @@ func TestReuseEndpoints(t *testing.T) {
 		VerifiedFilesDigest: &digest,
 		Paths:               []api.ReusePath{{Path: "dist/", Digest: "b3:bb", Key: "step-reuse/bb.tar.gz", Size: 9, Files: 4}},
 		OverheadMS:          1234,
+		Signature:           &manifest,
 	})
 	if err != nil {
 		t.Fatalf("SubmitReuseResult() error = %v", err)
@@ -120,7 +128,8 @@ func TestReuseEndpoints(t *testing.T) {
 		{"GET", "/jobs/j1/reuse", "", nil},
 		{"POST", "/jobs/j1/reuse/result", "", map[string]any{
 			"exit_status": 0.0, "verified_files_digest": "b3:ff", "overhead_ms": 1234.0, "discard_reason": nil,
-			"paths": []any{map[string]any{"path": "dist/", "digest": "b3:bb", "key": "step-reuse/bb.tar.gz", "size": 9.0, "files": 4.0}},
+			"signature": "eyJ.manifest.sig",
+			"paths":     []any{map[string]any{"path": "dist/", "digest": "b3:bb", "key": "step-reuse/bb.tar.gz", "size": 9.0, "files": 4.0}},
 		}},
 		{"POST", "/jobs/j1/reuse/input_unavailable", "", map[string]any{"step_key": "deps", "path": "node_modules/", "reason": "blob not found"}},
 		{"PUT", "/jobs/j1/outputs/values", "", map[string]any{"name": "bundle_size", "value": "184kB"}},
