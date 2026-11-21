@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"slices"
@@ -18,6 +19,7 @@ import (
 	"github.com/buildkite/agent/v4/api"
 	"github.com/buildkite/agent/v4/env"
 	"github.com/buildkite/agent/v4/internal/experiments"
+	"github.com/buildkite/agent/v4/internal/reuse"
 	"github.com/buildkite/agent/v4/logger"
 	"github.com/buildkite/go-pipeline"
 	"github.com/buildkite/go-pipeline/jwkutil"
@@ -1379,5 +1381,120 @@ func TestPipelineUploadFix(t *testing.T) {
 				t.Errorf("pipelineUploadFix() = %q, want it to contain %q", got, test.want)
 			}
 		})
+	}
+}
+
+func TestPipelineUploadReuseInputsDigest(t *testing.T) {
+	dir := t.TempDir()
+	runGit := func(args ...string) {
+		t.Helper()
+		cmd := exec.Command("git", args...)
+		cmd.Dir = dir
+		cmd.Env = append(os.Environ(),
+			"GIT_AUTHOR_NAME=test", "GIT_AUTHOR_EMAIL=test@example.com",
+			"GIT_COMMITTER_NAME=test", "GIT_COMMITTER_EMAIL=test@example.com",
+			"GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_NOSYSTEM=1",
+		)
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	runGit("init", "-q")
+	for name, content := range map[string]string{
+		"package.json":  "{}",
+		"yarn.lock":     "lock",
+		"web/app.ts":    "app",
+		"web/README.md": "readme",
+		"tsconfig.json": "{}",
+		"unrelated.txt": "x",
+	} {
+		path := filepath.Join(dir, filepath.FromSlash(name))
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	runGit("add", "-A")
+	runGit("commit", "-q", "-m", "init")
+	t.Chdir(dir)
+
+	const yml = `steps:
+  - key: deps
+    command: ./install.sh
+    inputs:
+      files: ["package.json", "yarn.lock"]
+    outputs:
+      paths: ["node_modules/"]
+    reuse: true
+  - group: g
+    steps:
+      - key: build
+        command: ./build.sh
+        inputs:
+          files:
+            include: ["web/**", "tsconfig.json"]
+            exclude: ["web/**/*.md"]
+          steps: [deps]
+        reuse: true
+  - key: nothing
+    command: ./x.sh
+    inputs:
+      files: "nope/**"
+  - key: plain
+    command: ./y.sh
+`
+	p, err := pipeline.Parse(strings.NewReader(yml))
+	if err != nil {
+		t.Fatalf("pipeline.Parse() error = %v", err)
+	}
+
+	l := logger.NewConsoleLogger(logger.NewTestPrinter(t), func(i int) { t.Errorf("exitFn(%d) invoked", i) })
+	(&inputsDigestApplicator{hasher: new(reuse.Hasher)}).apply(t.Context(), l, p.Steps)
+
+	digestOf := func(s *pipeline.CommandStep) map[string]any {
+		t.Helper()
+		m, ok := s.RemainingFields["inputs_digest"].(*ordered.MapSA)
+		if !ok {
+			t.Fatalf("step %q inputs_digest = %#v, want a map", s.Key, s.RemainingFields["inputs_digest"])
+		}
+		return m.ToMap()
+	}
+
+	deps := p.Steps[0].(*pipeline.CommandStep)
+	build := p.Steps[1].(*pipeline.GroupStep).Steps[0].(*pipeline.CommandStep)
+	nothing := p.Steps[2].(*pipeline.CommandStep)
+	plain := p.Steps[3].(*pipeline.CommandStep)
+
+	for _, tc := range []struct {
+		step      *pipeline.CommandStep
+		include   []string
+		exclude   []string
+		wantCount int
+	}{
+		{deps, []string{"package.json", "yarn.lock"}, nil, 2},
+		{build, []string{"web/**", "tsconfig.json"}, []string{"web/**/*.md"}, 2},
+	} {
+		want, err := reuse.HashFiles(t.Context(), ".", tc.include, tc.exclude, false)
+		if err != nil {
+			t.Fatal(err)
+		}
+		wantMap := map[string]any{"algorithm": "blake3", "files_digest": want.Digest, "files_count": tc.wantCount}
+		if diff := cmp.Diff(digestOf(tc.step), wantMap); diff != "" {
+			t.Errorf("step %q inputs_digest (-got +want):\n%s", tc.step.Key, diff)
+		}
+		for _, key := range []string{"inputs", "reuse"} {
+			if _, ok := tc.step.RemainingFields[key]; !ok {
+				t.Errorf("step %q lost %q", tc.step.Key, key)
+			}
+		}
+	}
+
+	if diff := cmp.Diff(digestOf(nothing), map[string]any{"error": "inputs.files matched no files"}); diff != "" {
+		t.Errorf("step nothing inputs_digest (-got +want):\n%s", diff)
+	}
+	if _, ok := plain.RemainingFields["inputs_digest"]; ok {
+		t.Errorf("step plain has inputs_digest, want none")
 	}
 }

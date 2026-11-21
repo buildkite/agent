@@ -29,6 +29,7 @@ import (
 	"github.com/buildkite/agent/v4/internal/programstatus"
 	"github.com/buildkite/agent/v4/internal/redact"
 	"github.com/buildkite/agent/v4/internal/replacer"
+	"github.com/buildkite/agent/v4/internal/reuse"
 	"github.com/buildkite/agent/v4/internal/stdin"
 	"github.com/buildkite/agent/v4/jobapi"
 	"github.com/buildkite/agent/v4/logger"
@@ -360,6 +361,8 @@ var PipelineUploadCommand = &cli.Command{
 			changedFilesPath: cfg.ChangedFilesPath,
 		}
 
+		inputsDigest := &inputsDigestApplicator{hasher: new(reuse.Hasher)}
+
 		// Process all inputs.
 		for _, input := range inputs {
 
@@ -437,6 +440,9 @@ var PipelineUploadCommand = &cli.Command{
 
 				// Apply or strip out `if_changed`, based on settings.
 				ifChanged.apply(l, result.Steps)
+
+				// Hash declared step reuse input files.
+				inputsDigest.apply(ctx, l, result.Steps)
 
 				// All logging happens to stderr.
 				// So this can be used with other tools to get interpolated, signed
@@ -1013,7 +1019,7 @@ stepsLoop:
 				continue stepsLoop
 			}
 			var err error
-			include, err = ifChangedPatterns(inclVal)
+			include, err = reuse.ParsePatterns(inclVal)
 			if err != nil {
 				l.Warnf("Couldn't parse if_changed.include patterns: %v. The step will not be skipped.", err)
 				continue stepsLoop
@@ -1022,7 +1028,7 @@ stepsLoop:
 			if !has {
 				break // switch
 			}
-			exclude, err = ifChangedPatterns(exclVal)
+			exclude, err = reuse.ParsePatterns(exclVal)
 			if err != nil {
 				l.Warnf("Couldn't parse if_changed.exclude patterns: %v. The step will not be skipped.", err)
 				continue stepsLoop
@@ -1030,7 +1036,7 @@ stepsLoop:
 
 		default:
 			// Should be either a simple string or a list of strings.
-			inc, err := ifChangedPatterns(x)
+			inc, err := reuse.ParsePatterns(x)
 			if err != nil {
 				l.Warnf("Couldn't parse if_changed patterns: %v. The step will not be skipped.", err)
 				continue stepsLoop
@@ -1127,41 +1133,86 @@ func (ica *ifChangedApplicator) gatherChangedPaths(l logger.Logger) ([]string, e
 	return cps, nil
 }
 
-// ifChangedPatterns converts a string or list within `if_changed` into a slice
-// of parsed globs.
-func ifChangedPatterns(value any) ([]*zzglob.Pattern, error) {
-	if value == nil {
-		return nil, nil
-	}
+// inputsDigestApplicator hashes the committed input files declared by command
+// steps that use step reuse (`inputs.files`), and records the result in
+// `inputs_digest` for the control plane to compute action keys from.
+type inputsDigestApplicator struct {
+	hasher *reuse.Hasher
+}
 
-	var patterns []string
-	switch x := value.(type) {
-	case string:
-		// A single string.
-		patterns = []string{x}
+// apply sets `inputs_digest` on every command step (including those within
+// groups) that declares `inputs.files`. Hashing failures are recorded in the
+// step and logged; they never fail the upload.
+func (ida *inputsDigestApplicator) apply(ctx context.Context, l logger.Logger, steps pipeline.Steps) {
+	for _, step := range steps {
+		switch st := step.(type) {
+		case *pipeline.GroupStep:
+			ida.apply(ctx, l, st.Steps)
 
-	case []any:
-		// A list of strings.
-		for i, item := range x {
-			patt, ok := item.(string)
+		case *pipeline.CommandStep:
+			inputs, ok := st.RemainingFields["inputs"].(*ordered.MapSA)
 			if !ok {
-				return nil, fmt.Errorf("at index %d, the item had unsupported type %T", i, item)
+				continue
 			}
-			patterns = append(patterns, patt)
+			files, has := inputs.Get("files")
+			if !has {
+				continue
+			}
+			name := cmp.Or(st.Key, st.Label, st.Command)
+
+			digest := ordered.NewMap[string, any](3)
+			res, err := ida.hash(ctx, files)
+			if err != nil {
+				l.Warnf("Step reuse: couldn't hash input files for step %q: %v", name, err)
+				digest.Set("error", err.Error())
+			} else {
+				l.Infof("Step reuse: hashed %d input files for step %q -> %s", res.Count, name, res.Digest)
+				digest.Set("algorithm", "blake3")
+				digest.Set("files_digest", res.Digest)
+				digest.Set("files_count", res.Count)
+			}
+			st.RemainingFields["inputs_digest"] = digest
 		}
-
-	default:
-		return nil, fmt.Errorf("the value had unsupported type %T", x)
 	}
+}
 
-	globs := make([]*zzglob.Pattern, 0, len(patterns))
-	for _, patt := range patterns {
-		g, err := zzglob.Parse(patt)
+func (ida *inputsDigestApplicator) hash(ctx context.Context, files any) (reuse.Result, error) {
+	include, exclude, untracked, err := parseInputsFiles(files)
+	if err != nil {
+		return reuse.Result{}, err
+	}
+	return ida.hasher.HashFiles(ctx, ".", include, exclude, untracked)
+}
+
+// parseInputsFiles parses `inputs.files`, which is a string, a list of
+// strings, or a mapping with `include` (required), `exclude` and `untracked`.
+func parseInputsFiles(files any) (include, exclude []string, untracked bool, err error) {
+	m, ok := files.(*ordered.MapSA)
+	if !ok {
+		include, err = reuse.StringList(files)
 		if err != nil {
-			return nil, fmt.Errorf("while parsing glob pattern %q: %w", patt, err)
+			return nil, nil, false, fmt.Errorf("inputs.files: %w", err)
 		}
-		globs = append(globs, g)
+		return include, nil, false, nil
 	}
 
-	return globs, nil
+	inclVal, has := m.Get("include")
+	if !has {
+		return nil, nil, false, errors.New("inputs.files was a mapping, but it didn't have an `include` key")
+	}
+	if include, err = reuse.StringList(inclVal); err != nil {
+		return nil, nil, false, fmt.Errorf("inputs.files.include: %w", err)
+	}
+	exclVal, _ := m.Get("exclude")
+	if exclude, err = reuse.StringList(exclVal); err != nil {
+		return nil, nil, false, fmt.Errorf("inputs.files.exclude: %w", err)
+	}
+	switch u, _ := m.Get("untracked"); u := u.(type) {
+	case nil:
+	case bool:
+		untracked = u
+	default:
+		return nil, nil, false, fmt.Errorf("inputs.files.untracked: the value had unsupported type %T", u)
+	}
+	return include, exclude, untracked, nil
 }
