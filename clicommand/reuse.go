@@ -58,6 +58,9 @@ Stores the current step's ′outputs.paths′ and reports the job's result for s
 reuse, according to the job's step reuse plan. The job executor runs this after
 the command phase when step reuse is enabled for the job.
 
+In repair mode, every output path is uploaded, replacing any stored archive
+with the same content digest, which may be corrupt.
+
 When the job has a pipeline signing key (′--jwks-file′ or a KMS key), the result
 is reported with a signed manifest of its exit status, output paths and values.
 
@@ -631,8 +634,10 @@ func (s *reuseSaver) save(ctx context.Context, plan *api.ReusePlan, result *api.
 		return
 	}
 
+	// A repair run replaces stored archives, which may be corrupt.
+	overwrite := plan.Mode != nil && *plan.Mode == "repair"
 	for i, p := range plan.Outputs.Paths {
-		stored, err := s.storePath(ctx, blob, p, dests[i])
+		stored, err := s.storePath(ctx, blob, p, dests[i], overwrite)
 		if err != nil {
 			discard(fmt.Sprintf("couldn't store output path %s: %v", p, err))
 			return
@@ -641,45 +646,50 @@ func (s *reuseSaver) save(ctx context.Context, plan *api.ReusePlan, result *api.
 	}
 }
 
-func (s *reuseSaver) storePath(ctx context.Context, blob store.Blob, outputPath, dest string) (api.ReusePath, error) {
+// storePath uploads the archive of an output path, unless the store already
+// has it and overwrite is false.
+func (s *reuseSaver) storePath(ctx context.Context, blob store.Blob, outputPath, dest string, overwrite bool) (api.ReusePath, error) {
 	digest, files, err := reuse.TreeDigest(dest)
 	if err != nil {
 		return api.ReusePath{}, err
 	}
 	key := reuseStoreKey(digest)
+	stored := api.ReusePath{Path: outputPath, Digest: digest, Key: key, Files: files}
 
-	size, err := blob.Stat(ctx, key)
-	switch {
-	case err == nil:
-		if refresher, ok := blob.(store.RetentionRefresher); ok {
-			refresher.RefreshRetention(ctx, key, reuseRetention)
-		}
-		s.l.Infof("Step reuse: output %s already stored (%d files, %s)", outputPath, files, digest)
+	if !overwrite {
+		size, err := blob.Stat(ctx, key)
+		switch {
+		case err == nil:
+			if refresher, ok := blob.(store.RetentionRefresher); ok {
+				refresher.RefreshRetention(ctx, key, reuseRetention)
+			}
+			s.l.Infof("Step reuse: output %s already stored (%d files, %s)", outputPath, files, digest)
+			stored.Size = size
+			return stored, nil
 
-	case errors.Is(err, store.ErrBlobNotFound):
-		archive, err := os.CreateTemp("", "buildkite-step-reuse-*.tar.gz")
-		if err != nil {
+		case !errors.Is(err, store.ErrBlobNotFound):
 			return api.ReusePath{}, err
 		}
-		_ = archive.Close()
-		defer func() { _ = os.Remove(archive.Name()) }()
-
-		if err := reuse.Pack(dest, archive.Name()); err != nil {
-			return api.ReusePath{}, err
-		}
-		fi, err := os.Stat(archive.Name())
-		if err != nil {
-			return api.ReusePath{}, err
-		}
-		if _, err := blob.Upload(ctx, archive.Name(), key, reuseRetention); err != nil {
-			return api.ReusePath{}, err
-		}
-		size = fi.Size()
-		s.l.Infof("Step reuse: output %s uploaded (%d files, %s)", outputPath, files, digest)
-
-	default:
-		return api.ReusePath{}, err
 	}
 
-	return api.ReusePath{Path: outputPath, Digest: digest, Key: key, Size: size, Files: files}, nil
+	archive, err := os.CreateTemp("", "buildkite-step-reuse-*.tar.gz")
+	if err != nil {
+		return api.ReusePath{}, err
+	}
+	_ = archive.Close()
+	defer func() { _ = os.Remove(archive.Name()) }()
+
+	if err := reuse.Pack(dest, archive.Name()); err != nil {
+		return api.ReusePath{}, err
+	}
+	fi, err := os.Stat(archive.Name())
+	if err != nil {
+		return api.ReusePath{}, err
+	}
+	if _, err := blob.Upload(ctx, archive.Name(), key, reuseRetention); err != nil {
+		return api.ReusePath{}, err
+	}
+	stored.Size = fi.Size()
+	s.l.Infof("Step reuse: output %s uploaded (%d files, %s)", outputPath, files, digest)
+	return stored, nil
 }

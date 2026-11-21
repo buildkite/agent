@@ -235,6 +235,39 @@ func TestReuseSaveAndRestore(t *testing.T) {
 	if got := fake.results[2].DiscardReason; got == nil || *got != reuseNoStoreReason {
 		t.Errorf("discard_reason without a store = %v, want %q", got, reuseNoStoreReason)
 	}
+
+	// A repair run replaces a corrupt stored archive, which other runs keep.
+	if err := runReuseCommand(t, server.URL, "restore", "--job", "restore", "--cache-store-url", storeURL); err != nil {
+		t.Fatalf("reuse restore error = %v", err)
+	}
+	distArchive := filepath.Join(storeDir, filepath.FromSlash(reuseStoreKey(wantDist)))
+	if err := os.WriteFile(distArchive, []byte("corrupt"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	repair := "repair"
+	fake.plans["repair"] = api.ReusePlan{StepKey: "build", Save: true, Mode: &repair, Outputs: api.ReuseOutputs{Paths: []string{"dist/"}}}
+	for _, job := range []string{"save", "repair"} {
+		if err := runReuseCommand(t, server.URL, "save", "--job", job, "--exit-status", "0", "--cache-store-url", storeURL); err != nil {
+			t.Fatalf("reuse save (%s) error = %v", job, err)
+		}
+		got, err := os.ReadFile(distArchive)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if corrupt := string(got) == "corrupt"; corrupt != (job == "save") {
+			t.Errorf("stored archive corrupt after %s = %t, want %t", job, corrupt, job == "save")
+		}
+	}
+	if err := os.RemoveAll("dist"); err != nil {
+		t.Fatal(err)
+	}
+	fake.plans["restore-repaired"] = api.ReusePlan{StepKey: "test", Restore: []api.ReuseRestore{{StepKey: "build", Paths: fake.results[len(fake.results)-1].Paths}}}
+	if err := runReuseCommand(t, server.URL, "restore", "--job", "restore-repaired", "--cache-store-url", storeURL); err != nil {
+		t.Fatalf("reuse restore (repaired) error = %v", err)
+	}
+	if got, _, err := reuse.TreeDigest("dist"); err != nil || got != wantDist {
+		t.Errorf("restored repaired dist digest = %q, %v, want %q", got, err, wantDist)
+	}
 }
 
 // clearReuseSigningEnv stops the environment from configuring signing keys.
