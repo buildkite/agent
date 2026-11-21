@@ -345,6 +345,10 @@ func (e *Executor) Run(ctx context.Context) (exitCode int) {
 		phaseErr = e.VendoredPluginPhase(ctx)
 	}
 
+	if phaseErr == nil && e.includePhase("command") && e.stepReuseEnabled() {
+		phaseErr = e.restoreStepReuseInputs(ctx)
+	}
+
 	if phaseErr == nil && e.includePhase("command") {
 		var commandErr error
 		phaseErr, commandErr = e.CommandPhase(ctx)
@@ -375,7 +379,20 @@ func (e *Executor) Run(ctx context.Context) (exitCode int) {
 		// Only upload artifacts as part of the command phase.
 		// The artifacts might be relevant for debugging job timeouts, so it can
 		// run during the grace period.
-		if err := e.artifactPhase(graceCtx); err != nil {
+		artifactErr := e.artifactPhase(graceCtx)
+
+		// Store the step's outputs and report its result for step reuse. A
+		// failed hook or artifact upload fails the job, so it is reported as
+		// a failed result even when the command itself succeeded.
+		if e.stepReuseEnabled() {
+			exitStatus, _ := strconv.Atoi(e.shell.Env.GetString("BUILDKITE_COMMAND_EXIT_STATUS", ""))
+			if exitStatus == 0 {
+				exitStatus = shell.ExitCode(cmp.Or(phaseErr, artifactErr))
+			}
+			e.saveStepReuseResult(graceCtx, exitStatus)
+		}
+
+		if err := artifactErr; err != nil {
 			e.shell.Errorf("%v", err)
 
 			if commandErr != nil {
