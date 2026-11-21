@@ -303,9 +303,10 @@ func loadReuseVerificationKeys(ctx context.Context, cfg ReuseRestoreConfig) (any
 	return nil, nil
 }
 
-// verifyRestoreSignature checks that an upstream result's signed manifest
-// covers every path to restore from it and matches its output values and exit
-// status. It returns the first path and a reason when it doesn't.
+// verifyRestoreSignature checks that an upstream result's signed manifest was
+// signed for the job that produced the result, covers every path to restore
+// from it, and matches its output values and exit status. It returns the first
+// path and a reason when it doesn't.
 func verifyRestoreSignature(keySet any, entry api.ReuseRestore) (failedPath, reason string) {
 	if len(entry.Paths) == 0 && len(entry.Values) == 0 {
 		return "", ""
@@ -323,6 +324,10 @@ func verifyRestoreSignature(keySet any, entry api.ReuseRestore) (failedPath, rea
 	}
 	if m.StepKey != entry.StepKey {
 		return failedPath, fmt.Sprintf("result signature invalid: signed for step %q", m.StepKey)
+	}
+	// Plans from before source_job_id can't say which job signed the result.
+	if entry.SourceJobID != "" && m.JobID != entry.SourceJobID {
+		return failedPath, fmt.Sprintf("result signature invalid: signed for job %s", m.JobID)
 	}
 	for _, p := range entry.Paths {
 		if !m.Covers(p.Path, p.Digest) {

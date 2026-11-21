@@ -36,7 +36,7 @@ func TestReuseEndpoints(t *testing.T) {
 			_, _ = io.WriteString(rw, `{"step_key":"build","save":true,"save_disabled_reason":null,
 				"files":{"include":["web/**"],"exclude":[],"untracked":false},
 				"outputs":{"paths":["dist/"],"artifacts":["dist/**"],"values":["bundle_size"]},
-				"restore":[{"step_key":"deps","download":false,"signature":"eyJ.manifest.sig",
+				"restore":[{"step_key":"deps","job_id":"j0","source_job_id":"j-1","download":false,"signature":"eyJ.manifest.sig",
 					"paths":[{"path":"node_modules/","digest":"b3:aa","key":"step-reuse/aa.tar.gz","size":123,"files":40}]}],
 				"values":{"bundle_size":"184kB"},"save_on_failure":true,"mode":"shadow","mode_reason":"sampled"}`)
 		case "POST /jobs/j1/reuse/result":
@@ -75,9 +75,11 @@ func TestReuseEndpoints(t *testing.T) {
 		Files:         &api.ReuseFiles{Include: []string{"web/**"}, Exclude: []string{}},
 		Outputs:       api.ReuseOutputs{Paths: []string{"dist/"}, Artifacts: []string{"dist/**"}, Values: []string{"bundle_size"}},
 		Restore: []api.ReuseRestore{{
-			StepKey:   "deps",
-			Paths:     []api.ReusePath{{Path: "node_modules/", Digest: "b3:aa", Key: "step-reuse/aa.tar.gz", Size: 123, Files: 40}},
-			Signature: &manifest,
+			StepKey:     "deps",
+			JobID:       "j0",
+			SourceJobID: "j-1",
+			Paths:       []api.ReusePath{{Path: "node_modules/", Digest: "b3:aa", Key: "step-reuse/aa.tar.gz", Size: 123, Files: 40}},
+			Signature:   &manifest,
 		}},
 	}
 	if diff := cmp.Diff(plan, wantPlan); diff != "" {

@@ -389,6 +389,8 @@ func TestReuseResultSignatures(t *testing.T) {
 		{name: "unverified ignores a missing signature", entry: api.ReuseRestore{StepKey: "build", Paths: result.Paths}},
 		{name: "missing signature", entry: api.ReuseRestore{StepKey: "build", Paths: result.Paths}, verify: true, wantReason: "result signature missing"},
 		{name: "signed with an untrusted key", entry: api.ReuseRestore{StepKey: "build", Paths: result.Paths, Signature: otherSig}, verify: true, wantReason: "result signature invalid: "},
+		{name: "signed by the source job", entry: api.ReuseRestore{StepKey: "build", JobID: "reusing-job", SourceJobID: "save", Paths: result.Paths, Signature: result.Signature}, verify: true},
+		{name: "signed for another job", entry: api.ReuseRestore{StepKey: "build", JobID: "build-job", SourceJobID: "build-job", Paths: result.Paths, Signature: result.Signature}, verify: true, wantReason: "result signature invalid: signed for job save"},
 		{name: "signed for another step", entry: api.ReuseRestore{StepKey: "test", Paths: result.Paths, Signature: result.Signature}, verify: true, wantReason: `result signature invalid: signed for step "build"`},
 		{name: "path digest not covered", entry: api.ReuseRestore{StepKey: "build", Paths: tamperedPaths, Signature: result.Signature}, verify: true, wantReason: "result signature invalid: doesn't cover VERSION"},
 		{name: "signed values match", entry: api.ReuseRestore{StepKey: "build", Paths: result.Paths, Values: map[string]string{"version": "1.2.3"}, ExitStatus: &zero, Signature: result.Signature}, verify: true},

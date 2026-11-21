@@ -49,6 +49,13 @@ type ReuseRestore struct {
 	Download bool        `json:"download"` // download the step's artifacts too
 	Paths    []ReusePath `json:"paths"`
 
+	// JobID is the upstream job in this build whose outputs are restored.
+	// SourceJobID is the job that produced and signed the result, which is
+	// JobID unless the upstream job itself reused a result. Older plans
+	// have neither.
+	JobID       string `json:"job_id"`
+	SourceJobID string `json:"source_job_id"`
+
 	// Values and ExitStatus are the upstream job's stored output values and
 	// exit status, which a signed manifest must match.
 	Values     map[string]string `json:"values"`
