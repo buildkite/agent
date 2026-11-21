@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"sync"
@@ -462,5 +463,134 @@ func TestLogReuseMode(t *testing.T) {
 		if diff := cmp.Diff(l.Messages, tt.want); diff != "" {
 			t.Errorf("logReuseMode(%v) messages (-got +want):\n%s", tt.mode, diff)
 		}
+	}
+}
+
+// fakeNSC is an `nsc` CLI that keeps artifacts in a directory, and logs each
+// invocation's arguments.
+const fakeNSC = `#!/bin/sh
+echo "$*" >> "$FAKE_NSC_DIR/calls.log"
+[ "$1" = artifact ] || exit 1
+cmd=$2
+shift 2
+case "$cmd" in
+upload)
+  mkdir -p "$(dirname "$FAKE_NSC_DIR/store/$2")" && cp "$1" "$FAKE_NSC_DIR/store/$2" ;;
+download)
+  if [ ! -f "$FAKE_NSC_DIR/store/$1" ]; then echo "artifact $1 not found" >&2; exit 1; fi
+  cp "$FAKE_NSC_DIR/store/$1" "$2" ;;
+describe)
+  if [ ! -f "$FAKE_NSC_DIR/store/$1" ]; then echo "$1 doesn't exist"; exit 2; fi
+  printf '{"size":%d,"status":"LIVE"}\n' "$(wc -c < "$FAKE_NSC_DIR/store/$1")" ;;
+extend)
+  if [ "$1" = --help ]; then echo "  --ensure_minimum duration"; exit 0; fi
+  [ -f "$FAKE_NSC_DIR/store/$1" ] || exit 1 ;;
+*)
+  exit 1 ;;
+esac
+`
+
+func TestReuseSaveAndRestoreNSC(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the fake nsc CLI is a shell script")
+	}
+	clearReuseSigningEnv(t)
+	t.Setenv("TMPDIR", t.TempDir())
+	nscDir := t.TempDir()
+	binDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(binDir, "nsc"), []byte(fakeNSC), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	t.Setenv("FAKE_NSC_DIR", nscDir)
+	const storeURL = "nsc://buildkite-cache-my-cluster"
+
+	t.Chdir(t.TempDir())
+	if err := os.MkdirAll(filepath.Join("dist", "bin"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join("dist", "bin", "app"), []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	wantDist, _, err := reuse.TreeDigest("dist")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	fake := &fakeReuseAPI{plans: map[string]api.ReusePlan{
+		"save": {StepKey: "build", Save: true, Outputs: api.ReuseOutputs{Paths: []string{"dist/"}}},
+	}}
+	server := httptest.NewServer(fake)
+	t.Cleanup(server.Close)
+
+	if err := runReuseCommand(t, server.URL, "save", "--job", "save", "--exit-status", "0", "--cache-store-url", storeURL); err != nil {
+		t.Fatalf("reuse save error = %v", err)
+	}
+	result := fake.results[0]
+	if result.DiscardReason != nil || len(result.Paths) != 1 || result.Paths[0].Digest != wantDist || result.Paths[0].Size == 0 {
+		t.Fatalf("result = %+v, want dist/ stored with digest %s", result, wantDist)
+	}
+	key := result.Paths[0].Key
+
+	// Saving the same output again only extends its expiry.
+	if err := runReuseCommand(t, server.URL, "save", "--job", "save", "--exit-status", "0", "--cache-store-url", storeURL); err != nil {
+		t.Fatalf("reuse save (again) error = %v", err)
+	}
+
+	if err := os.RemoveAll("dist"); err != nil {
+		t.Fatal(err)
+	}
+	fake.plans["restore"] = api.ReusePlan{StepKey: "test", Restore: []api.ReuseRestore{{StepKey: "build", Paths: result.Paths}}}
+	if err := runReuseCommand(t, server.URL, "restore", "--job", "restore", "--cache-store-url", storeURL); err != nil {
+		t.Fatalf("reuse restore error = %v", err)
+	}
+	if got, _, err := reuse.TreeDigest("dist"); err != nil || got != wantDist {
+		t.Errorf("restored dist digest = %q, %v, want %q", got, err, wantDist)
+	}
+
+	// A missing artifact is unavailable.
+	missing := result.Paths[0]
+	missing.Key = "step-reuse/missing.tar.gz"
+	fake.plans["missing"] = api.ReusePlan{StepKey: "test", Restore: []api.ReuseRestore{{StepKey: "build", Paths: []api.ReusePath{missing}}}}
+	err = runReuseCommand(t, server.URL, "restore", "--job", "missing", "--cache-store-url", storeURL)
+	if serr := new(SilentExitError); !errors.As(err, &serr) || serr.Code() != reuse.ExitCodeInputUnavailable {
+		t.Fatalf("reuse restore (missing) error = %v, want exit %d", err, reuse.ExitCodeInputUnavailable)
+	}
+	if len(fake.unavailable) != 1 || fake.unavailable[0].Reason != "blob not found" {
+		t.Errorf("input_unavailable reports = %+v, want one for a missing blob", fake.unavailable)
+	}
+
+	calls, err := os.ReadFile(filepath.Join(nscDir, "calls.log"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for line := range strings.Lines(string(calls)) {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "artifact extend --help") {
+			continue
+		}
+		// Drop local temporary file paths.
+		fields := strings.Fields(line)
+		switch fields[1] {
+		case "upload":
+			fields = slices.Delete(fields, 2, 3)
+		case "download":
+			fields = slices.Delete(fields, 3, 4)
+		}
+		got = append(got, strings.Join(fields, " "))
+	}
+	ns := "--namespace buildkite-cache-my-cluster"
+	want := []string{
+		"artifact describe " + key + " -o json " + ns,
+		"artifact upload " + key + " --expires_in 720h " + ns,
+		"artifact describe " + key + " -o json " + ns,
+		"artifact extend " + key + " --ensure_minimum 720h " + ns,
+		"artifact download " + key + " " + ns,
+		"artifact extend " + key + " --ensure_minimum 720h " + ns,
+		"artifact download step-reuse/missing.tar.gz " + ns,
+	}
+	if diff := cmp.Diff(got, want); diff != "" {
+		t.Errorf("nsc calls (-got +want):\n%s", diff)
 	}
 }

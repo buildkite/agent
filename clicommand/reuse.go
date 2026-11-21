@@ -468,14 +468,16 @@ func (r *reuseRestorer) restorePath(ctx context.Context, stepKey string, p api.R
 		return fmt.Sprintf("couldn't open the cache store: %v", err), nil
 	}
 
-	archive, err := os.CreateTemp("", "buildkite-step-reuse-*.tar.gz")
+	// Download to a path that doesn't exist yet, as `cache restore` does,
+	// since stores such as nsc write the file themselves.
+	downloadDir, err := os.MkdirTemp("", "buildkite-step-reuse-")
 	if err != nil {
 		return "", err
 	}
-	_ = archive.Close()
-	defer func() { _ = os.Remove(archive.Name()) }()
+	defer func() { _ = os.RemoveAll(downloadDir) }()
+	archive := filepath.Join(downloadDir, "archive.tar.gz")
 
-	if _, err := blob.Download(ctx, p.Key, archive.Name()); err != nil {
+	if _, err := blob.Download(ctx, p.Key, archive); err != nil {
 		if errors.Is(err, store.ErrBlobNotFound) {
 			return store.ErrBlobNotFound.Error(), nil
 		}
@@ -495,7 +497,7 @@ func (r *reuseRestorer) restorePath(ctx context.Context, stepKey string, p api.R
 	defer func() { _ = os.RemoveAll(tmp) }()
 
 	unpacked := filepath.Join(tmp, "out")
-	if err := reuse.Unpack(archive.Name(), unpacked); err != nil {
+	if err := reuse.Unpack(archive, unpacked); err != nil {
 		return fmt.Sprintf("couldn't unpack the archive: %v", err), nil
 	}
 
@@ -515,6 +517,11 @@ func (r *reuseRestorer) restorePath(ctx context.Context, stepKey string, p api.R
 	}
 	if digest != p.Digest {
 		return fmt.Sprintf("digest mismatch: got %s, want %s", digest, p.Digest), nil
+	}
+
+	// Keep a stored output that's still in use, as `cache restore` does.
+	if refresher, ok := blob.(store.RetentionRefresher); ok {
+		refresher.RefreshRetention(ctx, p.Key, reuseRetention)
 	}
 
 	if err := os.RemoveAll(dest); err != nil {
