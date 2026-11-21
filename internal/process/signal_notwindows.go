@@ -43,6 +43,8 @@ func (p *Process) terminateProcessGroup() error {
 	return syscall.Kill(-p.pid(), syscall.SIGKILL)
 }
 
+func (p *Process) cleanupProcessGroup() {}
+
 func (p *Process) interruptProcessGroup() error {
 	// Note: interruptProcessGroup is called from within p.Interrupt, which
 	// holds p.mu.

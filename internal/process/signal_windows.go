@@ -76,6 +76,7 @@ func newJobObject() (uintptr, error) {
 		uint32(unsafe.Sizeof(info)),
 	)
 	if err != nil {
+		_ = windows.CloseHandle(handle)
 		return 0, err
 	}
 
@@ -122,6 +123,29 @@ func (p *Process) terminateProcessGroup() error {
 	h := p.winJobHandle
 	p.winJobHandle = 0
 	return windows.CloseHandle(windows.Handle(h))
+}
+
+func (p *Process) cleanupProcessGroup() {
+	if p.winJobHandle == 0 {
+		return
+	}
+	h := p.winJobHandle
+	p.winJobHandle = 0
+
+	// Clear KILL_ON_JOB_CLOSE before closing on normal exit so backgrounded
+	// child processes survive, matching POSIX process group behaviour.
+	var info windows.JOBOBJECT_EXTENDED_LIMIT_INFORMATION
+	if _, err := windows.SetInformationJobObject(
+		windows.Handle(h),
+		windows.JobObjectExtendedLimitInformation,
+		uintptr(unsafe.Pointer(&info)),
+		uint32(unsafe.Sizeof(info)),
+	); err != nil {
+		p.logger.Warnf("[Process] Failed to clear job limits before closing handle: %v", err)
+	}
+	if err := windows.CloseHandle(windows.Handle(h)); err != nil {
+		p.logger.Warnf("[Process] Failed to close job handle: %v", err)
+	}
 }
 
 func (p *Process) interruptProcessGroup() error {
