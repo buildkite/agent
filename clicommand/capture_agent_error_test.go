@@ -4,12 +4,37 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
+	"os"
 	"strings"
 	"testing"
 
+	"github.com/buildkite/agent/v4/env"
+	"github.com/buildkite/agent/v4/internal/redact"
+	"github.com/buildkite/agent/v4/internal/replacer"
+	"github.com/buildkite/agent/v4/internal/shell"
 	"github.com/buildkite/agent/v4/jobapi"
 	"github.com/buildkite/agent/v4/logger"
 )
+
+func startCaptureErrorTestServer(t *testing.T, report func(context.Context, *jobapi.CapturedError) error) {
+	t.Helper()
+	socketPath, err := jobapi.NewSocketPath(os.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	redactors := replacer.NewMux(redact.New(io.Discard, nil))
+	server, token, err := jobapi.NewServer(shell.TestingLogger{T: t}, socketPath, env.New(), redactors, jobapi.WithCapturedErrorReporter(report))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := server.Start(); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = server.Stop() })
+	t.Setenv("BUILDKITE_AGENT_JOB_API_SOCKET", socketPath)
+	t.Setenv("BUILDKITE_AGENT_JOB_API_TOKEN", token)
+}
 
 // startAgentErrorTestServer starts a Local Job API that records captured
 // errors, and opts the job in to agent error capture.
