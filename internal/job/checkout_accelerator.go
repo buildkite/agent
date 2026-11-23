@@ -96,7 +96,7 @@ func (e *Executor) acceleratorRepositoryURL() string {
 
 // acceleratorGit prepares a one-command transport environment. In particular,
 // job-supplied trace, proxy, helper and TLS overrides do not apply to it.
-func (e *Executor) acceleratorGit(ctx context.Context, attempt *remoteMirrorAttempt, gitDir string, flags []string) (*shell.Shell, []string, error) {
+func (e *Executor) acceleratorGit(ctx context.Context, attempt *remoteMirrorAttempt, gitDir string, flags []string, anonymous bool) (*shell.Shell, []string, error) {
 	environ := env.FromMap(map[string]string{
 		"GIT_CEILING_DIRECTORIES": filepath.Dir(e.shell.Getwd()),
 		"GIT_CONFIG_NOSYSTEM":     "1",
@@ -146,7 +146,7 @@ func (e *Executor) acceleratorGit(ctx context.Context, attempt *remoteMirrorAtte
 		}
 	}
 	flags = append(flags, "-c", "protocol.version=2", "-c", "http.followRedirects=false", "-c", "core.hooksPath="+os.DevNull)
-	if !e.useRepositoryProviderGitCredentials() {
+	if anonymous || !e.useRepositoryProviderGitCredentials() {
 		return sh, flags, nil
 	}
 	client := api.NewClient(logger.Discard, api.Config{
@@ -158,7 +158,11 @@ func (e *Executor) acceleratorGit(ctx context.Context, attempt *remoteMirrorAtte
 	defer cancel()
 	creds, _, err := client.GenerateRepositoryCredentials(credentialCtx, e.canonicalRepository, e.JobID)
 	if err != nil || creds.Token == "" {
-		return nil, nil, errors.New("managed repository credentials unavailable for accelerator")
+		if err := ctx.Err(); err != nil {
+			return nil, nil, err
+		}
+		e.shell.Commentf("Managed repository credentials unavailable; trying Git Accelerator anonymously")
+		return sh, flags, nil
 	}
 	username := creds.Username
 	if username == "" {
@@ -174,12 +178,57 @@ func (e *Executor) acceleratorGit(ctx context.Context, attempt *remoteMirrorAtte
 }
 
 func (e *Executor) cloneFromAccelerator(ctx context.Context, attempt *remoteMirrorAttempt, flags []string, destination string, bare bool) error {
-	sh, gitFlags, err := e.acceleratorGit(ctx, attempt, "", []string{
+	transportFlags := []string{
 		"-c", "http.lowSpeedLimit=1000", "-c", "http.lowSpeedTime=" + strconv.Itoa(remoteMirrorLowSpeedTime),
-	})
+	}
+	sh, gitFlags, err := e.acceleratorGit(ctx, attempt, "", transportFlags, false)
 	if err != nil {
 		return err
 	}
+	err = e.runAcceleratorClone(ctx, attempt, sh, gitFlags, flags, destination, bare)
+	if err == nil || ctx.Err() != nil {
+		return err
+	}
+	var cloneErr *gitError
+	if errors.As(err, &cloneErr) && cloneErr.Type == gitErrorCloneTimeout {
+		return err
+	}
+	// Git does not expose the HTTP status directly. Confirm the authenticated
+	// discovery request is challenged before retrying without credentials.
+	auth := sh.Env.GetString(acceleratorAuthorizationEnv, "")
+	if auth == "" || !acceleratorChallengesToken(ctx, attempt.url, auth) {
+		return err
+	}
+	e.shell.Commentf("Git Accelerator rejected managed repository credentials; retrying anonymously")
+	// Git cleans up the failed clone before returning. Prepare a new isolated
+	// environment so neither the retry's Git nor CloneKit receives the token.
+	sh, gitFlags, err = e.acceleratorGit(ctx, attempt, "", transportFlags, true)
+	if err != nil {
+		return err
+	}
+	return e.runAcceleratorClone(ctx, attempt, sh, gitFlags, flags, destination, bare)
+}
+
+func acceleratorChallengesToken(ctx context.Context, source, auth string) bool {
+	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, source+"/info/refs?service=git-upload-pack", nil)
+	if err != nil {
+		return false
+	}
+	req.Header.Set("Git-Protocol", "version=2")
+	req.Header.Set("Authorization", strings.TrimPrefix(auth, "Authorization: "))
+	client := acceleratorHTTPClient()
+	defer client.CloseIdleConnections()
+	resp, err := client.Do(req)
+	if err != nil {
+		return false
+	}
+	defer resp.Body.Close()
+	return resp.StatusCode == http.StatusUnauthorized && strings.EqualFold(resp.Header.Get("WWW-Authenticate"), `Basic realm="git-accelerator"`)
+}
+
+func (e *Executor) runAcceleratorClone(ctx context.Context, attempt *remoteMirrorAttempt, sh *shell.Shell, gitFlags, flags []string, destination string, bare bool) error {
 	flags = append(append([]string{}, flags...), "--template=")
 	if !bare {
 		flags = append(flags, "--no-checkout")
@@ -204,7 +253,26 @@ func (e *Executor) cloneFromAccelerator(ctx context.Context, attempt *remoteMirr
 			return err
 		}
 	}
-	return gitClone(withoutGitErrorCapture(ctx), sh, gitFlags, flags, attempt.url, destination, shell.AlwaysHidePrompt())
+	if err := gitClone(withoutGitErrorCapture(ctx), sh, gitFlags, flags, attempt.url, destination, shell.AlwaysHidePrompt()); err != nil {
+		return err
+	}
+	if !bare && e.Commit == "HEAD" {
+		// Keep origin's tracking rules, but rewrite its URL for this command only.
+		attempt.acceleratorHeadFetch = &gitFetchArgs{
+			Shell:      sh,
+			GitFlags:   append(gitFlags, "-c", "url."+attempt.url+".insteadOf="+e.Repository),
+			Repository: "origin",
+			HidePrompt: true,
+		}
+	}
+	return nil
+}
+
+func acceleratorHTTPClient() *http.Client {
+	// Like accelerator Git, do not use an ambient proxy or follow redirects.
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.Proxy = nil
+	return &http.Client{Transport: transport, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 }
 
 func (e *Executor) tryAcceleratorCloneKit(parent context.Context, sh *shell.Shell, source, staging string) bool {
@@ -218,11 +286,8 @@ func (e *Executor) tryAcceleratorCloneKit(parent context.Context, sh *shell.Shel
 		tracetools.FinishWithError(span, nil)
 		e.shell.Commentf("Git accelerator CloneKit: %s (%s)", outcome, stage)
 	}()
-	// Like accelerator Git, do not use an ambient proxy or follow redirects.
-	transport := http.DefaultTransport.(*http.Transport).Clone()
-	transport.Proxy = nil
-	defer transport.CloseIdleConnections()
-	client := &http.Client{Transport: transport, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	client := acceleratorHTTPClient()
+	defer client.CloseIdleConnections()
 	seedEnv := sh.Env.Copy()
 	auth := strings.TrimPrefix(seedEnv.Remove(acceleratorAuthorizationEnv), "Authorization: ")
 	m, err := fetchCloneKitManifest(ctx, client, source+"/clone-kit", func(req *http.Request) {

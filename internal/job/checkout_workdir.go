@@ -138,9 +138,9 @@ func (e *Executor) prepareCheckoutWorkdir(
 		}
 		if cloneErr == nil {
 			// Refs and tags from this clone are the mirror's snapshot and may lag
-			// canonical; the built commit is still the backend's exact object
-			// ID. Durable origin is canonical. If the job is killed before this
-			// set-url, the next checkout's remote URL reconciliation repairs it.
+			// canonical. The built commit is the pinned object ID or, for HEAD,
+			// the result of a follow-up branch fetch. If the job is killed before
+			// this set-url, the next checkout's remote URL reconciliation repairs it.
 			cloneErr = e.shell.Command(
 				"git", "remote", "set-url", "origin", e.Repository,
 			).Run(ctx)
@@ -157,7 +157,7 @@ func (e *Executor) prepareCheckoutWorkdir(
 			}
 		}
 		hasCommit := false
-		if cloneErr == nil {
+		if cloneErr == nil && e.Commit != "HEAD" {
 			hasCommit = hasGitCommit(ctx, e.shell, ".git", e.Commit)
 		}
 		attempt.duration = time.Since(started)
@@ -168,6 +168,12 @@ func (e *Executor) prepareCheckoutWorkdir(
 			return ctxErr
 		}
 		if cloneErr == nil {
+			if e.Commit == "HEAD" && !shallowClone {
+				// The hit describes the bulk clone only. fetchSource must still
+				// fetch the requested branch, not use the clone's local HEAD.
+				attempt.outcome = remoteMirrorOutcomeHit
+				return nil
+			}
 			ambientAlternates, _ := e.shell.Env.Get("GIT_ALTERNATE_OBJECT_DIRECTORIES")
 			alternateObjects := ambientAlternates != "" ||
 				osutil.FileExists(filepath.Join(e.shell.Getwd(), ".git", "objects", "info", "alternates"))

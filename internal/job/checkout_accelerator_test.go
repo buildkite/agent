@@ -186,6 +186,13 @@ func TestGitAcceleratorCloneKitCheckout(t *testing.T) {
 	seedTip := gitOutputForRemoteCheckoutTest(t, writer, "rev-parse", "HEAD")
 	manifest, files := makeCloneKitTestSeed(t, canonicalURL, seedTip)
 	runGitForMirrorTest(t, writer, "checkout", "-b", "feature-branch")
+	runGitForMirrorTest(t, writer, "push", "origin", "feature-branch")
+	stale := copyOnHostMirrorHTTPRepo(t, canonicalURL, "canonical")
+	staleURL, err := url.Parse(stale.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	staleProxy := httputil.NewSingleHostReverseProxy(staleURL)
 	runGitForMirrorTest(t, writer, "commit", "--allow-empty", "-m", "Commit after seed")
 	runGitForMirrorTest(t, writer, "tag", "after-seed")
 	runGitForMirrorTest(t, writer, "push", "origin", "feature-branch", "after-seed")
@@ -194,6 +201,7 @@ func TestGitAcceleratorCloneKitCheckout(t *testing.T) {
 	const origin = "https://git.example/acme/private.git"
 	const repo = "/git.example/acme/private.git"
 	var manifestRequests, credentialRequests, gitRequests, canonicalRequests atomic.Int32
+	var headDiscoveries atomic.Int32
 	var gitBytes, seedBytes atomic.Int64
 	var cancelClone atomic.Pointer[context.CancelFunc]
 	var mode atomic.Value
@@ -205,6 +213,10 @@ func TestGitAcceleratorCloneKitCheckout(t *testing.T) {
 		}
 		if err := json.NewDecoder(r.Body).Decode(&input); err != nil || input.RepoURL != origin {
 			t.Error("managed credential was not requested for the canonical repository")
+		}
+		if mode.Load() == "token-unavailable" {
+			http.Error(w, "cannot issue token", http.StatusBadRequest)
+			return
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = io.WriteString(w, `{"username":"reader","token":"fixture-token"}`)
@@ -226,7 +238,7 @@ func TestGitAcceleratorCloneKitCheckout(t *testing.T) {
 	t.Cleanup(foreignServer.Close)
 	accelerator := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		state := mode.Load().(string)
-		if state == "anonymous" && r.Header.Get("Authorization") != "" {
+		if (state == "anonymous" || state == "token-unavailable") && r.Header.Get("Authorization") != "" {
 			t.Error("anonymous checkout sent authorization")
 		}
 		if kind, ok := strings.CutPrefix(r.URL.Path, repo+"/clone-kit/files/"); ok {
@@ -247,7 +259,15 @@ func TestGitAcceleratorCloneKitCheckout(t *testing.T) {
 			seedBytes.Add(int64(n))
 			return
 		}
-		if state != "anonymous" {
+		if state == "token-rejected" && r.Header.Get("Authorization") != "" {
+			if r.URL.Path == repo+"/clone-kit" {
+				manifestRequests.Add(1)
+			}
+			w.Header().Set("WWW-Authenticate", `Basic realm="git-accelerator"`)
+			http.Error(w, "token rejected", http.StatusUnauthorized)
+			return
+		}
+		if state != "anonymous" && state != "token-unavailable" && state != "token-rejected" {
 			if u, p, ok := r.BasicAuth(); !ok || u != "reader" || p != "fixture-token" {
 				t.Error("missing preemptive accelerator authorization")
 				http.NotFound(w, r)
@@ -282,13 +302,26 @@ func TestGitAcceleratorCloneKitCheckout(t *testing.T) {
 			http.Error(w, "Git unavailable", http.StatusServiceUnavailable)
 			return
 		}
+		gitProxy := proxy
+		if strings.HasPrefix(state, "head-") {
+			if strings.HasSuffix(r.URL.Path, "/info/refs") {
+				headDiscoveries.Add(1)
+			}
+			if headDiscoveries.Load() == 1 {
+				// The follow-up fetch sees a newer branch tip than the clone did.
+				gitProxy = staleProxy
+			} else if state == "head-fetch-down" {
+				http.Error(w, "Git unavailable", http.StatusServiceUnavailable)
+				return
+			}
+		}
 		r.Header.Del("Authorization")
 		r.URL.Path = "/canonical.git" + strings.TrimPrefix(r.URL.Path, repo)
 		if r.Method == http.MethodPost {
-			proxy.ServeHTTP(&acceleratorByteCounter{ResponseWriter: w, bytes: &gitBytes}, r)
+			gitProxy.ServeHTTP(&acceleratorByteCounter{ResponseWriter: w, bytes: &gitBytes}, r)
 			return
 		}
-		proxy.ServeHTTP(w, r)
+		gitProxy.ServeHTTP(w, r)
 	}))
 	t.Cleanup(accelerator.Close)
 	launcher := acceleratorTestGitLauncher(t, accelerator)
@@ -300,7 +333,7 @@ func TestGitAcceleratorCloneKitCheckout(t *testing.T) {
 	for _, bare := range []bool{false, true} {
 		cases := []string{"mirror-only", "hit"}
 		if !bare {
-			cases = append(cases, "cold", "expired", "corrupt", "foreign-file", "git-down", "host-excluded", "anonymous", "cancel")
+			cases = append(cases, "head-mirror", "head-clonekit", "head-fetch-down", "cold", "expired", "corrupt", "foreign-file", "git-down", "host-excluded", "anonymous", "token-unavailable", "token-rejected", "cancel")
 		}
 		for _, state := range cases {
 			t.Run(fmt.Sprintf("bare=%t/%s", bare, state), func(t *testing.T) {
@@ -313,6 +346,10 @@ func TestGitAcceleratorCloneKitCheckout(t *testing.T) {
 					}
 				})
 				e, _ := newFreshCloneRemoteMirrorExecutor(t, origin, "", commit)
+				head := strings.HasPrefix(state, "head-")
+				if head {
+					e.Commit = "HEAD"
+				}
 				e.JobID = "test-job"
 				e.GitAcceleratorURL, e.GitAcceleratorPath = accelerator.URL, launcher
 				e.GitCleanFlags, e.GitCommitVerification = "-ffxdq", GitCommitVerificationOff
@@ -330,7 +367,7 @@ func TestGitAcceleratorCloneKitCheckout(t *testing.T) {
 					e.GitMirrorsPath, e.GitMirrorsLockTimeout, e.GitMirrorCheckoutMode = t.TempDir(), 30, "dissociate"
 				}
 				ctx, _ := experiments.Enable(t.Context(), experiments.GitAcceleratorMirror)
-				if state != "mirror-only" {
+				if state != "mirror-only" && state != "head-mirror" {
 					ctx, _ = experiments.Enable(ctx, experiments.GitAcceleratorCloneKit)
 				}
 				ctx, cancel := context.WithCancel(ctx)
@@ -342,6 +379,7 @@ func TestGitAcceleratorCloneKitCheckout(t *testing.T) {
 				credentialRequests.Store(0)
 				gitRequests.Store(0)
 				canonicalRequests.Store(0)
+				headDiscoveries.Store(0)
 				started := time.Now()
 				err := e.defaultCheckoutPhase(ctx, 0)
 				if state == "cancel" {
@@ -354,11 +392,11 @@ func TestGitAcceleratorCloneKitCheckout(t *testing.T) {
 					t.Fatal(err)
 				}
 				t.Logf("checkout: %s; Git response bytes: %d; seed file bytes: %d", time.Since(started), gitBytes.Load(), seedBytes.Load())
-				if state == "mirror-only" && gitBytes.Load() < int64(len(payload)) {
+				if (state == "mirror-only" || state == "head-mirror") && gitBytes.Load() < int64(len(payload)) {
 					t.Fatal("mirror-only control did not transfer the full history")
 				}
 				switch state {
-				case "hit", "anonymous":
+				case "hit", "head-clonekit", "anonymous", "token-unavailable", "token-rejected":
 					if gitBytes.Load() <= 0 || gitBytes.Load() >= int64(len(payload))/10 || seedBytes.Load() < int64(len(payload)) {
 						t.Fatal("seed did not replace the bulk of the Git transfer")
 					}
@@ -369,12 +407,21 @@ func TestGitAcceleratorCloneKitCheckout(t *testing.T) {
 				}
 				// A workspace with an on-host mirror still uses canonical origin
 				// with a reference, so its canonical requests are not fallback.
-				if !bare && (state == "git-down" || state == "host-excluded") != (canonicalRequests.Load() > 0) {
+				if !bare && (state == "head-fetch-down" || state == "git-down" || state == "host-excluded") != (canonicalRequests.Load() > 0) {
 					t.Errorf("unexpected canonical request count %d", canonicalRequests.Load())
 				}
-				wantManifest := state != "mirror-only" && state != "host-excluded"
-				if (wantManifest && manifestRequests.Load() != 1) || (!wantManifest && manifestRequests.Load() != 0) {
-					t.Errorf("manifest requests = %d", manifestRequests.Load())
+				if head && headDiscoveries.Load() < 2 {
+					t.Error("HEAD fetch did not try the accelerator after cloning")
+				}
+				var wantManifests int32 = 1
+				switch state {
+				case "mirror-only", "head-mirror", "host-excluded":
+					wantManifests = 0
+				case "token-rejected":
+					wantManifests = 2 // The original request carries the token; the retry does not.
+				}
+				if got := manifestRequests.Load(); got != wantManifests {
+					t.Errorf("manifest requests = %d, want %d", got, wantManifests)
 				}
 				wantCredentials := state != "host-excluded" && state != "anonymous"
 				if (wantCredentials && credentialRequests.Load() != 1) || (!wantCredentials && credentialRequests.Load() != 0) {
@@ -382,7 +429,11 @@ func TestGitAcceleratorCloneKitCheckout(t *testing.T) {
 				}
 				work := e.shell.Getwd()
 				assertGitConfigForRemoteMirrorTest(t, work, "remote.origin.url", origin)
-				if got := gitOutputForRemoteCheckoutTest(t, work, "rev-parse", "HEAD", "refs/remotes/origin/feature-branch", "refs/tags/after-seed"); got != strings.Join([]string{commit, commit, commit}, "\n") {
+				if head {
+					if got := gitOutputForRemoteCheckoutTest(t, work, "rev-parse", "HEAD", "FETCH_HEAD", "refs/remotes/origin/feature-branch"); got != strings.Join([]string{commit, commit, commit}, "\n") {
+						t.Fatalf("checkout did not use the refreshed branch tip %s: %s", commit, got)
+					}
+				} else if got := gitOutputForRemoteCheckoutTest(t, work, "rev-parse", "HEAD", "refs/remotes/origin/feature-branch", "refs/tags/after-seed"); got != strings.Join([]string{commit, commit, commit}, "\n") {
 					t.Fatalf("wrong checkout or refs: %s", got)
 				}
 				gitOutputForRemoteCheckoutTest(t, work, "fsck", "--full", "--no-dangling")

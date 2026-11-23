@@ -114,6 +114,8 @@ type remoteMirrorAttempt struct {
 	// cloneKitURL is independently eligible for cold on-host mirror creation.
 	// It never grants a remote-mirror hit or bypasses canonical commit fetching.
 	cloneKitURL string
+	// acceleratorHeadFetch reuses the isolated transport of a successful HEAD clone.
+	acceleratorHeadFetch *gitFetchArgs
 
 	outcome  remoteMirrorOutcome
 	duration time.Duration
@@ -149,7 +151,11 @@ func (e *Executor) resolveRemoteMirrorAttempt(ctx context.Context, previousAttem
 	if e.Repository != e.canonicalRepository {
 		return skip(remoteMirrorSkipCanonicalChanged)
 	}
-	if !fullSHA1ObjectID.MatchString(e.Commit) {
+	// A fresh accelerator clone can supply objects for a HEAD build without
+	// deciding its commit. Existing checkouts and on-host mirrors still need
+	// an exact object ID for their accelerated fetch paths.
+	headClone := accelerator && e.Commit == "HEAD" && e.PullRequest == "false"
+	if !headClone && !fullSHA1ObjectID.MatchString(e.Commit) {
 		return skip(remoteMirrorSkipNotFullObjectID)
 	}
 	if e.Branch == "" {
@@ -193,6 +199,9 @@ func (e *Executor) resolveRemoteMirrorAttempt(ctx context.Context, previousAttem
 		attempt.site = remoteMirrorSiteExistingCheckout
 	default:
 		attempt.site = remoteMirrorSiteFreshClone
+	}
+	if headClone && attempt.site != remoteMirrorSiteFreshClone {
+		return skip(remoteMirrorSkipNotFullObjectID)
 	}
 	if attempt.site == remoteMirrorSiteExistingCheckout && e.checkoutUsesGitFile() {
 		// External Git dirs survive worktree cleanup, so failures cannot be quarantined.
@@ -319,7 +328,7 @@ func (e *Executor) fetchCommitFromRemoteMirror(
 			return false, nil
 		}
 		var err error
-		sh, gitFlags, err = e.acceleratorGit(mirrorCtx, attempt, gitDir, gitFlags)
+		sh, gitFlags, err = e.acceleratorGit(mirrorCtx, attempt, gitDir, gitFlags, false)
 		if err != nil {
 			attempt.outcome = remoteMirrorOutcomeError
 			return false, ctx.Err()
