@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/netip"
 	"net/url"
@@ -233,18 +234,25 @@ func (e *Executor) runAcceleratorClone(ctx context.Context, attempt *remoteMirro
 	if !bare {
 		flags = append(flags, "--no-checkout")
 	}
+	cloneDir := destination
+	if !filepath.IsAbs(cloneDir) {
+		cloneDir = filepath.Join(sh.Getwd(), cloneDir)
+	}
+	var seed string
 	if experiments.IsEnabled(ctx, experiments.GitAcceleratorCloneKit) && !e.checkoutAlreadyExists() &&
 		len(e.GitSparseCheckoutPaths) == 0 && (e.GitCloneFlags == "" || e.GitCloneFlags == "-v") {
-		if temp, err := os.MkdirTemp("", "buildkite-clonekit-"); err == nil {
+		// Stage beside the clone so its destination stays empty and the pack
+		// can normally be installed by rename on the same filesystem.
+		if temp, err := os.MkdirTemp(filepath.Dir(cloneDir), "buildkite-clonekit-"); err == nil {
 			cleanup := func() {
 				if err := os.RemoveAll(temp); err != nil {
 					e.shell.Warningf("Could not remove temporary CloneKit seed")
 				}
 			}
-			seed := filepath.Join(temp, "seed.git")
-			if e.tryAcceleratorCloneKit(ctx, sh, attempt.url, seed) {
+			if staging := filepath.Join(temp, "seed.git"); e.tryAcceleratorCloneKit(ctx, sh, attempt.url, staging) {
+				seed = staging
 				defer cleanup()
-				flags = append(flags, "--reference", seed, "--dissociate")
+				flags = append(flags, "--reference", seed)
 			} else {
 				cleanup()
 			}
@@ -256,6 +264,15 @@ func (e *Executor) runAcceleratorClone(ctx context.Context, attempt *remoteMirro
 	if err := gitClone(withoutGitErrorCapture(ctx), sh, gitFlags, flags, attempt.url, destination, shell.AlwaysHidePrompt()); err != nil {
 		return err
 	}
+	if seed != "" {
+		gitDir := cloneDir
+		if !bare {
+			gitDir = filepath.Join(gitDir, ".git")
+		}
+		if err := installCloneKitPack(seed, gitDir); err != nil {
+			return err
+		}
+	}
 	if !bare && e.Commit == "HEAD" {
 		// Keep origin's tracking rules, but rewrite its URL for this command only.
 		attempt.acceleratorHeadFetch = &gitFetchArgs{
@@ -264,6 +281,26 @@ func (e *Executor) runAcceleratorClone(ctx context.Context, attempt *remoteMirro
 			Repository: "origin",
 			HidePrompt: true,
 		}
+	}
+	return nil
+}
+
+// installCloneKitPack makes the clone self-contained without repacking.
+// On failure, the caller discards the incomplete clone.
+func installCloneKitPack(seed, gitDir string) error {
+	seedPackDir := filepath.Join(seed, "objects", "pack")
+	objects := filepath.Join(gitDir, "objects")
+	files, err := os.ReadDir(seedPackDir)
+	if err != nil {
+		return fmt.Errorf("reading CloneKit pack files: %w", err)
+	}
+	for _, file := range files {
+		if err := os.Rename(filepath.Join(seedPackDir, file.Name()), filepath.Join(objects, "pack", file.Name())); err != nil {
+			return fmt.Errorf("installing CloneKit pack file: %w", err)
+		}
+	}
+	if err := os.Remove(filepath.Join(objects, "info", "alternates")); err != nil {
+		return fmt.Errorf("removing CloneKit alternate: %w", err)
 	}
 	return nil
 }

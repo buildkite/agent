@@ -338,13 +338,6 @@ func TestGitAcceleratorCloneKitCheckout(t *testing.T) {
 		for _, state := range cases {
 			t.Run(fmt.Sprintf("bare=%t/%s", bare, state), func(t *testing.T) {
 				mode.Store(state)
-				temp := t.TempDir()
-				t.Setenv("TMPDIR", temp)
-				t.Cleanup(func() {
-					if matches, err := filepath.Glob(filepath.Join(temp, "buildkite-clonekit-*")); err != nil || len(matches) != 0 {
-						t.Errorf("temporary seed directories remain: %v, err=%v", matches, err)
-					}
-				})
 				e, _ := newFreshCloneRemoteMirrorExecutor(t, origin, "", commit)
 				head := strings.HasPrefix(state, "head-")
 				if head {
@@ -363,9 +356,16 @@ func TestGitAcceleratorCloneKitCheckout(t *testing.T) {
 				if state == "host-excluded" {
 					e.GitAcceleratorHosts = []string{"other.example"}
 				}
+				seedParent := filepath.Dir(e.shell.Getwd())
 				if bare {
 					e.GitMirrorsPath, e.GitMirrorsLockTimeout, e.GitMirrorCheckoutMode = t.TempDir(), 30, "dissociate"
+					seedParent = e.GitMirrorsPath
 				}
+				t.Cleanup(func() {
+					if matches, err := filepath.Glob(filepath.Join(seedParent, "buildkite-clonekit-*")); err != nil || len(matches) != 0 {
+						t.Errorf("temporary seed directories remain: %v, err=%v", matches, err)
+					}
+				})
 				ctx, _ := experiments.Enable(t.Context(), experiments.GitAcceleratorMirror)
 				if state != "mirror-only" && state != "head-mirror" {
 					ctx, _ = experiments.Enable(ctx, experiments.GitAcceleratorCloneKit)
@@ -452,6 +452,18 @@ func TestGitAcceleratorCloneKitCheckout(t *testing.T) {
 				for _, dir := range dirs {
 					if _, err := os.Stat(filepath.Join(dir, "objects", "info", "alternates")); !os.IsNotExist(err) {
 						t.Errorf("temporary alternate survived in %s: %v", dir, err)
+					}
+				}
+				if state == "hit" || state == "head-clonekit" || state == "head-fetch-down" {
+					for _, file := range manifest.Files {
+						path := filepath.Join(dirs[len(dirs)-1], file.Path)
+						contents, err := os.ReadFile(path)
+						if err != nil {
+							t.Fatalf("verified seed file was not retained: %v", err)
+						}
+						if cloneKitTestDigest(string(contents)) != file.SHA256 {
+							t.Errorf("seed file %s was changed during clone", file.Name)
+						}
 					}
 				}
 				if !bare && state == "hit" {
