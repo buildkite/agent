@@ -94,9 +94,16 @@ installs the seed directly in the workspace, keeps the canonical `origin`, and
 does not clone other branches or follow tags. Normal commit verification still
 runs and may fetch the requested branch to prove ancestry.
 
-If the commit isn't in the seed, the normal Accelerator clone still runs, using
-the seed as a reference when available. `HEAD` builds, pull requests, and
-on-host mirrors continue to use the existing checkout paths.
+For an eligible fresh branch build with `Commit=HEAD`, the agent resolves the
+branch tip through the Accelerator before cloning and keeps that SHA for this
+job. If the seed doesn't cover it, the agent fetches that exact SHA into the
+seed without following tags. If early lookup fails, the existing `HEAD` checkout
+path still applies. If lookup succeeds but seed setup falls back, checkout still
+targets the resolved SHA.
+
+For a build submitted with a full SHA that is absent from the seed, the normal
+Accelerator clone still runs, using the seed as a reference when available.
+Pull requests and on-host mirrors continue to use the existing checkout paths.
 
 ### `post-bootstrap-hook`
 

@@ -69,6 +69,9 @@ type Executor struct {
 	// The checkout directory root
 	checkoutRoot *os.Root
 
+	// Once CloneKit resolves HEAD, keep the same commit across checkout attempts.
+	resolvedCheckoutHead string
+
 	// Only a successful ancestry check sets this, not a skipped or unavailable check.
 	commitVerified bool
 

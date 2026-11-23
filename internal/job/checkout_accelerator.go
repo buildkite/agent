@@ -248,6 +248,18 @@ func (e *Executor) runAcceleratorClone(ctx context.Context, attempt *remoteMirro
 	var seed string
 	if experiments.IsEnabled(ctx, experiments.GitAcceleratorCloneKit) && !e.checkoutAlreadyExists() &&
 		len(e.GitSparseCheckoutPaths) == 0 && (e.GitCloneFlags == "" || e.GitCloneFlags == "-v") {
+		seedOnly := !bare && e.PullRequest == "false" && experiments.IsEnabled(ctx, experiments.GitAcceleratorCloneKitSeedOnly)
+		if seedOnly {
+			// Like git clone, only initialize an empty destination.
+			entries, err := os.ReadDir(cloneDir)
+			seedOnly = err == nil && len(entries) == 0
+		}
+		if seedOnly && e.Commit == "HEAD" && e.resolvedCheckoutHead == "" {
+			switch e.GitFetchFlags {
+			case "", "-v --prune", "--no-tags":
+				e.resolvedCheckoutHead = e.resolveAcceleratorHead(ctx, sh, gitFlags, attempt.url)
+			}
+		}
 		// Stage beside the clone so its destination stays empty and the pack
 		// can normally be installed by rename on the same filesystem.
 		if temp, err := os.MkdirTemp(filepath.Dir(cloneDir), "buildkite-clonekit-"); err == nil {
@@ -259,12 +271,21 @@ func (e *Executor) runAcceleratorClone(ctx context.Context, attempt *remoteMirro
 			if staging := filepath.Join(temp, "seed.git"); e.tryAcceleratorCloneKit(ctx, sh, attempt.url, staging) {
 				seed = staging
 				defer cleanup()
-				if !bare && e.PullRequest == "false" && fullSHA1ObjectID.MatchString(e.Commit) &&
-					experiments.IsEnabled(ctx, experiments.GitAcceleratorCloneKitSeedOnly) && hasGitCommit(ctx, sh, seed, e.Commit) {
-					// Like git clone, only initialize an empty destination.
-					if entries, err := os.ReadDir(cloneDir); err == nil && len(entries) == 0 {
+				if seedOnly {
+					commit := e.Commit
+					if e.resolvedCheckoutHead != "" {
+						commit = e.resolvedCheckoutHead
+						if !hasGitCommit(ctx, sh, seed, commit) {
+							if err := e.fetchAcceleratorHeadIntoSeed(ctx, sh, gitFlags, attempt.url, seed, commit); err != nil {
+								return err
+							}
+						}
+					} else if !fullSHA1ObjectID.MatchString(commit) || !hasGitCommit(ctx, sh, seed, commit) {
+						commit = ""
+					}
+					if commit != "" {
 						return e.traceOp(ctx, "git.accelerator.clonekit.seed_only", func(ctx context.Context) error {
-							if err := e.initializeCloneKitCheckout(ctx, sh, seed, cloneDir); err != nil {
+							if err := e.initializeCloneKitCheckout(ctx, sh, seed, cloneDir, commit); err != nil {
 								return err
 							}
 							e.shell.Commentf("Git accelerator CloneKit: initialized checkout from seed without cloning")
@@ -304,7 +325,7 @@ func (e *Executor) runAcceleratorClone(ctx context.Context, attempt *remoteMirro
 			return err
 		}
 	}
-	if !bare && e.Commit == "HEAD" {
+	if !bare && e.Commit == "HEAD" && e.resolvedCheckoutHead == "" {
 		// Keep origin's tracking rules, but rewrite its URL for this command only.
 		attempt.acceleratorHeadFetch = &gitFetchArgs{
 			Shell:      sh,
@@ -316,7 +337,37 @@ func (e *Executor) runAcceleratorClone(ctx context.Context, attempt *remoteMirro
 	return nil
 }
 
-func (e *Executor) initializeCloneKitCheckout(ctx context.Context, sh *shell.Shell, seed, cloneDir string) error {
+func (e *Executor) resolveAcceleratorHead(ctx context.Context, sh *shell.Shell, gitFlags []string, source string) string {
+	span, ctx := e.traceOpSpan(ctx, "git.accelerator.resolve_head")
+	defer span.End()
+	ctx, cancel := context.WithTimeout(ctx, remoteMirrorProbeTimeout)
+	defer cancel()
+	ref := "refs/heads/" + e.Branch
+	args := append(slices.Clone(gitFlags), "ls-remote", "--exit-code", "--refs", "--", source, ref)
+	out, err := sh.Command("git", args...).RunAndCaptureStdout(ctx, shell.AlwaysHidePrompt(), shell.ShowStderr(false))
+	sha, remoteRef, _ := strings.Cut(strings.TrimSpace(out), "\t")
+	if err != nil || remoteRef != ref || !fullSHA1ObjectID.MatchString(sha) {
+		span.SetAttributes(attribute.String("outcome", "fallback"))
+		e.shell.Commentf("Git Accelerator could not resolve branch HEAD early; using normal HEAD checkout")
+		return ""
+	}
+	span.SetAttributes(attribute.String("outcome", "resolved"))
+	e.shell.Commentf("Resolved branch HEAD through Git Accelerator to %s", sha)
+	return sha
+}
+
+func (e *Executor) fetchAcceleratorHeadIntoSeed(ctx context.Context, sh *shell.Shell, gitFlags []string, source, seed, commit string) error {
+	return e.traceOp(ctx, "git.accelerator.clonekit.catch_up", func(ctx context.Context) error {
+		ctx, cancel := context.WithTimeout(ctx, remoteMirrorProbeTimeout)
+		defer cancel()
+		// Keep even a tiny fetch as a pack: seed installation moves only pack files.
+		args := append(slices.Clone(gitFlags), "--git-dir", seed, "-c", "fetch.unpackLimit=1", "fetch",
+			"--no-tags", "--no-recurse-submodules", "--no-auto-maintenance", "--", source, commit)
+		return cloneKitGit(ctx, sh, args...)
+	})
+}
+
+func (e *Executor) initializeCloneKitCheckout(ctx context.Context, sh *shell.Shell, seed, cloneDir, commit string) error {
 	if err := cloneKitGit(ctx, sh, "init", "--template=", "--object-format=sha1", "--", cloneDir); err != nil {
 		return fmt.Errorf("initializing CloneKit checkout: %w", err)
 	}
@@ -330,7 +381,7 @@ func (e *Executor) initializeCloneKitCheckout(ctx context.Context, sh *shell.She
 	if err := cloneKitGit(ctx, sh, "--git-dir", gitDir, "remote", "add", "--no-tags", "origin", e.Repository); err != nil {
 		return fmt.Errorf("setting CloneKit checkout origin: %w", err)
 	}
-	return cloneKitGit(ctx, sh, "--git-dir", gitDir, "update-ref", "--no-deref", "HEAD", e.Commit)
+	return cloneKitGit(ctx, sh, "--git-dir", gitDir, "update-ref", "--no-deref", "HEAD", commit)
 }
 
 // installCloneKitPack takes ownership of the verified pack without repacking.
