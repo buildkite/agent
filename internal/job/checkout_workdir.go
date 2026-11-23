@@ -119,6 +119,10 @@ func (e *Executor) prepareCheckoutWorkdir(
 	) error {
 		return gitClone(cloneCtx, e.shell, gitFlags, gitCloneFlags, repository, ".", runOpts...)
 	}
+	if isFreshCloneRemoteMirrorAttempt(attempt) && attempt.accelerator && (sparse.active() || mirrorDir != "") {
+		attempt.outcome = remoteMirrorOutcomeSkipped
+		attempt.skipReason = remoteMirrorSkipAcceleratorOptions
+	}
 	if isFreshCloneRemoteMirrorAttempt(attempt) {
 		started := time.Now()
 		// A mirror that cannot serve --filter (no uploadpack.allowFilter) only
@@ -126,11 +130,12 @@ func (e *Executor) prepareCheckoutWorkdir(
 		// silently lose the saving. Unlike --depth, this does not fail loudly.
 		// Preserve Git's clone semantics and expose the cost through telemetry
 		// rather than reconstructing clone capability negotiation.
-		cloneErr := cloneCheckout(
-			remoteMirrorBulkGitFlags(ctx),
-			attempt.url,
-			shell.AlwaysHidePrompt(),
-		)
+		var cloneErr error
+		if attempt.accelerator {
+			cloneErr = e.cloneFromAccelerator(cloneCtx, attempt, gitCloneFlags, ".", false)
+		} else {
+			cloneErr = cloneCheckout(remoteMirrorBulkGitFlags(ctx), attempt.url, shell.AlwaysHidePrompt())
+		}
 		if cloneErr == nil {
 			// Refs and tags from this clone are the mirror's snapshot and may lag
 			// canonical; the built commit is still the backend's exact object

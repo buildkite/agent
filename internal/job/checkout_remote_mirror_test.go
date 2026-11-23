@@ -239,7 +239,7 @@ func TestResolveRemoteMirrorAttempt(t *testing.T) {
 				tc.mutate(e)
 			}
 
-			got := e.resolveRemoteMirrorAttempt(tc.previousAttempts)
+			got := e.resolveRemoteMirrorAttempt(t.Context(), tc.previousAttempts)
 			if got.site != tc.wantSite {
 				t.Errorf("site = %q, want %q", got.site, tc.wantSite)
 			}

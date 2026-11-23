@@ -154,6 +154,13 @@ func (s *Shell) CloneWithStdin(r io.Reader) *Shell {
 	}
 }
 
+// CloneWithEnv prepares a copy of the shell with a replacement environment.
+func (s *Shell) CloneWithEnv(environ *env.Environment) *Shell {
+	clone := s.CloneWithStdin(s.stdin)
+	clone.Env = environ
+	return clone
+}
+
 // Getwd returns the current working directory of the shell
 func (s *Shell) Getwd() string {
 	return s.wd

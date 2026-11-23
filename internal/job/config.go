@@ -44,6 +44,11 @@ type ExecutorConfig struct {
 	// Intentionally has no env tag so hooks cannot replace it at runtime.
 	GitRemoteMirrorURL string
 
+	// Agent-configured accelerator origin and upstream allowlist. Hooks cannot change them.
+	GitAcceleratorURL   string
+	GitAcceleratorHosts []string
+	GitAcceleratorPath  string // Operator's executable search path, not the job's PATH.
+
 	// The commit being built
 	Commit string
 

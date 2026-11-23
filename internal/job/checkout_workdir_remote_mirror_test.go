@@ -272,7 +272,7 @@ func TestPrepareCheckoutWorkdirRecursiveSubmodulesUseCanonical(t *testing.T) {
 		commit,
 	)
 	e.GitCloneFlags = "--recurse-submodules"
-	attempt := e.resolveRemoteMirrorAttempt(0)
+	attempt := e.resolveRemoteMirrorAttempt(t.Context(), 0)
 
 	if err := e.prepareCheckoutWorkdir(
 		t.Context(),

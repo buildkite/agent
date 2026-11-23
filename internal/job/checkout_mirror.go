@@ -182,6 +182,10 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string, attem
 			}
 		}
 
+		if isOnHostRemoteMirrorAttempt(attempt) && attempt.accelerator && e.GitCloneMirrorFlags != "" && e.GitCloneMirrorFlags != "-v" {
+			attempt.outcome = remoteMirrorOutcomeSkipped
+			attempt.skipReason = remoteMirrorSkipAcceleratorOptions
+		}
 		if isOnHostRemoteMirrorAttempt(attempt) {
 			started := time.Now()
 			tempMirrorDir := stagingDir
@@ -193,7 +197,11 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string, attem
 				// umask and inherit parent setgid/default ACLs.
 				err = os.Mkdir(tempMirrorDir, 0o777)
 			}
-			if err == nil {
+			if err == nil && attempt.accelerator {
+				err = e.traceOp(ctx, "git.mirror.clone", func(ctx context.Context) error {
+					return e.cloneFromAccelerator(ctx, attempt, flags, tempMirrorDir, true)
+				})
+			} else if err == nil {
 				err = cloneMirror(
 					ctx,
 					remoteMirrorBulkGitFlags(ctx),

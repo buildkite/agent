@@ -513,6 +513,18 @@ func (r *JobRunner) createEnvironment(ctx context.Context) ([]string, error) {
 	})
 	env["BUILDKITE_ALLOWED_REPOSITORIES"] = strings.Join(allowedRepositories, ",")
 
+	// Like the repository allowlist, this is operator policy, not job input.
+	maps.DeleteFunc(env, func(name, _ string) bool {
+		return strings.EqualFold(name, "BUILDKITE_GIT_ACCELERATOR_URL") ||
+			strings.EqualFold(name, "BUILDKITE_GIT_ACCELERATOR_PATH") ||
+			strings.EqualFold(name, "BUILDKITE_GIT_ACCELERATOR_HOSTS")
+	})
+	env["BUILDKITE_GIT_ACCELERATOR_URL"] = r.conf.AgentConfiguration.GitAcceleratorURL
+	env["BUILDKITE_GIT_ACCELERATOR_HOSTS"] = strings.Join(r.conf.AgentConfiguration.GitAcceleratorHosts, ",")
+	if r.conf.AgentConfiguration.GitAcceleratorURL != "" {
+		env["BUILDKITE_GIT_ACCELERATOR_PATH"] = os.Getenv("PATH")
+	}
+
 	// When in KubernetesExec mode, filter out the Kubernetes plugin,
 	// since it's not a real plugin. agent-stack-k8s reads it but we have no
 	// need for it. Supplying it when not using agent-stack-k8s is a mistake
@@ -573,6 +585,9 @@ BUILDKITE_GIT_CLONE_MIRROR_FLAGS
 BUILDKITE_GIT_MIRROR_CHECKOUT_MODE
 BUILDKITE_GIT_FETCH_FLAGS
 BUILDKITE_GIT_MIRRORS_LOCK_TIMEOUT
+BUILDKITE_GIT_ACCELERATOR_URL
+BUILDKITE_GIT_ACCELERATOR_PATH
+BUILDKITE_GIT_ACCELERATOR_HOSTS
 BUILDKITE_GIT_MIRRORS_PATH
 BUILDKITE_GIT_MIRRORS_SKIP_UPDATE
 BUILDKITE_GIT_MIRRORS_LFS_CACHE

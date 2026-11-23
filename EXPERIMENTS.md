@@ -29,6 +29,44 @@ for configuration and reporting.
 **Status:** Experimental; the timeout setting is intended to become a normal
 agent option in a later release.
 
+### `git-accelerator-mirror`
+
+Use [git-accelerator](https://github.com/buildkite/git-accelerator) as an optional
+pull-through mirror for the build repository:
+
+```bash
+buildkite-agent start --experiment git-accelerator-mirror \
+  --git-accelerator-url https://cache.example.com \
+  --git-accelerator-hosts github.com,git.example.com
+```
+
+Configure the HTTPS origin on the agent, not in the pipeline. Eligible jobs
+pinned to a commit can clone or fetch through the accelerator. A repository
+such as `https://github.com/acme/project.git` maps to
+`https://cache.example.com/github.com/acme/project.git`. If you use
+`--allowed-repositories`, allow both URLs. A permitted backend-provided mirror
+takes precedence. The checkout keeps its canonical `origin` and falls back to
+ordinary Git on an accelerator failure. SSH repository URLs and checkout
+settings that need custom Git flags or transport config stay on the normal path.
+Plugins, submodules, Git LFS and CloneKit are not routed through this experiment.
+
+`--git-accelerator-hosts` is optional. It matches the canonical repository's
+hostname exactly, ignoring case. Use bare hostnames, without ports or
+wildcards. Other hosts use normal checkout without an accelerator request.
+Omitting the list lets any otherwise eligible host use the accelerator.
+This option does not restrict backend-provided mirrors or replace
+`--allowed-repositories` or the accelerator's server-side origin rules.
+
+By default the accelerator requests are anonymous. For repositories that use
+Buildkite-managed Git credentials, the agent sends the canonical repository's
+credential to the configured accelerator. Use only an accelerator you trust
+with that credential, and configure an exact-host rule for the upstream host.
+The accelerator assumes clients authorized for a repository can see the same
+cached objects, which may include objects no longer served by the upstream.
+For a private CA, install the CA into the default certificate trust store used
+by Git in the checkout environment. The accelerator Git invocation does not
+inherit job-provided Git configuration or TLS overrides.
+
 ### `post-bootstrap-hook`
 
 Enables the agent-side `post-bootstrap` hook after each bootstrap attempt,

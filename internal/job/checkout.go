@@ -403,7 +403,7 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context, previousAttempts in
 	)
 	defer func() { tracetools.FinishWithError(span, retErr) }()
 
-	attempt := e.resolveRemoteMirrorAttempt(previousAttempts)
+	attempt := e.resolveRemoteMirrorAttempt(ctx, previousAttempts)
 	attempt.cloneKitURL = e.originCloneKitSource(ctx, previousAttempts)
 	defer func() { e.emitRemoteMirrorTelemetry(span, attempt) }()
 

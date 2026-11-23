@@ -105,6 +105,41 @@ func TestCreateEnvironmentProtectedEnv(t *testing.T) {
 	}
 }
 
+func TestCreateEnvironmentGitAccelerator(t *testing.T) {
+	t.Parallel()
+	const accelerator = "https://cache.example.com"
+	r := controlPlaneTestRunner(t, map[string]string{
+		"BUILDKITE_GIT_ACCELERATOR_URL":   "https://job.example.com",
+		"buildkite_git_accelerator_url":   "https://job.example.com",
+		"BUILDKITE_GIT_ACCELERATOR_PATH":  "/job/bin",
+		"BUILDKITE_GIT_ACCELERATOR_HOSTS": "untrusted.example",
+		"buildkite_git_accelerator_hosts": "untrusted.example",
+	}, AgentConfiguration{GitAcceleratorURL: accelerator, GitAcceleratorHosts: []string{"github.com", "git.example.com"}})
+	got, err := r.createEnvironment(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	bootstrapEnv := envutil.FromSlice(got)
+	if got := bootstrapEnv.GetString("BUILDKITE_GIT_ACCELERATOR_URL", ""); got != accelerator {
+		t.Errorf("accelerator URL = %q, want %q", got, accelerator)
+	}
+	if got := bootstrapEnv.GetString("BUILDKITE_GIT_ACCELERATOR_PATH", ""); got != os.Getenv("PATH") {
+		t.Error("accelerator Git did not inherit the operator's search path")
+	}
+	const hosts = "github.com,git.example.com"
+	if got := bootstrapEnv.GetString("BUILDKITE_GIT_ACCELERATOR_HOSTS", ""); got != hosts {
+		t.Errorf("accelerator hosts = %q, want %q", got, hosts)
+	}
+	for name, value := range envutil.SeqSlice(got) {
+		if strings.EqualFold(name, "BUILDKITE_GIT_ACCELERATOR_URL") && value != accelerator {
+			t.Errorf("untrusted accelerator URL reached bootstrap: %s=%q", name, value)
+		}
+		if strings.EqualFold(name, "BUILDKITE_GIT_ACCELERATOR_HOSTS") && value != hosts {
+			t.Errorf("untrusted accelerator hosts reached bootstrap: %s=%q", name, value)
+		}
+	}
+}
+
 func TestCreateEnvironmentRepositoryAllowlist(t *testing.T) {
 	t.Setenv("BUILDKITE_ALLOWED_REPOSITORIES", "ambient-policy")
 

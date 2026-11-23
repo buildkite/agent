@@ -321,6 +321,18 @@ var (
 		Sources: cli.EnvVars("BUILDKITE_GIT_SPARSE_CHECKOUT_MODE"),
 	}
 
+	GitAcceleratorURLFlag = &cli.StringFlag{
+		Name:    "git-accelerator-url",
+		Usage:   "HTTPS origin of the Git accelerator (requires the git-accelerator-mirror experiment)",
+		Sources: cli.EnvVars("BUILDKITE_GIT_ACCELERATOR_URL"),
+	}
+
+	GitAcceleratorHostsFlag = &cli.StringSliceFlag{
+		Name:    "git-accelerator-hosts",
+		Usage:   "Comma-separated list of exact upstream repository hostnames eligible for Git acceleration (default: all eligible hosts)",
+		Sources: cli.EnvVars("BUILDKITE_GIT_ACCELERATOR_HOSTS"),
+	}
+
 	GitMirrorsPathFlag = &cli.StringFlag{
 		Name:    "git-mirrors-path",
 		Value:   "",
