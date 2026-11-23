@@ -58,6 +58,24 @@ attempt returns, `post-bootstrap` runs even if starting the process failed or
 cancellation, a timeout, or agent stop caused it to be killed with SIGKILL. It
 does not run for jobs rejected before the bootstrap attempt.
 
+Opt in to the `pre-bootstrap` hook timeout with
+`--experiment pre-bootstrap-hook-timeout` or
+`experiment="pre-bootstrap-hook-timeout"` in the agent config. Only the timeout
+is experimental; without opt-in the hook still runs without a dedicated deadline.
+The default is **10 seconds**. Override it with `--pre-bootstrap-timeout=30s`,
+`pre-bootstrap-timeout="30s"` in the agent config, or
+`BUILDKITE_PRE_BOOTSTRAP_TIMEOUT=30s` in the agent's environment. Non-positive
+values use the default. Job or pipeline environment variables cannot enable the
+experiment or override the budget.
+
+On expiry, the agent immediately kills the hook's process group and rejects
+the job without running bootstrap (exit status `-1`, signal reason
+`agent_refused`). The job log reports the timeout; the agent log includes the
+configured duration and hook path and is where the hook's output goes. This
+deadline is separate from the step's `timeout_in_minutes`. The step's timeout
+can expire while the hook is running, but the agent only polls for job
+cancellation after bootstrap starts.
+
 The agent uploads the final bootstrap logs before running `post-bootstrap`, so
 diagnostics remain visible while cleanup runs. `post-bootstrap` finishes before
 the agent reports the job finished or removes the job's environment files.
@@ -74,8 +92,7 @@ or `BUILDKITE_POST_BOOTSTRAP_TIMEOUT=2s` in the agent's environment. Non-positiv
 values use the one-second default rather than disabling the timeout. Job or
 pipeline environment variables cannot change this setting. The budget starts
 when the hook is invoked, after final bootstrap log upload. Without a
-`post-bootstrap` hook, no extra timeout or wait is added. `pre-bootstrap` is
-unchanged and has no dedicated hook timeout.
+`post-bootstrap` hook, no extra timeout or wait is added.
 
 Force-stopping the agent imposes a separate shutdown deadline:
 `cancel-signal-timeout + cancel-cleanup-timeout + 1s` (16 seconds by default),

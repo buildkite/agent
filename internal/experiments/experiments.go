@@ -27,6 +27,7 @@ const (
 	InterpolationPrefersRuntimeEnv = "interpolation-prefers-runtime-env"
 	OriginCloneKit                 = "origin-clonekit"
 	PostBootstrapHook              = "post-bootstrap-hook"
+	PreBootstrapHookTimeout        = "pre-bootstrap-hook-timeout"
 	ProgramStatus                  = "program-status"
 	PTYRaw                         = "pty-raw"
 	LegacyPostHookOrder            = "legacy-post-hook-order"
@@ -59,6 +60,7 @@ var (
 		OriginCloneKit:                 {},
 		LegacyPostHookOrder:            {},
 		PostBootstrapHook:              {},
+		PreBootstrapHookTimeout:        {},
 		ProgramStatus:                  {},
 		PTYRaw:                         {},
 		ZipPlugins:                     {},

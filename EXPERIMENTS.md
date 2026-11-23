@@ -18,6 +18,17 @@ If an experiment doesn't exist, no error will be raised.
 
 ## Available Experiments
 
+### `pre-bootstrap-hook-timeout`
+
+Opts in to a ten-second default timeout for the agent-side `pre-bootstrap`
+hook. The agent rejects the job on timeout rather than running it without a
+successful hook result. Without this experiment, `pre-bootstrap` still runs
+with no dedicated timeout. See [agent-side bootstrap hooks](docs/agent-start.md#agent-side-bootstrap-hooks)
+for configuration and reporting.
+
+**Status:** Experimental; the timeout setting is intended to become a normal
+agent option in a later release.
+
 ### `post-bootstrap-hook`
 
 Enables the agent-side `post-bootstrap` hook after each bootstrap attempt,
