@@ -62,9 +62,9 @@ Opt in to the `pre-bootstrap` hook timeout with
 `--experiment pre-bootstrap-hook-timeout` or
 `experiment="pre-bootstrap-hook-timeout"` in the agent config. Only the timeout
 is experimental; without opt-in the hook still runs without a dedicated deadline.
-The default is **five minutes**. Override it with `--pre-bootstrap-timeout=10m`,
-`pre-bootstrap-timeout="10m"` in the agent config, or
-`BUILDKITE_PRE_BOOTSTRAP_TIMEOUT=10m` in the agent's environment. Non-positive
+The default is **10 seconds**. Override it with `--pre-bootstrap-timeout=30s`,
+`pre-bootstrap-timeout="30s"` in the agent config, or
+`BUILDKITE_PRE_BOOTSTRAP_TIMEOUT=30s` in the agent's environment. Non-positive
 values use the default. Job or pipeline environment variables cannot enable the
 experiment or override the budget.
 

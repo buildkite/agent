@@ -10,7 +10,7 @@ import (
 )
 
 // DefaultPreBootstrapTimeout is the hook budget when its timeout experiment is enabled.
-const DefaultPreBootstrapTimeout = 5 * time.Minute
+const DefaultPreBootstrapTimeout = 10 * time.Second
 
 // AgentConfiguration is the run-time configuration for an agent that
 // has been loaded from the config file and command-line params
