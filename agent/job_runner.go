@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"maps"
@@ -984,12 +985,25 @@ func (w LogWriter) Write(bytes []byte) (int, error) {
 	return len(bytes), nil
 }
 
+var errPreBootstrapHookTimeout = errors.New("pre-bootstrap hook timed out")
+
 func (r *JobRunner) executePreBootstrapHook(ctx context.Context, hook string) (bool, error) {
 	r.agentLogger.Infof("Running pre-bootstrap hook %q", hook)
 
-	sh, err := shell.New(
-		shell.WithStdout(LogWriter{l: r.agentLogger}),
-	)
+	opts := []shell.NewShellOpt{shell.WithStdout(LogWriter{l: r.agentLogger})}
+	var timeout time.Duration
+	if experiments.IsEnabled(ctx, experiments.PreBootstrapHookTimeout) {
+		timeout = r.conf.AgentConfiguration.PreBootstrapTimeout
+		if timeout <= 0 {
+			timeout = DefaultPreBootstrapTimeout
+		}
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeoutCause(ctx, timeout, errPreBootstrapHookTimeout)
+		defer cancel()
+		// The deadline is the whole hook budget, as for post-bootstrap.
+		opts = append(opts, shell.WithInterruptSignal(process.SIGKILL))
+	}
+	sh, err := shell.New(opts...)
 	if err != nil {
 		return false, err
 	}
@@ -999,7 +1013,11 @@ func (r *JobRunner) executePreBootstrapHook(ctx context.Context, hook string) (b
 		r.agentLogger.Errorf("Finished pre-bootstrap hook %q: script not runnable: %v", hook, err)
 		return false, err
 	}
-	if err := script.Run(ctx, shell.ShowPrompt(false), shell.WithExtraEnv(r.bootstrapHookEnvironment())); err != nil {
+	err = script.Run(ctx, shell.ShowPrompt(false), shell.WithExtraEnv(r.bootstrapHookEnvironment()))
+	if context.Cause(ctx) == errPreBootstrapHookTimeout {
+		return false, fmt.Errorf("%w after %s: %q", errPreBootstrapHookTimeout, timeout, hook)
+	}
+	if err != nil {
 		r.agentLogger.Errorf("Finished pre-bootstrap hook %q: job rejected: %v", hook, err)
 		return false, err
 	}

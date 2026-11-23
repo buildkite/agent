@@ -9,6 +9,9 @@ import (
 	"github.com/buildkite/agent/v4/internal/job"
 )
 
+// DefaultPreBootstrapTimeout is the hook budget when its timeout experiment is enabled.
+const DefaultPreBootstrapTimeout = 5 * time.Minute
+
 // AgentConfiguration is the run-time configuration for an agent that
 // has been loaded from the config file and command-line params
 type AgentConfiguration struct {
@@ -72,6 +75,7 @@ type AgentConfiguration struct {
 	DisconnectAfterUptime      time.Duration
 	CancelSignalTimeout        time.Duration
 	CancelCleanupTimeout       time.Duration
+	PreBootstrapTimeout        time.Duration
 	PostBootstrapTimeout       time.Duration
 	EnableJobLogTmpfile        bool
 	JobLogPath                 string

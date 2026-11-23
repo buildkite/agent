@@ -275,14 +275,16 @@ func (r *JobRunner) Run(ctx context.Context, ignoreAgentInDispatches *bool) (err
 		// Once we have a hook any failure to run it MUST be fatal to the job to guarantee a true positive result from the hook
 		ok, err := r.executePreBootstrapHook(ctx, hook)
 		if !ok {
-			// Ensure the Job UI knows why this job resulted in failure
-			_, _ = fmt.Fprintln(r.jobLogs, "pre-bootstrap hook rejected this job, see the buildkite-agent logs for more details")
-			// But disclose more information in the agent logs
+			// Keep the hook path and output in the agent logs.
+			jobLog := "pre-bootstrap hook rejected this job, see the buildkite-agent logs for more details"
+			message := "This agent's pre-bootstrap hook rejected the job. The hook's output is in the agent's logs, not the job log. Run the step on other agents, or ask the agent's operator why the hook rejected it."
+			if errors.Is(err, errPreBootstrapHookTimeout) {
+				jobLog = "pre-bootstrap hook timed out; this job was rejected. See the buildkite-agent logs for more details."
+				message = "This agent's pre-bootstrap hook timed out before approving the job. Ask the agent's operator to check the hook and its configured timeout."
+			}
+			_, _ = fmt.Fprintln(r.jobLogs, jobLog)
 			r.agentLogger.Errorf("pre-bootstrap hook rejected this job: %s", err)
-			// Like the job log, the report leaves the hook's reasons to the
-			// agent logs.
-			r.captureJobError(ctx, "buildkite.job_rejected",
-				"This agent's pre-bootstrap hook rejected the job. The hook's output is in the agent's logs, not the job log. Run the step on other agents, or ask the agent's operator why the hook rejected it.")
+			r.captureJobError(ctx, "buildkite.job_rejected", message)
 
 			exit.Status = -1
 			exit.SignalReason = SignalReasonAgentRefused
