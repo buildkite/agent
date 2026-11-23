@@ -174,7 +174,9 @@ func TestGitAcceleratorCloneKitCheckout(t *testing.T) {
 	// Make the seed history large enough to distinguish a delta from a full
 	// transfer, with deterministic data that does not compress to a few bytes.
 	payload := make([]byte, 2<<20)
-	rand.NewChaCha8([32]byte{1}).Read(payload)
+	if _, err := rand.NewChaCha8([32]byte{1}).Read(payload); err != nil {
+		t.Fatal(err)
+	}
 	if err := os.WriteFile(filepath.Join(writer, "payload.bin"), payload, 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -355,11 +357,12 @@ func TestGitAcceleratorCloneKitCheckout(t *testing.T) {
 				if state == "mirror-only" && gitBytes.Load() < int64(len(payload)) {
 					t.Fatal("mirror-only control did not transfer the full history")
 				}
-				if state == "hit" || state == "anonymous" {
+				switch state {
+				case "hit", "anonymous":
 					if gitBytes.Load() <= 0 || gitBytes.Load() >= int64(len(payload))/10 || seedBytes.Load() < int64(len(payload)) {
 						t.Fatal("seed did not replace the bulk of the Git transfer")
 					}
-				} else if state == "cold" || state == "expired" || state == "corrupt" || state == "foreign-file" {
+				case "cold", "expired", "corrupt", "foreign-file":
 					if gitBytes.Load() < int64(len(payload)) || canonicalRequests.Load() != 0 {
 						t.Fatal("unusable seed did not fall back to unseeded accelerator Git")
 					}
