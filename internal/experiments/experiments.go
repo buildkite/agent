@@ -25,6 +25,7 @@ const (
 	// Available experiments
 	AgentAPI                       = "agent-api"
 	GitAcceleratorCloneKit         = "git-accelerator-clonekit"
+	GitAcceleratorCloneKitSeedOnly = "git-accelerator-clonekit-seed-only"
 	GitAcceleratorMirror           = "git-accelerator-mirror"
 	InterpolationPrefersRuntimeEnv = "interpolation-prefers-runtime-env"
 	OriginCloneKit                 = "origin-clonekit"
@@ -59,6 +60,7 @@ var (
 	Available = map[string]struct{}{
 		AgentAPI:                       {},
 		GitAcceleratorCloneKit:         {},
+		GitAcceleratorCloneKitSeedOnly: {},
 		GitAcceleratorMirror:           {},
 		InterpolationPrefersRuntimeEnv: {},
 		OriginCloneKit:                 {},

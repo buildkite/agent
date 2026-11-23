@@ -40,6 +40,8 @@ func TestTraceGitCheckout_EmitsSpans(t *testing.T) {
 	for _, name := range wantSpans {
 		assertSpanChildOf(t, spans, name, "repo-checkout")
 	}
+	assertSpanChildOf(t, spans, "git.clone.command", "git.clone")
+	assertSpanAttr(t, findOnlySpan(t, spans, "git.clone.command"), "git.clone.source", "origin")
 }
 
 // TestTraceGitCheckout_Mirrors asserts the git.mirror.* and git.dissociate

@@ -233,6 +233,9 @@ func validateGitCommitVerification(value string) error {
 }
 
 func validateGitAccelerator(ctx context.Context, url string, hosts []string) error {
+	if experiments.IsEnabled(ctx, experiments.GitAcceleratorCloneKitSeedOnly) && !experiments.IsEnabled(ctx, experiments.GitAcceleratorCloneKit) {
+		return fmt.Errorf("--experiment %s requires --experiment %s", experiments.GitAcceleratorCloneKitSeedOnly, experiments.GitAcceleratorCloneKit)
+	}
 	if experiments.IsEnabled(ctx, experiments.GitAcceleratorMirror) {
 		if err := job.ValidateGitAcceleratorURL(url); err != nil {
 			return err

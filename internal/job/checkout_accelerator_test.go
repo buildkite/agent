@@ -23,7 +23,9 @@ import (
 	"time"
 
 	"github.com/buildkite/agent/v4/internal/experiments"
+	"github.com/buildkite/agent/v4/tracetools"
 	"github.com/buildkite/shellwords"
+	"go.opentelemetry.io/otel/codes"
 )
 
 func TestGitAcceleratorCheckout(t *testing.T) {
@@ -185,6 +187,8 @@ func TestGitAcceleratorCloneKitCheckout(t *testing.T) {
 	runGitForMirrorTest(t, writer, "push", "origin", "main")
 	seedTip := gitOutputForRemoteCheckoutTest(t, writer, "rev-parse", "HEAD")
 	manifest, files := makeCloneKitTestSeed(t, canonicalURL, seedTip)
+	runGitForMirrorTest(t, writer, "tag", "at-seed")
+	runGitForMirrorTest(t, writer, "push", "origin", "at-seed")
 	runGitForMirrorTest(t, writer, "checkout", "-b", "feature-branch")
 	runGitForMirrorTest(t, writer, "push", "origin", "feature-branch")
 	stale := copyOnHostMirrorHTTPRepo(t, canonicalURL, "canonical")
@@ -333,7 +337,7 @@ func TestGitAcceleratorCloneKitCheckout(t *testing.T) {
 	for _, bare := range []bool{false, true} {
 		cases := []string{"mirror-only", "hit"}
 		if !bare {
-			cases = append(cases, "head-mirror", "head-clonekit", "head-fetch-down", "cold", "expired", "corrupt", "foreign-file", "git-down", "host-excluded", "anonymous", "token-unavailable", "token-rejected", "cancel")
+			cases = append(cases, "seed-only-hit", "seed-only-miss", "head-mirror", "head-clonekit", "head-fetch-down", "cold", "expired", "corrupt", "foreign-file", "git-down", "host-excluded", "anonymous", "token-unavailable", "token-rejected", "cancel")
 		}
 		for _, state := range cases {
 			t.Run(fmt.Sprintf("bare=%t/%s", bare, state), func(t *testing.T) {
@@ -346,6 +350,10 @@ func TestGitAcceleratorCloneKitCheckout(t *testing.T) {
 				e.JobID = "test-job"
 				e.GitAcceleratorURL, e.GitAcceleratorPath = accelerator.URL, launcher
 				e.GitCleanFlags, e.GitCommitVerification = "-ffxdq", GitCommitVerificationOff
+				if state == "seed-only-hit" {
+					e.Commit, e.Branch = seedTip, "main"
+					e.GitCommitVerification = GitCommitVerificationFailClosed
+				}
 				e.shell.Env.Set("BUILDKITE_AGENT_ENDPOINT", backend.URL)
 				e.shell.Env.Set("GIT_CONFIG_COUNT", "1")
 				e.shell.Env.Set("GIT_CONFIG_KEY_0", "url."+canonicalProxy.URL+"/canonical.git.insteadOf")
@@ -370,6 +378,9 @@ func TestGitAcceleratorCloneKitCheckout(t *testing.T) {
 				if state != "mirror-only" && state != "head-mirror" {
 					ctx, _ = experiments.Enable(ctx, experiments.GitAcceleratorCloneKit)
 				}
+				if strings.HasPrefix(state, "seed-only-") {
+					ctx, _ = experiments.Enable(ctx, experiments.GitAcceleratorCloneKitSeedOnly)
+				}
 				ctx, cancel := context.WithCancel(ctx)
 				defer cancel()
 				cancelClone.Store(&cancel)
@@ -380,6 +391,8 @@ func TestGitAcceleratorCloneKitCheckout(t *testing.T) {
 				gitRequests.Store(0)
 				canonicalRequests.Store(0)
 				headDiscoveries.Store(0)
+				recorder := installGlobalSpanRecorder(t)
+				e.TracingBackend = tracetools.BackendOpenTelemetry
 				started := time.Now()
 				err := e.defaultCheckoutPhase(ctx, 0)
 				if state == "cancel" {
@@ -391,12 +404,35 @@ func TestGitAcceleratorCloneKitCheckout(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
+				if !bare && state == "hit" {
+					spans := recorder.Ended()
+					for _, name := range []string{"git.accelerator.credentials", "git.accelerator.clonekit", "git.clone.command", "git.accelerator.clonekit.install"} {
+						assertSpanChildOf(t, spans, name, "git.clone")
+					}
+					for _, stage := range []string{"manifest", "download", "verify"} {
+						assertSpanChildOf(t, spans, "git.accelerator.clonekit."+stage, "git.accelerator.clonekit")
+					}
+					command := findOnlySpan(t, spans, "git.clone.command")
+					assertSpanAttr(t, command, "git.clone.source", "git-accelerator")
+					assertSpanAttr(t, command, "git.clone.seeded", "true")
+				}
+				if state == "token-unavailable" {
+					span := findOnlySpan(t, recorder.Ended(), "git.accelerator.credentials")
+					if got := span.Status().Code; got != codes.Unset {
+						t.Errorf("credential fallback span status = %v, want Unset", got)
+					}
+					assertSpanAttr(t, span, "outcome", "anonymous-fallback")
+				}
 				t.Logf("checkout: %s; Git response bytes: %d; seed file bytes: %d", time.Since(started), gitBytes.Load(), seedBytes.Load())
 				if (state == "mirror-only" || state == "head-mirror") && gitBytes.Load() < int64(len(payload)) {
 					t.Fatal("mirror-only control did not transfer the full history")
 				}
 				switch state {
-				case "hit", "head-clonekit", "anonymous", "token-unavailable", "token-rejected":
+				case "seed-only-hit":
+					if gitRequests.Load() != 0 || seedBytes.Load() < int64(len(payload)) {
+						t.Fatal("checkout did not use only the seed for the pinned commit")
+					}
+				case "hit", "seed-only-miss", "head-clonekit", "anonymous", "token-unavailable", "token-rejected":
 					if gitBytes.Load() <= 0 || gitBytes.Load() >= int64(len(payload))/10 || seedBytes.Load() < int64(len(payload)) {
 						t.Fatal("seed did not replace the bulk of the Git transfer")
 					}
@@ -407,7 +443,8 @@ func TestGitAcceleratorCloneKitCheckout(t *testing.T) {
 				}
 				// A workspace with an on-host mirror still uses canonical origin
 				// with a reference, so its canonical requests are not fallback.
-				if !bare && (state == "head-fetch-down" || state == "git-down" || state == "host-excluded") != (canonicalRequests.Load() > 0) {
+				// The seed-only hit performs normal branch verification at origin.
+				if !bare && (state == "seed-only-hit" || state == "head-fetch-down" || state == "git-down" || state == "host-excluded") != (canonicalRequests.Load() > 0) {
 					t.Errorf("unexpected canonical request count %d", canonicalRequests.Load())
 				}
 				if head && headDiscoveries.Load() < 2 {
@@ -429,7 +466,20 @@ func TestGitAcceleratorCloneKitCheckout(t *testing.T) {
 				}
 				work := e.shell.Getwd()
 				assertGitConfigForRemoteMirrorTest(t, work, "remote.origin.url", origin)
-				if head {
+				if state == "seed-only-hit" {
+					if got := gitOutputForRemoteCheckoutTest(t, work, "rev-parse", "HEAD"); got != seedTip {
+						t.Fatalf("HEAD = %s, want %s", got, seedTip)
+					}
+					if got := gitOutputForRemoteCheckoutTest(t, work, "for-each-ref", "refs/remotes/origin/feature-branch", "refs/tags"); got != "" {
+						t.Errorf("unexpected branch or tags: %s", got)
+					}
+					if packs, err := filepath.Glob(filepath.Join(work, ".git", "objects", "pack", "*.pack")); err != nil || len(packs) != 1 {
+						t.Errorf("expected just the seed pack, got %v, err=%v", packs, err)
+					}
+					if got, err := os.ReadFile(filepath.Join(work, "payload.bin")); err != nil || string(got) != string(payload) {
+						t.Errorf("seed-only checkout did not materialize the expected payload: %v", err)
+					}
+				} else if head {
 					if got := gitOutputForRemoteCheckoutTest(t, work, "rev-parse", "HEAD", "FETCH_HEAD", "refs/remotes/origin/feature-branch"); got != strings.Join([]string{commit, commit, commit}, "\n") {
 						t.Fatalf("checkout did not use the refreshed branch tip %s: %s", commit, got)
 					}
@@ -454,7 +504,7 @@ func TestGitAcceleratorCloneKitCheckout(t *testing.T) {
 						t.Errorf("temporary alternate survived in %s: %v", dir, err)
 					}
 				}
-				if state == "hit" || state == "head-clonekit" || state == "head-fetch-down" {
+				if state == "hit" || state == "seed-only-hit" || state == "head-clonekit" || state == "head-fetch-down" {
 					for _, file := range manifest.Files {
 						path := filepath.Join(dirs[len(dirs)-1], file.Path)
 						contents, err := os.ReadFile(path)

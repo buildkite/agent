@@ -112,13 +112,7 @@ func (e *Executor) prepareCheckoutWorkdir(
 	)
 	defer func() { tracetools.FinishWithError(cloneSpan, retErr) }()
 
-	cloneCheckout := func(
-		gitFlags []string,
-		repository string,
-		runOpts ...shell.RunCommandOpt,
-	) error {
-		return gitClone(cloneCtx, e.shell, gitFlags, gitCloneFlags, repository, ".", runOpts...)
-	}
+	fallback := false
 	if isFreshCloneRemoteMirrorAttempt(attempt) && attempt.accelerator && (sparse.active() || mirrorDir != "") {
 		attempt.outcome = remoteMirrorOutcomeSkipped
 		attempt.skipReason = remoteMirrorSkipAcceleratorOptions
@@ -134,7 +128,9 @@ func (e *Executor) prepareCheckoutWorkdir(
 		if attempt.accelerator {
 			cloneErr = e.cloneFromAccelerator(cloneCtx, attempt, gitCloneFlags, ".", false)
 		} else {
-			cloneErr = cloneCheckout(remoteMirrorBulkGitFlags(ctx), attempt.url, shell.AlwaysHidePrompt())
+			cloneErr = e.traceCloneCommand(cloneCtx, "remote-mirror", false, false, false, func(ctx context.Context) error {
+				return gitClone(ctx, e.shell, remoteMirrorBulkGitFlags(ctx), gitCloneFlags, attempt.url, ".", shell.AlwaysHidePrompt())
+			})
 		}
 		if cloneErr == nil {
 			// Refs and tags from this clone are the mirror's snapshot and may lag
@@ -222,9 +218,12 @@ func (e *Executor) prepareCheckoutWorkdir(
 			}
 			e.shell.Commentf("Remote Git mirror clone failed; falling back to canonical repository")
 		}
+		fallback = true
 	}
 
-	if err := cloneCheckout(nil, e.Repository); err != nil {
+	if err := e.traceCloneCommand(cloneCtx, "origin", false, false, fallback, func(ctx context.Context) error {
+		return gitClone(ctx, e.shell, nil, gitCloneFlags, e.Repository, ".")
+	}); err != nil {
 		return fmt.Errorf("cloning git repository: %w", err)
 	}
 	return nil

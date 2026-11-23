@@ -23,6 +23,7 @@ import (
 	"github.com/buildkite/agent/v4/tracetools"
 	"github.com/google/uuid"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/sync/errgroup"
 )
@@ -108,7 +109,7 @@ func (e *Executor) tryOriginCloneKit(parent context.Context, source, repository,
 		if err != nil {
 			return err
 		}
-		stage, err = prepareCloneKitSeed(ctx, e.shell, client, m, staging)
+		stage, err = e.prepareCloneKitSeed(ctx, e.shell, client, m, staging, "origin-clonekit")
 		if err != nil {
 			return err
 		}
@@ -158,7 +159,7 @@ func cloneKitGit(ctx context.Context, sh *shell.Shell, args ...string) error {
 
 // prepareCloneKitSeed builds a verified bare repository in unpublished staging.
 // The caller owns staging cleanup and decides whether to publish or borrow it.
-func prepareCloneKitSeed(ctx context.Context, sh *shell.Shell, client *http.Client, m *cloneKitManifest, staging string) (string, error) {
+func (e *Executor) prepareCloneKitSeed(ctx context.Context, sh *shell.Shell, client *http.Client, m *cloneKitManifest, staging, spanPrefix string) (_ string, retErr error) {
 	span := trace.SpanFromContext(ctx)
 	if err := os.Mkdir(staging, 0o777); err != nil {
 		return "prepare", errors.New("create staging failed")
@@ -167,22 +168,38 @@ func prepareCloneKitSeed(ctx context.Context, sh *shell.Shell, client *http.Clie
 		return "prepare", err
 	}
 	t := time.Now()
-	g, downloadCtx := errgroup.WithContext(ctx)
+	downloadSpan, downloadCtx := e.traceOpSpan(ctx, spanPrefix+".download")
+	g, downloadCtx := errgroup.WithContext(downloadCtx)
 	var bytes int64
 	for _, file := range m.Files {
 		bytes += file.Size
 		if file.Name == "pack" {
-			span.SetAttributes(attribute.Int("ranges", cloneKitRangeCount(file.Size)))
+			ranges := attribute.Int("ranges", cloneKitRangeCount(file.Size))
+			span.SetAttributes(ranges)
+			downloadSpan.SetAttributes(ranges)
 		}
 		g.Go(func() error {
 			return downloadCloneKitFile(downloadCtx, client, file, filepath.Join(staging, file.Name+".download"))
 		})
 	}
-	if err := g.Wait(); err != nil {
+	downloadSpan.SetAttributes(attribute.Int64("bytes", bytes))
+	err := g.Wait()
+	if err != nil {
+		downloadSpan.SetStatus(codes.Error, "seed download failed")
+	}
+	downloadSpan.End()
+	if err != nil {
 		return "download", err
 	}
 	span.SetAttributes(attribute.Float64("download_seconds", time.Since(t).Seconds()), attribute.Int64("bytes", bytes))
 	t = time.Now()
+	verifySpan, ctx := e.traceOpSpan(ctx, spanPrefix+".verify")
+	defer func() {
+		if retErr != nil {
+			verifySpan.SetStatus(codes.Error, "seed verification failed")
+		}
+		verifySpan.End()
+	}()
 	for _, file := range m.Files {
 		if err := verifyCloneKitFile(ctx, file, m.PackChunks, filepath.Join(staging, file.Name+".download")); err != nil {
 			return "verify", err

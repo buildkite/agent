@@ -19,6 +19,7 @@ import (
 	"go.opentelemetry.io/contrib/propagators/ot"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
 	"go.opentelemetry.io/otel/propagation"
@@ -378,4 +379,21 @@ func (e *Executor) traceOp(ctx context.Context, name string, fn func(context.Con
 	span, ctx := tracetools.StartSpanFromContext(ctx, name, e.TracingBackend)
 	defer func() { tracetools.FinishWithError(span, err) }()
 	return fn(ctx)
+}
+
+func (e *Executor) traceCloneCommand(ctx context.Context, source string, seeded, retry, fallback bool, run func(context.Context) error) error {
+	span, ctx := e.traceOpSpan(ctx, "git.clone.command")
+	defer span.End()
+	span.SetAttributes(
+		attribute.String("git.clone.source", source),
+		attribute.Bool("git.clone.seeded", seeded),
+		attribute.Bool("git.clone.retry", retry),
+		attribute.Bool("git.clone.fallback", fallback),
+	)
+	err := run(ctx)
+	if err != nil {
+		// Command errors may contain arguments, including remote credentials.
+		span.SetStatus(codes.Error, "clone command failed")
+	}
+	return err
 }

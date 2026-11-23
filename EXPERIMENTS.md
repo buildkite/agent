@@ -85,6 +85,19 @@ For a private CA, trust it in both Git and the bootstrap process's Go trust
 store. Pipeline-supplied `SSL_CERT_FILE` and `SSL_CERT_DIR` do not override the
 agent's trust settings when this experiment is enabled.
 
+### `git-accelerator-clonekit-seed-only`
+
+Requires `--experiment git-accelerator-clonekit` (and therefore
+`git-accelerator-mirror`). On a fresh branch checkout pinned to a full commit
+SHA, skip `git clone` if the verified seed contains the commit. The agent
+installs the seed directly in the workspace, keeps the canonical `origin`, and
+does not clone other branches or follow tags. Normal commit verification still
+runs and may fetch the requested branch to prove ancestry.
+
+If the commit isn't in the seed, the normal Accelerator clone still runs, using
+the seed as a reference when available. `HEAD` builds, pull requests, and
+on-host mirrors continue to use the existing checkout paths.
+
 ### `post-bootstrap-hook`
 
 Enables the agent-side `post-bootstrap` hook after each bootstrap attempt,

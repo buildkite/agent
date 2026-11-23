@@ -23,6 +23,7 @@ import (
 	"github.com/buildkite/agent/v4/logger"
 	"github.com/buildkite/agent/v4/tracetools"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 )
 
 const acceleratorAuthorizationEnv = "BUILDKITE_ACCELERATOR_AUTHORIZATION"
@@ -157,14 +158,20 @@ func (e *Executor) acceleratorGit(ctx context.Context, attempt *remoteMirrorAtte
 	})
 	credentialCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
+	credentialSpan, credentialCtx := e.traceOpSpan(credentialCtx, "git.accelerator.credentials")
 	creds, _, err := client.GenerateRepositoryCredentials(credentialCtx, e.canonicalRepository, e.JobID)
 	if err != nil || creds.Token == "" {
 		if err := ctx.Err(); err != nil {
+			credentialSpan.SetStatus(codes.Error, "credential request interrupted")
+			credentialSpan.End()
 			return nil, nil, err
 		}
+		credentialSpan.SetAttributes(attribute.String("outcome", "anonymous-fallback"))
+		credentialSpan.End()
 		e.shell.Commentf("Managed repository credentials unavailable; trying Git Accelerator anonymously")
 		return sh, flags, nil
 	}
+	credentialSpan.End()
 	username := creds.Username
 	if username == "" {
 		username = "token"
@@ -186,7 +193,7 @@ func (e *Executor) cloneFromAccelerator(ctx context.Context, attempt *remoteMirr
 	if err != nil {
 		return err
 	}
-	err = e.runAcceleratorClone(ctx, attempt, sh, gitFlags, flags, destination, bare)
+	err = e.runAcceleratorClone(ctx, attempt, sh, gitFlags, flags, destination, bare, false)
 	if err == nil || ctx.Err() != nil {
 		return err
 	}
@@ -207,7 +214,7 @@ func (e *Executor) cloneFromAccelerator(ctx context.Context, attempt *remoteMirr
 	if err != nil {
 		return err
 	}
-	return e.runAcceleratorClone(ctx, attempt, sh, gitFlags, flags, destination, bare)
+	return e.runAcceleratorClone(ctx, attempt, sh, gitFlags, flags, destination, bare, true)
 }
 
 func acceleratorChallengesToken(ctx context.Context, source, auth string) bool {
@@ -229,7 +236,7 @@ func acceleratorChallengesToken(ctx context.Context, source, auth string) bool {
 	return resp.StatusCode == http.StatusUnauthorized && strings.EqualFold(resp.Header.Get("WWW-Authenticate"), `Basic realm="git-accelerator"`)
 }
 
-func (e *Executor) runAcceleratorClone(ctx context.Context, attempt *remoteMirrorAttempt, sh *shell.Shell, gitFlags, flags []string, destination string, bare bool) error {
+func (e *Executor) runAcceleratorClone(ctx context.Context, attempt *remoteMirrorAttempt, sh *shell.Shell, gitFlags, flags []string, destination string, bare, retry bool) error {
 	flags = append(append([]string{}, flags...), "--template=")
 	if !bare {
 		flags = append(flags, "--no-checkout")
@@ -252,6 +259,19 @@ func (e *Executor) runAcceleratorClone(ctx context.Context, attempt *remoteMirro
 			if staging := filepath.Join(temp, "seed.git"); e.tryAcceleratorCloneKit(ctx, sh, attempt.url, staging) {
 				seed = staging
 				defer cleanup()
+				if !bare && e.PullRequest == "false" && fullSHA1ObjectID.MatchString(e.Commit) &&
+					experiments.IsEnabled(ctx, experiments.GitAcceleratorCloneKitSeedOnly) && hasGitCommit(ctx, sh, seed, e.Commit) {
+					// Like git clone, only initialize an empty destination.
+					if entries, err := os.ReadDir(cloneDir); err == nil && len(entries) == 0 {
+						return e.traceOp(ctx, "git.accelerator.clonekit.seed_only", func(ctx context.Context) error {
+							if err := e.initializeCloneKitCheckout(ctx, sh, seed, cloneDir); err != nil {
+								return err
+							}
+							e.shell.Commentf("Git accelerator CloneKit: initialized checkout from seed without cloning")
+							return nil
+						})
+					}
+				}
 				flags = append(flags, "--reference", seed)
 			} else {
 				cleanup()
@@ -261,7 +281,9 @@ func (e *Executor) runAcceleratorClone(ctx context.Context, attempt *remoteMirro
 			return err
 		}
 	}
-	if err := gitClone(withoutGitErrorCapture(ctx), sh, gitFlags, flags, attempt.url, destination, shell.AlwaysHidePrompt()); err != nil {
+	if err := e.traceCloneCommand(ctx, "git-accelerator", seed != "", retry, false, func(ctx context.Context) error {
+		return gitClone(withoutGitErrorCapture(ctx), sh, gitFlags, flags, attempt.url, destination, shell.AlwaysHidePrompt())
+	}); err != nil {
 		return err
 	}
 	if seed != "" {
@@ -269,7 +291,16 @@ func (e *Executor) runAcceleratorClone(ctx context.Context, attempt *remoteMirro
 		if !bare {
 			gitDir = filepath.Join(gitDir, ".git")
 		}
-		if err := installCloneKitPack(seed, gitDir); err != nil {
+		span, _ := e.traceOpSpan(ctx, "git.accelerator.clonekit.install")
+		err := installCloneKitPack(seed, gitDir)
+		if err == nil {
+			err = os.Remove(filepath.Join(gitDir, "objects", "info", "alternates"))
+		}
+		if err != nil {
+			span.SetStatus(codes.Error, "pack installation failed")
+		}
+		span.End()
+		if err != nil {
 			return err
 		}
 	}
@@ -285,8 +316,24 @@ func (e *Executor) runAcceleratorClone(ctx context.Context, attempt *remoteMirro
 	return nil
 }
 
-// installCloneKitPack makes the clone self-contained without repacking.
-// On failure, the caller discards the incomplete clone.
+func (e *Executor) initializeCloneKitCheckout(ctx context.Context, sh *shell.Shell, seed, cloneDir string) error {
+	if err := cloneKitGit(ctx, sh, "init", "--template=", "--object-format=sha1", "--", cloneDir); err != nil {
+		return fmt.Errorf("initializing CloneKit checkout: %w", err)
+	}
+	gitDir := filepath.Join(cloneDir, ".git")
+	if err := installCloneKitPack(seed, gitDir); err != nil {
+		return err
+	}
+	// Keep canonical origin for normal branch verification, but don't auto-follow
+	// tags. A detached HEAD lets Git negotiate from the seed if verification
+	// needs to fetch the branch tip; the normal checkout populates the worktree.
+	if err := cloneKitGit(ctx, sh, "--git-dir", gitDir, "remote", "add", "--no-tags", "origin", e.Repository); err != nil {
+		return fmt.Errorf("setting CloneKit checkout origin: %w", err)
+	}
+	return cloneKitGit(ctx, sh, "--git-dir", gitDir, "update-ref", "--no-deref", "HEAD", e.Commit)
+}
+
+// installCloneKitPack takes ownership of the verified pack without repacking.
 func installCloneKitPack(seed, gitDir string) error {
 	seedPackDir := filepath.Join(seed, "objects", "pack")
 	objects := filepath.Join(gitDir, "objects")
@@ -298,9 +345,6 @@ func installCloneKitPack(seed, gitDir string) error {
 		if err := os.Rename(filepath.Join(seedPackDir, file.Name()), filepath.Join(objects, "pack", file.Name())); err != nil {
 			return fmt.Errorf("installing CloneKit pack file: %w", err)
 		}
-	}
-	if err := os.Remove(filepath.Join(objects, "info", "alternates")); err != nil {
-		return fmt.Errorf("removing CloneKit alternate: %w", err)
 	}
 	return nil
 }
@@ -327,11 +371,18 @@ func (e *Executor) tryAcceleratorCloneKit(parent context.Context, sh *shell.Shel
 	defer client.CloseIdleConnections()
 	seedEnv := sh.Env.Copy()
 	auth := strings.TrimPrefix(seedEnv.Remove(acceleratorAuthorizationEnv), "Authorization: ")
-	m, err := fetchCloneKitManifest(ctx, client, source+"/clone-kit", func(req *http.Request) {
+	manifestSpan, manifestCtx := e.traceOpSpan(ctx, "git.accelerator.clonekit.manifest")
+	m, err := fetchCloneKitManifest(manifestCtx, client, source+"/clone-kit", func(req *http.Request) {
 		if auth != "" {
 			req.Header.Set("Authorization", auth)
 		}
 	})
+	if errors.Is(err, errCloneKitMiss) {
+		manifestSpan.SetAttributes(attribute.String("outcome", "miss"))
+	} else if err != nil {
+		manifestSpan.SetStatus(codes.Error, "manifest request failed")
+	}
+	manifestSpan.End()
 	if err == nil {
 		authority, _ := url.Parse(source) // validated when the accelerator was selected
 		for _, file := range m.Files {
@@ -340,7 +391,7 @@ func (e *Executor) tryAcceleratorCloneKit(parent context.Context, sh *shell.Shel
 				return false
 			}
 		}
-		stage, err = prepareCloneKitSeed(ctx, sh.CloneWithEnv(seedEnv), client, m, staging)
+		stage, err = e.prepareCloneKitSeed(ctx, sh.CloneWithEnv(seedEnv), client, m, staging, "git.accelerator.clonekit")
 	}
 	switch {
 	case parent.Err() != nil:
