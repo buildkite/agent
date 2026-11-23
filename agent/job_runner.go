@@ -1148,7 +1148,21 @@ func usesDockerBootstrap(conf JobRunnerConfig) bool {
 func validateDockerBootstrapStep(conf JobRunnerConfig) error {
 	if usesDockerBootstrap(conf) {
 		if _, present := conf.Job.Step.RemainingFields["image"]; present {
-			return fmt.Errorf("docker bootstrap setup failed (125): step image is rejected by agent-only policy; pipeline image selection is not supported yet")
+			args, _ := shellwords.Split(conf.AgentConfiguration.BootstrapScript)
+			imageFromJob := false
+			for _, arg := range args[2:] {
+				if arg == "--" {
+					break
+				}
+				if arg == "--image-from-job" {
+					imageFromJob = true
+				} else if value, ok := strings.CutPrefix(arg, "--image-from-job="); ok {
+					imageFromJob, _ = strconv.ParseBool(value)
+				}
+			}
+			if !imageFromJob {
+				return fmt.Errorf("docker bootstrap setup failed (125): step image is rejected by agent-only policy; enable --image-from-job to use server-resolved BUILDKITE_IMAGE")
+			}
 		}
 	}
 	return nil

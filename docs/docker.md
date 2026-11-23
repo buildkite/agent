@@ -13,6 +13,48 @@ validation checklist below and the [validation runbook and results](docker-valid
 Broader compatibility validation remains pending. Later phases describe the
 intended supported feature, not requirements for the first milestone.
 
+### Isolated VM opt-ins
+
+The current prototype also supports explicit operator opt-ins for disposable,
+one-job-per-VM workloads. These supersede the original first-milestone image
+restrictions below only when enabled:
+
+```sh
+--bootstrap-script='/usr/bin/buildkite-agent docker-bootstrap --image-from-job --mount-docker-socket --docker-cli-plugins=/usr/local/lib/docker/cli-plugins'
+```
+
+`--image-from-job` selects `BUILDKITE_IMAGE` from the private API-job environment
+snapshot, not from the host environment or the raw step. Missing or invalid
+values fail setup without falling back to `--image`; the two flags are mutually
+exclusive. The server resolves step, pipeline, queue, then provider-default image.
+It must always supply a resolved image after merging user environment variables:
+the current server only overwrites user `BUILDKITE_IMAGE` when it resolves a
+non-nil image. Configure a queue/provider default before enabling this mode.
+Image selection is not covered by job signature verification.
+
+The matching host agent is mounted read-only at `/bin/buildkite-agent` in every
+mode. `/bin` is prepended to the image's PATH; the remaining image PATH is retained.
+The image needs `/bin/sh`, git, and ssh, but does not need an agent installation.
+The existing host-UID:GID default and explicit `--user=UID:GID` override remain.
+
+`--mount-docker-socket` exposes `/var/run/docker.sock` and mounts the operator's
+`--docker-path` (default `/usr/bin/docker`) read-only at `/usr/bin/docker`.
+`--docker-cli-plugins` optionally mounts a host plugin directory read-only at
+`/usr/local/lib/docker/cli-plugins`; verify the source directory for the VM's
+Docker packages. Neither flag is enabled by job environment. Socket access grants
+control of the host daemon even though the socket bind is read-only. Use it only
+on an isolated, disposable VM; permissions must already allow the selected UID
+to access the socket. Dynamically linked host tools require compatible image
+libraries/libc and architecture; glibc tools are not guaranteed to run on Alpine.
+The job Docker client is directed to the local Unix socket, without inheriting
+Docker contexts, configuration paths, or TLS settings from the job/image env.
+
+Compose bind mounts work for the build directory because its absolute host path
+is preserved inside the job container. Containers, networks, and volumes created
+by job Docker commands are not owned by the supervisor's cleanup: jobs should
+clean them up, and the VM must be destroyed after the job, including cancellation.
+Without these opt-ins, the operator-selected image and no-socket defaults remain.
+
 First-milestone decisions:
 
 - Use the Docker CLI and one agent-configured image, defaulting to

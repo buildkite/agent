@@ -70,6 +70,31 @@ func TestDockerJobContextIsolation(t *testing.T) {
 	}
 }
 
+func TestDockerBootstrapImageOptIn(t *testing.T) {
+	for _, tc := range []struct {
+		flags string
+		allow bool
+	}{
+		{"--image-from-job", true},
+		{"--image-from-job=true", true},
+		{"--image-from-job=false", false},
+		{"--image-from-job --image-from-job=false", false},
+		{"-- --image-from-job", false},
+		{"--mount-docker-socket", false},
+	} {
+		t.Run(tc.flags, func(t *testing.T) {
+			var job api.Job
+			if err := json.Unmarshal([]byte(`{"env":{"BUILDKITE_IMAGE":"server-image"},"step":{"image":"step-image"}}`), &job); err != nil {
+				t.Fatal(err)
+			}
+			conf := JobRunnerConfig{Job: &job, AgentConfiguration: AgentConfiguration{BootstrapScript: "buildkite-agent docker-bootstrap " + tc.flags}}
+			if err := validateDockerBootstrapStep(conf); (err == nil) != tc.allow {
+				t.Fatalf("allow=%t: %v", tc.allow, err)
+			}
+		})
+	}
+}
+
 func TestDockerContextCannotBeSpoofedByJobEnvironment(t *testing.T) {
 	r := controlPlaneTestRunner(t, map[string]string{dockerbootstrap.ContextEnv: "/tmp/other-job"}, AgentConfiguration{})
 	r.dockerContextDir = "/private/real-job"
@@ -84,6 +109,34 @@ func TestDockerContextCannotBeSpoofedByJobEnvironment(t *testing.T) {
 	ignored, _ := environ.Get("BUILDKITE_IGNORED_ENV")
 	if !strings.Contains(ignored, dockerbootstrap.ContextEnv) {
 		t.Fatal("spoofed value not recorded as ignored")
+	}
+}
+
+func TestDockerImageSnapshotUsesAPIEnvironment(t *testing.T) {
+	t.Setenv("BUILDKITE_IMAGE", "ambient-image")
+	r := controlPlaneTestRunner(t, map[string]string{
+		"BUILDKITE_IMAGE":         "server-image",
+		"BUILDKITE_ENV_JSON_FILE": "/untrusted/snapshot",
+	}, AgentConfiguration{})
+	got, err := r.createEnvironment(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	environ := envutil.FromSlice(got)
+	path, _ := environ.Get("BUILDKITE_ENV_JSON_FILE")
+	if path != r.envJSONFile.Name() {
+		t.Fatalf("job selected its own image snapshot: %s", path)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var snapshot map[string]string
+	if err := json.Unmarshal(data, &snapshot); err != nil {
+		t.Fatal(err)
+	}
+	if snapshot["BUILDKITE_IMAGE"] != "server-image" {
+		t.Fatalf("snapshot lost the API image: %v", snapshot["BUILDKITE_IMAGE"])
 	}
 }
 

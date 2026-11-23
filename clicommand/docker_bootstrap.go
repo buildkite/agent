@@ -18,16 +18,19 @@ import (
 
 // DockerBootstrapConfig retains cli tags for config completeness checks only.
 type DockerBootstrapConfig struct {
-	PullPolicy       string        `cli:"pull-policy"`
-	DockerConfig     string        `cli:"docker-config"`
-	HelperEnvFile    string        `cli:"docker-helper-env-file"`
-	HelperPath       string        `cli:"docker-helper-path"`
-	User             string        `cli:"user"`
-	Image            string        `cli:"image"`
-	DockerPath       string        `cli:"docker-path"`
-	CleanupMargin    time.Duration `cli:"cleanup-margin"`
-	OperationTimeout time.Duration `cli:"operation-timeout"`
-	PullTimeout      time.Duration `cli:"pull-timeout"`
+	PullPolicy        string        `cli:"pull-policy"`
+	DockerConfig      string        `cli:"docker-config"`
+	HelperEnvFile     string        `cli:"docker-helper-env-file"`
+	HelperPath        string        `cli:"docker-helper-path"`
+	User              string        `cli:"user"`
+	Image             string        `cli:"image"`
+	ImageFromJob      bool          `cli:"image-from-job"`
+	MountDockerSocket bool          `cli:"mount-docker-socket"`
+	DockerCLIPlugins  string        `cli:"docker-cli-plugins"`
+	DockerPath        string        `cli:"docker-path"`
+	CleanupMargin     time.Duration `cli:"cleanup-margin"`
+	OperationTimeout  time.Duration `cli:"operation-timeout"`
+	PullTimeout       time.Duration `cli:"pull-timeout"`
 }
 
 var DockerBootstrapCommand = &cli.Command{
@@ -50,6 +53,9 @@ Registry credentials are read only from an operator-supplied --docker-config.`,
 		&cli.StringFlag{Name: "docker-helper-path", Usage: "Absolute host PATH entries for registry credential helpers"},
 		&cli.StringFlag{Name: "user", Usage: "Container numeric UID:GID (default: host agent UID:GID)"},
 		&cli.StringFlag{Name: "image", Value: dockerbootstrap.DefaultImage, Usage: "Agent-controlled bootstrap image"},
+		&cli.BoolFlag{Name: "image-from-job", Usage: "Use server-resolved BUILDKITE_IMAGE from the API job snapshot (requires a server-configured default image; not signature-verified)"},
+		&cli.BoolFlag{Name: "mount-docker-socket", Usage: "Expose the local Docker socket and CLI to the job, granting host control (isolated one-job-per-VM workloads only; requires compatible image libraries and socket permissions)"},
+		&cli.StringFlag{Name: "docker-cli-plugins", Usage: "Absolute host Docker CLI plugins directory to mount read-only; requires --mount-docker-socket"},
 		&cli.StringFlag{Name: "docker-path", Value: "/usr/bin/docker", Usage: "Absolute path to the Docker CLI"},
 		&cli.DurationFlag{Name: "cleanup-margin", Value: 5 * time.Second, Usage: "Time reserved within the agent cancellation timeout for removal"},
 		&cli.DurationFlag{Name: "operation-timeout", Value: 30 * time.Second, Usage: "Timeout for Docker setup operations"},
@@ -59,11 +65,15 @@ Registry credentials are read only from an operator-supplied --docker-config.`,
 		// The general config loader would also trust inherited config-file settings.
 		cfg := DockerBootstrapConfig{
 			Image: c.String("image"), DockerPath: c.String("docker-path"),
+			ImageFromJob: c.Bool("image-from-job"), MountDockerSocket: c.Bool("mount-docker-socket"), DockerCLIPlugins: c.String("docker-cli-plugins"),
 			PullPolicy: c.String("pull-policy"), DockerConfig: c.String("docker-config"), HelperEnvFile: c.String("docker-helper-env-file"), HelperPath: c.String("docker-helper-path"), User: c.String("user"),
 			CleanupMargin: c.Duration("cleanup-margin"), OperationTimeout: c.Duration("operation-timeout"), PullTimeout: c.Duration("pull-timeout"),
 		}
 		if runtime.GOOS != "linux" {
 			return cli.Exit("docker-bootstrap requires a Linux host", dockerbootstrap.SetupFailure)
+		}
+		if cfg.ImageFromJob && c.IsSet("image") {
+			return cli.Exit("--image and --image-from-job are mutually exclusive", dockerbootstrap.SetupFailure)
 		}
 		sig := os.Getenv("BUILDKITE_CANCEL_SIGNAL")
 		if sig == "" || sig == "SIGKILL" {
@@ -102,6 +112,7 @@ Registry credentials are read only from an operator-supplied --docker-config.`,
 		code, err := runner.Run(ctx, dockerbootstrap.Config{
 			PullPolicy: cfg.PullPolicy, DockerConfig: cfg.DockerConfig, HelperEnvFile: cfg.HelperEnvFile, User: cfg.User, RedactedValues: auth.Secrets,
 			Image: cfg.Image, Binary: self.Path(ctx), Environment: os.Environ(),
+			ImageFromJob: cfg.ImageFromJob, MountDockerSocket: cfg.MountDockerSocket, DockerPath: cfg.DockerPath, DockerCLIPlugins: cfg.DockerCLIPlugins,
 			CleanupMargin: cfg.CleanupMargin, OperationTimeout: cfg.OperationTimeout, PullTimeout: cfg.PullTimeout,
 		})
 		if err != nil {

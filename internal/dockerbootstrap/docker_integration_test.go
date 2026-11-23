@@ -17,6 +17,92 @@ import (
 	"time"
 )
 
+// TestDockerToolsIntegration uses an agent-free, glibc image with git and ssh.
+// It runs Compose against the VM-local daemon, never a nested Docker daemon.
+func TestDockerToolsIntegration(t *testing.T) {
+	binary, image, plugins := os.Getenv("DOCKER_BOOTSTRAP_TEST_BINARY"), os.Getenv("DOCKER_BOOTSTRAP_TEST_IMAGE"), os.Getenv("DOCKER_BOOTSTRAP_TEST_CLI_PLUGINS")
+	if binary == "" || image == "" || plugins == "" {
+		t.Skip("set DOCKER_BOOTSTRAP_TEST_BINARY, DOCKER_BOOTSTRAP_TEST_IMAGE and DOCKER_BOOTSTRAP_TEST_CLI_PLUGINS")
+	}
+	for _, socket := range []bool{false, true} {
+		t.Run(fmt.Sprintf("socket=%t", socket), func(t *testing.T) {
+			cfg := testConfig(t)
+			cfg.Binary, cfg.ImageFromJob, cfg.PullPolicy, cfg.User = binary, true, "never", "0:0"
+			cfg.CleanupMargin, cfg.OperationTimeout, cfg.PullTimeout = 3*time.Second, 15*time.Second, time.Minute
+			cfg.MountDockerSocket, cfg.DockerPath = socket, "/usr/bin/docker"
+			if socket {
+				cfg.DockerCLIPlugins = plugins
+			}
+			build := t.TempDir()
+			project := fmt.Sprintf("bk-tools-%d", time.Now().UnixNano())
+			// Compose sees the same checkout path as the job and host daemon.
+			compose := fmt.Sprintf("services:\n  proof:\n    image: %s\n    pull_policy: never\n    command: [sh, -c, 'echo compose-ok > /workspace/compose-result']\n    volumes:\n      - %s:/workspace\n", image, build)
+			if err := os.WriteFile(filepath.Join(build, "compose.yml"), []byte(compose), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			command := `set -eu
+test -f /.dockerenv
+test "$(command -v buildkite-agent)" = /bin/buildkite-agent
+test "$BUILDKITE_BIN_PATH" = /bin
+awk '$2 == "/usr/bin/buildkite-agent" || $2 == "/bin/buildkite-agent" { if ($4 ~ /^ro,/) found=1 } END { exit !found }' /proc/mounts
+test -n "$(command -v node)"
+node --version
+`
+			if socket {
+				command += fmt.Sprintf(`
+test -S /var/run/docker.sock
+docker version
+docker buildx version
+docker compose version
+trap 'docker compose -p %s -f compose.yml down --remove-orphans' EXIT
+docker compose -p %s -f compose.yml up --abort-on-container-exit --exit-code-from proof
+test "$(cat compose-result)" = compose-ok
+echo tools-and-compose-ok
+`, project, project)
+			} else {
+				command += "test ! -S /var/run/docker.sock\necho isolated-ok\n"
+			}
+			cfg.Environment = append(cfg.Environment,
+				"BUILDKITE_IMAGE=ambient-invalid-image", "BUILDKITE_BUILD_PATH="+build, "BUILDKITE_BUILD_CHECKOUT_PATH="+build,
+				"BUILDKITE_BOOTSTRAP_PHASES=command", "BUILDKITE_COMMAND="+command,
+				"BUILDKITE_JOB_ID="+project, "BUILDKITE_CANCEL_SIGNAL_TIMEOUT=10s", "BUILDKITE_PTY=false",
+				"BUILDKITE_REPO=.", "BUILDKITE_COMMIT=HEAD", "BUILDKITE_BRANCH=main", "BUILDKITE_PIPELINE_PROVIDER=custom",
+				"BUILDKITE_AGENT_NAME=test-agent", "BUILDKITE_ORGANIZATION_SLUG=test-org", "BUILDKITE_PIPELINE_SLUG=test-pipeline")
+			for _, pair := range cfg.Environment {
+				if path, ok := strings.CutPrefix(pair, "BUILDKITE_ENV_JSON_FILE="); ok {
+					data, _ := json.Marshal(map[string]string{"BUILDKITE_IMAGE": image})
+					if err := os.WriteFile(path, data, 0o600); err != nil {
+						t.Fatal(err)
+					}
+				}
+			}
+			var output bytes.Buffer
+			client := CLI{Path: "/usr/bin/docker", ConfigDir: t.TempDir()}
+			code, err := (Runner{Client: client, Stdout: &output, Stderr: &output}).Run(t.Context(), cfg)
+			want := "isolated-ok"
+			if socket {
+				want = "tools-and-compose-ok"
+			}
+			if code != 0 || err != nil || !strings.Contains(output.String(), want) || !strings.Contains(output.String(), "Docker bootstrap image: "+image) {
+				t.Fatalf("code=%d err=%v\n%s", code, err, output.String())
+			}
+			for _, args := range [][]string{
+				{"ps", "--all", "--quiet", "--filter", "label=com.buildkite.job-id=" + project},
+				{"network", "ls", "--quiet", "--filter", "label=com.buildkite.job-id=" + project},
+				{"ps", "--all", "--quiet", "--filter", "label=com.docker.compose.project=" + project},
+				{"network", "ls", "--quiet", "--filter", "label=com.docker.compose.project=" + project},
+			} {
+				var remaining bytes.Buffer
+				status, err := client.Run(t.Context(), args, nil, &remaining, &remaining)
+				if status != 0 || err != nil || remaining.Len() != 0 {
+					t.Fatalf("cleanup check %v: %d %v %s", args, status, err, remaining.String())
+				}
+			}
+			t.Log(output.String())
+		})
+	}
+}
+
 // An explicit binary opts into tests that create resources on the local daemon.
 func TestDockerUserIntegration(t *testing.T) {
 	binary := os.Getenv("DOCKER_BOOTSTRAP_TEST_BINARY")

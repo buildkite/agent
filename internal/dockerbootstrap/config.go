@@ -19,24 +19,29 @@ const (
 	DefaultImage    = "buildkite/agent-base:ubuntu-noble-hosted"
 	ContextEnv      = "BUILDKITE_DOCKER_BOOTSTRAP_CONTEXT"
 	containerRoot   = "/buildkite-docker"
-	containerBinary = containerRoot + "/bin/buildkite-agent"
+	containerBinary = "/bin/buildkite-agent"
 )
 
 type Config struct {
-	PullPolicy       string
-	DockerConfig     string
-	HelperEnvFile    string
-	User             string
-	RedactedValues   []string
-	Image            string
-	Binary           string
-	Environment      []string
-	CleanupMargin    time.Duration
-	OperationTimeout time.Duration
-	PullTimeout      time.Duration
+	PullPolicy        string
+	DockerConfig      string
+	HelperEnvFile     string
+	User              string
+	RedactedValues    []string
+	Image             string
+	ImageFromJob      bool
+	MountDockerSocket bool
+	DockerPath        string
+	DockerCLIPlugins  string
+	Binary            string
+	Environment       []string
+	CleanupMargin     time.Duration
+	OperationTimeout  time.Duration
+	PullTimeout       time.Duration
 }
 
 type jobConfig struct {
+	image         string
 	env           map[string]string
 	args          []string
 	grace         time.Duration
@@ -50,9 +55,6 @@ var proxyNames = []string{"HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "NO_PROXY", 
 
 func prepare(cfg Config) (jobConfig, error) {
 	var job jobConfig
-	if cfg.Image == "" || strings.HasPrefix(cfg.Image, "-") || strings.ContainsAny(cfg.Image, " \t\r\n") {
-		return job, fmt.Errorf("invalid Docker bootstrap image")
-	}
 	if _, _, err := containerUser(cfg.User); err != nil {
 		return job, err
 	}
@@ -96,6 +98,15 @@ func prepare(cfg Config) (jobConfig, error) {
 	if err := json.Unmarshal(data, &names); err != nil {
 		return job, fmt.Errorf("decode job environment: %w", err)
 	}
+	job.image = cfg.Image
+	if cfg.ImageFromJob {
+		// Read the API job snapshot, not the inherited process environment.
+		// The server must resolve BUILDKITE_IMAGE after merging user env.
+		job.image = names["BUILDKITE_IMAGE"]
+	}
+	if job.image == "" || strings.HasPrefix(job.image, "-") || strings.ContainsAny(job.image, " \t\r\n") {
+		return job, fmt.Errorf("invalid or missing Docker bootstrap image (image-from-job requires server-resolved BUILDKITE_IMAGE)")
+	}
 	job.env = make(map[string]string)
 	for name, value := range all {
 		_, fromJob := names[name]
@@ -107,6 +118,9 @@ func prepare(cfg Config) (jobConfig, error) {
 			}
 			job.env[name] = value
 		}
+	}
+	if cfg.ImageFromJob {
+		job.env["BUILDKITE_IMAGE"] = job.image
 	}
 	for _, name := range []string{"BUILDKITE_AGENT_ENDPOINT", "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "all_proxy"} {
 		value := job.env[name]
@@ -156,6 +170,32 @@ func prepare(cfg Config) (jobConfig, error) {
 	}
 	if err := addMount(cfg.Binary, containerBinary, true); err != nil {
 		return job, err
+	}
+	if cfg.DockerCLIPlugins != "" && !cfg.MountDockerSocket {
+		return job, fmt.Errorf("docker-cli-plugins requires --mount-docker-socket")
+	}
+	if cfg.MountDockerSocket {
+		info, err := os.Stat("/var/run/docker.sock")
+		if err != nil || info.Mode()&os.ModeSocket == 0 {
+			return job, fmt.Errorf("mount-docker-socket requires a local Docker socket at /var/run/docker.sock")
+		}
+		for _, mount := range [][2]string{
+			{"/var/run/docker.sock", "/var/run/docker.sock"},
+			{cfg.DockerPath, "/usr/bin/docker"},
+			{cfg.DockerCLIPlugins, "/usr/local/lib/docker/cli-plugins"},
+		} {
+			if mount[0] == "" && mount[1] == "/usr/local/lib/docker/cli-plugins" {
+				continue
+			}
+			if err := addMount(mount[0], mount[1], true); err != nil {
+				return job, err
+			}
+		}
+		// Job DOCKER_HOST/CONTEXT must not redirect this explicit local access.
+		job.env["DOCKER_HOST"] = "unix:///var/run/docker.sock"
+		for _, name := range []string{"DOCKER_CONTEXT", "DOCKER_CONFIG", "DOCKER_TLS_VERIFY", "DOCKER_CERT_PATH"} {
+			job.env[name] = ""
+		}
 	}
 	if err := addMount(contextDir, contextDir, true); err != nil {
 		return job, err

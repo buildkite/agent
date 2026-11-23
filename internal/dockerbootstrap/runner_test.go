@@ -131,6 +131,58 @@ func TestEnvironmentAndMounts(t *testing.T) {
 	}
 }
 
+func TestServerImageSelection(t *testing.T) {
+	for _, imageFromJob := range []bool{false, true} {
+		for _, image := range []string{"server.example/node:24", "", "--privileged", "bad image"} {
+			t.Run(fmt.Sprintf("enabled=%t/image=%s", imageFromJob, image), func(t *testing.T) {
+				cfg := testConfig(t)
+				cfg.ImageFromJob = imageFromJob
+				// An ambient image or flag-shaped env must not choose policy or image.
+				cfg.Environment = append(cfg.Environment, "BUILDKITE_IMAGE=ambient:wrong", "BUILDKITE_IMAGE_FROM_JOB=true", "BUILDKITE_MOUNT_DOCKER_SOCKET=true")
+				for _, pair := range cfg.Environment {
+					if path, ok := strings.CutPrefix(pair, "BUILDKITE_ENV_JSON_FILE="); ok {
+						data, _ := json.Marshal(map[string]string{"BUILDKITE_IMAGE": image})
+						if err := os.WriteFile(path, data, 0o600); err != nil {
+							t.Fatal(err)
+						}
+					}
+				}
+				f := &fakeClient{}
+				code, err := (Runner{Client: f}).Run(t.Context(), cfg)
+				if imageFromJob && image != "server.example/node:24" {
+					if code != SetupFailure || err == nil || len(f.calls) != 0 {
+						t.Fatalf("invalid server image did not fail closed: %d %v %v", code, err, f.calls)
+					}
+					return
+				}
+				if err != nil || code != 0 {
+					t.Fatalf("code=%d err=%v", code, err)
+				}
+				want := cfg.Image
+				if imageFromJob {
+					want = image
+				}
+				for _, args := range f.calls {
+					if (args[0] == "pull" || args[0] == "image") && args[len(args)-1] != want {
+						t.Fatalf("wrong image: %v, want %s", args, want)
+					}
+					if strings.Contains(strings.Join(args, " "), "/var/run/docker.sock") {
+						t.Fatal("job env enabled Docker socket access")
+					}
+				}
+			})
+		}
+	}
+}
+
+func TestDockerPluginsRequireSocketOptIn(t *testing.T) {
+	cfg := testConfig(t)
+	cfg.DockerCLIPlugins = t.TempDir()
+	if _, err := prepare(cfg); err == nil || !strings.Contains(err.Error(), "requires --mount-docker-socket") {
+		t.Fatalf("unexpected validation: %v", err)
+	}
+}
+
 func TestValidation(t *testing.T) {
 	for _, tc := range []struct{ name, variable, value string }{
 		{"short cancellation", "BUILDKITE_CANCEL_SIGNAL_TIMEOUT", "50ms"},

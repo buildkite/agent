@@ -70,17 +70,17 @@ func (r Runner) Run(ctx context.Context, cfg Config) (code int, err error) {
 		return SetupFailure, err
 	}
 	if cfg.PullPolicy == "always" {
-		if err := operation(ctx, cfg.PullTimeout, "pull", cfg.Image); err != nil {
+		if err := operation(ctx, cfg.PullTimeout, "pull", job.image); err != nil {
 			return SetupFailure, err
 		}
-	} else if err := operation(ctx, cfg.OperationTimeout, "image", "inspect", cfg.Image); err != nil {
+	} else if err := operation(ctx, cfg.OperationTimeout, "image", "inspect", job.image); err != nil {
 		if ctx.Err() != nil {
 			return SetupFailure, ctx.Err()
 		}
 		if cfg.PullPolicy == "never" {
 			return SetupFailure, fmt.Errorf("pull-policy never requires a cached image: %w", err)
 		}
-		if err := operation(ctx, cfg.PullTimeout, "pull", cfg.Image); err != nil {
+		if err := operation(ctx, cfg.PullTimeout, "pull", job.image); err != nil {
 			return SetupFailure, err
 		}
 	}
@@ -88,7 +88,7 @@ func (r Runner) Run(ctx context.Context, cfg Config) (code int, err error) {
 	// Full inspection output could disclose image environment secrets in job logs.
 	var identity bytes.Buffer
 	inspectCtx, inspectCancel := context.WithTimeout(ctx, cfg.OperationTimeout)
-	_, inspectErr := r.Client.Run(inspectCtx, []string{"image", "inspect", "--format", "{{.Id}} {{json .RepoDigests}}", cfg.Image}, nil, &identity, io.Discard)
+	_, inspectErr := r.Client.Run(inspectCtx, []string{"image", "inspect", "--format", "{{.Id}} {{json .RepoDigests}}", job.image}, nil, &identity, io.Discard)
 	inspectCancel()
 	if inspectErr != nil {
 		return SetupFailure, inspectErr
@@ -98,7 +98,7 @@ func (r Runner) Run(ctx context.Context, cfg Config) (code int, err error) {
 		return SetupFailure, fmt.Errorf("docker image inspection returned no image ID")
 	}
 	imageID := fields[0]
-	_, _ = fmt.Fprintf(r.Stdout, "Docker bootstrap image: %s (%s)\n", cfg.Image, strings.TrimSpace(identity.String()))
+	_, _ = fmt.Fprintf(r.Stdout, "Docker bootstrap image: %s (%s)\n", job.image, strings.TrimSpace(identity.String()))
 
 	// Register cleanup before creation: Docker may succeed but lose the response.
 	containerAttempted := false
@@ -129,7 +129,7 @@ func (r Runner) Run(ctx context.Context, cfg Config) (code int, err error) {
 	// The mounted agent must take precedence over image binaries. exec lets
 	// Docker's init deliver signals directly to bootstrap.
 	const script = `set -e
-export PATH="/buildkite-docker/bin:$PATH"
+export PATH="/bin:$PATH"
 USER="$(id -un)"
 export USER LOGNAME="$USER"
 for path in "$BUILDKITE_ENV_FILE" "$BUILDKITE_ENV_JSON_FILE"; do
@@ -145,15 +145,15 @@ for path in "$HOME" "$BUILDKITE_BUILD_PATH" "${BUILDKITE_PLUGINS_PATH:-}" "${BUI
   fi
 done
 cd "$BUILDKITE_BUILD_PATH"
-if ! test -x /buildkite-docker/bin/buildkite-agent || ! command -v git >/dev/null || ! command -v ssh >/dev/null; then
+if ! test -x /bin/buildkite-agent || ! command -v git >/dev/null || ! command -v ssh >/dev/null; then
   echo 'Docker bootstrap image contract requires an executable agent binary, git, and ssh' >&2
   exit 125
 fi
-if ! /buildkite-docker/bin/buildkite-agent --version >/dev/null; then
+if ! /bin/buildkite-agent --version >/dev/null; then
   echo 'Docker bootstrap image contract: mounted agent binary cannot run' >&2
   exit 125
 fi
-exec /buildkite-docker/bin/buildkite-agent bootstrap`
+exec /bin/buildkite-agent bootstrap`
 	// A concurrent tag refresh must not change the image after inspection.
 	args = append(args, imageID, "-c", script)
 	createCtx, createCancel := context.WithTimeout(ctx, cfg.OperationTimeout)
