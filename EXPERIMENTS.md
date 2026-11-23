@@ -48,7 +48,7 @@ such as `https://github.com/acme/project.git` maps to
 takes precedence. The checkout keeps its canonical `origin` and falls back to
 ordinary Git on an accelerator failure. SSH repository URLs and checkout
 settings that need custom Git flags or transport config stay on the normal path.
-Plugins, submodules, Git LFS and CloneKit are not routed through this experiment.
+Plugins, submodules, and Git LFS are not routed through this experiment.
 
 `--git-accelerator-hosts` is optional. It matches the canonical repository's
 hostname exactly, ignoring case. Use bare hostnames, without ports or
@@ -66,6 +66,24 @@ cached objects, which may include objects no longer served by the upstream.
 For a private CA, install the CA into the default certificate trust store used
 by Git in the checkout environment. The accelerator Git invocation does not
 inherit job-provided Git configuration or TLS overrides.
+
+### `git-accelerator-clonekit`
+
+Requires `--experiment git-accelerator-mirror` and an accelerator serving
+CloneKit seeds at the configured HTTPS origin. Set the accelerator's
+`GIT_ACCELERATOR_CLONEKIT_PUBLIC_BASE_URL` to the agent's `--git-accelerator-url`.
+Eligible fresh clones can use a verified seed, either for the workspace or for
+its first on-host Git mirror. An on-host mirror is not required. The accelerator
+host allowlist applies; existing checkouts, shallow or sparse checkouts, and
+custom clone flags do not use seeds.
+
+Git still fetches refs and any objects missing from the seed. If a seed is
+missing or cannot be verified, the agent tries Git through the accelerator
+without it. If accelerator Git fails, the agent falls back to canonical Git.
+Seed files must come from the configured accelerator origin, without redirects.
+For a private CA, trust it in both Git and the bootstrap process's Go trust
+store. Pipeline-supplied `SSL_CERT_FILE` and `SSL_CERT_DIR` do not override the
+agent's trust settings when this experiment is enabled.
 
 ### `post-bootstrap-hook`
 

@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/buildkite/agent/v4/env"
-	"github.com/buildkite/agent/v4/internal/experiments"
 	"github.com/buildkite/agent/v4/internal/job"
 	"github.com/buildkite/agent/v4/internal/process"
 	"github.com/buildkite/agent/v4/logger"
@@ -440,12 +439,7 @@ var BootstrapCommand = &cli.Command{
 		ctx, cfg, l, _, done := setupLoggerAndConfig[BootstrapConfig](ctx, c)
 		defer done()
 
-		if experiments.IsEnabled(ctx, experiments.GitAcceleratorMirror) {
-			if err := job.ValidateGitAcceleratorURL(cfg.GitAcceleratorURL); err != nil {
-				return err
-			}
-		}
-		if err := job.ValidateGitAcceleratorHosts(cfg.GitAcceleratorHosts); err != nil {
+		if err := validateGitAccelerator(ctx, cfg.GitAcceleratorURL, cfg.GitAcceleratorHosts); err != nil {
 			return err
 		}
 

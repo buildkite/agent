@@ -232,6 +232,17 @@ func validateGitCommitVerification(value string) error {
 	return nil
 }
 
+func validateGitAccelerator(ctx context.Context, url string, hosts []string) error {
+	if experiments.IsEnabled(ctx, experiments.GitAcceleratorMirror) {
+		if err := job.ValidateGitAcceleratorURL(url); err != nil {
+			return err
+		}
+	} else if experiments.IsEnabled(ctx, experiments.GitAcceleratorCloneKit) {
+		return fmt.Errorf("--experiment %s requires --experiment %s", experiments.GitAcceleratorCloneKit, experiments.GitAcceleratorMirror)
+	}
+	return job.ValidateGitAcceleratorHosts(hosts)
+}
+
 // Git related flags shared between agent start and bootstrap
 var (
 	SkipCheckoutFlag = &cli.BoolFlag{

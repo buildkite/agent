@@ -108,13 +108,17 @@ func TestCreateEnvironmentProtectedEnv(t *testing.T) {
 func TestCreateEnvironmentGitAccelerator(t *testing.T) {
 	t.Parallel()
 	const accelerator = "https://cache.example.com"
-	r := controlPlaneTestRunner(t, map[string]string{
+	jobEnv := map[string]string{
 		"BUILDKITE_GIT_ACCELERATOR_URL":   "https://job.example.com",
 		"buildkite_git_accelerator_url":   "https://job.example.com",
 		"BUILDKITE_GIT_ACCELERATOR_PATH":  "/job/bin",
 		"BUILDKITE_GIT_ACCELERATOR_HOSTS": "untrusted.example",
 		"buildkite_git_accelerator_hosts": "untrusted.example",
-	}, AgentConfiguration{GitAcceleratorURL: accelerator, GitAcceleratorHosts: []string{"github.com", "git.example.com"}})
+		"SSL_CERT_FILE":                   "/job/ca.pem",
+		"SSL_CERT_DIR":                    "/job/ca",
+	}
+	conf := AgentConfiguration{GitAcceleratorURL: accelerator, GitAcceleratorHosts: []string{"github.com", "git.example.com"}}
+	r := controlPlaneTestRunner(t, jobEnv, conf)
 	got, err := r.createEnvironment(t.Context())
 	if err != nil {
 		t.Fatal(err)
@@ -136,6 +140,18 @@ func TestCreateEnvironmentGitAccelerator(t *testing.T) {
 		}
 		if strings.EqualFold(name, "BUILDKITE_GIT_ACCELERATOR_HOSTS") && value != hosts {
 			t.Errorf("untrusted accelerator hosts reached bootstrap: %s=%q", name, value)
+		}
+	}
+	ctx, _ := experiments.Enable(t.Context(), experiments.GitAcceleratorCloneKit)
+	r = controlPlaneTestRunner(t, jobEnv, conf)
+	withCloneKit, err := r.createEnvironment(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cloneKitEnv := envutil.FromSlice(withCloneKit)
+	for _, key := range []string{"SSL_CERT_FILE", "SSL_CERT_DIR"} {
+		if !bootstrapEnv.Exists(key) || cloneKitEnv.Exists(key) {
+			t.Errorf("job-supplied %s should be filtered only with CloneKit enabled", key)
 		}
 	}
 }

@@ -524,6 +524,12 @@ func (r *JobRunner) createEnvironment(ctx context.Context) ([]string, error) {
 	if r.conf.AgentConfiguration.GitAcceleratorURL != "" {
 		env["BUILDKITE_GIT_ACCELERATOR_PATH"] = os.Getenv("PATH")
 	}
+	if experiments.IsEnabled(ctx, experiments.GitAcceleratorCloneKit) {
+		// Go's system root pool reads these from the bootstrap process's
+		// environment. Inherit them from the operator, not the job.
+		delete(env, "SSL_CERT_FILE")
+		delete(env, "SSL_CERT_DIR")
+	}
 
 	// When in KubernetesExec mode, filter out the Kubernetes plugin,
 	// since it's not a real plugin. agent-stack-k8s reads it but we have no

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"errors"
+	"net/http"
 	"net/netip"
 	"net/url"
 	"os"
@@ -16,9 +17,14 @@ import (
 
 	"github.com/buildkite/agent/v4/api"
 	"github.com/buildkite/agent/v4/env"
+	"github.com/buildkite/agent/v4/internal/experiments"
 	"github.com/buildkite/agent/v4/internal/shell"
 	"github.com/buildkite/agent/v4/logger"
+	"github.com/buildkite/agent/v4/tracetools"
+	"go.opentelemetry.io/otel/attribute"
 )
+
+const acceleratorAuthorizationEnv = "BUILDKITE_ACCELERATOR_AUTHORIZATION"
 
 var (
 	acceleratorRepositoryPath = regexp.MustCompile(`^(/[a-zA-Z0-9._~-]+)+\.git$`)
@@ -163,8 +169,8 @@ func (e *Executor) acceleratorGit(ctx context.Context, attempt *remoteMirrorAtte
 	}
 	encoded := base64.StdEncoding.EncodeToString([]byte(username + ":" + creds.Token))
 	e.redactors.Add(creds.Token, encoded)
-	environ.Set("BUILDKITE_ACCELERATOR_AUTHORIZATION", "Authorization: Basic "+encoded)
-	return sh, append(flags, "--config-env=http."+attempt.url+".extraHeader=BUILDKITE_ACCELERATOR_AUTHORIZATION"), nil
+	environ.Set(acceleratorAuthorizationEnv, "Authorization: Basic "+encoded)
+	return sh, append(flags, "--config-env=http."+attempt.url+".extraHeader="+acceleratorAuthorizationEnv), nil
 }
 
 func (e *Executor) cloneFromAccelerator(ctx context.Context, attempt *remoteMirrorAttempt, flags []string, destination string, bare bool) error {
@@ -178,5 +184,71 @@ func (e *Executor) cloneFromAccelerator(ctx context.Context, attempt *remoteMirr
 	if !bare {
 		flags = append(flags, "--no-checkout")
 	}
+	if experiments.IsEnabled(ctx, experiments.GitAcceleratorCloneKit) && !e.checkoutAlreadyExists() &&
+		len(e.GitSparseCheckoutPaths) == 0 && (e.GitCloneFlags == "" || e.GitCloneFlags == "-v") {
+		if temp, err := os.MkdirTemp("", "buildkite-clonekit-"); err == nil {
+			cleanup := func() {
+				if err := os.RemoveAll(temp); err != nil {
+					e.shell.Warningf("Could not remove temporary CloneKit seed")
+				}
+			}
+			seed := filepath.Join(temp, "seed.git")
+			if e.tryAcceleratorCloneKit(ctx, sh, attempt.url, seed) {
+				defer cleanup()
+				flags = append(flags, "--reference", seed, "--dissociate")
+			} else {
+				cleanup()
+			}
+		}
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+	}
 	return gitClone(withoutGitErrorCapture(ctx), sh, gitFlags, flags, attempt.url, destination, shell.AlwaysHidePrompt())
+}
+
+func (e *Executor) tryAcceleratorCloneKit(parent context.Context, sh *shell.Shell, source, staging string) bool {
+	span, ctx := e.traceOpSpan(parent, "git.accelerator.clonekit")
+	ctx, cancel := context.WithTimeout(ctx, cloneKitSeedTimeout)
+	defer cancel()
+	started := time.Now()
+	stage, outcome := "manifest", "error"
+	defer func() {
+		span.SetAttributes(attribute.String("stage", stage), attribute.String("outcome", outcome), attribute.Float64("duration_seconds", time.Since(started).Seconds()))
+		tracetools.FinishWithError(span, nil)
+		e.shell.Commentf("Git accelerator CloneKit: %s (%s)", outcome, stage)
+	}()
+	// Like accelerator Git, do not use an ambient proxy or follow redirects.
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.Proxy = nil
+	defer transport.CloseIdleConnections()
+	client := &http.Client{Transport: transport, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	seedEnv := sh.Env.Copy()
+	auth := strings.TrimPrefix(seedEnv.Remove(acceleratorAuthorizationEnv), "Authorization: ")
+	m, err := fetchCloneKitManifest(ctx, client, source+"/clone-kit", func(req *http.Request) {
+		if auth != "" {
+			req.Header.Set("Authorization", auth)
+		}
+	})
+	if err == nil {
+		authority, _ := url.Parse(source) // validated when the accelerator was selected
+		for _, file := range m.Files {
+			u, _ := url.Parse(file.URL) // the manifest parser already validated its HTTPS URL
+			if !strings.EqualFold(u.Host, authority.Host) {
+				return false
+			}
+		}
+		stage, err = prepareCloneKitSeed(ctx, sh.CloneWithEnv(seedEnv), client, m, staging)
+	}
+	switch {
+	case parent.Err() != nil:
+		outcome = "cancelled"
+	case ctx.Err() != nil:
+		outcome = "timeout"
+	case err == nil:
+		outcome = "hit"
+	case errors.Is(err, errCloneKitMiss):
+		outcome = "miss"
+	}
+	return outcome == "hit"
 }

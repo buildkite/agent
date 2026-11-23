@@ -23,10 +23,14 @@ import (
 	"github.com/buildkite/agent/v4/tracetools"
 	"github.com/google/uuid"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/sync/errgroup"
 )
 
-const cloneKitAnchor = "refs/buildkite-agent/origin-clonekit/anchor"
+const (
+	cloneKitAnchor      = "refs/buildkite-agent/origin-clonekit/anchor"
+	cloneKitSeedTimeout = 30 * time.Second
+)
 
 var (
 	cloneKitRepoPath = regexp.MustCompile(`^/(git/)?[A-Za-z0-9_][A-Za-z0-9_.-]*/[A-Za-z0-9_][A-Za-z0-9_.-]*\.git$`)
@@ -61,7 +65,7 @@ func (e *Executor) originCloneKitSource(ctx context.Context, previousAttempts in
 // All errors crossing this boundary are intentionally URL/credential-free.
 func (e *Executor) tryOriginCloneKit(parent context.Context, source, repository, staging, destination string) (bool, error) {
 	span, ctx := e.traceOpSpan(parent, "origin-clonekit")
-	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, cloneKitSeedTimeout)
 	defer cancel()
 	started := time.Now()
 	stage, outcome := "credentials", "error"
@@ -97,74 +101,20 @@ func (e *Executor) tryOriginCloneKit(parent context.Context, source, repository,
 		client := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 		stage = "manifest"
 		t := time.Now()
-		m, err := fetchCloneKitManifest(ctx, client, source+"/clone-kit", username, password)
+		m, err := fetchCloneKitManifest(ctx, client, source+"/clone-kit", func(req *http.Request) {
+			req.SetBasicAuth(username, password)
+		})
 		span.SetAttributes(attribute.Float64("manifest_seconds", time.Since(t).Seconds()))
 		if err != nil {
 			return err
 		}
-		stage = "prepare"
-		if err := os.Mkdir(staging, 0o777); err != nil {
-			return errors.New("create staging failed")
-		}
-		runGit := func(args ...string) error {
-			_, err := e.shell.Command("git", args...).RunAndCaptureStdout(ctx, shell.AlwaysHidePrompt(), shell.ShowStderr(false))
-			if err != nil {
-				return errors.New("seed git operation failed")
-			}
-			return nil
-		}
-		if err := runGit("init", "--bare", "--object-format=sha1", "--initial-branch=main", staging); err != nil {
+		stage, err = prepareCloneKitSeed(ctx, e.shell, client, m, staging)
+		if err != nil {
 			return err
 		}
-		stage = "download"
-		t = time.Now()
-		g, downloadCtx := errgroup.WithContext(ctx)
-		var bytes int64
-		for _, file := range m.Files {
-			bytes += file.Size
-			if file.Name == "pack" {
-				span.SetAttributes(attribute.Int("ranges", cloneKitRangeCount(file.Size)))
-			}
-			g.Go(func() error {
-				return downloadCloneKitFile(downloadCtx, client, file, filepath.Join(staging, file.Name+".download"))
-			})
-		}
-		if err := g.Wait(); err != nil {
-			return err
-		}
-		span.SetAttributes(attribute.Float64("download_seconds", time.Since(t).Seconds()), attribute.Int64("bytes", bytes))
-		stage = "verify"
-		t = time.Now()
-		for _, file := range m.Files {
-			if err := verifyCloneKitFile(ctx, file, m.PackChunks, filepath.Join(staging, file.Name+".download")); err != nil {
-				return err
-			}
-		}
-		for _, file := range m.Files {
-			// Paths have been validated, but derive destinations from the pack ID.
-			name := "pack-" + m.packID + "." + file.Name
-			// Mirror caches may be shared by agents running as different users.
-			// Match Git's read-only pack permissions, respecting the host umask.
-			if err := os.Chmod(filepath.Join(staging, file.Name+".download"), 0o444&^osutil.Umask); err != nil {
-				return errors.New("set pack permissions failed")
-			}
-			if err := os.Rename(filepath.Join(staging, file.Name+".download"), filepath.Join(staging, "objects", "pack", name)); err != nil {
-				return errors.New("install pack data failed")
-			}
-		}
-		if err := runGit("--git-dir", staging, "cat-file", "-e", m.TipCommit+"^{commit}"); err != nil {
-			return err
-		}
-		if err := runGit("--git-dir", staging, "fsck", "--connectivity-only", "--no-dangling", m.TipCommit); err != nil {
-			return err
-		}
-		if err := runGit("--git-dir", staging, "update-ref", cloneKitAnchor, m.TipCommit); err != nil {
-			return err
-		}
-		span.SetAttributes(attribute.Float64("verify_seconds", time.Since(t).Seconds()))
 		stage = "publish"
 		for _, config := range [][2]string{{"remote.origin.url", repository}, {"remote.origin.fetch", "+refs/*:refs/*"}, {"remote.origin.mirror", "true"}, {"remote.origin.tagOpt", "--no-tags"}} {
-			if err := runGit("--git-dir", staging, "config", config[0], config[1]); err != nil {
+			if err := cloneKitGit(ctx, e.shell, "--git-dir", staging, "config", config[0], config[1]); err != nil {
 				return err
 			}
 		}
@@ -199,6 +149,70 @@ func (e *Executor) tryOriginCloneKit(parent context.Context, source, repository,
 	return false, nil
 }
 
+func cloneKitGit(ctx context.Context, sh *shell.Shell, args ...string) error {
+	if _, err := sh.Command("git", args...).RunAndCaptureStdout(ctx, shell.AlwaysHidePrompt(), shell.ShowStderr(false)); err != nil {
+		return errors.New("seed git operation failed")
+	}
+	return nil
+}
+
+// prepareCloneKitSeed builds a verified bare repository in unpublished staging.
+// The caller owns staging cleanup and decides whether to publish or borrow it.
+func prepareCloneKitSeed(ctx context.Context, sh *shell.Shell, client *http.Client, m *cloneKitManifest, staging string) (string, error) {
+	span := trace.SpanFromContext(ctx)
+	if err := os.Mkdir(staging, 0o777); err != nil {
+		return "prepare", errors.New("create staging failed")
+	}
+	if err := cloneKitGit(ctx, sh, "init", "--bare", "--object-format=sha1", "--initial-branch=main", staging); err != nil {
+		return "prepare", err
+	}
+	t := time.Now()
+	g, downloadCtx := errgroup.WithContext(ctx)
+	var bytes int64
+	for _, file := range m.Files {
+		bytes += file.Size
+		if file.Name == "pack" {
+			span.SetAttributes(attribute.Int("ranges", cloneKitRangeCount(file.Size)))
+		}
+		g.Go(func() error {
+			return downloadCloneKitFile(downloadCtx, client, file, filepath.Join(staging, file.Name+".download"))
+		})
+	}
+	if err := g.Wait(); err != nil {
+		return "download", err
+	}
+	span.SetAttributes(attribute.Float64("download_seconds", time.Since(t).Seconds()), attribute.Int64("bytes", bytes))
+	t = time.Now()
+	for _, file := range m.Files {
+		if err := verifyCloneKitFile(ctx, file, m.PackChunks, filepath.Join(staging, file.Name+".download")); err != nil {
+			return "verify", err
+		}
+	}
+	for _, file := range m.Files {
+		// Paths have been validated, but derive destinations from the pack ID.
+		name := "pack-" + m.packID + "." + file.Name
+		// Mirror caches may be shared by agents running as different users.
+		// Match Git's read-only pack permissions, respecting the host umask.
+		if err := os.Chmod(filepath.Join(staging, file.Name+".download"), 0o444&^osutil.Umask); err != nil {
+			return "verify", errors.New("set pack permissions failed")
+		}
+		if err := os.Rename(filepath.Join(staging, file.Name+".download"), filepath.Join(staging, "objects", "pack", name)); err != nil {
+			return "verify", errors.New("install pack data failed")
+		}
+	}
+	for _, args := range [][]string{
+		{"cat-file", "-e", m.TipCommit + "^{commit}"},
+		{"fsck", "--connectivity-only", "--no-dangling", m.TipCommit},
+		{"update-ref", cloneKitAnchor, m.TipCommit},
+	} {
+		if err := cloneKitGit(ctx, sh, append([]string{"--git-dir", staging}, args...)...); err != nil {
+			return "verify", err
+		}
+	}
+	span.SetAttributes(attribute.Float64("verify_seconds", time.Since(t).Seconds()))
+	return "verify", ctx.Err()
+}
+
 type cloneKitFile struct {
 	Name   string `json:"name"`
 	Path   string `json:"path"`
@@ -221,12 +235,12 @@ type cloneKitManifest struct {
 	packID     string
 }
 
-func fetchCloneKitManifest(ctx context.Context, client *http.Client, endpoint, username, password string) (*cloneKitManifest, error) {
+func fetchCloneKitManifest(ctx context.Context, client *http.Client, endpoint string, authorize func(*http.Request)) (*cloneKitManifest, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
 		return nil, errors.New("invalid manifest request")
 	}
-	req.SetBasicAuth(username, password)
+	authorize(req)
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, errors.New("manifest request failed")

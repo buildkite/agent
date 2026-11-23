@@ -876,12 +876,7 @@ var AgentStartCommand = &cli.Command{
 		if err := validateGitFetchBaseBranch(cfg.GitFetchBaseBranch); err != nil {
 			return err
 		}
-		if slices.Contains(cfg.Experiments, experiments.GitAcceleratorMirror) {
-			if err := job.ValidateGitAcceleratorURL(cfg.GitAcceleratorURL); err != nil {
-				return err
-			}
-		}
-		if err := job.ValidateGitAcceleratorHosts(cfg.GitAcceleratorHosts); err != nil {
+		if err := validateGitAccelerator(ctx, cfg.GitAcceleratorURL, cfg.GitAcceleratorHosts); err != nil {
 			return err
 		}
 
