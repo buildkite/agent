@@ -18,6 +18,35 @@ If an experiment doesn't exist, no error will be raised.
 
 ## Available Experiments
 
+### `start-paused`
+
+Allows v4 agents to request a finite pause when registering:
+
+```bash
+buildkite-agent start --experiment=start-paused --start-paused --start-paused-timeout-in-minutes=60
+```
+
+Both the experiment and startup pause default off. The experiment alone does not
+pause an agent. A pause request without the experiment fails before registration.
+The existing `BUILDKITE_AGENT_EXPERIMENT=start-paused` environment variable or
+`experiment="start-paused"` config setting can also enable the experiment.
+
+Requires server support and organization enablement, deployed server-first.
+A disabled server rejects the request; an older server or proxy missing the
+required acknowledgement causes the agent to exit before hooks or session calls.
+Verify compatibility through Agent Edge before rollout. No supporting release
+number is assigned here; pin a verified supporting v4 binary, since older agents
+may ignore unknown environment/config settings and start unpaused.
+
+Expiry permits work even if the host has not been repaired. Existing authorized
+Resume paths still apply; this is not a host/token security boundary. Disabling
+either gate does not resume or extend existing leases. For ordinary startup,
+remove both pause settings and the experiment; removing only the experiment
+while retaining `start-paused` intentionally prevents startup. See
+`buildkite-agent start --help` for lifecycle and duration details.
+
+**Status:** Experimental; not an indefinite hold or pause-renewal policy.
+
 ### `pre-bootstrap-hook-timeout`
 
 Opts in to a ten-second default timeout for the agent-side `pre-bootstrap`
