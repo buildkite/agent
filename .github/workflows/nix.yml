@@ -1,0 +1,114 @@
+name: Nix
+
+# Run the aggregate check even on unrelated PRs so it can be required on main.
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  scope:
+    runs-on: ubuntu-24.04
+    outputs:
+      relevant: ${{ steps.scope.outputs.relevant }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+      - name: Check Nix change scope and version
+        id: scope
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_REF: ${{ github.head_ref }}
+        shell: bash
+        run: |
+          manifest=nix/release.json
+          if [[ "$HEAD_REF" == release/nix/* ]]; then
+            if [[ "$(git diff --name-only "$BASE_SHA" HEAD)" != "$manifest" ]] ||
+               [[ "$HEAD_REF" != "release/nix/v$(jq -er '.version' "$manifest")" ]]; then
+              echo 'A Nix release PR must change only the manifest and match its version.' >&2
+              exit 1
+            fi
+          fi
+          changed=$(git diff --name-only "$BASE_SHA" HEAD -- flake.nix flake.lock nix/ \
+            scripts/nix-release-manifest.rb .buildkite/steps/propose-nix-release.sh \
+            .buildkite/pipeline.release-stable.yml .github/workflows/nix.yml)
+          if [[ -z "$changed" ]]; then
+            echo 'relevant=false' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [[ -n "$(git diff --name-only "$BASE_SHA" HEAD -- "$manifest")" ]]; then
+            version=$(jq -er '.version | select(test("^[0-9]+\\.[0-9]+\\.[0-9]+$"))' "$manifest")
+            if git cat-file -e "$BASE_SHA:$manifest" 2>/dev/null; then
+              current=$(git show "$BASE_SHA:$manifest" | jq -er '.version')
+              if [[ "$version" == "$current" || "$(printf '%s\n' "$current" "$version" | sort -V | tail -1)" != "$version" ]]; then
+                echo "The Nix manifest must advance the version ($current -> $version)." >&2
+                exit 1
+              fi
+            fi
+          fi
+          echo 'relevant=true' >> "$GITHUB_OUTPUT"
+
+  smoke:
+    needs: scope
+    if: needs.scope.outputs.relevant == 'true'
+    name: Nix smoke (${{ matrix.system }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - system: x86_64-linux
+            runner: ubuntu-24.04
+          - system: aarch64-linux
+            runner: ubuntu-24.04-arm
+          - system: x86_64-darwin
+            runner: macos-15-intel
+          - system: aarch64-darwin
+            runner: macos-15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: cachix/install-nix-action@382a9ed9481c7c1f94f68b72ef105b3417c73877 # v32.1.0
+      - name: Evaluate all flake outputs
+        if: matrix.system == 'x86_64-linux'
+        run: nix flake check --all-systems --no-build --no-update-lock-file .
+      - name: Build and run the agent natively
+        env:
+          SYSTEM: ${{ matrix.system }}
+        shell: bash
+        run: |
+          actual_system=$(nix eval --impure --raw --expr builtins.currentSystem)
+          if [[ "$actual_system" != "$SYSTEM" ]]; then
+            echo "Expected a native $SYSTEM runner, got $actual_system" >&2
+            exit 1
+          fi
+          expected=$(jq -er '.version' nix/release.json)
+          out=$(nix build --no-link --print-out-paths --no-update-lock-file .#buildkite-agent)
+          actual=$("$out/bin/buildkite-agent" --version)
+          echo "$actual"
+          if [[ "$actual" != "buildkite-agent version $expected" && "$actual" != "buildkite-agent version $expected+"?* ]]; then
+            echo "Expected Buildkite Agent $expected" >&2
+            exit 1
+          fi
+
+  gate:
+    name: Nix release gate
+    needs: [scope, smoke]
+    if: always()
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Require all Nix checks for Nix changes
+        env:
+          SCOPE: ${{ needs.scope.result }}
+          RELEVANT: ${{ needs.scope.outputs.relevant }}
+          SMOKE: ${{ needs.smoke.result }}
+        run: |
+          case "$SCOPE:$RELEVANT:$SMOKE" in
+            success:false:skipped|success:true:success) exit 0 ;;
+            *) echo 'Nix scope or native smoke checks did not pass.' >&2; exit 1 ;;
+          esac

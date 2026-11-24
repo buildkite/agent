@@ -50,6 +50,31 @@ personalised instructions, or you can refer to
 cover installing the agent with Ubuntu (via apt), Debian (via apt), macOS (via
 homebrew), Windows and Linux.
 
+### Nix
+
+With Nix flakes enabled, install the agent on Linux or macOS (amd64 or arm64):
+
+```sh
+nix profile add github:buildkite/agent#buildkite-agent
+buildkite-agent --version
+```
+
+To try it without installing, run
+`nix run github:buildkite/agent#buildkite-agent -- --version`.
+
+The flake installs only the binary from a checksum-pinned
+[GitHub release](https://github.com/buildkite/agent/releases), not the agent
+package or service module from nixpkgs. It does not configure a service.
+
+The default GitHub ref tracks `main`. A new agent version is available from
+the flake after its [release manifest](nix/release.json) bump merges, not as
+soon as the GitHub release is published. To upgrade a profile installation,
+run `nix profile upgrade buildkite-agent`. To pin a version, use
+`github:buildkite/agent/<commit>#buildkite-agent` with the commit that contains
+the desired manifest. If you use the flake as an input, your own `flake.lock`
+pins the revision until you update that input. The agent repository's
+`flake.lock` pins nixpkgs separately; updating it does not bump the agent.
+
 ### Docker
 
 We also support and publish

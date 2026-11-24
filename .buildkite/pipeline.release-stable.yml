@@ -40,6 +40,7 @@ steps:
             - "/yum.buildkite.com"
 
   - name: ":octocat: :rocket: Create Github Release (if necessary)"
+    key: github-release
     command: ".buildkite/steps/github-release.sh"
     env:
       CODENAME: "stable"
@@ -150,3 +151,24 @@ steps:
   - name: ":pipeline: Upload Namespace agent overlay image trigger"
     command: ".buildkite/steps/trigger-namespace-agent-overlay-image.sh"
     soft_fail: true
+
+  # No other release step depends on this optional follow-up.
+  - name: ":nix: Propose Nix release bump"
+    depends_on: github-release
+    command: ".buildkite/steps/propose-nix-release.sh"
+    concurrency: 1
+    concurrency_group: "buildkite/agent/nix-release"
+    timeout_in_minutes: 10
+    soft_fail: true
+    plugins:
+      - aws-assume-role-with-web-identity#v1.4.0:
+          role-arn: arn:aws:iam::032379705303:role/pipeline-buildkite-agent-release-stable
+          session-tags:
+            - organization_slug
+            - organization_id
+            - pipeline_slug
+            - build_branch
+      - ecr#v2.12.0:
+          login: true
+          account_ids: "445615400570"
+      - docker#v5.14.0: *release_tools
