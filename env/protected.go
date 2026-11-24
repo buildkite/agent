@@ -80,6 +80,7 @@ var protectedEnv = map[string]protection{
 	"BUILDKITE_GIT_ACCELERATOR_URL":                         {},
 	"BUILDKITE_GIT_ACCELERATOR_PATH":                        {},
 	"BUILDKITE_GIT_ACCELERATOR_HOSTS":                       {},
+	"BUILDKITE_GIT_ACCELERATOR_DISABLE_HTTP":                {},
 	"BUILDKITE_GIT_CLONE_MIRROR_FLAGS":                      {},
 	"BUILDKITE_GIT_MIRRORS_LOCK_TIMEOUT":                    {},
 	"BUILDKITE_GIT_MIRRORS_PATH":                            {},

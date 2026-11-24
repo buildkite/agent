@@ -70,7 +70,8 @@ inherit job-provided Git configuration or TLS overrides.
 ### `git-accelerator-clonekit`
 
 Requires `--experiment git-accelerator-mirror` and an accelerator serving
-CloneKit seeds at the configured HTTPS origin. Set the accelerator's
+CloneKit seeds at the configured HTTPS origin. Set
+`GIT_ACCELERATOR_CLONEKIT_ENABLED=true` on the accelerator and set its
 `GIT_ACCELERATOR_CLONEKIT_PUBLIC_BASE_URL` to the agent's `--git-accelerator-url`.
 Eligible fresh clones can use a verified seed, either for the workspace or for
 its first on-host Git mirror. An on-host mirror is not required. The accelerator
@@ -82,8 +83,9 @@ missing or cannot be verified, the agent tries Git through the accelerator
 without it. If accelerator Git fails, the agent falls back to canonical Git.
 Seed files must come from the configured accelerator origin, without redirects.
 For a private CA, trust it in both Git and the bootstrap process's Go trust
-store. Pipeline-supplied `SSL_CERT_FILE` and `SSL_CERT_DIR` do not override the
-agent's trust settings when this experiment is enabled.
+store. If a job overrides the operator's `SSL_CERT_FILE` or `SSL_CERT_DIR`, the
+agent preserves the job's settings and skips CloneKit and the HTTP check for
+anonymous retry. It can still use Git through the accelerator.
 
 ### `git-accelerator-clonekit-seed-only`
 

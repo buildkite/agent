@@ -32,6 +32,7 @@ func TestGitAcceleratorCheckout(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("fixture uses a POSIX Git launcher to trust the test certificate")
 	}
+	t.Setenv("BUILDKITE_TEST_BOOTSTRAP_ENV", "parent-only")
 	canonical := newOnHostMirrorHTTPRepo(t, "canonical")
 	originURL, err := url.Parse(canonical.URL)
 	if err != nil {
@@ -141,6 +142,23 @@ func TestGitAcceleratorCheckout(t *testing.T) {
 			}
 		})
 	}
+	t.Run("fresh clone preserves custom fetch flags", func(t *testing.T) {
+		if err := e.removeCheckoutDir(); err != nil {
+			t.Fatal(err)
+		}
+		e.GitAcceleratorHosts = []string{"git.example"}
+		e.GitFetchFlags = "--depth=1"
+		before := gitRequests.Load()
+		if err := e.defaultCheckoutPhase(ctx, 0); err != nil {
+			t.Fatal(err)
+		}
+		if gitRequests.Load() != before {
+			t.Error("custom fetch flags should bypass the accelerator")
+		}
+		if got := gitOutputForRemoteCheckoutTest(t, e.shell.Getwd(), "rev-parse", "--is-shallow-repository"); got != "true" {
+			t.Errorf("checkout is shallow = %s, want true with --depth=1", got)
+		}
+	})
 }
 
 func acceleratorTestGitLauncher(t *testing.T, accelerator *httptest.Server) string {
@@ -154,7 +172,7 @@ func acceleratorTestGitLauncher(t *testing.T, accelerator *httptest.Server) stri
 	if err := os.WriteFile(certPath, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: accelerator.Certificate().Raw}), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	launcher := "#!/bin/sh\nexec " + shellwords.Quote(git) + " -c " + shellwords.Quote("http.sslCAInfo="+certPath) + " \"$@\"\n"
+	launcher := "#!/bin/sh\n[ -z \"${BUILDKITE_TEST_BOOTSTRAP_ENV+x}\" ] || exit 1\nexec " + shellwords.Quote(git) + " -c " + shellwords.Quote("http.sslCAInfo="+certPath) + " \"$@\"\n"
 	if err := os.WriteFile(filepath.Join(launcherDir, "git"), []byte(launcher), 0o700); err != nil {
 		t.Fatal(err)
 	}
@@ -361,7 +379,7 @@ func TestGitAcceleratorCloneKitCheckout(t *testing.T) {
 	for _, bare := range []bool{false, true} {
 		cases := []string{"mirror-only", "hit"}
 		if !bare {
-			cases = append(cases, "seed-only-hit", "seed-only-miss", "head-seed-hit", "head-seed-miss", "head-seed-lookup-fails", "head-seed-fetch-fails", "head-mirror", "head-clonekit", "head-fetch-down", "cold", "expired", "corrupt", "foreign-file", "git-down", "host-excluded", "anonymous", "token-unavailable", "token-rejected", "cancel")
+			cases = append(cases, "seed-only-hit", "seed-only-miss", "head-seed-hit", "head-seed-miss", "head-seed-lookup-fails", "head-seed-fetch-fails", "head-mirror", "head-clonekit", "head-fetch-down", "cold", "expired", "corrupt", "foreign-file", "git-down", "host-excluded", "anonymous", "token-unavailable", "token-rejected", "job-tls-roots", "cancel")
 		}
 		for _, state := range cases {
 			t.Run(fmt.Sprintf("bare=%t/%s", bare, state), func(t *testing.T) {
@@ -373,6 +391,7 @@ func TestGitAcceleratorCloneKitCheckout(t *testing.T) {
 				}
 				e.JobID = "test-job"
 				e.GitAcceleratorURL, e.GitAcceleratorPath = accelerator.URL, launcher
+				e.GitAcceleratorDisableHTTP = state == "job-tls-roots"
 				e.GitCleanFlags, e.GitCommitVerification = "-ffxdq", GitCommitVerificationOff
 				if state == "seed-only-hit" {
 					e.Commit, e.Branch = seedTip, "main"
@@ -451,7 +470,7 @@ func TestGitAcceleratorCloneKitCheckout(t *testing.T) {
 					assertSpanAttr(t, span, "outcome", "anonymous-fallback")
 				}
 				t.Logf("checkout: %s; Git response bytes: %d; seed file bytes: %d", time.Since(started), gitBytes.Load(), seedBytes.Load())
-				if (state == "mirror-only" || state == "head-mirror") && gitBytes.Load() < int64(len(payload)) {
+				if (state == "mirror-only" || state == "head-mirror" || state == "job-tls-roots") && gitBytes.Load() < int64(len(payload)) {
 					t.Fatal("mirror-only control did not transfer the full history")
 				}
 				switch state {
@@ -483,7 +502,7 @@ func TestGitAcceleratorCloneKitCheckout(t *testing.T) {
 				}
 				var wantManifests int32 = 1
 				switch state {
-				case "mirror-only", "head-mirror", "host-excluded":
+				case "mirror-only", "head-mirror", "host-excluded", "job-tls-roots":
 					wantManifests = 0
 				case "token-rejected":
 					wantManifests = 2 // The original request carries the token; the retry does not.

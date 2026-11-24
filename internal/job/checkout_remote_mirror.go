@@ -151,6 +151,11 @@ func (e *Executor) resolveRemoteMirrorAttempt(ctx context.Context, previousAttem
 	if e.Repository != e.canonicalRepository {
 		return skip(remoteMirrorSkipCanonicalChanged)
 	}
+	// A mirror hit can skip the source fetch entirely. Leave jobs that need
+	// custom fetch behavior on the canonical path, including fresh clones.
+	if accelerator && !acceleratorSupportsFetchFlags(e.GitFetchFlags) {
+		return skip(remoteMirrorSkipAcceleratorOptions)
+	}
 	// A fresh accelerator clone can supply objects for a HEAD build without
 	// deciding its commit. Existing checkouts and on-host mirrors still need
 	// an exact object ID for their accelerated fetch paths.
@@ -269,6 +274,15 @@ func (e *Executor) checkoutUsesGitFile() bool {
 	return err == nil && !info.IsDir()
 }
 
+func acceleratorSupportsFetchFlags(flags string) bool {
+	switch flags {
+	case "", "-v --prune", "--no-tags":
+		return true
+	default:
+		return false
+	}
+}
+
 func remoteMirrorGitFlags(ctx context.Context) []string {
 	return []string{
 		"-c", "credential.useHttpPath=true",
@@ -320,9 +334,7 @@ func (e *Executor) fetchCommitFromRemoteMirror(
 	}
 	sh := e.shell
 	if attempt.accelerator {
-		switch gitFetchFlags {
-		case "", "-v --prune", "--no-tags":
-		default:
+		if !acceleratorSupportsFetchFlags(gitFetchFlags) {
 			attempt.outcome = remoteMirrorOutcomeSkipped
 			attempt.skipReason = remoteMirrorSkipAcceleratorOptions
 			return false, nil

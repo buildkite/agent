@@ -497,6 +497,11 @@ var BootstrapCommand = &cli.Command{
 			allowedRepositories = append(allowedRepositories, compiled)
 		}
 
+		acceleratorPath, managed := os.LookupEnv("BUILDKITE_GIT_ACCELERATOR_PATH")
+		if !managed { // Standalone bootstrap, without an agent job runner.
+			acceleratorPath = os.Getenv("PATH")
+		}
+
 		// Configure the bootstraper
 		bootstrap := job.New(job.ExecutorConfig{
 			AllowedRepositories:          allowedRepositories,
@@ -538,7 +543,8 @@ var BootstrapCommand = &cli.Command{
 			GitRemoteMirrorURL:           cfg.GitRemoteMirrorURL,
 			GitAcceleratorURL:            cfg.GitAcceleratorURL,
 			GitAcceleratorHosts:          cfg.GitAcceleratorHosts,
-			GitAcceleratorPath:           os.Getenv("BUILDKITE_GIT_ACCELERATOR_PATH"),
+			GitAcceleratorPath:           acceleratorPath,
+			GitAcceleratorDisableHTTP:    os.Getenv("BUILDKITE_GIT_ACCELERATOR_DISABLE_HTTP") == "true",
 			GitSubmodules:                cfg.GitSubmodules,
 			GitSubmoduleCloneConfig:      cfg.GitSubmoduleCloneConfig,
 			HooksPath:                    cfg.HooksPath,

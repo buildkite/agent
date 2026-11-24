@@ -107,18 +107,14 @@ func (e *Executor) acceleratorGit(ctx context.Context, attempt *remoteMirrorAtte
 		"GIT_ALLOW_PROTOCOL":      "https",
 	})
 	// Use the operator's executable search path rather than the job's PATH.
-	for _, key := range []string{"PATHEXT", "SystemRoot", "WINDIR", "TEMP", "TMP", "TMPDIR"} {
+	for _, key := range []string{"SystemRoot", "WINDIR"} {
 		if value, ok := os.LookupEnv(key); ok {
 			environ.Set(key, value)
 		}
 	}
-	path := e.GitAcceleratorPath
-	if path == "" { // Standalone bootstrap, without an agent job runner.
-		path = os.Getenv("PATH")
-	}
 	// Don't look for git in the checkout via empty or relative path entries.
 	var absolutePaths []string
-	for _, dir := range filepath.SplitList(path) {
+	for _, dir := range filepath.SplitList(e.GitAcceleratorPath) {
 		if filepath.IsAbs(dir) {
 			absolutePaths = append(absolutePaths, dir)
 		}
@@ -204,7 +200,7 @@ func (e *Executor) cloneFromAccelerator(ctx context.Context, attempt *remoteMirr
 	// Git does not expose the HTTP status directly. Confirm the authenticated
 	// discovery request is challenged before retrying without credentials.
 	auth := sh.Env.GetString(acceleratorAuthorizationEnv, "")
-	if auth == "" || !acceleratorChallengesToken(ctx, attempt.url, auth) {
+	if auth == "" || e.GitAcceleratorDisableHTTP || !acceleratorChallengesToken(ctx, attempt.url, auth) {
 		return err
 	}
 	e.shell.Commentf("Git Accelerator rejected managed repository credentials; retrying anonymously")
@@ -246,7 +242,7 @@ func (e *Executor) runAcceleratorClone(ctx context.Context, attempt *remoteMirro
 		cloneDir = filepath.Join(sh.Getwd(), cloneDir)
 	}
 	var seed string
-	if experiments.IsEnabled(ctx, experiments.GitAcceleratorCloneKit) && !e.checkoutAlreadyExists() &&
+	if !e.GitAcceleratorDisableHTTP && experiments.IsEnabled(ctx, experiments.GitAcceleratorCloneKit) && !e.checkoutAlreadyExists() &&
 		len(e.GitSparseCheckoutPaths) == 0 && (e.GitCloneFlags == "" || e.GitCloneFlags == "-v") {
 		seedOnly := !bare && e.PullRequest == "false" && experiments.IsEnabled(ctx, experiments.GitAcceleratorCloneKitSeedOnly)
 		if seedOnly {
@@ -255,10 +251,7 @@ func (e *Executor) runAcceleratorClone(ctx context.Context, attempt *remoteMirro
 			seedOnly = err == nil && len(entries) == 0
 		}
 		if seedOnly && e.Commit == "HEAD" && e.resolvedCheckoutHead == "" {
-			switch e.GitFetchFlags {
-			case "", "-v --prune", "--no-tags":
-				e.resolvedCheckoutHead = e.resolveAcceleratorHead(ctx, sh, gitFlags, attempt.url)
-			}
+			e.resolvedCheckoutHead = e.resolveAcceleratorHead(ctx, sh, gitFlags, attempt.url)
 		}
 		// Stage beside the clone so its destination stays empty and the pack
 		// can normally be installed by rename on the same filesystem.
