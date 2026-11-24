@@ -477,6 +477,34 @@ func TestAgentStartPausedConfiguration(t *testing.T) {
 	}
 }
 
+func TestAgentStartPausedRequiresExperiment(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		args   []string
+		env    map[string]string
+		config string
+	}{
+		{name: "CLI", args: []string{"--start-paused", "--start-paused-timeout-in-minutes=60"}},
+		{name: "env", env: map[string]string{"BUILDKITE_AGENT_START_PAUSED": "true", "BUILDKITE_AGENT_START_PAUSED_TIMEOUT_MINUTES": "60"}},
+		{name: "file", config: "start-paused=true\nstart-paused-timeout-in-minutes=60"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var requests atomic.Int32
+			handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				requests.Add(1)
+				w.WriteHeader(http.StatusUnprocessableEntity)
+			})
+			err := runPausedAgentStart(t, handler, tc.config, tc.env, tc.args...)
+			if err == nil || !strings.Contains(err.Error(), "--experiment=start-paused") {
+				t.Fatalf("error = %v, want experiment guidance", err)
+			}
+			if got := requests.Load(); got != 0 {
+				t.Errorf("requests = %d, want zero", got)
+			}
+		})
+	}
+}
+
 func TestAgentStartPausedAcknowledgement(t *testing.T) {
 	for _, tc := range []struct {
 		name  string
@@ -511,7 +539,7 @@ func TestAgentStartPausedAcknowledgement(t *testing.T) {
 				}
 				_, _ = io.WriteString(w, tc.body)
 			})
-			err := runPausedAgentStart(t, handler, "", nil, "--start-paused", "--start-paused-timeout-in-minutes=60", fmt.Sprintf("--spawn=%d", tc.spawn), "--hooks-path", hooks)
+			err := runPausedAgentStart(t, handler, "", nil, "--experiment=start-paused", "--start-paused", "--start-paused-timeout-in-minutes=60", fmt.Sprintf("--spawn=%d", tc.spawn), "--hooks-path", hooks)
 			if err == nil || !strings.Contains(err.Error(), tc.want) {
 				t.Fatalf("error = %v, want %q", err, tc.want)
 			}
@@ -534,11 +562,12 @@ func TestAgentStartPausedPayload(t *testing.T) {
 		minutes int
 	}{
 		{name: "default off"},
-		{name: "CLI minimum", args: []string{"--start-paused", "--start-paused-timeout-in-minutes=1"}, minutes: 1},
-		{name: "file maximum", config: "start-paused=true\nstart-paused-timeout-in-minutes=10080", minutes: 10080},
-		{name: "CLI overrides malformed file", args: []string{"--start-paused", "--start-paused-timeout-in-minutes=60"}, config: "start-paused=yes\nstart-paused-timeout-in-minutes=1h", minutes: 60},
-		{name: "env overrides file", env: map[string]string{"BUILDKITE_AGENT_START_PAUSED": "true", "BUILDKITE_AGENT_START_PAUSED_TIMEOUT_MINUTES": "7"}, config: "start-paused=yes\nstart-paused-timeout-in-minutes=1h", minutes: 7},
-		{name: "CLI overrides env", args: []string{"--start-paused-timeout-in-minutes=3"}, env: map[string]string{"BUILDKITE_AGENT_START_PAUSED": "true", "BUILDKITE_AGENT_START_PAUSED_TIMEOUT_MINUTES": "7"}, minutes: 3},
+		{name: "experiment alone", args: []string{"--experiment=start-paused"}},
+		{name: "CLI minimum", args: []string{"--experiment=start-paused", "--start-paused", "--start-paused-timeout-in-minutes=1"}, minutes: 1},
+		{name: "file maximum", config: "experiment=start-paused\nstart-paused=true\nstart-paused-timeout-in-minutes=10080", minutes: 10080},
+		{name: "CLI overrides malformed file", args: []string{"--experiment=start-paused", "--start-paused", "--start-paused-timeout-in-minutes=60"}, config: "start-paused=yes\nstart-paused-timeout-in-minutes=1h", minutes: 60},
+		{name: "env overrides file", env: map[string]string{"BUILDKITE_AGENT_EXPERIMENT": "start-paused", "BUILDKITE_AGENT_START_PAUSED": "true", "BUILDKITE_AGENT_START_PAUSED_TIMEOUT_MINUTES": "7"}, config: "start-paused=yes\nstart-paused-timeout-in-minutes=1h", minutes: 7},
+		{name: "CLI overrides env", args: []string{"--experiment=start-paused", "--start-paused-timeout-in-minutes=3"}, env: map[string]string{"BUILDKITE_AGENT_START_PAUSED": "true", "BUILDKITE_AGENT_START_PAUSED_TIMEOUT_MINUTES": "7"}, minutes: 3},
 		{name: "explicit false overrides file", args: []string{"--start-paused=false"}, config: "start-paused=yes"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -589,7 +618,7 @@ func TestAgentStartPausedPayload(t *testing.T) {
 func runPausedAgentStart(t *testing.T, handler http.Handler, config string, env map[string]string, args ...string) error {
 	t.Helper()
 	t.Setenv("BUILDKITE_AGENT_TOKEN", "")
-	for _, key := range []string{"BUILDKITE_AGENT_START_PAUSED", "BUILDKITE_AGENT_START_PAUSED_TIMEOUT_MINUTES"} {
+	for _, key := range []string{"BUILDKITE_AGENT_START_PAUSED", "BUILDKITE_AGENT_START_PAUSED_TIMEOUT_MINUTES", "BUILDKITE_AGENT_EXPERIMENT"} {
 		t.Setenv(key, "")
 		if err := os.Unsetenv(key); err != nil {
 			t.Fatal(err)

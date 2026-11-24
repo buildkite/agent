@@ -64,9 +64,9 @@ Example:
 
     $ buildkite-agent start --token xxx
 
-Timed startup pause (v4 only, requires server support):
+Timed startup pause (v4 only, requires server support and organization enablement):
 
-    $ buildkite-agent start --start-paused --start-paused-timeout-in-minutes 60
+    $ buildkite-agent start --experiment=start-paused --start-paused --start-paused-timeout-in-minutes 60
 
 The pause starts at server registration. Each spawned worker must receive the
 server's acknowledgement before any worker connects or the startup hook runs.
@@ -76,9 +76,17 @@ it. A new registration starts a new lease. Existing authorized resume paths appl
 A paused agent cannot run queued recovery jobs; resuming it permits production
 work too unless the operator has already isolated its queue.
 
-Environment: BUILDKITE_AGENT_START_PAUSED=true and
-BUILDKITE_AGENT_START_PAUSED_TIMEOUT_MINUTES=60.
-Config file: start-paused=true and start-paused-timeout-in-minutes=60.
+Environment: BUILDKITE_AGENT_EXPERIMENT=start-paused, BUILDKITE_AGENT_START_PAUSED=true
+and BUILDKITE_AGENT_START_PAUSED_TIMEOUT_MINUTES=60.
+Config file: experiment=start-paused, start-paused=true and
+start-paused-timeout-in-minutes=60.
+Both the experiment and startup pause default off. The experiment alone does not
+request a pause; requesting a pause without it fails before registration. The
+server's organization feature must also be enabled, otherwise registration is
+rejected. Deploy server support first and verify acknowledgement through Agent
+Edge before enabling canaries. Disabling either gate does not resume or extend
+existing leases. To return to ordinary startup, remove the pause and duration
+settings as well as the experiment; removing only the experiment fails closed.
 Pin a supporting v4 binary when using environment or config settings: older
 agents ignore unknown settings and can start unpaused. CLI flags fail startup
 on older binaries. Check the release notes for the first supporting v4 release.
@@ -424,7 +432,7 @@ var AgentStartCommand = &cli.Command{
 		},
 		&cli.BoolFlag{
 			Name:    "start-paused",
-			Usage:   "Register paused before receiving work; requires --start-paused-timeout-in-minutes and server support (default: false)",
+			Usage:   "Register paused before receiving work; requires --experiment=start-paused, --start-paused-timeout-in-minutes and server organization enablement (default: false)",
 			Sources: cli.EnvVars("BUILDKITE_AGENT_START_PAUSED"),
 		},
 		&cli.IntFlag{
@@ -851,6 +859,9 @@ var AgentStartCommand = &cli.Command{
 			// Matches the server's Agent::MAX_DISPATCH_PAUSED_TIMEOUT_IN_MINUTES.
 			if !durationSet || cfg.StartPausedTimeoutInMinutes < 1 || cfg.StartPausedTimeoutInMinutes > 10080 {
 				return errors.New(pauseDurationGuidance)
+			}
+			if !experiments.IsEnabled(ctx, experiments.StartPaused) {
+				return errors.New("--start-paused requires --experiment=start-paused (BUILDKITE_AGENT_EXPERIMENT=start-paused, config experiment=start-paused); agent will not register")
 			}
 		}
 
