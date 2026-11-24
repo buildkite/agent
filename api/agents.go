@@ -1,22 +1,27 @@
 package api
 
-import "context"
+import (
+	"context"
+	"time"
+)
 
 // AgentRegisterRequest is a call to register on the Buildkite Agent API
 type AgentRegisterRequest struct {
-	Name               string   `json:"name"`
-	Hostname           string   `json:"hostname"`
-	OS                 string   `json:"os"`
-	Arch               string   `json:"arch"`
-	ScriptEvalEnabled  bool     `json:"script_eval_enabled"`
-	IgnoreInDispatches bool     `json:"ignore_in_dispatches"`
-	Priority           string   `json:"priority,omitempty"`
-	Version            string   `json:"version"`
-	Build              string   `json:"build"`
-	Tags               []string `json:"meta_data"`
-	PID                int      `json:"pid,omitempty"`
-	MachineID          string   `json:"machine_id,omitempty"`
-	Features           []string `json:"features"`
+	Name                        string   `json:"name"`
+	Hostname                    string   `json:"hostname"`
+	OS                          string   `json:"os"`
+	Arch                        string   `json:"arch"`
+	ScriptEvalEnabled           bool     `json:"script_eval_enabled"`
+	IgnoreInDispatches          bool     `json:"ignore_in_dispatches"`
+	Priority                    string   `json:"priority,omitempty"`
+	Version                     string   `json:"version"`
+	Build                       string   `json:"build"`
+	Tags                        []string `json:"meta_data"`
+	PID                         int      `json:"pid,omitempty"`
+	MachineID                   string   `json:"machine_id,omitempty"`
+	Features                    []string `json:"features"`
+	StartPaused                 bool     `json:"start_paused,omitempty"`
+	StartPausedTimeoutInMinutes int      `json:"start_paused_timeout_in_minutes,omitempty"`
 }
 
 // AgentRegisterResponse is the response from the Buildkite Agent API
@@ -32,6 +37,8 @@ type AgentRegisterResponse struct {
 	Tags              []string          `json:"meta_data"`
 	Tracing           *AgentTracing     `json:"tracing,omitempty"`
 	Warnings          []Warning         `json:"warnings,omitempty"`
+	StartPausedAt     time.Time         `json:"start_paused_at,omitempty"`
+	StartPausedUntil  time.Time         `json:"start_paused_until,omitempty"`
 }
 
 // Warning is a message from Buildkite for the agent to show to its operator,

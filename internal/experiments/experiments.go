@@ -31,6 +31,7 @@ const (
 	ProgramStatus                  = "program-status"
 	PTYRaw                         = "pty-raw"
 	LegacyPostHookOrder            = "legacy-post-hook-order"
+	StartPaused                    = "start-paused"
 	ZipPlugins                     = "zip-plugins"
 
 	// Promoted or removed experiments - un-export these to ensure no new code
@@ -63,6 +64,7 @@ var (
 		PreBootstrapHookTimeout:        {},
 		ProgramStatus:                  {},
 		PTYRaw:                         {},
+		StartPaused:                    {},
 		ZipPlugins:                     {},
 	}
 

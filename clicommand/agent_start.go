@@ -62,7 +62,38 @@ The agent will run any jobs within a PTY (pseudo terminal) if available.
 
 Example:
 
-    $ buildkite-agent start --token xxx`
+    $ buildkite-agent start --token xxx
+
+Timed startup pause (v4 only, requires server support and organization enablement):
+
+    $ buildkite-agent start --experiment=start-paused --start-paused --start-paused-timeout-in-minutes 60
+
+The pause starts at server registration. Each spawned worker must receive the
+server's acknowledgement before any worker connects or the startup hook runs.
+The agent automatically resumes after the timeout even if the host has not been
+repaired. Hooks and disconnection consume the same lease; reconnect does not renew
+it. A new registration starts a new lease. Existing authorized resume paths apply.
+A paused agent cannot run queued recovery jobs; resuming it permits production
+work too unless the operator has already isolated its queue.
+
+Environment: BUILDKITE_AGENT_EXPERIMENT=start-paused, BUILDKITE_AGENT_START_PAUSED=true
+and BUILDKITE_AGENT_START_PAUSED_TIMEOUT_MINUTES=60.
+Config file: experiment=start-paused, start-paused=true and
+start-paused-timeout-in-minutes=60.
+Both the experiment and startup pause default off. The experiment alone does not
+request a pause; requesting a pause without it fails before registration. The
+server's organization feature must also be enabled, otherwise registration is
+rejected. Deploy server support first and verify acknowledgement through Agent
+Edge before enabling canaries. Disabling either gate does not resume or extend
+existing leases. To return to ordinary startup, remove the pause and duration
+settings as well as the experiment; removing only the experiment fails closed.
+Pin a supporting v4 binary when using environment or config settings: older
+agents ignore unknown settings and can start unpaused. CLI flags fail startup
+on older binaries. Check the release notes for the first supporting v4 release.
+An unsupported server causes startup to fail without connecting; supervisor
+restarts may leave additional never-connected registrations. No session cleanup
+is sent. This scheduling control does not protect against a compromised host or
+anyone holding the agent's session token, which can resume the agent.`
 
 const pingModePingOnly = "ping-only"
 
@@ -116,15 +147,17 @@ type AgentStartConfig struct {
 	VerificationJWKSFile        string `cli:"verification-jwks-file" normalize:"filepath"`
 	VerificationFailureBehavior string `cli:"verification-failure-behavior"`
 
-	AcquireJob                 string        `cli:"acquire-job"`
-	DisconnectAfterJob         bool          `cli:"disconnect-after-job"`
-	DisconnectAfterIdleTimeout int           `cli:"disconnect-after-idle-timeout"`
-	DisconnectAfterUptime      int           `cli:"disconnect-after-uptime"`
-	CancelSignalTimeout        time.Duration `cli:"cancel-signal-timeout"`
-	CancelCleanupTimeout       time.Duration `cli:"cancel-cleanup-timeout"`
-	PreBootstrapTimeout        time.Duration `cli:"pre-bootstrap-timeout"`
-	PostBootstrapTimeout       time.Duration `cli:"post-bootstrap-timeout"`
-	ReflectExitStatus          bool          `cli:"reflect-exit-status"`
+	AcquireJob                  string        `cli:"acquire-job"`
+	StartPaused                 bool          `cli:"start-paused"`
+	StartPausedTimeoutInMinutes int           `cli:"start-paused-timeout-in-minutes"`
+	DisconnectAfterJob          bool          `cli:"disconnect-after-job"`
+	DisconnectAfterIdleTimeout  int           `cli:"disconnect-after-idle-timeout"`
+	DisconnectAfterUptime       int           `cli:"disconnect-after-uptime"`
+	CancelSignalTimeout         time.Duration `cli:"cancel-signal-timeout"`
+	CancelCleanupTimeout        time.Duration `cli:"cancel-cleanup-timeout"`
+	PreBootstrapTimeout         time.Duration `cli:"pre-bootstrap-timeout"`
+	PostBootstrapTimeout        time.Duration `cli:"post-bootstrap-timeout"`
+	ReflectExitStatus           bool          `cli:"reflect-exit-status"`
 
 	EnableJobLogTmpfile bool   `cli:"enable-job-log-tmpfile"`
 	JobLogPath          string `cli:"job-log-path" normalize:"filepath"`
@@ -398,6 +431,16 @@ var AgentStartCommand = &cli.Command{
 			Value:   "",
 			Usage:   "Start this agent and only run the specified job, disconnecting after it's finished",
 			Sources: cli.EnvVars("BUILDKITE_AGENT_ACQUIRE_JOB"),
+		},
+		&cli.BoolFlag{
+			Name:    "start-paused",
+			Usage:   "Register paused before receiving work; requires --experiment=start-paused, --start-paused-timeout-in-minutes and server organization enablement (default: false)",
+			Sources: cli.EnvVars("BUILDKITE_AGENT_START_PAUSED"),
+		},
+		&cli.IntFlag{
+			Name:    "start-paused-timeout-in-minutes",
+			Usage:   "Explicit startup pause duration, 1–10080 whole minutes from registration; automatically resumes even if the host has not been repaired (no default)",
+			Sources: cli.EnvVars("BUILDKITE_AGENT_START_PAUSED_TIMEOUT_MINUTES"),
 		},
 		&cli.BoolFlag{
 			Name:    "reflect-exit-status",
@@ -797,6 +840,44 @@ var AgentStartCommand = &cli.Command{
 			defaultConfigFilePaths(),
 		))
 		defer done()
+
+		const pauseDurationGuidance = "--start-paused requires --start-paused-timeout-in-minutes (BUILDKITE_AGENT_START_PAUSED_TIMEOUT_MINUTES, config start-paused-timeout-in-minutes) set to whole minutes from 1 to 10080, for example 60. See buildkite-agent start --help"
+		durationSet := c.IsSet("start-paused-timeout-in-minutes")
+		if configFile != nil {
+			if raw, ok := configFile.Config["start-paused"]; ok && !c.IsSet("start-paused") {
+				value, err := strconv.ParseBool(raw)
+				if err != nil {
+					return fmt.Errorf("invalid config start-paused=%q: expected true or false", raw)
+				}
+				cfg.StartPaused = value
+			}
+			if raw, ok := configFile.Config["start-paused-timeout-in-minutes"]; ok && !durationSet {
+				durationSet = true
+				if !cfg.StartPaused {
+					return errors.New("--start-paused-timeout-in-minutes requires startup pause; enable --start-paused or remove the duration")
+				}
+				value, err := strconv.Atoi(raw)
+				if err != nil {
+					return fmt.Errorf("invalid config start-paused-timeout-in-minutes=%q: %s", raw, pauseDurationGuidance)
+				}
+				cfg.StartPausedTimeoutInMinutes = value
+			}
+		}
+		if !cfg.StartPaused && durationSet {
+			return errors.New("--start-paused-timeout-in-minutes requires startup pause; enable --start-paused or remove the duration")
+		}
+		if cfg.StartPaused {
+			if cfg.AcquireJob != "" {
+				return errors.New("--start-paused cannot be used with --acquire-job; remove one option")
+			}
+			// Matches the server's Agent::MAX_DISPATCH_PAUSED_TIMEOUT_IN_MINUTES.
+			if !durationSet || cfg.StartPausedTimeoutInMinutes < 1 || cfg.StartPausedTimeoutInMinutes > 10080 {
+				return errors.New(pauseDurationGuidance)
+			}
+			if !experiments.IsEnabled(ctx, experiments.StartPaused) {
+				return errors.New("--start-paused requires --experiment=start-paused (BUILDKITE_AGENT_EXPERIMENT=start-paused, config experiment=start-paused); agent will not register")
+			}
+		}
 
 		// Resolve indirect registration tokens (fd://N from the re-exec
 		// above, or file://PATH) into the real token.
@@ -1248,8 +1329,10 @@ var AgentStartCommand = &cli.Command{
 			// We only want this agent to be ignored in Buildkite
 			// dispatches if it's being booted to acquire a
 			// specific job.
-			IgnoreInDispatches: cfg.AcquireJob != "",
-			Features:           cfg.Features(ctx),
+			IgnoreInDispatches:          cfg.AcquireJob != "",
+			Features:                    cfg.Features(ctx),
+			StartPaused:                 cfg.StartPaused,
+			StartPausedTimeoutInMinutes: cfg.StartPausedTimeoutInMinutes,
 		}
 
 		if cfg.SpawnPerCPU > 0 {
@@ -1324,7 +1407,18 @@ var AgentStartCommand = &cli.Command{
 			// Register the agent with the buildkite API
 			reg, err := client.Register(ctx, regReq)
 			if err != nil {
+				if cfg.StartPaused {
+					return nil, fmt.Errorf("startup pause registration failed; agent will not connect or accept work: %w", err)
+				}
 				return nil, err
+			}
+
+			if cfg.StartPaused {
+				if reg.StartPausedAt.IsZero() || reg.StartPausedUntil.IsZero() ||
+					reg.StartPausedUntil.Sub(reg.StartPausedAt) != time.Duration(cfg.StartPausedTimeoutInMinutes)*time.Minute {
+					return nil, errors.New("server did not acknowledge the requested timed startup pause; agent will not connect or accept work. Check server support/deployment")
+				}
+				l.Infof("Agent %q startup pause accepted from %s until %s; expiry permits work even if the host has not been repaired", reg.Name, reg.StartPausedAt.Format(time.RFC3339Nano), reg.StartPausedUntil.Format(time.RFC3339Nano))
 			}
 
 			for _, w := range reg.Warnings {
