@@ -1,6 +1,7 @@
 package integration
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"os"
@@ -17,8 +18,314 @@ import (
 	"github.com/buildkite/agent/v4/agent"
 	"github.com/buildkite/agent/v4/api"
 	"github.com/buildkite/agent/v4/env"
+	"github.com/buildkite/agent/v4/internal/experiments"
+	"github.com/buildkite/agent/v4/logger"
+	"github.com/buildkite/agent/v4/metrics"
 	"github.com/buildkite/bintest/v3"
 )
+
+func TestPostBootstrapHook(t *testing.T) {
+	t.Parallel()
+	ctx, _ := experiments.Enable(t.Context(), experiments.PostBootstrapHook)
+	for _, tc := range []struct {
+		name          string
+		bootstrapExit int
+		hookExit      int
+		startFailure  bool
+	}{
+		{name: "success"},
+		{name: "failed_bootstrap", bootstrapExit: 7},
+		{name: "failed_hook", hookExit: 3},
+		{name: "start_failure", bootstrapExit: -1, startFailure: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			hooksDir := t.TempDir()
+			e := createTestAgentEndpoint()
+			server := e.server()
+			defer server.Close()
+			post := mockAgentHook(t, hooksDir, "post-bootstrap")
+			defer post.CheckAndClose(t) //nolint:errcheck // bintest logs to t
+			post.Expect().Once().AndCallFunc(func(c *bintest.Call) {
+				for key, want := range map[string]string{
+					"BUILDKITE_JOB_ID":                  defaultJobID,
+					"BUILDKITE_AGENT_ACCESS_TOKEN":      "bkaj_job-token",
+					"BUILDKITE_AGENT_ENDPOINT":          server.URL,
+					"BUILDKITE_NO_HTTP2":                "false",
+					"BUILDKITE_AGENT_DEBUG":             "false",
+					"BUILDKITE_AGENT_DEBUG_HTTP":        "false",
+					"BUILDKITE_BOOTSTRAP_EXIT_STATUS":   strconv.Itoa(tc.bootstrapExit),
+					"BUILDKITE_BOOTSTRAP_SIGNAL":        "",
+					"BUILDKITE_BOOTSTRAP_SIGNAL_REASON": "",
+					"POST_BOOTSTRAP_UNTRUSTED":          "",
+				} {
+					if tc.startFailure && key == "BUILDKITE_BOOTSTRAP_SIGNAL_REASON" {
+						want = agent.SignalReasonProcessRunError
+					}
+					if got := c.GetEnv(key); got != want {
+						t.Errorf("%s = %q, want %q", key, got, want)
+					}
+				}
+				for _, key := range []string{"BUILDKITE_ENV_FILE", "BUILDKITE_ENV_JSON_FILE"} {
+					if contents, err := os.ReadFile(c.GetEnv(key)); err != nil || !strings.Contains(string(contents), "POST_BOOTSTRAP_UNTRUSTED") {
+						t.Errorf("%s must still contain the job environment: %v", key, err)
+					}
+				}
+				if finishes := e.finishesFor(t, defaultJobID); len(finishes) != 0 {
+					t.Error("job finished before post-bootstrap completed")
+				}
+				wantLog := "final bootstrap output"
+				if tc.startFailure {
+					wantLog = "Error running job:"
+				}
+				if !strings.Contains(e.logsFor(t, defaultJobID), wantLog) {
+					t.Errorf("job logs must contain %q before post-bootstrap starts", wantLog)
+				}
+				if _, err := fmt.Fprintln(c.Stdout, "host cleanup output"); err != nil {
+					t.Errorf("writing hook output: %v", err)
+				}
+				c.Exit(tc.hookExit)
+			})
+			mb := mockBootstrap(t)
+			defer mb.CheckAndClose(t) //nolint:errcheck // bintest logs to t
+			logs := logger.NewBuffer()
+			cfg := testRunJobConfig{
+				job: &api.Job{
+					ID: defaultJobID, Token: "bkaj_job-token", ChunksMaxSizeBytes: 1024,
+					ChunksIntervalSeconds: 3600, // Keep final output buffered until the process exits.
+					Env:                   map[string]string{"POST_BOOTSTRAP_UNTRUSTED": "must not be exported"},
+				},
+				server: server, agentCfg: agent.AgentConfiguration{HooksPath: hooksDir}, logger: logs,
+			}
+			if tc.startFailure {
+				mb.Expect().NotCalled()
+				cfg.agentCfg.BootstrapScript = filepath.Join(t.TempDir(), "missing-bootstrap")
+			} else {
+				mb.Expect().Once().AndCallFunc(func(c *bintest.Call) {
+					if _, err := fmt.Fprintln(c.Stdout, "final bootstrap output"); err != nil {
+						t.Errorf("writing bootstrap output: %v", err)
+					}
+					c.Exit(tc.bootstrapExit)
+				})
+				cfg.mockBootstrap = mb
+			}
+			if err := runJob(t, ctx, cfg); err != nil {
+				t.Fatalf("runJob: %v", err)
+			}
+			finish := e.finishesFor(t, defaultJobID)[0]
+			if finish.ExitStatus != strconv.Itoa(tc.bootstrapExit) {
+				t.Errorf("exit status = %s, want %d", finish.ExitStatus, tc.bootstrapExit)
+			}
+			if strings.Contains(e.logsFor(t, defaultJobID), "host cleanup output") {
+				t.Error("post-bootstrap output leaked into job logs")
+			}
+			if !strings.Contains(strings.Join(logs.Messages, "\n"), "host cleanup output") {
+				t.Error("post-bootstrap output missing from agent logs")
+			}
+			if tc.hookExit != 0 && !strings.Contains(strings.Join(logs.Messages, "\n"), "[error] Finished post-bootstrap hook") {
+				t.Error("post-bootstrap failure missing from agent logs")
+			}
+		})
+	}
+}
+
+func TestPostBootstrapHookRequiresExperiment(t *testing.T) {
+	t.Parallel()
+	hooksDir := t.TempDir()
+	post := mockAgentHook(t, hooksDir, "post-bootstrap")
+	post.Expect().NotCalled()
+	defer post.CheckAndClose(t) //nolint:errcheck // bintest logs to t
+	mb := mockBootstrap(t)
+	mb.Expect().Once().AndExitWith(7)
+	defer mb.CheckAndClose(t) //nolint:errcheck // bintest logs to t
+	e := createTestAgentEndpoint()
+	server := e.server()
+	defer server.Close()
+	if err := runJob(t, t.Context(), testRunJobConfig{
+		job: &api.Job{
+			ID: defaultJobID, Token: "bkaj_job-token", ChunksMaxSizeBytes: 1024,
+			Env: map[string]string{"BUILDKITE_AGENT_EXPERIMENT": experiments.PostBootstrapHook},
+		},
+		server: server, mockBootstrap: mb,
+		agentCfg: agent.AgentConfiguration{HooksPath: hooksDir, PostBootstrapTimeout: time.Second},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if finish := e.finishesFor(t, defaultJobID)[0]; finish.ExitStatus != "7" {
+		t.Errorf("job exit status = %s, want 7", finish.ExitStatus)
+	}
+}
+
+func TestPostBootstrapHookTimeout(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("requires a POSIX shell and signals")
+	}
+	t.Parallel()
+	ctx, _ := experiments.Enable(t.Context(), experiments.PostBootstrapHook)
+	for _, tc := range []struct {
+		name     string
+		timeout  time.Duration
+		timedOut bool
+	}{
+		{name: "default_one_second", timedOut: true},
+		{name: "shorter_override", timeout: 50 * time.Millisecond, timedOut: true},
+		{name: "longer_override", timeout: 3 * time.Second},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			hooksDir := t.TempDir()
+			executable, err := os.Executable()
+			if err != nil {
+				t.Fatal(err)
+			}
+			cmd := exec.Command(executable, "write-exec", filepath.Join(hooksDir, "post-bootstrap"))
+			// Both the hook and its child ignore SIGTERM. The timeout must kill
+			// their process group without another cancellation grace period.
+			cmd.Stdin = strings.NewReader("#!/bin/sh\ntrap '' TERM\n(sleep 2; echo cleanup-finished) &\nwait\n")
+			if err := cmd.Run(); err != nil {
+				t.Fatal(err)
+			}
+			e := createTestAgentEndpoint()
+			server := e.server()
+			defer server.Close()
+			mb := mockBootstrap(t)
+			defer mb.CheckAndClose(t) //nolint:errcheck // bintest logs to t
+			mb.Expect().Once().AndExitWith(7)
+			logs := logger.NewBuffer()
+			if err := runJob(t, ctx, testRunJobConfig{
+				job: &api.Job{
+					ID: defaultJobID, Token: "bkaj_job-token", ChunksMaxSizeBytes: 1024,
+					Env: map[string]string{"BUILDKITE_POST_BOOTSTRAP_TIMEOUT": "30s"},
+				},
+				server: server, mockBootstrap: mb, logger: logs,
+				agentCfg: agent.AgentConfiguration{
+					HooksPath: hooksDir, PostBootstrapTimeout: tc.timeout,
+					CancelSignalTimeout: 30 * time.Second,
+				},
+			}); err != nil {
+				t.Fatal(err)
+			}
+			output := strings.Join(logs.Messages, "\n")
+			if got := strings.Contains(output, "post-bootstrap hook timed out"); got != tc.timedOut {
+				t.Errorf("timeout warning present = %t, want %t", got, tc.timedOut)
+			}
+			if tc.timeout == 0 && !strings.Contains(output, "post-bootstrap hook timed out after 1s") {
+				t.Error("unconfigured hook must use the one-second timeout")
+			}
+			if got := strings.Contains(output, "cleanup-finished"); got == tc.timedOut {
+				t.Errorf("cleanup completed = %t, want %t", got, !tc.timedOut)
+			}
+			finish := e.finishesFor(t, defaultJobID)[0]
+			if finish.ExitStatus != "7" || finish.Signal != "" || finish.SignalReason != "" {
+				t.Errorf("job result = %+v, want exit 7 without a signal or signal reason", finish)
+			}
+		})
+	}
+}
+
+func TestPostBootstrapHookAfterSIGKILL(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("requires POSIX signals")
+	}
+	t.Parallel()
+	experimentCtx, _ := experiments.Enable(t.Context(), experiments.PostBootstrapHook)
+	for _, tc := range []struct {
+		name          string
+		reason        agent.CancelReason
+		cancelContext bool
+	}{
+		{name: "cancel", reason: agent.CancelReasonJobState},
+		{name: "timeout", reason: agent.CancelReasonJobTimeout},
+		{name: "agent_stop", reason: agent.CancelReasonAgentStopping},
+		{name: "cancelled_context", cancelContext: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			ctx, cancel := context.WithCancel(experimentCtx)
+			defer cancel()
+			hooksDir := t.TempDir()
+			ready := make(chan struct{})
+			mb := mockBootstrap(t)
+			defer mb.CheckAndClose(t) //nolint:errcheck // bintest logs to t
+			mb.Expect().Once().AndCallFunc(func(c *bintest.Call) {
+				c.Exit(0)
+				close(ready)
+			})
+			// Ignore SIGTERM so cancellation must escalate to SIGKILL. The
+			// readiness command runs only once the signal disposition is set.
+			bootstrap := filepath.Join(t.TempDir(), "bootstrap")
+			executable, err := os.Executable()
+			if err != nil {
+				t.Fatal(err)
+			}
+			cmd := exec.Command(executable, "write-exec", bootstrap)
+			cmd.Stdin = strings.NewReader(fmt.Sprintf("#!/bin/sh\ntrap '' TERM\n%q\nwhile :; do sleep 1; done\n", mb.Path))
+			if err := cmd.Run(); err != nil {
+				t.Fatal(err)
+			}
+			e := createTestAgentEndpoint()
+			server := e.server()
+			defer server.Close()
+			post := mockAgentHook(t, hooksDir, "post-bootstrap")
+			defer post.CheckAndClose(t) //nolint:errcheck // bintest logs to t
+			post.Expect().Once().AndCallFunc(func(c *bintest.Call) {
+				if got := c.GetEnv("BUILDKITE_BOOTSTRAP_SIGNAL"); got != "SIGKILL" {
+					t.Errorf("signal = %q, want SIGKILL", got)
+				}
+				if got := c.GetEnv("BUILDKITE_BOOTSTRAP_EXIT_STATUS"); got != "-1" {
+					t.Errorf("exit status = %q, want -1", got)
+				}
+				if !tc.cancelContext {
+					want := agent.SignalReasonCancel
+					if tc.reason == agent.CancelReasonAgentStopping {
+						want = agent.SignalReasonAgentStop
+					}
+					if got := c.GetEnv("BUILDKITE_BOOTSTRAP_SIGNAL_REASON"); got != want {
+						t.Errorf("signal reason = %q, want %q", got, want)
+					}
+				}
+				if len(e.finishesFor(t, defaultJobID)) != 0 {
+					t.Error("job finished before cleanup")
+				}
+				c.Exit(0)
+			})
+			m := metrics.NewCollector(logger.Discard, metrics.CollectorConfig{})
+			jr, err := agent.NewJobRunner(ctx, logger.Discard, api.NewClient(logger.Discard, api.Config{Endpoint: server.URL}), agent.JobRunnerConfig{
+				Job:                &api.Job{ID: defaultJobID, Token: "bkaj_job-token", ChunksMaxSizeBytes: 1024},
+				AgentConfiguration: agent.AgentConfiguration{HooksPath: hooksDir, BootstrapScript: bootstrap, CancelSignalTimeout: 10 * time.Millisecond},
+				MetricsScope:       m.Scope(metrics.Tags{}),
+				JobStatusInterval:  time.Second,
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			cancelDone := make(chan struct{})
+			go func() {
+				defer close(cancelDone)
+				select {
+				case <-ready:
+				case <-ctx.Done():
+					return
+				}
+				if tc.cancelContext {
+					cancel()
+				} else if err := jr.Cancel(tc.reason); err != nil {
+					t.Errorf("Cancel: %v", err)
+				}
+			}()
+			if err := jr.Run(ctx, nil); err != nil {
+				t.Errorf("Run: %v", err)
+			}
+			<-cancelDone
+			if !tc.cancelContext {
+				finish := e.finishesFor(t, defaultJobID)[0]
+				if finish.ExitStatus != "-1" || finish.Signal != "SIGKILL" {
+					t.Errorf("finish = %+v, want SIGKILL exit -1", finish)
+				}
+			}
+		})
+	}
+}
 
 func TestPreBootstrapHookScripts(t *testing.T) {
 	t.Parallel()
@@ -137,7 +444,7 @@ func TestPreBootstrapHookScripts(t *testing.T) {
 
 func TestPreBootstrapHookRefusesJob(t *testing.T) {
 	t.Parallel()
-	ctx := t.Context()
+	ctx, _ := experiments.Enable(t.Context(), experiments.PostBootstrapHook)
 
 	hooksDir, err := os.MkdirTemp("", "bootstrap-hooks")
 	if err != nil {
@@ -153,6 +460,9 @@ func TestPreBootstrapHookRefusesJob(t *testing.T) {
 		c.Exit(1) // Fail the pre-bootstrap hook
 	})
 	defer mockPB.CheckAndClose(t) //nolint:errcheck // bintest logs to t
+	post := mockAgentHook(t, hooksDir, "post-bootstrap")
+	post.Expect().NotCalled()
+	defer post.CheckAndClose(t) //nolint:errcheck // bintest logs to t
 
 	jobID := "my-job-id"
 	j := &api.Job{
@@ -197,6 +507,82 @@ func TestPreBootstrapHookRefusesJob(t *testing.T) {
 	captured := e.capturedErrorsFor(t, jobID)
 	if len(captured) != 1 || captured[0].Code != "buildkite.job_rejected" || !strings.HasPrefix(captured[0].Message, "This agent's pre-bootstrap hook rejected the job.") {
 		t.Errorf("captured errors = %+v, want buildkite.job_rejected by the pre-bootstrap hook", captured)
+	}
+}
+
+func TestPreBootstrapHookTimeout(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("requires a POSIX shell and signals")
+	}
+	t.Parallel()
+	for _, enabled := range []bool{false, true} {
+		t.Run(fmt.Sprintf("experiment=%t", enabled), func(t *testing.T) {
+			t.Parallel()
+			ctx := t.Context()
+			if enabled {
+				ctx, _ = experiments.Enable(ctx, experiments.PreBootstrapHookTimeout)
+			}
+			hooksDir := t.TempDir()
+			hookPath := filepath.Join(hooksDir, "pre-bootstrap")
+			executable, err := os.Executable()
+			if err != nil {
+				t.Fatal(err)
+			}
+			cmd := exec.Command(executable, "write-exec", hookPath)
+			// A timeout must stop the child too, even when both ignore SIGTERM.
+			cmd.Stdin = strings.NewReader("#!/bin/sh\ntrap '' TERM\necho validation-started\n(sleep 1; echo validation-completed) &\nwait\n")
+			if err := cmd.Run(); err != nil {
+				t.Fatal(err)
+			}
+
+			e := createTestAgentEndpoint()
+			server := e.server()
+			defer server.Close()
+			wantExit, wantReason := "0", ""
+			if enabled {
+				wantExit, wantReason = "-1", "agent_refused"
+			}
+			logs := logger.NewBuffer()
+			if err := runJob(t, ctx, testRunJobConfig{
+				job: &api.Job{ID: defaultJobID, Token: "bkaj_job-token", ChunksMaxSizeBytes: 1024, Env: map[string]string{
+					"BUILDKITE_AGENT_EXPERIMENT":      experiments.PreBootstrapHookTimeout,
+					"BUILDKITE_PRE_BOOTSTRAP_TIMEOUT": "30s",
+					"BUILDKITE_CAPTURE_AGENT_ERRORS":  "true",
+				}},
+				server: server, logger: logs,
+				agentCfg: agent.AgentConfiguration{
+					HooksPath: hooksDir, PreBootstrapTimeout: 300 * time.Millisecond,
+					BootstrapScript: "/bin/sh -c 'echo bootstrap-started'",
+				},
+			}); err != nil {
+				t.Fatal(err)
+			}
+
+			finish := e.finishesFor(t, defaultJobID)[0]
+			if finish.ExitStatus != wantExit || finish.SignalReason != wantReason {
+				t.Errorf("job result = (%s, %s), want (%s, %s)", finish.ExitStatus, finish.SignalReason, wantExit, wantReason)
+			}
+			agentLogs := strings.Join(logs.Messages, "\n")
+			if !strings.Contains(agentLogs, "validation-started") || strings.Contains(agentLogs, "validation-completed") == enabled {
+				t.Errorf("unexpected hook output: %s", agentLogs)
+			}
+			jobLogs := e.logsFor(t, defaultJobID)
+			if strings.Contains(jobLogs, "bootstrap-started") == enabled {
+				t.Errorf("unexpected bootstrap output: %q", jobLogs)
+			}
+			if enabled {
+				if want := fmt.Sprintf("pre-bootstrap hook timed out after 300ms: %q", hookPath); !strings.Contains(agentLogs, want) {
+					t.Errorf("agent log missing %q: %s", want, agentLogs)
+				}
+				if !strings.Contains(jobLogs, "pre-bootstrap hook timed out") || strings.Contains(jobLogs, "validation-started") || strings.Contains(jobLogs, hookPath) {
+					t.Errorf("job log should show the timeout, not the hook output or path: %q", jobLogs)
+				}
+				captured := e.capturedErrorsFor(t, defaultJobID)
+				if len(captured) != 1 || captured[0].Code != "buildkite.job_rejected" || !strings.Contains(captured[0].Message, "pre-bootstrap hook timed out") {
+					t.Errorf("captured errors = %+v, want a pre-bootstrap timeout rejection", captured)
+				}
+			}
+		})
 	}
 }
 

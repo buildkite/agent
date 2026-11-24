@@ -47,6 +47,7 @@ func TestOTelResourceAttributesFromEnv(t *testing.T) {
 		"BUILDKITE_LABEL":                 ":go: test",
 		"BUILDKITE_COMMIT":                "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
 		"BUILDKITE_PULL_REQUEST":          "1234",
+		"BUILDKITE_PULL_REQUEST_DRAFT":    "true",
 		"BUILDKITE_BUILD_AUTHOR":          "Ada Lovelace",
 	})
 
@@ -58,17 +59,18 @@ func TestOTelResourceAttributesFromEnv(t *testing.T) {
 	}
 
 	wantStrings := map[attribute.Key]string{
-		"buildkite.agent":        "agent-1",
-		"buildkite.queue":        "default",
-		"buildkite.org":          "acme",
-		"buildkite.pipeline":     "app",
-		"buildkite.branch":       "main",
-		"buildkite.job_id":       "job-123",
-		"buildkite.job_label":    ":go: test",
-		"buildkite.build_number": "42",
-		"buildkite.commit":       "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
-		"buildkite.pull_request": "1234",
-		"buildkite.build_author": "Ada Lovelace",
+		"buildkite.agent":              "agent-1",
+		"buildkite.queue":              "default",
+		"buildkite.org":                "acme",
+		"buildkite.pipeline":           "app",
+		"buildkite.branch":             "main",
+		"buildkite.job_id":             "job-123",
+		"buildkite.job_label":          ":go: test",
+		"buildkite.build_number":       "42",
+		"buildkite.commit":             "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
+		"buildkite.pull_request":       "1234",
+		"buildkite.pull_request_draft": "true",
+		"buildkite.build_author":       "Ada Lovelace",
 	}
 	for key, want := range wantStrings {
 		if got := byKey[key].AsString(); got != want {
@@ -105,6 +107,64 @@ func TestGenericTracingExtrasPullRequest(t *testing.T) {
 
 			if got := extras["buildkite.pull_request"]; got != test.want {
 				t.Errorf("buildkite.pull_request = %v, want %v", got, test.want)
+			}
+		})
+	}
+}
+
+func TestGenericTracingExtrasPullRequestDraft(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		env  map[string]string
+		want string
+	}{
+		{
+			name: "draft pull request",
+			env:  map[string]string{"BUILDKITE_PULL_REQUEST": "1234", "BUILDKITE_PULL_REQUEST_DRAFT": "true"},
+			want: "true",
+		},
+		{
+			name: "ready pull request",
+			env:  map[string]string{"BUILDKITE_PULL_REQUEST": "1234"},
+			want: "false",
+		},
+		{
+			name: "pull request with draft explicitly false",
+			env:  map[string]string{"BUILDKITE_PULL_REQUEST": "1234", "BUILDKITE_PULL_REQUEST_DRAFT": "false"},
+			want: "false",
+		},
+		{
+			name: "non pull request build",
+			env:  map[string]string{"BUILDKITE_PULL_REQUEST": "false"},
+			want: "n/a",
+		},
+		{
+			name: "non pull request build with stray draft value",
+			env:  map[string]string{"BUILDKITE_PULL_REQUEST": "false", "BUILDKITE_PULL_REQUEST_DRAFT": "true"},
+			want: "n/a",
+		},
+		{
+			name: "empty pull request",
+			env:  map[string]string{"BUILDKITE_PULL_REQUEST": "", "BUILDKITE_PULL_REQUEST_DRAFT": "true"},
+			want: "n/a",
+		},
+		{
+			name: "pull request unset",
+			env:  map[string]string{"BUILDKITE_PULL_REQUEST_DRAFT": "true"},
+			want: "n/a",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			extras := genericTracingExtras(jobTracingValues{}, env.FromMap(test.env))
+
+			if got := extras["buildkite.pull_request_draft"]; got != test.want {
+				t.Errorf("buildkite.pull_request_draft = %v, want %v", got, test.want)
 			}
 		})
 	}

@@ -691,7 +691,7 @@ func TestCheckoutCancellationCleanupFailureRemovesCheckout(t *testing.T) {
 		}
 	}()
 
-	err = e.checkout(ctx)
+	err = e.checkout(ctx, e.defaultCheckoutPhase)
 	if lockErr := <-lockResult; lockErr != nil {
 		t.Fatalf("creating config lock: %v; checkout error: %v", lockErr, err)
 	}

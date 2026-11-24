@@ -1,12 +1,67 @@
 package job
 
 import (
+	"bytes"
 	"context"
 	"io"
 	"slices"
+	"strings"
+	"sync"
 
 	"github.com/buildkite/agent/v4/internal/programstatus"
+	"github.com/buildkite/agent/v4/internal/redact"
+	"github.com/buildkite/agent/v4/internal/replacer"
+	"github.com/buildkite/osc7501"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 )
+
+// outputSpan attributes log records and program status reports to the current
+// span, restoring the enclosing span when a hook or phase returns.
+func (e *Executor) outputSpan(ctx context.Context) func() {
+	restoreLogs := e.otlpLogSpan(ctx)
+	onReport := func(r osc7501.Report) { e.recordProgramStatus(ctx, r) }
+	restoreOutput := func() {}
+	if e.programStatus != nil {
+		restoreOutput = e.programStatus.SetReportHandler(onReport)
+	}
+	var previous func(osc7501.Report)
+	if e.status != nil {
+		previous = e.status.r.OnReport
+		e.status.r.OnReport = onReport
+	}
+	return func() {
+		restoreOutput()
+		if e.status != nil {
+			e.status.r.OnReport = previous
+		}
+		restoreLogs()
+	}
+}
+
+func (e *Executor) recordProgramStatus(ctx context.Context, r osc7501.Report) {
+	span := trace.SpanFromContext(ctx)
+	if !span.IsRecording() {
+		return
+	}
+	// Reports reach this callback before the log redactors. Use the current
+	// needles so secrets added by hooks or the Job API are also removed.
+	needles := e.redactors.Needles()
+	var out strings.Builder
+	redactor := replacer.New(&out, needles, redact.Redacted)
+	redactor.AddPrefixes(redact.TokenPrefixes()...)
+	redactValue := func(value string) string {
+		start := out.Len()
+		_, _ = io.WriteString(redactor, value)
+		_ = redactor.Flush() // strings.Builder cannot fail
+		return out.String()[start:]
+	}
+	span.AddEvent("buildkite.program_status", trace.WithAttributes(
+		attribute.String("buildkite.program_status.id", redactValue(r.ID)),
+		attribute.String("buildkite.program_status.state", r.State),
+		attribute.String("buildkite.program_status.message", redactValue(r.Msg)),
+	))
+}
 
 // commandStatusID is the record for the step's command. It's left behind
 // when the job ends, so whoever is watching can see how the job finished.
@@ -18,6 +73,7 @@ const commandStatusID = "command"
 // them. A nil jobStatus does nothing.
 type jobStatus struct {
 	r         *programstatus.Reporter
+	trailer   *statusTrailer
 	cancelled <-chan struct{} // closed when the job is cancelled
 	done      []string        // records whose last report was done
 
@@ -27,10 +83,83 @@ type jobStatus struct {
 	afterCancel map[string]bool
 }
 
-// newJobStatus returns a jobStatus that writes to w. cancelled is closed when
-// the job is cancelled.
-func newJobStatus(w io.Writer, cancelled <-chan struct{}) *jobStatus {
-	return &jobStatus{r: programstatus.New(w), cancelled: cancelled, afterCancel: make(map[string]bool)}
+// statusTrailer sits in the logger's writer chain. It holds the agent's own
+// program status reports and attaches them to the end of the next line the
+// logger writes, so the invisible sequence never comes before a section header
+// such as "~~~", which the log viewer only recognises at the start of a line.
+type statusTrailer struct {
+	w io.Writer
+
+	mu      sync.Mutex
+	pending []byte
+}
+
+// hold keeps p until the next suitable line is written.
+func (t *statusTrailer) hold(p []byte) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.pending = append(t.pending, p...)
+}
+
+// holder adapts hold to an io.Writer.
+type holder struct{ t *statusTrailer }
+
+func (h holder) Write(p []byte) (int, error) {
+	h.t.hold(p)
+	return len(p), nil
+}
+
+// Write writes p to the logger's stream, inserting any held reports before the
+// terminator of the first complete line. A "^^^ +++" line is left exactly as
+// it is, because it's a header marker on its own.
+func (t *statusTrailer) Write(p []byte) (int, error) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if len(t.pending) == 0 {
+		return t.w.Write(p)
+	}
+
+	for start := 0; start < len(p); {
+		nl := bytes.IndexByte(p[start:], '\n')
+		if nl < 0 {
+			break
+		}
+		end := start + nl // index of '\n'
+		line := bytes.TrimSuffix(p[start:end], []byte("\r"))
+		if string(line) == "^^^ +++" {
+			start = end + 1
+			continue
+		}
+		at := start + len(line)
+		out := make([]byte, 0, len(p)+len(t.pending))
+		out = append(out, p[:at]...)
+		out = append(out, t.pending...)
+		out = append(out, p[at:]...)
+		t.pending = nil
+		if _, err := t.w.Write(out); err != nil {
+			return 0, err
+		}
+		return len(p), nil
+	}
+	return t.w.Write(p)
+}
+
+// Flush writes any held reports as they are.
+func (t *statusTrailer) Flush() error {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if len(t.pending) == 0 {
+		return nil
+	}
+	_, err := t.w.Write(t.pending)
+	t.pending = nil
+	return err
+}
+
+// newJobStatus returns a jobStatus that reports through t. cancelled is closed
+// when the job is cancelled.
+func newJobStatus(t *statusTrailer, cancelled <-chan struct{}) *jobStatus {
+	return &jobStatus{r: programstatus.New(holder{t}), trailer: t, cancelled: cancelled, afterCancel: make(map[string]bool)}
 }
 
 func (s *jobStatus) isCancelled() bool {
@@ -76,7 +205,8 @@ func (s *jobStatus) finish(id string, err error, what string) {
 }
 
 // clearDone removes the records that finished successfully, except the
-// command's, leaving the result and anything that failed.
+// command's, leaving the result and anything that failed. Nothing is logged
+// afterwards, so it also flushes the reports the trailer still holds.
 func (s *jobStatus) clearDone() {
 	if s == nil {
 		return
@@ -87,6 +217,7 @@ func (s *jobStatus) clearDone() {
 		}
 	}
 	s.done = nil
+	_ = s.trailer.Flush()
 }
 
 // hookStatusID returns the record id for a hook, such as hook/agent/environment

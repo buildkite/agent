@@ -418,7 +418,7 @@ func TestCheckoutErrorCaptureFromExecutor(t *testing.T) {
 			_ = e.checkoutRoot.Close()
 		}
 	})
-	if err := e.checkout(ctx); err == nil || !strings.Contains(err.Error(), "splitting --git-clone-flags") {
+	if err := e.checkout(ctx, e.defaultCheckoutPhase); err == nil || !strings.Contains(err.Error(), "splitting --git-clone-flags") {
 		t.Fatalf("checkout error = %v, want invalid clone flags", err)
 	}
 	if len(reports) != 1 {
@@ -512,7 +512,7 @@ func TestCheckoutPreflightErrorCapture(t *testing.T) {
 				}
 				e.shell.Env.Set("PATH", dir)
 			}
-			if err := e.checkout(ctx); err == nil || err.Error() != tc.wantError {
+			if err := e.checkout(ctx, e.defaultCheckoutPhase); err == nil || err.Error() != tc.wantError {
 				t.Fatalf("checkout error = %v, want %q", err, tc.wantError)
 			}
 			if len(reports) != 1 {
@@ -630,7 +630,7 @@ func TestCheckoutErrorCaptureDeliveryDoesNotCauseTimeout(t *testing.T) {
 	})
 
 	start := time.Now()
-	err := e.runDefaultCheckoutAttempt(ctx, 0)
+	err := e.runDefaultCheckoutAttempt(ctx, 0, e.defaultCheckoutPhase)
 	if errors.Is(err, errCheckoutAttemptTimedOut) {
 		t.Fatalf("reporting turned a completed fetch failure into a checkout timeout: %v", err)
 	}
@@ -667,7 +667,7 @@ func TestCheckoutErrorCaptureGenuineTimeout(t *testing.T) {
 		}
 	})
 
-	err := e.runDefaultCheckoutAttempt(ctx, 0)
+	err := e.runDefaultCheckoutAttempt(ctx, 0, e.defaultCheckoutPhase)
 	if !errors.Is(err, errCheckoutAttemptTimedOut) {
 		t.Fatalf("checkout error = %v, want checkout timeout", err)
 	}

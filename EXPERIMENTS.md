@@ -18,6 +18,35 @@ If an experiment doesn't exist, no error will be raised.
 
 ## Available Experiments
 
+### `pre-bootstrap-hook-timeout`
+
+Opts in to a ten-second default timeout for the agent-side `pre-bootstrap`
+hook. The agent rejects the job on timeout rather than running it without a
+successful hook result. Without this experiment, `pre-bootstrap` still runs
+with no dedicated timeout. See [agent-side bootstrap hooks](docs/agent-start.md#agent-side-bootstrap-hooks)
+for configuration and reporting.
+
+**Status:** Experimental; the timeout setting is intended to become a normal
+agent option in a later release.
+
+### `post-bootstrap-hook`
+
+Enables the agent-side `post-bootstrap` hook after each bootstrap attempt,
+including when the bootstrap is killed with SIGKILL. Install the hook in the
+agent's configured hooks path and opt in with
+`buildkite-agent start --experiment post-bootstrap-hook` or
+`experiment="post-bootstrap-hook"` in the agent config. Without the experiment,
+the hook is ignored.
+
+This is a last-resort notification backstop: report a problem or notify an
+independent watchdog to recover leftover resources, rather than perform recovery
+inside the hook. It has a one-second default timeout and runs before the agent
+reports the job finished. Hook failure or timeout does not change the job result.
+See [agent-side bootstrap hooks](docs/agent-start.md#agent-side-bootstrap-hooks)
+for environment, timeout configuration, and shutdown limits.
+
+**Status:** Experimental; the hook and its settings may change or be removed.
+
 ### `origin-clonekit`
 
 Seeds a missing on-host Git mirror using Cursor Origin's CloneKit pack data.
@@ -75,7 +104,7 @@ Shows [OSC 7501 program status](https://www.superlogical.com/rex/docs/build/prog
 # Program status: state=working id=build progress=40 app=cargo msg="Compiling"
 ```
 
-The report itself stays in the log unchanged. Reports that repeat the previous report for the same `id`, or only change its `progress`, don't add a line. Messages and titles are decoded before secret redaction, so redacted values are removed from them.
+The report itself stays in the log without its message and title, which only appear in the description line. Messages and titles are decoded before secret redaction, so redacted values are removed from them. Reports that repeat the previous report for the same `id`, or only change its `progress`, don't add a line.
 
 The experiment also sets `BUILDKITE_PROGRAM_STATUS=true` in the job environment, unless the job already sets it. Tools such as the Buildkite CLI (`bk`) only send reports in a Buildkite job when it's `true`. Set it to `false` in the job to turn them off.
 
@@ -87,7 +116,19 @@ The agent also reports the job's own progress, on records with these ids, so the
 - `hook/agent/<hook>` and `hook/repository/<hook>` for agent and repository hooks, such as `hook/agent/pre-command`.
 - `hook/plugin/<plugin>/<hook>` for plugin hooks, such as `hook/plugin/docker/pre-command`.
 
-These reports don't add a line to the log, because the log already has a header for each of them. When the job ends, the agent clears the records that finished successfully, except `command`.
+These reports don't add a line to the log, because the log already has a header for each of them. The agent attaches its reports to the end of a log line, so they never come before a section header. When the job ends, the agent clears the records that finished successfully, except `command`.
+
+With OpenTelemetry tracing enabled, reports also become `buildkite.program_status` events on the active hook or phase span. This includes the agent's own reports, program output, repeated reports and progress updates. Events have these attributes:
+
+| Attribute | OSC key | Meaning |
+| --- | --- | --- |
+| `buildkite.program_status.id` | `id` | Record path. An empty string means the root record. |
+| `buildkite.program_status.state` | `state` | `idle`, `working`, `done`, `blocked`, `error` or `clear`. |
+| `buildkite.program_status.message` | `msg` | Decoded message, or an empty string when absent. |
+
+Record IDs and messages are secret-redacted before export. Event timestamps record when the agent processes each report. Events do not change the span's error status: an OSC `error` report can appear on a command span that exits successfully. Events export when their span ends, are subject to the OpenTelemetry SDK's event limit, and do not require OTLP job log export.
+
+The [protocol's available keys](https://www.superlogical.com/rex/docs/build/program-status#keys) also include `kind` (`permission`, `question` or `auth`, for `blocked`), `progress` (0–100, for `working` or `blocked`), `app` (program identifier), and `title` (base64-encoded label). These four keys are not exported as event attributes yet. Both `msg` and `title` are base64-encoded on the wire; log descriptions decode them.
 
 **Status:** Experimental. The agent doesn't reply to the protocol's feature detection query yet.
 

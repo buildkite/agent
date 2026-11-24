@@ -185,8 +185,19 @@ func (e *Executor) fetchSource(ctx context.Context, addBloblessFilter bool, atte
 			// Note: this is the typical case e.Commit != HEAD.
 			refspecs = append(refspecs, e.Commit)
 			// We aim to eliminate network round-trip as much as possible so we use a single git fetch here.
-			if err := gitFetchWithFallback(ctx, e.shell, gitFetchFlags, refspecs...); err != nil {
-				return fmt.Errorf("fetching PR refspec %q: %w%s", refspecs, err, prMergeRefspecHint(kind == refspecGithubPRMerge))
+			var fetchErr error
+			if kind == refspecGithubPRHead && e.Commit != "" {
+				fetchErr = e.gitFetchPRHead(ctx, gitFetchArgs{
+					Shell:         e.shell,
+					GitFetchFlags: gitFetchFlags,
+					Repository:    "origin",
+					RefSpecs:      refspecs,
+				})
+			} else {
+				fetchErr = gitFetchWithFallback(ctx, e.shell, gitFetchFlags, refspecs...)
+			}
+			if fetchErr != nil {
+				return fmt.Errorf("fetching PR refspec %q: %w%s", refspecs, fetchErr, prMergeRefspecHint(kind == refspecGithubPRMerge))
 			}
 		}
 
@@ -222,6 +233,44 @@ func (e *Executor) fetchSource(ctx context.Context, addBloblessFilter bool, atte
 	}
 
 	return nil
+}
+
+// gitFetchPRHead recovers a missing GitHub PR head ref by fetching the build's
+// known commit. A missing ref aborts even a combined ref+commit fetch. Callers
+// must have a non-empty e.Commit other than HEAD; unknown-commit builds, merge
+// refs and custom refspecs must use their ordinary fetch paths instead.
+func (e *Executor) gitFetchPRHead(ctx context.Context, args gitFetchArgs) error {
+	retry := args.Retry
+	// Try direct commit recovery before waiting for the asynchronous PR ref.
+	args.Retry = false
+	args.CLocale = true
+	err := gitFetch(ctx, args)
+	if gerr := new(gitError); ctx.Err() == nil && errors.As(err, &gerr) && gerr.Type == gitErrorFetchBadReference {
+		e.shell.Commentf("Pull request head fetch failed because a remote ref is missing, fetching commit %q directly", e.Commit)
+		commitArgs := args
+		commitArgs.RefSpecs = nil
+		commitArgs.LiteralRefSpecs = []string{e.Commit}
+		err = gitFetch(ctx, commitArgs)
+		if ctx.Err() != nil || !errors.As(err, &gerr) {
+			return err
+		}
+		switch {
+		case !retry && (gerr.Type == gitErrorFetchBadReference || gerr.outputMatches[gitErrStrUnadvertisedObject]):
+			// Short hashes and rejected unadvertised SHA requests may still
+			// resolve through branch or tag history. Preserve "not our ref"
+			// failures rather than treating all missing objects as recoverable.
+			return gitFetchAllHeadsAndTags(ctx, args.Shell, args.GitFetchFlags)
+		case retry && (gerr.Type == gitErrorFetchBadReference || gerr.Type == gitErrorFetchRefNotOnRemote):
+			// Short hashes and unadvertised commits may not be fetchable
+			// directly. Keep the caller's wait for GitHub to publish the PR
+			// ref, but do not mask transport, authentication or corrupt-object
+			// errors by retrying a different fetch.
+			e.shell.Commentf("Commit could not be fetched directly, retrying the pull request head fetch")
+			args.Retry = true
+			return gitFetch(ctx, args)
+		}
+	}
+	return err
 }
 
 // headBuildRefs returns the refs a Commit=HEAD build may name, in fetch order.
@@ -639,6 +688,13 @@ func gitFetchWithFallback(ctx context.Context, shell *shell.Shell, gitFetchFlags
 		}
 	}
 
+	if err := gitFetchAllHeadsAndTags(ctx, shell, gitFetchFlags); err != nil {
+		return fmt.Errorf("fetching refspecs %v: %w", refspecs, err)
+	}
+	return nil
+}
+
+func gitFetchAllHeadsAndTags(ctx context.Context, shell *shell.Shell, gitFetchFlags string) error {
 	// The refspecs might be something that's not possible to fetch directly
 	// (e.g. short commit hashes), so we fall back to fetching all heads and tags,
 	// hoping that the refspecs are included.
@@ -652,15 +708,11 @@ func gitFetchWithFallback(ctx context.Context, shell *shell.Shell, gitFetchFlags
 		return fmt.Errorf("getting remote.origin.fetch: %w", err)
 	}
 
-	if err := gitFetch(ctx, gitFetchArgs{
+	return gitFetch(ctx, gitFetchArgs{
 		Shell:         shell,
 		GitFetchFlags: gitFetchFlags,
 		Repository:    "origin",
 		Retry:         true,
 		RefSpecs:      []string{gitFetchRefspec, "+refs/tags/*:refs/tags/*"},
-	}); err != nil {
-		return fmt.Errorf("fetching refspecs %v: %w", refspecs, err)
-	}
-
-	return nil
+	})
 }

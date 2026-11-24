@@ -15,21 +15,28 @@ import (
 // cap in the OSC 7501 spec.
 const maxProgramStatusRecords = 256
 
-// ProgramStatusWriter passes output through unchanged and, after each OSC 7501
-// program status report in it, writes a line describing the report. Terminals
-// and the Buildkite log viewer hide the report itself, so the line makes it
-// visible in the job log.
+// ProgramStatusWriter passes output through and, after each OSC 7501 program
+// status report in it, writes a line describing the report. Terminals and the
+// Buildkite log viewer hide the report itself, so the line makes it visible in
+// the job log.
+//
+// The report stays in the log without its message and title, which are base64
+// encoded and so can't be redacted. They only appear in the description line,
+// which a redactor downstream can process. Reports that fail to parse, and
+// queries, are removed and not written back.
 //
 // Reports that repeat the previous report for the same record, or only change
 // its progress, don't produce a line.
 //
 // See https://www.superlogical.com/rex/docs/build/program-status
 type ProgramStatusWriter struct {
-	mu      sync.Mutex
-	out     lineTracker
-	scanner osc7501.Scanner
-	logged  map[string]osc7501.Report // last report described, by record id
-	lineErr error                     // from writing a report's line
+	mu       sync.Mutex
+	out      lineTracker
+	scanner  osc7501.Scanner
+	strip    stripWriter
+	logged   map[string]osc7501.Report // last report described, by record id
+	lineErr  error                     // from writing a report's line
+	onReport func(osc7501.Report)
 }
 
 // NewProgramStatusWriter returns a ProgramStatusWriter that writes to out.
@@ -38,8 +45,24 @@ func NewProgramStatusWriter(out io.Writer) *ProgramStatusWriter {
 		out:    lineTracker{w: out, last: '\n'},
 		logged: make(map[string]osc7501.Report),
 	}
-	w.scanner = osc7501.Scanner{W: &w.out, OnReport: w.describe}
+	w.strip = stripWriter{w: &w.out}
+	w.scanner = osc7501.Scanner{W: &w.strip, OnReport: w.describe}
 	return w
+}
+
+// SetReportHandler installs a callback for every valid report, including
+// repeats and progress updates, and returns a function that restores the
+// previous handler. The callback runs before redaction and must not call w.
+func (w *ProgramStatusWriter) SetReportHandler(handler func(osc7501.Report)) func() {
+	w.mu.Lock()
+	previous := w.onReport
+	w.onReport = handler
+	w.mu.Unlock()
+	return func() {
+		w.mu.Lock()
+		defer w.mu.Unlock()
+		w.onReport = previous
+	}
 }
 
 // Write implements io.Writer.
@@ -51,8 +74,37 @@ func (w *ProgramStatusWriter) Write(p []byte) (int, error) {
 	return n, err
 }
 
-// describe is called by the scanner after a report has been written to out.
+// Flush writes any bytes held back from an unterminated sequence at the end
+// of the output. Output written afterwards is scanned afresh, so it can't
+// complete a sequence that was flushed.
+func (w *ProgramStatusWriter) Flush() error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	// Stripper.Flush resets the stripper, so reset the scanner to match.
+	w.scanner = osc7501.Scanner{W: &w.strip, OnReport: w.describe}
+	if held := w.strip.s.Flush(); len(held) > 0 {
+		_, err := w.out.Write(held)
+		return err
+	}
+	return nil
+}
+
+// describe is called by the scanner after a report's terminator has been
+// written to the stripper, which has dropped the report and holds nothing, so
+// writing to out here keeps the output in order.
 func (w *ProgramStatusWriter) describe(r osc7501.Report) {
+	if w.onReport != nil {
+		w.onReport(r)
+	}
+
+	// Write the report back without the text, which the line below carries.
+	sanitised := r
+	sanitised.Title, sanitised.Msg = "", ""
+	if _, err := w.out.Write(sanitised.Encode()); err != nil {
+		w.lineErr = err
+		return
+	}
+
 	if !w.remember(r) {
 		return
 	}
@@ -115,6 +167,24 @@ func (w *ProgramStatusWriter) remember(r osc7501.Report) bool {
 	}
 	w.logged[r.ID] = key
 	return true
+}
+
+// stripWriter removes OSC 7501 sequences from what it writes to w.
+type stripWriter struct {
+	w io.Writer
+	s osc7501.Stripper
+}
+
+func (s *stripWriter) Write(p []byte) (int, error) {
+	out := s.s.Strip(p)
+	if len(out) == 0 {
+		return len(p), nil
+	}
+	if n, err := s.w.Write(out); err != nil {
+		// Report no more than was accepted of the input.
+		return min(n, len(p)), err
+	}
+	return len(p), nil
 }
 
 // lineTracker writes to w and remembers the last byte written outside an ANSI

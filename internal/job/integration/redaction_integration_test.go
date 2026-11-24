@@ -3,6 +3,7 @@ package integration
 import (
 	"encoding/base64"
 	"fmt"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -220,8 +221,9 @@ func TestRedactorRedactsProgramStatusMessages(t *testing.T) {
 
 	// The message is base64-encoded in the report, so it can only be redacted
 	// after the agent decodes it.
+	var msg string
 	tester.ExpectGlobalHook("command").AndCallFunc(func(c *bintest.Call) {
-		msg := base64.StdEncoding.EncodeToString([]byte("token " + c.GetEnv("BUILDKITE_AGENT_ACCESS_TOKEN")))
+		msg = base64.StdEncoding.EncodeToString([]byte("token " + c.GetEnv("BUILDKITE_AGENT_ACCESS_TOKEN")))
 		_, _ = fmt.Fprintf(c.Stderr, "\x1b]7501;state=working:app=bk:msg=%s\x1b\\", msg)
 		c.Exit(0)
 	})
@@ -237,4 +239,12 @@ func TestRedactorRedactsProgramStatusMessages(t *testing.T) {
 	if strings.Contains(tester.Output, "test-token-please-ignore") {
 		t.Errorf("expected agent token to be redacted, but it wasn't. Full output: %s", tester.Output)
 	}
+	if msg == "" || strings.Contains(tester.Output, msg) {
+		t.Errorf("expected base64 message %q to be absent from output. Full output: %s", msg, tester.Output)
+	}
+	if programStatusMsgRE.MatchString(tester.Output) {
+		t.Errorf("expected no OSC 7501 sequence with msg= in output. Full output: %s", tester.Output)
+	}
 }
+
+var programStatusMsgRE = regexp.MustCompile(`\x1b\]7501;[^\x07\x1b]*msg=`)

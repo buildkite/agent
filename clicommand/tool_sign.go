@@ -228,6 +228,77 @@ Signing a pipeline from a file:
 	},
 }
 
+// mergePipelineSecretsIntoSteps merges pipeline-level secrets into every
+// command step, including those nested inside group steps, mirroring the
+// recursion signature.SignSteps uses to reach and sign those same steps.
+//
+// The merge is needed only so the signature covers secrets a step inherits
+// from the pipeline. It returns a restore function that puts each step's
+// original Secrets back afterwards; callers that serialize or upload the
+// pipeline once it's signed should call restore first, so an inherited
+// pipeline-level secret isn't persisted as an explicit step-level one (which
+// the backend can reject as an env/secrets conflict).
+func mergePipelineSecretsIntoSteps(steps pipeline.Steps, pipelineSecrets pipeline.Secrets) (restore func()) {
+	type original struct {
+		step    *pipeline.CommandStep
+		secrets pipeline.Secrets
+	}
+	var originals []original
+
+	var merge func(steps pipeline.Steps)
+	merge = func(steps pipeline.Steps) {
+		for _, step := range steps {
+			switch step := step.(type) {
+			case *pipeline.CommandStep:
+				originals = append(originals, original{step: step, secrets: step.Secrets})
+				step.Secrets = mergeSecretsStepFirst(step.Secrets, pipelineSecrets)
+			case *pipeline.GroupStep:
+				merge(step.Steps)
+			}
+		}
+	}
+	merge(steps)
+
+	return func() {
+		for _, o := range originals {
+			o.step.Secrets = o.secrets
+		}
+	}
+}
+
+// mergeSecretsStepFirst merges step-level secrets with pipeline-level
+// secrets, deduplicating by EnvironmentVariable so each environment
+// variable is backed by exactly one secret: step-level secrets always win,
+// and among the pipeline-level secrets the first one declared for a given
+// environment variable wins.
+//
+// This doesn't use pipeline.Secrets.MergeWith, which short-circuits to
+// returning one side verbatim, with no deduplication at all, whenever the
+// other side is empty (as it usually is here: most steps have no
+// step-level secrets). That means duplicate pipeline-level secrets for the
+// same environment variable would both get signed, even though the
+// backend only honours one of them, so the signature would cover a value
+// that's never actually enforced.
+func mergeSecretsStepFirst(stepSecrets, pipelineSecrets pipeline.Secrets) pipeline.Secrets {
+	seen := make(map[string]bool, len(stepSecrets)+len(pipelineSecrets))
+	merged := make(pipeline.Secrets, 0, len(stepSecrets)+len(pipelineSecrets))
+
+	for _, secrets := range [2]pipeline.Secrets{stepSecrets, pipelineSecrets} {
+		for _, secret := range secrets {
+			if secret.EnvironmentVariable == "" || seen[secret.EnvironmentVariable] {
+				continue
+			}
+			seen[secret.EnvironmentVariable] = true
+			merged = append(merged, secret)
+		}
+	}
+
+	if len(merged) == 0 {
+		return nil
+	}
+	return merged
+}
+
 func validateNoInterpolations(pipelineString string) error {
 	expansions, err := interpolate.Identifiers(pipelineString)
 	if err != nil {
@@ -311,11 +382,7 @@ func signOffline(ctx context.Context, c *cli.Command, l logger.Logger, key signa
 	}
 
 	// Merge pipeline-level secrets with step-level secrets before signing
-	for _, step := range parsedPipeline.Steps {
-		if commandStep, ok := step.(*pipeline.CommandStep); ok {
-			commandStep.MergeSecretsFromPipeline(parsedPipeline.Secrets)
-		}
-	}
+	restoreSecrets := mergePipelineSecretsIntoSteps(parsedPipeline.Steps, parsedPipeline.Secrets)
 
 	err = signature.SignSteps(
 		ctx,
@@ -325,10 +392,13 @@ func signOffline(ctx context.Context, c *cli.Command, l logger.Logger, key signa
 		signature.WithEnv(parsedPipeline.Env.ToMap()),
 		signature.WithLogger(logger.DeprecatedLogger{Logger: l}),
 		signature.WithDebugSigning(cfg.DebugSigning),
+		signature.WithArtifactPathsSigning(true),
 	)
 	if err != nil {
 		return fmt.Errorf("couldn't sign pipeline: %w", err)
 	}
+
+	restoreSecrets()
 
 	enc := yaml.NewEncoder(c.Root().Writer)
 	enc.SetIndent(yamlIndent)
@@ -383,6 +453,9 @@ func signWithGraphQL(ctx context.Context, c *cli.Command, l logger.Logger, key s
 		debugL.Debugf("Pipeline parsed successfully: %v", parsedPipeline)
 	}
 
+	// Merge pipeline-level secrets with step-level secrets before signing
+	restoreSecrets := mergePipelineSecretsIntoSteps(parsedPipeline.Steps, parsedPipeline.Secrets)
+
 	err = signature.SignSteps(
 		ctx,
 		parsedPipeline.Steps,
@@ -391,10 +464,16 @@ func signWithGraphQL(ctx context.Context, c *cli.Command, l logger.Logger, key s
 		signature.WithEnv(parsedPipeline.Env.ToMap()),
 		signature.WithLogger(logger.DeprecatedLogger{Logger: debugL}),
 		signature.WithDebugSigning(cfg.DebugSigning),
+		signature.WithArtifactPathsSigning(true),
 	)
 	if err != nil {
 		return fmt.Errorf("couldn't sign pipeline: %w", err)
 	}
+
+	// The signature now covers any inherited pipeline-level secrets; restore
+	// each step's original secrets before this gets serialized and sent back
+	// to GraphQL, so they aren't persisted as explicit step-level secrets.
+	restoreSecrets()
 
 	if !cfg.Update {
 		enc := yaml.NewEncoder(c.Root().Writer)

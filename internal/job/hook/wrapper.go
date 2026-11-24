@@ -1,15 +1,18 @@
 package hook
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"text/template"
 
 	"github.com/buildkite/agent/v4/env"
+	"github.com/buildkite/agent/v4/internal/self"
 	"github.com/buildkite/agent/v4/internal/shellscript"
 	"github.com/buildkite/agent/v4/internal/tempfile"
 )
@@ -34,7 +37,6 @@ const (
 	hookExitStatusEnv = "BUILDKITE_HOOK_EXIT_STATUS"
 	hookWorkingDirEnv = "BUILDKITE_HOOK_WORKING_DIR"
 	hookWrapperDir    = "buildkite-agent-hook-wrapper"
-	testJobID         = "1111-1111-1111-1111"
 
 	batchWrapper = `@echo off
 SETLOCAL ENABLEDELAYEDEXPANSION
@@ -59,18 +61,20 @@ exit $Env:BUILDKITE_HOOK_EXIT_STATUS`
 
 	posixShellWrapper = `{{if .ShebangLine}}{{.ShebangLine}}
 {{end -}}
-"{{.AgentBinary}}" env dump > "{{.BeforeEnvFileName}}"
-. "{{.PathToHook}}"
+{{.AgentBinary | quotePosix}} env dump > {{.BeforeEnvFileName | quotePosix}}
+. {{.PathToHook | quotePosix}}
 export BUILDKITE_HOOK_EXIT_STATUS=$?
 export BUILDKITE_HOOK_WORKING_DIR="${PWD}"
-"{{.AgentBinary}}" env dump > "{{.AfterEnvFileName}}"
+{{.AgentBinary | quotePosix}} env dump > {{.AfterEnvFileName | quotePosix}}
 exit $BUILDKITE_HOOK_EXIT_STATUS`
 )
 
 var (
 	batchWrapperTmpl      = template.Must(template.New("batch").Parse(batchWrapper))
 	powershellWrapperTmpl = template.Must(template.New("pwsh").Parse(powershellWrapper))
-	posixShellWrapperTmpl = template.Must(template.New("bash").Parse(posixShellWrapper))
+	posixShellWrapperTmpl = template.Must(template.New("bash").Funcs(template.FuncMap{
+		"quotePosix": func(s string) string { return "'" + strings.ReplaceAll(s, "'", "'\\''") + "'" },
+	}).Parse(posixShellWrapper))
 
 	ErrNoHookPath = errors.New("hook path was not provided")
 )
@@ -149,7 +153,7 @@ func WithOS(o string) WrapperOpt {
 
 // NewWrapper creates and configures a hook.Wrapper.
 // Writes temporary files to the filesystem.
-func NewWrapper(opts ...WrapperOpt) (*Wrapper, error) {
+func NewWrapper(ctx context.Context, opts ...WrapperOpt) (*Wrapper, error) {
 	wrap := &Wrapper{
 		os: runtime.GOOS,
 	}
@@ -255,13 +259,8 @@ func NewWrapper(opts ...WrapperOpt) (*Wrapper, error) {
 		return nil, fmt.Errorf("finding absolute path to %q: %w", wrap.hookPath, err)
 	}
 
-	buildkiteAgent, err := resolveBuildkiteAgentBinary()
-	if err != nil {
-		return nil, err
-	}
-
 	templateInput := WrapperTemplateInput{
-		AgentBinary:       buildkiteAgent,
+		AgentBinary:       self.Path(ctx),
 		ShebangLine:       shebang,
 		BeforeEnvFileName: wrap.beforeEnvPath,
 		AfterEnvFileName:  wrap.afterEnvPath,
@@ -280,18 +279,6 @@ func NewWrapper(opts ...WrapperOpt) (*Wrapper, error) {
 	wrap.wrapperPath = wrapperPath
 
 	return wrap, nil
-}
-
-func resolveBuildkiteAgentBinary() (string, error) {
-	// Integration tests override self-execution to a bintest mock so hook wrappers
-	// do not need to spin up the full test binary just to run `env dump`.
-	if os.Getenv("BUILDKITE_JOB_ID") == testJobID {
-		if overrideSelf := os.Getenv("BUILDKITE_OVERRIDE_SELF"); overrideSelf != "" {
-			return overrideSelf, nil
-		}
-	}
-
-	return os.Executable()
 }
 
 // WriteHookWrapper will write a hook wrapper script to a temporary file with the same extension as,

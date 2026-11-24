@@ -62,7 +62,7 @@ type gitError struct {
 	Type       int
 	WasRetried bool
 	captured   bool
-	// Retained for reporting; callers use Type and WasRetried for retry decisions.
+	// Retained for reporting and distinguishing rejected unadvertised SHA requests.
 	outputMatches map[string]bool
 }
 

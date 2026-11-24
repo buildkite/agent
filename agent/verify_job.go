@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/buildkite/agent/v4/logger"
@@ -59,6 +60,16 @@ func (r *JobRunner) verifyJob(ctx context.Context, keySet any) error {
 		return newInvalidSignatureError(ErrVerificationFailed)
 	}
 
+	signedFields := step.Signature.SignedFields
+	// Artifact upload paths are not matrix-interpolated by the backend. Compare
+	// the signed, original paths before interpolating the step's other fields.
+	if slices.Contains(signedFields, "artifact_paths") {
+		if strings.Join(step.ArtifactPaths, ";") != r.conf.Job.Env["BUILDKITE_ARTIFACT_PATHS"] {
+			r.agentLogger.Debugf("failed to verifyJob: signed artifact paths do not match the job's upload paths")
+			return newInvalidSignatureError(ErrInvalidJob)
+		}
+	}
+
 	// Interpolate the matrix permutation (validating the permutation in the
 	// process).
 	if err := step.InterpolateMatrixPermutation(r.conf.Job.MatrixPermutation); err != nil {
@@ -77,6 +88,7 @@ func (r *JobRunner) verifyJob(ctx context.Context, keySet any) error {
 	// - command should match BUILDKITE_COMMAND exactly
 	// - env vars are complicated
 	// - plugins should match BUILDKITE_PLUGINS semantically
+	// - artifact paths match BUILDKITE_ARTIFACT_PATHS before matrix interpolation
 	// - matrix interpolates into the others, and does not itself compare
 	//
 	// We can't check that the job is consistent with fields we don't know
@@ -106,8 +118,6 @@ func (r *JobRunner) verifyJob(ctx context.Context, keySet any) error {
 	//    Signature.Verify has checked its pre-matrix value.
 	// 4. If a var was a step env var then its post-matrix value must equal
 	//    the job env var.
-	signedFields := step.Signature.SignedFields
-
 	// Compare each field to the job.
 	for _, field := range signedFields {
 		switch field {
@@ -175,6 +185,9 @@ func (r *JobRunner) verifyJob(ctx context.Context, keySet any) error {
 				r.agentLogger.Debugf("failed to verifyJob: jobPluginsNorm = %q != %q = stepPluginsNorm", jobPluginsNorm, stepPluginsNorm)
 				return newInvalidSignatureError(ErrInvalidJob)
 			}
+
+		case "artifact_paths": // compared above before matrix interpolation
+			continue
 
 		case "matrix": // compared indirectly through other fields
 			continue

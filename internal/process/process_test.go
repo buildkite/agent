@@ -24,9 +24,11 @@ func TestProcessOutput(t *testing.T) {
 	stdout := &bytes.Buffer{}
 	stderr := &bytes.Buffer{}
 
+	// Isolate helper coverage so concurrent exit hooks cannot collide on
+	// temporary metadata filenames. These helpers only print test fixtures.
 	p := process.New(logger.Discard, process.Config{
 		Path:   os.Args[0],
-		Env:    []string{"TEST_MAIN=output"},
+		Env:    []string{"TEST_MAIN=output", "GOCOVERDIR=" + t.TempDir()},
 		Stdout: stdout,
 		Stderr: stderr,
 	})
@@ -59,7 +61,7 @@ func TestProcessOutputPTY(t *testing.T) {
 	logger := logger.NewBuffer()
 	p := process.New(logger, process.Config{
 		Path:   os.Args[0],
-		Env:    []string{"TEST_MAIN=output"},
+		Env:    []string{"TEST_MAIN=output", "GOCOVERDIR=" + t.TempDir()},
 		PTY:    true,
 		Stdout: stdout,
 	})
@@ -95,7 +97,7 @@ func TestProcessOutputPTY_PTYRawExperiment(t *testing.T) {
 	logger := logger.NewBuffer()
 	p := process.New(logger, process.Config{
 		Path:   os.Args[0],
-		Env:    []string{"TEST_MAIN=output"},
+		Env:    []string{"TEST_MAIN=output", "GOCOVERDIR=" + t.TempDir()},
 		PTY:    true,
 		Stdout: stdout,
 	})
@@ -134,7 +136,7 @@ func TestProcessOutputPTY_PTYRawExperimentWritesBeforeRawMode(t *testing.T) {
 	logger := logger.NewBuffer()
 	p := process.New(logger, process.Config{
 		Path:   os.Args[0],
-		Env:    []string{"TEST_MAIN=output-slow-exit"},
+		Env:    []string{"TEST_MAIN=output-slow-exit", "GOCOVERDIR=" + t.TempDir()},
 		PTY:    true,
 		Stdout: stdout,
 	})

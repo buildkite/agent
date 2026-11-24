@@ -155,6 +155,8 @@ type AgentStartConfig struct {
 	DisconnectAfterUptime       int           `cli:"disconnect-after-uptime"`
 	CancelSignalTimeout         time.Duration `cli:"cancel-signal-timeout"`
 	CancelCleanupTimeout        time.Duration `cli:"cancel-cleanup-timeout"`
+	PreBootstrapTimeout         time.Duration `cli:"pre-bootstrap-timeout"`
+	PostBootstrapTimeout        time.Duration `cli:"post-bootstrap-timeout"`
 	ReflectExitStatus           bool          `cli:"reflect-exit-status"`
 
 	EnableJobLogTmpfile bool   `cli:"enable-job-log-tmpfile"`
@@ -463,6 +465,18 @@ var AgentStartCommand = &cli.Command{
 			Sources: cli.EnvVars("BUILDKITE_AGENT_DISCONNECT_AFTER_UPTIME"),
 		},
 		cancelSignalTimeoutFlag,
+		&cli.DurationFlag{
+			Name:    "pre-bootstrap-timeout",
+			Value:   agent.DefaultPreBootstrapTimeout,
+			Usage:   "Maximum runtime of the pre-bootstrap hook (requires --experiment pre-bootstrap-hook-timeout); timeout rejects the job",
+			Sources: cli.EnvVars("BUILDKITE_PRE_BOOTSTRAP_TIMEOUT"),
+		},
+		&cli.DurationFlag{
+			Name:    "post-bootstrap-timeout",
+			Value:   time.Second,
+			Usage:   "Maximum runtime of the experimental post-bootstrap hook (requires --experiment post-bootstrap-hook); timeout does not change the job result",
+			Sources: cli.EnvVars("BUILDKITE_POST_BOOTSTRAP_TIMEOUT"),
+		},
 		&cli.BoolFlag{
 			Name:    "enable-job-log-tmpfile",
 			Usage:   "Store the job logs in a temporary file ′BUILDKITE_JOB_LOG_TMPFILE′ that is accessible during the job and removed at the end of the job (default: false)",
@@ -1124,6 +1138,8 @@ var AgentStartCommand = &cli.Command{
 			DisconnectAfterUptime:                   time.Duration(cfg.DisconnectAfterUptime) * time.Second,
 			CancelSignalTimeout:                     cfg.CancelSignalTimeout,
 			CancelCleanupTimeout:                    cfg.CancelCleanupTimeout,
+			PreBootstrapTimeout:                     cfg.PreBootstrapTimeout,
+			PostBootstrapTimeout:                    cfg.PostBootstrapTimeout,
 			EnableJobLogTmpfile:                     cfg.EnableJobLogTmpfile,
 			JobLogPath:                              cfg.JobLogPath,
 			WriteJobLogsToStdout:                    cfg.WriteJobLogsToStdout,

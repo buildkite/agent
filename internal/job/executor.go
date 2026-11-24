@@ -57,6 +57,10 @@ type Executor struct {
 	// Shell is the shell environment for the executor
 	shell *shell.Shell
 
+	// programStatus strips program status reports from stdout. Nil unless the
+	// program-status experiment is enabled.
+	programStatus *process.ProgramStatusWriter
+
 	// canonicalRepository is the backend-supplied repository captured before
 	// hooks may rewrite Repository. A remote mirror is only eligible while they
 	// still match.
@@ -93,7 +97,7 @@ type Executor struct {
 
 	// otlpJobLogger exports job log output as OTLP log records while job log
 	// export is enabled. The executor updates its current span context at
-	// phase and hook boundaries via otlpLogSpan.
+	// phase and hook boundaries via outputSpan.
 	otlpJobLogger *otlpJobLogger
 
 	// jobAPI is the Job API server for this job. It's retained so the executor
@@ -169,18 +173,23 @@ func (e *Executor) Run(ctx context.Context) (exitCode int) {
 
 	// Report the job's phases and hooks as program status records, if the
 	// experiment and BUILDKITE_PROGRAM_STATUS turn reports on. The agent's
-	// own reports already have a header in the log, so they skip the program
-	// status writer below.
+	// own reports go on the logger stream, attached to the end of a log line
+	// so they never come before a section header. They never pass through the
+	// program status writer below, which wraps stdout, so they don't get a
+	// description line: the log already has a header for each of them.
 	if experiments.IsEnabled(ctx, experiments.ProgramStatus) &&
 		programstatus.Enabled(environ.Get, term.IsTerminal(int(os.Stdout.Fd()))) {
-		e.status = newJobStatus(preRedactedStdout, e.cancelCh)
+		t := &statusTrailer{w: preRedactedLogger.Writer}
+		preRedactedLogger.Writer = t // logger -> trailer -> redactor -> real stderr
+		e.status = newJobStatus(t, e.cancelCh)
 	}
 
 	// Describe OSC 7501 program status reports in the job log. This must
 	// happen before redaction: the report's message is base64-encoded, so
 	// the redactor can only find secrets in it once it has been decoded.
 	if experiments.IsEnabled(ctx, experiments.ProgramStatus) {
-		preRedactedStdout = process.NewProgramStatusWriter(preRedactedStdout) // shell -> program status -> redactor
+		e.programStatus = process.NewProgramStatusWriter(preRedactedStdout) // shell -> program status -> redactor
+		preRedactedStdout = e.programStatus
 	}
 
 	// Check if not nil to allow for tests to overwrite shell.
@@ -228,6 +237,7 @@ func (e *Executor) Run(ctx context.Context) (exitCode int) {
 		cleanup := e.setupOTLPJobLogger(ctx)
 		defer cleanup()
 	}
+	defer e.outputSpan(ctx)()
 
 	// Initialize the Job API when enabled.
 	if e.JobAPI {
@@ -495,9 +505,13 @@ type HookConfig struct {
 
 // executeHook runs a hook script with the hookRunner
 func (e *Executor) executeHook(ctx context.Context, hookCfg HookConfig) (retErr error) {
+	id := hookStatusID(hookCfg)
 	spanName := fmt.Sprintf("%s %s hook", hookCfg.Scope, hookCfg.Name)
 	span, ctx := tracetools.StartSpanFromContext(ctx, spanName, e.TracingBackend)
 	defer func() { tracetools.FinishWithError(span, retErr) }()
+	if e.status != nil {
+		span.SetAttributes(attribute.String("buildkite.program_status.id", id))
+	}
 	span.SetAttributes(
 		attribute.String("hook.type", hookCfg.Scope),
 		attribute.String("hook.name", hookCfg.Name),
@@ -506,7 +520,7 @@ func (e *Executor) executeHook(ctx context.Context, hookCfg HookConfig) (retErr 
 	for k, v := range hookCfg.SpanAttributes {
 		span.SetAttributes(attribute.String(k, v))
 	}
-	defer e.otlpLogSpan(ctx)()
+	defer e.outputSpan(ctx)()
 
 	hookName := hookCfg.Scope
 	if hookCfg.PluginName != "" {
@@ -539,9 +553,11 @@ func (e *Executor) executeHook(ctx context.Context, hookCfg HookConfig) (retErr 
 		}[hookCfg.Scope]
 	}
 
-	id := hookStatusID(hookCfg)
 	e.status.start(id, "Running "+hookName+" hook")
 	defer func() { e.status.finish(id, retErr, "The "+hookName+" hook") }()
+	// Release output held back at the end of the hook, whatever its type, so
+	// it reaches this hook's section of the log.
+	defer e.flushOutput()
 
 	e.shell.Headerf("Running %s hook", hookName)
 
@@ -687,14 +703,22 @@ type hookExitError struct {
 func (e hookExitError) Error() string { return e.message }
 func (e hookExitError) Unwrap() error { return e.err }
 
-func (e *Executor) runWrappedShellScriptHook(ctx context.Context, hookName string, hookCfg HookConfig) error {
-	defer func() {
-		if err := e.redactors.Flush(); err != nil {
-			e.shell.Errorf("Error flushing redactors: %v", err)
+// flushOutput writes output that the program status writer and the redactors
+// are holding back, such as the start of a possible secret at the end of a
+// hook's output.
+func (e *Executor) flushOutput() {
+	if e.programStatus != nil {
+		if err := e.programStatus.Flush(); err != nil {
+			e.shell.Errorf("Error flushing program status writer: %v", err)
 		}
-	}()
+	}
+	if err := e.redactors.Flush(); err != nil {
+		e.shell.Errorf("Error flushing redactors: %v", err)
+	}
+}
 
-	script, err := hook.NewWrapper(hook.WithPath(hookCfg.Path))
+func (e *Executor) runWrappedShellScriptHook(ctx context.Context, hookName string, hookCfg HookConfig) error {
+	script, err := hook.NewWrapper(ctx, hook.WithPath(hookCfg.Path))
 	if err != nil {
 		e.shell.Errorf("Error creating hook script: %v", err)
 		return err
@@ -1061,7 +1085,7 @@ func dirForRepository(repository string) string {
 func (e *Executor) setUp(ctx context.Context) (retErr error) {
 	span, ctx := tracetools.StartSpanFromContext(ctx, "environment", e.TracingBackend)
 	defer func() { tracetools.FinishWithError(span, retErr) }()
-	defer e.otlpLogSpan(ctx)()
+	defer e.outputSpan(ctx)()
 
 	// Add the $BUILDKITE_BIN_PATH to the $PATH if we've been given one
 	if e.BinPath != "" {
@@ -1253,7 +1277,7 @@ func (e *Executor) fetchAndSetSecrets(ctx context.Context) error {
 func (e *Executor) tearDown(ctx context.Context) (retErr error) {
 	span, ctx := tracetools.StartSpanFromContext(ctx, "pre-exit", e.TracingBackend)
 	defer func() { tracetools.FinishWithError(span, retErr) }()
-	defer e.otlpLogSpan(ctx)()
+	defer e.outputSpan(ctx)()
 
 	// In vanilla agent usage, there's always a command phase.
 	// But over in agent-stack-k8s, which splits the agent phases among
@@ -1331,6 +1355,9 @@ func (e *Executor) CommandPhase(ctx context.Context) (hookErr, commandErr error)
 	var preCommandErr error
 
 	span, ctx := tracetools.StartSpanFromContext(ctx, "command", e.TracingBackend)
+	if e.status != nil {
+		span.SetAttributes(attribute.String("buildkite.program_status.id", commandStatusID))
+	}
 	defer func() {
 		if hookErr != nil {
 			tracetools.FinishWithError(span, hookErr)
@@ -1338,7 +1365,7 @@ func (e *Executor) CommandPhase(ctx context.Context) (hookErr, commandErr error)
 			tracetools.FinishWithError(span, commandErr)
 		}
 	}()
-	defer e.otlpLogSpan(ctx)()
+	defer e.outputSpan(ctx)()
 
 	// Run postCommandHooks, even if there is an error from the command, but not if there is an
 	// error from the pre-command hooks. Note: any post-command hook error will be returned.
@@ -1420,15 +1447,11 @@ func (e *Executor) defaultCommandPhase(ctx context.Context) (retErr error) {
 		attribute.String("hook.name", "command"),
 		attribute.String("hook.type", "default"),
 	)
-	defer e.otlpLogSpan(ctx)()
+	defer e.outputSpan(ctx)()
 
-	// Flush the redactors before the OTLP span restore above runs, so any
+	// Flush held output before the OTLP span restore above runs, so any
 	// withheld bytes are released and attributed to this span.
-	defer func() {
-		if err := e.redactors.Flush(); err != nil {
-			e.shell.Errorf("Error flushing redactors: %v", err)
-		}
-	}()
+	defer e.flushOutput()
 
 	e.resetRecentOutput()
 
@@ -1619,8 +1642,8 @@ func (e *Executor) writeBatchScript(cmd string) (string, error) {
 //
 // and
 //
-//	(returned shell.Logger) -> redactor 2 -> stderr
-func (e *Executor) setupRedactors(log shell.Logger, environ *env.Environment, stdout, stderr io.Writer) (io.Writer, shell.Logger) {
+//	(returned *shell.WriterLogger) -> redactor 2 -> stderr
+func (e *Executor) setupRedactors(log shell.Logger, environ *env.Environment, stdout, stderr io.Writer) (io.Writer, *shell.WriterLogger) {
 	varsToRedact, short, err := redact.Vars(e.RedactedVars, environ.DumpPairs())
 	if err != nil {
 		log.OptionalWarningf("bad-redacted-vars", "Couldn't match environment variable names against redacted-vars: %v", err)

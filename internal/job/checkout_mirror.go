@@ -369,9 +369,12 @@ func (e *Executor) updateGitMirror(ctx context.Context, repository string, attem
 				refspec = fmt.Sprintf("refs/pull/%s/merge", e.PullRequest)
 				isMergeRefspec = true
 			} else {
-				e.shell.Commentf("Fetching and mirroring pull request head from GitHub. This will be retried if it fails, as the pull request head might not be available yet — GitHub creates them asynchronously")
+				e.shell.Commentf("Fetching and mirroring pull request head from GitHub")
 				refspec = fmt.Sprintf("refs/pull/%s/head", e.PullRequest)
 				retry = true
+				if e.Commit != "" && e.Commit != "HEAD" {
+					fetch = e.gitFetchPRHead
+				}
 			}
 			refspecs = []string{refspec}
 		default:
