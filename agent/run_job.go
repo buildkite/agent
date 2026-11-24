@@ -213,6 +213,17 @@ func (r *JobRunner) Run(ctx context.Context, ignoreAgentInDispatches *bool) (err
 		}
 	}
 
+	// The step signature does not cover the resolved Docker image. Do not
+	// let a job choose the bootstrap runtime when verification is required.
+	if r.conf.Executor == ExecutorDocker && job.Image != "" && r.conf.JWKS != nil && r.VerificationFailureBehavior == VerificationBehaviourBlock {
+		const reason = "This agent rejected the job because a per-job Docker image is not covered by the step signature. Remove the job image and use --executor-docker-image on the agent instead."
+		r.verificationFailureLogs(VerificationBehaviourBlock, errors.New(reason))
+		r.captureJobError(ctx, "buildkite.job_signature_rejected", reason)
+		exit.Status = -1
+		exit.SignalReason = SignalReasonSignatureRejected
+		return nil
+	}
+
 	// Log a message if the job has cache settings but is running on a self-hosted agent.
 	if cache := job.Step.Cache; cache != nil && !cache.Disabled && len(cache.Paths) > 0 {
 		if job.Env["BUILDKITE_COMPUTE_TYPE"] == "self-hosted" {

@@ -33,6 +33,10 @@ If neither is set, the job fails rather than running on the host. The image must
 provide the configured shell and any tools the job uses, including Git and CA
 certificates for normal Git checkout. Docker and Compose clients are not injected.
 
+Agents that require valid step signatures reject per-job images because the
+signature does not cover the resolved image. Use an operator-configured image
+without a job image on those agents.
+
 The executor mounts the local Docker socket by default, giving jobs control of
 the Docker host. Use only with trusted workloads. Pass `--executor-docker-mount-socket=false`
 to omit that bind mount. This does not isolate jobs from shared host paths or any
