@@ -9,7 +9,7 @@ import (
 )
 
 // resolveExecutor returns the canonical executor name from the executor
-// setting and the --kubernetes-exec alias. An unknown name is an error, so a
+// setting and the legacy --kubernetes-exec flag. An unknown name is an error, so a
 // typo can never fall back to running jobs on the host.
 func resolveExecutor(executor string, kubernetesExec bool) (string, error) {
 	switch executor {
@@ -18,12 +18,12 @@ func resolveExecutor(executor string, kubernetesExec bool) (string, error) {
 			return agent.ExecutorKubernetes, nil
 		}
 		return agent.ExecutorExec, nil
-	case agent.ExecutorExec, agent.ExecutorKubernetes, agent.ExecutorDocker:
+	case agent.ExecutorExec, agent.ExecutorDocker:
 	default:
-		return "", fmt.Errorf("unknown executor %q, must be one of %v", executor, []string{agent.ExecutorExec, agent.ExecutorDocker, agent.ExecutorKubernetes})
+		return "", fmt.Errorf("unknown executor %q, must be exec or docker", executor)
 	}
-	if kubernetesExec && executor != agent.ExecutorKubernetes {
-		return "", fmt.Errorf("kubernetes-exec cannot be combined with executor %q (kubernetes-exec means executor %q)", executor, agent.ExecutorKubernetes)
+	if kubernetesExec {
+		return "", fmt.Errorf("kubernetes-exec cannot be combined with executor %q", executor)
 	}
 	return executor, nil
 }
@@ -38,6 +38,7 @@ func dockerExecutorConfig(cfg AgentStartConfig, cancelSignal process.Signal) doc
 	hooksPaths = append(hooksPaths, cfg.AdditionalHooksPaths...)
 	return dockerexec.Config{
 		Image:           cfg.ExecutorDockerImage,
+		NoSocket:        cfg.ExecutorDockerNoSocket,
 		Mounts:          cfg.ExecutorDockerMount,
 		Env:             cfg.ExecutorDockerEnv,
 		Network:         cfg.ExecutorDockerNetwork,

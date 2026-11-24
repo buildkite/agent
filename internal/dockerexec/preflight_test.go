@@ -47,7 +47,7 @@ func newPreflightFixture(t *testing.T) (Config, preflightDeps, *fakeClient) {
 	return cfg, deps, fake
 }
 
-func TestPrepare_PinsThePulledImage(t *testing.T) {
+func TestResolveImage_PinsThePulledImage(t *testing.T) {
 	t.Parallel()
 	cfg, deps, fake := newPreflightFixture(t)
 	var pullOpts client.ImagePullOptions
@@ -59,6 +59,10 @@ func TestPrepare_PinsThePulledImage(t *testing.T) {
 	e, err := prepare(t.Context(), logger.Discard, cfg, deps)
 	if err != nil {
 		t.Fatalf("prepare() error = %v", err)
+	}
+	id, err := e.resolveImage(t.Context(), "alpine:3.20")
+	if err != nil {
+		t.Fatal(err)
 	}
 
 	if diff := cmp.Diff([]string{"Ping", "ImagePull", "ImageInspect"}, fake.Calls()); diff != "" {
@@ -74,7 +78,7 @@ func TestPrepare_PinsThePulledImage(t *testing.T) {
 	if diff := cmp.Diff(wantAuth, decodeAuth(t, pullOpts.RegistryAuth)); diff != "" {
 		t.Errorf("pull registry auth diff (-want +got):\n%s", diff)
 	}
-	if got, want := e.imageID, "sha256:abc"; got != want {
+	if got, want := id, "sha256:abc"; got != want {
 		t.Errorf("imageID = %q, want %q", got, want)
 	}
 	if diff := cmp.Diff([]string{"HTTP_PROXY=http://proxy:3128"}, e.env); diff != "" {
@@ -85,7 +89,7 @@ func TestPrepare_PinsThePulledImage(t *testing.T) {
 	}
 }
 
-func TestPrepare_UsesALocalImageWhenThePullFails(t *testing.T) {
+func TestResolveImage_DoesNotFallBackToACachedTag(t *testing.T) {
 	t.Parallel()
 	cfg, deps, fake := newPreflightFixture(t)
 	fake.imagePull = func(string, client.ImagePullOptions) error { return errors.New("registry unreachable") }
@@ -94,12 +98,28 @@ func TestPrepare_UsesALocalImageWhenThePullFails(t *testing.T) {
 	if err != nil {
 		t.Fatalf("prepare() error = %v", err)
 	}
-	if got, want := e.imageID, "sha256:abc"; got != want {
-		t.Errorf("imageID = %q, want %q", got, want)
+	if _, err := e.resolveImage(t.Context(), "alpine:3.20"); err == nil || !strings.Contains(err.Error(), "registry unreachable") {
+		t.Fatalf("resolveImage() error = %v, want registry failure", err)
 	}
 }
 
-func TestPrepare_DoesNotFallBackToALocalImageWhenCancelled(t *testing.T) {
+func TestResolveImage_UsesCachedDigestWithoutPull(t *testing.T) {
+	t.Parallel()
+	cfg, deps, fake := newPreflightFixture(t)
+	e, err := prepare(t.Context(), logger.Discard, cfg, deps)
+	if err != nil {
+		t.Fatal(err)
+	}
+	id, err := e.resolveImage(t.Context(), "alpine@sha256:"+strings.Repeat("a", 64))
+	if err != nil || id != "sha256:abc" {
+		t.Fatalf("resolveImage() = %q, %v, want cached image", id, err)
+	}
+	if got := strings.Join(fake.Calls(), ","); got != "Ping,ImageInspect" {
+		t.Fatalf("daemon calls = %s, want Ping,ImageInspect", got)
+	}
+}
+
+func TestResolveImage_DoesNotFallBackToALocalImageWhenCancelled(t *testing.T) {
 	t.Parallel()
 	cfg, deps, fake := newPreflightFixture(t)
 	ctx, cancel := context.WithCancel(t.Context())
@@ -108,8 +128,12 @@ func TestPrepare_DoesNotFallBackToALocalImageWhenCancelled(t *testing.T) {
 		return context.Canceled
 	}
 
-	if _, err := prepare(ctx, logger.Discard, cfg, deps); err == nil {
-		t.Fatal("prepare() error = nil, want an error")
+	e, err := prepare(ctx, logger.Discard, cfg, deps)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.resolveImage(ctx, "alpine:3.20"); !errors.Is(err, context.Canceled) {
+		t.Fatalf("resolveImage() error = %v, want cancellation", err)
 	}
 	if got, want := strings.Join(fake.Calls(), ","), "Ping,ImagePull"; got != want {
 		t.Errorf("daemon calls = [%s], want [%s]", got, want)
@@ -125,12 +149,6 @@ func TestPrepare_Failures(t *testing.T) {
 		wantErr   string
 		wantCalls []string
 	}{
-		{
-			name:      "invalid_config",
-			setup:     func(c *Config, _ *preflightDeps, _ *fakeClient) { c.Image = "" },
-			wantErr:   "executor-docker-image is required",
-			wantCalls: []string{},
-		},
 		{
 			name: "missing_mount_source",
 			setup: func(c *Config, _ *preflightDeps, _ *fakeClient) {
@@ -164,7 +182,7 @@ func TestPrepare_Failures(t *testing.T) {
 				}
 			},
 			wantErr:   "manifest unknown",
-			wantCalls: []string{"Ping", "ImagePull", "ImageInspect"},
+			wantCalls: []string{"Ping", "ImagePull"},
 		},
 		{
 			name: "wrong_architecture",
@@ -184,7 +202,7 @@ func TestPrepare_Failures(t *testing.T) {
 				writeDockerConfig(t, d.dockerConfigDir, "{not json")
 			},
 			wantErr:   "parsing Docker config",
-			wantCalls: []string{},
+			wantCalls: []string{"Ping"},
 		},
 		{
 			name:      "invalid_image_reference",
@@ -199,7 +217,10 @@ func TestPrepare_Failures(t *testing.T) {
 			cfg, deps, fake := newPreflightFixture(t)
 			tc.setup(&cfg, &deps, fake)
 
-			_, err := prepare(t.Context(), logger.Discard, cfg, deps)
+			e, err := prepare(t.Context(), logger.Discard, cfg, deps)
+			if err == nil {
+				_, err = e.resolveImage(t.Context(), cfg.Image)
+			}
 			if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
 				t.Fatalf("prepare() error = %v, want an error containing %q", err, tc.wantErr)
 			}

@@ -25,7 +25,7 @@ func TestRunJob_ExecutionErrorSignalReason(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			r := &JobRunner{process: failingExecution{}, jobLogs: io.Discard}
+			r := &JobRunner{conf: JobRunnerConfig{Executor: ExecutorDocker}, process: failingExecution{}, jobLogs: io.Discard}
 			r.cancelled.Store(tc.cancelled)
 			r.agentStopping.Store(tc.agentStopping)
 

@@ -159,6 +159,7 @@ type JobRunner struct {
 	// cancelled because of a Buildkite job-level timeout. The path is passed
 	// to the bootstrap subprocess via BUILDKITE_AGENT_JOB_TIMEOUT_FILE.
 	jobTimeoutFilePath string
+	dockerContextDir   string
 
 	// droppedRemoteMirrorURL records a backend-provided mirror removed from the
 	// bootstrap environment because it did not match --allowed-repositories.
@@ -247,6 +248,21 @@ func NewJobRunner(ctx context.Context, l logger.Logger, apiClient *api.Client, c
 	)
 
 	contextDir := jobContextDir(conf)
+	if conf.Executor == ExecutorDocker {
+		if err := os.MkdirAll(contextDir, 0o700); err != nil {
+			return nil, fmt.Errorf("creating Docker job context root: %w", err)
+		}
+		contextDir, err = os.MkdirTemp(contextDir, "docker-job-")
+		if err != nil {
+			return nil, fmt.Errorf("creating private Docker job context: %w", err)
+		}
+		r.dockerContextDir = contextDir
+		defer func() {
+			if r.process == nil {
+				_ = os.RemoveAll(contextDir)
+			}
+		}()
+	}
 
 	r.envShellFile, r.envJSONFile, err = createJobEnvFiles(r.agentLogger, r.conf.Job.ID, contextDir)
 	if err != nil {
@@ -321,6 +337,7 @@ func NewJobRunner(ctx context.Context, l logger.Logger, apiClient *api.Client, c
 
 	req := JobExecutionRequest{
 		JobID:      conf.Job.ID,
+		Image:      conf.Job.Image,
 		Env:        env,
 		ContextDir: contextDir,
 		Output:     r.jobLogs,

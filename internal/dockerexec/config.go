@@ -1,10 +1,9 @@
 // Package dockerexec runs job bootstrap inside an ephemeral Docker container,
-// using the host agent's own binary and an operator-chosen image. The executor
+// using the host agent's own binary and the resolved job image. The executor
 // only supports Linux hosts, so all paths here are forward-slash paths.
 package dockerexec
 
 import (
-	"errors"
 	"fmt"
 	"path"
 	"regexp"
@@ -20,12 +19,15 @@ const (
 	agentBinDir  = "/buildkite-agent/bin"
 	agentBinPath = agentBinDir + "/buildkite-agent"
 	homeDir      = "/tmp/buildkite-home"
+	dockerSocket = "/var/run/docker.sock"
+	socketsDir   = "/tmp/buildkite-sockets"
 )
 
 // Config is the Docker executor's configuration, taken from the agent's.
 type Config struct {
-	// Image is the image whose filesystem and ENV jobs run in.
-	Image string
+	// Image is the operator default when the job has no resolved image.
+	Image    string
+	NoSocket bool
 
 	// Mounts are extra bind mounts, each "src:dst" or "src:dst:ro".
 	Mounts []string
@@ -64,10 +66,6 @@ var envName = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 // daemon. It returns the parsed operator mounts and the resolved operator
 // env, with name-only entries looked up using lookupEnv.
 func (c Config) validate(lookupEnv func(string) (string, bool)) ([]mount.Mount, []string, error) {
-	if c.Image == "" {
-		return nil, nil, errors.New("executor-docker-image is required when executor is docker")
-	}
-
 	// Host paths are mounted at the same path in the container, so they must
 	// be absolute.
 	for _, p := range []struct {
@@ -124,7 +122,7 @@ func (c Config) validate(lookupEnv func(string) (string, bool)) ([]mount.Mount, 
 func (c Config) reservedTargets() []string {
 	paths := []string{
 		c.BuildPath, c.PluginsPath, c.GitMirrorsPath, c.SocketsPath, c.JobContextDir,
-		c.SigningJWKSFile, agentBinDir, "/etc/passwd", "/etc/group",
+		c.SigningJWKSFile, agentBinDir, dockerSocket, socketsDir, "/etc/passwd", "/etc/group",
 	}
 	paths = append(paths, c.HooksPaths...)
 	paths = slices.DeleteFunc(paths, func(p string) bool { return p == "" })

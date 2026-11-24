@@ -24,6 +24,7 @@ const (
 const (
 	// Available experiments
 	AgentAPI                       = "agent-api"
+	DockerExecutor                 = "docker-executor"
 	InterpolationPrefersRuntimeEnv = "interpolation-prefers-runtime-env"
 	OriginCloneKit                 = "origin-clonekit"
 	PostBootstrapHook              = "post-bootstrap-hook"
@@ -56,6 +57,7 @@ const (
 var (
 	Available = map[string]struct{}{
 		AgentAPI:                       {},
+		DockerExecutor:                 {},
 		InterpolationPrefersRuntimeEnv: {},
 		OriginCloneKit:                 {},
 		LegacyPostHookOrder:            {},

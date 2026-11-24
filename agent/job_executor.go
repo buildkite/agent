@@ -54,6 +54,7 @@ type JobExecution interface {
 type JobExecutionRequest struct {
 	// JobID identifies the job.
 	JobID string
+	Image string
 
 	// Env is the job environment from createEnvironment. It does not include
 	// the agent's own process environment.

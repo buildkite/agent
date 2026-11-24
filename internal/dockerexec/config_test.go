@@ -155,7 +155,6 @@ func TestConfigValidate_RequiredSettings(t *testing.T) {
 		mutate  func(*Config)
 		wantErr string
 	}{
-		{name: "no_image", mutate: func(c *Config) { c.Image = "" }, wantErr: "executor-docker-image is required"},
 		{name: "relative_build_path", mutate: func(c *Config) { c.BuildPath = "builds" }, wantErr: "build-path must be an absolute path"},
 		{name: "empty_job_context_dir", mutate: func(c *Config) { c.JobContextDir = "" }, wantErr: "job-context-dir is required"},
 		{name: "relative_jwks_file", mutate: func(c *Config) { c.SigningJWKSFile = "jwks.json" }, wantErr: "signing-jwks-file must be an absolute path"},

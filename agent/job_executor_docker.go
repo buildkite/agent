@@ -15,6 +15,8 @@ type dockerExecutor struct {
 func (e dockerExecutor) New(_ context.Context, req JobExecutionRequest) (JobExecution, error) {
 	return e.NewExecution(dockerexec.Request{
 		JobID:         req.JobID,
+		Image:         req.Image,
+		ContextDir:    req.ContextDir,
 		Env:           req.Env,
 		Output:        req.Output,
 		JobLogTmpfile: req.JobLogTmpfile,

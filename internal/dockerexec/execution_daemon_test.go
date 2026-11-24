@@ -235,7 +235,10 @@ func TestDaemon_InterruptReachesBootstrap(t *testing.T) {
 
 func TestDaemon_CleanupRemovesAnonymousVolumes(t *testing.T) {
 	t.Parallel()
-	_, cli := newDaemonExecutor(t, daemonTestImage, nil)
+	e, cli := newDaemonExecutor(t, daemonTestImage, nil)
+	if _, err := e.resolveImage(t.Context(), daemonTestImage); err != nil {
+		t.Fatal(err)
+	}
 
 	// Make an image that declares a VOLUME, as the official agent image does.
 	base, err := cli.ContainerCreate(t.Context(), client.ContainerCreateOptions{Image: daemonTestImage})
@@ -251,7 +254,7 @@ func TestDaemon_CleanupRemovesAnonymousVolumes(t *testing.T) {
 		_, _ = cli.ImageRemove(context.WithoutCancel(t.Context()), committed.ID, client.ImageRemoveOptions{Force: true})
 	})
 
-	e, _ := newDaemonExecutor(t, committed.ID, nil)
+	e, _ = newDaemonExecutor(t, committed.ID, nil)
 	x := e.NewExecution(Request{JobID: "daemon-test", Output: &process.Buffer{}})
 	cleanupAfterTest(t, x)
 	if err := x.Run(t.Context()); err != nil {

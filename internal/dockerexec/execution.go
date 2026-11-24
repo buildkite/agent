@@ -160,7 +160,7 @@ func (x *Execution) Run(ctx context.Context) error {
 			go func() {
 				select {
 				case <-wait.Result:
-				case <-wait.Error:
+				case <-wait.Error: //nolint:errcheck // The launch error has already been returned.
 				}
 			}()
 		}
@@ -187,7 +187,9 @@ func (x *Execution) Run(ctx context.Context) error {
 	select {
 	case <-copied:
 	case <-time.After(drainTimeout):
-		x.e.logger.Warnf("Job container output did not finish within %v of the container exiting", drainTimeout)
+		attach.Close()
+		<-copied
+		_, _ = fmt.Fprintf(x.req.Output, "Docker bootstrap logs did not finish within %v of container exit\n", drainTimeout)
 	}
 	x.mu.Lock()
 	x.exitCode = code
@@ -269,7 +271,7 @@ func (x *Execution) Cleanup(ctx context.Context) error {
 // create creates the container, unless the job has already been cancelled.
 // Interrupt and Terminate abandon a create in progress.
 func (x *Execution) create(runCtx context.Context) (string, error) {
-	createCtx, cancel := context.WithTimeout(runCtx, createTimeout)
+	setupCtx, cancel := context.WithCancel(runCtx)
 	defer cancel()
 
 	x.mu.Lock()
@@ -278,14 +280,31 @@ func (x *Execution) create(runCtx context.Context) (string, error) {
 		return "", errCancelledBeforeStart
 	}
 	x.state = stateCreating
-	x.createAttempted = true
 	x.cancelCreate = cancel
 	x.mu.Unlock()
 
-	opts := x.e.createOptions(x.req, x.name, func(p string) bool {
+	req := x.req
+	if req.Image == "" {
+		req.Image = x.e.cfg.Image
+	}
+	imageID, err := x.e.resolveImage(setupCtx, req.Image)
+	if err != nil {
+		return "", err
+	}
+	_, _ = fmt.Fprintf(req.Output, "Docker bootstrap image: %s (%s)\n", req.Image, imageID)
+	opts := x.e.createOptions(req, x.name, imageID, func(p string) bool {
 		_, err := os.Stat(p)
 		return err == nil
 	})
+	x.mu.Lock()
+	if x.pending != signalNone {
+		x.mu.Unlock()
+		return "", errCancelledBeforeStart
+	}
+	x.createAttempted = true
+	x.mu.Unlock()
+	createCtx, cancelCreate := context.WithTimeout(setupCtx, createTimeout)
+	defer cancelCreate()
 	res, err := x.e.client.ContainerCreate(createCtx, opts)
 
 	x.mu.Lock()
@@ -297,8 +316,6 @@ func (x *Execution) create(runCtx context.Context) (string, error) {
 	switch {
 	case pending != signalNone:
 		return "", errCancelledBeforeStart
-	case cerrdefs.IsNotFound(err):
-		return "", fmt.Errorf("creating the job container: %w (the docker executor image was removed after the agent started, restart the agent to pull it again)", err)
 	case err != nil:
 		return "", fmt.Errorf("creating the job container: %w", err)
 	}
@@ -437,7 +454,7 @@ func (x *Execution) kill(id, signal string) error {
 // mounts, as the agent user. Left to Docker, missing sources would be
 // created as root, which would then break the next job.
 func (x *Execution) provisionMountSources() error {
-	for _, dir := range []string{x.e.cfg.BuildPath, x.e.cfg.PluginsPath, x.e.cfg.SocketsPath, x.e.cfg.JobContextDir, x.e.cfg.GitMirrorsPath} {
+	for _, dir := range []string{x.e.cfg.BuildPath, x.e.cfg.PluginsPath, x.e.cfg.GitMirrorsPath} {
 		if dir == "" {
 			continue
 		}
@@ -458,7 +475,7 @@ func (x *Execution) copyOutput(r io.Reader) {
 		_, err = stdcopy.StdCopy(x.req.Output, x.req.Output, r)
 	}
 	if err != nil {
-		x.e.logger.Debugf("Job container output stream ended: %v", err)
+		_, _ = fmt.Fprintf(x.req.Output, "Docker bootstrap log stream interrupted: %v\n", err)
 	}
 }
 

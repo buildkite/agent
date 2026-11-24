@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -14,6 +15,7 @@ import (
 	"github.com/buildkite/agent/v4/logger"
 	cerrdefs "github.com/containerd/errdefs"
 	"github.com/moby/moby/api/types/container"
+	"github.com/moby/moby/api/types/image"
 	"github.com/moby/moby/client"
 )
 
@@ -34,7 +36,13 @@ func newTestExecution(t *testing.T, fake *fakeClient, mutate func(*Config)) (*Ex
 	if mutate != nil {
 		mutate(&cfg)
 	}
-	e := &Executor{logger: logger.Discard, client: fake, cfg: cfg, imageID: "sha256:abc", agentBinary: "/usr/bin/buildkite-agent"}
+	fake.imagePull = func(string, client.ImagePullOptions) error { return nil }
+	fake.imageInspect = func(string) (client.ImageInspectResult, error) {
+		return client.ImageInspectResult{InspectResponse: image.InspectResponse{
+			ID: "sha256:abc", Os: "linux", Architecture: runtime.GOARCH,
+		}}, nil
+	}
+	e := &Executor{logger: logger.Discard, client: fake, cfg: cfg, agentBinary: "/usr/bin/buildkite-agent", dockerConfigDir: dir}
 	out := &process.Buffer{}
 	return e.NewExecution(Request{JobID: "job-1", Output: out}), out
 }
@@ -85,7 +93,7 @@ func TestExecution_ReportsTheExitCodeAndOutput(t *testing.T) {
 	if !startedBeforeCreate {
 		t.Error("Started() was not closed before the container was created")
 	}
-	if got, want := strings.Join(fake.Calls(), ","), "ContainerCreate,ContainerAttach,ContainerWait,ContainerStart"; got != want {
+	if got, want := strings.Join(fake.Calls(), ","), "ImagePull,ImageInspect,ContainerCreate,ContainerAttach,ContainerWait,ContainerStart"; got != want {
 		t.Errorf("daemon calls = [%s], want [%s]", got, want)
 	}
 	if got, want := x.WaitStatus().ExitStatus(), 3; got != want {
@@ -94,7 +102,7 @@ func TestExecution_ReportsTheExitCodeAndOutput(t *testing.T) {
 	if x.WaitStatus().Signaled() {
 		t.Error("WaitStatus().Signaled() = true, want false")
 	}
-	if got, want := string(out.ReadAndTruncate()), "hello from bootstrap\n"; got != want {
+	if got, want := string(out.ReadAndTruncate()), "Docker bootstrap image: debian:stable-slim (sha256:abc)\nhello from bootstrap\n"; got != want {
 		t.Errorf("output = %q, want %q", got, want)
 	}
 	select {
@@ -119,7 +127,7 @@ func TestExecution_DemultiplexesOutputWithoutATTY(t *testing.T) {
 	if err := x.Run(t.Context()); err != nil {
 		t.Fatalf("Run() error = %v", err)
 	}
-	if got, want := string(out.ReadAndTruncate()), "to stdout\nto stderr\n"; got != want {
+	if got, want := string(out.ReadAndTruncate()), "Docker bootstrap image: debian:stable-slim (sha256:abc)\nto stdout\nto stderr\n"; got != want {
 		t.Errorf("output = %q, want %q", got, want)
 	}
 }
@@ -141,16 +149,6 @@ func TestExecution_LaunchFailuresAreExecutorErrors(t *testing.T) {
 				}
 			},
 			wantErr: "creating the job container: no such image",
-			cleanup: "ContainerRemove buildkite-job-job-1-",
-		},
-		{
-			name: "create_image_removed",
-			breakIt: func(f *fakeClient) {
-				f.containerCreate = func(context.Context, client.ContainerCreateOptions) (client.ContainerCreateResult, error) {
-					return client.ContainerCreateResult{}, cerrdefs.ErrNotFound.WithMessage("No such image: sha256:abc")
-				}
-			},
-			wantErr: "creating the job container: No such image: sha256:abc (the docker executor image was removed after the agent started, restart the agent to pull it again)",
 			cleanup: "ContainerRemove buildkite-job-job-1-",
 		},
 		{
@@ -213,7 +211,7 @@ func TestExecution_InterruptDuringCreateAbandonsIt(t *testing.T) {
 	if err := x.Cleanup(t.Context()); err != nil {
 		t.Fatalf("Cleanup() error = %v", err)
 	}
-	if got, want := strings.Join(fake.Calls(), ","), "ContainerCreate,ContainerRemove "+x.name; got != want {
+	if got, want := strings.Join(fake.Calls(), ","), "ImagePull,ImageInspect,ContainerCreate,ContainerRemove "+x.name; got != want {
 		t.Errorf("daemon calls = [%s], want [%s]", got, want)
 	}
 }
@@ -271,7 +269,7 @@ func TestExecution_InterruptDuringStartIsDeliveredOnceAsSIGTERM(t *testing.T) {
 	}
 	_ = x.Interrupt()
 
-	if got, want := strings.Join(fake.Calls(), ","), "ContainerCreate,ContainerAttach,ContainerWait,ContainerStart,ContainerKill SIGTERM"; got != want {
+	if got, want := strings.Join(fake.Calls(), ","), "ImagePull,ImageInspect,ContainerCreate,ContainerAttach,ContainerWait,ContainerStart,ContainerKill SIGTERM"; got != want {
 		t.Errorf("daemon calls = [%s], want [%s]", got, want)
 	}
 	if got, want := x.WaitStatus().ExitStatus(), 143; got != want {
@@ -345,7 +343,7 @@ func TestExecution_TerminateDuringAHungStartKillsTheContainer(t *testing.T) {
 	if err := x.Cleanup(t.Context()); err != nil {
 		t.Fatalf("Cleanup() error = %v", err)
 	}
-	if got, want := strings.Join(fake.Calls(), ","), "ContainerCreate,ContainerAttach,ContainerWait,ContainerStart,ContainerKill SIGKILL,ContainerRemove cid"; got != want {
+	if got, want := strings.Join(fake.Calls(), ","), "ImagePull,ImageInspect,ContainerCreate,ContainerAttach,ContainerWait,ContainerStart,ContainerKill SIGKILL,ContainerRemove cid"; got != want {
 		t.Errorf("daemon calls = [%s], want [%s]", got, want)
 	}
 }
@@ -366,7 +364,7 @@ func TestExecution_TerminateDuringStartKillsAContainerThatStarts(t *testing.T) {
 	if err := x.Run(t.Context()); err == nil || !strings.Contains(err.Error(), "terminated while its container was starting") {
 		t.Fatalf("Run() error = %v, want it to report the termination", err)
 	}
-	if got, want := strings.Join(fake.Calls(), ","), "ContainerCreate,ContainerAttach,ContainerWait,ContainerStart,ContainerKill SIGKILL,ContainerKill SIGKILL"; got != want {
+	if got, want := strings.Join(fake.Calls(), ","), "ImagePull,ImageInspect,ContainerCreate,ContainerAttach,ContainerWait,ContainerStart,ContainerKill SIGKILL,ContainerKill SIGKILL"; got != want {
 		t.Errorf("daemon calls = [%s], want [%s]", got, want)
 	}
 }
@@ -393,7 +391,7 @@ func TestExecution_TerminateUnblocksAHungDaemonBeforeStart(t *testing.T) {
 	if err := x.Cleanup(t.Context()); err != nil {
 		t.Fatalf("Cleanup() error = %v", err)
 	}
-	if got, want := strings.Join(fake.Calls(), ","), "ContainerCreate,ContainerAttach,ContainerRemove cid"; got != want {
+	if got, want := strings.Join(fake.Calls(), ","), "ImagePull,ImageInspect,ContainerCreate,ContainerAttach,ContainerRemove cid"; got != want {
 		t.Errorf("daemon calls = [%s], want [%s]", got, want)
 	}
 }
@@ -471,7 +469,7 @@ func TestExecution_WaitErrorFallsBackToInspect(t *testing.T) {
 			if got := x.WaitStatus().ExitStatus(); err == nil && got != tc.wantCode {
 				t.Errorf("WaitStatus().ExitStatus() = %d, want %d", got, tc.wantCode)
 			}
-			if got := strings.Join(fake.Calls(), ","); got != tc.wantCalls {
+			if got := strings.Join(fake.Calls(), ","); got != "ImagePull,ImageInspect,"+tc.wantCalls {
 				t.Errorf("daemon calls = [%s], want [%s]", got, tc.wantCalls)
 			}
 		})

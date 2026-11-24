@@ -21,10 +21,8 @@ func TestResolveExecutor(t *testing.T) {
 	}{
 		{name: "default", want: "exec"},
 		{name: "exec", executor: "exec", want: "exec"},
-		{name: "kubernetes", executor: "kubernetes", want: "kubernetes"},
 		{name: "docker", executor: "docker", want: "docker"},
 		{name: "kubernetes_exec_alias", kubernetesExec: true, want: "kubernetes"},
-		{name: "kubernetes_exec_and_kubernetes", executor: "kubernetes", kubernetesExec: true, want: "kubernetes"},
 		{name: "kubernetes_exec_conflicts_with_exec", executor: "exec", kubernetesExec: true, wantErr: "cannot be combined"},
 		{name: "kubernetes_exec_conflicts_with_docker", executor: "docker", kubernetesExec: true, wantErr: "cannot be combined"},
 		{name: "unknown_rejected_before_conflict", executor: "dokcer", kubernetesExec: true, wantErr: "unknown executor"},

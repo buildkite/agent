@@ -20,10 +20,7 @@ type Executor struct {
 	client dockerClient
 	cfg    Config
 
-	// imageID is the image every container is created from. Using the ID
-	// rather than cfg.Image means a tag that moves while the agent runs
-	// cannot swap in an image the preflight never saw.
-	imageID string
+	dockerConfigDir string
 
 	// agentBinary is the host path of the static agent binary mounted into
 	// every container.
@@ -57,9 +54,7 @@ type dockerClient interface {
 }
 
 // Prepare runs the start-time preflight and returns an Executor. It checks
-// the configuration, the agent binary, and the Docker daemon, then pulls the
-// image and resolves it to an ID. Any failure means the agent cannot run
-// jobs with the docker executor.
+// the configuration, the agent binary, and the Docker daemon.
 func Prepare(ctx context.Context, l logger.Logger, cfg Config) (*Executor, error) {
 	if runtime.GOOS != "linux" {
 		return nil, errors.New("the docker executor only supports Linux")
@@ -72,7 +67,7 @@ func Prepare(ctx context.Context, l logger.Logger, cfg Config) (*Executor, error
 	if err != nil {
 		return nil, err
 	}
-	cli, err := client.New(client.FromEnv)
+	cli, err := client.New(client.WithHost("unix://" + dockerSocket))
 	if err != nil {
 		return nil, err
 	}
@@ -92,7 +87,9 @@ func Prepare(ctx context.Context, l logger.Logger, cfg Config) (*Executor, error
 // Request holds the per-job values the executor needs.
 type Request struct {
 	// JobID names and labels the container.
-	JobID string
+	JobID      string
+	Image      string
+	ContextDir string
 
 	// Env is the job environment. It does not include the agent's own
 	// process environment, which never reaches the container.

@@ -146,11 +146,12 @@ type AgentStartConfig struct {
 	BootstrapScript string `cli:"bootstrap-script" normalize:"commandpath"`
 	Executor        string `cli:"executor"`
 
-	ExecutorDockerImage   string   `cli:"executor-docker-image"`
-	ExecutorDockerMount   []string `cli:"executor-docker-mount"`
-	ExecutorDockerEnv     []string `cli:"executor-docker-env"`
-	ExecutorDockerNetwork string   `cli:"executor-docker-network"`
-	NoPTY                 bool     `cli:"no-pty"`
+	ExecutorDockerImage    string   `cli:"executor-docker-image"`
+	ExecutorDockerNoSocket bool     `cli:"executor-docker-no-socket"`
+	ExecutorDockerMount    []string `cli:"executor-docker-mount"`
+	ExecutorDockerEnv      []string `cli:"executor-docker-env"`
+	ExecutorDockerNetwork  string   `cli:"executor-docker-network"`
+	NoPTY                  bool     `cli:"no-pty"`
 
 	Queue                     string        `cli:"queue"`
 	Tags                      []string      `cli:"tags" normalize:"list"`
@@ -580,19 +581,21 @@ var AgentStartCommand = &cli.Command{
 		&cli.StringFlag{
 			Name: "executor",
 			Usage: "How to launch each job's bootstrap. One of: exec, which runs --bootstrap-script " +
-				"as a local process, docker, which runs it in a container (Linux only), or kubernetes, " +
-				"which is the same as --kubernetes-exec (default: exec)",
+				"as a local process, or docker (Linux only; requires --experiment docker-executor). Default: exec",
 			Sources: cli.EnvVars("BUILDKITE_EXECUTOR"),
 			// No Value: leaving it empty lets resolveExecutor tell an unset
 			// executor apart from an explicit one that conflicts with
 			// --kubernetes-exec.
 		},
 		&cli.StringFlag{
-			Name: "executor-docker-image",
-			Usage: "The image the docker executor runs jobs in. The agent mounts its own binary into the " +
-				"container, so the image needs only the job's tools: the configured shell, git, and CA " +
-				"certificates. Required with --executor docker",
+			Name:    "executor-docker-image",
+			Usage:   "Default image when Buildkite does not specify one. The image must supply the configured shell, Git and CA certificates",
 			Sources: cli.EnvVars("BUILDKITE_EXECUTOR_DOCKER_IMAGE"),
+		},
+		&cli.BoolFlag{
+			Name:    "executor-docker-no-socket",
+			Usage:   "Do not mount the Docker daemon socket into job containers. By default Docker executor jobs can control the host through this socket",
+			Sources: cli.EnvVars("BUILDKITE_EXECUTOR_DOCKER_NO_SOCKET"),
 		},
 		&cli.StringSliceFlag{
 			Name: "executor-docker-mount",
@@ -616,7 +619,7 @@ var AgentStartCommand = &cli.Command{
 		&cli.StringFlag{
 			Name:    "bootstrap-script",
 			Value:   "",
-			Usage:   "The command that is executed for bootstrapping a job, defaults to the bootstrap sub-command of this binary. Ignored with --executor docker",
+			Usage:   "The command that is executed for bootstrapping a job, defaults to the bootstrap sub-command of this binary",
 			Sources: cli.EnvVars("BUILDKITE_BOOTSTRAP_SCRIPT_PATH"),
 		},
 
@@ -809,7 +812,7 @@ var AgentStartCommand = &cli.Command{
 			Name: "kubernetes-exec",
 			Usage: "This is intended to be used only by the Buildkite k8s stack " +
 				"(github.com/buildkite/agent-stack-k8s); it enables a Unix socket for transporting " +
-				"logs and exit statuses between containers in a pod. An alias for --executor=kubernetes (default: false)",
+				"logs and exit statuses between containers in a pod (default: false)",
 			Sources: cli.EnvVars("BUILDKITE_KUBERNETES_EXEC"),
 		},
 		&cli.DurationFlag{
@@ -897,13 +900,15 @@ var AgentStartCommand = &cli.Command{
 			return err
 		}
 		cfg.Executor = executor
-		if cfg.Executor != agent.ExecutorDocker && (cfg.ExecutorDockerImage != "" || len(cfg.ExecutorDockerMount) > 0 || len(cfg.ExecutorDockerEnv) > 0 || cfg.ExecutorDockerNetwork != "") {
+		if cfg.Executor != agent.ExecutorDocker && (cfg.ExecutorDockerImage != "" || cfg.ExecutorDockerNoSocket || len(cfg.ExecutorDockerMount) > 0 || len(cfg.ExecutorDockerEnv) > 0 || cfg.ExecutorDockerNetwork != "") {
 			l.Warnf("executor-docker-* settings are ignored because the executor is %s, not docker", cfg.Executor)
 		}
 		if cfg.Executor == agent.ExecutorDocker {
+			if !experiments.IsEnabled(ctx, experiments.DockerExecutor) {
+				return fmt.Errorf("--executor docker requires --experiment %s", experiments.DockerExecutor)
+			}
 			if cfg.BootstrapScript != "" {
-				l.Warnf("bootstrap-script is ignored with the docker executor, which runs the agent's own bootstrap in the job container")
-				cfg.BootstrapScript = ""
+				return fmt.Errorf("--bootstrap-script cannot be combined with --executor docker")
 			}
 			// Jobs see the job context dir through a bind mount, so give
 			// them a dedicated one rather than the whole temp dir.
@@ -1266,6 +1271,9 @@ var AgentStartCommand = &cli.Command{
 			agentConf.DockerExecutor, err = dockerexec.Prepare(ctx, l, dockerExecutorConfig(cfg, cancelSig))
 			if err != nil {
 				return fmt.Errorf("preparing the docker executor: %w", err)
+			}
+			if !cfg.ExecutorDockerNoSocket {
+				l.Warnf("Docker executor job containers can control this host through its Docker socket; use --executor-docker-no-socket to disable the mount")
 			}
 		}
 

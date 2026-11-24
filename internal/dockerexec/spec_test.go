@@ -22,7 +22,6 @@ func TestCreateOptions(t *testing.T) {
 	cfg.RunInPty = true
 	e := &Executor{
 		cfg:         cfg,
-		imageID:     "sha256:abc",
 		agentBinary: "/usr/bin/buildkite-agent",
 		mounts:      []mount.Mount{{Type: mount.TypeBind, Source: "/srv/cache", Target: "/cache", ReadOnly: true}},
 		env:         []string{"HTTP_PROXY=http://proxy:3128"},
@@ -35,9 +34,11 @@ func TestCreateOptions(t *testing.T) {
 
 	got := e.createOptions(Request{
 		JobID:         "job-1",
+		Image:         "alpine:3.20",
+		ContextDir:    "/var/lib/buildkite/job-context/job-1",
 		Env:           []string{"BUILDKITE_JOB_ID=job-1", "BUILDKITE_AGENT_ACCESS_TOKEN=tok"},
 		JobLogTmpfile: "/tmp/buildkite_job_log123",
-	}, "buildkite-job-job-1-abcd", exists)
+	}, "buildkite-job-job-1-abcd", "sha256:abc", exists)
 
 	useInit := true
 	bind := func(p string, ro bool) mount.Mount {
@@ -53,8 +54,11 @@ func TestCreateOptions(t *testing.T) {
 			Env: []string{
 				"BUILDKITE_AGENT_ACCESS_TOKEN=tok",
 				"BUILDKITE_BIN_PATH=/buildkite-agent/bin",
+				"BUILDKITE_IMAGE=alpine:3.20",
 				"BUILDKITE_JOB_ID=job-1",
 				"BUILDKITE_JOB_LOG_TMPFILE=/tmp/buildkite_job_log123",
+				"BUILDKITE_SOCKETS_PATH=/tmp/buildkite-sockets",
+				"DOCKER_HOST=unix:///var/run/docker.sock",
 				"HOME=/tmp/buildkite-home",
 				"HTTP_PROXY=http://proxy:3128",
 			},
@@ -67,9 +71,9 @@ func TestCreateOptions(t *testing.T) {
 			Mounts: []mount.Mount{
 				bind("/var/lib/buildkite/builds", false),
 				bind("/var/lib/buildkite/plugins", false),
-				bind("/var/lib/buildkite/sockets", false),
-				bind("/var/lib/buildkite/job-context", false),
 				bind("/var/lib/buildkite/git-mirrors", false),
+				bind("/var/lib/buildkite/job-context/job-1", true),
+				bind("/var/run/docker.sock", false),
 				bind("/etc/buildkite-agent/hooks", true),
 				bind("/etc/buildkite-agent/jwks.json", true),
 				bind("/tmp/buildkite_job_log123", true),
@@ -78,7 +82,7 @@ func TestCreateOptions(t *testing.T) {
 				{Type: mount.TypeBind, Source: "/usr/bin/buildkite-agent", Target: "/buildkite-agent/bin/buildkite-agent", ReadOnly: true},
 				{Type: mount.TypeBind, Source: "/srv/cache", Target: "/cache", ReadOnly: true},
 			},
-			Tmpfs:       map[string]string{"/tmp/buildkite-home": "exec,uid=1000,gid=1001,mode=0700"},
+			Tmpfs:       map[string]string{"/tmp/buildkite-home": "exec,uid=1000,gid=1001,mode=0700", "/tmp/buildkite-sockets": "uid=1000,gid=1001,mode=0700"},
 			GroupAdd:    []string{"999", "4"},
 			SecurityOpt: []string{"no-new-privileges"},
 			Init:        &useInit,
@@ -93,9 +97,10 @@ func TestCreateOptions(t *testing.T) {
 func TestCreateOptions_MinimalConfig(t *testing.T) {
 	t.Parallel()
 
-	e := &Executor{cfg: validConfig(), imageID: "sha256:abc", agentBinary: "/usr/bin/buildkite-agent"}
+	e := &Executor{cfg: validConfig(), agentBinary: "/usr/bin/buildkite-agent"}
 	e.cfg.GitMirrorsPath, e.cfg.SigningJWKSFile, e.cfg.PluginsPath = "", "", ""
-	got := e.createOptions(Request{JobID: "job-1"}, "name", func(string) bool { return false })
+	e.cfg.NoSocket = true
+	got := e.createOptions(Request{JobID: "job-1", Image: "alpine:3.20"}, "name", "sha256:abc", func(string) bool { return false })
 
 	if got.Config.Tty {
 		t.Error("Config.Tty = true, want false when run-in-pty is off")
@@ -109,8 +114,6 @@ func TestCreateOptions_MinimalConfig(t *testing.T) {
 	}
 	wantTargets := []string{
 		"/var/lib/buildkite/builds",
-		"/var/lib/buildkite/sockets",
-		"/var/lib/buildkite/job-context",
 		"/etc/passwd",
 		"/etc/group",
 		"/buildkite-agent/bin/buildkite-agent",
@@ -132,6 +135,9 @@ func TestContainerEnv(t *testing.T) {
 			"BUILDKITE_BIN_PATH=/usr/bin",
 			"BUILDKITE_AGENT_PID=42",
 			"BUILDKITE_CONFIG_PATH=/etc/buildkite-agent/buildkite-agent.cfg",
+			"BUILDKITE_AGENT_TOKEN=registration-token",
+			"BUILDKITE_AGENT_ACQUIRE_JOB=some-other-job",
+			"BUILDKITE_IMAGE=not-what-we-ran",
 			"MULTILINE=a\nb=c",
 			"EMPTY=",
 			"TWICE=first",
@@ -140,12 +146,14 @@ func TestContainerEnv(t *testing.T) {
 			"not-an-entry",
 			"=no-key",
 		},
-		"",
+		"", "alpine:3.20", false,
 	)
 	// A job's DOCKER_HOST is ordinary job env: it reaches the container but
 	// never the executor's own daemon client.
 	want := []string{
 		"BUILDKITE_BIN_PATH=/buildkite-agent/bin",
+		"BUILDKITE_IMAGE=alpine:3.20",
+		"BUILDKITE_SOCKETS_PATH=/tmp/buildkite-sockets",
 		"DOCKER_HOST=tcp://evil:2375",
 		"EMPTY=",
 		"HOME=/tmp/buildkite-home",

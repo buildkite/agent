@@ -26,7 +26,7 @@ const (
 // for req. The image supplies only its filesystem and ENV: the executor sets
 // the entrypoint, command, user, working directory, and init. exists reports
 // whether an optional read-only mount source is present.
-func (e *Executor) createOptions(req Request, name string, exists func(string) bool) client.ContainerCreateOptions {
+func (e *Executor) createOptions(req Request, name, imageID string, exists func(string) bool) client.ContainerCreateOptions {
 	groups := make([]string, 0, len(e.groups))
 	for _, g := range e.groups {
 		groups = append(groups, strconv.Itoa(g))
@@ -36,10 +36,10 @@ func (e *Executor) createOptions(req Request, name string, exists func(string) b
 		Name:     name,
 		Platform: &ocispec.Platform{OS: "linux", Architecture: runtime.GOARCH},
 		Config: &container.Config{
-			Image:      e.imageID,
+			Image:      imageID,
 			Entrypoint: []string{agentBinPath},
 			Cmd:        []string{"bootstrap"},
-			Env:        containerEnv(e.env, req.Env, req.JobLogTmpfile),
+			Env:        containerEnv(e.env, req.Env, req.JobLogTmpfile, req.Image, e.cfg.NoSocket),
 			User:       fmt.Sprintf("%d:%d", e.uid, e.gid),
 			WorkingDir: e.cfg.BuildPath,
 			Tty:        e.cfg.RunInPty,
@@ -52,7 +52,10 @@ func (e *Executor) createOptions(req Request, name string, exists func(string) b
 			Mounts: e.containerMounts(req, exists),
 			// Docker mounts tmpfs noexec by default, which would break tools
 			// that install binaries under HOME.
-			Tmpfs:       map[string]string{homeDir: fmt.Sprintf("exec,uid=%d,gid=%d,mode=0700", e.uid, e.gid)},
+			Tmpfs: map[string]string{
+				homeDir:    fmt.Sprintf("exec,uid=%d,gid=%d,mode=0700", e.uid, e.gid),
+				socketsDir: fmt.Sprintf("uid=%d,gid=%d,mode=0700", e.uid, e.gid),
+			},
 			GroupAdd:    groups,
 			SecurityOpt: []string{"no-new-privileges"},
 			Init:        &useInit,
@@ -74,10 +77,16 @@ func (e *Executor) containerMounts(req Request, exists func(string) bool) []moun
 	}
 
 	var mounts []mount.Mount
-	for _, p := range []string{e.cfg.BuildPath, e.cfg.PluginsPath, e.cfg.SocketsPath, e.cfg.JobContextDir, e.cfg.GitMirrorsPath} {
+	for _, p := range []string{e.cfg.BuildPath, e.cfg.PluginsPath, e.cfg.GitMirrorsPath} {
 		if p != "" {
 			mounts = append(mounts, bind(p, false))
 		}
+	}
+	if req.ContextDir != "" {
+		mounts = append(mounts, bind(req.ContextDir, true))
+	}
+	if !e.cfg.NoSocket {
+		mounts = append(mounts, bind(dockerSocket, false))
 	}
 	for _, p := range append(slices.Clone(e.cfg.HooksPaths), e.cfg.SigningJWKSFile) {
 		if p != "" && exists(p) {
@@ -107,7 +116,7 @@ func (e *Executor) containerMounts(req Request, exists func(string) bool) []moun
 // env overrides the operator's, as it overrides the agent's own environment
 // with the exec executor. Each key appears once, sorted. The image's ENV sits
 // underneath all of these.
-func containerEnv(operatorEnv, jobEnv []string, jobLogTmpfile string) []string {
+func containerEnv(operatorEnv, jobEnv []string, jobLogTmpfile, image string, noSocket bool) []string {
 	env := make(map[string]string)
 	for _, kv := range slices.Concat(operatorEnv, jobEnv) {
 		// Both lists are built by the agent as KEY=VALUE entries, so anything
@@ -121,9 +130,18 @@ func containerEnv(operatorEnv, jobEnv []string, jobLogTmpfile string) []string {
 	// not mounted.
 	delete(env, "BUILDKITE_AGENT_PID")
 	delete(env, "BUILDKITE_CONFIG_PATH")
+	delete(env, "BUILDKITE_AGENT_TOKEN")
+	delete(env, "BUILDKITE_AGENT_ACQUIRE_JOB")
 
 	env["HOME"] = homeDir
 	env["BUILDKITE_BIN_PATH"] = agentBinDir
+	env["BUILDKITE_SOCKETS_PATH"] = socketsDir
+	env["BUILDKITE_IMAGE"] = image
+	if !noSocket {
+		if _, set := env["DOCKER_HOST"]; !set {
+			env["DOCKER_HOST"] = "unix://" + dockerSocket
+		}
+	}
 	// The executor is told the tmpfile path because it mounts the file, so it
 	// sets the variable itself rather than relying on the job env.
 	delete(env, "BUILDKITE_JOB_LOG_TMPFILE")

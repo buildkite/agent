@@ -10,7 +10,10 @@ import (
 	"time"
 
 	"github.com/buildkite/agent/v4/logger"
+	cerrdefs "github.com/containerd/errdefs"
+	"github.com/distribution/reference"
 	"github.com/moby/moby/client"
+	digest "github.com/opencontainers/go-digest"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 )
 
@@ -45,9 +48,10 @@ func prepare(ctx context.Context, l logger.Logger, cfg Config, deps preflightDep
 	if err := checkStaticBinary(deps.agentBinary); err != nil {
 		return nil, err
 	}
-	auth, err := registryAuth(cfg.Image, deps.dockerConfigDir)
-	if err != nil {
-		return nil, err
+	if cfg.Image != "" && digest.Digest(cfg.Image).Validate() != nil {
+		if _, err := reference.ParseNormalizedNamed(cfg.Image); err != nil {
+			return nil, fmt.Errorf("invalid executor-docker-image: %w", err)
+		}
 	}
 
 	pingCtx, cancel := context.WithTimeout(ctx, pingTimeout)
@@ -56,27 +60,22 @@ func prepare(ctx context.Context, l logger.Logger, cfg Config, deps preflightDep
 		return nil, fmt.Errorf("connecting to the Docker daemon: %w", err)
 	}
 
-	imageID, err := pullImage(ctx, l, deps.client, cfg.Image, auth)
-	if err != nil {
-		return nil, err
-	}
-
 	groups, err := os.Getgroups()
 	if err != nil {
 		return nil, fmt.Errorf("getting the agent's supplementary groups: %w", err)
 	}
 	return &Executor{
-		logger:      l,
-		client:      deps.client,
-		cfg:         cfg,
-		imageID:     imageID,
-		agentBinary: deps.agentBinary,
-		mounts:      mounts,
-		env:         env,
-		uid:         os.Getuid(),
-		gid:         os.Getgid(),
-		groups:      groups,
-		runID:       rand.Text(),
+		logger:          l,
+		client:          deps.client,
+		cfg:             cfg,
+		dockerConfigDir: deps.dockerConfigDir,
+		agentBinary:     deps.agentBinary,
+		mounts:          mounts,
+		env:             env,
+		uid:             os.Getuid(),
+		gid:             os.Getgid(),
+		groups:          groups,
+		runID:           rand.Text(),
 	}, nil
 }
 
@@ -97,34 +96,46 @@ func checkStaticBinary(path string) error {
 	return nil
 }
 
-// pullImage pulls image for the host's platform and returns its ID. If the
-// pull fails but the image is already present, it uses the local copy, which
-// covers air-gapped hosts and registries the agent cannot authenticate to.
-func pullImage(ctx context.Context, l logger.Logger, cli dockerClient, image, auth string) (string, error) {
-	l.Infof("Pulling docker executor image %s", image)
-	pullCtx, cancel := context.WithTimeout(ctx, pullTimeout)
-	pullErr := pull(pullCtx, cli, image, auth)
-	cancel()
-	if pullErr != nil {
-		if ctx.Err() != nil {
-			return "", fmt.Errorf("pulling docker executor image %s: %w", image, pullErr)
-		}
-		l.Warnf("Couldn't pull docker executor image %s, looking for a local copy, which may be out of date: %v", image, pullErr)
+// resolveImage refreshes tags, but uses an already cached digest without a pull.
+func (e *Executor) resolveImage(ctx context.Context, image string) (string, error) {
+	if image == "" {
+		return "", fmt.Errorf("job has no resolved image and --executor-docker-image is not set")
 	}
+	if image == e.cfg.Image && digest.Digest(image).Validate() == nil {
+		return e.inspectImage(ctx, image)
+	}
+	named, err := reference.ParseNormalizedNamed(image)
+	if err != nil {
+		return "", fmt.Errorf("invalid job image %q: %w", image, err)
+	}
+	if _, pinned := named.(reference.Digested); pinned {
+		id, err := e.inspectImage(ctx, image)
+		if !cerrdefs.IsNotFound(err) {
+			return id, err
+		}
+	}
+	auth, err := registryAuth(image, e.dockerConfigDir)
+	if err != nil {
+		return "", err
+	}
+	pullCtx, cancel := context.WithTimeout(ctx, pullTimeout)
+	defer cancel()
+	if err := pull(pullCtx, e.client, image, auth); err != nil {
+		return "", fmt.Errorf("pulling job image %s: %w", image, err)
+	}
+	return e.inspectImage(ctx, image)
+}
 
+func (e *Executor) inspectImage(ctx context.Context, image string) (string, error) {
 	inspectCtx, cancel := context.WithTimeout(ctx, inspectTimeout)
 	defer cancel()
-	inspect, err := cli.ImageInspect(inspectCtx, image)
+	inspect, err := e.client.ImageInspect(inspectCtx, image)
 	if err != nil {
-		if pullErr != nil {
-			return "", fmt.Errorf("pulling docker executor image %s: %w", image, pullErr)
-		}
 		return "", fmt.Errorf("inspecting docker executor image %s: %w", image, err)
 	}
 	if inspect.Os != "linux" || inspect.Architecture != runtime.GOARCH {
 		return "", fmt.Errorf("docker executor image %s is for %s/%s, but the agent host is linux/%s", image, inspect.Os, inspect.Architecture, runtime.GOARCH)
 	}
-	l.Infof("Using docker executor image %s (%s)", image, inspect.ID)
 	return inspect.ID, nil
 }
 

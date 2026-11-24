@@ -75,6 +75,13 @@ func (e *missingKeyError) Error() string {
 
 // Run runs the job.
 func (r *JobRunner) Run(ctx context.Context, ignoreAgentInDispatches *bool) (err error) {
+	if r.dockerContextDir != "" {
+		defer func() {
+			if err := os.RemoveAll(r.dockerContextDir); err != nil {
+				r.agentLogger.Warnf("Error removing Docker job context: %v", err)
+			}
+		}()
+	}
 	if r.cancelled.Load() {
 		return errors.New("job already cancelled before running")
 	}
