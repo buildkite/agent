@@ -228,7 +228,7 @@ func acceleratorChallengesToken(ctx context.Context, source, auth string) bool {
 	if err != nil {
 		return false
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	return resp.StatusCode == http.StatusUnauthorized && strings.EqualFold(resp.Header.Get("WWW-Authenticate"), `Basic realm="git-accelerator"`)
 }
 
