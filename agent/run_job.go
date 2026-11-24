@@ -217,7 +217,7 @@ func (r *JobRunner) Run(ctx context.Context, ignoreAgentInDispatches *bool) (err
 	// let a job choose the bootstrap runtime when verification is required.
 	if r.conf.Executor == ExecutorDocker && job.Image != "" && r.conf.JWKS != nil && r.VerificationFailureBehavior == VerificationBehaviourBlock {
 		const reason = "This agent rejected the job because a per-job Docker image is not covered by the step signature. Remove the job image and use --executor-docker-image on the agent instead."
-		r.verificationFailureLogs(VerificationBehaviourBlock, errors.New(reason))
+		r.verificationFailureLogs(VerificationBehaviourBlock, errors.New("per-job Docker images are not covered by step signatures; use --executor-docker-image on the agent instead"))
 		r.captureJobError(ctx, "buildkite.job_signature_rejected", reason)
 		exit.Status = -1
 		exit.SignalReason = SignalReasonSignatureRejected
