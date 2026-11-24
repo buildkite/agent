@@ -33,13 +33,13 @@ func TestDockerExecutorRunsJobBootstrap(t *testing.T) {
 	t.Setenv("BUILDKITE_AGENT_TOKEN", "fake-registration-token")
 	builds, jobContext := t.TempDir(), t.TempDir()
 	const image = "alpine:3.20"
-	for _, noSocket := range []bool{false, true} {
-		t.Run(fmt.Sprintf("no-socket=%t", noSocket), func(t *testing.T) {
+	for _, mountSocket := range []bool{true, false} {
+		t.Run(fmt.Sprintf("mount-socket=%t", mountSocket), func(t *testing.T) {
 			e := createTestAgentEndpoint()
 			server := e.server()
 			t.Cleanup(server.Close)
 			docker, err := dockerexec.Prepare(t.Context(), logger.Discard, dockerexec.Config{
-				Image: "not-the-job-image:unused", NoSocket: noSocket,
+				Image: "not-the-job-image:unused", MountSocket: mountSocket,
 				BuildPath: builds, JobContextDir: jobContext, SocketsPath: t.TempDir(),
 				CancelSignal: process.SIGTERM,
 			})
@@ -47,7 +47,7 @@ func TestDockerExecutorRunsJobBootstrap(t *testing.T) {
 				t.Fatal(err)
 			}
 			socketCheck := "test -S /var/run/docker.sock"
-			if noSocket {
+			if !mountSocket {
 				socketCheck = "test ! -S /var/run/docker.sock"
 			}
 			command := `set -eu

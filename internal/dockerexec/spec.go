@@ -39,7 +39,7 @@ func (e *Executor) createOptions(req Request, name, imageID string, exists func(
 			Image:      imageID,
 			Entrypoint: []string{agentBinPath},
 			Cmd:        []string{"bootstrap"},
-			Env:        containerEnv(e.env, req.Env, req.JobLogTmpfile, req.Image, e.cfg.NoSocket),
+			Env:        containerEnv(e.env, req.Env, req.JobLogTmpfile, req.Image, e.cfg.MountSocket),
 			User:       fmt.Sprintf("%d:%d", e.uid, e.gid),
 			WorkingDir: e.cfg.BuildPath,
 			Tty:        e.cfg.RunInPty,
@@ -85,7 +85,7 @@ func (e *Executor) containerMounts(req Request, exists func(string) bool) []moun
 	if req.ContextDir != "" {
 		mounts = append(mounts, bind(req.ContextDir, true))
 	}
-	if !e.cfg.NoSocket {
+	if e.cfg.MountSocket {
 		mounts = append(mounts, bind(dockerSocket, false))
 	}
 	for _, p := range append(slices.Clone(e.cfg.HooksPaths), e.cfg.SigningJWKSFile) {
@@ -116,7 +116,7 @@ func (e *Executor) containerMounts(req Request, exists func(string) bool) []moun
 // env overrides the operator's, as it overrides the agent's own environment
 // with the exec executor. Each key appears once, sorted. The image's ENV sits
 // underneath all of these.
-func containerEnv(operatorEnv, jobEnv []string, jobLogTmpfile, image string, noSocket bool) []string {
+func containerEnv(operatorEnv, jobEnv []string, jobLogTmpfile, image string, mountSocket bool) []string {
 	env := make(map[string]string)
 	for _, kv := range slices.Concat(operatorEnv, jobEnv) {
 		// Both lists are built by the agent as KEY=VALUE entries, so anything
@@ -137,7 +137,7 @@ func containerEnv(operatorEnv, jobEnv []string, jobLogTmpfile, image string, noS
 	env["BUILDKITE_BIN_PATH"] = agentBinDir
 	env["BUILDKITE_SOCKETS_PATH"] = socketsDir
 	env["BUILDKITE_IMAGE"] = image
-	if !noSocket {
+	if mountSocket {
 		if _, set := env["DOCKER_HOST"]; !set {
 			env["DOCKER_HOST"] = "unix://" + dockerSocket
 		}

@@ -34,7 +34,7 @@ provide the configured shell and any tools the job uses, including Git and CA
 certificates for normal Git checkout. Docker and Compose clients are not injected.
 
 The executor mounts the local Docker socket by default, giving jobs control of
-the Docker host. Use only with trusted workloads. Pass `--executor-docker-no-socket`
+the Docker host. Use only with trusted workloads. Pass `--executor-docker-mount-socket=false`
 to omit that bind mount. This does not isolate jobs from shared host paths or any
 access you grant through operator mounts or networking. Keep experimental agents
 in a separate queue; other executors do not consume the Agent API image field.

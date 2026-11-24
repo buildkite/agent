@@ -26,8 +26,9 @@ const (
 // Config is the Docker executor's configuration, taken from the agent's.
 type Config struct {
 	// Image is the operator default when the job has no resolved image.
-	Image    string
-	NoSocket bool
+	Image string
+	// MountSocket exposes the local Docker socket to the job container.
+	MountSocket bool
 
 	// Mounts are extra bind mounts, each "src:dst" or "src:dst:ro".
 	Mounts []string

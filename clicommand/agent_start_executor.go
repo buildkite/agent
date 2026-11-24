@@ -38,7 +38,7 @@ func dockerExecutorConfig(cfg AgentStartConfig, cancelSignal process.Signal) doc
 	hooksPaths = append(hooksPaths, cfg.AdditionalHooksPaths...)
 	return dockerexec.Config{
 		Image:           cfg.ExecutorDockerImage,
-		NoSocket:        cfg.ExecutorDockerNoSocket,
+		MountSocket:     cfg.ExecutorDockerMountSocket,
 		Mounts:          cfg.ExecutorDockerMount,
 		Env:             cfg.ExecutorDockerEnv,
 		Network:         cfg.ExecutorDockerNetwork,

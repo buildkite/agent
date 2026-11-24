@@ -20,6 +20,7 @@ func TestCreateOptions(t *testing.T) {
 	cfg.SigningJWKSFile = "/etc/buildkite-agent/jwks.json"
 	cfg.Network = "builds"
 	cfg.RunInPty = true
+	cfg.MountSocket = true
 	e := &Executor{
 		cfg:         cfg,
 		agentBinary: "/usr/bin/buildkite-agent",
@@ -99,7 +100,6 @@ func TestCreateOptions_MinimalConfig(t *testing.T) {
 
 	e := &Executor{cfg: validConfig(), agentBinary: "/usr/bin/buildkite-agent"}
 	e.cfg.GitMirrorsPath, e.cfg.SigningJWKSFile, e.cfg.PluginsPath = "", "", ""
-	e.cfg.NoSocket = true
 	got := e.createOptions(Request{JobID: "job-1", Image: "alpine:3.20"}, "name", "sha256:abc", func(string) bool { return false })
 
 	if got.Config.Tty {
@@ -146,7 +146,7 @@ func TestContainerEnv(t *testing.T) {
 			"not-an-entry",
 			"=no-key",
 		},
-		"", "alpine:3.20", false,
+		"", "alpine:3.20", true,
 	)
 	// A job's DOCKER_HOST is ordinary job env: it reaches the container but
 	// never the executor's own daemon client.

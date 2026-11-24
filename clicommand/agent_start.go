@@ -144,14 +144,14 @@ type AgentStartConfig struct {
 	Shell           string `cli:"shell"`
 	HooksShell      string `cli:"hooks-shell"`
 	BootstrapScript string `cli:"bootstrap-script" normalize:"commandpath"`
-	Executor        string `cli:"executor"`
+	NoPTY           bool   `cli:"no-pty"`
 
-	ExecutorDockerImage    string   `cli:"executor-docker-image"`
-	ExecutorDockerNoSocket bool     `cli:"executor-docker-no-socket"`
-	ExecutorDockerMount    []string `cli:"executor-docker-mount"`
-	ExecutorDockerEnv      []string `cli:"executor-docker-env"`
-	ExecutorDockerNetwork  string   `cli:"executor-docker-network"`
-	NoPTY                  bool     `cli:"no-pty"`
+	Executor                  string   `cli:"executor"`
+	ExecutorDockerImage       string   `cli:"executor-docker-image"`
+	ExecutorDockerMountSocket bool     `cli:"executor-docker-mount-socket"`
+	ExecutorDockerMount       []string `cli:"executor-docker-mount"`
+	ExecutorDockerEnv         []string `cli:"executor-docker-env"`
+	ExecutorDockerNetwork     string   `cli:"executor-docker-network"`
 
 	Queue                     string        `cli:"queue"`
 	Tags                      []string      `cli:"tags" normalize:"list"`
@@ -593,9 +593,10 @@ var AgentStartCommand = &cli.Command{
 			Sources: cli.EnvVars("BUILDKITE_EXECUTOR_DOCKER_IMAGE"),
 		},
 		&cli.BoolFlag{
-			Name:    "executor-docker-no-socket",
-			Usage:   "Do not mount the Docker daemon socket into job containers. By default Docker executor jobs can control the host through this socket",
-			Sources: cli.EnvVars("BUILDKITE_EXECUTOR_DOCKER_NO_SOCKET"),
+			Name:    "executor-docker-mount-socket",
+			Usage:   "Mount the Docker daemon socket into job containers, giving jobs control of the Docker host",
+			Value:   true,
+			Sources: cli.EnvVars("BUILDKITE_EXECUTOR_DOCKER_MOUNT_SOCKET"),
 		},
 		&cli.StringSliceFlag{
 			Name: "executor-docker-mount",
@@ -900,7 +901,7 @@ var AgentStartCommand = &cli.Command{
 			return err
 		}
 		cfg.Executor = executor
-		if cfg.Executor != agent.ExecutorDocker && (cfg.ExecutorDockerImage != "" || cfg.ExecutorDockerNoSocket || len(cfg.ExecutorDockerMount) > 0 || len(cfg.ExecutorDockerEnv) > 0 || cfg.ExecutorDockerNetwork != "") {
+		if cfg.Executor != agent.ExecutorDocker && (cfg.ExecutorDockerImage != "" || !cfg.ExecutorDockerMountSocket || len(cfg.ExecutorDockerMount) > 0 || len(cfg.ExecutorDockerEnv) > 0 || cfg.ExecutorDockerNetwork != "") {
 			l.Warnf("executor-docker-* settings are ignored because the executor is %s, not docker", cfg.Executor)
 		}
 		if cfg.Executor == agent.ExecutorDocker {
@@ -1272,8 +1273,8 @@ var AgentStartCommand = &cli.Command{
 			if err != nil {
 				return fmt.Errorf("preparing the docker executor: %w", err)
 			}
-			if !cfg.ExecutorDockerNoSocket {
-				l.Warnf("Docker executor job containers can control this host through its Docker socket; use --executor-docker-no-socket to disable the mount")
+			if cfg.ExecutorDockerMountSocket {
+				l.Warnf("Docker executor job containers can control this host through its Docker socket; use --executor-docker-mount-socket=false to disable the mount")
 			}
 		}
 
