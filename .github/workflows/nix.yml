@@ -74,6 +74,10 @@ jobs:
         with:
           persist-credentials: false
       - uses: cachix/install-nix-action@382a9ed9481c7c1f94f68b72ef105b3417c73877 # v32.1.0
+        with:
+          # Nix 2.36 dropped x86_64-darwin binaries.
+          install_url: https://releases.nixos.org/nix/nix-2.35.3/install
+          install_sha256: 69d0fe8fba8fe88f94c98b09964691ac9950abc7ecbf2ba861dc0533cfd901e9
       - name: Evaluate all flake outputs
         if: matrix.system == 'x86_64-linux'
         run: nix flake check --all-systems --no-build --no-update-lock-file .
