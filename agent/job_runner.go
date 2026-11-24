@@ -513,6 +513,29 @@ func (r *JobRunner) createEnvironment(ctx context.Context) ([]string, error) {
 	})
 	env["BUILDKITE_ALLOWED_REPOSITORIES"] = strings.Join(allowedRepositories, ",")
 
+	// Like the repository allowlist, this is operator policy, not job input.
+	maps.DeleteFunc(env, func(name, _ string) bool {
+		return strings.EqualFold(name, "BUILDKITE_GIT_ACCELERATOR_URL") ||
+			strings.EqualFold(name, "BUILDKITE_GIT_ACCELERATOR_PATH") ||
+			strings.EqualFold(name, "BUILDKITE_GIT_ACCELERATOR_HOSTS") ||
+			strings.EqualFold(name, "BUILDKITE_GIT_ACCELERATOR_DISABLE_HTTP")
+	})
+	env["BUILDKITE_GIT_ACCELERATOR_URL"] = r.conf.AgentConfiguration.GitAcceleratorURL
+	env["BUILDKITE_GIT_ACCELERATOR_HOSTS"] = strings.Join(r.conf.AgentConfiguration.GitAcceleratorHosts, ",")
+	if r.conf.AgentConfiguration.GitAcceleratorURL != "" {
+		env["BUILDKITE_GIT_ACCELERATOR_PATH"] = os.Getenv("PATH")
+		// Go's system root pool reads these from the bootstrap process's
+		// environment. Keep the job's settings, but don't use that trust pool
+		// for accelerator requests if the job changed it.
+		disableHTTP := false
+		for _, key := range []string{"SSL_CERT_FILE", "SSL_CERT_DIR"} {
+			if value, ok := env[key]; ok && value != os.Getenv(key) {
+				disableHTTP = true
+			}
+		}
+		env["BUILDKITE_GIT_ACCELERATOR_DISABLE_HTTP"] = strconv.FormatBool(disableHTTP)
+	}
+
 	// When in KubernetesExec mode, filter out the Kubernetes plugin,
 	// since it's not a real plugin. agent-stack-k8s reads it but we have no
 	// need for it. Supplying it when not using agent-stack-k8s is a mistake
@@ -573,6 +596,10 @@ BUILDKITE_GIT_CLONE_MIRROR_FLAGS
 BUILDKITE_GIT_MIRROR_CHECKOUT_MODE
 BUILDKITE_GIT_FETCH_FLAGS
 BUILDKITE_GIT_MIRRORS_LOCK_TIMEOUT
+BUILDKITE_GIT_ACCELERATOR_URL
+BUILDKITE_GIT_ACCELERATOR_PATH
+BUILDKITE_GIT_ACCELERATOR_HOSTS
+BUILDKITE_GIT_ACCELERATOR_DISABLE_HTTP
 BUILDKITE_GIT_MIRRORS_PATH
 BUILDKITE_GIT_MIRRORS_SKIP_UPDATE
 BUILDKITE_GIT_MIRRORS_LFS_CACHE

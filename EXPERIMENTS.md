@@ -29,6 +29,84 @@ for configuration and reporting.
 **Status:** Experimental; the timeout setting is intended to become a normal
 agent option in a later release.
 
+### `git-accelerator-mirror`
+
+Use [git-accelerator](https://github.com/buildkite/git-accelerator) as an optional
+pull-through mirror for the build repository:
+
+```bash
+buildkite-agent start --experiment git-accelerator-mirror \
+  --git-accelerator-url https://cache.example.com \
+  --git-accelerator-hosts github.com,git.example.com
+```
+
+Configure the HTTPS origin on the agent, not in the pipeline. Eligible jobs
+pinned to a commit can clone or fetch through the accelerator. A repository
+such as `https://github.com/acme/project.git` maps to
+`https://cache.example.com/github.com/acme/project.git`. If you use
+`--allowed-repositories`, allow both URLs. A permitted backend-provided mirror
+takes precedence. The checkout keeps its canonical `origin` and falls back to
+ordinary Git on an accelerator failure. SSH repository URLs and checkout
+settings that need custom Git flags or transport config stay on the normal path.
+Plugins, submodules, and Git LFS are not routed through this experiment.
+
+`--git-accelerator-hosts` is optional. It matches the canonical repository's
+hostname exactly, ignoring case. Use bare hostnames, without ports or
+wildcards. Other hosts use normal checkout without an accelerator request.
+Omitting the list lets any otherwise eligible host use the accelerator.
+This option does not restrict backend-provided mirrors or replace
+`--allowed-repositories` or the accelerator's server-side origin rules.
+
+By default the accelerator requests are anonymous. For repositories that use
+Buildkite-managed Git credentials, the agent sends the canonical repository's
+credential to the configured accelerator. Use only an accelerator you trust
+with that credential, and configure an exact-host rule for the upstream host.
+The accelerator assumes clients authorized for a repository can see the same
+cached objects, which may include objects no longer served by the upstream.
+For a private CA, install the CA into the default certificate trust store used
+by Git in the checkout environment. The accelerator Git invocation does not
+inherit job-provided Git configuration or TLS overrides.
+
+### `git-accelerator-clonekit`
+
+Requires `--experiment git-accelerator-mirror` and an accelerator serving
+CloneKit seeds at the configured HTTPS origin. Set
+`GIT_ACCELERATOR_CLONEKIT_ENABLED=true` on the accelerator and set its
+`GIT_ACCELERATOR_CLONEKIT_PUBLIC_BASE_URL` to the agent's `--git-accelerator-url`.
+Eligible fresh clones can use a verified seed, either for the workspace or for
+its first on-host Git mirror. An on-host mirror is not required. The accelerator
+host allowlist applies; existing checkouts, shallow or sparse checkouts, and
+custom clone flags do not use seeds.
+
+Git still fetches refs and any objects missing from the seed. If a seed is
+missing or cannot be verified, the agent tries Git through the accelerator
+without it. If accelerator Git fails, the agent falls back to canonical Git.
+Seed files must come from the configured accelerator origin, without redirects.
+For a private CA, trust it in both Git and the bootstrap process's Go trust
+store. If a job overrides the operator's `SSL_CERT_FILE` or `SSL_CERT_DIR`, the
+agent preserves the job's settings and skips CloneKit and the HTTP check for
+anonymous retry. It can still use Git through the accelerator.
+
+### `git-accelerator-clonekit-seed-only`
+
+Requires `--experiment git-accelerator-clonekit` (and therefore
+`git-accelerator-mirror`). On a fresh branch checkout pinned to a full commit
+SHA, skip `git clone` if the verified seed contains the commit. The agent
+installs the seed directly in the workspace, keeps the canonical `origin`, and
+does not clone other branches or follow tags. Normal commit verification still
+runs and may fetch the requested branch to prove ancestry.
+
+For an eligible fresh branch build with `Commit=HEAD`, the agent resolves the
+branch tip through the Accelerator before cloning and keeps that SHA for this
+job. If the seed doesn't cover it, the agent fetches that exact SHA into the
+seed without following tags. If early lookup fails, the existing `HEAD` checkout
+path still applies. If lookup succeeds but seed setup falls back, checkout still
+targets the resolved SHA.
+
+For a build submitted with a full SHA that is absent from the seed, the normal
+Accelerator clone still runs, using the seed as a reference when available.
+Pull requests and on-host mirrors continue to use the existing checkout paths.
+
 ### `post-bootstrap-hook`
 
 Enables the agent-side `post-bootstrap` hook after each bootstrap attempt,

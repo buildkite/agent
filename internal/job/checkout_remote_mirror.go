@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/buildkite/agent/v4/internal/experiments"
 	"github.com/buildkite/agent/v4/internal/osutil"
 	"github.com/buildkite/agent/v4/internal/redact"
 	"github.com/buildkite/shellwords"
@@ -101,15 +102,20 @@ const (
 	remoteMirrorSkipSeparateGitDir      remoteMirrorSkipReason = "separate-git-dir"
 	remoteMirrorSkipURLConfigConflict   remoteMirrorSkipReason = "url-config-conflict"
 	remoteMirrorSkipCloneKit            remoteMirrorSkipReason = "origin-clonekit"
+	remoteMirrorSkipAcceleratorOptions  remoteMirrorSkipReason = "accelerator-options"
+	remoteMirrorSkipAcceleratorPolicy   remoteMirrorSkipReason = "accelerator-policy"
 )
 
 type remoteMirrorAttempt struct {
-	site       remoteMirrorSite
-	url        string
-	skipReason remoteMirrorSkipReason
+	site        remoteMirrorSite
+	url         string
+	skipReason  remoteMirrorSkipReason
+	accelerator bool
 	// cloneKitURL is independently eligible for cold on-host mirror creation.
 	// It never grants a remote-mirror hit or bypasses canonical commit fetching.
 	cloneKitURL string
+	// acceleratorHeadFetch reuses the isolated transport of a successful HEAD clone.
+	acceleratorHeadFetch *gitFetchArgs
 
 	outcome  remoteMirrorOutcome
 	duration time.Duration
@@ -119,7 +125,7 @@ func (a remoteMirrorAttempt) hit() bool {
 	return a.outcome == remoteMirrorOutcomeHit
 }
 
-func (e *Executor) resolveRemoteMirrorAttempt(previousAttempts int) remoteMirrorAttempt {
+func (e *Executor) resolveRemoteMirrorAttempt(ctx context.Context, previousAttempts int) remoteMirrorAttempt {
 	skip := func(reason remoteMirrorSkipReason) remoteMirrorAttempt {
 		return remoteMirrorAttempt{
 			outcome:    remoteMirrorOutcomeSkipped,
@@ -127,17 +133,34 @@ func (e *Executor) resolveRemoteMirrorAttempt(previousAttempts int) remoteMirror
 		}
 	}
 
-	if e.GitRemoteMirrorURL == "" {
+	source := e.GitRemoteMirrorURL
+	accelerator := source == "" && experiments.IsEnabled(ctx, experiments.GitAcceleratorMirror)
+	if accelerator {
+		source = e.acceleratorRepositoryURL()
+		if source != "" && (!RepositoryAllowed(e.AllowedRepositories, e.Repository) || !RepositoryAllowed(e.AllowedRepositories, source)) {
+			return skip(remoteMirrorSkipAcceleratorPolicy)
+		}
+	}
+	if source == "" {
 		return skip(remoteMirrorSkipNoURL)
 	}
-	mirrorURL, err := url.Parse(e.GitRemoteMirrorURL)
+	mirrorURL, err := url.Parse(source)
 	if err != nil || mirrorURL.Scheme != "https" || mirrorURL.Host == "" {
 		return skip(remoteMirrorSkipNotHTTPS)
 	}
 	if e.Repository != e.canonicalRepository {
 		return skip(remoteMirrorSkipCanonicalChanged)
 	}
-	if !fullSHA1ObjectID.MatchString(e.Commit) {
+	// A mirror hit can skip the source fetch entirely. Leave jobs that need
+	// custom fetch behavior on the canonical path, including fresh clones.
+	if accelerator && !acceleratorSupportsFetchFlags(e.GitFetchFlags) {
+		return skip(remoteMirrorSkipAcceleratorOptions)
+	}
+	// A fresh accelerator clone can supply objects for a HEAD build without
+	// deciding its commit. Existing checkouts and on-host mirrors still need
+	// an exact object ID for their accelerated fetch paths.
+	headClone := accelerator && e.Commit == "HEAD" && e.PullRequest == "false"
+	if !headClone && !fullSHA1ObjectID.MatchString(e.Commit) {
 		return skip(remoteMirrorSkipNotFullObjectID)
 	}
 	if e.Branch == "" {
@@ -173,7 +196,7 @@ func (e *Executor) resolveRemoteMirrorAttempt(previousAttempts int) remoteMirror
 		return skip(remoteMirrorSkipNotFirstAttempt)
 	}
 
-	attempt := remoteMirrorAttempt{url: e.GitRemoteMirrorURL}
+	attempt := remoteMirrorAttempt{url: source, accelerator: accelerator}
 	switch {
 	case e.GitMirrorsPath != "" && e.Repository != "" && !e.GitMirrorsSkipUpdate:
 		attempt.site = remoteMirrorSiteOnHostMirror
@@ -182,11 +205,17 @@ func (e *Executor) resolveRemoteMirrorAttempt(previousAttempts int) remoteMirror
 	default:
 		attempt.site = remoteMirrorSiteFreshClone
 	}
+	if headClone && attempt.site != remoteMirrorSiteFreshClone {
+		return skip(remoteMirrorSkipNotFullObjectID)
+	}
 	if attempt.site == remoteMirrorSiteExistingCheckout && e.checkoutUsesGitFile() {
 		// External Git dirs survive worktree cleanup, so failures cannot be quarantined.
 		return skip(remoteMirrorSkipSeparateGitDir)
 	}
 	if attempt.site == remoteMirrorSiteFreshClone {
+		if accelerator && e.GitCloneFlags != "" && e.GitCloneFlags != "-v" {
+			return skip(remoteMirrorSkipAcceleratorOptions)
+		}
 		cloneFlags, err := shellwords.Split(e.GitCloneFlags)
 		if err == nil && hasRecursiveSubmoduleCloneFlags(cloneFlags) {
 			// Clone-time recursive submodules resolve URLs and worktrees while
@@ -245,6 +274,15 @@ func (e *Executor) checkoutUsesGitFile() bool {
 	return err == nil && !info.IsDir()
 }
 
+func acceleratorSupportsFetchFlags(flags string) bool {
+	switch flags {
+	case "", "-v --prune", "--no-tags":
+		return true
+	default:
+		return false
+	}
+}
+
 func remoteMirrorGitFlags(ctx context.Context) []string {
 	return []string{
 		"-c", "credential.useHttpPath=true",
@@ -294,12 +332,28 @@ func (e *Executor) fetchCommitFromRemoteMirror(
 	case gitDir != "":
 		gitFlags = []string{"--git-dir", gitDir}
 	}
-	gitFlags = append(gitFlags, remoteMirrorGitFlags(ctx)...)
+	sh := e.shell
+	if attempt.accelerator {
+		if !acceleratorSupportsFetchFlags(gitFetchFlags) {
+			attempt.outcome = remoteMirrorOutcomeSkipped
+			attempt.skipReason = remoteMirrorSkipAcceleratorOptions
+			return false, nil
+		}
+		var err error
+		sh, gitFlags, err = e.acceleratorGit(mirrorCtx, attempt, gitDir, gitFlags, false)
+		if err != nil {
+			attempt.outcome = remoteMirrorOutcomeError
+			return false, ctx.Err()
+		}
+		gitFetchFlags += " --no-recurse-submodules --no-auto-maintenance"
+	} else {
+		gitFlags = append(gitFlags, remoteMirrorGitFlags(ctx)...)
+	}
 
 	// A miss or error falls back to the canonical repository, whose fetch is
 	// reported if it fails too, so the probe's failure is not reported.
 	err := gitFetch(withoutGitErrorCapture(mirrorCtx), gitFetchArgs{
-		Shell:         e.shell,
+		Shell:         sh,
 		GitFlags:      gitFlags,
 		GitFetchFlags: gitFetchFlags,
 		Repository:    attempt.url,
@@ -352,6 +406,9 @@ func (e *Executor) emitRemoteMirrorTelemetry(span trace.Span, attempt remoteMirr
 	}
 	if attempt.duration > 0 {
 		attributes = append(attributes, attribute.Int64("git.remote_mirror.duration_ms", attempt.duration.Milliseconds()))
+	}
+	if attempt.accelerator {
+		attributes = append(attributes, attribute.String("git.remote_mirror.source", "git-accelerator"))
 	}
 	span.SetAttributes(attributes...)
 

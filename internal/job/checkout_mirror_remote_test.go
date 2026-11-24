@@ -333,7 +333,7 @@ func TestUpdateGitMirrorWarmHitUsesUnpinnedCommitWithoutScan(t *testing.T) {
 		{
 			name: "no remote mirror URL",
 			attempt: func(e *Executor) remoteMirrorAttempt {
-				attempt := e.resolveRemoteMirrorAttempt(0)
+				attempt := e.resolveRemoteMirrorAttempt(t.Context(), 0)
 				if attempt.outcome != remoteMirrorOutcomeSkipped ||
 					attempt.skipReason != remoteMirrorSkipNoURL {
 					t.Fatalf("attempt = %+v, want no-url skip", attempt)
@@ -430,7 +430,7 @@ func TestUpdateGitMirrorNoRemoteURLPostFetchSkipsReachabilityScan(t *testing.T) 
 	e.Commit = commit
 	e.PullRequest = "123"
 	e.PipelineProvider = "github"
-	attempt := e.resolveRemoteMirrorAttempt(0)
+	attempt := e.resolveRemoteMirrorAttempt(t.Context(), 0)
 	if attempt.outcome != remoteMirrorOutcomeSkipped ||
 		attempt.skipReason != remoteMirrorSkipNoURL {
 		t.Fatalf("attempt = %+v, want no-url skip", attempt)

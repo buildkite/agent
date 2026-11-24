@@ -83,8 +83,13 @@ func (e *Executor) fetchSource(ctx context.Context, addBloblessFilter bool, atte
 	// This is useful when a pre-populated git mirror is used with --reference,
 	// as the commit objects are already reachable and fetching is redundant.
 	mirrorHit := attempt != nil && attempt.hit()
-	skipFetch := (e.GitSkipFetchExistingCommits || mirrorHit) && e.Commit != "HEAD" &&
-		hasGitCommit(ctx, e.shell, ".git", e.Commit)
+	commit := e.Commit
+	pinnedHead := e.resolvedCheckoutHead != ""
+	if pinnedHead {
+		commit = e.resolvedCheckoutHead
+	}
+	skipFetch := (e.GitSkipFetchExistingCommits || mirrorHit || pinnedHead) && commit != "HEAD" &&
+		hasGitCommit(ctx, e.shell, ".git", commit)
 
 	baseBranchMode, err := parseGitFetchBaseBranchMode(e.GitFetchBaseBranch)
 	if err != nil {
@@ -108,7 +113,7 @@ func (e *Executor) fetchSource(ctx context.Context, addBloblessFilter bool, atte
 	}
 
 	if skipFetch {
-		e.shell.Commentf("Commit %q already exists locally, skipping fetch", e.Commit)
+		e.shell.Commentf("Commit %q already exists locally, skipping fetch", commit)
 		return nil
 	}
 
@@ -205,9 +210,35 @@ func (e *Executor) fetchSource(ctx context.Context, addBloblessFilter bool, atte
 		e.shell.Commentf("FETCH_HEAD is now `%s`", gitFetchHead)
 
 	case refspecBranch:
+		if pinnedHead {
+			// If accelerated setup fell back without the pin, recover that exact
+			// commit from origin instead of sampling the branch a second time.
+			return gitFetch(ctx, gitFetchArgs{
+				Shell:         e.shell,
+				GitFetchFlags: gitFetchFlags + " --no-tags",
+				Repository:    "origin",
+				RefSpecs:      []string{commit},
+			})
+		}
 		// If the commit is "HEAD" then we can't do a commit-specific fetch and will
 		// need to fetch the remote head and checkout the fetched head explicitly.
 		e.shell.Commentf("Fetch and checkout remote branch HEAD commit")
+		if mirrorHit && attempt.acceleratorHeadFetch != nil && acceleratorSupportsFetchFlags(gitFetchFlags) {
+			args := *attempt.acceleratorHeadFetch
+			args.GitFetchFlags = gitFetchFlags + " --no-recurse-submodules --no-auto-maintenance"
+			mirrorCtx, cancel := context.WithTimeout(ctx, remoteMirrorProbeTimeout)
+			err := e.gitFetchHeadRef(withoutGitErrorCapture(mirrorCtx), args)
+			cancel()
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+			if err == nil {
+				span.SetAttributes(attribute.String("git.head_fetch_source", "git-accelerator"))
+				e.shell.Commentf("Fetched branch HEAD through Git Accelerator")
+				return nil
+			}
+			e.shell.Commentf("Git Accelerator branch fetch failed; falling back to canonical repository")
+		}
 		if err := e.gitFetchHeadRef(ctx, gitFetchArgs{
 			Shell:         e.shell,
 			GitFetchFlags: gitFetchFlags,

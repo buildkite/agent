@@ -168,6 +168,8 @@ type AgentStartConfig struct {
 	GitFetchFlags               string   `cli:"git-fetch-flags"`
 	GitSparseCheckoutPaths      []string `cli:"git-sparse-checkout-paths" normalize:"list"`
 	GitSparseCheckoutMode       string   `cli:"git-sparse-checkout-mode"`
+	GitAcceleratorURL           string   `cli:"git-accelerator-url"`
+	GitAcceleratorHosts         []string `cli:"git-accelerator-hosts" normalize:"list"`
 	GitMirrorsPath              string   `cli:"git-mirrors-path" normalize:"filepath"`
 	GitMirrorCheckoutMode       string   `cli:"git-mirror-checkout-mode"`
 	GitMirrorsLockTimeout       int      `cli:"git-mirrors-lock-timeout"`
@@ -559,6 +561,8 @@ var AgentStartCommand = &cli.Command{
 		GitSparseCheckoutPathsFlag,
 		GitSparseCheckoutModeFlag,
 		GitCloneMirrorFlagsFlag,
+		GitAcceleratorURLFlag,
+		GitAcceleratorHostsFlag,
 		GitMirrorsPathFlag,
 		GitMirrorCheckoutModeFlag,
 		GitMirrorsLockTimeoutFlag,
@@ -872,6 +876,9 @@ var AgentStartCommand = &cli.Command{
 		if err := validateGitFetchBaseBranch(cfg.GitFetchBaseBranch); err != nil {
 			return err
 		}
+		if err := validateGitAccelerator(ctx, cfg.GitAcceleratorURL, cfg.GitAcceleratorHosts); err != nil {
+			return err
+		}
 
 		// Force some settings if on Windows (these aren't supported yet)
 		if runtime.GOOS == "windows" {
@@ -1017,6 +1024,8 @@ var AgentStartCommand = &cli.Command{
 			BootstrapScript:                         cfg.BootstrapScript,
 			BuildPath:                               cfg.BuildPath,
 			SocketsPath:                             cfg.SocketsPath,
+			GitAcceleratorURL:                       cfg.GitAcceleratorURL,
+			GitAcceleratorHosts:                     cfg.GitAcceleratorHosts,
 			GitMirrorsPath:                          cfg.GitMirrorsPath,
 			GitMirrorCheckoutMode:                   cfg.GitMirrorCheckoutMode,
 			GitMirrorsLockTimeout:                   cfg.GitMirrorsLockTimeout,

@@ -403,7 +403,7 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context, previousAttempts in
 	)
 	defer func() { tracetools.FinishWithError(span, retErr) }()
 
-	attempt := e.resolveRemoteMirrorAttempt(previousAttempts)
+	attempt := e.resolveRemoteMirrorAttempt(ctx, previousAttempts)
 	attempt.cloneKitURL = e.originCloneKitSource(ctx, previousAttempts)
 	defer func() { e.emitRemoteMirrorTelemetry(span, attempt) }()
 
@@ -545,13 +545,17 @@ func (e *Executor) defaultCheckoutPhase(ctx context.Context, previousAttempts in
 	gitCheckoutFlags := e.GitCheckoutFlags
 
 	if err := e.traceOp(ctx, "git.checkout", func(ctx context.Context) error {
-		if e.Commit == "HEAD" {
+		commit := e.Commit
+		if e.resolvedCheckoutHead != "" {
+			commit = e.resolvedCheckoutHead
+		}
+		if commit == "HEAD" {
 			if err := gitCheckout(ctx, e.shell, gitCheckoutFlags, "FETCH_HEAD"); err != nil {
 				return fmt.Errorf("checking out FETCH_HEAD: %w", err)
 			}
 		} else {
-			if err := gitCheckout(ctx, e.shell, gitCheckoutFlags, e.Commit); err != nil {
-				return fmt.Errorf("checking out commit %q: %w", e.Commit, err)
+			if err := gitCheckout(ctx, e.shell, gitCheckoutFlags, commit); err != nil {
+				return fmt.Errorf("checking out commit %q: %w", commit, err)
 			}
 		}
 		return nil

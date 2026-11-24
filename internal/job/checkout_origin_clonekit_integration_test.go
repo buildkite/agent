@@ -30,31 +30,7 @@ func TestOriginCloneKitMirrorLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	packRepo := filepath.Join(t.TempDir(), "pack.git")
-	runGitForMirrorTest(t, "", "clone", "--mirror", canonical.RepoURL("canonical"), packRepo)
-	runGitForMirrorTest(t, packRepo, "-c", "pack.writeReverseIndex=true", "repack", "-ad")
-	m := validCloneKitManifest()
-	m.TipCommit, m.PackChunks, m.Files = commit, nil, nil
-	data := make(map[string][]byte)
-	entries, err := os.ReadDir(filepath.Join(packRepo, "objects", "pack"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, entry := range entries {
-		name := strings.TrimPrefix(filepath.Ext(entry.Name()), ".")
-		if name != "pack" && name != "idx" && name != "rev" {
-			continue
-		}
-		b, err := os.ReadFile(filepath.Join(packRepo, "objects", "pack", entry.Name()))
-		if err != nil {
-			t.Fatal(err)
-		}
-		data[name] = b
-		m.Files = append(m.Files, cloneKitFile{Name: name, Path: "objects/pack/" + entry.Name(), Size: int64(len(b)), SHA256: cloneKitTestDigest(string(b)), URL: "https://cdn.example/" + name + "?secret=presigned-secret"})
-	}
-	if err := m.validate(); err != nil {
-		t.Fatal(err)
-	}
+	m, data := makeCloneKitTestSeed(t, canonical.RepoURL("canonical"), commit)
 	helper := filepath.Join(t.TempDir(), "helper")
 	if err := os.WriteFile(helper, []byte("#!/bin/sh\ncat > \"$CLONEKIT_CREDENTIAL_INPUT\"\nprintf 'username=test-user\\npassword=repository-secret\\n'\n"), 0o755); err != nil {
 		t.Fatal(err)
@@ -167,4 +143,34 @@ func TestOriginCloneKitMirrorLifecycle(t *testing.T) {
 			}
 		})
 	}
+}
+
+func makeCloneKitTestSeed(t *testing.T, source, tip string) (cloneKitManifest, map[string][]byte) {
+	t.Helper()
+	packRepo := filepath.Join(t.TempDir(), "pack.git")
+	runGitForMirrorTest(t, "", "clone", "--mirror", source, packRepo)
+	runGitForMirrorTest(t, packRepo, "-c", "pack.writeReverseIndex=true", "repack", "-ad")
+	m := validCloneKitManifest()
+	m.TipCommit, m.PackChunks, m.Files = tip, nil, nil
+	data := make(map[string][]byte)
+	entries, err := os.ReadDir(filepath.Join(packRepo, "objects", "pack"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, entry := range entries {
+		name := strings.TrimPrefix(filepath.Ext(entry.Name()), ".")
+		if name != "pack" && name != "idx" && name != "rev" {
+			continue
+		}
+		b, err := os.ReadFile(filepath.Join(packRepo, "objects", "pack", entry.Name()))
+		if err != nil {
+			t.Fatal(err)
+		}
+		data[name] = b
+		m.Files = append(m.Files, cloneKitFile{Name: name, Path: "objects/pack/" + entry.Name(), Size: int64(len(b)), SHA256: cloneKitTestDigest(string(b)), URL: "https://cdn.example/" + name + "?secret=presigned-secret"})
+	}
+	if err := m.validate(); err != nil {
+		t.Fatal(err)
+	}
+	return m, data
 }

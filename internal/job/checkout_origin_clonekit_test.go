@@ -334,7 +334,9 @@ func TestFetchCloneKitManifestBoundary(t *testing.T) {
 			defer s.Close()
 			client := s.Client()
 			client.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
-			_, err := fetchCloneKitManifest(t.Context(), client, s.URL+"?secret=presigned-secret", "user", "repository-secret")
+			_, err := fetchCloneKitManifest(t.Context(), client, s.URL+"?secret=presigned-secret", func(req *http.Request) {
+				req.SetBasicAuth("user", "repository-secret")
+			})
 			if (err == nil) != tc.valid {
 				t.Fatalf("error=%v valid=%v", err, tc.valid)
 			}

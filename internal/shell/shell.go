@@ -46,6 +46,8 @@ type Shell struct {
 	// The running environment for the shell.
 	Env *env.Environment
 
+	replaceEnv bool
+
 	// If set, the command arg vectors are appended to the slice as they are
 	// executed (or would be executed, as in dry-run mode).
 	commandLog *[][]string
@@ -146,12 +148,22 @@ func (s *Shell) CloneWithStdin(r io.Reader) *Shell {
 	return &Shell{
 		Logger:            s.Logger,
 		Env:               s.Env,
+		replaceEnv:        s.replaceEnv,
 		stdin:             r, // our new stdin
 		stdout:            s.stdout,
 		wd:                s.wd,
 		interruptSignal:   s.interruptSignal,
 		signalGracePeriod: s.signalGracePeriod,
 	}
+}
+
+// CloneWithEnv prepares a copy of the shell that does not inherit environment
+// variables or executable search locations from the parent process.
+func (s *Shell) CloneWithEnv(environ *env.Environment) *Shell {
+	clone := s.CloneWithStdin(s.stdin)
+	clone.Env = environ
+	clone.replaceEnv = true
+	return clone
 }
 
 // Getwd returns the current working directory of the shell
@@ -194,6 +206,18 @@ func (s *Shell) AbsolutePath(executable string) (string, error) {
 
 	envPath, _ := s.Env.Get("PATH")
 	fileExtensions, _ := s.Env.Get("PATHEXT") // For searching .exe, .bat, etc on Windows
+	if s.replaceEnv && !filepath.IsAbs(executable) {
+		// Passing an absolute candidate also avoids the implicit current-directory
+		// search in LookPath on Windows.
+		for _, dir := range filepath.SplitList(envPath) {
+			if filepath.IsAbs(dir) {
+				if path, err := LookPath(filepath.Join(dir, executable), "", fileExtensions); err == nil {
+					return path, nil
+				}
+			}
+		}
+		return "", &exec.Error{Name: executable, Err: exec.ErrNotFound}
+	}
 
 	// Use our custom lookPath that takes a specific path
 	absolutePath, err := LookPath(executable, envPath, fileExtensions)
@@ -586,6 +610,7 @@ func (s *Shell) buildCommand(name string, arg ...string) (process.Config, error)
 		Path:              absPath,
 		Args:              arg,
 		Env:               append(s.Env.ToSlice(), "PWD="+s.wd),
+		ReplaceEnv:        s.replaceEnv,
 		Stdin:             s.stdin,
 		Dir:               s.wd,
 		InterruptSignal:   s.interruptSignal,

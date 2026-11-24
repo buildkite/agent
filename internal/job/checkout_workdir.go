@@ -112,12 +112,10 @@ func (e *Executor) prepareCheckoutWorkdir(
 	)
 	defer func() { tracetools.FinishWithError(cloneSpan, retErr) }()
 
-	cloneCheckout := func(
-		gitFlags []string,
-		repository string,
-		runOpts ...shell.RunCommandOpt,
-	) error {
-		return gitClone(cloneCtx, e.shell, gitFlags, gitCloneFlags, repository, ".", runOpts...)
+	fallback := false
+	if isFreshCloneRemoteMirrorAttempt(attempt) && attempt.accelerator && (sparse.active() || mirrorDir != "") {
+		attempt.outcome = remoteMirrorOutcomeSkipped
+		attempt.skipReason = remoteMirrorSkipAcceleratorOptions
 	}
 	if isFreshCloneRemoteMirrorAttempt(attempt) {
 		started := time.Now()
@@ -126,16 +124,19 @@ func (e *Executor) prepareCheckoutWorkdir(
 		// silently lose the saving. Unlike --depth, this does not fail loudly.
 		// Preserve Git's clone semantics and expose the cost through telemetry
 		// rather than reconstructing clone capability negotiation.
-		cloneErr := cloneCheckout(
-			remoteMirrorBulkGitFlags(ctx),
-			attempt.url,
-			shell.AlwaysHidePrompt(),
-		)
+		var cloneErr error
+		if attempt.accelerator {
+			cloneErr = e.cloneFromAccelerator(cloneCtx, attempt, gitCloneFlags, ".", false)
+		} else {
+			cloneErr = e.traceCloneCommand(cloneCtx, "remote-mirror", false, false, false, func(ctx context.Context) error {
+				return gitClone(ctx, e.shell, remoteMirrorBulkGitFlags(ctx), gitCloneFlags, attempt.url, ".", shell.AlwaysHidePrompt())
+			})
+		}
 		if cloneErr == nil {
 			// Refs and tags from this clone are the mirror's snapshot and may lag
-			// canonical; the built commit is still the backend's exact object
-			// ID. Durable origin is canonical. If the job is killed before this
-			// set-url, the next checkout's remote URL reconciliation repairs it.
+			// canonical. The built commit is the pinned object ID or, for HEAD,
+			// the result of a follow-up branch fetch. If the job is killed before
+			// this set-url, the next checkout's remote URL reconciliation repairs it.
 			cloneErr = e.shell.Command(
 				"git", "remote", "set-url", "origin", e.Repository,
 			).Run(ctx)
@@ -152,7 +153,7 @@ func (e *Executor) prepareCheckoutWorkdir(
 			}
 		}
 		hasCommit := false
-		if cloneErr == nil {
+		if cloneErr == nil && e.Commit != "HEAD" {
 			hasCommit = hasGitCommit(ctx, e.shell, ".git", e.Commit)
 		}
 		attempt.duration = time.Since(started)
@@ -163,6 +164,12 @@ func (e *Executor) prepareCheckoutWorkdir(
 			return ctxErr
 		}
 		if cloneErr == nil {
+			if e.Commit == "HEAD" && !shallowClone {
+				// The hit describes the bulk clone only. fetchSource must still
+				// fetch the requested branch, not use the clone's local HEAD.
+				attempt.outcome = remoteMirrorOutcomeHit
+				return nil
+			}
 			ambientAlternates, _ := e.shell.Env.Get("GIT_ALTERNATE_OBJECT_DIRECTORIES")
 			alternateObjects := ambientAlternates != "" ||
 				osutil.FileExists(filepath.Join(e.shell.Getwd(), ".git", "objects", "info", "alternates"))
@@ -211,9 +218,12 @@ func (e *Executor) prepareCheckoutWorkdir(
 			}
 			e.shell.Commentf("Remote Git mirror clone failed; falling back to canonical repository")
 		}
+		fallback = true
 	}
 
-	if err := cloneCheckout(nil, e.Repository); err != nil {
+	if err := e.traceCloneCommand(cloneCtx, "origin", false, false, fallback, func(ctx context.Context) error {
+		return gitClone(ctx, e.shell, nil, gitCloneFlags, e.Repository, ".")
+	}); err != nil {
 		return fmt.Errorf("cloning git repository: %w", err)
 	}
 	return nil

@@ -87,6 +87,8 @@ type BootstrapConfig struct {
 	GitSSHKey                               string        `cli:"git-ssh-key"`
 	GitCommitVerification                   string        `cli:"git-commit-verification"`
 	GitRemoteMirrorURL                      string        `cli:"git-remote-mirror-url"`
+	GitAcceleratorURL                       string        `cli:"git-accelerator-url"`
+	GitAcceleratorHosts                     []string      `cli:"git-accelerator-hosts" normalize:"list"`
 	GitMirrorsPath                          string        `cli:"git-mirrors-path" normalize:"filepath"`
 	GitMirrorCheckoutMode                   string        `cli:"git-mirror-checkout-mode"`
 	GitMirrorsLockTimeout                   int           `cli:"git-mirrors-lock-timeout"`
@@ -289,6 +291,8 @@ var BootstrapCommand = &cli.Command{
 			Usage:   "Backend-provided remote Git mirror used as an optional checkout source",
 			Sources: cli.EnvVars("BUILDKITE_GIT_REMOTE_MIRROR_URL"),
 		},
+		GitAcceleratorURLFlag,
+		GitAcceleratorHostsFlag,
 		GitMirrorsPathFlag,
 		GitMirrorCheckoutModeFlag,
 		GitMirrorsLockTimeoutFlag,
@@ -435,6 +439,10 @@ var BootstrapCommand = &cli.Command{
 		ctx, cfg, l, _, done := setupLoggerAndConfig[BootstrapConfig](ctx, c)
 		defer done()
 
+		if err := validateGitAccelerator(ctx, cfg.GitAcceleratorURL, cfg.GitAcceleratorHosts); err != nil {
+			return err
+		}
+
 		// Turn of PTY support if we're on Windows
 		runInPty := cfg.PTY
 		if runtime.GOOS == "windows" {
@@ -489,6 +497,11 @@ var BootstrapCommand = &cli.Command{
 			allowedRepositories = append(allowedRepositories, compiled)
 		}
 
+		acceleratorPath, managed := os.LookupEnv("BUILDKITE_GIT_ACCELERATOR_PATH")
+		if !managed { // Standalone bootstrap, without an agent job runner.
+			acceleratorPath = os.Getenv("PATH")
+		}
+
 		// Configure the bootstraper
 		bootstrap := job.New(job.ExecutorConfig{
 			AllowedRepositories:          allowedRepositories,
@@ -528,6 +541,10 @@ var BootstrapCommand = &cli.Command{
 			GitMirrorsSkipUpdate:         cfg.GitMirrorsSkipUpdate,
 			GitMirrorsLFSCache:           cfg.GitMirrorsLFSCache,
 			GitRemoteMirrorURL:           cfg.GitRemoteMirrorURL,
+			GitAcceleratorURL:            cfg.GitAcceleratorURL,
+			GitAcceleratorHosts:          cfg.GitAcceleratorHosts,
+			GitAcceleratorPath:           acceleratorPath,
+			GitAcceleratorDisableHTTP:    os.Getenv("BUILDKITE_GIT_ACCELERATOR_DISABLE_HTTP") == "true",
 			GitSubmodules:                cfg.GitSubmodules,
 			GitSubmoduleCloneConfig:      cfg.GitSubmoduleCloneConfig,
 			HooksPath:                    cfg.HooksPath,

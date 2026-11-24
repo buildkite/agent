@@ -232,6 +232,20 @@ func validateGitCommitVerification(value string) error {
 	return nil
 }
 
+func validateGitAccelerator(ctx context.Context, url string, hosts []string) error {
+	if experiments.IsEnabled(ctx, experiments.GitAcceleratorCloneKitSeedOnly) && !experiments.IsEnabled(ctx, experiments.GitAcceleratorCloneKit) {
+		return fmt.Errorf("--experiment %s requires --experiment %s", experiments.GitAcceleratorCloneKitSeedOnly, experiments.GitAcceleratorCloneKit)
+	}
+	if experiments.IsEnabled(ctx, experiments.GitAcceleratorMirror) {
+		if err := job.ValidateGitAcceleratorURL(url); err != nil {
+			return err
+		}
+	} else if experiments.IsEnabled(ctx, experiments.GitAcceleratorCloneKit) {
+		return fmt.Errorf("--experiment %s requires --experiment %s", experiments.GitAcceleratorCloneKit, experiments.GitAcceleratorMirror)
+	}
+	return job.ValidateGitAcceleratorHosts(hosts)
+}
+
 // Git related flags shared between agent start and bootstrap
 var (
 	SkipCheckoutFlag = &cli.BoolFlag{
@@ -319,6 +333,18 @@ var (
 		Value:   job.SparseCheckoutModeCone.String(),
 		Usage:   fmt.Sprintf("Changes how the sparse checkout paths are interpreted; available modes are %v. ′cone′ treats each path as a directory to include, which is git's default and enables faster pattern matching, but it accepts only directory names. ′no-cone′ treats each path as a gitignore-style pattern, which allows globs and exclusions such as ′!/docs/′, and requires git >= 2.35. Git LFS objects are not scoped to the sparse paths in ′no-cone′ mode.", job.SparseCheckoutModes),
 		Sources: cli.EnvVars("BUILDKITE_GIT_SPARSE_CHECKOUT_MODE"),
+	}
+
+	GitAcceleratorURLFlag = &cli.StringFlag{
+		Name:    "git-accelerator-url",
+		Usage:   "HTTPS origin of the Git accelerator (requires the git-accelerator-mirror experiment)",
+		Sources: cli.EnvVars("BUILDKITE_GIT_ACCELERATOR_URL"),
+	}
+
+	GitAcceleratorHostsFlag = &cli.StringSliceFlag{
+		Name:    "git-accelerator-hosts",
+		Usage:   "Comma-separated list of exact upstream repository hostnames eligible for Git acceleration (default: all eligible hosts)",
+		Sources: cli.EnvVars("BUILDKITE_GIT_ACCELERATOR_HOSTS"),
 	}
 
 	GitMirrorsPathFlag = &cli.StringFlag{

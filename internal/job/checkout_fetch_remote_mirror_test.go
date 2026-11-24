@@ -459,7 +459,7 @@ func TestResolveRemoteMirrorAttemptSkipsGitFileCheckout(t *testing.T) {
 	)
 	e.shell.Env.Set("BUILDKITE_BUILD_CHECKOUT_PATH", checkout)
 
-	attempt := e.resolveRemoteMirrorAttempt(0)
+	attempt := e.resolveRemoteMirrorAttempt(t.Context(), 0)
 	if attempt.outcome != remoteMirrorOutcomeSkipped ||
 		attempt.skipReason != remoteMirrorSkipSeparateGitDir {
 		t.Errorf("resolveRemoteMirrorAttempt() = %+v, want separate-git-dir skip", attempt)
@@ -675,7 +675,7 @@ func TestCheckoutCancellationCleanupFailureRemovesCheckout(t *testing.T) {
 	e.GitCleanFlags = "-fdq"
 	e.shell.Env.Set("BUILDKITE_BUILD_CHECKOUT_PATH", checkout)
 	e.shell.Env.Set("GIT_SSL_NO_VERIFY", "true")
-	if attempt := e.resolveRemoteMirrorAttempt(0); attempt.site != remoteMirrorSiteExistingCheckout {
+	if attempt := e.resolveRemoteMirrorAttempt(t.Context(), 0); attempt.site != remoteMirrorSiteExistingCheckout {
 		t.Fatalf("resolveRemoteMirrorAttempt() = %+v, want existing checkout", attempt)
 	}
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)

@@ -105,6 +105,67 @@ func TestCreateEnvironmentProtectedEnv(t *testing.T) {
 	}
 }
 
+func TestCreateEnvironmentGitAccelerator(t *testing.T) {
+	t.Setenv("SSL_CERT_FILE", "/operator/ca.pem")
+	t.Setenv("SSL_CERT_DIR", "/operator/ca")
+	const accelerator = "https://cache.example.com"
+	jobEnv := map[string]string{
+		"BUILDKITE_GIT_ACCELERATOR_URL":          "https://job.example.com",
+		"buildkite_git_accelerator_url":          "https://job.example.com",
+		"BUILDKITE_GIT_ACCELERATOR_PATH":         "/job/bin",
+		"BUILDKITE_GIT_ACCELERATOR_HOSTS":        "untrusted.example",
+		"buildkite_git_accelerator_hosts":        "untrusted.example",
+		"BUILDKITE_GIT_ACCELERATOR_DISABLE_HTTP": "false",
+		"SSL_CERT_FILE":                          "/job/ca.pem",
+		"SSL_CERT_DIR":                           "/job/ca",
+	}
+	ctx, _ := experiments.Enable(t.Context(), experiments.GitAcceleratorCloneKit)
+	conf := AgentConfiguration{GitAcceleratorURL: accelerator, GitAcceleratorHosts: []string{"github.com", "git.example.com"}}
+	r := controlPlaneTestRunner(t, jobEnv, conf)
+	got, err := r.createEnvironment(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bootstrapEnv := envutil.FromSlice(got)
+	if got := bootstrapEnv.GetString("BUILDKITE_GIT_ACCELERATOR_URL", ""); got != accelerator {
+		t.Errorf("accelerator URL = %q, want %q", got, accelerator)
+	}
+	if got := bootstrapEnv.GetString("BUILDKITE_GIT_ACCELERATOR_PATH", ""); got != os.Getenv("PATH") {
+		t.Error("accelerator Git did not inherit the operator's search path")
+	}
+	const hosts = "github.com,git.example.com"
+	if got := bootstrapEnv.GetString("BUILDKITE_GIT_ACCELERATOR_HOSTS", ""); got != hosts {
+		t.Errorf("accelerator hosts = %q, want %q", got, hosts)
+	}
+	for name, value := range envutil.SeqSlice(got) {
+		if strings.EqualFold(name, "BUILDKITE_GIT_ACCELERATOR_URL") && value != accelerator {
+			t.Errorf("untrusted accelerator URL reached bootstrap: %s=%q", name, value)
+		}
+		if strings.EqualFold(name, "BUILDKITE_GIT_ACCELERATOR_HOSTS") && value != hosts {
+			t.Errorf("untrusted accelerator hosts reached bootstrap: %s=%q", name, value)
+		}
+	}
+	if !bootstrapEnv.GetBool("BUILDKITE_GIT_ACCELERATOR_DISABLE_HTTP", false) {
+		t.Error("accelerator HTTP must not use job-supplied TLS roots")
+	}
+	for _, key := range []string{"SSL_CERT_FILE", "SSL_CERT_DIR"} {
+		if got := bootstrapEnv.GetString(key, ""); got != jobEnv[key] {
+			t.Errorf("%s = %q, want %q for the job", key, got, jobEnv[key])
+		}
+	}
+	jobEnv["SSL_CERT_FILE"] = "/operator/ca.pem"
+	delete(jobEnv, "SSL_CERT_DIR")
+	jobEnv["BUILDKITE_GIT_ACCELERATOR_DISABLE_HTTP"] = "true"
+	r = controlPlaneTestRunner(t, jobEnv, conf)
+	withOperatorTrust, err := r.createEnvironment(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if envutil.FromSlice(withOperatorTrust).GetBool("BUILDKITE_GIT_ACCELERATOR_DISABLE_HTTP", true) {
+		t.Error("accelerator HTTP should remain enabled when the job uses the operator's TLS roots")
+	}
+}
+
 func TestCreateEnvironmentRepositoryAllowlist(t *testing.T) {
 	t.Setenv("BUILDKITE_ALLOWED_REPOSITORIES", "ambient-policy")
 
