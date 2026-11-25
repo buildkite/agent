@@ -103,6 +103,7 @@ type AgentConfiguration struct {
 	DisableWarningsFor           []string
 	AllowMultipartArtifactUpload bool
 	ArtifactUploadConcurrency    int
+	OIDCTokenMaxLifetime         int
 
 	PingMode string
 }

@@ -301,6 +301,48 @@ func TestEnvironmentHookCannotSetCheckoutInfraVars(t *testing.T) {
 	}
 }
 
+func TestEnvironmentHookCannotChangeOIDCTokenMaxLifetime(t *testing.T) {
+	t.Parallel()
+
+	tester, err := NewExecutorTester(mainCtx)
+	if err != nil {
+		t.Fatalf("NewExecutorTester() error = %v", err)
+	}
+	defer tester.Close()
+
+	filename := "environment"
+	script := []string{
+		"#!/usr/bin/env bash",
+		"export BUILDKITE_OIDC_TOKEN_MAX_LIFETIME=86400",
+	}
+	if runtime.GOOS == "windows" {
+		filename = "environment.bat"
+		script = []string{
+			"@echo off",
+			"set BUILDKITE_OIDC_TOKEN_MAX_LIFETIME=86400",
+		}
+	}
+
+	if err := os.WriteFile(filepath.Join(tester.HooksDir, filename), []byte(strings.Join(script, "\n")), 0o700); err != nil {
+		t.Fatalf("os.WriteFile(%q, script, 0o700) = %v", filename, err)
+	}
+
+	tester.ExpectGlobalHook("command").Once().AndExitWith(0).AndCallFunc(func(c *bintest.Call) {
+		if got, want := c.GetEnv("BUILDKITE_OIDC_TOKEN_MAX_LIFETIME"), "120"; got != want {
+			_, _ = fmt.Fprintf(c.Stderr, "BUILDKITE_OIDC_TOKEN_MAX_LIFETIME=%q, want %q\n", got, want)
+			c.Exit(1)
+			return
+		}
+		c.Exit(0)
+	})
+
+	tester.RunAndCheck(t, "BUILDKITE_OIDC_TOKEN_MAX_LIFETIME=120")
+
+	if !strings.Contains(tester.Output, "env vars were blocked") || !strings.Contains(tester.Output, "BUILDKITE_OIDC_TOKEN_MAX_LIFETIME") {
+		t.Fatalf("output did not report BUILDKITE_OIDC_TOKEN_MAX_LIFETIME as blocked\noutput: %s", tester.Output)
+	}
+}
+
 func TestEnvironmentHookCannotRelaxCheckoutOverrideMode(t *testing.T) {
 	t.Parallel()
 

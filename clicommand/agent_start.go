@@ -222,6 +222,7 @@ type AgentStartConfig struct {
 	JobContextDir                   string        `cli:"job-context-dir" normalize:"filepath"`
 	NoMultipartArtifactUpload       bool          `cli:"no-multipart-artifact-upload"`
 	ArtifactUploadConcurrency       int           `cli:"artifact-upload-concurrency"`
+	OIDCTokenMaxLifetime            int           `cli:"oidc-token-max-lifetime"`
 
 	// API + agent behaviour
 	PingMode string `cli:"ping-mode"`
@@ -823,6 +824,11 @@ var AgentStartCommand = &cli.Command{
 			Value:   5 * time.Minute,
 		},
 		JobContextDirFlag,
+		&cli.IntFlag{
+			Name:    "oidc-token-max-lifetime",
+			Usage:   "The maximum lifetime (in seconds) of OIDC tokens that jobs on this agent can request with `buildkite-agent oidc request-token`. Requests for a longer --lifetime are rejected. 0 means no agent-side limit. This guards the request-token command only: it does not stop a job from calling the Buildkite API directly (default: 0)",
+			Sources: cli.EnvVars(OIDCTokenMaxLifetimeEnvVar),
+		},
 
 		// Other shared flags
 		RedactedVars,
@@ -885,6 +891,10 @@ var AgentStartCommand = &cli.Command{
 		sparseCheckoutMode, err := job.ParseSparseCheckoutMode(cfg.GitSparseCheckoutMode)
 		if err != nil {
 			return err
+		}
+
+		if cfg.OIDCTokenMaxLifetime < 0 {
+			return fmt.Errorf("oidc-token-max-lifetime %d must be a non-negative integer", cfg.OIDCTokenMaxLifetime)
 		}
 
 		if !slices.Contains(pingModes, cfg.PingMode) {
@@ -1147,6 +1157,7 @@ var AgentStartCommand = &cli.Command{
 			TelemetryServiceName:                    cfg.TelemetryServiceName,
 			AllowMultipartArtifactUpload:            !cfg.NoMultipartArtifactUpload,
 			ArtifactUploadConcurrency:               cfg.ArtifactUploadConcurrency,
+			OIDCTokenMaxLifetime:                    cfg.OIDCTokenMaxLifetime,
 			Executor:                                cfg.Executor,
 			KubernetesContainerStartTimeout:         cfg.KubernetesContainerStartTimeout,
 			JobContextDir:                           cfg.JobContextDir,
