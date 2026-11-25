@@ -20,6 +20,7 @@ import (
 
 	"github.com/buildkite/agent/v4/agent"
 	"github.com/buildkite/agent/v4/api"
+	"github.com/buildkite/agent/v4/internal/process"
 	"github.com/buildkite/agent/v4/internal/ptr"
 	"github.com/buildkite/agent/v4/logger"
 	"github.com/buildkite/agent/v4/metrics"
@@ -49,6 +50,7 @@ type testRunJobConfig struct {
 	verificationJWKS jwk.Set
 	client           *api.Client
 	logger           logger.Logger
+	cancelSignal     process.Signal
 }
 
 func runJob(t *testing.T, ctx context.Context, cfg testRunJobConfig) error {
@@ -79,6 +81,9 @@ func runJob(t *testing.T, ctx context.Context, cfg testRunJobConfig) error {
 		Job:                cfg.job,
 		JWKS:               cfg.verificationJWKS,
 		AgentConfiguration: cfg.agentCfg,
+		Executor:           cfg.agentCfg.Executor,
+		JobContextDir:      cfg.agentCfg.JobContextDir,
+		CancelSignal:       cfg.cancelSignal,
 		MetricsScope:       scope,
 		JobStatusInterval:  1 * time.Second,
 	})

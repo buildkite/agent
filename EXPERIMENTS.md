@@ -18,6 +18,31 @@ If an experiment doesn't exist, no error will be raised.
 
 ## Available Experiments
 
+### `docker-executor`
+
+On a dedicated Linux agent with a static agent binary and Docker listening on
+`/var/run/docker.sock`, run:
+
+```bash
+buildkite-agent start --experiment docker-executor --executor docker \
+  --executor-docker-image your-registry.example/ci-tools:stable
+```
+
+The job image from the Agent API takes precedence over `--executor-docker-image`.
+If neither is set, the job fails rather than running on the host. The image must
+provide the configured shell and any tools the job uses, including Git and CA
+certificates for normal Git checkout. Docker and Compose clients are not injected.
+
+Agents that require valid step signatures reject per-job images because the
+signature does not cover the resolved image. Use an operator-configured image
+without a job image on those agents.
+
+The executor mounts the local Docker socket by default, giving jobs control of
+the Docker host. Use only with trusted workloads. Pass `--executor-docker-mount-socket=false`
+to omit that bind mount. This does not isolate jobs from shared host paths or any
+access you grant through operator mounts or networking. Keep experimental agents
+in a separate queue; other executors do not consume the Agent API image field.
+
 ### `pre-bootstrap-hook-timeout`
 
 Opts in to a ten-second default timeout for the agent-side `pre-bootstrap`

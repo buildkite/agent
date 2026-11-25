@@ -118,8 +118,10 @@ var (
 			"manages the shared /workspace volume that Kubernetes mode defaults " +
 			"to. When running --kubernetes-exec under your own orchestration, set " +
 			"this on every container to the path where the shared volume is " +
-			"mounted in that container. Outside Kubernetes mode it defaults to " +
-			"the system temporary directory and rarely needs changing",
+			"mounted in that container. With --executor docker only a private " +
+			"per-job subdirectory is mounted into each job container. Otherwise " +
+			"it defaults to the system temporary directory and " +
+			"rarely needs changing",
 		Sources: cli.EnvVars("BUILDKITE_JOB_CONTEXT_DIR"),
 	}
 

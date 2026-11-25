@@ -7,6 +7,7 @@ import (
 
 	"github.com/buildkite/agent/v4/agent"
 	"github.com/buildkite/agent/v4/api"
+	"github.com/buildkite/agent/v4/internal/dockerexec"
 	"github.com/buildkite/bintest/v3"
 	"github.com/buildkite/go-pipeline"
 	"github.com/buildkite/go-pipeline/signature"
@@ -811,11 +812,20 @@ func TestJobVerificationFailuresAreCaptured(t *testing.T) {
 	cases := []struct {
 		name             string
 		job              api.Job
+		image            string
 		behavior         string
 		signingKey       jwk.Key
 		verificationJWKS jwk.Set
 		wantReason       string
 	}{
+		{
+			name:             "valid signature with a per-job Docker image",
+			image:            "unused image reference",
+			behavior:         agent.VerificationBehaviourBlock,
+			signingKey:       symmetricJWKFor(t, signingKeyLlamas),
+			verificationJWKS: jwksFromKeys(t, symmetricJWKFor(t, signingKeyLlamas)),
+			wantReason:       "a per-job Docker image is not covered by the step signature",
+		},
 		{
 			name:             "invalid signature",
 			behavior:         agent.VerificationBehaviourBlock,
@@ -878,10 +888,17 @@ func TestJobVerificationFailuresAreCaptured(t *testing.T) {
 			}
 			defer mb.CheckAndClose(t) //nolint:errcheck // bintest logs to t
 
+			agentCfg := agent.AgentConfiguration{VerificationFailureBehaviour: tc.behavior}
+			if tc.image != "" {
+				job.Image = tc.image
+				agentCfg.Executor = agent.ExecutorDocker
+				agentCfg.DockerExecutor = &dockerexec.Executor{} // No daemon is needed to reject the job.
+				agentCfg.JobContextDir = t.TempDir()
+			}
 			err := runJob(t, t.Context(), testRunJobConfig{
 				job:              &job,
 				server:           server,
-				agentCfg:         agent.AgentConfiguration{VerificationFailureBehaviour: tc.behavior},
+				agentCfg:         agentCfg,
 				mockBootstrap:    mb,
 				verificationJWKS: tc.verificationJWKS,
 			})
@@ -898,6 +915,10 @@ func TestJobVerificationFailuresAreCaptured(t *testing.T) {
 			}
 			if len(captured) != 1 || captured[0].Code != "buildkite.job_signature_rejected" || !strings.Contains(captured[0].Message, tc.wantReason) {
 				t.Errorf("captured errors = %+v, want buildkite.job_signature_rejected saying %q", captured, tc.wantReason)
+			}
+			finishes := e.finishesFor(t, job.ID)
+			if len(finishes) != 1 || finishes[0].SignalReason != agent.SignalReasonSignatureRejected || finishes[0].ExitStatus != "-1" {
+				t.Errorf("finishes = %+v, want one signature rejection", finishes)
 			}
 		})
 	}

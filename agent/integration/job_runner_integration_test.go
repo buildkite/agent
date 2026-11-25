@@ -18,11 +18,85 @@ import (
 	"github.com/buildkite/agent/v4/agent"
 	"github.com/buildkite/agent/v4/api"
 	"github.com/buildkite/agent/v4/env"
+	"github.com/buildkite/agent/v4/internal/dockerexec"
 	"github.com/buildkite/agent/v4/internal/experiments"
+	"github.com/buildkite/agent/v4/internal/process"
 	"github.com/buildkite/agent/v4/logger"
 	"github.com/buildkite/agent/v4/metrics"
 	"github.com/buildkite/bintest/v3"
 )
+
+func TestDockerExecutorRunsJobBootstrap(t *testing.T) {
+	if os.Getenv("BUILDKITE_TEST_DOCKER_EXECUTOR") == "" {
+		t.Skip("set BUILDKITE_TEST_DOCKER_EXECUTOR and CGO_ENABLED=0 to test against a local Docker daemon")
+	}
+	t.Setenv("BUILDKITE_AGENT_TOKEN", "fake-registration-token")
+	builds, jobContext := t.TempDir(), t.TempDir()
+	const image = "alpine:3.20"
+	for _, mountSocket := range []bool{true, false} {
+		t.Run(fmt.Sprintf("mount-socket=%t", mountSocket), func(t *testing.T) {
+			e := createTestAgentEndpoint()
+			server := e.server()
+			t.Cleanup(server.Close)
+			docker, err := dockerexec.Prepare(t.Context(), logger.Discard, dockerexec.Config{
+				Image: "not-the-job-image:unused", MountSocket: mountSocket,
+				BuildPath: builds, JobContextDir: jobContext, SocketsPath: t.TempDir(),
+				CancelSignal: process.SIGTERM,
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			socketCheck := "test -S /var/run/docker.sock"
+			if !mountSocket {
+				socketCheck = "test ! -S /var/run/docker.sock"
+			}
+			command := `set -eu
+test -r /etc/alpine-release
+test "$BUILDKITE_IMAGE" = alpine:3.20
+test "$BUILDKITE_AGENT_ACCESS_TOKEN" = bkaj_job-token
+test -z "${BUILDKITE_AGENT_TOKEN:-}"
+test -r "$BUILDKITE_ENV_JSON_FILE"
+test -S "$BUILDKITE_AGENT_JOB_API_SOCKET"
+` + socketCheck + `
+echo 'container bootstrap contract ok'
+exit 23`
+			if err := runJob(t, t.Context(), testRunJobConfig{
+				job: &api.Job{
+					ID: defaultJobID, Token: "bkaj_job-token", Image: image, ChunksMaxSizeBytes: 100_000,
+					Env: map[string]string{
+						"BUILDKITE_AGENT_NAME":        "docker-test-agent",
+						"BUILDKITE_BRANCH":            "main",
+						"BUILDKITE_COMMAND":           command,
+						"BUILDKITE_COMMIT":            "HEAD",
+						"BUILDKITE_IMAGE":             "untrusted-env-image",
+						"BUILDKITE_JOB_ID":            defaultJobID,
+						"BUILDKITE_ORGANIZATION_SLUG": "test",
+						"BUILDKITE_PIPELINE_PROVIDER": "custom",
+						"BUILDKITE_PIPELINE_SLUG":     "test",
+						"BUILDKITE_REPO":              "https://example.invalid/repo.git",
+					},
+				},
+				server: server, cancelSignal: process.SIGTERM,
+				agentCfg: agent.AgentConfiguration{
+					Executor: agent.ExecutorDocker, DockerExecutor: docker,
+					BuildPath: builds, JobContextDir: jobContext, SkipCheckout: true, CommandEval: true,
+					Shell: "/bin/sh -e -c", GitCommitVerification: "off", GitMirrorCheckoutMode: "reference",
+					CheckoutOverrideMode: env.CheckoutOverrideFromJob,
+				},
+			}); err != nil {
+				t.Fatal(err)
+			}
+			logs := e.logsFor(t, defaultJobID)
+			finish := e.finishesFor(t, defaultJobID)
+			if len(finish) != 1 || finish[0].ExitStatus != "23" || !strings.Contains(logs, "container bootstrap contract ok\n") {
+				t.Fatalf("expected exit 23 and the bootstrap marker, got %v; job log:\n%s", finish, logs)
+			}
+			if entries, err := os.ReadDir(jobContext); err != nil || len(entries) != 0 {
+				t.Errorf("job context not cleaned up: %v, %v", entries, err)
+			}
+		})
+	}
+}
 
 func TestPostBootstrapHook(t *testing.T) {
 	t.Parallel()
