@@ -70,11 +70,6 @@ steps:
       BUILDKITE_NO_LOCAL_HOOKS: "true"
     command: |
       set -euo pipefail
-      outcome=$$(buildkite-agent step get outcome --step github-release)
-      if [[ "$$outcome" != passed ]]; then
-        echo 'Skipping Nix publisher: GitHub release did not pass'
-        exit 0
-      fi
       version=$$(buildkite-agent meta-data get github_release_version)
       export AGENT_RELEASE_TAG="v$$version"
 
