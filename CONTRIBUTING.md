@@ -15,8 +15,8 @@ Our objective is to have no PR wait more than a week for some sort of interactio
 
 ## Nix releases
 
-After GitHub publishes a stable agent release, the release pipeline triggers
-the shared [Nix publisher](https://buildkite.com/buildkite/nix) with the
-release tag. If it fails, replay that pipeline for the tag rather
-than rerunning the agent release. The flake, manifest, and validation are
-maintained in [buildkite/nix](https://github.com/buildkite/nix).
+After GitHub publishes a stable agent release, the release pipeline passes
+its tag to [agent-release-nix](https://buildkite.com/buildkite/agent-release-nix).
+That pipeline updates only the agent package in the shared
+[buildkite/nix](https://github.com/buildkite/nix) flake. If it fails, replay
+that pipeline for the same tag rather than rerunning the agent release.
