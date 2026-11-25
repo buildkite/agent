@@ -26,6 +26,7 @@ func (p failedJobProcess) Interrupt() error               { return nil }
 func (p failedJobProcess) Terminate() error               { return nil }
 func (p failedJobProcess) Run(context.Context) error      { return p.err }
 func (p failedJobProcess) WaitStatus() process.WaitStatus { return nil }
+func (p failedJobProcess) Cleanup(context.Context) error  { return nil }
 
 func TestKubernetesStartTimeoutIsCaptured(t *testing.T) {
 	for _, tc := range []struct {

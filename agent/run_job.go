@@ -75,6 +75,13 @@ func (e *missingKeyError) Error() string {
 
 // Run runs the job.
 func (r *JobRunner) Run(ctx context.Context, ignoreAgentInDispatches *bool) (err error) {
+	if r.dockerContextDir != "" {
+		defer func() {
+			if err := os.RemoveAll(r.dockerContextDir); err != nil {
+				r.agentLogger.Warnf("Error removing Docker job context: %v", err)
+			}
+		}()
+	}
 	if r.cancelled.Load() {
 		return errors.New("job already cancelled before running")
 	}
@@ -204,6 +211,17 @@ func (r *JobRunner) Run(ctx context.Context, ignoreAgentInDispatches *bool) (err
 			_, _ = fmt.Fprintln(r.jobLogs, "~~~ ✅ Job signature verified")
 			_, _ = fmt.Fprintf(r.jobLogs, "signature: %s\n", job.Step.Signature.Value)
 		}
+	}
+
+	// The step signature does not cover the resolved Docker image. Do not
+	// let a job choose the bootstrap runtime when verification is required.
+	if r.conf.Executor == ExecutorDocker && job.Image != "" && r.conf.JWKS != nil && r.VerificationFailureBehavior == VerificationBehaviourBlock {
+		const reason = "This agent rejected the job because a per-job Docker image is not covered by the step signature. Remove the job image and use --executor-docker-image on the agent instead."
+		r.verificationFailureLogs(VerificationBehaviourBlock, errors.New("per-job Docker images are not covered by step signatures; use --executor-docker-image on the agent instead"))
+		r.captureJobError(ctx, "buildkite.job_signature_rejected", reason)
+		exit.Status = -1
+		exit.SignalReason = SignalReasonSignatureRejected
+		return nil
 	}
 
 	// Log a message if the job has cache settings but is running on a self-hosted agent.
@@ -452,15 +470,27 @@ func (r *JobRunner) runJob(ctx context.Context) core.ProcessExit {
 		}
 
 		// The process did not run at all, so make sure it fails
-		return core.ProcessExit{
+		exit := core.ProcessExit{
 			Status:       -1,
 			SignalReason: SignalReasonProcessRunError,
 		}
+		if r.conf.Executor != ExecutorDocker {
+			return exit
+		}
+		switch {
+		case r.agentStopping.Load():
+			exit.SignalReason = SignalReasonAgentStop
+		case r.cancelled.Load():
+			exit.SignalReason = SignalReasonCancel
+		}
+		return exit
 	}
 	// Intended to capture situations where the job-exec (aka bootstrap) container did not
 	// start. Normally such errors are hidden in the Kubernetes events. Let's feed them up
 	// to the user as they may be the caused by errors in the pipeline definition.
-	k8sProcess, isK8s := r.process.(*kubernetes.Runner)
+	k8sProcess, isK8s := r.process.(interface {
+		AnyClientIn(kubernetes.ClientState) bool
+	})
 	if isK8s && !r.agentStopping.Load() {
 		switch {
 		case r.cancelled.Load() && k8sProcess.AnyClientIn(kubernetes.StateNotYetConnected):
@@ -537,6 +567,12 @@ func (r *JobRunner) cleanup(ctx context.Context, wg *sync.WaitGroup, exit core.P
 	// Wait for the routines that we spun up to finish
 	r.agentLogger.Debugf("[JobRunner] Waiting for all other routines to finish")
 	wg.Wait()
+
+	cleanupCtx, cancelCleanup := context.WithTimeout(context.WithoutCancel(ctx), jobExecutionCleanupTimeout)
+	if err := r.process.Cleanup(cleanupCtx); err != nil {
+		r.agentLogger.Errorf("[JobRunner] Error cleaning up job execution: %v", err)
+	}
+	cancelCleanup()
 
 	// Upload final bootstrap diagnostics before potentially slow host cleanup.
 	// Keep the env files and job token available, and finish host cleanup before

@@ -31,6 +31,7 @@ import (
 	"github.com/buildkite/agent/v4/internal/concurrently"
 	awssigner "github.com/buildkite/agent/v4/internal/cryptosigner/aws"
 	gcpsigner "github.com/buildkite/agent/v4/internal/cryptosigner/gcp"
+	"github.com/buildkite/agent/v4/internal/dockerexec"
 	"github.com/buildkite/agent/v4/internal/experiments"
 	"github.com/buildkite/agent/v4/internal/job"
 	"github.com/buildkite/agent/v4/internal/job/hook"
@@ -144,6 +145,13 @@ type AgentStartConfig struct {
 	HooksShell      string `cli:"hooks-shell"`
 	BootstrapScript string `cli:"bootstrap-script" normalize:"commandpath"`
 	NoPTY           bool   `cli:"no-pty"`
+
+	Executor                  string   `cli:"executor"`
+	ExecutorDockerImage       string   `cli:"executor-docker-image"`
+	ExecutorDockerMountSocket bool     `cli:"executor-docker-mount-socket"`
+	ExecutorDockerMount       []string `cli:"executor-docker-mount"`
+	ExecutorDockerEnv         []string `cli:"executor-docker-env"`
+	ExecutorDockerNetwork     string   `cli:"executor-docker-network"`
 
 	Queue                     string        `cli:"queue"`
 	Tags                      []string      `cli:"tags" normalize:"list"`
@@ -571,6 +579,45 @@ var AgentStartCommand = &cli.Command{
 		CheckoutAttemptsFlag,
 
 		&cli.StringFlag{
+			Name: "executor",
+			Usage: "How to launch each job's bootstrap. One of: exec, which runs --bootstrap-script " +
+				"as a local process, or docker (Linux only; requires --experiment docker-executor). Default: exec",
+			Sources: cli.EnvVars("BUILDKITE_EXECUTOR"),
+			// No Value: leaving it empty lets resolveExecutor tell an unset
+			// executor apart from an explicit one that conflicts with
+			// --kubernetes-exec.
+		},
+		&cli.StringFlag{
+			Name:    "executor-docker-image",
+			Usage:   "Default image when Buildkite does not specify one. The image must supply the configured shell, Git and CA certificates",
+			Sources: cli.EnvVars("BUILDKITE_EXECUTOR_DOCKER_IMAGE"),
+		},
+		&cli.BoolFlag{
+			Name:    "executor-docker-mount-socket",
+			Usage:   "Mount the Docker daemon socket into job containers, giving jobs control of the Docker host",
+			Value:   true,
+			Sources: cli.EnvVars("BUILDKITE_EXECUTOR_DOCKER_MOUNT_SOCKET"),
+		},
+		&cli.StringSliceFlag{
+			Name: "executor-docker-mount",
+			Usage: "An extra bind mount for docker executor job containers, as src:dst or src:dst:ro. " +
+				"HOME in the container is /tmp/buildkite-home, but ssh reads its config and keys from the " +
+				"agent user's home directory in /etc/passwd, so mount ~/.ssh at that path. Can be repeated",
+			Sources: cli.EnvVars("BUILDKITE_EXECUTOR_DOCKER_MOUNT"),
+		},
+		&cli.StringSliceFlag{
+			Name: "executor-docker-env",
+			Usage: "An extra environment variable for docker executor job containers, as KEY=VALUE, or " +
+				"KEY to copy the value from the agent's environment (use KEY for values containing commas). " +
+				"Job environment variables take precedence. Can be repeated",
+			Sources: cli.EnvVars("BUILDKITE_EXECUTOR_DOCKER_ENV"),
+		},
+		&cli.StringFlag{
+			Name:    "executor-docker-network",
+			Usage:   "The Docker network mode for docker executor job containers (default: Docker's default bridge network)",
+			Sources: cli.EnvVars("BUILDKITE_EXECUTOR_DOCKER_NETWORK"),
+		},
+		&cli.StringFlag{
 			Name:    "bootstrap-script",
 			Value:   "",
 			Usage:   "The command that is executed for bootstrapping a job, defaults to the bootstrap sub-command of this binary",
@@ -849,6 +896,33 @@ var AgentStartCommand = &cli.Command{
 			cfg.PingMode = agent.PingModePollOnly
 		}
 
+		executor, err := resolveExecutor(cfg.Executor, cfg.KubernetesExec)
+		if err != nil {
+			return err
+		}
+		cfg.Executor = executor
+		if cfg.Executor != agent.ExecutorDocker && (cfg.ExecutorDockerImage != "" || !cfg.ExecutorDockerMountSocket || len(cfg.ExecutorDockerMount) > 0 || len(cfg.ExecutorDockerEnv) > 0 || cfg.ExecutorDockerNetwork != "") {
+			l.Warnf("executor-docker-* settings are ignored because the executor is %s, not docker", cfg.Executor)
+		}
+		if cfg.Executor == agent.ExecutorDocker {
+			if !experiments.IsEnabled(ctx, experiments.DockerExecutor) {
+				return fmt.Errorf("--executor docker requires --experiment %s", experiments.DockerExecutor)
+			}
+			if cfg.BootstrapScript != "" {
+				return fmt.Errorf("--bootstrap-script cannot be combined with --executor docker")
+			}
+			// Jobs see the job context dir through a bind mount, so give
+			// them a dedicated one rather than the whole temp dir.
+			if cfg.JobContextDir == "" {
+				dir, err := os.MkdirTemp("", "buildkite-job-context-")
+				if err != nil {
+					return fmt.Errorf("creating a job context dir for the docker executor: %w", err)
+				}
+				defer os.RemoveAll(dir) //nolint:errcheck // Best effort on the way out.
+				cfg.JobContextDir = dir
+			}
+		}
+
 		validSpawnWithPriorities := []string{"static", "ascending", "descending"}
 		if !slices.Contains(validSpawnWithPriorities, cfg.SpawnWithPriority) {
 			return fmt.Errorf("invalid spawn-with-priority, must be one of %v", validSpawnWithPriorities)
@@ -878,8 +952,9 @@ var AgentStartCommand = &cli.Command{
 			cfg.NoPTY = true
 		}
 
-		// Set a useful default for the bootstrap script
-		if cfg.BootstrapScript == "" {
+		// Set a useful default for the bootstrap script. The docker executor
+		// does not use one.
+		if cfg.BootstrapScript == "" && cfg.Executor != agent.ExecutorDocker {
 			exePath, err := os.Executable()
 			if err != nil {
 				return errors.New("unable to find executable path for bootstrap")
@@ -1072,7 +1147,7 @@ var AgentStartCommand = &cli.Command{
 			TelemetryServiceName:                    cfg.TelemetryServiceName,
 			AllowMultipartArtifactUpload:            !cfg.NoMultipartArtifactUpload,
 			ArtifactUploadConcurrency:               cfg.ArtifactUploadConcurrency,
-			KubernetesExec:                          cfg.KubernetesExec,
+			Executor:                                cfg.Executor,
 			KubernetesContainerStartTimeout:         cfg.KubernetesContainerStartTimeout,
 			JobContextDir:                           cfg.JobContextDir,
 			PingMode:                                cfg.PingMode,
@@ -1193,9 +1268,19 @@ var AgentStartCommand = &cli.Command{
 			return fmt.Errorf("failed to parse cancel-signal: %w", err)
 		}
 
+		if cfg.Executor == agent.ExecutorDocker {
+			agentConf.DockerExecutor, err = dockerexec.Prepare(ctx, l, dockerExecutorConfig(cfg, cancelSig))
+			if err != nil {
+				return fmt.Errorf("preparing the docker executor: %w", err)
+			}
+			if cfg.ExecutorDockerMountSocket {
+				l.Warnf("Docker executor job containers can control this host through its Docker socket; use --executor-docker-mount-socket=false to disable the mount")
+			}
+		}
+
 		tags, err := agent.FetchTags(ctx, l, agent.FetchTagsConfig{
 			Tags:                      cfg.Tags,
-			TagsFromK8s:               cfg.KubernetesExec,
+			TagsFromK8s:               cfg.Executor == agent.ExecutorKubernetes,
 			TagsFromEC2MetaData:       cfg.TagsFromEC2MetaData,
 			TagsFromEC2MetaDataPaths:  cfg.TagsFromEC2MetaDataPaths,
 			TagsFromEC2Tags:           cfg.TagsFromEC2Tags,
@@ -1386,7 +1471,7 @@ var AgentStartCommand = &cli.Command{
 			cancelGracePeriod: cfg.CancelSignalTimeout + cfg.CancelCleanupTimeout,
 			// Under Kubernetes, there is no user interactively signalling us,
 			// so on SIGTERM, stop un-gracefully.
-			skipGraceful: cfg.KubernetesExec,
+			skipGraceful: cfg.Executor == agent.ExecutorKubernetes,
 		}
 		signals := poolSigs.handle(ctx)
 		defer close(signals)

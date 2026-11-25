@@ -16,6 +16,7 @@ type Job struct {
 	State                 string                     `json:"state"`
 	Env                   map[string]string          `json:"env"`
 	Step                  pipeline.CommandStep       `json:"step"`
+	Image                 string                     `json:"image,omitempty"`
 	MatrixPermutation     pipeline.MatrixPermutation `json:"matrix_permutation"`
 	ChunksMaxSizeBytes    uint64                     `json:"chunks_max_size_bytes"`
 	ChunksIntervalSeconds int                        `json:"chunks_interval_seconds"`
