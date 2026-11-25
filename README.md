@@ -55,7 +55,7 @@ homebrew), Windows and Linux.
 With Nix flakes enabled, install the agent on Linux or macOS (amd64 or arm64):
 
 ```sh
-nix profile add github:buildkite/nix
+nix profile add github:buildkite/nix#buildkite-agent
 buildkite-agent --version
 ```
 

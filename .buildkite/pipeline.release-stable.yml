@@ -57,12 +57,6 @@ steps:
           account-ids: "445615400570"
       - docker#v5.14.0: *release_tools
 
-  # A failed Nix publish is visible without failing the agent release.
-  - name: ":pipeline: Upload Nix publisher trigger"
-    depends_on: github-release
-    command: ".buildkite/steps/trigger-agent-release-nix.sh"
-    soft_fail: true
-
   - name: ":redhat: Publish RPM Package"
     command: ".buildkite/steps/publish-rpm-package.sh"
     env:
