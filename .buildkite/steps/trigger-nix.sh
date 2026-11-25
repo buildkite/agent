@@ -20,8 +20,8 @@ fi
 buildkite-agent pipeline upload <<YAML
 steps:
   - label: ":nix: Publish Buildkite Agent v${version} for Nix"
-    key: agent-release-nix
-    trigger: agent-release-nix
+    key: nix
+    trigger: nix
     async: false
     soft_fail: true
     build:
