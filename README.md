@@ -63,6 +63,9 @@ The [Buildkite Nix flake](https://github.com/buildkite/nix) installs the
 checksum-pinned release binary, not a service. See that repository for how to
 pin or upgrade the package.
 
+To run the agent as a systemd service on NixOS, see the downstream
+[`services.buildkite-agents` module in nixpkgs](https://github.com/NixOS/nixpkgs/blob/nixos-26.05/nixos/modules/services/continuous-integration/buildkite-agents.nix).
+
 ### Docker
 
 We also support and publish
