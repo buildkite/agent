@@ -23,7 +23,8 @@ type KMS struct {
 	alg    types.SigningAlgorithmSpec
 	jwaAlg jwa.KeyAlgorithm
 	client *kms.Client
-	kid    string
+	keyRef string // Configured identifier (possibly an alias) used for AWS requests.
+	keyARN string // Resolved key ARN used for the protected JWS kid.
 }
 
 // NewKMS creates a new ECDSA object. This object isnot complete by itself -- it
@@ -46,6 +47,10 @@ func NewKMS(client *kms.Client, kmsKeyID string) (*KMS, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to describe key %q: %w", kmsKeyID, err)
 	}
+	keyARN := aws.ToString(keyDesc.KeyId)
+	if keyARN == "" {
+		return nil, fmt.Errorf("KMS GetPublicKey returned no key ARN for %q", kmsKeyID)
+	}
 
 	// the key must be a sign/verify key see https://pkg.go.dev/github.com/aws/aws-sdk-go-v2/service/kms/types#KeyUsageType
 	if keyDesc.KeyUsage != types.KeyUsageTypeSignVerify {
@@ -65,7 +70,8 @@ func NewKMS(client *kms.Client, kmsKeyID string) (*KMS, error) {
 	case types.KeySpecEccNistP256:
 		return &KMS{
 			client: client,
-			kid:    kmsKeyID,
+			keyRef: kmsKeyID,
+			keyARN: keyARN,
 			jwaAlg: jwa.ES256(),
 			alg:    types.SigningAlgorithmSpecEcdsaSha256,
 		}, nil
@@ -80,12 +86,12 @@ func (sv *KMS) Sign(_ io.Reader, digest []byte, opts crypto.SignerOpts) ([]byte,
 	if sv.alg == "" {
 		return nil, fmt.Errorf("aws.KMS.Sign() requires the types.SigningAlgorithmSpec")
 	}
-	if sv.kid == "" {
+	if sv.keyRef == "" {
 		return nil, fmt.Errorf("aws.KMS.Sign() requires the KMS key ID")
 	}
 
 	input := kms.SignInput{
-		KeyId:            aws.String(sv.kid),
+		KeyId:            aws.String(sv.keyRef),
 		Message:          digest,
 		MessageType:      types.MessageTypeDigest,
 		SigningAlgorithm: sv.alg,
@@ -94,9 +100,15 @@ func (sv *KMS) Sign(_ io.Reader, digest []byte, opts crypto.SignerOpts) ([]byte,
 	if err != nil {
 		return nil, fmt.Errorf("failed to sign via KMS: %w", err)
 	}
+	if arn := aws.ToString(signed.KeyId); arn != sv.keyARN {
+		return nil, fmt.Errorf("KMS signed with key %q, expected %q for %q", arn, sv.keyARN, sv.keyRef)
+	}
 
 	return signed.Signature, nil
 }
+
+// KeyID returns the resolved key ARN for use as the JWS key ID.
+func (sv *KMS) KeyID() string { return sv.keyARN }
 
 // Public returns the corresponding public key.
 //
@@ -111,12 +123,12 @@ func (sv *KMS) Public() crypto.PublicKey {
 // GetPublicKey is an escape hatch for those cases where the user needs
 // to debug what went wrong during the GetPublicKey operation.
 func (sv *KMS) GetPublicKey() (crypto.PublicKey, error) {
-	if sv.kid == "" {
+	if sv.keyRef == "" {
 		return nil, fmt.Errorf("aws.KMS.Sign() requires the key ID")
 	}
 
 	input := kms.GetPublicKeyInput{
-		KeyId: aws.String(sv.kid),
+		KeyId: aws.String(sv.keyRef),
 	}
 
 	output, err := sv.client.GetPublicKey(context.Background(), &input)
