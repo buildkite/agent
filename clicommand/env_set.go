@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 
 	"github.com/buildkite/agent/v4/env"
@@ -107,6 +108,20 @@ func envSetAction(ctx context.Context, c *cli.Command) error {
 	for _, arg := range c.Args().Slice() {
 		if arg == "-" {
 			// TODO: replace with c.App.Reader (or something like that) when we upgrade to urfave/cli v3
+			if cfg.InputFormat == "json" {
+				dec := json.NewDecoder(os.Stdin)
+				for {
+					err := dec.Decode(&req.Env)
+					if err == io.EOF {
+						break
+					}
+					if err != nil {
+						return fmt.Errorf("couldn't parse input JSON: %w", err)
+					}
+				}
+				continue
+			}
+
 			sc := bufio.NewScanner(os.Stdin)
 			line := 1
 			for sc.Scan() {
