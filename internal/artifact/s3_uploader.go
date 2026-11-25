@@ -125,6 +125,7 @@ func (u *s3UploaderWork) DoWork(ctx context.Context) (*api.ArtifactPartETag, err
 	if err != nil {
 		return nil, fmt.Errorf("failed to open file %q (%w)", u.artifact.AbsolutePath, err)
 	}
+	defer f.Close() //nolint:errcheck // File open for read only.
 
 	// Upload the file to S3.
 	u.logger.Debugf("Uploading %q to bucket with permission %q", u.artifactPath(u.artifact), permission)

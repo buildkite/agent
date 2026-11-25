@@ -177,6 +177,7 @@ func (u *gsUploaderWork) DoWork(_ context.Context) (*api.ArtifactPartETag, error
 	if err != nil {
 		return nil, fmt.Errorf("opening file %q: %w", u.artifact.AbsolutePath, err)
 	}
+	defer file.Close() //nolint:errcheck // File open for read only.
 	call := u.service.Objects.Insert(u.BucketName, object)
 	if permission != "" {
 		call = call.PredefinedAcl(permission)
