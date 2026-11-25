@@ -57,6 +57,48 @@ steps:
           account-ids: "445615400570"
       - docker#v5.14.0: *release_tools
 
+  - label: ":nix: Publish agent for Nix"
+    key: publish-nix
+    if: build.branch == "main" && build.env("DRY_RUN") == "false"
+    depends_on: github-release
+    soft_fail: true
+    concurrency: 1
+    concurrency_group: "buildkite/agent/nix-release"
+    timeout_in_minutes: 10
+    env:
+      BUILDKITE_SKIP_CHECKOUT: "true"
+      BUILDKITE_NO_LOCAL_HOOKS: "true"
+    command: |
+      set -euo pipefail
+      prerelease=$$(buildkite-agent meta-data get agent-is-prerelease)
+      if [[ "$$prerelease" == 1 ]]; then
+        echo 'Skipping Nix publisher: prerelease'
+        exit 0
+      fi
+      outcome=$$(buildkite-agent step get outcome --step github-release)
+      if [[ "$$outcome" != passed ]]; then
+        echo 'Skipping Nix publisher: GitHub release did not pass'
+        exit 0
+      fi
+      version=$$(buildkite-agent meta-data get github_release_version)
+      export AGENT_RELEASE_TAG="v$$version"
+
+      # The release tag selects the binaries, not the publisher code.
+      umask 077
+      scratch=$$(mktemp -d)
+      trap 'rm -rf "$$scratch"' EXIT
+      git clone --quiet --branch main --single-branch https://github.com/buildkite/nix.git "$$scratch/nix"
+      cd "$$scratch/nix"
+
+      # IAM requires this pipeline, the main branch, and the publish-nix key.
+      buildkite-agent oidc request-token --audience sts.amazonaws.com > "$$scratch/aws-token"
+      unset AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN AWS_PROFILE AWS_DEFAULT_PROFILE
+      export AWS_ROLE_ARN=arn:aws:iam::032379705303:role/pipeline-buildkite-agent-release-stable-nix
+      export AWS_WEB_IDENTITY_TOKEN_FILE="$$scratch/aws-token"
+      GH_TOKEN=$$(aws ssm get-parameter --name /pipelines/nix-publisher/GITHUB_TOKEN --with-decryption --output text --query Parameter.Value --region us-east-1)
+      export GH_TOKEN
+      scripts/propose-nix-release.sh
+
   - name: ":redhat: Publish RPM Package"
     command: ".buildkite/steps/publish-rpm-package.sh"
     env:
