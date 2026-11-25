@@ -43,6 +43,14 @@ type UploaderConfig struct {
 	// A specific Content-Type to use for all artifacts
 	ContentType string
 
+	// Object classification attributes are opt-in. JSON is resolved only for
+	// the destination provider, after collection has found matching files.
+	ObjectAttributes       bool
+	S3ObjectTags           string
+	GCSObjectContexts      string
+	AzureBlobTags          string
+	ExplicitAttributeFlags []string
+
 	// Standard HTTP options.
 	DebugHTTP    bool
 	TraceHTTP    bool
@@ -521,6 +529,10 @@ func (a *Uploader) build(path, absolutePath string) (*api.Artifact, error) {
 // createUploader applies some heuristics to the destination to infer which
 // uploader to use.
 func (a *Uploader) createUploader(ctx context.Context) (_ workCreator, err error) {
+	attributes, err := a.conf.resolveObjectAttributes()
+	if err != nil {
+		return nil, err
+	}
 	var dest string
 	defer func() {
 		if err != nil || dest == "" {
@@ -542,12 +554,14 @@ func (a *Uploader) createUploader(ctx context.Context) (_ workCreator, err error
 		dest = "Amazon S3"
 		return NewS3Uploader(ctx, a.logger, S3UploaderConfig{
 			Destination: a.conf.Destination,
+			Tags:        attributes,
 		})
 
 	case strings.HasPrefix(a.conf.Destination, "gs://"):
 		dest = "Google Cloud Storage"
 		return NewGSUploader(ctx, a.logger, GSUploaderConfig{
 			Destination: a.conf.Destination,
+			Contexts:    attributes,
 		})
 
 	case strings.HasPrefix(a.conf.Destination, "rt://"):
@@ -563,6 +577,7 @@ func (a *Uploader) createUploader(ctx context.Context) (_ workCreator, err error
 		dest = "Azure Blob storage"
 		return NewAzureBlobUploader(a.logger, AzureBlobUploaderConfig{
 			Destination: a.conf.Destination,
+			Tags:        attributes,
 		})
 
 	default:

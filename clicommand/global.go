@@ -630,6 +630,43 @@ func loadAPIClientConfig(cfg any, tokenField string) api.Config {
 	return conf
 }
 
+// artifactAttributeFlag records CLI provenance before PostParse reads environment
+// sources. IsSet and Count include environment values in urfave/cli.
+type artifactAttributeFlag struct {
+	cli.StringFlag
+	explicit bool
+}
+
+func (f *artifactAttributeFlag) PostParse() error {
+	f.explicit = f.IsSet()
+	return f.StringFlag.PostParse()
+}
+
+func artifactObjectAttributeFlags() []cli.Flag {
+	return []cli.Flag{
+		&cli.BoolFlag{
+			Name:    "object-attributes",
+			Usage:   "Enable custom S3 object tags, GCS object contexts and Azure blob index tags (default: false)",
+			Sources: cli.EnvVars("BUILDKITE_ARTIFACT_UPLOAD_OBJECT_ATTRIBUTES"),
+		},
+		&artifactAttributeFlag{StringFlag: cli.StringFlag{
+			Name: "s3-object-tags", Value: "{}",
+			Usage:   "S3 object tags as a JSON string-to-string object; requires --object-attributes",
+			Sources: cli.EnvVars("BUILDKITE_S3_OBJECT_TAGS"),
+		}},
+		&artifactAttributeFlag{StringFlag: cli.StringFlag{
+			Name: "gcs-object-contexts", Value: "{}",
+			Usage:   "GCS object contexts as a JSON string-to-string object; requires --object-attributes",
+			Sources: cli.EnvVars("BUILDKITE_GCS_OBJECT_CONTEXTS"),
+		}},
+		&artifactAttributeFlag{StringFlag: cli.StringFlag{
+			Name: "azure-blob-tags", Value: "{}",
+			Usage:   "Azure blob index tags as a JSON string-to-string object; requires --object-attributes",
+			Sources: cli.EnvVars("BUILDKITE_AZURE_BLOB_TAGS"),
+		}},
+	}
+}
+
 type configOpts func(*cliconfig.Loader)
 
 func withConfigFilePaths(paths []string) func(*cliconfig.Loader) {

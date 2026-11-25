@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"regexp"
@@ -15,6 +16,66 @@ import (
 	"github.com/buildkite/agent/v4/logger"
 	"github.com/google/go-cmp/cmp"
 )
+
+func TestCreateEnvironmentArtifactAttributeDefaults(t *testing.T) {
+	t.Parallel()
+	for _, source := range []string{"agent", "step", "protected"} {
+		t.Run(source, func(t *testing.T) {
+			upstream := map[string]string{}
+			conf := AgentConfiguration{ObjectAttributes: true, S3ObjectTags: `{"team":"agent"}`, GCSObjectContexts: `{"department":"platform"}`, AzureBlobTags: `{"cost_centre":"infra"}`}
+			want := map[string]string{
+				"BUILDKITE_ARTIFACT_UPLOAD_OBJECT_ATTRIBUTES": "true",
+				"BUILDKITE_S3_OBJECT_TAGS":                    `{"team":"agent"}`,
+				"BUILDKITE_GCS_OBJECT_CONTEXTS":               `{"department":"platform"}`,
+				"BUILDKITE_AZURE_BLOB_TAGS":                   `{"cost_centre":"infra"}`,
+			}
+			if source != "agent" {
+				upstream = map[string]string{"BUILDKITE_ARTIFACT_UPLOAD_OBJECT_ATTRIBUTES": "false", "BUILDKITE_S3_OBJECT_TAGS": "{}", "BUILDKITE_GCS_OBJECT_CONTEXTS": "", "BUILDKITE_AZURE_BLOB_TAGS": `{"team":"step"}`}
+				if source == "step" {
+					want = upstream
+				} else {
+					conf.ProtectedEnvironmentVariables = []string{"BUILDKITE_ARTIFACT_UPLOAD_OBJECT_ATTRIBUTES", "BUILDKITE_S3_OBJECT_TAGS", "BUILDKITE_GCS_OBJECT_CONTEXTS", "BUILDKITE_AZURE_BLOB_TAGS"}
+				}
+			}
+			r := controlPlaneTestRunner(t, upstream, conf)
+			got, err := r.createEnvironment(t.Context())
+			if err != nil {
+				t.Fatal(err)
+			}
+			bootstrapEnv := envutil.FromSlice(got)
+			for key, value := range want {
+				if got, exists := bootstrapEnv.Get(key); !exists || got != value {
+					t.Errorf("%s=%q, want %q", key, got, value)
+				}
+			}
+			shell, err := os.ReadFile(r.envShellFile.Name())
+			if err != nil {
+				t.Fatal(err)
+			}
+			data, err := os.ReadFile(r.envJSONFile.Name())
+			if err != nil {
+				t.Fatal(err)
+			}
+			var saved map[string]string
+			if err := json.Unmarshal(data, &saved); err != nil {
+				t.Fatal(err)
+			}
+			for key := range want {
+				if !strings.Contains(string(shell), key+"\n") {
+					t.Errorf("container forwarding list missing %s", key)
+				}
+				value, exists := saved[key]
+				if source == "step" {
+					if !exists || value != upstream[key] {
+						t.Errorf("upstream JSON %s=%q, want %q", key, value, upstream[key])
+					}
+				} else if exists {
+					t.Errorf("upstream JSON unexpectedly contains %s", key)
+				}
+			}
+		})
+	}
+}
 
 func TestCreateEnvironmentProtectedEnv(t *testing.T) {
 	t.Parallel()

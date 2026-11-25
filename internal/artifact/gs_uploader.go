@@ -22,6 +22,7 @@ type GSUploaderConfig struct {
 	// The destination which includes the GS bucket name and the path.
 	// gs://my-bucket-name/foo/bar
 	Destination string
+	Contexts    map[string]string
 }
 
 type GSUploader struct {
@@ -165,6 +166,12 @@ func (u *gsUploaderWork) DoWork(_ context.Context) (*api.ArtifactPartETag, error
 		Name:               u.artifactPath(u.artifact),
 		ContentType:        u.artifact.ContentType,
 		ContentDisposition: u.contentDisposition(u.artifact),
+	}
+	if len(u.conf.Contexts) > 0 {
+		object.Contexts = &storage.ObjectContexts{Custom: make(map[string]storage.ObjectCustomContextPayload, len(u.conf.Contexts))}
+		for key, value := range u.conf.Contexts {
+			object.Contexts.Custom[key] = storage.ObjectCustomContextPayload{Value: value}
+		}
 	}
 	file, err := os.Open(u.artifact.AbsolutePath)
 	if err != nil {

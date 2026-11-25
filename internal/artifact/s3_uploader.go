@@ -23,6 +23,7 @@ type S3UploaderConfig struct {
 	// The destination which includes the S3 bucket name and the path.
 	// For example, s3://my-bucket-name/foo/bar
 	Destination string
+	Tags        map[string]string
 }
 
 type S3Uploader struct {
@@ -134,6 +135,14 @@ func (u *s3UploaderWork) DoWork(ctx context.Context) (*api.ArtifactPartETag, err
 		ContentType: aws.String(u.artifact.ContentType),
 		ACL:         permission,
 		Body:        f,
+	}
+
+	if len(u.conf.Tags) > 0 {
+		tags := make(url.Values, len(u.conf.Tags))
+		for key, value := range u.conf.Tags {
+			tags.Set(key, value)
+		}
+		params.Tagging = aws.String(tags.Encode())
 	}
 
 	// if enabled we assign the sse configuration
