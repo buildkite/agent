@@ -62,8 +62,9 @@ steps:
     if: build.branch == "main" && build.env("DRY_RUN") == "false"
     depends_on: github-release
     soft_fail: true
-    concurrency: 1
-    concurrency_group: "buildkite/agent/nix-release"
+    concurrency:
+      limit: 1
+      group: "buildkite/agent/nix-release"
     timeout_in_minutes: 10
     env:
       BUILDKITE_SKIP_CHECKOUT: "true"
