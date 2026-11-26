@@ -41,7 +41,8 @@ func newInternalTraceExporter(config *api.TracingExporter) (*internalTraceExport
 	if err != nil || u.Host == "" || (u.Scheme != "https" && u.Scheme != "http") || u.User != nil || u.Fragment != "" || config.Protocol != "http/protobuf" {
 		return nil, errors.New("invalid internal tracing exporter configuration")
 	}
-	httpClient := agenthttp.NewClient()
+	// HTTP/2 debug logging can expose collector headers in customer job logs.
+	httpClient := agenthttp.NewClient(agenthttp.WithAllowHTTP2(false))
 	transport := httpClient.Transport.(*http.Transport).Clone()
 	transport.Proxy = nil
 	httpClient.Transport = transport

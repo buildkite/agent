@@ -3,6 +3,7 @@ package integration
 import (
 	"bytes"
 	"context"
+	"encoding/pem"
 	"fmt"
 	"io"
 	"net/http"
@@ -42,6 +43,7 @@ func TestBootstrapInternalTracing(t *testing.T) {
 		failJob                    bool
 		invalidCustomerHeaders     bool
 		pty, largeConfig           bool
+		http2Debug                 string
 	}{
 		{name: "neither"},
 		{name: "customer only", customer: true},
@@ -51,6 +53,8 @@ func TestBootstrapInternalTracing(t *testing.T) {
 		{name: "large internal config", internal: true, config: true, largeConfig: true},
 		{name: "internal only with invalid customer headers", internal: true, config: true, invalidCustomerHeaders: true},
 		{name: "both", customer: true, internal: true, config: true},
+		{name: "HTTP2 debug headers", customer: true, internal: true, config: true, http2Debug: "1"},
+		{name: "HTTP2 debug frames", customer: true, internal: true, config: true, http2Debug: "2"},
 		{name: "next job flag off", customer: true, config: true},
 		{name: "flag without registration", internal: true},
 		{name: "internal sink fails", customer: true, internal: true, config: true, failSink: "unavailable"},
@@ -58,8 +62,8 @@ func TestBootstrapInternalTracing(t *testing.T) {
 		{name: "job fails", customer: true, internal: true, config: true, failJob: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			customer := newTraceSink(t, "Bearer customer-token", tc.customerSink)
-			internal := newTraceSink(t, "Bearer internal-token", tc.failSink)
+			customer := newTraceSink(t, "Bearer customer-token", tc.customerSink, tc.http2Debug != "")
+			internal := newTraceSink(t, "Bearer internal-token", tc.failSink, tc.http2Debug != "")
 			root := t.TempDir()
 			checkEnv := `test -z "${BUILDKITE_INTERNAL_TRACING_EXPORTER+x}" || exit 91
 ! grep -qi '^BUILDKITE_INTERNAL_TRACING_EXPORTER=' "$BUILDKITE_ENV_FILE" || exit 92
@@ -121,6 +125,19 @@ fi
 					"BUILDKITE_INTERNAL_TRACING_EXPORTER": "job-supplied-untrusted-config",
 				},
 			}
+			if tc.http2Debug != "" {
+				var certs []byte
+				for _, sink := range []*traceSink{customer, internal} {
+					certs = append(certs, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: sink.server.Certificate().Raw})...)
+				}
+				certFile := filepath.Join(root, "collector-ca.pem")
+				if err := os.WriteFile(certFile, certs, 0o600); err != nil {
+					t.Fatal(err)
+				}
+				j.Env["GODEBUG"] = "http2debug=" + tc.http2Debug
+				j.Env["SSL_CERT_FILE"] = certFile
+				j.Env["SSL_CERT_DIR"] = root
+			}
 			if tc.invalidCustomerHeaders {
 				j.Env["OTEL_EXPORTER_OTLP_HEADERS"] = "Authorization=Bearer%20customer-env-secret%ZZ"
 				j.Env["OTEL_EXPORTER_OTLP_TRACES_HEADERS"] = "Authorization=Bearer%20customer-env-secret%ZZ"
@@ -156,6 +173,19 @@ fi
 			}
 			if got, want := len(internalSpans) > 0, tc.internal && tc.config; got != want {
 				t.Fatalf("internal spans present = %t, want %t", got, want)
+			}
+			if tc.http2Debug != "" {
+				for _, destination := range []struct {
+					name     string
+					sink     *traceSink
+					protocol int
+				}{{"customer", customer, 2}, {"internal", internal, 1}} {
+					destination.sink.mu.Lock()
+					if got := destination.sink.protocols; len(got) != 1 || !got[destination.protocol] {
+						t.Errorf("%s HTTP protocol versions = %v, want only %d", destination.name, got, destination.protocol)
+					}
+					destination.sink.mu.Unlock()
+				}
 			}
 			if tc.customer {
 				body := customer.body()
@@ -235,15 +265,16 @@ func TestInternalTracingBootstrapFailure(t *testing.T) {
 }
 
 type traceSink struct {
-	server   *httptest.Server
-	mu       sync.Mutex
-	requests []*collector.ExportTraceServiceRequest
+	server    *httptest.Server
+	mu        sync.Mutex
+	requests  []*collector.ExportTraceServiceRequest
+	protocols map[int]bool
 }
 
-func newTraceSink(t *testing.T, auth, fail string) *traceSink {
+func newTraceSink(t *testing.T, auth, fail string, https bool) *traceSink {
 	t.Helper()
-	s := &traceSink{}
-	s.server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	s := &traceSink{protocols: make(map[int]bool)}
+	s.server = httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/v1/traces" || r.Header.Get("Authorization") != auth || r.Header.Get("Content-Type") != "application/x-protobuf" {
 			t.Errorf("unexpected OTLP request: %s %s auth=%q content-type=%q", r.Method, r.URL, r.Header.Get("Authorization"), r.Header.Get("Content-Type"))
 		}
@@ -269,6 +300,7 @@ func newTraceSink(t *testing.T, auth, fail string) *traceSink {
 			}
 		}
 		s.mu.Lock()
+		s.protocols[r.ProtoMajor] = true
 		s.requests = append(s.requests, &request)
 		s.mu.Unlock()
 		if fail == "unavailable" {
@@ -281,6 +313,12 @@ func newTraceSink(t *testing.T, auth, fail string) *traceSink {
 		}
 		w.Header().Set("Content-Type", "application/x-protobuf")
 	}))
+	if https {
+		s.server.EnableHTTP2 = true
+		s.server.StartTLS()
+	} else {
+		s.server.Start()
+	}
 	t.Cleanup(s.server.Close)
 	return s
 }
