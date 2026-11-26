@@ -15,8 +15,9 @@ type AgentTracing struct {
 // header): raw endpoints and headers must not be logged or written to the
 // persisted job-env files. The customer exporter is intentionally delivered
 // through the bootstrap process environment so hooks and the job command can
-// export spans to the same collector. The internal exporter must be consumed
-// and removed from the environment before hooks or commands run.
+// export spans to the same collector. On Unix, the internal exporter travels
+// through a pipe that bootstrap consumes and closes before hooks or commands
+// run. Windows uses the environment and removes it before job execution.
 type TracingExporter struct {
 	Endpoint string            `json:"endpoint"`
 	Protocol string            `json:"protocol"`

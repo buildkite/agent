@@ -93,6 +93,7 @@ type Config struct {
 	Stdin             io.Reader
 	Stdout            io.Writer
 	Stderr            io.Writer
+	ExtraFiles        []*os.File // Inherited as descriptors 3+i; caller retains ownership. Not supported on Windows.
 	Dir               string
 	Nice              int // Unix nice value for the child process (0 = default)
 	InterruptSignal   Signal
@@ -147,6 +148,16 @@ func (p *Process) WaitResult() error {
 // WaitStatus returns the status of the Wait() call
 func (p *Process) WaitStatus() WaitStatus {
 	return p.status
+}
+
+// RunWithFile runs the command with an inherited file and an fd://N reference
+// in the named environment variable. The caller closes the file. Unix only.
+func (p *Process) RunWithFile(ctx context.Context, name string, file *os.File) error {
+	p.mu.Lock()
+	p.conf.Env = append(p.conf.Env, fmt.Sprintf("%s=fd://%d", name, 3+len(p.conf.ExtraFiles)))
+	p.conf.ExtraFiles = append(p.conf.ExtraFiles, file)
+	p.mu.Unlock()
+	return p.Run(ctx)
 }
 
 // Run the command and block until it finishes
@@ -211,6 +222,7 @@ func (p *Process) setup(ctx context.Context) error {
 	// grace period, p.Terminate.
 	p.command = exec.CommandContext(ctx, p.conf.Path, p.conf.Args...)
 	p.command.Cancel = p.onContextCancel
+	p.command.ExtraFiles = p.conf.ExtraFiles
 
 	// Setup the process to create a process group if supported
 	p.setupProcessGroup()

@@ -47,7 +47,7 @@ func TestCreateEnvironmentInternalTracing(t *testing.T) {
 				}
 			}
 			config, _ := bootstrapEnv.Get(job.InternalTracingExporterEnv)
-			if enabled {
+			if enabled && runtime.GOOS == "windows" {
 				var exporter api.TracingExporter
 				if err := json.Unmarshal([]byte(config), &exporter); err != nil {
 					t.Fatal(err)
@@ -55,11 +55,13 @@ func TestCreateEnvironmentInternalTracing(t *testing.T) {
 				if diff := cmp.Diff(*conf.InternalTracingExporter, exporter); diff != "" {
 					t.Errorf("bootstrap internal exporter (-want +got):\n%s", diff)
 				}
+			} else if config != "" {
+				t.Errorf("job environment received internal configuration: %q", config)
+			}
+			if enabled {
 				if value, _ := bootstrapEnv.Get("BUILDKITE_TRACING_TRACEPARENT"); value != r.conf.Job.TraceParent {
 					t.Errorf("internal-only traceparent = %q, want server traceparent", value)
 				}
-			} else if config != "" {
-				t.Errorf("disabled job received internal configuration: %q", config)
 			}
 			for _, f := range []*os.File{r.envShellFile, r.envJSONFile} {
 				contents, err := os.ReadFile(f.Name())

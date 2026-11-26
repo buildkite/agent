@@ -41,11 +41,14 @@ func TestBootstrapInternalTracing(t *testing.T) {
 		failSink                   string
 		failJob                    bool
 		invalidCustomerHeaders     bool
+		pty, largeConfig           bool
 	}{
 		{name: "neither"},
 		{name: "customer only", customer: true},
 		{name: "slow customer only", customer: true, customerSink: "slow"},
 		{name: "internal only", internal: true, config: true},
+		{name: "internal only with PTY", internal: true, config: true, pty: true},
+		{name: "large internal config", internal: true, config: true, largeConfig: true},
 		{name: "internal only with invalid customer headers", internal: true, config: true, invalidCustomerHeaders: true},
 		{name: "both", customer: true, internal: true, config: true},
 		{name: "next job flag off", customer: true, config: true},
@@ -62,6 +65,14 @@ func TestBootstrapInternalTracing(t *testing.T) {
 ! grep -qi '^BUILDKITE_INTERNAL_TRACING_EXPORTER=' "$BUILDKITE_ENV_FILE" || exit 92
 ! grep -q '"BUILDKITE_INTERNAL_TRACING_EXPORTER":' "$BUILDKITE_ENV_JSON_FILE" || exit 92
 `
+			if runtime.GOOS == "linux" {
+				checkEnv += `tr '\000' '\n' < "/proc/$PPID/environ" | grep -q '^BUILDKITE_JOB_ID=' || exit 93
+if tr '\000' '\n' < "/proc/$PPID/environ" | grep '^BUILDKITE_INTERNAL_TRACING_EXPORTER=' | grep -q '"Authorization"'; then
+  echo 'internal collector credential remains in bootstrap startup environment'
+  exit 94
+fi
+`
+			}
 			report := osc7501.Report{ID: "private-status-id", State: "working", Progress: -1, Msg: "private-osc-message"}
 			command := checkEnv + fmt.Sprintf("printf '%%s' '%s'\necho WORKLOAD_RAN", report.Encode())
 			if tc.failJob {
@@ -80,11 +91,15 @@ func TestBootstrapInternalTracing(t *testing.T) {
 				CommandEval: true, Shell: "/bin/sh -e -c", OpenTelemetryTracing: tc.customer,
 				TelemetryServiceName:  "customer-service",
 				GitCommitVerification: "off", GitMirrorCheckoutMode: "reference",
+				RunInPty: tc.pty,
 			}
 			if tc.config {
 				conf.InternalTracingExporter = &api.TracingExporter{
 					Endpoint: internal.server.URL + "/v1/traces", Protocol: "http/protobuf",
 					Headers: map[string]string{"Authorization": "Bearer internal-token"},
+				}
+				if tc.largeConfig {
+					conf.InternalTracingExporter.Headers["X-Internal-Context"] = strings.Repeat("x", 128*1024)
 				}
 			}
 			j := &api.Job{
@@ -168,6 +183,52 @@ func TestBootstrapInternalTracing(t *testing.T) {
 				if bytes.Contains(internal.body(), []byte(banned)) {
 					t.Errorf("internal export contains %q", banned)
 				}
+			}
+		})
+	}
+}
+
+func TestInternalTracingBootstrapFailure(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Unix pipe transport")
+	}
+	for _, tc := range []struct {
+		name, bootstrap, exit string
+	}{
+		{name: "start fails", bootstrap: filepath.Join(t.TempDir(), "missing-bootstrap"), exit: "-1"},
+		{name: "exits without reading", bootstrap: "/bin/sh -c 'exit 23'", exit: "23"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			e := createTestAgentEndpoint()
+			server := e.server()
+			defer server.Close()
+			ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+			defer cancel()
+			// With no reader, this payload fills the pipe. Finishing the job
+			// must close it and release the writer, not wait for delivery.
+			conf := agent.AgentConfiguration{
+				BootstrapScript: tc.bootstrap,
+				BuildPath:       t.TempDir(),
+				InternalTracingExporter: &api.TracingExporter{
+					Headers: map[string]string{"Authorization": "internal-token" + strings.Repeat("x", 128*1024)},
+				},
+			}
+			j := &api.Job{
+				ID: defaultJobID, ChunksMaxSizeBytes: 1024, Token: "bkaj_job-token",
+				InternalTracing: true,
+			}
+			if err := runJob(t, ctx, testRunJobConfig{job: j, server: server, agentCfg: conf}); err != nil {
+				t.Fatal(err)
+			}
+			if err := ctx.Err(); err != nil {
+				t.Fatalf("bootstrap failure delayed job completion: %v", err)
+			}
+			finishes := e.finishesFor(t, defaultJobID)
+			if len(finishes) != 1 || finishes[0].ExitStatus != tc.exit {
+				t.Fatalf("job finishes = %+v, want one finish with exit %q", finishes, tc.exit)
+			}
+			if logs := e.logsFor(t, defaultJobID); strings.Contains(logs, "internal-token") {
+				t.Fatalf("job log contains internal credentials: %s", logs)
 			}
 		})
 	}

@@ -23,7 +23,8 @@ import (
 )
 
 // InternalTracingExporterEnv carries registration credentials to bootstrap.
-// Bootstrap consumes and unsets it before loading the job environment.
+// Unix uses a pipe reference to keep credentials out of /proc/PID/environ;
+// Windows uses the environment. Bootstrap consumes and unsets it before hooks.
 const InternalTracingExporterEnv = "BUILDKITE_INTERNAL_TRACING_EXPORTER"
 
 // internalTraceExporter constructs OTLP from an allowlist rather than copying

@@ -345,12 +345,21 @@ func NewJobRunner(ctx context.Context, l logger.Logger, apiClient *api.Client, c
 	if r.jobLogTmpFile != nil {
 		req.JobLogTmpfile = r.jobLogTmpFile.Name()
 	}
+	if r.internalTracingEnabled() && runtime.GOOS != "windows" {
+		req.InternalTracingExporter = r.conf.AgentConfiguration.InternalTracingExporter
+	}
 	r.process, err = executor.New(ctx, req)
 	if err != nil {
 		return nil, err
 	}
 
 	return r, nil
+}
+
+func (r *JobRunner) internalTracingEnabled() bool {
+	// Container executors expose their initial environment through the pod
+	// runner socket or Docker metadata and cannot inherit the private pipe.
+	return (r.conf.Executor == "" || r.conf.Executor == ExecutorExec) && r.conf.Job.InternalTracing && r.conf.AgentConfiguration.InternalTracingExporter != nil
 }
 
 // removeJobLogTmpfile closes and deletes the job log tmpfile, if there is one.
@@ -832,23 +841,20 @@ BUILDKITE_AGENT_JWKS_KEY_ID`
 		setEnv("BUILDKITE_TELEMETRY_SERVICE_NAME", r.conf.AgentConfiguration.TelemetryServiceName)
 	}
 
-	// Container executors expose their initial environment through the pod
-	// runner socket or Docker metadata, even after bootstrap unsets it.
-	internalTracing := (r.conf.Executor == "" || r.conf.Executor == ExecutorExec) && r.conf.Job.InternalTracing && r.conf.AgentConfiguration.InternalTracingExporter != nil
 	// Clear ambient and job-supplied configuration even when this job is not
-	// enabled. Only registration and the per-job switch can enable this copy.
+	// enabled. Unix passes enabled jobs a pipe reference instead of credentials.
 	env[job.InternalTracingExporterEnv] = ""
-	if internalTracing {
+	if r.internalTracingEnabled() && runtime.GOOS == "windows" {
+		// Windows has no /proc environment exposure and cannot inherit ExtraFiles.
 		config, err := json.Marshal(r.conf.AgentConfiguration.InternalTracingExporter)
 		if err != nil {
 			r.agentLogger.Warnf("Could not encode internal tracing exporter configuration")
-			internalTracing = false
 		} else {
 			env[job.InternalTracingExporterEnv] = string(config)
 		}
 	}
 
-	if r.conf.AgentConfiguration.OpenTelemetryTracing || internalTracing {
+	if r.conf.AgentConfiguration.OpenTelemetryTracing || r.internalTracingEnabled() {
 		// Buildkite backend can provide a traceparent property on the job
 		// which can be propagated to the job tracing if OpenTelemetry is used
 		//
