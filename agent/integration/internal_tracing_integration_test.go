@@ -27,6 +27,9 @@ func TestBootstrapInternalTracing(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("uses POSIX shell commands")
 	}
+	// Bootstrap must use this test's settings, not the surrounding CI job's.
+	t.Setenv("BUILDKITE_ARTIFACT_PATHS", "")
+	t.Setenv("BUILDKITE_OPENTELEMETRY_TRACING", "false")
 	executable, err := os.Executable()
 	if err != nil {
 		t.Fatal(err)
