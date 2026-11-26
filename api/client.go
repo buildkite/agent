@@ -346,8 +346,11 @@ func newResponse(r *http.Response) *Response {
 // interface, the raw response body will be written to v, without attempting to
 // first decode it.
 func (c *Client) doRequest(req *http.Request, v any) (*Response, error) {
+	// Registration carries internal collector credentials, which must not
+	// appear in HTTP debug dumps, including when customer tracing is disabled.
+	_, registration := v.(*AgentRegisterResponse)
 	resp, err := agenthttp.Do(c.logger, c.client, req,
-		agenthttp.WithDebugHTTP(c.conf.DebugHTTP),
+		agenthttp.WithDebugHTTP(c.conf.DebugHTTP && !registration),
 		agenthttp.WithTraceHTTP(c.conf.TraceHTTP),
 	)
 	if err != nil {
@@ -359,6 +362,9 @@ func (c *Client) doRequest(req *http.Request, v any) (*Response, error) {
 	response := newResponse(resp)
 
 	if err := checkResponse(resp); err != nil {
+		if apiError, ok := err.(*ErrorResponse); registration && ok {
+			apiError.Snippet = ""
+		}
 		// even though there was an error, we still return the response
 		// in case the caller wants to inspect it further
 		return response, err
@@ -378,6 +384,9 @@ func (c *Client) doRequest(req *http.Request, v any) (*Response, error) {
 			// failure can report what the response actually contained.
 			head := &headWriter{limit: maxErrorBodySnippet}
 			if err = json.NewDecoder(io.TeeReader(resp.Body, head)).Decode(v); err != nil {
+				if registration {
+					return response, newUndecodableResponseError(resp, "", err)
+				}
 				return response, newUndecodableResponseError(resp, head.String(), err)
 			}
 		}

@@ -31,6 +31,7 @@ type Job struct {
 	ChunksFailedCount     int                        `json:"chunks_failed_count"`
 	TraceParent           string                     `json:"traceparent"`
 	TraceState            string                     `json:"tracestate"`
+	InternalTracing       bool                       `json:"internal_tracing"`
 	Priority              int                        `json:"priority"`
 	Warnings              []Warning                  `json:"warnings,omitempty"`
 }

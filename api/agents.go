@@ -21,17 +21,18 @@ type AgentRegisterRequest struct {
 
 // AgentRegisterResponse is the response from the Buildkite Agent API
 type AgentRegisterResponse struct {
-	UUID              string            `json:"id"`
-	Name              string            `json:"name"`
-	AccessToken       string            `json:"access_token"`
-	Endpoint          string            `json:"endpoint"`
-	RequestHeaders    map[string]string `json:"request_headers"`
-	PingInterval      int               `json:"ping_interval"`
-	JobStatusInterval int               `json:"job_status_interval"`
-	HeartbeatInterval int               `json:"heartbeat_interval"`
-	Tags              []string          `json:"meta_data"`
-	Tracing           *AgentTracing     `json:"tracing,omitempty"`
-	Warnings          []Warning         `json:"warnings,omitempty"`
+	UUID                    string            `json:"id"`
+	Name                    string            `json:"name"`
+	AccessToken             string            `json:"access_token"`
+	Endpoint                string            `json:"endpoint"`
+	RequestHeaders          map[string]string `json:"request_headers"`
+	PingInterval            int               `json:"ping_interval"`
+	JobStatusInterval       int               `json:"job_status_interval"`
+	HeartbeatInterval       int               `json:"heartbeat_interval"`
+	Tags                    []string          `json:"meta_data"`
+	Tracing                 *AgentTracing     `json:"tracing,omitempty"`
+	InternalTracingExporter *TracingExporter  `json:"internal_tracing_exporter,omitempty"`
+	Warnings                []Warning         `json:"warnings,omitempty"`
 }
 
 // Warning is a message from Buildkite for the agent to show to its operator,
