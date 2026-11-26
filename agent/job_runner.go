@@ -345,12 +345,21 @@ func NewJobRunner(ctx context.Context, l logger.Logger, apiClient *api.Client, c
 	if r.jobLogTmpFile != nil {
 		req.JobLogTmpfile = r.jobLogTmpFile.Name()
 	}
+	if r.internalTracingEnabled() && runtime.GOOS != "windows" {
+		req.InternalTracingExporter = r.conf.AgentConfiguration.InternalTracingExporter
+	}
 	r.process, err = executor.New(ctx, req)
 	if err != nil {
 		return nil, err
 	}
 
 	return r, nil
+}
+
+func (r *JobRunner) internalTracingEnabled() bool {
+	// Container executors expose their initial environment through the pod
+	// runner socket or Docker metadata and cannot inherit the private pipe.
+	return (r.conf.Executor == "" || r.conf.Executor == ExecutorExec) && r.conf.Job.InternalTracing && r.conf.AgentConfiguration.InternalTracingExporter != nil
 }
 
 // removeJobLogTmpfile closes and deletes the job log tmpfile, if there is one.
@@ -430,6 +439,12 @@ func (r *JobRunner) createEnvironment(ctx context.Context) ([]string, error) {
 
 	// The agent registration token should never make it into the job environment
 	delete(env, "BUILDKITE_AGENT_TOKEN")
+
+	// Internal collector credentials are bootstrap-only. Remove job-supplied
+	// values before writing env files, including case variants on Windows.
+	maps.DeleteFunc(env, func(name, _ string) bool {
+		return strings.EqualFold(name, job.InternalTracingExporterEnv)
+	})
 
 	// Filter only job-supplied values, before injecting agent configuration or
 	// writing either env file. The process inherits the operator's environment
@@ -824,7 +839,22 @@ BUILDKITE_AGENT_JWKS_KEY_ID`
 	if r.conf.AgentConfiguration.OpenTelemetryTracing {
 		setEnv("BUILDKITE_OPENTELEMETRY_TRACING", "true")
 		setEnv("BUILDKITE_TELEMETRY_SERVICE_NAME", r.conf.AgentConfiguration.TelemetryServiceName)
+	}
 
+	// Clear ambient and job-supplied configuration even when this job is not
+	// enabled. Unix passes enabled jobs a pipe reference instead of credentials.
+	env[job.InternalTracingExporterEnv] = ""
+	if r.internalTracingEnabled() && runtime.GOOS == "windows" {
+		// Windows has no /proc environment exposure and cannot inherit ExtraFiles.
+		config, err := json.Marshal(r.conf.AgentConfiguration.InternalTracingExporter)
+		if err != nil {
+			r.agentLogger.Warnf("Could not encode internal tracing exporter configuration")
+		} else {
+			env[job.InternalTracingExporterEnv] = string(config)
+		}
+	}
+
+	if r.conf.AgentConfiguration.OpenTelemetryTracing || r.internalTracingEnabled() {
 		// Buildkite backend can provide a traceparent property on the job
 		// which can be propagated to the job tracing if OpenTelemetry is used
 		//

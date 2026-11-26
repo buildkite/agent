@@ -7,6 +7,7 @@ import (
 	"io"
 	"time"
 
+	"github.com/buildkite/agent/v4/api"
 	"github.com/buildkite/agent/v4/internal/process"
 	"github.com/buildkite/agent/v4/logger"
 )
@@ -59,6 +60,10 @@ type JobExecutionRequest struct {
 	// Env is the job environment from createEnvironment. It does not include
 	// the agent's own process environment.
 	Env []string
+
+	// InternalTracingExporter is passed to Unix bootstrap over a private pipe.
+	// Custom bootstrap wrappers must forward fd 3 to bootstrap.
+	InternalTracingExporter *api.TracingExporter
 
 	// ContextDir is the job context directory, which holds the job env files
 	// and the job timeout marker.

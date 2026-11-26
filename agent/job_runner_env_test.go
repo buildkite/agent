@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"regexp"
@@ -12,9 +13,89 @@ import (
 	"github.com/buildkite/agent/v4/api"
 	envutil "github.com/buildkite/agent/v4/env"
 	"github.com/buildkite/agent/v4/internal/experiments"
+	"github.com/buildkite/agent/v4/internal/job"
 	"github.com/buildkite/agent/v4/logger"
 	"github.com/google/go-cmp/cmp"
 )
+
+func TestCreateEnvironmentInternalTracing(t *testing.T) {
+	t.Parallel()
+	for _, enabled := range []bool{false, true} {
+		t.Run(fmt.Sprint(enabled), func(t *testing.T) {
+			t.Parallel()
+			conf := AgentConfiguration{InternalTracingExporter: serverTracing().Exporter}
+			jobEnv := map[string]string{
+				job.InternalTracingExporterEnv:                  "untrusted-value",
+				strings.ToLower(job.InternalTracingExporterEnv): "untrusted-case-variant",
+				envutil.OTELTracesEndpoint:                      "https://customer.example/v1/traces",
+				envutil.OTELTracesHeaders:                       "Authorization=customer-token",
+			}
+			r := controlPlaneTestRunner(t, jobEnv, conf)
+			r.conf.Job.InternalTracing = enabled
+			r.conf.Job.TraceParent = "00-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-bbbbbbbbbbbbbbbb-01"
+			got, err := r.createEnvironment(t.Context())
+			if err != nil {
+				t.Fatal(err)
+			}
+			bootstrapEnv := envutil.FromSlice(got)
+			if r.conf.AgentConfiguration.OpenTelemetryTracing || bootstrapEnv.Exists("BUILDKITE_OPENTELEMETRY_TRACING") {
+				t.Fatal("internal exporter enabled customer tracing")
+			}
+			for _, name := range []string{envutil.OTELTracesEndpoint, envutil.OTELTracesHeaders} {
+				if value, _ := bootstrapEnv.Get(name); value != jobEnv[name] {
+					t.Errorf("customer variable %s = %q, want %q", name, value, jobEnv[name])
+				}
+			}
+			config, _ := bootstrapEnv.Get(job.InternalTracingExporterEnv)
+			if enabled && runtime.GOOS == "windows" {
+				var exporter api.TracingExporter
+				if err := json.Unmarshal([]byte(config), &exporter); err != nil {
+					t.Fatal(err)
+				}
+				if diff := cmp.Diff(*conf.InternalTracingExporter, exporter); diff != "" {
+					t.Errorf("bootstrap internal exporter (-want +got):\n%s", diff)
+				}
+			} else if config != "" {
+				t.Errorf("job environment received internal configuration: %q", config)
+			}
+			if enabled {
+				if value, _ := bootstrapEnv.Get("BUILDKITE_TRACING_TRACEPARENT"); value != r.conf.Job.TraceParent {
+					t.Errorf("internal-only traceparent = %q, want server traceparent", value)
+				}
+			}
+			for _, f := range []*os.File{r.envShellFile, r.envJSONFile} {
+				contents, err := os.ReadFile(f.Name())
+				if err != nil {
+					t.Fatal(err)
+				}
+				for _, banned := range []string{"super-secret-token", "collector.example", "untrusted-", "internal_tracing_exporter"} {
+					if strings.Contains(strings.ToLower(string(contents)), banned) {
+						t.Errorf("env file contains %q: %s", banned, contents)
+					}
+				}
+			}
+		})
+	}
+}
+
+func TestCreateEnvironmentInternalTracingContainerExecutors(t *testing.T) {
+	t.Parallel()
+	for _, executor := range []string{ExecutorKubernetes, ExecutorDocker} {
+		t.Run(executor, func(t *testing.T) {
+			t.Parallel()
+			r := controlPlaneTestRunner(t, nil, AgentConfiguration{InternalTracingExporter: serverTracing().Exporter})
+			r.conf.Executor = executor
+			r.conf.Job.InternalTracing = true
+			got, err := r.createEnvironment(t.Context())
+			if err != nil {
+				t.Fatal(err)
+			}
+			if value, _ := envutil.FromSlice(got).Get(job.InternalTracingExporterEnv); value != "" {
+				t.Fatal("internal collector credentials would be exposed through the container executor")
+			}
+		})
+	}
+}
 
 func TestCreateEnvironmentProtectedEnv(t *testing.T) {
 	t.Parallel()

@@ -2,10 +2,12 @@ package clicommand
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"iter"
 	"os"
 	"reflect"
+	"runtime"
 	"slices"
 	"strconv"
 	"strings"
@@ -638,6 +640,30 @@ func withConfigFilePaths(paths []string) func(*cliconfig.Loader) {
 	}
 }
 
+// readInternalTracingExporter consumes internal credentials before bootstrap
+// can start any hooks or commands. Unix uses a one-shot pipe, closed here.
+func readInternalTracingExporter(ref string) (*api.TracingExporter, error) {
+	var config *api.TracingExporter
+	if runtime.GOOS == "windows" {
+		if err := json.Unmarshal([]byte(ref), &config); err != nil {
+			return nil, err
+		}
+		return config, nil
+	}
+	if ref != "fd://3" {
+		return nil, fmt.Errorf("invalid internal tracing pipe reference")
+	}
+	f, err := openInheritedFile(ref)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close() //nolint:errcheck // Read-only pipe, consumed before job execution.
+	if err := json.NewDecoder(f).Decode(&config); err != nil {
+		return nil, err
+	}
+	return config, nil
+}
+
 // setupLoggerAndConfig populates the given config struct with values from the
 // CLI flags and environment variables. It returns the config struct, a logger
 // based on the resulting config, a reference to the config file (if any), and
@@ -655,6 +681,16 @@ func setupLoggerAndConfig[T any](ctx context.Context, c *cli.Command, opts ...co
 	f *cliconfig.File,
 	done func(),
 ) {
+	var internalConfigErr error
+	if _, isBootstrap := any(&cfg).(*BootstrapConfig); isBootstrap {
+		ref := os.Getenv(job.InternalTracingExporterEnv)
+		if err := os.Unsetenv(job.InternalTracingExporterEnv); err != nil {
+			panic("could not remove internal tracing credentials from environment")
+		}
+		if ref != "" {
+			_, internalConfigErr = readInternalTracingExporter(ref)
+		}
+	}
 	loader := cliconfig.Loader{CLI: c, Config: &cfg}
 
 	for _, opt := range opts {
@@ -682,6 +718,10 @@ func setupLoggerAndConfig[T any](ctx context.Context, c *cli.Command, opts ...co
 
 	// Setup any global configuration options
 	ctx, done = HandleGlobalFlags(ctx, l, cfg)
+
+	if internalConfigErr != nil {
+		l.Warnf("Ignoring invalid internal tracing configuration")
+	}
 
 	// When OpenTelemetry tracing is enabled, always initialize a TracerProvider
 	// so that every command (bootstrap or standalone subcommand) can emit spans.

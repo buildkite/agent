@@ -38,25 +38,32 @@ func isIndirectToken(token string) bool {
 	return strings.HasPrefix(token, "file://") || strings.HasPrefix(token, "fd://")
 }
 
+func openInheritedFile(ref string) (*os.File, error) {
+	fd, err := strconv.ParseUint(strings.TrimPrefix(ref, "fd://"), 10, 31)
+	if err != nil {
+		return nil, fmt.Errorf("invalid token file descriptor %q: %w", ref, err)
+	}
+	f := os.NewFile(uintptr(fd), "buildkite-agent-token")
+	if f == nil {
+		return nil, fmt.Errorf("invalid token file descriptor %q", ref)
+	}
+	return f, nil
+}
+
 // resolveRegistrationToken resolves fd:// and file:// token references into
 // the actual token. Plain token values are returned unchanged.
 func resolveRegistrationToken(token string) (string, error) {
 	switch {
 	case strings.HasPrefix(token, "fd://"):
-		fd, err := strconv.ParseUint(strings.TrimPrefix(token, "fd://"), 10, 31)
+		f, err := openInheritedFile(token)
 		if err != nil {
-			return "", fmt.Errorf("invalid token file descriptor %q: %w", token, err)
-		}
-
-		f := os.NewFile(uintptr(fd), "buildkite-agent-token")
-		if f == nil {
-			return "", fmt.Errorf("invalid token file descriptor %q", token)
+			return "", err
 		}
 		defer f.Close() //nolint:errcheck // File is only read.
 
 		b, err := io.ReadAll(io.LimitReader(f, maxTokenFileSize))
 		if err != nil {
-			return "", fmt.Errorf("couldn't read token from file descriptor %d: %w", fd, err)
+			return "", fmt.Errorf("couldn't read token from file descriptor %d: %w", f.Fd(), err)
 		}
 
 		return strings.TrimSpace(string(b)), nil
