@@ -707,7 +707,7 @@ func setupLoggerAndConfig[T any](ctx context.Context, c *cli.Command, opts ...co
 			resourceAttrs = job.OTelResourceAttributesFromEnv(env.FromSlice(os.Environ()))
 		}
 
-		traceProvider, err := job.InitOTelTracerProvider(ctx, serviceName, resourceAttrs)
+		traceProvider, err := job.InitOTelTracerProvider(ctx, serviceName, resourceAttrs, true, nil)
 		if err != nil {
 			l.Warnf("Failed to initialize tracing: %v", err)
 		} else {
