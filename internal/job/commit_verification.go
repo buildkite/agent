@@ -95,6 +95,10 @@ func (e *Executor) checkCommitOnBranch(ctx context.Context) error {
 		return fmt.Errorf("%w: unable to parse git-fetch-flags %q: %w", ErrCommitVerificationUnavailable, e.GitFetchFlags, err)
 	}
 	fetchFlags = stripShallowFetchFlags(stripRefSuppressingFetchFlags(fetchFlags))
+	if len(e.AllowedRepositories) != 0 {
+		// Verify the parent commit before any populated child may be fetched.
+		fetchFlags = append(fetchFlags, "--no-recurse-submodules")
+	}
 	fetchBranch := func(extraFlags ...string) error {
 		args := append([]string{"fetch"}, fetchFlags...)
 		args = append(args, extraFlags...)

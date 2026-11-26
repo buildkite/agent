@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 
@@ -378,8 +379,96 @@ func gitFetch(ctx context.Context, args gitFetchArgs) error {
 	})
 }
 
-func gitEnumerateSubmoduleURLs(ctx context.Context, sh *shell.Shell) ([]string, error) {
-	urls := []string{}
+type gitSubmoduleURL struct {
+	key      string
+	url      string
+	path     string
+	relative bool
+}
+
+// gitEnumerateSubmodulePaths includes selected gitlinks whose URL is supplied
+// only by Git configuration, rather than by .gitmodules.
+func gitEnumerateSubmodulePaths(ctx context.Context, sh *shell.Shell, args []string) ([]gitSubmoduleURL, error) {
+	index, err := sh.Command("git", "ls-files", "--stage", "-z").RunAndCaptureStdout(ctx)
+	if err != nil {
+		return nil, err
+	}
+	gitlinks := make(map[string]bool)
+	for entry := range strings.SplitSeq(index, "\x00") {
+		metadata, path, _ := strings.Cut(entry, "\t")
+		if strings.HasPrefix(metadata, "160000 ") && strings.HasSuffix(metadata, " 0") {
+			gitlinks[path] = true
+		}
+	}
+	selection, err := sh.Command("git", append(slices.Clone(args), "config", "--null", "--get-all", "submodule.active")...).RunAndCaptureStdout(ctx)
+	var selectedPaths map[string]bool
+	if err == nil {
+		// Let Git interpret pathspecs, including exclusion and magic syntax.
+		selectedArgs := append(slices.Clone(args), "ls-files", "-z", "--")
+		selectedArgs = append(selectedArgs, strings.Split(strings.TrimSuffix(selection, "\x00"), "\x00")...)
+		selected, err := sh.Command("git", selectedArgs...).RunAndCaptureStdout(ctx)
+		if err != nil {
+			return nil, err
+		}
+		selectedPaths = make(map[string]bool)
+		for path := range strings.SplitSeq(selected, "\x00") {
+			selectedPaths[path] = true
+		}
+	} else if shell.ExitCode(err) != 1 {
+		return nil, err
+	}
+	paths, err := sh.Command("git", "config", "--file", ".gitmodules", "--null", "--get-regexp", `^submodule\..+\.(path|url)$`).RunAndCaptureStdout(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var submodules []gitSubmoduleURL
+	urls := make(map[string]string)
+	for entry := range strings.SplitSeq(strings.TrimSuffix(paths, "\x00"), "\x00") {
+		key, path, ok := strings.Cut(entry, "\n")
+		if !ok {
+			return nil, fmt.Errorf("failed to parse .gitmodules entry %q", entry)
+		}
+		if strings.HasSuffix(key, ".url") {
+			urls[key] = path
+			continue
+		}
+		if gitlinks[path] {
+			submodules = append(submodules, gitSubmoduleURL{key: strings.TrimSuffix(key, ".path") + ".url", path: path})
+		}
+	}
+	activeSubmodules := submodules[:0]
+	for _, submodule := range submodules {
+		// An explicit per-module boolean takes precedence over submodule.active;
+		// only when both are absent does a configured URL select the child.
+		activeKey := strings.TrimSuffix(submodule.key, ".url") + ".active"
+		active, err := sh.Command("git", append(slices.Clone(args), "config", "--bool", "--get", activeKey)...).RunAndCaptureStdout(ctx)
+		if err == nil {
+			if strings.TrimSpace(active) == "false" {
+				continue
+			}
+		} else if shell.ExitCode(err) != 1 {
+			return nil, err
+		} else if selectedPaths != nil && !selectedPaths[submodule.path] {
+			continue
+		}
+		// Active children can still opt out of updates, including --init --force.
+		updateKey := strings.TrimSuffix(submodule.key, ".url") + ".update"
+		update, err := sh.Command("git", append(slices.Clone(args), "config", "--null", "--get", updateKey)...).RunAndCaptureStdout(ctx)
+		if err != nil && shell.ExitCode(err) != 1 {
+			return nil, err
+		}
+		if strings.TrimSuffix(update, "\x00") == "none" {
+			continue
+		}
+		// Keep the relative-source fallback policy after init resolves the URL.
+		submodule.relative = isRelativeSubmoduleURL(urls[submodule.key])
+		activeSubmodules = append(activeSubmodules, submodule)
+	}
+	return activeSubmodules, nil
+}
+
+func gitEnumerateSubmoduleURLs(ctx context.Context, sh *shell.Shell) ([]gitSubmoduleURL, error) {
+	urls := []gitSubmoduleURL{}
 
 	// The output of this command looks like:
 	// submodule.bitbucket-git-docker-example.url\ngit@bitbucket.org:lox24/docker-example.git\0
@@ -400,7 +489,7 @@ func gitEnumerateSubmoduleURLs(ctx context.Context, sh *shell.Shell) ([]string, 
 		if len(tokens) != 2 {
 			return nil, fmt.Errorf("failed to parse .gitmodules line %q", line)
 		}
-		urls = append(urls, tokens[1])
+		urls = append(urls, gitSubmoduleURL{key: tokens[0], url: tokens[1]})
 	}
 
 	return urls, nil
