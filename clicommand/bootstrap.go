@@ -128,6 +128,7 @@ type BootstrapConfig struct {
 	JobLogsOTLP                             bool          `cli:"job-logs-otlp"`
 	DisableWarningsFor                      []string      `cli:"disable-warnings-for" normalize:"list"`
 	CheckoutAttempts                        int           `cli:"checkout-attempts"`
+	internalTracing                         bool
 }
 
 // checkoutOverrideMode resolves the configured mode, forcing strict when command-eval is off.
@@ -476,7 +477,7 @@ var BootstrapCommand = &cli.Command{
 		}
 
 		tracingBackend := tracetools.BackendNone
-		if cfg.OpenTelemetryTracing {
+		if cfg.OpenTelemetryTracing || cfg.internalTracing {
 			tracingBackend = tracetools.BackendOpenTelemetry
 		}
 

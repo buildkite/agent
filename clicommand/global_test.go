@@ -1,7 +1,9 @@
 package clicommand
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"slices"
@@ -12,6 +14,25 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/urfave/cli/v3"
 )
+
+func TestEnvDumpPreservesCallerEnvironment(t *testing.T) {
+	const name = "BUILDKITE_INTERNAL_TRACING_EXPORTER"
+	t.Setenv(name, "caller-supplied-value")
+	t.Setenv("BUILDKITE_OPENTELEMETRY_TRACING", "false")
+	var output bytes.Buffer
+	command := *EnvDumpCommand
+	command.Writer = &output
+	if err := command.Run(t.Context(), []string{"dump"}); err != nil {
+		t.Fatal(err)
+	}
+	var dumped map[string]string
+	if err := json.Unmarshal(output.Bytes(), &dumped); err != nil {
+		t.Fatal(err)
+	}
+	if got := dumped[name]; got != "caller-supplied-value" {
+		t.Errorf("env dump changed caller environment: %s = %q", name, got)
+	}
+}
 
 func TestProtectedEnvConfigurationSources(t *testing.T) {
 	for _, source := range []string{"default", "flags", "environment", "config"} {

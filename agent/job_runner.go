@@ -431,6 +431,12 @@ func (r *JobRunner) createEnvironment(ctx context.Context) ([]string, error) {
 	// The agent registration token should never make it into the job environment
 	delete(env, "BUILDKITE_AGENT_TOKEN")
 
+	// Internal collector credentials are bootstrap-only. Remove job-supplied
+	// values before writing env files, including case variants on Windows.
+	maps.DeleteFunc(env, func(name, _ string) bool {
+		return strings.EqualFold(name, job.InternalTracingExporterEnv)
+	})
+
 	// Filter only job-supplied values, before injecting agent configuration or
 	// writing either env file. The process inherits the operator's environment
 	// separately, so deleting a job override preserves any trusted value.
@@ -824,7 +830,25 @@ BUILDKITE_AGENT_JWKS_KEY_ID`
 	if r.conf.AgentConfiguration.OpenTelemetryTracing {
 		setEnv("BUILDKITE_OPENTELEMETRY_TRACING", "true")
 		setEnv("BUILDKITE_TELEMETRY_SERVICE_NAME", r.conf.AgentConfiguration.TelemetryServiceName)
+	}
 
+	// Container executors expose their initial environment through the pod
+	// runner socket or Docker metadata, even after bootstrap unsets it.
+	internalTracing := (r.conf.Executor == "" || r.conf.Executor == ExecutorExec) && r.conf.Job.InternalTracing && r.conf.AgentConfiguration.InternalTracingExporter != nil
+	// Clear ambient and job-supplied configuration even when this job is not
+	// enabled. Only registration and the per-job switch can enable this copy.
+	env[job.InternalTracingExporterEnv] = ""
+	if internalTracing {
+		config, err := json.Marshal(r.conf.AgentConfiguration.InternalTracingExporter)
+		if err != nil {
+			r.agentLogger.Warnf("Could not encode internal tracing exporter configuration")
+			internalTracing = false
+		} else {
+			env[job.InternalTracingExporterEnv] = string(config)
+		}
+	}
+
+	if r.conf.AgentConfiguration.OpenTelemetryTracing || internalTracing {
 		// Buildkite backend can provide a traceparent property on the job
 		// which can be propagated to the job tracing if OpenTelemetry is used
 		//

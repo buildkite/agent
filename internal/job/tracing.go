@@ -26,6 +26,7 @@ import (
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
 	"go.opentelemetry.io/otel/trace"
+	"golang.org/x/sync/errgroup"
 )
 
 // stopper lets us abstract the tracer wrap up code.
@@ -82,23 +83,30 @@ func otlpTracesProtocol() string {
 }
 
 // InitOTelTracerProvider creates and globally registers an OpenTelemetry TracerProvider
-// and text map propagator. Caller must call ForceFlush and Shutdown
-// on the returned provider before the process exits.
-func InitOTelTracerProvider(ctx context.Context, serviceName string, extraAttrs []attribute.KeyValue) (*sdktrace.TracerProvider, error) {
-	protocol := otlpTracesProtocol()
-
-	var exporter sdktrace.SpanExporter
-	var err error
-	switch protocol {
-	case "grpc":
-		exporter, err = otlptracegrpc.New(ctx)
-	case "http/protobuf", "http":
-		exporter, err = otlptracehttp.New(ctx)
-	default:
-		return nil, fmt.Errorf("unsupported OTLP protocol: %s", protocol)
+// and text map propagator. Caller must call ForceFlush and Shutdown on a non-nil
+// provider before the process exits, even when one exporter fails to initialise
+// and an error is returned alongside the working provider.
+func InitOTelTracerProvider(ctx context.Context, serviceName string, extraAttrs []attribute.KeyValue, customer bool, internal *api.TracingExporter) (*sdktrace.TracerProvider, error) {
+	var processors traceProcessors
+	var initErr error
+	if customer {
+		exporter, err := newCustomerTraceExporter(ctx)
+		if err != nil {
+			initErr = err
+		} else {
+			processors = append(processors, sdktrace.NewBatchSpanProcessor(exporter))
+		}
 	}
-	if err != nil {
-		return nil, fmt.Errorf("creating OTLP trace exporter: %w", err)
+	if internal != nil {
+		exporter, err := newInternalTraceExporter(internal)
+		if err != nil {
+			initErr = errors.Join(initErr, err)
+		} else {
+			processors = append(processors, sdktrace.NewBatchSpanProcessor(exporter))
+		}
+	}
+	if len(processors) == 0 {
+		return nil, initErr
 	}
 
 	attributes := []attribute.KeyValue{
@@ -116,13 +124,18 @@ func InitOTelTracerProvider(ctx context.Context, serviceName string, extraAttrs 
 	)
 	if err != nil {
 		if !errors.Is(err, resource.ErrPartialResource) {
+			_ = processors.Shutdown(ctx)
 			return nil, fmt.Errorf("creating OpenTelemetry trace resource: %w", err)
 		}
 		otel.Handle(err)
 	}
+	processor := processors[0]
+	if len(processors) > 1 {
+		processor = processors
+	}
 	tracerProvider := sdktrace.NewTracerProvider(
-		sdktrace.WithBatcher(exporter),
 		sdktrace.WithResource(resources),
+		sdktrace.WithSpanProcessor(processor),
 	)
 
 	otel.SetTracerProvider(tracerProvider)
@@ -135,7 +148,57 @@ func InitOTelTracerProvider(ctx context.Context, serviceName string, extraAttrs 
 		&xray.Propagator{},
 	))
 
-	return tracerProvider, nil
+	return tracerProvider, initErr
+}
+
+// traceProcessors flushes destinations concurrently so a stalled collector
+// cannot consume the other collector's shutdown deadline.
+type traceProcessors []sdktrace.SpanProcessor
+
+func (ps traceProcessors) OnStart(ctx context.Context, span sdktrace.ReadWriteSpan) {
+	for _, p := range ps {
+		p.OnStart(ctx, span)
+	}
+}
+
+func (ps traceProcessors) OnEnd(span sdktrace.ReadOnlySpan) {
+	for _, p := range ps {
+		p.OnEnd(span)
+	}
+}
+
+func (ps traceProcessors) ForceFlush(ctx context.Context) error {
+	var group errgroup.Group
+	for _, p := range ps {
+		group.Go(func() error { return p.ForceFlush(ctx) })
+	}
+	return group.Wait()
+}
+
+func (ps traceProcessors) Shutdown(ctx context.Context) error {
+	var group errgroup.Group
+	for _, p := range ps {
+		group.Go(func() error { return p.Shutdown(ctx) })
+	}
+	return group.Wait()
+}
+
+func newCustomerTraceExporter(ctx context.Context) (sdktrace.SpanExporter, error) {
+	protocol := otlpTracesProtocol()
+	var exporter sdktrace.SpanExporter
+	var err error
+	switch protocol {
+	case "grpc":
+		exporter, err = otlptracegrpc.New(ctx)
+	case "http/protobuf", "http":
+		exporter, err = otlptracehttp.New(ctx)
+	default:
+		return nil, fmt.Errorf("unsupported OTLP protocol: %s", protocol)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("creating OTLP trace exporter: %w", err)
+	}
+	return exporter, nil
 }
 
 func (e *Executor) startTracingOpenTelemetry(ctx context.Context) (trace.Span, context.Context, stopper) {

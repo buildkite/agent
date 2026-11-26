@@ -1,12 +1,180 @@
 package job
 
 import (
+	"bytes"
+	"context"
+	"errors"
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"testing"
+	"time"
 
+	"github.com/buildkite/agent/v4/api"
 	"github.com/buildkite/agent/v4/env"
 	"github.com/google/go-cmp/cmp"
+	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
+	collector "go.opentelemetry.io/proto/otlp/collector/trace/v1"
+	tracepb "go.opentelemetry.io/proto/otlp/trace/v1"
+	"google.golang.org/protobuf/proto"
 )
+
+func TestOTelIndependentExporters(t *testing.T) {
+	previousProvider, previousPropagator := otel.GetTracerProvider(), otel.GetTextMapPropagator()
+	t.Cleanup(func() {
+		otel.SetTracerProvider(previousProvider)
+		otel.SetTextMapPropagator(previousPropagator)
+	})
+	for _, invalid := range []string{"neither", "customer", "internal", "slow customer"} {
+		t.Run(invalid, func(t *testing.T) {
+			newSink := func(auth string) (*httptest.Server, <-chan *collector.ExportTraceServiceRequest) {
+				requests := make(chan *collector.ExportTraceServiceRequest, 1)
+				s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					if r.Header.Get("Authorization") != auth || r.URL.Path != "/v1/traces" {
+						t.Errorf("wrong destination or credential: %s %q", r.URL, r.Header.Get("Authorization"))
+					}
+					data, err := io.ReadAll(r.Body)
+					if err != nil {
+						t.Error(err)
+						return
+					}
+					var request collector.ExportTraceServiceRequest
+					if err := proto.Unmarshal(data, &request); err != nil {
+						t.Error(err)
+						return
+					}
+					requests <- &request
+					if invalid == "slow customer" && auth == "Bearer customer-secret" {
+						<-r.Context().Done()
+						return
+					}
+					w.Header().Set("Content-Type", "application/x-protobuf")
+				}))
+				t.Cleanup(s.Close)
+				return s, requests
+			}
+			customer, customerRequests := newSink("Bearer customer-secret")
+			internal, internalRequests := newSink("Bearer internal-secret")
+			t.Setenv("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT", customer.URL+"/v1/traces")
+			t.Setenv("OTEL_EXPORTER_OTLP_TRACES_HEADERS", "Authorization=Bearer%20customer-secret")
+			t.Setenv("OTEL_EXPORTER_OTLP_TRACES_PROTOCOL", "http/protobuf")
+			exporter := &api.TracingExporter{Endpoint: internal.URL + "/v1/traces", Protocol: "http/protobuf", Headers: map[string]string{"Authorization": "Bearer internal-secret"}}
+			if invalid == "customer" {
+				t.Setenv("OTEL_EXPORTER_OTLP_TRACES_PROTOCOL", "invalid")
+			}
+			if invalid == "internal" {
+				exporter.Protocol = "invalid"
+			}
+			provider, err := InitOTelTracerProvider(t.Context(), "private-service", []attribute.KeyValue{attribute.String("private-resource", "private-value")}, true, exporter)
+			if (err != nil) != (invalid == "customer" || invalid == "internal") || provider == nil {
+				t.Fatalf("InitOTelTracerProvider() = %v, %v", provider, err)
+			}
+			defer provider.Shutdown(t.Context()) //nolint:errcheck // ForceFlush below checks delivery.
+			tracer := provider.Tracer("private-scope", trace.WithSchemaURL("private-schema"), trace.WithInstrumentationAttributes(attribute.String("private-scope-attribute", "private-value")))
+			ctx, root := tracer.Start(t.Context(), "private-name", trace.WithAttributes(attribute.String("private-attribute", "private-value")), trace.WithLinks(trace.Link{
+				SpanContext: trace.NewSpanContext(trace.SpanContextConfig{
+					TraceID: trace.TraceID{1}, SpanID: trace.SpanID{2},
+				}),
+				Attributes: []attribute.KeyValue{attribute.String("private-link", "private-value")},
+			}))
+			_, phase := tracer.Start(ctx, "checkout")
+			phase.End()
+			root.AddEvent("private-event", trace.WithAttributes(attribute.String("private-message", "private-value")))
+			root.RecordError(errors.New("private-error"))
+			root.SetStatus(codes.Error, "private-status")
+			root.End()
+			flushBudget := 5 * time.Second
+			if invalid == "slow customer" {
+				flushBudget = 500 * time.Millisecond
+			}
+			flushCtx, cancel := context.WithTimeout(t.Context(), flushBudget)
+			defer cancel()
+			flushErr := provider.ForceFlush(flushCtx)
+			if invalid == "slow customer" {
+				if !errors.Is(flushErr, context.DeadlineExceeded) {
+					t.Fatalf("stalled customer flush error = %v, want deadline exceeded", flushErr)
+				}
+				select {
+				case <-internalRequests:
+				default:
+					t.Fatal("stalled customer exporter prevented internal delivery")
+				}
+				return
+			}
+			if flushErr != nil {
+				t.Fatal(flushErr)
+			}
+			for _, destination := range []struct {
+				name     string
+				requests <-chan *collector.ExportTraceServiceRequest
+			}{{"customer", customerRequests}, {"internal", internalRequests}} {
+				if destination.name == invalid {
+					select {
+					case <-destination.requests:
+						t.Errorf("invalid %s exporter received traces", invalid)
+					default:
+					}
+					continue
+				}
+				var request *collector.ExportTraceServiceRequest
+				select {
+				case request = <-destination.requests:
+				case <-flushCtx.Done():
+					t.Fatalf("no delivery to %s", destination.name)
+				}
+				body, err := proto.Marshal(request)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if destination.name == "customer" {
+					for _, want := range []string{"private-service", "private-resource", "private-name", "private-scope", "private-schema", "private-attribute", "private-event", "private-error", "private-status", "private-link"} {
+						if !bytes.Contains(body, []byte(want)) {
+							t.Errorf("customer export lost %q", want)
+						}
+					}
+					continue
+				}
+				if bytes.Contains(body, []byte("private-")) {
+					t.Errorf("internal export contains customer text: %v", request)
+				}
+				spans := request.ResourceSpans[0].ScopeSpans[0].Spans
+				if len(spans) != 2 || spans[0].Name != "checkout" || spans[1].Name != "job.operation" || len(spans[1].ParentSpanId) != 0 || spans[1].Status.GetCode() != tracepb.Status_STATUS_CODE_ERROR {
+					t.Errorf("internal export lost phase, parent or status semantics: %v", spans)
+				}
+			}
+		})
+	}
+}
+
+func TestInternalTracingExportDeadline(t *testing.T) {
+	previousProvider, previousPropagator := otel.GetTracerProvider(), otel.GetTextMapPropagator()
+	t.Cleanup(func() {
+		otel.SetTracerProvider(previousProvider)
+		otel.SetTextMapPropagator(previousPropagator)
+	})
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = io.Copy(io.Discard, r.Body)
+		<-r.Context().Done()
+	}))
+	defer server.Close()
+	provider, err := InitOTelTracerProvider(t.Context(), "", nil, false, &api.TracingExporter{
+		Endpoint: server.URL + "/v1/traces", Protocol: "http/protobuf",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer provider.Shutdown(t.Context()) //nolint:errcheck // ForceFlush below checks the export deadline.
+	_, span := provider.Tracer("test").Start(t.Context(), "command")
+	span.End()
+	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Second)
+	defer cancel()
+	if err := provider.ForceFlush(ctx); err != nil {
+		t.Fatalf("internal collector exhausted the flush budget: %v", err)
+	}
+}
 
 func TestOTLPTracesProtocol(t *testing.T) {
 	// No t.Parallel: t.Setenv manipulates the process environment. Empty

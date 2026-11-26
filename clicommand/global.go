@@ -2,6 +2,7 @@ package clicommand
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"iter"
 	"os"
@@ -655,6 +656,14 @@ func setupLoggerAndConfig[T any](ctx context.Context, c *cli.Command, opts ...co
 	f *cliconfig.File,
 	done func(),
 ) {
+	var internalConfig string
+	bootstrap, isBootstrap := any(&cfg).(*BootstrapConfig)
+	if isBootstrap {
+		internalConfig = os.Getenv(job.InternalTracingExporterEnv)
+		if err := os.Unsetenv(job.InternalTracingExporterEnv); err != nil {
+			panic("could not remove internal tracing credentials from environment")
+		}
+	}
 	loader := cliconfig.Loader{CLI: c, Config: &cfg}
 
 	for _, opt := range opts {
@@ -683,6 +692,14 @@ func setupLoggerAndConfig[T any](ctx context.Context, c *cli.Command, opts ...co
 	// Setup any global configuration options
 	ctx, done = HandleGlobalFlags(ctx, l, cfg)
 
+	var internalExporter *api.TracingExporter
+	if isBootstrap && internalConfig != "" {
+		if err := json.Unmarshal([]byte(internalConfig), &internalExporter); err != nil {
+			internalExporter = nil
+			l.Warnf("Ignoring invalid internal tracing configuration")
+		}
+	}
+
 	// When OpenTelemetry tracing is enabled, always initialize a TracerProvider
 	// so that every command (bootstrap or standalone subcommand) can emit spans.
 	tracingEnabled, _ := strconv.ParseBool(os.Getenv("BUILDKITE_OPENTELEMETRY_TRACING"))
@@ -692,7 +709,7 @@ func setupLoggerAndConfig[T any](ctx context.Context, c *cli.Command, opts ...co
 		}
 	}
 
-	if tracingEnabled {
+	if tracingEnabled || internalExporter != nil {
 		serviceName := os.Getenv("BUILDKITE_TELEMETRY_SERVICE_NAME")
 		if sn, err := reflections.GetField(cfg, "TelemetryServiceName"); err == nil {
 			if snStr, ok := sn.(string); ok && snStr != "" {
@@ -707,10 +724,14 @@ func setupLoggerAndConfig[T any](ctx context.Context, c *cli.Command, opts ...co
 			resourceAttrs = job.OTelResourceAttributesFromEnv(env.FromSlice(os.Environ()))
 		}
 
-		traceProvider, err := job.InitOTelTracerProvider(ctx, serviceName, resourceAttrs)
+		traceProvider, err := job.InitOTelTracerProvider(ctx, serviceName, resourceAttrs, tracingEnabled, internalExporter)
 		if err != nil {
 			l.Warnf("Failed to initialize tracing: %v", err)
-		} else {
+		}
+		if traceProvider != nil {
+			if isBootstrap {
+				bootstrap.internalTracing = internalExporter != nil
+			}
 			// Extract any incoming trace context so spans created in this process
 			// are linked to the parent job's trace.
 			carrier := propagation.MapCarrier{}
