@@ -13,6 +13,41 @@ import (
 	"github.com/buildkite/agent/v4/logger"
 )
 
+func TestAcceptAndAcquireInternalTracing(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		payload string
+		want    bool
+	}{
+		{`{"id":"job-1","internal_tracing":true}`, true},
+		{`{"id":"job-1","internal_tracing":false}`, false},
+		{`{"id":"job-1"}`, false},
+	} {
+		t.Run(tc.payload, func(t *testing.T) {
+			t.Parallel()
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = io.WriteString(w, tc.payload)
+			}))
+			defer server.Close()
+			client := api.NewClient(logger.Discard, api.Config{Endpoint: server.URL, Token: "llamas"})
+			accepted, _, err := client.AcceptJob(t.Context(), "job-1")
+			if err != nil {
+				t.Fatal(err)
+			}
+			acquired, _, err := client.AcquireJob(t.Context(), "job-1")
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, job := range []*api.Job{accepted, acquired} {
+				if job.InternalTracing != tc.want {
+					t.Errorf("job internal tracing = %t, want %t", job.InternalTracing, tc.want)
+				}
+			}
+		})
+	}
+}
+
 func TestJobURL(t *testing.T) {
 	const buildURL = "https://buildkite.com/my-org/my-pipeline/builds/42"
 	const jobID = "b078e2d2-86e9-4c12-bf3b-612a8058d0a4"
