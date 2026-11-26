@@ -29,6 +29,23 @@ func TestAgentStartFeatures_OpenTelemetryTracing(t *testing.T) {
 	if !slices.Contains(features, "opentelemetry-tracing") {
 		t.Fatalf("Features() = %v, want opentelemetry-tracing", features)
 	}
+	for _, enabled := range []bool{false, true} {
+		features := AgentStartConfig{OpenTelemetryTracing: enabled}.Features(t.Context())
+		if !slices.Contains(features, "internal-otlp-tracing") {
+			t.Errorf("Features() with customer tracing %t = %v, want internal-otlp-tracing", enabled, features)
+		}
+	}
+	if features := (AgentStartConfig{NoFeatureReporting: true}).Features(t.Context()); len(features) != 0 {
+		t.Errorf("Features() with reporting disabled = %v, want none", features)
+	}
+	if features := (AgentStartConfig{KubernetesExec: true}).Features(t.Context()); slices.Contains(features, "internal-otlp-tracing") {
+		t.Errorf("Features() advertises internal tracing without a private credential transport: %v", features)
+	}
+	for _, executor := range []string{agent.ExecutorKubernetes, agent.ExecutorDocker} {
+		if features := (AgentStartConfig{Executor: executor}).Features(t.Context()); slices.Contains(features, "internal-otlp-tracing") {
+			t.Errorf("Features() with executor %s advertises internal tracing without a private credential transport: %v", executor, features)
+		}
+	}
 }
 
 func setupHooksPath(t *testing.T) (string, func()) {

@@ -681,14 +681,16 @@ func setupLoggerAndConfig[T any](ctx context.Context, c *cli.Command, opts ...co
 	f *cliconfig.File,
 	done func(),
 ) {
+	var internalExporter *api.TracingExporter
 	var internalConfigErr error
-	if _, isBootstrap := any(&cfg).(*BootstrapConfig); isBootstrap {
+	bootstrap, isBootstrap := any(&cfg).(*BootstrapConfig)
+	if isBootstrap {
 		ref := os.Getenv(job.InternalTracingExporterEnv)
 		if err := os.Unsetenv(job.InternalTracingExporterEnv); err != nil {
 			panic("could not remove internal tracing credentials from environment")
 		}
 		if ref != "" {
-			_, internalConfigErr = readInternalTracingExporter(ref)
+			internalExporter, internalConfigErr = readInternalTracingExporter(ref)
 		}
 	}
 	loader := cliconfig.Loader{CLI: c, Config: &cfg}
@@ -732,7 +734,7 @@ func setupLoggerAndConfig[T any](ctx context.Context, c *cli.Command, opts ...co
 		}
 	}
 
-	if tracingEnabled {
+	if tracingEnabled || internalExporter != nil {
 		serviceName := os.Getenv("BUILDKITE_TELEMETRY_SERVICE_NAME")
 		if sn, err := reflections.GetField(cfg, "TelemetryServiceName"); err == nil {
 			if snStr, ok := sn.(string); ok && snStr != "" {
@@ -747,10 +749,14 @@ func setupLoggerAndConfig[T any](ctx context.Context, c *cli.Command, opts ...co
 			resourceAttrs = job.OTelResourceAttributesFromEnv(env.FromSlice(os.Environ()))
 		}
 
-		traceProvider, err := job.InitOTelTracerProvider(ctx, serviceName, resourceAttrs, true, nil)
+		traceProvider, err := job.InitOTelTracerProvider(ctx, serviceName, resourceAttrs, tracingEnabled, internalExporter)
 		if err != nil {
 			l.Warnf("Failed to initialize tracing: %v", err)
-		} else {
+		}
+		if traceProvider != nil {
+			if isBootstrap {
+				bootstrap.internalTracing = internalExporter != nil
+			}
 			// Extract any incoming trace context so spans created in this process
 			// are linked to the parent job's trace.
 			carrier := propagation.MapCarrier{}

@@ -269,6 +269,10 @@ func (asc AgentStartConfig) Features(ctx context.Context) []string {
 	// the registration response (design:
 	// https://linear.app/buildkite/issue/A-1641).
 	features = append(features, "control-plane-otlp-tracing")
+	// Container executors cannot carry private collector credentials.
+	if !asc.KubernetesExec && (asc.Executor == "" || asc.Executor == agent.ExecutorExec) {
+		features = append(features, "internal-otlp-tracing")
+	}
 
 	if asc.DisconnectAfterJob {
 		features = append(features, "disconnect-after-job")
@@ -1425,6 +1429,7 @@ var AgentStartCommand = &cli.Command{
 			// merged in; the shared agentConf is never mutated.
 			workerConf := agentConf
 			agent.ApplyControlPlaneTracing(wl, &workerConf, reg.Tracing, localTracing)
+			workerConf.InternalTracingExporter = reg.InternalTracingExporter
 
 			// Create an agent worker to run the agent
 			return agent.NewAgentWorker(
