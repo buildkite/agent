@@ -615,3 +615,19 @@ func TestLocalFileBlobStat(t *testing.T) {
 		t.Errorf("Stat(stored) size = %d, want %d", size, len(content))
 	}
 }
+
+func TestSyncDir(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	if err := syncDir(tmpDir); err != nil {
+		t.Errorf("syncDir(%q) = %v, want nil", tmpDir, err)
+	}
+
+	if runtime.GOOS != "windows" {
+		nonExistent := filepath.Join(tmpDir, "does-not-exist")
+		if err := syncDir(nonExistent); err == nil {
+			t.Errorf("syncDir(%q) = nil, want error", nonExistent)
+		}
+	}
+}
