@@ -103,6 +103,10 @@ type AgentConfiguration struct {
 	DisableWarningsFor           []string
 	AllowMultipartArtifactUpload bool
 	ArtifactUploadConcurrency    int
+	ObjectAttributes             bool
+	S3ObjectTags                 string
+	GCSObjectContexts            string
+	AzureBlobTags                string
 
 	PingMode string
 }

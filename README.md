@@ -12,6 +12,8 @@ and uploading the job's artifacts.
 Full documentation is available at
 [buildkite.com/docs/agent](https://buildkite.com/docs/agent).
 
+For opt-in private-storage classification, see [artifact object tags and contexts](docs/artifact-object-attributes.md).
+
 ```text
 $ buildkite-agent --help
 Usage:

@@ -23,6 +23,7 @@ type S3UploaderConfig struct {
 	// The destination which includes the S3 bucket name and the path.
 	// For example, s3://my-bucket-name/foo/bar
 	Destination string
+	Tags        map[string]string
 }
 
 type S3Uploader struct {
@@ -124,6 +125,7 @@ func (u *s3UploaderWork) DoWork(ctx context.Context) (*api.ArtifactPartETag, err
 	if err != nil {
 		return nil, fmt.Errorf("failed to open file %q (%w)", u.artifact.AbsolutePath, err)
 	}
+	defer f.Close() //nolint:errcheck // File open for read only.
 
 	// Upload the file to S3.
 	u.logger.Debugf("Uploading %q to bucket with permission %q", u.artifactPath(u.artifact), permission)
@@ -134,6 +136,14 @@ func (u *s3UploaderWork) DoWork(ctx context.Context) (*api.ArtifactPartETag, err
 		ContentType: aws.String(u.artifact.ContentType),
 		ACL:         permission,
 		Body:        f,
+	}
+
+	if len(u.conf.Tags) > 0 {
+		tags := make(url.Values, len(u.conf.Tags))
+		for key, value := range u.conf.Tags {
+			tags.Set(key, value)
+		}
+		params.Tagging = aws.String(tags.Encode())
 	}
 
 	// if enabled we assign the sse configuration

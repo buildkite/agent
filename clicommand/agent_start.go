@@ -222,6 +222,10 @@ type AgentStartConfig struct {
 	JobContextDir                   string        `cli:"job-context-dir" normalize:"filepath"`
 	NoMultipartArtifactUpload       bool          `cli:"no-multipart-artifact-upload"`
 	ArtifactUploadConcurrency       int           `cli:"artifact-upload-concurrency"`
+	ObjectAttributes                bool          `cli:"object-attributes"`
+	S3ObjectTags                    string        `cli:"s3-object-tags" config:"literal"`
+	GCSObjectContexts               string        `cli:"gcs-object-contexts" config:"literal"`
+	AzureBlobTags                   string        `cli:"azure-blob-tags" config:"literal"`
 
 	// API + agent behaviour
 	PingMode string `cli:"ping-mode"`
@@ -382,7 +386,7 @@ var AgentStartCommand = &cli.Command{
 	Usage:       "Starts a Buildkite agent",
 	Description: startDescription,
 	Flags: append(
-		globalFlags(),
+		slices.Concat(globalFlags(), artifactObjectAttributeFlags()),
 		&cli.StringFlag{
 			Name:    "config",
 			Value:   "",
@@ -1147,6 +1151,10 @@ var AgentStartCommand = &cli.Command{
 			TelemetryServiceName:                    cfg.TelemetryServiceName,
 			AllowMultipartArtifactUpload:            !cfg.NoMultipartArtifactUpload,
 			ArtifactUploadConcurrency:               cfg.ArtifactUploadConcurrency,
+			ObjectAttributes:                        cfg.ObjectAttributes,
+			S3ObjectTags:                            cfg.S3ObjectTags,
+			GCSObjectContexts:                       cfg.GCSObjectContexts,
+			AzureBlobTags:                           cfg.AzureBlobTags,
 			Executor:                                cfg.Executor,
 			KubernetesContainerStartTimeout:         cfg.KubernetesContainerStartTimeout,
 			JobContextDir:                           cfg.JobContextDir,

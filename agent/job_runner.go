@@ -541,6 +541,10 @@ func (r *JobRunner) createEnvironment(ctx context.Context) ([]string, error) {
 		// without complaints.
 		const agentCfgVars = `BUILDKITE_GIT_CHECKOUT_FLAGS
 BUILDKITE_ARTIFACT_UPLOAD_CONCURRENCY
+BUILDKITE_ARTIFACT_UPLOAD_OBJECT_ATTRIBUTES
+BUILDKITE_S3_OBJECT_TAGS
+BUILDKITE_GCS_OBJECT_CONTEXTS
+BUILDKITE_AZURE_BLOB_TAGS
 BUILDKITE_GIT_CLEAN_FLAGS
 BUILDKITE_GIT_CLONE_FLAGS
 BUILDKITE_GIT_CLONE_MIRROR_FLAGS
@@ -767,6 +771,19 @@ BUILDKITE_AGENT_JWKS_KEY_ID`
 	}
 	if r.conf.AgentConfiguration.ArtifactUploadConcurrency > 0 {
 		setEnv("BUILDKITE_ARTIFACT_UPLOAD_CONCURRENCY", strconv.Itoa(r.conf.AgentConfiguration.ArtifactUploadConcurrency))
+	}
+
+	// These are overridable defaults, unlike most agent settings. Add them
+	// after writing the upstream-only env files, and preserve explicit empties.
+	for name, value := range map[string]string{
+		"BUILDKITE_ARTIFACT_UPLOAD_OBJECT_ATTRIBUTES": strconv.FormatBool(r.conf.AgentConfiguration.ObjectAttributes),
+		"BUILDKITE_S3_OBJECT_TAGS":                    r.conf.AgentConfiguration.S3ObjectTags,
+		"BUILDKITE_GCS_OBJECT_CONTEXTS":               r.conf.AgentConfiguration.GCSObjectContexts,
+		"BUILDKITE_AZURE_BLOB_TAGS":                   r.conf.AgentConfiguration.AzureBlobTags,
+	} {
+		if _, exists := env[name]; !exists {
+			env[name] = value
+		}
 	}
 
 	// propagate CancelSignal to bootstrap, unless it's the default SIGTERM

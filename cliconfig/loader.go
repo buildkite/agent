@@ -67,18 +67,23 @@ func (l *Loader) Load() (warnings []string, err error) {
 		}
 	}
 
+	// Opt in only JSON-valued settings to literal parsing. Legacy config values
+	// retain their existing quote and escape handling.
+	fields, _ := reflections.FieldsDeep(l.Config)
+
 	// If a file was found, then we should load it
 	if l.File != nil {
+		for _, fieldName := range fields {
+			if mode, _ := reflections.GetFieldTag(l.Config, fieldName, "config"); mode == "literal" {
+				key, _ := reflections.GetFieldTag(l.Config, fieldName, "cli")
+				l.File.LiteralKeys = append(l.File.LiteralKeys, key)
+			}
+		}
 		// Attempt to load the config file we've found
 		if err := l.File.Load(); err != nil {
 			return warnings, fmt.Errorf("loading config file: %w", err)
 		}
 	}
-
-	// Now it's onto actually setting the fields. We start by getting all
-	// the fields from the configuration interface
-	var fields []string
-	fields, _ = reflections.FieldsDeep(l.Config)
 
 	// Loop through each of the fields, and look for tags and handle them
 	// appropriately

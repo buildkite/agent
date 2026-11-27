@@ -2,9 +2,11 @@ package cliconfig
 
 import (
 	"bufio"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
+	"slices"
 	"strings"
 
 	"github.com/buildkite/agent/v4/internal/osutil"
@@ -16,6 +18,9 @@ type File struct {
 
 	// A map of key/values that was loaded from the file
 	Config map[string]string
+
+	// LiteralKeys preserve JSON escapes rather than applying legacy unquoting.
+	LiteralKeys []string
 }
 
 func (f *File) Load() error {
@@ -47,6 +52,13 @@ func (f *File) Load() error {
 	// Parse each line
 	for lineNum, fullLine := range lines {
 		if !isIgnoredLine(fullLine) {
+			if sep := strings.IndexAny(fullLine, "=:"); sep >= 0 {
+				key := strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(fullLine[:sep]), "export"))
+				if slices.Contains(f.LiteralKeys, key) {
+					f.Config[key] = literalValue(fullLine[sep+1:])
+					continue
+				}
+			}
 			key, value, err := parseLine(fullLine)
 			if err != nil {
 				return fmt.Errorf("parsing config line %d: %w", lineNum+1, err)
@@ -145,6 +157,32 @@ func parseLine(line string) (key, value string, err error) {
 	}
 
 	return key, value, nil
+}
+
+// literalValue uses the JSON boundary only to remove an optional config quote
+// wrapper and trailing comment. Validation is deferred to the consumer so a
+// disabled setting can contain malformed JSON without changing legacy behaviour.
+func literalValue(value string) string {
+	value = strings.TrimSpace(value)
+	text := value
+	var quote byte
+	if len(text) > 0 && (text[0] == '\'' || text[0] == '"') {
+		quote, text = text[0], text[1:]
+	}
+	decoder := json.NewDecoder(strings.NewReader(text))
+	var raw json.RawMessage
+	if err := decoder.Decode(&raw); err == nil {
+		tail := strings.TrimSpace(text[decoder.InputOffset():])
+		if quote != 0 && len(tail) > 0 && tail[0] == quote {
+			tail = strings.TrimSpace(tail[1:])
+		} else if quote != 0 {
+			return value
+		}
+		if tail == "" || strings.HasPrefix(tail, "#") {
+			return string(raw)
+		}
+	}
+	return value
 }
 
 func isIgnoredLine(line string) bool {

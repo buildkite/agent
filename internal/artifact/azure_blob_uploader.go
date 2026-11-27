@@ -7,6 +7,7 @@ import (
 	"path"
 	"time"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/blockblob"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/sas"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/service"
 	"github.com/buildkite/agent/v4/api"
@@ -18,6 +19,7 @@ type AzureBlobUploaderConfig struct {
 	// The destination which includes the storage account name and the path.
 	// For example, "https://my-storage-account.blob.core.windows.net/my-container/my-virtual-directory/artifacts-go-here/"
 	Destination string
+	Tags        map[string]string
 }
 
 // AzureBlobUploader uploads artifacts to Azure Blob Storage.
@@ -120,6 +122,10 @@ func (u *azureBlobUploaderWork) DoWork(ctx context.Context) (*api.ArtifactPartET
 	u.logger.Debugf("Uploading %s to %s", u.artifact.Path, u.loc.URL(blobName))
 
 	bbc := u.client.NewContainerClient(u.loc.ContainerName).NewBlockBlobClient(blobName)
-	_, err = bbc.UploadFile(ctx, f, nil)
+	var options *blockblob.UploadFileOptions
+	if len(u.conf.Tags) > 0 {
+		options = &blockblob.UploadFileOptions{Tags: u.conf.Tags}
+	}
+	_, err = bbc.UploadFile(ctx, f, options)
 	return nil, err
 }

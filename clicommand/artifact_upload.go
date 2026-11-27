@@ -26,8 +26,8 @@ You need to ensure that the paths are surrounded by quotes otherwise the
 built-in shell path globbing will provide the files, which is currently not
 supported.
 
-You can specify an alternate destination on Amazon S3, Google Cloud Storage
-or Artifactory as per the examples below. This may be specified in the
+You can specify an alternate destination on Amazon S3, Google Cloud Storage,
+Azure Blob Storage or Artifactory as per the examples below. This may be specified in the
 'destination' argument, or in the 'BUILDKITE_ARTIFACT_UPLOAD_DESTINATION'
 environment variable.  Otherwise, artifacts are uploaded to a
 Buildkite-managed Amazon S3 bucket.
@@ -67,6 +67,23 @@ Or upload directly to Artifactory:
     $ export BUILDKITE_ARTIFACTORY_PASSWORD=xxx
     $ buildkite-agent artifact upload "log/**/*.log" rt://name-of-your-artifactory-repo/$BUILDKITE_JOB_ID
 
+To attach classification attributes to private storage objects, explicitly opt in:
+
+    $ buildkite-agent artifact upload --object-attributes --s3-object-tags '{"team":"payments"}' "log/**/*.log" s3://my-artifacts
+
+Use --gcs-object-contexts for GCS object contexts, or --azure-blob-tags for
+Azure blob index tags. Each accepts a JSON string-to-string object and requires
+--object-attributes. These settings are also available on agent start and in the
+agent config file, with provider-prefixed environment variables shown below.
+An upload CLI flag overrides job environment, which overrides agent defaults.
+Maps replace rather than merge; use {} to clear a map or --object-attributes=false
+to suppress all attributes. Standalone uploads can select an agent config file
+with --config; they do not query a running agent or discover its config file.
+
+Attributes require additional provider permissions and may incur charges,
+including recurring GCS context charges. They are not cloud billing dimensions.
+Buildkite-managed storage and Artifactory do not support custom attributes.
+
 By default, symlinks to directories will not be explored when resolving the glob, but symlinks to
 files will be uploaded as the linked files. To ignore symlinks to files use:
 
@@ -82,6 +99,7 @@ type ArtifactUploadConfig struct {
 	GlobalConfig
 	APIConfig
 
+	ConfigFile  string `cli:"config"`
 	UploadPaths string `cli:"arg:0" label:"upload paths" validate:"required"`
 	Destination string `cli:"arg:1" label:"destination" env:"BUILDKITE_ARTIFACT_UPLOAD_DESTINATION"`
 	Job         string `cli:"job" validate:"required"`
@@ -94,6 +112,10 @@ type ArtifactUploadConfig struct {
 	UploadSkipSymlinks        bool   `cli:"upload-skip-symlinks"`
 	NoMultipartUpload         bool   `cli:"no-multipart-artifact-upload"`
 	UploadConcurrency         int    `cli:"concurrency"`
+	ObjectAttributes          bool   `cli:"object-attributes"`
+	S3ObjectTags              string `cli:"s3-object-tags" config:"literal"`
+	GCSObjectContexts         string `cli:"gcs-object-contexts" config:"literal"`
+	AzureBlobTags             string `cli:"azure-blob-tags" config:"literal"`
 }
 
 var ArtifactUploadCommand = &cli.Command{
@@ -101,6 +123,11 @@ var ArtifactUploadCommand = &cli.Command{
 	Usage:       "Uploads files to a job as artifacts",
 	Description: uploadHelpDescription,
 	Flags: slices.Concat(globalFlags(), apiFlags(), []cli.Flag{
+		&cli.StringFlag{
+			Name:    "config",
+			Usage:   "Path to an agent configuration file for upload defaults (not loaded automatically)",
+			Sources: cli.EnvVars("BUILDKITE_AGENT_CONFIG"),
+		},
 		&cli.StringFlag{
 			Name:    "job",
 			Value:   "",
@@ -141,7 +168,7 @@ var ArtifactUploadCommand = &cli.Command{
 			Sources: cli.EnvVars(ArtifactUploadConcurrencyEnvVar),
 		},
 		NoMultipartArtifactUploadFlag,
-	}),
+	}, artifactObjectAttributeFlags()),
 	Action: func(ctx context.Context, c *cli.Command) error {
 		ctx, cfg, l, _, done := setupLoggerAndConfig[ArtifactUploadConfig](ctx, c)
 		defer done()
@@ -154,20 +181,32 @@ var ArtifactUploadCommand = &cli.Command{
 
 		status := newUploadStatus(programstatus.FromEnvironment(), "artifact", "No artifacts matched", "Artifact upload failed")
 
+		var explicitAttributeFlags []string
+		for _, flag := range c.Flags {
+			if f, ok := flag.(*artifactAttributeFlag); ok && f.explicit {
+				explicitAttributeFlags = append(explicitAttributeFlags, f.Name)
+			}
+		}
+
 		// Setup the uploader
 		uploader := artifact.NewUploader(l, client, artifact.UploaderConfig{
-			JobID:             cfg.Job,
-			Paths:             cfg.UploadPaths,
-			Destination:       cfg.Destination,
-			ContentType:       cfg.ContentType,
-			DebugHTTP:         cfg.DebugHTTP,
-			TraceHTTP:         cfg.TraceHTTP,
-			DisableHTTP2:      cfg.NoHTTP2,
-			AllowMultipart:    !cfg.NoMultipartUpload,
-			Literal:           cfg.Literal,
-			Delimiter:         cfg.Delimiter,
-			UploadConcurrency: cfg.UploadConcurrency,
-			OnProgress:        status.progress,
+			JobID:                  cfg.Job,
+			Paths:                  cfg.UploadPaths,
+			Destination:            cfg.Destination,
+			ContentType:            cfg.ContentType,
+			DebugHTTP:              cfg.DebugHTTP,
+			TraceHTTP:              cfg.TraceHTTP,
+			DisableHTTP2:           cfg.NoHTTP2,
+			AllowMultipart:         !cfg.NoMultipartUpload,
+			Literal:                cfg.Literal,
+			Delimiter:              cfg.Delimiter,
+			UploadConcurrency:      cfg.UploadConcurrency,
+			OnProgress:             status.progress,
+			ObjectAttributes:       cfg.ObjectAttributes,
+			S3ObjectTags:           cfg.S3ObjectTags,
+			GCSObjectContexts:      cfg.GCSObjectContexts,
+			AzureBlobTags:          cfg.AzureBlobTags,
+			ExplicitAttributeFlags: explicitAttributeFlags,
 
 			GlobResolveFollowSymlinks: cfg.GlobResolveFollowSymlinks,
 			UploadSkipSymlinks:        cfg.UploadSkipSymlinks,
