@@ -51,7 +51,7 @@ func parseKeyReference(ref string) (string, string, int, error) {
 		}
 	}
 	if strings.Contains(name, "/") {
-		return "", "", 0, fmt.Errorf("Vault Transit key name must be a single path segment")
+		return "", "", 0, fmt.Errorf("the Vault Transit key name must be a single path segment")
 	}
 	return keyPath, mount + "/sign/" + name, int(version), nil
 }
@@ -73,13 +73,13 @@ func New(ctx context.Context, ref string) (*Signer, error) {
 		return nil, fmt.Errorf("reading Vault Transit key %q: %w", keyPath, err)
 	}
 	if metadata == nil {
-		return nil, fmt.Errorf("Vault Transit key %q not found", keyPath)
+		return nil, fmt.Errorf("no such Vault Transit key %q", keyPath)
 	}
 	versions, _ := metadata.Data["keys"].(map[string]any)
 	entry, _ := versions[strconv.Itoa(version)].(map[string]any)
 	publicPEM, _ := entry["public_key"].(string)
 	if publicPEM == "" {
-		return nil, fmt.Errorf("Vault Transit key %q version %d has no public key", keyPath, version)
+		return nil, fmt.Errorf("no public key for Vault Transit key %q version %d", keyPath, version)
 	}
 	block, _ := pem.Decode([]byte(publicPEM))
 	if block == nil || block.Type != "PUBLIC KEY" {
@@ -91,7 +91,7 @@ func New(ctx context.Context, ref string) (*Signer, error) {
 	}
 	public, ok := raw.(*ecdsa.PublicKey)
 	if !ok || public.Curve != elliptic.P256() {
-		return nil, fmt.Errorf("Vault Transit key %q version %d must be ECDSA P-256", keyPath, version)
+		return nil, fmt.Errorf("expected an ECDSA P-256 key for Vault Transit key %q version %d", keyPath, version)
 	}
 	key, err := jwk.Import(public)
 	if err != nil {
@@ -117,7 +117,7 @@ func (s *Signer) KeyID() string                       { return s.kid }
 
 func (s *Signer) Sign(_ io.Reader, digest []byte, opts crypto.SignerOpts) ([]byte, error) {
 	if opts == nil || opts.HashFunc() != crypto.SHA256 || len(digest) != crypto.SHA256.Size() {
-		return nil, fmt.Errorf("Vault Transit ES256 signing requires a SHA-256 digest")
+		return nil, fmt.Errorf("expected a SHA-256 digest for Vault Transit ES256 signing")
 	}
 	response, err := s.client.WriteWithContext(s.ctx, s.signPath, map[string]any{
 		"input":                base64.StdEncoding.EncodeToString(digest),
@@ -130,12 +130,12 @@ func (s *Signer) Sign(_ io.Reader, digest []byte, opts crypto.SignerOpts) ([]byt
 		return nil, fmt.Errorf("signing with Vault Transit: %w", err)
 	}
 	if response == nil {
-		return nil, fmt.Errorf("Vault Transit returned no signing response")
+		return nil, fmt.Errorf("no signing response from Vault Transit")
 	}
 	envelope, _ := response.Data["signature"].(string)
 	encoded, ok := strings.CutPrefix(envelope, fmt.Sprintf("vault:v%d:", s.version))
 	if !ok {
-		return nil, fmt.Errorf("Vault Transit signature is missing or not for key version %d", s.version)
+		return nil, fmt.Errorf("the Vault Transit signature is missing or not for key version %d", s.version)
 	}
 	signature, err := base64.StdEncoding.DecodeString(encoded)
 	if err != nil || !ecdsa.VerifyASN1(s.public, digest, signature) {
