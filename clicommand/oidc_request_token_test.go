@@ -2,18 +2,22 @@ package clicommand
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"os"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/buildkite/agent/v4/api"
+	"github.com/lestrrat-go/jwx/v3/jwa"
+	"github.com/lestrrat-go/jwx/v3/jwt"
 	"github.com/urfave/cli/v3"
 )
 
@@ -286,5 +290,278 @@ func TestOIDCRequestTokenFailureIsCaptured(t *testing.T) {
 		if report.Code != "buildkite.oidc_token_request_failed" || !strings.Contains(report.Message, want) {
 			t.Errorf("report = %q %q, want buildkite.oidc_token_request_failed containing %q", report.Code, report.Message, want)
 		}
+	}
+}
+
+func TestOIDCTokenMaxLifetime(t *testing.T) {
+	tests := []struct {
+		name    string
+		value   string
+		want    int
+		wantErr bool
+	}{
+		{name: "unset", value: "", want: 0},
+		{name: "no limit", value: "0", want: 0},
+		{name: "limit", value: "600", want: 600},
+		{name: "negative", value: "-1", wantErr: true},
+		{name: "not a number", value: "abc", wantErr: true},
+		{name: "duration", value: "10m", wantErr: true},
+		{name: "padded", value: " 60", wantErr: true},
+		{name: "overflow", value: "99999999999999999999", wantErr: true},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Setenv(OIDCTokenMaxLifetimeEnvVar, test.value)
+
+			got, err := oidcTokenMaxLifetime()
+			if test.wantErr {
+				if err == nil {
+					t.Fatalf("oidcTokenMaxLifetime() = (%d, nil), want error", got)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("oidcTokenMaxLifetime() error = %v, want nil", err)
+			}
+			if got != test.want {
+				t.Errorf("oidcTokenMaxLifetime() = %d, want %d", got, test.want)
+			}
+		})
+	}
+}
+
+func TestOIDCTokenRequestLifetime(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name        string
+		requested   int
+		maxLifetime int
+		want        int
+		wantErr     bool
+	}{
+		{name: "no limit, default lifetime", requested: 0, maxLifetime: 0, want: 0},
+		{name: "no limit, requested lifetime", requested: 86400, maxLifetime: 0, want: 86400},
+		{name: "under the limit", requested: 60, maxLifetime: 600, want: 60},
+		{name: "at the limit", requested: 600, maxLifetime: 600, want: 600},
+		{name: "over the limit", requested: 601, maxLifetime: 600, wantErr: true},
+		{name: "far over the limit", requested: 9223372036854775807, maxLifetime: 600, wantErr: true},
+		{name: "default lifetime over a short limit", requested: 0, maxLifetime: 60, want: 60},
+		{name: "default lifetime over a limit of 1", requested: 0, maxLifetime: 1, want: 1},
+		{name: "default lifetime just over the limit", requested: 0, maxLifetime: oidcTokenDefaultLifetime - 1, want: oidcTokenDefaultLifetime - 1},
+		{name: "default lifetime at the limit", requested: 0, maxLifetime: oidcTokenDefaultLifetime, want: 0},
+		{name: "default lifetime under a long limit", requested: 0, maxLifetime: 3600, want: 0},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			got, err := oidcTokenRequestLifetime(test.requested, test.maxLifetime)
+			if test.wantErr {
+				if err == nil {
+					t.Fatalf("oidcTokenRequestLifetime(%d, %d) = (%d, nil), want error", test.requested, test.maxLifetime, got)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("oidcTokenRequestLifetime(%d, %d) error = %v, want nil", test.requested, test.maxLifetime, err)
+			}
+			if got != test.want {
+				t.Errorf("oidcTokenRequestLifetime(%d, %d) = %d, want %d", test.requested, test.maxLifetime, got, test.want)
+			}
+		})
+	}
+}
+
+// signedOIDCTestToken returns a signed JWT with the given lifetime, or without
+// the iat or exp claim when issuedAt or expiry is the zero time.
+func signedOIDCTestToken(t *testing.T, issuedAt, expiry time.Time) string {
+	t.Helper()
+
+	builder := jwt.NewBuilder().Audience([]string{"sts.amazonaws.com"})
+	if !issuedAt.IsZero() {
+		builder = builder.IssuedAt(issuedAt)
+	}
+	if !expiry.IsZero() {
+		builder = builder.Expiration(expiry)
+	}
+	token, err := builder.Build()
+	if err != nil {
+		t.Fatalf("building test token: %v", err)
+	}
+	signed, err := jwt.Sign(token, jwt.WithKey(jwa.HS256(), []byte("test-signing-key")))
+	if err != nil {
+		t.Fatalf("signing test token: %v", err)
+	}
+	return string(signed)
+}
+
+func TestCheckOIDCTokenLifetime(t *testing.T) {
+	t.Parallel()
+
+	issuedAt := time.Unix(1_800_000_000, 0)
+
+	tests := []struct {
+		name        string
+		token       string
+		maxLifetime int
+		wantErr     bool
+	}{
+		{name: "no limit skips the check", token: "not-a-jwt", maxLifetime: 0},
+		{name: "under the limit", token: signedOIDCTestToken(t, issuedAt, issuedAt.Add(time.Minute)), maxLifetime: 300},
+		{name: "at the limit", token: signedOIDCTestToken(t, issuedAt, issuedAt.Add(5*time.Minute)), maxLifetime: 300},
+		{name: "over the limit", token: signedOIDCTestToken(t, issuedAt, issuedAt.Add(5*time.Minute+time.Second)), maxLifetime: 300, wantErr: true},
+		{name: "expired when issued", token: signedOIDCTestToken(t, issuedAt, issuedAt.Add(-time.Minute)), maxLifetime: 300},
+		{name: "no iat claim", token: signedOIDCTestToken(t, time.Time{}, issuedAt.Add(time.Minute)), maxLifetime: 300, wantErr: true},
+		{name: "no exp claim", token: signedOIDCTestToken(t, issuedAt, time.Time{}), maxLifetime: 300, wantErr: true},
+		{name: "not a JWT", token: "not-a-jwt", maxLifetime: 300, wantErr: true},
+		{name: "empty token", token: "", maxLifetime: 300, wantErr: true},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			err := checkOIDCTokenLifetime(test.token, test.maxLifetime)
+			if gotErr := err != nil; gotErr != test.wantErr {
+				t.Errorf("checkOIDCTokenLifetime(%q, %d) error = %v, want error: %t", test.token, test.maxLifetime, err, test.wantErr)
+			}
+		})
+	}
+}
+
+// newOIDCLifetimeTestServer returns a server that records the lifetime of each
+// token request and issues a token valid for issuedLifetime, or for the
+// requested lifetime (or 5 minutes, the API's default) when issuedLifetime is 0.
+func newOIDCLifetimeTestServer(t *testing.T, issuedLifetime time.Duration, requestedLifetimes *[]int) *httptest.Server {
+	t.Helper()
+
+	return httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
+		var body struct {
+			Lifetime *int `json:"lifetime"`
+		}
+		if err := json.NewDecoder(req.Body).Decode(&body); err != nil {
+			http.Error(rw, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		lifetime := issuedLifetime
+		requested := 0
+		if body.Lifetime != nil {
+			requested = *body.Lifetime
+		}
+		*requestedLifetimes = append(*requestedLifetimes, requested)
+		if lifetime == 0 {
+			lifetime = oidcTokenDefaultLifetime * time.Second
+			if requested > 0 {
+				lifetime = time.Duration(requested) * time.Second
+			}
+		}
+
+		issuedAt := time.Now().Truncate(time.Second)
+		_, _ = fmt.Fprintf(rw, `{"token":%q}`, signedOIDCTestToken(t, issuedAt, issuedAt.Add(lifetime)))
+	}))
+}
+
+func TestOIDCRequestTokenMaxLifetime(t *testing.T) {
+	tests := []struct {
+		name           string
+		maxLifetime    string
+		args           []string
+		issuedLifetime time.Duration
+		wantRequests   []int
+		wantErr        string
+	}{
+		{
+			name:         "no limit passes the requested lifetime through",
+			maxLifetime:  "0",
+			args:         []string{"--lifetime", "86400"},
+			wantRequests: []int{86400},
+		},
+		{
+			name:         "unset limit passes the requested lifetime through",
+			maxLifetime:  "",
+			args:         []string{"--lifetime", "86400"},
+			wantRequests: []int{86400},
+		},
+		{
+			name:         "lifetime under the limit",
+			maxLifetime:  "600",
+			args:         []string{"--lifetime", "60"},
+			wantRequests: []int{60},
+		},
+		{
+			name:         "lifetime at the limit",
+			maxLifetime:  "600",
+			args:         []string{"--lifetime", "600"},
+			wantRequests: []int{600},
+		},
+		{
+			name:        "lifetime over the limit is rejected without a request",
+			maxLifetime: "600",
+			args:        []string{"--lifetime", "601"},
+			wantErr:     "lifetime 601 exceeds this agent's maximum OIDC token lifetime of 600 seconds",
+		},
+		{
+			name:         "default lifetime over the limit requests the limit",
+			maxLifetime:  "60",
+			wantRequests: []int{60},
+		},
+		{
+			name:         "default lifetime under the limit is left to the API",
+			maxLifetime:  "3600",
+			wantRequests: []int{0},
+		},
+		{
+			name:           "token issued for longer than the limit is not printed",
+			maxLifetime:    "3600",
+			issuedLifetime: 2 * time.Hour,
+			wantRequests:   []int{0},
+			wantErr:        "exceeds this agent's maximum OIDC token lifetime of 3600 seconds",
+		},
+		{
+			name:        "invalid limit fails closed without a request",
+			maxLifetime: "abc",
+			args:        []string{"--lifetime", "60"},
+			wantErr:     "is not a valid maximum OIDC token lifetime",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Setenv(OIDCTokenMaxLifetimeEnvVar, test.maxLifetime)
+
+			var requests []int
+			server := newOIDCLifetimeTestServer(t, test.issuedLifetime, &requests)
+			defer server.Close()
+
+			args := append([]string{"--skip-redaction"}, test.args...)
+			out, err := runOIDCRequestTokenCommand(t, server.URL, args...)
+
+			if test.wantErr != "" {
+				if err == nil {
+					t.Fatalf("runOIDCRequestTokenCommand() error = nil, want error containing %q", test.wantErr)
+				}
+				if !strings.Contains(err.Error(), test.wantErr) {
+					t.Errorf("runOIDCRequestTokenCommand() error = %q, want containing %q", err, test.wantErr)
+				}
+				if out != "" {
+					t.Errorf("runOIDCRequestTokenCommand() output = %q, want empty", out)
+				}
+			} else {
+				if err != nil {
+					t.Fatalf("runOIDCRequestTokenCommand() error = %v, want nil", err)
+				}
+				if strings.Count(out, ".") != 2 {
+					t.Errorf("runOIDCRequestTokenCommand() output = %q, want a JWT", out)
+				}
+			}
+
+			if !slices.Equal(requests, test.wantRequests) {
+				t.Errorf("requested lifetimes = %v, want %v", requests, test.wantRequests)
+			}
+		})
 	}
 }

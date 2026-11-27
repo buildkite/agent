@@ -6,12 +6,15 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"os"
 	"slices"
+	"strconv"
 	"time"
 
 	"github.com/buildkite/agent/v4/api"
 	"github.com/buildkite/agent/v4/jobapi"
 	"github.com/buildkite/roko"
+	"github.com/lestrrat-go/jwx/v3/jwt"
 	"github.com/urfave/cli/v3"
 	"go.opentelemetry.io/otel"
 )
@@ -48,6 +51,18 @@ type OIDCTokenConfig struct {
 // OTLP relay credential failure is terminal). Do not change or reuse it.
 const OIDCTokenRefusedExitStatus = 77
 
+// OIDCTokenMaxLifetimeEnvVar holds the maximum OIDC token lifetime, in
+// seconds, set by `buildkite-agent start --oidc-token-max-lifetime`. The agent
+// always sets it in the job environment (0 when there is no limit), and it is
+// protected from job env, secrets, hooks and plugins.
+const OIDCTokenMaxLifetimeEnvVar = "BUILDKITE_OIDC_TOKEN_MAX_LIFETIME"
+
+// oidcTokenDefaultLifetime is the lifetime, in seconds, that the Buildkite API
+// gives a token when the request doesn't specify one (documented as 5 minutes).
+// It is only used to decide whether a request without --lifetime would exceed
+// the agent's limit. The issued token is checked against the limit anyway.
+const oidcTokenDefaultLifetime = 300
+
 const (
 	backoffSeconds       = 2
 	maxAttempts          = 5
@@ -67,6 +82,10 @@ Example:
 
 Requests and prints an OIDC token from Buildkite that claims the Job ID
 (amongst other things) and the audience "sts.amazonaws.com".
+
+If the agent was started with --oidc-token-max-lifetime, requests for a longer
+--lifetime are rejected, and tokens are only printed if they expire within
+that limit.
 
 Exit statuses:
 
@@ -143,6 +162,16 @@ var OIDCRequestTokenCommand = &cli.Command{
 			return fmt.Errorf("format %q is not valid. Supported values are 'jwt' and 'gcp'", cfg.Format)
 		}
 
+		maxLifetime, err := oidcTokenMaxLifetime()
+		if err != nil {
+			return err
+		}
+
+		lifetime, err := oidcTokenRequestLifetime(cfg.Lifetime, maxLifetime)
+		if err != nil {
+			return err
+		}
+
 		// Create the API client
 		client := api.NewClient(l, loadAPIClientConfig(cfg, "AgentAccessToken"))
 
@@ -155,7 +184,7 @@ var OIDCRequestTokenCommand = &cli.Command{
 			req := &api.OIDCTokenRequest{
 				Job:            cfg.Job,
 				Audience:       cfg.Audience,
-				Lifetime:       cfg.Lifetime,
+				Lifetime:       lifetime,
 				Claims:         cfg.Claims,
 				AWSSessionTags: cfg.AWSSessionTags,
 				SubjectClaim:   cfg.SubjectClaim,
@@ -190,6 +219,10 @@ var OIDCRequestTokenCommand = &cli.Command{
 			if oidcTokenRefused(err) {
 				return NewExitError(OIDCTokenRefusedExitStatus, err)
 			}
+			return err
+		}
+
+		if err := checkOIDCTokenLifetime(token.Token, maxLifetime); err != nil {
 			return err
 		}
 
@@ -271,4 +304,63 @@ func oidcTokenRefused(err error) bool {
 	default:
 		return false
 	}
+}
+
+// oidcTokenMaxLifetime returns the agent's maximum OIDC token lifetime in
+// seconds, or 0 if there is no limit. The agent sets the value, so an invalid
+// one means the environment was tampered with, and the command fails rather
+// than ignoring the limit.
+func oidcTokenMaxLifetime() (int, error) {
+	value := os.Getenv(OIDCTokenMaxLifetimeEnvVar)
+	if value == "" {
+		return 0, nil
+	}
+	maxLifetime, err := strconv.Atoi(value)
+	if err != nil || maxLifetime < 0 {
+		return 0, fmt.Errorf("%s=%q is not a valid maximum OIDC token lifetime: it must be a non-negative integer number of seconds", OIDCTokenMaxLifetimeEnvVar, value)
+	}
+	return maxLifetime, nil
+}
+
+// oidcTokenRequestLifetime returns the lifetime to request from the API, given
+// the lifetime passed with --lifetime (0 when omitted) and the agent's maximum
+// lifetime (0 when there is no limit). A requested lifetime over the maximum is
+// an error. When --lifetime is omitted and the API's default lifetime would
+// exceed the maximum, it requests the maximum instead. It never requests a
+// longer lifetime than the API would otherwise give.
+func oidcTokenRequestLifetime(requested, maxLifetime int) (int, error) {
+	if maxLifetime == 0 {
+		return requested, nil
+	}
+	if requested > maxLifetime {
+		return 0, fmt.Errorf("lifetime %d exceeds this agent's maximum OIDC token lifetime of %d seconds (set with --oidc-token-max-lifetime on buildkite-agent start)", requested, maxLifetime)
+	}
+	if requested == 0 && maxLifetime < oidcTokenDefaultLifetime {
+		return maxLifetime, nil
+	}
+	return requested, nil
+}
+
+// checkOIDCTokenLifetime returns an error if the token is valid for longer than
+// maxLifetime seconds, measured from its iat (issued at) claim to its exp
+// (expiry) claim. It doesn't verify the token's signature, because it only
+// guards against printing a token the API issued with a longer lifetime than
+// requested. With no limit (maxLifetime 0), it doesn't check the token.
+func checkOIDCTokenLifetime(token string, maxLifetime int) error {
+	if maxLifetime == 0 {
+		return nil
+	}
+	parsed, err := jwt.ParseInsecure([]byte(token))
+	if err != nil {
+		return fmt.Errorf("couldn't check the OIDC token's lifetime against this agent's maximum of %d seconds: %w", maxLifetime, err)
+	}
+	issuedAt, hasIssuedAt := parsed.IssuedAt()
+	expiry, hasExpiry := parsed.Expiration()
+	if !hasIssuedAt || !hasExpiry {
+		return fmt.Errorf("couldn't check the OIDC token's lifetime against this agent's maximum of %d seconds: the token has no iat or exp claim", maxLifetime)
+	}
+	if lifetime := expiry.Sub(issuedAt); lifetime > time.Duration(maxLifetime)*time.Second {
+		return fmt.Errorf("the OIDC token issued by Buildkite is valid for %s, which exceeds this agent's maximum OIDC token lifetime of %d seconds, so it was not printed", lifetime, maxLifetime)
+	}
+	return nil
 }

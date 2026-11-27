@@ -90,6 +90,7 @@ var protectedEnv = map[string]protection{
 	"BUILDKITE_JOB_CONTEXT_DIR":                             {},
 	"BUILDKITE_KUBERNETES_EXEC":                             {},
 	"BUILDKITE_LOCAL_HOOKS_ENABLED":                         {},
+	"BUILDKITE_OIDC_TOKEN_MAX_LIFETIME":                     {},
 	"BUILDKITE_PLUGINS_ALWAYS_CLONE_FRESH":                  {mutableFromWithinJob: true},
 	"BUILDKITE_PLUGINS_ENABLED":                             {},
 	"BUILDKITE_PLUGINS_PATH":                                {},

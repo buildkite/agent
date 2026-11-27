@@ -1408,3 +1408,73 @@ func TestWindowsJobEnvCaseCollisionIsRefusedBeforeVerification(t *testing.T) {
 		t.Errorf("logs = %q, want them to contain %q", logs, want)
 	}
 }
+
+func TestOIDCTokenMaxLifetimeIsAgentAuthoritative(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name        string
+		maxLifetime int
+		jobEnv      map[string]string
+		want        string
+	}{
+		{
+			name:        "agent limit is set",
+			maxLifetime: 120,
+			want:        "120",
+		},
+		{
+			name: "no agent limit is set as 0",
+			want: "0",
+		},
+		{
+			name:        "job env can't raise the agent limit",
+			maxLifetime: 120,
+			jobEnv:      map[string]string{"BUILDKITE_OIDC_TOKEN_MAX_LIFETIME": "86400"},
+			want:        "120",
+		},
+		{
+			name:   "job env can't set a limit when the agent has none",
+			jobEnv: map[string]string{"BUILDKITE_OIDC_TOKEN_MAX_LIFETIME": "86400"},
+			want:   "0",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			job := &api.Job{
+				ID:                 "oidc-token-max-lifetime-job",
+				ChunksMaxSizeBytes: 1024,
+				Env:                test.jobEnv,
+				Step:               pipeline.CommandStep{},
+				Token:              "bkaj_job-token",
+			}
+
+			mb := mockBootstrap(t)
+			defer mb.CheckAndClose(t) //nolint:errcheck // bintest logs to t
+
+			mb.Expect().Once().AndExitWith(0).AndCallFunc(func(c *bintest.Call) {
+				if got := c.GetEnv("BUILDKITE_OIDC_TOKEN_MAX_LIFETIME"); got != test.want {
+					t.Errorf("c.GetEnv(BUILDKITE_OIDC_TOKEN_MAX_LIFETIME) = %q, want %q", got, test.want)
+				}
+				c.Exit(0)
+			})
+
+			e := createTestAgentEndpoint()
+			server := e.server()
+			defer server.Close()
+
+			err := runJob(t, t.Context(), testRunJobConfig{
+				job:           job,
+				server:        server,
+				agentCfg:      agent.AgentConfiguration{OIDCTokenMaxLifetime: test.maxLifetime},
+				mockBootstrap: mb,
+			})
+			if err != nil {
+				t.Fatalf("runJob() error = %v", err)
+			}
+		})
+	}
+}

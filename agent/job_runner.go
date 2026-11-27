@@ -769,6 +769,14 @@ BUILDKITE_AGENT_JWKS_KEY_ID`
 		setEnv("BUILDKITE_ARTIFACT_UPLOAD_CONCURRENCY", strconv.Itoa(r.conf.AgentConfiguration.ArtifactUploadConcurrency))
 	}
 
+	// Always set the OIDC token lifetime limit, even when there is none (0), so
+	// the job env can't supply its own. Windows treats env names as
+	// case-insensitive, so also remove job-supplied variants of the name.
+	maps.DeleteFunc(env, func(name, _ string) bool {
+		return strings.EqualFold(name, "BUILDKITE_OIDC_TOKEN_MAX_LIFETIME") && name != "BUILDKITE_OIDC_TOKEN_MAX_LIFETIME"
+	})
+	setEnv("BUILDKITE_OIDC_TOKEN_MAX_LIFETIME", strconv.Itoa(r.conf.AgentConfiguration.OIDCTokenMaxLifetime))
+
 	// propagate CancelSignal to bootstrap, unless it's the default SIGTERM
 	if r.conf.CancelSignal != process.SIGTERM {
 		setEnv("BUILDKITE_CANCEL_SIGNAL", r.conf.CancelSignal.String())
