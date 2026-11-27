@@ -157,6 +157,69 @@ func TestCreateEnvironmentRepositoryAllowlist(t *testing.T) {
 	}
 }
 
+func TestCreateEnvironmentVaultTransitSigning(t *testing.T) {
+	const name = "BUILDKITE_AGENT_SIGNING_VAULT_TRANSIT_KEY"
+	const configured = "ci/transit/keys/pipeline@3"
+	const jobSupplied = "job-transit/keys/other@1"
+	const jobSetting = "job-supplied-vault-setting"
+	const ambientToken = "ambient-vault-token"
+	t.Setenv("VAULT_TOKEN", ambientToken)
+
+	for _, ref := range []string{"", configured} {
+		jobEnv := map[string]string{name: jobSupplied, "BASH_ENV": "job-shell-init", "CUSTOM": "keep"}
+		connectionSettings := []string{"VAULT_ADDR", "VAULT_AGENT_ADDR", "VAULT_NAMESPACE", "VAULT_TOKEN", "VAULT_PROXY_ADDR", "VAULT_CACERT", "VAULT_SKIP_VERIFY", "HTTP_PROXY", "https_proxy", "NO_PROXY", "SSL_CERT_FILE", "SSL_CERT_DIR"}
+		for _, setting := range connectionSettings {
+			jobEnv[setting] = jobSetting
+		}
+		r := controlPlaneTestRunner(t, jobEnv, AgentConfiguration{
+			SigningVaultTransitKey:        ref,
+			ProtectedEnvironmentVariables: []string{"BASH_ENV"},
+		})
+		got, err := r.createEnvironment(t.Context())
+		if err != nil {
+			t.Fatal(err)
+		}
+		bootstrap := envutil.FromSlice(got)
+		wantRef := jobSupplied
+		if ref != "" {
+			wantRef = ref
+		}
+		if got := bootstrap.GetString(name, ""); got != wantRef {
+			t.Errorf("bootstrap key reference = %q, want %q", got, wantRef)
+		}
+		if bootstrap.Exists("BASH_ENV") || bootstrap.GetString("CUSTOM", "") != "keep" {
+			t.Error("existing job environment policy was not preserved")
+		}
+		// Bootstrap uses this policy to reject pipeline secret mappings too.
+		patterns := strings.Split(bootstrap.GetString("BUILDKITE_PROTECTED_ENVIRONMENT_VARIABLES", ""), ",")
+		if !envutil.MatchesProtectedEnv("BASH_ENV", patterns) || envutil.MatchesProtectedEnv("CUSTOM", patterns) {
+			t.Error("bootstrap did not retain the operator's protection policy")
+		}
+		for _, setting := range connectionSettings {
+			if bootstrap.Exists(setting) != (ref == "") {
+				t.Errorf("key reference %q: bootstrap contains %s = %t", ref, setting, bootstrap.Exists(setting))
+			}
+		}
+		for _, setting := range append(connectionSettings, name) {
+			if protected := envutil.MatchesProtectedEnv(setting, patterns); protected != (ref != "") {
+				t.Errorf("key reference %q: bootstrap secret policy protects %s = %t", ref, setting, protected)
+			}
+		}
+		for _, path := range []string{r.envShellFile.Name(), r.envJSONFile.Name()} {
+			data, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !strings.Contains(string(data), wantRef) || strings.Contains(string(data), ambientToken) {
+				t.Errorf("env file %s did not preserve the key reference or copied an ambient token", path)
+			}
+			if ref != "" && (strings.Contains(string(data), jobSupplied) || strings.Contains(string(data), jobSetting)) {
+				t.Errorf("env file %s contains untrusted Vault configuration", path)
+			}
+		}
+	}
+}
+
 // controlPlaneTestRunner builds the minimal JobRunner that createEnvironment
 // needs: a job env, an agent configuration, real temp env files, and an API
 // client that never makes a request (createEnvironment only reads its

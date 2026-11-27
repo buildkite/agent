@@ -39,6 +39,12 @@ func FromMap(m map[string]string) *Environment {
 	return env
 }
 
+// ValidName reports whether a name can be written in a line of name=value
+// without changing the name or record boundaries.
+func ValidName(name string) bool {
+	return name != "" && !strings.ContainsAny(name, "=\x00\r\n")
+}
+
 // Split splits an environment variable (in the form "name=value") into the name
 // and value substrings. If there is no '=', or the first '=' is at the start,
 // it returns `"", "", false`.

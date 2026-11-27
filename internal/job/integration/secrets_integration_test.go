@@ -962,6 +962,13 @@ func TestSecretsIntegration_FailuresAreCaptured(t *testing.T) {
 			message: "- MISSING_SECRET: 404 Not Found: Not Found: method = GET",
 		},
 		{
+			name:    "malformed environment variable name",
+			secrets: []pipeline.Secret{{Key: "VALID_SECRET", EnvironmentVariable: "TEST_VAR=extra"}},
+			env:     []string{"BUILDKITE_PROTECTED_ENVIRONMENT_VARIABLES=TEST_VAR"},
+			code:    "buildkite.secret_environment_variable_invalid",
+			message: `secret "VALID_SECRET" has an invalid environment_variable name`,
+		},
+		{
 			name:    "protected environment variable",
 			secrets: []pipeline.Secret{{Key: "VALID_SECRET", EnvironmentVariable: "BUILDKITE_AGENT_ACCESS_TOKEN"}},
 			code:    "buildkite.secret_environment_variable_rejected",

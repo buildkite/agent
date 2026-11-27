@@ -1198,9 +1198,16 @@ func (e *Executor) fetchAndSetSecrets(ctx context.Context) error {
 
 	e.shell.Headerf("Preparing secrets")
 
-	// Extract keys for fetching
+	// Validate destinations before fetching any secrets. An empty destination
+	// still means fetch for redaction only.
 	keys := make([]string, len(pipelineSecrets))
 	for i, ps := range pipelineSecrets {
+		if name := ps.EnvironmentVariable; name != "" && !env.ValidName(name) {
+			err := fmt.Errorf("secret %q has an invalid environment_variable name: names cannot contain '=', NUL, or line breaks", ps.Key)
+			message := jobapi.CapturedErrorMessage(err.Error(), "A secret has an invalid environment_variable name. Use a name without '=', NUL, or line breaks.")
+			captureJobError(ctx, e.shell, "buildkite.secret_environment_variable_invalid", message)
+			return err
+		}
 		keys[i] = ps.Key
 	}
 

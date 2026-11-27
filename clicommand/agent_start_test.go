@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"slices"
+	"strings"
 	"sync/atomic"
 	"testing"
 
@@ -353,10 +354,12 @@ func TestAgentStartRegistrationRejected(t *testing.T) {
 	t.Setenv("BUILDKITE_AGENT_TOKEN", "")
 
 	for _, tc := range []struct {
-		name     string
-		status   int
-		message  string
-		wantExit int
+		name      string
+		status    int
+		message   string
+		wantExit  int
+		config    string
+		wantError string
 	}{
 		{
 			name:     "job unacquirable",
@@ -376,6 +379,26 @@ func TestAgentStartRegistrationRejected(t *testing.T) {
 			message:  "Invalid job acquisition token",
 			wantExit: 1,
 		},
+		{
+			name:     "Vault signing reaches registration without Vault access",
+			status:   http.StatusUnauthorized,
+			message:  "Invalid job acquisition token",
+			wantExit: 1,
+			config:   `signing-vault-transit-key="ci/transit/keys/pipeline@3"`,
+		},
+		{
+			name:      "Vault signing requires a pinned version",
+			wantExit:  1,
+			config:    `signing-vault-transit-key="ci/transit/keys/pipeline@latest"`,
+			wantError: "invalid signing-vault-transit-key",
+		},
+		{
+			name:     "Vault and JWKS signing conflict",
+			wantExit: 1,
+			config: `signing-vault-transit-key="ci/transit/keys/pipeline@3"
+signing-jwks-file="unused.jwks"`,
+			wantError: "cannot be combined with another signing provider",
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			var requests atomic.Int32
@@ -389,9 +412,12 @@ func TestAgentStartRegistrationRejected(t *testing.T) {
 				_, _ = fmt.Fprintf(w, `{"message":%q}`, tc.message)
 			}))
 			defer server.Close()
+			t.Setenv("VAULT_ADDR", server.URL)
+			t.Setenv("VAULT_AGENT_ADDR", "")
+			t.Setenv("VAULT_MAX_RETRIES", "0")
 
 			configPath := filepath.Join(t.TempDir(), "buildkite-agent.cfg")
-			if err := os.WriteFile(configPath, nil, 0o600); err != nil {
+			if err := os.WriteFile(configPath, []byte(tc.config), 0o600); err != nil {
 				t.Fatal(err)
 			}
 			// Clone the command: Run mutates it.
@@ -420,8 +446,15 @@ func TestAgentStartRegistrationRejected(t *testing.T) {
 			if gotExit != tc.wantExit {
 				t.Errorf("exit code = %d, want %d (error: %v)", gotExit, tc.wantExit, err)
 			}
-			if got := requests.Load(); got != 1 {
-				t.Errorf("requests = %d, want 1 (no retries or job acquisition)", got)
+			wantRequests := int32(1)
+			if tc.wantError != "" {
+				wantRequests = 0
+				if !strings.Contains(err.Error(), tc.wantError) {
+					t.Errorf("error = %v, want %q", err, tc.wantError)
+				}
+			}
+			if got := requests.Load(); got != wantRequests {
+				t.Errorf("requests = %d, want %d (no retries, job acquisition, or Vault calls)", got, wantRequests)
 			}
 		})
 	}

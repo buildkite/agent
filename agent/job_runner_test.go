@@ -57,6 +57,12 @@ func TestNormalizeJobEnv(t *testing.T) {
 		{"windows_token_alias", "windows", map[string]string{"buildkite_agent_token": "secret"}, map[string]string{"BUILDKITE_AGENT_TOKEN": "secret"}, false},
 		{"windows_collision", "windows", map[string]string{"BUILDKITE_REPO": "safe", "buildkite_repo": "unsafe"}, nil, true},
 		{"linux_distinct", "linux", map[string]string{"BUILDKITE_REPO": "safe", "buildkite_repo": "unsafe"}, map[string]string{"BUILDKITE_REPO": "safe", "buildkite_repo": "unsafe"}, false},
+		{"linux_equals_in_name", "linux", map[string]string{"TEST_VAR=extra": "value"}, nil, true},
+		{"windows_equals_in_name", "windows", map[string]string{"TEST_VAR=extra": "value"}, nil, true},
+		{"empty_name", "linux", map[string]string{"": "value"}, nil, true},
+		{"nul_in_name", "linux", map[string]string{"TEST\x00VAR": "value"}, nil, true},
+		{"line_break_in_name", "linux", map[string]string{"TEST\nVAR": "value"}, nil, true},
+		{"equals_in_value", "linux", map[string]string{"TEST.VAR": "key=value"}, map[string]string{"TEST.VAR": "key=value"}, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
