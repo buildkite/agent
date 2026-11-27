@@ -25,6 +25,7 @@ import (
 	"github.com/buildkite/agent/v4/internal/awslib"
 	awssigner "github.com/buildkite/agent/v4/internal/cryptosigner/aws"
 	gcpsigner "github.com/buildkite/agent/v4/internal/cryptosigner/gcp"
+	vaultsigner "github.com/buildkite/agent/v4/internal/cryptosigner/vault"
 	"github.com/buildkite/agent/v4/internal/experiments"
 	"github.com/buildkite/agent/v4/internal/programstatus"
 	"github.com/buildkite/agent/v4/internal/redact"
@@ -99,11 +100,27 @@ type PipelineUploadConfig struct {
 	ChangedFilesPath string `cli:"changed-files-path"`
 
 	// Used for signing
-	JWKSFile         string `cli:"jwks-file"`
-	JWKSKeyID        string `cli:"jwks-key-id"`
-	SigningAWSKMSKey string `cli:"signing-aws-kms-key"`
-	SigningGCPKMSKey string `cli:"signing-gcp-kms-key"`
-	DebugSigning     bool   `cli:"debug-signing"`
+	JWKSFile               string `cli:"jwks-file"`
+	JWKSKeyID              string `cli:"jwks-key-id"`
+	SigningAWSKMSKey       string `cli:"signing-aws-kms-key"`
+	SigningGCPKMSKey       string `cli:"signing-gcp-kms-key"`
+	SigningVaultTransitKey string `cli:"signing-vault-transit-key"`
+	DebugSigning           bool   `cli:"debug-signing"`
+}
+
+func vaultTransitSigningFlag() *cli.StringFlag {
+	return &cli.StringFlag{
+		Name:    "signing-vault-transit-key",
+		Usage:   "The Vault Transit ECDSA P-256 key version used to sign pipelines, in the format <mount>/keys/<name>@<version>. The signing process uses standard Vault connection and authentication settings.",
+		Sources: cli.EnvVars("BUILDKITE_AGENT_SIGNING_VAULT_TRANSIT_KEY"),
+	}
+}
+
+func checkVaultTransitSigningConflict(vault, jwks, aws, gcp string) error {
+	if vault != "" && (jwks != "" || aws != "" || gcp != "") {
+		return errors.New("--signing-vault-transit-key cannot be combined with another signing provider (JWKS, AWS KMS, or GCP KMS)")
+	}
+	return nil
 }
 
 var PipelineUploadCommand = &cli.Command{
@@ -193,6 +210,7 @@ var PipelineUploadCommand = &cli.Command{
 				"This should be in the format projects/*/locations/*/keyRings/*/cryptoKeys/*/cryptoKeyVersions/*",
 			Sources: cli.EnvVars("BUILDKITE_AGENT_GCP_KMS_KEY"),
 		},
+		vaultTransitSigningFlag(),
 		&cli.BoolFlag{
 			Name:    "debug-signing",
 			Usage:   "Enable debug logging for pipeline signing. This can potentially leak secrets to the logs as it prints each step in full before signing. Requires debug logging to be enabled (default: false)",
@@ -226,6 +244,11 @@ var PipelineUploadCommand = &cli.Command{
 		}
 		status := newUploadStatus(reporter, "pipeline", "", "Pipeline upload failed")
 		defer func() { status.finish(cmp.Or(failure, err)) }()
+
+		if err := checkVaultTransitSigningConflict(cfg.SigningVaultTransitKey, cfg.JWKSFile, cfg.SigningAWSKMSKey, cfg.SigningGCPKMSKey); err != nil {
+			stage = "signing"
+			return err
+		}
 
 		// Find the pipeline either from STDIN or the non-flag arguments
 		type input struct {
@@ -360,6 +383,7 @@ var PipelineUploadCommand = &cli.Command{
 			changedFilesPath: cfg.ChangedFilesPath,
 		}
 
+		var vaultKey *vaultsigner.Signer
 		// Process all inputs.
 		for _, input := range inputs {
 
@@ -385,6 +409,15 @@ var PipelineUploadCommand = &cli.Command{
 				var key signature.Key
 
 				switch {
+				case cfg.SigningVaultTransitKey != "":
+					if vaultKey == nil {
+						vaultKey, err = vaultsigner.New(ctx, cfg.SigningVaultTransitKey)
+						if err != nil {
+							return fmt.Errorf("couldn't create Vault Transit signer: %w", err)
+						}
+					}
+					key = vaultKey
+
 				case cfg.SigningAWSKMSKey != "":
 					awscfg, err := awslib.GetConfigV2(ctx)
 					if err != nil {

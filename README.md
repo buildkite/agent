@@ -11,6 +11,7 @@ and uploading the job's artifacts.
 
 Full documentation is available at
 [buildkite.com/docs/agent](https://buildkite.com/docs/agent).
+For Vault Transit pipeline signing, see the [setup and rotation guide](./docs/vault-transit-pipeline-signing.md).
 
 ```text
 $ buildkite-agent --help

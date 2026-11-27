@@ -166,9 +166,9 @@ type JobRunner struct {
 	// createEnvironment runs before jobLogs exists, so Run emits the warning.
 	droppedRemoteMirrorURL string
 
-	// jobEnvError means the job env couldn't be normalized (case-colliding
-	// names on Windows). NewJobRunner runs before jobLogs exists, so Run
-	// refuses the job before anything reads the env.
+	// jobEnvError means the job env has malformed names or Windows case
+	// collisions. NewJobRunner runs before jobLogs exists, so Run refuses
+	// the job before verification or bootstrap.
 	jobEnvError error
 
 	// signedJobEnv is the job env exactly as the backend sent it. Only
@@ -415,7 +415,17 @@ func (r *JobRunner) createEnvironment(ctx context.Context) ([]string, error) {
 	// them.
 	checkoutMode := r.conf.AgentConfiguration.CheckoutOverrideMode
 
-	protectedEnvPatterns, err := envutil.ProtectedEnvPatterns(r.conf.AgentConfiguration.ProtectedEnvironmentVariables, r.conf.AgentConfiguration.ProtectDangerousGitEnvironmentVariables)
+	vaultRef := r.conf.AgentConfiguration.SigningVaultTransitKey
+	protectedEnv := r.conf.AgentConfiguration.ProtectedEnvironmentVariables
+	if vaultRef != "" {
+		// Keep job inputs from changing the connection used with trusted Vault credentials.
+		protectedEnv = append(slices.Clone(protectedEnv),
+			"BUILDKITE_AGENT_SIGNING_VAULT_TRANSIT_KEY", "VAULT_*",
+			"HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY", "http_proxy", "https_proxy", "no_proxy",
+			"SSL_CERT_FILE", "SSL_CERT_DIR",
+		)
+	}
+	protectedEnvPatterns, err := envutil.ProtectedEnvPatterns(protectedEnv, r.conf.AgentConfiguration.ProtectDangerousGitEnvironmentVariables)
 	if err != nil {
 		return nil, err
 	}
@@ -511,8 +521,14 @@ func (r *JobRunner) createEnvironment(ctx context.Context) ([]string, error) {
 		}
 		env[name] = value
 	}
-	setEnv("BUILDKITE_PROTECTED_ENVIRONMENT_VARIABLES", strings.Join(r.conf.AgentConfiguration.ProtectedEnvironmentVariables, ","))
+	setEnv("BUILDKITE_PROTECTED_ENVIRONMENT_VARIABLES", strings.Join(protectedEnv, ","))
 	setEnv("BUILDKITE_PROTECT_DANGEROUS_GIT_ENVIRONMENT_VARIABLES", fmt.Sprint(r.conf.AgentConfiguration.ProtectDangerousGitEnvironmentVariables))
+
+	// Override the job value before writing the env files so container uploaders
+	// also receive the operator's key reference. Vault credentials are not copied.
+	if vaultRef != "" {
+		setEnv("BUILDKITE_AGENT_SIGNING_VAULT_TRANSIT_KEY", vaultRef)
+	}
 
 	// For some checkout env vars, we allow the Job env (if present) to have
 	// higher precedence than the agent configuration, unless the checkout-override
@@ -571,6 +587,7 @@ BUILDKITE_TRACING_TRACEPARENT
 BUILDKITE_TRACING_TRACESTATE
 BUILDKITE_AGENT_AWS_KMS_KEY
 BUILDKITE_AGENT_GCP_KMS_KEY
+BUILDKITE_AGENT_SIGNING_VAULT_TRANSIT_KEY
 BUILDKITE_AGENT_JWKS_FILE
 BUILDKITE_AGENT_JWKS_KEY_ID`
 		if _, err := fmt.Fprintln(r.envShellFile, agentCfgVars); err != nil {
@@ -891,9 +908,15 @@ BUILDKITE_AGENT_JWKS_KEY_ID`
 	return envSlice, nil
 }
 
-// normalizeJobEnv returns the job env with names spelled the way goos will
-// resolve them, or an error if two names would resolve to the same variable.
+// normalizeJobEnv validates job environment names and normalizes their case
+// for goos, rejecting names that would resolve to the same variable.
 func normalizeJobEnv(jobEnv map[string]string, goos string) (map[string]string, error) {
+	for name := range jobEnv {
+		if !envutil.ValidName(name) {
+			return nil, errors.New("environment variable names must be non-empty and cannot contain '=', NUL, or line breaks")
+		}
+	}
+
 	switch goos {
 	case "windows":
 		normalized := make(map[string]string, len(jobEnv))

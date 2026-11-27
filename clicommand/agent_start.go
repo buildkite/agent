@@ -31,6 +31,7 @@ import (
 	"github.com/buildkite/agent/v4/internal/concurrently"
 	awssigner "github.com/buildkite/agent/v4/internal/cryptosigner/aws"
 	gcpsigner "github.com/buildkite/agent/v4/internal/cryptosigner/gcp"
+	vaultsigner "github.com/buildkite/agent/v4/internal/cryptosigner/vault"
 	"github.com/buildkite/agent/v4/internal/dockerexec"
 	"github.com/buildkite/agent/v4/internal/experiments"
 	"github.com/buildkite/agent/v4/internal/job"
@@ -109,10 +110,11 @@ type AgentStartConfig struct {
 
 	SigningJWKSKeyID string `cli:"signing-jwks-key-id"`
 
-	SigningJWKSFile  string `cli:"signing-jwks-file" normalize:"filepath"`
-	SigningAWSKMSKey string `cli:"signing-aws-kms-key"`
-	SigningGCPKMSKey string `cli:"signing-gcp-kms-key"`
-	DebugSigning     bool   `cli:"debug-signing"`
+	SigningJWKSFile        string `cli:"signing-jwks-file" normalize:"filepath"`
+	SigningAWSKMSKey       string `cli:"signing-aws-kms-key"`
+	SigningGCPKMSKey       string `cli:"signing-gcp-kms-key"`
+	SigningVaultTransitKey string `cli:"signing-vault-transit-key"`
+	DebugSigning           bool   `cli:"debug-signing"`
 
 	VerificationJWKSFile        string `cli:"verification-jwks-file" normalize:"filepath"`
 	VerificationFailureBehavior string `cli:"verification-failure-behavior"`
@@ -776,6 +778,7 @@ var AgentStartCommand = &cli.Command{
 			Usage:   "The GCP KMS key resource name used when signing and verifying the pipeline. Format: projects/*/locations/*/keyRings/*/cryptoKeys/*/cryptoKeyVersions/*",
 			Sources: cli.EnvVars("BUILDKITE_AGENT_SIGNING_GCP_KMS_KEY"),
 		},
+		vaultTransitSigningFlag(),
 		&cli.BoolFlag{
 			Name:    "debug-signing",
 			Usage:   "Enable debug logging for pipeline signing. This can potentially leak secrets to the logs as it prints each step in full before signing. Requires debug logging to be enabled (default: false)",
@@ -876,6 +879,17 @@ var AgentStartCommand = &cli.Command{
 		// Remove any config env from the environment to prevent them propagating to bootstrap
 		if err := UnsetConfigFromEnvironment(c); err != nil {
 			return fmt.Errorf("failed to unset config from environment: %w", err)
+		}
+
+		if cfg.SigningVaultTransitKey != "" {
+			if err := checkVaultTransitSigningConflict(cfg.SigningVaultTransitKey, cfg.SigningJWKSFile, cfg.SigningAWSKMSKey, cfg.SigningGCPKMSKey); err != nil {
+				return err
+			}
+			// Startup needs only the reference. Upload processes connect to Vault;
+			// workers verify independently using the configured public JWKS.
+			if err := vaultsigner.ValidateKeyReference(cfg.SigningVaultTransitKey); err != nil {
+				return fmt.Errorf("invalid signing-vault-transit-key: %w", err)
+			}
 		}
 
 		if !slices.Contains(mirrorCheckoutModes, cfg.GitMirrorCheckoutMode) {
@@ -1152,11 +1166,12 @@ var AgentStartCommand = &cli.Command{
 			JobContextDir:                           cfg.JobContextDir,
 			PingMode:                                cfg.PingMode,
 
-			SigningJWKSFile:  cfg.SigningJWKSFile,
-			SigningJWKSKeyID: cfg.SigningJWKSKeyID,
-			SigningAWSKMSKey: cfg.SigningAWSKMSKey,
-			SigningGCPKMSKey: cfg.SigningGCPKMSKey,
-			DebugSigning:     cfg.DebugSigning,
+			SigningJWKSFile:        cfg.SigningJWKSFile,
+			SigningJWKSKeyID:       cfg.SigningJWKSKeyID,
+			SigningAWSKMSKey:       cfg.SigningAWSKMSKey,
+			SigningGCPKMSKey:       cfg.SigningGCPKMSKey,
+			SigningVaultTransitKey: cfg.SigningVaultTransitKey,
+			DebugSigning:           cfg.DebugSigning,
 
 			VerificationJWKS:             verificationJWKS,
 			VerificationFailureBehaviour: cfg.VerificationFailureBehavior,

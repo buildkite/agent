@@ -14,6 +14,7 @@ import (
 	"github.com/buildkite/agent/v4/internal/bkgql"
 	awssigner "github.com/buildkite/agent/v4/internal/cryptosigner/aws"
 	gcpsigner "github.com/buildkite/agent/v4/internal/cryptosigner/gcp"
+	vaultsigner "github.com/buildkite/agent/v4/internal/cryptosigner/vault"
 	"github.com/buildkite/agent/v4/internal/stdin"
 	"github.com/buildkite/agent/v4/logger"
 	"github.com/buildkite/go-pipeline"
@@ -44,6 +45,8 @@ type ToolSignConfig struct {
 
 	// GCP KMS key used for signing pipelines
 	GCPKMSKeyID string `cli:"signing-gcp-kms-key"`
+
+	SigningVaultTransitKey string `cli:"signing-vault-transit-key"`
 
 	// Enable debug logging for pipeline signing, this depends on debug logging also being enabled
 	DebugSigning bool `cli:"debug-signing"`
@@ -144,6 +147,7 @@ Signing a pipeline from a file:
 				"This should be in the format projects/*/locations/*/keyRings/*/cryptoKeys/*/cryptoKeyVersions/*",
 			Sources: cli.EnvVars("BUILDKITE_AGENT_GCP_KMS_KEY"),
 		},
+		vaultTransitSigningFlag(),
 		&cli.BoolFlag{
 			Name:    "debug-signing",
 			Usage:   "Enable debug logging for pipeline signing. This can potentially leak secrets to the logs as it prints each step in full before signing. Requires debug logging to be enabled (default: false)",
@@ -180,12 +184,22 @@ Signing a pipeline from a file:
 		ctx, cfg, l, _, done := setupLoggerAndConfig[ToolSignConfig](ctx, c)
 		defer done()
 
+		if err := checkVaultTransitSigningConflict(cfg.SigningVaultTransitKey, cfg.JWKSFile, cfg.AWSKMSKeyID, cfg.GCPKMSKeyID); err != nil {
+			return err
+		}
+
 		var (
 			key signature.Key
 			err error
 		)
 
 		switch {
+		case cfg.SigningVaultTransitKey != "":
+			key, err = vaultsigner.New(ctx, cfg.SigningVaultTransitKey)
+			if err != nil {
+				return fmt.Errorf("couldn't create Vault Transit signer: %w", err)
+			}
+
 		case cfg.AWSKMSKeyID != "":
 			// load the AWS SDK V2 config
 			awscfg, err := awslib.GetConfigV2(ctx)
