@@ -200,12 +200,8 @@ func (b *LocalFileBlob) Upload(ctx context.Context, srcPath, key string, _ time.
 
 	cleanup = false
 
-	// Fsync parent directory for durability (optional but recommended)
-	if dir, err := os.Open(filepath.Dir(dataPath)); err == nil {
-		if err := dir.Sync(); err != nil {
-			slog.Warn("failed to fsync directory after upload", "path", filepath.Dir(dataPath), "error", err)
-		}
-		_ = dir.Close()
+	if err := syncDir(filepath.Dir(dataPath)); err != nil {
+		slog.Warn("failed to fsync directory after upload", "path", filepath.Dir(dataPath), "error", err)
 	}
 
 	metadata := FileMetadata{
@@ -370,12 +366,8 @@ func (b *LocalFileBlob) Download(ctx context.Context, key, destPath string) (*Tr
 
 	cleanup = false
 
-	// Fsync parent directory for durability (optional but recommended)
-	if dir, err := os.Open(filepath.Dir(destPath)); err == nil {
-		if err := dir.Sync(); err != nil {
-			slog.Warn("failed to fsync directory after download", "path", filepath.Dir(destPath), "error", err)
-		}
-		_ = dir.Close()
+	if err := syncDir(filepath.Dir(destPath)); err != nil {
+		slog.Warn("failed to fsync directory after download", "path", filepath.Dir(destPath), "error", err)
 	}
 
 	// Attempt to restore metadata if available (best-effort)
@@ -478,4 +470,16 @@ func validateFileKey(key string) error {
 	}
 
 	return nil
+}
+
+func syncDir(dirPath string) error {
+	if runtime.GOOS == "windows" {
+		return nil
+	}
+	dir, err := os.Open(dirPath)
+	if err != nil {
+		return err
+	}
+	defer dir.Close()
+	return dir.Sync()
 }
