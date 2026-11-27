@@ -40,6 +40,7 @@ steps:
             - "/yum.buildkite.com"
 
   - name: ":octocat: :rocket: Create Github Release (if necessary)"
+    key: github-release
     command: ".buildkite/steps/github-release.sh"
     env:
       CODENAME: "stable"
@@ -55,6 +56,41 @@ steps:
           login: true
           account-ids: "445615400570"
       - docker#v5.14.0: *release_tools
+
+  - label: ":nix: Publish agent for Nix"
+    key: publish-nix
+    if: build.branch == "main" && build.env("DRY_RUN") == "false"
+    depends_on: github-release
+    soft_fail: true
+    concurrency:
+      limit: 1
+      group: "buildkite/agent/nix-release"
+    timeout_in_minutes: 10
+    env:
+      BUILDKITE_SKIP_CHECKOUT: "true"
+      BUILDKITE_NO_LOCAL_HOOKS: "true"
+    plugins:
+      - buildkite/just-works#v0.1.0:
+          role-arn: arn:aws:iam::032379705303:role/pipeline-buildkite-agent-release-stable-nix
+          ecr:
+            enabled: false
+          ssm:
+            enabled: false
+          github:
+            changes-enabled: true
+            organization: buildkite
+    command: |
+      set -euo pipefail
+      version=$$(buildkite-agent meta-data get github_release_version)
+      export AGENT_RELEASE_TAG="v$$version"
+
+      # The release tag selects the binaries, not the publisher code.
+      umask 077
+      scratch=$$(mktemp -d)
+      trap 'rm -rf "$$scratch"' EXIT
+      git clone --quiet --branch main --single-branch https://github.com/buildkite/nix.git "$$scratch/nix"
+      cd "$$scratch/nix"
+      scripts/propose-nix-release.sh
 
   - name: ":redhat: Publish RPM Package"
     command: ".buildkite/steps/publish-rpm-package.sh"

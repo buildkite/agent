@@ -12,3 +12,11 @@
 The agent wranglers at Buildkite will review your PR, and start a CI build for it. For security reasons, we don't automatically run CI against forked repos, and a human will review your PR prior to its CI running.
 
 Our objective is to have no PR wait more than a week for some sort of interaction from us -- this might be a review, or it might be a "I'm going to come back to this and review it a bit later". This isn't a guarantee though, and sometimes other work might get in the way of reviewing opensource contributions. If we're really dragging our feet on reviewing a PR, please feel free to ping us through GitHub or Slack, or get in touch with support@buildkite.com, and they can bug us to get things done :)
+
+## Nix releases
+
+After GitHub publishes a stable agent release, the **Publish agent for Nix**
+step in [Agent - Release - Stable](https://buildkite.com/buildkite/agent-release-stable)
+uses the published tag to update the agent package in the shared
+[buildkite/nix](https://github.com/buildkite/nix) flake. If publishing fails,
+retry that job rather than rerunning the agent release.
